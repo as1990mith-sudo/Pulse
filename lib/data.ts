@@ -217,3 +217,68 @@ export const callInQueue = [
   { id: "c2", name: "Priya", topic: "Wants to share a story", waiting: "1:18" },
   { id: "c3", name: "Marcus", topic: "Disagrees with the last point", waiting: "2:05" },
 ]
+
+export type DevotionalComment = {
+  id: string
+  user: string
+  initials: string
+  color: string
+  text: string
+  postedAt: string
+}
+
+export type Devotional = {
+  date: string
+  title: string
+  verseRef: string
+  verse: string
+  cover: string
+  readingMinutes: number
+  body: string[]
+  prayer: string
+  initialLikes: number
+  comments: DevotionalComment[]
+}
+
+export const dailyDevotional: Devotional = {
+  date: "Friday, June 19",
+  title: "Be Still and Listen",
+  verseRef: "Psalm 46:10",
+  verse: "Be still, and know that I am God.",
+  cover: "/devotional/sunrise.png",
+  readingMinutes: 3,
+  body: [
+    "We live in a world tuned to noise. Notifications, deadlines, and the endless scroll all compete for the same quiet space where peace is meant to grow. Stillness has become something we schedule rather than something we inhabit.",
+    "Yet the invitation in this verse is not to do more, but to stop. To be still is an act of trust — a way of saying that the world will keep turning even when we set down our striving for a moment. In that pause, we make room to remember who is actually holding things together.",
+    "Today, before the day pulls you in a dozen directions, take a single breath and listen. Not for answers or instructions, but simply to be present. The same voice that calmed storms still speaks in the quiet, and it is often in the silence that we hear most clearly.",
+  ],
+  prayer:
+    "Quiet my restless heart today. Help me to trust that I can stop, that I am held, and that your presence is enough. Teach me to listen in the stillness. Amen.",
+  initialLikes: 248,
+  comments: [
+    {
+      id: "d1",
+      user: "Grace M.",
+      initials: "GM",
+      color: "bg-chart-2/20 text-chart-2",
+      text: "Needed this today. The line about scheduling stillness instead of living in it hit hard.",
+      postedAt: "2h ago",
+    },
+    {
+      id: "d2",
+      user: "Daniel O.",
+      initials: "DO",
+      color: "bg-chart-3/20 text-chart-3",
+      text: "Reading this with my morning coffee before the chaos starts. Thank you.",
+      postedAt: "4h ago",
+    },
+    {
+      id: "d3",
+      user: "Ruth A.",
+      initials: "RA",
+      color: "bg-primary/20 text-primary",
+      text: "Sharing with my small group tonight. Such a timely word.",
+      postedAt: "6h ago",
+    },
+  ],
+}
