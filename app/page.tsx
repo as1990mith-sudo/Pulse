@@ -1,7 +1,10 @@
-import { Clock, Calendar } from "lucide-react"
+import Link from "next/link"
+import { Clock, Calendar, BookHeart, ShoppingCart } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
 import { DevotionalInteractions } from "@/components/devotional-interactions"
+import { Button } from "@/components/ui/button"
 import { getLatestDevotional } from "@/lib/content"
+import { devotionalSource } from "@/lib/data"
 import { getDevotionalComments } from "@/app/actions/devotional"
 import { getCurrentUser } from "@/lib/session"
 
@@ -24,7 +27,7 @@ export default async function DevotionalPage() {
           <div className="relative mx-auto w-full max-w-3xl px-4 py-16 sm:px-6 md:py-20">
             <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
               <span className="inline-flex items-center gap-1.5 font-medium text-primary">
-                <Calendar className="size-4" /> Daily Devotional
+                <Calendar className="size-4" /> Weekly Devotional
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <Clock className="size-4" /> {d.readingMinutes} min read
@@ -51,6 +54,31 @@ export default async function DevotionalPage() {
           <div className="rounded-2xl border border-primary/30 bg-primary/5 p-6 sm:p-8">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-primary">A prayer for today</h2>
             <p className="mt-3 text-pretty text-base leading-relaxed text-foreground/90 sm:text-lg">{d.prayer}</p>
+          </div>
+
+          <div className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-card p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8">
+            <div className="flex items-start gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <BookHeart className="size-5" />
+              </span>
+              <div className="space-y-0.5">
+                <p className="text-sm text-muted-foreground">
+                  From the devotional{" "}
+                  <span className="font-semibold text-foreground">{devotionalSource.name}</span>
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  by <span className="font-medium text-foreground">{devotionalSource.author}</span>
+                </p>
+              </div>
+            </div>
+            <Button
+              render={<Link href={devotionalSource.orderUrl} target="_blank" rel="noopener noreferrer" />}
+              nativeButton={false}
+              className="shrink-0 gap-2"
+            >
+              <ShoppingCart className="size-4" />
+              Order the devotional
+            </Button>
           </div>
 
           <DevotionalInteractions

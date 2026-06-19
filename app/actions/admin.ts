@@ -72,6 +72,18 @@ export async function deleteDevotional(id: number): Promise<ActionResult> {
   return { ok: true }
 }
 
+/**
+ * Reposts an existing devotional: bumps its lastPostedAt to now so it becomes
+ * the one shown on the homepage again, without duplicating or deleting it.
+ */
+export async function repostDevotional(id: number): Promise<ActionResult> {
+  await requireAdmin()
+  await db.update(devotional).set({ lastPostedAt: new Date() }).where(eq(devotional.id, id))
+  revalidatePath("/")
+  revalidatePath("/admin")
+  return { ok: true }
+}
+
 // --- Episodes --------------------------------------------------------------
 
 export async function createEpisode(input: {

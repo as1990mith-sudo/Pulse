@@ -1,12 +1,31 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Camera, CameraOff, Mic, MicOff, MonitorUp, PhoneCall, Radio, Users, X } from "lucide-react"
-import { callInQueue, hosts } from "@/lib/data"
+import { useEffect, useState, useTransition } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import {
+  Camera,
+  CameraOff,
+  CheckCircle2,
+  Loader2,
+  Mic,
+  MicOff,
+  MonitorUp,
+  PhoneCall,
+  Radio,
+  Upload,
+  Users,
+  X,
+} from "lucide-react"
+import { callInQueue } from "@/lib/data"
+import type { CurrentUser } from "@/lib/session"
+import { goLive, publishShow } from "@/app/actions/shows"
 import { LiveChat } from "@/components/live-chat"
+import { CoverUpload } from "@/components/admin/cover-upload"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Textarea } from "@/components/ui/textarea"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 
@@ -16,16 +35,26 @@ function formatTime(s: number) {
   return `${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`
 }
 
-export function StudioConsole() {
-  const host = hosts.maya
+function formatDuration(s: number) {
+  if (s < 60) return `${s}s`
+  const m = Math.round(s / 60)
+  if (m < 60) return `${m}m`
+  const h = Math.floor(m / 60)
+  return `${h}h ${(m % 60).toString().padStart(2, "0")}m`
+}
+
+type EndedSession = { title: string; duration: string } | null
+
+export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
   const [live, setLive] = useState(false)
   const [camOn, setCamOn] = useState(true)
   const [micOn, setMicOn] = useState(true)
   const [elapsed, setElapsed] = useState(0)
   const [viewers, setViewers] = useState(0)
-  const [title, setTitle] = useState("Culture Cast — live session")
+  const [title, setTitle] = useState(`${currentUser.name} — live session`)
   const [queue, setQueue] = useState(callInQueue)
   const [onAir, setOnAir] = useState<string | null>(null)
+  const [endedSession, setEndedSession] = useState<EndedSession>(null)
 
   useEffect(() => {
     if (!live) return
@@ -47,11 +76,16 @@ export function StudioConsole() {
 
   function toggleLive() {
     if (live) {
+      // Ending the stream: offer to publish the recorded session.
+      setEndedSession({ title, duration: formatDuration(elapsed) })
       setLive(false)
       setElapsed(0)
       setOnAir(null)
     } else {
       setLive(true)
+      setEndedSession(null)
+      // Notify followers that this host just went live (fire and forget).
+      goLive({ title }).catch(() => {})
     }
   }
 
@@ -91,7 +125,11 @@ export function StudioConsole() {
         {/* Camera preview */}
         <div className="relative aspect-video overflow-hidden rounded-2xl border border-border/60 bg-black">
           {camOn ? (
-            <img src={host.avatar || "/placeholder.svg"} alt="Your camera preview" className="size-full object-cover" />
+            <div className="flex size-full items-center justify-center bg-gradient-to-b from-secondary to-background">
+              <span className={cn("flex size-24 items-center justify-center rounded-full text-3xl font-semibold", currentUser.color)}>
+                {currentUser.initials}
+              </span>
+            </div>
           ) : (
             <div className="flex size-full flex-col items-center justify-center gap-3 text-muted-foreground">
               <CameraOff className="size-10" />
@@ -143,6 +181,14 @@ export function StudioConsole() {
           </div>
         </div>
 
+        {/* Publish panel — shown after a stream ends */}
+        {endedSession && (
+          <PublishPanel
+            session={endedSession}
+            onClose={() => setEndedSession(null)}
+          />
+        )}
+
         {/* Show setup */}
         <div className="space-y-2 rounded-xl border border-border/60 bg-card p-4">
           <label htmlFor="show-title" className="text-sm font-medium">
@@ -151,11 +197,10 @@ export function StudioConsole() {
           <Input id="show-title" value={title} onChange={(e) => setTitle(e.target.value)} />
           <div className="flex items-center gap-3 pt-1">
             <Avatar className="size-8">
-              <AvatarImage src={host.avatar || "/placeholder.svg"} alt={host.name} />
-              <AvatarFallback>{host.name[0]}</AvatarFallback>
+              <AvatarFallback className={currentUser.color}>{currentUser.initials}</AvatarFallback>
             </Avatar>
             <span className="text-sm text-muted-foreground">
-              Broadcasting as <span className="font-medium text-foreground">{host.name}</span>
+              Broadcasting as <span className="font-medium text-foreground">{currentUser.name}</span>
             </span>
           </div>
         </div>
@@ -219,5 +264,101 @@ export function StudioConsole() {
         </Tabs>
       </aside>
     </div>
+  )
+}
+
+function PublishPanel({
+  session,
+  onClose,
+}: {
+  session: { title: string; duration: string }
+  onClose: () => void
+}) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+  const [published, setPublished] = useState(false)
+
+  const [title, setTitle] = useState(session.title)
+  const [tagline, setTagline] = useState("")
+  const [category, setCategory] = useState("")
+  const [description, setDescription] = useState("")
+  const [cover, setCover] = useState<string | null>(null)
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    startTransition(async () => {
+      const res = await publishShow({
+        title,
+        tagline,
+        category,
+        duration: session.duration,
+        description,
+        cover,
+      })
+      if (res.ok) {
+        setPublished(true)
+        router.refresh()
+      } else {
+        setError(res.error)
+      }
+    })
+  }
+
+  if (published) {
+    return (
+      <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-5 text-center">
+        <CheckCircle2 className="mx-auto size-8 text-primary" />
+        <p className="font-semibold">Session published to your catalogue</p>
+        <p className="text-sm text-muted-foreground">Your followers and anyone visiting your profile can watch it now.</p>
+        <Button variant="secondary" onClick={onClose}>
+          Done
+        </Button>
+      </div>
+    )
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-4 rounded-xl border border-primary/30 bg-primary/5 p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Upload className="size-5 text-primary" />
+          <div>
+            <h2 className="font-semibold">Publish this session</h2>
+            <p className="text-xs text-muted-foreground">Recorded {session.duration}. Save it to your profile catalogue.</p>
+          </div>
+        </div>
+        <Button type="button" size="icon" variant="ghost" className="size-8 shrink-0" onClick={onClose} aria-label="Dismiss">
+          <X className="size-4" />
+        </Button>
+      </div>
+
+      <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Episode title" aria-label="Episode title" />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Category (e.g. Culture)" aria-label="Category" />
+        <Input value={tagline} onChange={(e) => setTagline(e.target.value)} placeholder="Short tagline (optional)" aria-label="Tagline" />
+      </div>
+      <Textarea
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder="What was this session about?"
+        className="min-h-24"
+        aria-label="Description"
+      />
+      <CoverUpload value={cover} onChange={setCover} label="Cover image (optional)" />
+
+      {error && <p className="text-sm text-destructive">{error}</p>}
+
+      <div className="flex items-center gap-2">
+        <Button type="submit" disabled={isPending} className="gap-2">
+          {isPending ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+          Publish to my catalogue
+        </Button>
+        <Button type="button" variant="ghost" onClick={onClose}>
+          Not now
+        </Button>
+      </div>
+    </form>
   )
 }

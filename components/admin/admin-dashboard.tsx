@@ -2,12 +2,13 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { BookOpen, Mic, Plus, Trash2, Loader2, CheckCircle2 } from "lucide-react"
+import { BookOpen, Mic, Plus, Trash2, Loader2, CheckCircle2, RotateCcw } from "lucide-react"
 import {
   createDevotional,
   createEpisode,
   deleteDevotional,
   deleteEpisode,
+  repostDevotional,
 } from "@/app/actions/admin"
 import type { devotional as devotionalTable, episode as episodeTable } from "@/lib/db/schema"
 import { CoverUpload } from "@/components/admin/cover-upload"
@@ -132,15 +133,23 @@ function DevotionalManager({ devotionals }: { devotionals: DevotionalRow[] }) {
     })
   }
 
+  function onRepost(id: number) {
+    startTransition(async () => {
+      await repostDevotional(id)
+      router.refresh()
+    })
+  }
+
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
       <Card className="space-y-5 p-6">
         <div className="flex items-center gap-2">
           <Plus className="size-5 text-primary" />
-          <h2 className="text-lg font-semibold">New devotional</h2>
+          <h2 className="text-lg font-semibold">New weekly devotional</h2>
         </div>
         <p className="text-sm text-muted-foreground">
-          This becomes the homepage devotional as soon as you publish it.
+          This becomes the devotional shown on the homepage as soon as you publish it. Past devotionals are kept in your
+          library below so you can repost any of them later.
         </p>
 
         <form onSubmit={submit} className="space-y-4">
@@ -207,29 +216,50 @@ function DevotionalManager({ devotionals }: { devotionals: DevotionalRow[] }) {
 
       <div className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Published ({devotionals.length})
+          Library ({devotionals.length})
         </h2>
         {devotionals.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nothing published yet. The sample devotional is showing for now.</p>
         ) : (
           <ul className="space-y-3">
-            {devotionals.map((d) => (
+            {devotionals.map((d, i) => (
               <li key={d.id}>
-                <Card className="flex items-start justify-between gap-3 p-4">
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{d.title}</p>
-                    <p className="truncate text-sm text-muted-foreground">{d.verseRef}</p>
+                <Card className="space-y-3 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{d.title}</p>
+                      <p className="truncate text-sm text-muted-foreground">{d.verseRef}</p>
+                    </div>
+                    {i === 0 && (
+                      <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                        Showing now
+                      </span>
+                    )}
                   </div>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
-                    onClick={() => onDelete(d.id)}
-                    aria-label={`Delete ${d.title}`}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
+                  <div className="flex items-center justify-between gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="h-8 gap-1.5"
+                      onClick={() => onRepost(d.id)}
+                      disabled={isPending || i === 0}
+                      aria-label={`Repost ${d.title}`}
+                    >
+                      <RotateCcw className="size-3.5" />
+                      {i === 0 ? "Live now" : "Repost"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => onDelete(d.id)}
+                      aria-label={`Delete ${d.title}`}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
                 </Card>
               </li>
             ))}

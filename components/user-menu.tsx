@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import useSWR from "swr"
-import { LogOut, Radio, LayoutDashboard } from "lucide-react"
+import { LogOut, Radio, LayoutDashboard, User } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
 import { checkIsAdmin } from "@/app/actions/admin"
 import { Button } from "@/components/ui/button"
@@ -78,6 +78,10 @@ export function UserMenu() {
             <span className="truncate text-xs font-normal text-muted-foreground">{getHandle(name)}</span>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
+          <DropdownMenuItem render={<Link href={`/u/${session.user.id}`} />} className="gap-2">
+            <User className="size-4" />
+            Your profile
+          </DropdownMenuItem>
           <DropdownMenuItem render={<Link href="/studio" />} className="gap-2">
             <Radio className="size-4" />
             Open studio

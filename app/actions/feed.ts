@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { feedComment, feedPost, follow } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
+import { notifyFollowers } from "@/app/actions/notifications"
 
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -110,6 +111,17 @@ export async function createPost(input: { text: string; image?: string | null })
     text,
     image: input.image ?? null,
   })
+
+  // Let everyone who follows this author know there's a new tweet.
+  const preview = text.length > 80 ? `${text.slice(0, 80)}…` : text || "shared a photo"
+  await notifyFollowers({
+    actorId: user.id,
+    actorName: user.name,
+    type: "post",
+    message: preview,
+    link: "/feed",
+  })
+
   revalidatePath("/feed")
 }
 
