@@ -19,7 +19,7 @@ export function ShowCard({ show }: { show: Show }) {
           alt={`${show.title} cover art`}
           className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/10 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent" />
         <div className="absolute left-3 top-3 flex items-center gap-2">
           {show.status === "live" && <LiveBadge />}
           {show.status === "upcoming" && (
