@@ -1,6 +1,7 @@
 // The 66 books of the Bible with their chapter counts, used to drive the
-// reader's book/chapter pickers. Text itself is fetched from bible-api.com
-// (the public-domain World English Bible) at read time.
+// reader's book/chapter pickers. The book's position in this list (1-based)
+// maps to its bundled text file at /public/bible/<n>.json — the complete,
+// offline public-domain World English Bible shipped with the app.
 
 export type BibleBook = {
   name: string

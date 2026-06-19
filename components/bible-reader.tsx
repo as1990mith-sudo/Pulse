@@ -16,15 +16,14 @@ import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 
 type Verse = { verse: number; text: string }
-type ChapterResponse = {
-  reference: string
-  verses: Verse[]
-  translation_name?: string
+type BookData = {
+  book: string
+  chapters: Record<string, Verse[]>
 }
 
-const fetcher = async (url: string): Promise<ChapterResponse> => {
+const fetcher = async (url: string): Promise<BookData> => {
   const res = await fetch(url)
-  if (!res.ok) throw new Error("Could not load this passage.")
+  if (!res.ok) throw new Error("Could not load this book.")
   return res.json()
 }
 
@@ -33,14 +32,17 @@ export function BibleReader() {
   const [chapter, setChapter] = useState(1)
 
   const current = getBook(book)
-  const query = `${book} ${chapter}`
+  const bookIndex = BIBLE_BOOKS.findIndex((b) => b.name === book)
+
+  // Bundled, offline copy: each book ships as a static JSON file in /public/bible.
+  // The file number matches the book's canonical position (1-66).
   const { data, error, isLoading } = useSWR(
-    `https://bible-api.com/${encodeURIComponent(query)}?translation=web`,
+    bookIndex >= 0 ? `/bible/${bookIndex + 1}.json` : null,
     fetcher,
-    { revalidateOnFocus: false },
+    { revalidateOnFocus: false, revalidateIfStale: false },
   )
 
-  const bookIndex = BIBLE_BOOKS.findIndex((b) => b.name === book)
+  const verses = data?.chapters[String(chapter)] ?? []
 
   function goPrev() {
     if (chapter > 1) {
@@ -183,7 +185,7 @@ export function BibleReader() {
           <h2 className="text-2xl font-bold tracking-tight">
             {book} {chapter}
           </h2>
-          <p className="text-xs text-muted-foreground">{data?.translation_name ?? "World English Bible"}</p>
+          <p className="text-xs text-muted-foreground">World English Bible</p>
         </div>
 
         {isLoading && (
@@ -195,18 +197,16 @@ export function BibleReader() {
 
         {error && (
           <div className="py-16 text-center">
-            <p className="text-sm text-muted-foreground">
-              We couldn&apos;t load this passage. Please check your connection and try again.
-            </p>
+            <p className="text-sm text-muted-foreground">We couldn&apos;t load this passage. Please try again.</p>
           </div>
         )}
 
         {data && !isLoading && (
           <div className="space-y-1 text-pretty leading-loose text-foreground/90">
-            {data.verses.map((v) => (
+            {verses.map((v) => (
               <span key={v.verse} className="inline">
                 <sup className="mr-1 align-super text-xs font-semibold text-primary">{v.verse}</sup>
-                <span>{v.text.replace(/\n/g, " ").trim()} </span>
+                <span>{v.text} </span>
               </span>
             ))}
           </div>
