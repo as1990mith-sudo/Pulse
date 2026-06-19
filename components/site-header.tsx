@@ -8,10 +8,10 @@ import { UserMenu } from "@/components/user-menu"
 import { cn } from "@/lib/utils"
 
 const navItems = [
-  { href: "/", label: "Catalog" },
+  { href: "/", label: "Devotional" },
+  { href: "/feed", label: "Tweet" },
   { href: "/live", label: "Live" },
-  { href: "/devotional", label: "Devotional" },
-  { href: "/feed", label: "On Your Mind" },
+  { href: "/catalog", label: "Catalogue" },
 ]
 
 export function SiteHeader() {

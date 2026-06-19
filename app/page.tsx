@@ -1,66 +1,67 @@
-import Link from "next/link"
-import { ArrowRight, Radio } from "lucide-react"
+import { Clock, Calendar } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
-import { EpisodeCatalog } from "@/components/episode-catalog"
-import { LiveBadge } from "@/components/live-badge"
-import { episodes, liveShows } from "@/lib/data"
+import { DevotionalInteractions } from "@/components/devotional-interactions"
+import { dailyDevotional } from "@/lib/data"
+import { getDevotionalComments } from "@/app/actions/devotional"
+import { getCurrentUser } from "@/lib/session"
 
-export default function CatalogPage() {
-  const liveCount = liveShows.length
+export default async function DevotionalPage() {
+  const d = dailyDevotional
+  const [comments, currentUser] = await Promise.all([getDevotionalComments(d.date), getCurrentUser()])
 
   return (
     <div className="min-h-screen">
       <SiteHeader />
       <main>
-        <section className="border-b border-border/60 bg-card/40">
-          <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-12 sm:px-6 md:py-16">
-            <div className="flex flex-col gap-3">
-              <span className="text-xs font-semibold uppercase tracking-wider text-primary">On demand</span>
-              <h1 className="max-w-2xl text-balance text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
-                Every episode, ready when you are
-              </h1>
-              <p className="max-w-xl text-pretty text-base text-muted-foreground leading-relaxed">
-                Browse the full catalog of recorded live shows. Filter by category, switch to the YouTube-style view, and
-                pick up right where the conversation left off.
-              </p>
+        <section className="relative overflow-hidden border-b border-border/60">
+          <img
+            src={d.cover || "/placeholder.svg"}
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 size-full object-cover opacity-30"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/85 to-background/50" />
+          <div className="relative mx-auto w-full max-w-3xl px-4 py-16 sm:px-6 md:py-20">
+            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5 font-medium text-primary">
+                <Calendar className="size-4" /> Daily Devotional
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Clock className="size-4" /> {d.readingMinutes} min read
+              </span>
+              <span>{d.date}</span>
             </div>
-            {liveCount > 0 && (
-              <Link
-                href="/live"
-                className="inline-flex w-fit items-center gap-2 rounded-lg border border-border/60 bg-background px-4 py-2.5 text-sm font-medium transition-colors hover:border-primary/60"
-              >
-                <LiveBadge />
-                {liveCount} {liveCount === 1 ? "show is" : "shows are"} streaming live now
-                <ArrowRight className="size-4 text-muted-foreground" />
-              </Link>
-            )}
+            <h1 className="mt-4 text-balance text-4xl font-bold tracking-tight sm:text-5xl">{d.title}</h1>
           </div>
         </section>
 
-        <div className="mx-auto w-full max-w-6xl space-y-16 px-4 py-12 sm:px-6">
-          <section className="space-y-6">
-            <EpisodeCatalog episodes={episodes} />
-          </section>
+        <article className="mx-auto w-full max-w-3xl space-y-10 px-4 py-12 sm:px-6">
+          <blockquote className="rounded-2xl border border-border/60 bg-card p-6 sm:p-8">
+            <p className="text-pretty text-xl font-medium leading-relaxed sm:text-2xl">{`"${d.verse}"`}</p>
+            <footer className="mt-3 text-sm font-semibold uppercase tracking-wider text-primary">{d.verseRef}</footer>
+          </blockquote>
 
-          <section className="overflow-hidden rounded-2xl border border-border/60 bg-card">
-            <div className="flex flex-col items-start gap-6 p-8 md:flex-row md:items-center md:justify-between md:p-12">
-              <div className="max-w-xl space-y-2">
-                <h2 className="text-2xl font-bold tracking-tight sm:text-3xl text-balance">
-                  Want to catch a show as it happens?
-                </h2>
-                <p className="text-muted-foreground leading-relaxed">
-                  Head to the live page to join a stream in progress, drop into the chat, or request to call in on air.
-                </p>
-              </div>
-              <Link
-                href="/live"
-                className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-primary px-6 py-3 font-medium text-primary-foreground transition-opacity hover:opacity-90"
-              >
-                <Radio className="size-4" /> Go to live shows
-              </Link>
-            </div>
-          </section>
-        </div>
+          <div className="space-y-5">
+            {d.body.map((paragraph, i) => (
+              <p key={i} className="text-pretty text-base leading-relaxed text-foreground/90 sm:text-lg">
+                {paragraph}
+              </p>
+            ))}
+          </div>
+
+          <div className="rounded-2xl border border-primary/30 bg-primary/5 p-6 sm:p-8">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-primary">A prayer for today</h2>
+            <p className="mt-3 text-pretty text-base leading-relaxed text-foreground/90 sm:text-lg">{d.prayer}</p>
+          </div>
+
+          <DevotionalInteractions
+            title={d.title}
+            devotionalDate={d.date}
+            initialLikes={d.initialLikes}
+            comments={comments}
+            currentUser={currentUser}
+          />
+        </article>
       </main>
 
       <footer className="border-t border-border/60">

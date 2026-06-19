@@ -24,7 +24,7 @@ export default async function LivePage({ params }: { params: Promise<{ id: strin
       <SiteHeader />
       <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
         <Link
-          href="/"
+          href="/live"
           className="mb-5 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="size-4" /> Back to all shows
