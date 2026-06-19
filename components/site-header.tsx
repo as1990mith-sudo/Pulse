@@ -10,6 +10,7 @@ const navItems = [
   { href: "/", label: "Catalog" },
   { href: "/live", label: "Live" },
   { href: "/devotional", label: "Devotional" },
+  { href: "/feed", label: "On Your Mind" },
 ]
 
 export function SiteHeader() {

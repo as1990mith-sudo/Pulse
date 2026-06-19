@@ -282,3 +282,96 @@ export const dailyDevotional: Devotional = {
     },
   ],
 }
+
+export type FeedComment = {
+  id: string
+  user: string
+  handle: string
+  initials: string
+  color: string
+  text: string
+  postedAt: string
+}
+
+export type FeedPost = {
+  id: string
+  user: string
+  handle: string
+  initials: string
+  color: string
+  postedAt: string
+  text: string
+  image?: string
+  likes: number
+  reposts: number
+  comments: FeedComment[]
+}
+
+export const feedPosts: FeedPost[] = [
+  {
+    id: "p1",
+    user: "Maya Okafor",
+    handle: "@mayaonair",
+    initials: "MO",
+    color: "bg-primary/20 text-primary",
+    postedAt: "32m",
+    text: "Going live with Culture Cast tonight at 9. What's the one track that defined your year? Drop it below and I might play it on air.",
+    likes: 184,
+    reposts: 22,
+    comments: [
+      {
+        id: "p1c1",
+        user: "rivers",
+        handle: "@riversflow",
+        initials: "RV",
+        color: "bg-chart-2/20 text-chart-2",
+        text: "Easily the summer remix you premiered last month. Still on repeat.",
+        postedAt: "20m",
+      },
+      {
+        id: "p1c2",
+        user: "j_dot",
+        handle: "@jdot",
+        initials: "JD",
+        color: "bg-chart-3/20 text-chart-3",
+        text: "Calling in from Lagos for this one!",
+        postedAt: "12m",
+      },
+    ],
+  },
+  {
+    id: "p2",
+    user: "Devon Reyes",
+    handle: "@devonreyes",
+    initials: "DR",
+    color: "bg-chart-3/20 text-chart-3",
+    postedAt: "1h",
+    text: "Hot take: the best ideas in tech right now aren't about more AI, they're about giving people quieter tools. Build things that get out of the way.",
+    likes: 421,
+    reposts: 87,
+    comments: [
+      {
+        id: "p2c1",
+        user: "nova",
+        handle: "@novabuilds",
+        initials: "NV",
+        color: "bg-chart-2/20 text-chart-2",
+        text: "This is exactly why I unsubscribed from half my notifications this week.",
+        postedAt: "44m",
+      },
+    ],
+  },
+  {
+    id: "p3",
+    user: "Petra Lindqvist",
+    handle: "@petra",
+    initials: "PL",
+    color: "bg-chart-2/20 text-chart-2",
+    postedAt: "3h",
+    text: "Caught the sunrise before the studio session this morning. Reminder to look up every now and then.",
+    image: "/devotional/sunrise.png",
+    likes: 309,
+    reposts: 41,
+    comments: [],
+  },
+]
