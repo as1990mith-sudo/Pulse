@@ -181,6 +181,24 @@ export const chatroomJoinRequest = pgTable("chatroom_join_request", {
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
+// --- Announcements ---------------------------------------------------------
+// Paid promotional event banners shown at the top of the feed (tweet) tab.
+// A creator submits a flyer + event details and pays to publish; once active
+// it is visible to everyone and any user can add the event to their calendar.
+export const announcement = pgTable("announcement", {
+  id: serial("id").primaryKey(),
+  userId: text("userId").notNull(),
+  creatorName: text("creatorName").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  flyer: text("flyer"),
+  location: text("location"),
+  eventDate: text("eventDate").notNull(), // YYYY-MM-DD
+  eventTime: text("eventTime"), // HH:MM (24h), optional
+  status: text("status").notNull().default("active"), // "pending" | "active"
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
 // Per-user notifications. A row is created for each follower when someone they
 // follow posts a tweet or starts a live stream.
 export const notification = pgTable("notification", {

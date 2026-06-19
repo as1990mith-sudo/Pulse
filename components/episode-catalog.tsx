@@ -65,13 +65,13 @@ export function EpisodeCatalog({ episodes }: { episodes: Show[] }) {
       </div>
 
       {view === "grid" ? (
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
           {filtered.map((show) => (
             <ShowCard key={show.id} show={show} />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-x-4 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:gap-x-4 sm:gap-y-8 lg:grid-cols-3">
           {filtered.map((show) => (
             <YouTubeCard key={show.id} show={show} />
           ))}

@@ -58,7 +58,7 @@ export default async function LivePage() {
               </span>
             </div>
             {liveShows.length > 0 ? (
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
                 {liveShows.map((show) => (
                   <ShowCard key={show.id} show={show} />
                 ))}
@@ -79,7 +79,7 @@ export default async function LivePage() {
                 title="Scheduled shows"
                 description="Set a reminder and be in the room when the mics go live."
               />
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
                 {upcomingShows.map((show) => (
                   <ShowCard key={show.id} show={show} />
                 ))}

@@ -1,10 +1,16 @@
 import { SiteHeader } from "@/components/site-header"
 import { MindFeed } from "@/components/mind-feed"
+import { AnnouncementBanner } from "@/components/announcement-banner"
 import { getFeed } from "@/app/actions/feed"
+import { getActiveAnnouncements } from "@/app/actions/announcements"
 import { getCurrentUser } from "@/lib/session"
 
 export default async function FeedPage() {
-  const [posts, currentUser] = await Promise.all([getFeed(), getCurrentUser()])
+  const [posts, currentUser, announcements] = await Promise.all([
+    getFeed(),
+    getCurrentUser(),
+    getActiveAnnouncements(),
+  ])
 
   return (
     <div className="min-h-screen">
@@ -20,7 +26,8 @@ export default async function FeedPage() {
           </div>
         </section>
 
-        <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6">
+        <div className="mx-auto w-full max-w-2xl space-y-8 px-4 py-8 sm:px-6">
+          <AnnouncementBanner announcements={announcements} currentUser={currentUser} />
           <MindFeed posts={posts} currentUser={currentUser} />
         </div>
       </main>
