@@ -112,7 +112,7 @@ export default async function LivePage() {
               </div>
               <Link
                 href="/studio"
-                className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-primary px-6 py-3 font-medium text-primary-foreground transition-opacity hover:opacity-90"
+                className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-live px-6 py-3 font-medium text-live-foreground transition-opacity hover:opacity-90"
               >
                 <Headphones className="size-4" /> Open the studio <ArrowRight className="size-4" />
               </Link>

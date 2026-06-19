@@ -130,7 +130,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
             <Textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="Share a photo, video, or thought..."
+              placeholder="What's on your mind."
               className="min-h-20 resize-none border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0"
               aria-label="Write a post"
             />
@@ -157,13 +157,13 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
-                className="gap-2 text-primary"
+                size="icon"
+                className="text-primary"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
+                aria-label="Add a photo or video"
               >
-                {uploading ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
-                {uploading ? "Uploading…" : "Photo / Video"}
+                {uploading ? <Loader2 className="size-5 animate-spin" /> : <ImagePlus className="size-5" />}
               </Button>
               <input
                 ref={fileInputRef}
@@ -307,6 +307,13 @@ export function PostCard({ post, currentUser }: { post: FeedPostView; currentUse
         )}
       </div>
 
+      {/* Caption — shown above the media */}
+      {post.text && (
+        <p className={cn("px-3 text-sm leading-relaxed text-foreground/90", hasMedia ? "pb-3" : "pb-1")}>
+          {post.text}
+        </p>
+      )}
+
       {/* Media — large, edge-to-edge Instagram-style */}
       {post.video ? (
         <div className="bg-black">
@@ -387,14 +394,6 @@ export function PostCard({ post, currentUser }: { post: FeedPostView; currentUse
         {likes > 0 && (
           <p className="text-sm font-semibold">
             {likes} {likes === 1 ? "like" : "likes"}
-          </p>
-        )}
-        {post.text && (
-          <p className={cn("text-sm leading-relaxed text-foreground/90", hasMedia && "pt-0.5")}>
-            <Link href={`/u/${post.authorId}`} className="mr-1.5 font-semibold hover:underline">
-              {post.user}
-            </Link>
-            {post.text}
           </p>
         )}
         {reposts > 0 && <p className="text-xs text-muted-foreground">{reposts} reposts</p>}

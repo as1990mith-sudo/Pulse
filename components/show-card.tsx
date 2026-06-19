@@ -11,7 +11,7 @@ export function ShowCard({ show }: { show: Show }) {
   return (
     <Link
       href={href}
-      className="group flex flex-col overflow-hidden rounded-xl border border-border/60 bg-card transition-colors hover:border-primary/50"
+      className="group flex flex-col overflow-hidden rounded-xl border border-border/60 bg-card transition-colors hover:border-live/50"
     >
       <div className="relative aspect-video overflow-hidden">
         <img
@@ -43,7 +43,9 @@ export function ShowCard({ show }: { show: Show }) {
 
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="space-y-1">
-          <h3 className="font-semibold leading-tight text-balance">{show.title}</h3>
+          <h3 className="font-semibold leading-tight text-balance transition-colors group-hover:text-live">
+            {show.title}
+          </h3>
           <p className="line-clamp-2 text-sm text-muted-foreground leading-relaxed">{show.tagline}</p>
         </div>
         <div className="mt-auto flex items-center justify-between">
