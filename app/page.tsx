@@ -29,7 +29,6 @@ export default async function DevotionalPage() {
               <span className="inline-flex items-center gap-1.5">
                 <Clock className="size-4" /> {d.readingMinutes} min read
               </span>
-              <span>{d.date}</span>
             </div>
             <h1 className="mt-4 text-balance text-4xl font-bold tracking-tight sm:text-5xl">{d.title}</h1>
           </div>

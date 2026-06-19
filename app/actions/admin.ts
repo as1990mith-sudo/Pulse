@@ -31,7 +31,6 @@ export async function createDevotional(input: {
   prayer: string
   cover: string | null
   readingMinutes: number
-  publishDate: string
 }): Promise<ActionResult> {
   await requireAdmin()
 
@@ -40,11 +39,14 @@ export async function createDevotional(input: {
   const verse = input.verse.trim()
   const body = input.body.trim()
   const prayer = input.prayer.trim()
-  const publishDate = input.publishDate.trim()
 
-  if (!title || !verseRef || !verse || !body || !prayer || !publishDate) {
+  if (!title || !verseRef || !verse || !body || !prayer) {
     return { ok: false, error: "Please fill in every field." }
   }
+
+  // publishDate is kept only as an internal, unique key that ties comments to
+  // a devotional. It is never shown to readers.
+  const publishKey = `dev-${Date.now()}`
 
   await db.insert(devotional).values({
     title,
@@ -54,7 +56,7 @@ export async function createDevotional(input: {
     prayer,
     cover: input.cover,
     readingMinutes: Math.max(1, Math.min(60, Math.round(input.readingMinutes) || 3)),
-    publishDate,
+    publishDate: publishKey,
   })
 
   revalidatePath("/")

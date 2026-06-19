@@ -38,10 +38,6 @@ function Field({
   )
 }
 
-function todayLabel(): string {
-  return new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })
-}
-
 export function AdminDashboard({
   adminName,
   devotionals,
@@ -88,7 +84,6 @@ function DevotionalManager({ devotionals }: { devotionals: DevotionalRow[] }) {
   const [success, setSuccess] = useState(false)
 
   const [title, setTitle] = useState("")
-  const [publishDate, setPublishDate] = useState(todayLabel())
   const [verseRef, setVerseRef] = useState("")
   const [verse, setVerse] = useState("")
   const [readingMinutes, setReadingMinutes] = useState(3)
@@ -98,7 +93,6 @@ function DevotionalManager({ devotionals }: { devotionals: DevotionalRow[] }) {
 
   function reset() {
     setTitle("")
-    setPublishDate(todayLabel())
     setVerseRef("")
     setVerse("")
     setReadingMinutes(3)
@@ -114,7 +108,6 @@ function DevotionalManager({ devotionals }: { devotionals: DevotionalRow[] }) {
     startTransition(async () => {
       const res = await createDevotional({
         title,
-        publishDate,
         verseRef,
         verse,
         readingMinutes,
@@ -155,20 +148,15 @@ function DevotionalManager({ devotionals }: { devotionals: DevotionalRow[] }) {
             <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Be Still and Listen" />
           </Field>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Date shown" hint="How the date appears to readers">
-              <Input value={publishDate} onChange={(e) => setPublishDate(e.target.value)} placeholder="Friday, June 19" />
-            </Field>
-            <Field label="Reading time (minutes)">
-              <Input
-                type="number"
-                min={1}
-                max={60}
-                value={readingMinutes}
-                onChange={(e) => setReadingMinutes(Number(e.target.value))}
-              />
-            </Field>
-          </div>
+          <Field label="Reading time (minutes)">
+            <Input
+              type="number"
+              min={1}
+              max={60}
+              value={readingMinutes}
+              onChange={(e) => setReadingMinutes(Number(e.target.value))}
+            />
+          </Field>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Verse reference">
@@ -230,7 +218,7 @@ function DevotionalManager({ devotionals }: { devotionals: DevotionalRow[] }) {
                 <Card className="flex items-start justify-between gap-3 p-4">
                   <div className="min-w-0">
                     <p className="truncate font-medium">{d.title}</p>
-                    <p className="text-sm text-muted-foreground">{d.publishDate}</p>
+                    <p className="truncate text-sm text-muted-foreground">{d.verseRef}</p>
                   </div>
                   <Button
                     type="button"
