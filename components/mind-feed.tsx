@@ -10,7 +10,7 @@ import { toggleFollow } from "@/app/actions/follow"
 import type { CurrentUser } from "@/lib/session"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
@@ -241,6 +241,7 @@ export function PostCard({ post, currentUser }: { post: FeedPostView; currentUse
       <div className="flex gap-3">
         <Link href={`/u/${post.authorId}`} aria-label={`View ${post.user}'s profile`} className="shrink-0">
           <Avatar className="size-10">
+            {post.authorImage && <AvatarImage src={post.authorImage || "/placeholder.svg"} alt={post.user} />}
             <AvatarFallback className={post.color}>{post.initials}</AvatarFallback>
           </Avatar>
         </Link>
@@ -354,6 +355,9 @@ export function PostCard({ post, currentUser }: { post: FeedPostView; currentUse
                   {post.comments.map((comment) => (
                     <li key={comment.id} className="flex gap-2.5">
                       <Avatar className="size-8 shrink-0">
+                        {comment.authorImage && (
+                          <AvatarImage src={comment.authorImage || "/placeholder.svg"} alt={comment.user} />
+                        )}
                         <AvatarFallback className={cn("text-xs", comment.color)}>{comment.initials}</AvatarFallback>
                       </Avatar>
                       <div className="space-y-0.5">

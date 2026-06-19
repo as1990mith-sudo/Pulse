@@ -1,11 +1,11 @@
 "use server"
 
-import { asc, desc, eq } from "drizzle-orm"
+import { asc, desc, eq, inArray } from "drizzle-orm"
 import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { feedComment, feedPost, follow } from "@/lib/db/schema"
+import { feedComment, feedPost, follow, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { notifyFollowers } from "@/app/actions/notifications"
 
@@ -21,6 +21,7 @@ export type FeedCommentView = {
   handle: string
   initials: string
   color: string
+  authorImage: string | null
   text: string
   postedAt: string
 }
@@ -32,6 +33,7 @@ export type FeedPostView = {
   handle: string
   initials: string
   color: string
+  authorImage: string | null
   postedAt: string
   text: string
   image: string | null
@@ -40,6 +42,17 @@ export type FeedPostView = {
   isFollowing: boolean
   isSelf: boolean
   comments: FeedCommentView[]
+}
+
+/** Builds a map of userId -> profile image for the given user ids. */
+async function getUserImageMap(userIds: string[]): Promise<Map<string, string | null>> {
+  const unique = [...new Set(userIds)]
+  if (unique.length === 0) return new Map()
+  const rows = await db
+    .select({ id: userTable.id, image: userTable.image })
+    .from(userTable)
+    .where(inArray(userTable.id, unique))
+  return new Map(rows.map((r) => [r.id, r.image]))
 }
 
 function timeAgo(date: Date): string {
@@ -71,6 +84,11 @@ export async function getFeed(): Promise<FeedPostView[]> {
   const posts = await db.select().from(feedPost).orderBy(desc(feedPost.createdAt))
   const comments = await db.select().from(feedComment).orderBy(asc(feedComment.createdAt))
 
+  const imageMap = await getUserImageMap([
+    ...posts.map((p) => p.userId),
+    ...comments.map((c) => c.userId),
+  ])
+
   return posts.map((p) => ({
     id: p.id,
     authorId: p.userId,
@@ -78,6 +96,7 @@ export async function getFeed(): Promise<FeedPostView[]> {
     handle: p.authorHandle,
     initials: getInitials(p.authorName),
     color: getAvatarColor(p.userId),
+    authorImage: imageMap.get(p.userId) ?? null,
     postedAt: timeAgo(p.createdAt),
     text: p.text,
     image: p.image,
@@ -93,6 +112,7 @@ export async function getFeed(): Promise<FeedPostView[]> {
         handle: c.authorHandle,
         initials: getInitials(c.authorName),
         color: getAvatarColor(c.userId),
+        authorImage: imageMap.get(c.userId) ?? null,
         text: c.text,
         postedAt: timeAgo(c.createdAt),
       })),
@@ -121,6 +141,11 @@ export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
     .orderBy(desc(feedPost.createdAt))
   const comments = await db.select().from(feedComment).orderBy(asc(feedComment.createdAt))
 
+  const imageMap = await getUserImageMap([
+    ...posts.map((p) => p.userId),
+    ...comments.map((c) => c.userId),
+  ])
+
   return posts.map((p) => ({
     id: p.id,
     authorId: p.userId,
@@ -128,6 +153,7 @@ export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
     handle: p.authorHandle,
     initials: getInitials(p.authorName),
     color: getAvatarColor(p.userId),
+    authorImage: imageMap.get(p.userId) ?? null,
     postedAt: timeAgo(p.createdAt),
     text: p.text,
     image: p.image,
@@ -143,6 +169,7 @@ export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
         handle: c.authorHandle,
         initials: getInitials(c.authorName),
         color: getAvatarColor(c.userId),
+        authorImage: imageMap.get(c.userId) ?? null,
         text: c.text,
         postedAt: timeAgo(c.createdAt),
       })),

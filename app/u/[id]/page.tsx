@@ -6,7 +6,7 @@ import { getCurrentUser } from "@/lib/session"
 import { SiteHeader } from "@/components/site-header"
 import { ProfileFollowButton } from "@/components/profile/profile-follow-button"
 import { ProfileTabs } from "@/components/profile/profile-tabs"
-import { cn } from "@/lib/utils"
+import { ProfileAvatar } from "@/components/profile/profile-avatar"
 
 export default async function ProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -25,14 +25,13 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
       <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
         <header className="flex flex-col gap-5 border-b border-border/60 pb-8 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
-            <span
-              className={cn(
-                "flex size-16 items-center justify-center rounded-full text-xl font-semibold sm:size-20 sm:text-2xl",
-                profile.color,
-              )}
-            >
-              {profile.initials}
-            </span>
+            <ProfileAvatar
+              initials={profile.initials}
+              color={profile.color}
+              image={profile.image}
+              name={profile.name}
+              editable={profile.isSelf}
+            />
             <div className="space-y-1">
               <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{profile.name}</h1>
               <p className="text-muted-foreground">{profile.handle}</p>
