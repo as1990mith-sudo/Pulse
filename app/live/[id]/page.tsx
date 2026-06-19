@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, MessageSquare, Share2 } from "lucide-react"
-import { getShow } from "@/lib/data"
+import { resolveShow } from "@/lib/content"
 import { getCurrentUser } from "@/lib/session"
 import { SiteHeader } from "@/components/site-header"
 import { StreamPlayer } from "@/components/stream-player"
@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button"
 
 export default async function LivePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const show = getShow(id)
+  const show = await resolveShow(id)
 
   if (!show) notFound()
 

@@ -95,3 +95,34 @@ export const devotionalComment = pgTable("devotional_comment", {
   text: text("text").notNull(),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
+
+// --- Admin-managed content -------------------------------------------------
+// Devotional readings and catalogue episodes published from the /admin
+// dashboard. The most recent devotional (by createdAt) shows on the homepage.
+
+export const devotional = pgTable("devotional", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  verseRef: text("verseRef").notNull(),
+  verse: text("verse").notNull(),
+  // Body paragraphs are stored as a single string, separated by blank lines.
+  body: text("body").notNull(),
+  prayer: text("prayer").notNull(),
+  cover: text("cover"),
+  readingMinutes: integer("readingMinutes").notNull().default(3),
+  publishDate: text("publishDate").notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+export const episode = pgTable("episode", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull().unique(),
+  title: text("title").notNull(),
+  tagline: text("tagline").notNull(),
+  category: text("category").notNull(),
+  hostName: text("hostName").notNull(),
+  duration: text("duration"),
+  cover: text("cover"),
+  description: text("description").notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})

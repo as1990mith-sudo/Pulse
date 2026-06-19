@@ -3,10 +3,12 @@ import { ArrowRight, Radio } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
 import { EpisodeCatalog } from "@/components/episode-catalog"
 import { LiveBadge } from "@/components/live-badge"
-import { episodes, liveShows } from "@/lib/data"
+import { liveShows } from "@/lib/data"
+import { getCatalogEpisodes } from "@/lib/content"
 
-export default function CatalogPage() {
+export default async function CatalogPage() {
   const liveCount = liveShows.length
+  const episodes = await getCatalogEpisodes()
 
   return (
     <div className="min-h-screen">

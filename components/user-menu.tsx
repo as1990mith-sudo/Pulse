@@ -2,8 +2,10 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { LogOut, Radio } from "lucide-react"
+import useSWR from "swr"
+import { LogOut, Radio, LayoutDashboard } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
+import { checkIsAdmin } from "@/app/actions/admin"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -20,6 +22,7 @@ import { cn } from "@/lib/utils"
 export function UserMenu() {
   const router = useRouter()
   const { data: session, isPending } = authClient.useSession()
+  const { data: isAdmin } = useSWR(session?.user ? "is-admin" : null, () => checkIsAdmin())
 
   if (isPending) {
     return <div className="size-8 animate-pulse rounded-full bg-muted" aria-hidden />
@@ -79,6 +82,12 @@ export function UserMenu() {
             <Radio className="size-4" />
             Open studio
           </DropdownMenuItem>
+          {isAdmin && (
+            <DropdownMenuItem render={<Link href="/admin" />} className="gap-2">
+              <LayoutDashboard className="size-4" />
+              Content dashboard
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={handleSignOut} className="gap-2 text-destructive">
             <LogOut className="size-4" />
             Sign out

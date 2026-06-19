@@ -1,12 +1,12 @@
 import { Clock, Calendar } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
 import { DevotionalInteractions } from "@/components/devotional-interactions"
-import { dailyDevotional } from "@/lib/data"
+import { getLatestDevotional } from "@/lib/content"
 import { getDevotionalComments } from "@/app/actions/devotional"
 import { getCurrentUser } from "@/lib/session"
 
 export default async function DevotionalPage() {
-  const d = dailyDevotional
+  const d = await getLatestDevotional()
   const [comments, currentUser] = await Promise.all([getDevotionalComments(d.date), getCurrentUser()])
 
   return (
