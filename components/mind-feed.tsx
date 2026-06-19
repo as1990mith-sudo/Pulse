@@ -259,7 +259,9 @@ export function PostCard({ post, currentUser }: { post: FeedPostView; currentUse
             )}
           </div>
 
-          {post.text && <p className="text-pretty leading-relaxed text-foreground/90">{post.text}</p>}
+          {post.text && (
+            <p className="leading-relaxed text-foreground/90 hyphens-auto text-justify">{post.text}</p>
+          )}
 
           {post.image && (
             <div className="overflow-hidden rounded-xl border border-border/60">
