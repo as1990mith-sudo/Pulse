@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+import { ImageLightbox } from "@/components/image-lightbox"
 import { cn } from "@/lib/utils"
 
 function readFileAsDataUrl(file: File): Promise<string> {
@@ -193,6 +194,7 @@ export function PostCard({ post, currentUser }: { post: FeedPostView; currentUse
   const [shared, setShared] = useState(false)
   const [showComments, setShowComments] = useState(false)
   const [commentDraft, setCommentDraft] = useState("")
+  const [lightboxOpen, setLightboxOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
 
   function toggleLike() {
@@ -270,16 +272,30 @@ export function PostCard({ post, currentUser }: { post: FeedPostView; currentUse
           )}
 
           {post.image && (
-            <div className="overflow-hidden rounded-xl border border-border/60">
-              <Image
-                src={post.image || "/placeholder.svg"}
-                alt="Post attachment"
-                width={1080}
-                height={1080}
-                className="aspect-square h-auto w-full object-cover"
-                unoptimized={post.image.startsWith("data:")}
-              />
-            </div>
+            <>
+              <button
+                type="button"
+                onClick={() => setLightboxOpen(true)}
+                className="block w-full overflow-hidden rounded-xl border border-border/60 transition-opacity hover:opacity-95"
+                aria-label="Expand image to full screen"
+              >
+                <Image
+                  src={post.image || "/placeholder.svg"}
+                  alt="Post attachment"
+                  width={1080}
+                  height={1080}
+                  className="aspect-square h-auto w-full object-cover"
+                  unoptimized={post.image.startsWith("data:")}
+                />
+              </button>
+              {lightboxOpen && (
+                <ImageLightbox
+                  src={post.image}
+                  alt={`Image posted by ${post.user}`}
+                  onClose={() => setLightboxOpen(false)}
+                />
+              )}
+            </>
           )}
 
           <div className="flex items-center justify-between pt-1 text-muted-foreground">

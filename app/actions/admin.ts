@@ -126,7 +126,7 @@ export async function createEpisode(input: {
     description,
   })
 
-  revalidatePath("/catalog")
+  revalidatePath("/live")
   revalidatePath("/admin")
   return { ok: true }
 }
@@ -134,7 +134,7 @@ export async function createEpisode(input: {
 export async function deleteEpisode(id: number): Promise<ActionResult> {
   await requireAdmin()
   await db.delete(episode).where(eq(episode.id, id))
-  revalidatePath("/catalog")
+  revalidatePath("/live")
   revalidatePath("/admin")
   return { ok: true }
 }

@@ -12,7 +12,6 @@ const navItems = [
   { href: "/", label: "Devotional" },
   { href: "/feed", label: "Tweet" },
   { href: "/live", label: "Live" },
-  { href: "/catalog", label: "Catalogue" },
   { href: "/chatrooms", label: "Chatroom" },
 ]
 

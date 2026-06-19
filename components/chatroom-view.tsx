@@ -3,40 +3,103 @@
 import { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Check, Copy, LogOut, Send, Users, X } from "lucide-react"
+import {
+  ArrowLeft,
+  Check,
+  Copy,
+  FileText,
+  ImageIcon,
+  LogOut,
+  Paperclip,
+  Send,
+  Smile,
+  Users,
+  X,
+} from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { ImageLightbox } from "@/components/image-lightbox"
 import { cn } from "@/lib/utils"
 import {
   approveJoinRequest,
   leaveChatroom,
   rejectJoinRequest,
   sendChatMessage,
+  updateChatroomImage,
+  type ChatAttachmentType,
+  type ChatMessageView,
   type ChatroomDetail,
 } from "@/app/actions/chatroom"
+
+const EMOJIS = [
+  "😀", "😂", "🥰", "😎", "🤔", "😴", "😭", "😡",
+  "👍", "👎", "🙏", "👏", "🙌", "💪", "🔥", "✨",
+  "❤️", "💔", "🎉", "🎶", "☀️", "🌙", "⭐", "✅",
+  "🙋", "🕊️", "📖", "🍞", "☕", "🌿", "💯", "👀",
+]
+
+type PendingAttachment = {
+  url: string
+  type: ChatAttachmentType
+  name: string
+}
 
 export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
   const router = useRouter()
   const [draft, setDraft] = useState("")
+  const [attachment, setAttachment] = useState<PendingAttachment | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const [showMembers, setShowMembers] = useState(false)
+  const [showEmoji, setShowEmoji] = useState(false)
   const [isSending, startSend] = useTransition()
   const [isLeaving, startLeave] = useTransition()
   const scrollEndRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     scrollEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [detail.messages.length])
 
+  async function handleFilePick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadError(null)
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      const res = await fetch("/api/upload-chat", { method: "POST", body: formData })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? "Upload failed")
+      setAttachment({ url: data.url, type: data.type, name: data.name })
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed")
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ""
+    }
+  }
+
   function handleSend(e: React.FormEvent) {
     e.preventDefault()
     const body = draft.trim()
-    if (!body) return
+    if (!body && !attachment) return
     setDraft("")
+    setShowEmoji(false)
+    const sentAttachment = attachment
+    setAttachment(null)
     startSend(async () => {
-      await sendChatMessage({ chatroomId: detail.id, body })
+      await sendChatMessage({
+        chatroomId: detail.id,
+        body,
+        attachmentUrl: sentAttachment?.url ?? null,
+        attachmentType: sentAttachment?.type ?? null,
+        attachmentName: sentAttachment?.name ?? null,
+      })
       router.refresh()
     })
   }
@@ -60,6 +123,12 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
           >
             <ArrowLeft className="size-5" />
           </Link>
+          <Avatar className="size-10 shrink-0">
+            {detail.image && <AvatarImage src={detail.image || "/placeholder.svg"} alt={detail.name} />}
+            <AvatarFallback className="bg-secondary text-sm">
+              {detail.name.slice(0, 2).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="truncate text-lg font-semibold">{detail.name}</h1>
@@ -94,41 +163,93 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
             </p>
           )}
           {detail.messages.map((m) => (
-            <div key={m.id} className={cn("flex gap-2.5", m.isSelf && "flex-row-reverse")}>
-              <Avatar className="size-7 shrink-0">
-                <AvatarFallback className={cn("text-[10px]", m.color)}>{m.initials}</AvatarFallback>
-              </Avatar>
-              <div className={cn("max-w-[75%] space-y-0.5", m.isSelf && "items-end text-right")}>
-                <div className={cn("flex items-center gap-2", m.isSelf && "flex-row-reverse")}>
-                  <span className="text-xs font-medium">{m.isSelf ? "You" : m.userName}</span>
-                  <span className="text-[10px] text-muted-foreground">{m.postedAt}</span>
-                </div>
-                <div
-                  className={cn(
-                    "inline-block rounded-2xl px-3 py-2 text-sm leading-relaxed",
-                    m.isSelf
-                      ? "rounded-tr-sm bg-primary text-primary-foreground"
-                      : "rounded-tl-sm bg-secondary text-foreground",
-                  )}
-                >
-                  {m.body}
-                </div>
-              </div>
-            </div>
+            <MessageBubble key={m.id} message={m} />
           ))}
           <div ref={scrollEndRef} />
         </div>
       </ScrollArea>
 
+      {/* Attachment preview */}
+      {attachment && (
+        <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card p-2.5">
+          {attachment.type === "image" ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={attachment.url || "/placeholder.svg"} alt={attachment.name} className="size-12 rounded-md object-cover" />
+          ) : attachment.type === "video" ? (
+            <video src={attachment.url} className="size-12 rounded-md object-cover" />
+          ) : (
+            <span className="flex size-12 items-center justify-center rounded-md bg-secondary">
+              <FileText className="size-5" />
+            </span>
+          )}
+          <span className="min-w-0 flex-1 truncate text-sm">{attachment.name}</span>
+          <Button type="button" variant="ghost" size="icon" onClick={() => setAttachment(null)} aria-label="Remove attachment">
+            <X className="size-4" />
+          </Button>
+        </div>
+      )}
+      {uploadError && <p className="text-sm text-destructive">{uploadError}</p>}
+
+      {/* Emoji picker */}
+      {showEmoji && (
+        <div className="grid grid-cols-8 gap-1 rounded-xl border border-border/60 bg-card p-3">
+          {EMOJIS.map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              onClick={() => setDraft((d) => d + emoji)}
+              className="flex size-9 items-center justify-center rounded-md text-xl transition-colors hover:bg-secondary"
+              aria-label={`Add ${emoji}`}
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Composer */}
       <form onSubmit={handleSend} className="flex items-center gap-2">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip"
+          className="hidden"
+          onChange={handleFilePick}
+        />
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="shrink-0 text-muted-foreground"
+          onClick={() => setShowEmoji((s) => !s)}
+          aria-label="Toggle emoji picker"
+        >
+          <Smile className="size-5" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="shrink-0 text-muted-foreground"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          aria-label="Attach a file"
+        >
+          <Paperclip className={cn("size-5", uploading && "animate-pulse")} />
+        </Button>
         <Input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder="Type a message"
+          placeholder={uploading ? "Uploading attachment…" : "Type a message"}
           aria-label="Message"
         />
-        <Button type="submit" size="icon" disabled={isSending || !draft.trim()} aria-label="Send message">
+        <Button
+          type="submit"
+          size="icon"
+          className="shrink-0"
+          disabled={isSending || uploading || (!draft.trim() && !attachment)}
+          aria-label="Send message"
+        >
           <Send className="size-4" />
         </Button>
       </form>
@@ -136,8 +257,74 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
   )
 }
 
+function MessageBubble({ message: m }: { message: ChatMessageView }) {
+  const [lightbox, setLightbox] = useState(false)
+
+  return (
+    <div className={cn("flex gap-2.5", m.isSelf && "flex-row-reverse")}>
+      <Avatar className="size-7 shrink-0">
+        <AvatarFallback className={cn("text-[10px]", m.color)}>{m.initials}</AvatarFallback>
+      </Avatar>
+      <div className={cn("max-w-[75%] space-y-0.5", m.isSelf && "items-end text-right")}>
+        <div className={cn("flex items-center gap-2", m.isSelf && "flex-row-reverse")}>
+          <span className="text-xs font-medium">{m.isSelf ? "You" : m.userName}</span>
+          <span className="text-[10px] text-muted-foreground">{m.postedAt}</span>
+        </div>
+        <div
+          className={cn(
+            "inline-block overflow-hidden rounded-2xl text-sm leading-relaxed",
+            m.attachmentType === "image" || m.attachmentType === "video" ? "p-1" : "px-3 py-2",
+            m.isSelf
+              ? "rounded-tr-sm bg-primary text-primary-foreground"
+              : "rounded-tl-sm bg-secondary text-foreground",
+          )}
+        >
+          {m.attachmentUrl && m.attachmentType === "image" && (
+            <>
+              <button type="button" onClick={() => setLightbox(true)} className="block" aria-label="Expand image">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={m.attachmentUrl || "/placeholder.svg"}
+                  alt={m.attachmentName ?? "Shared image"}
+                  className="max-h-64 rounded-xl object-cover"
+                />
+              </button>
+              {lightbox && (
+                <ImageLightbox src={m.attachmentUrl} alt={m.attachmentName ?? "Shared image"} onClose={() => setLightbox(false)} />
+              )}
+            </>
+          )}
+          {m.attachmentUrl && m.attachmentType === "video" && (
+            // eslint-disable-next-line jsx-a11y/media-has-caption
+            <video src={m.attachmentUrl} controls className="max-h-64 rounded-xl" />
+          )}
+          {m.attachmentUrl && m.attachmentType === "document" && (
+            <a
+              href={m.attachmentUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-1 py-0.5 underline-offset-2 hover:underline",
+                m.isSelf ? "text-primary-foreground" : "text-foreground",
+              )}
+            >
+              <FileText className="size-4 shrink-0" />
+              <span className="truncate">{m.attachmentName ?? "Document"}</span>
+            </a>
+          )}
+          {m.body && <p className={cn(m.attachmentUrl && "px-2 pb-1 pt-1.5")}>{m.body}</p>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function MembersPanel({ detail }: { detail: ChatroomDetail }) {
+  const router = useRouter()
   const [copied, setCopied] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const imageInputRef = useRef<HTMLInputElement>(null)
+  const [isPending, startTransition] = useTransition()
 
   function copyInvite() {
     const link =
@@ -150,8 +337,65 @@ function MembersPanel({ detail }: { detail: ChatroomDetail }) {
     })
   }
 
+  async function handleGroupImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      const res = await fetch("/api/upload-chat", { method: "POST", body: formData })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? "Upload failed")
+      await updateChatroomImage({ chatroomId: detail.id, image: data.url })
+      router.refresh()
+    } catch {
+      // ignore — surfaced via no change
+    } finally {
+      setUploading(false)
+      if (imageInputRef.current) imageInputRef.current.value = ""
+    }
+  }
+
+  function removeGroupImage() {
+    startTransition(async () => {
+      await updateChatroomImage({ chatroomId: detail.id, image: null })
+      router.refresh()
+    })
+  }
+
   return (
     <div className="space-y-3 rounded-xl border border-border/60 bg-card p-4">
+      {detail.isOwner && (
+        <div className="flex items-center gap-3 border-b border-border/60 pb-3">
+          <Avatar className="size-14">
+            {detail.image && <AvatarImage src={detail.image || "/placeholder.svg"} alt={detail.name} />}
+            <AvatarFallback className="bg-secondary text-base">{detail.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+          </Avatar>
+          <div className="space-y-1.5">
+            <p className="text-sm font-medium">Group picture</p>
+            <div className="flex items-center gap-2">
+              <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleGroupImage} />
+              <Button
+                variant="secondary"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => imageInputRef.current?.click()}
+                disabled={uploading || isPending}
+              >
+                <ImageIcon className="size-3.5" />
+                {uploading ? "Uploading…" : detail.image ? "Change" : "Upload"}
+              </Button>
+              {detail.image && (
+                <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={removeGroupImage} disabled={isPending}>
+                  Remove
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-sm font-medium">Members</h2>
         <Button variant="secondary" size="sm" className="gap-1.5" onClick={copyInvite}>

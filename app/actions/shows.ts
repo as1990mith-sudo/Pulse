@@ -83,7 +83,7 @@ export async function publishShow(input: {
     description,
   })
 
-  revalidatePath("/catalog")
+  revalidatePath("/live")
   revalidatePath(`/u/${user.id}`)
   return { ok: true }
 }

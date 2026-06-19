@@ -144,6 +144,7 @@ export const chatroom = pgTable("chatroom", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   description: text("description"),
+  image: text("image"),
   ownerId: text("ownerId").notNull(),
   ownerName: text("ownerName").notNull(),
   inviteCode: text("inviteCode").notNull().unique(),
@@ -164,7 +165,10 @@ export const chatroomMessage = pgTable("chatroom_message", {
   chatroomId: integer("chatroomId").notNull(),
   userId: text("userId").notNull(),
   userName: text("userName").notNull(),
-  body: text("body").notNull(),
+  body: text("body"), // nullable — a message can be attachment-only
+  attachmentUrl: text("attachmentUrl"),
+  attachmentType: text("attachmentType"), // "image" | "video" | "document"
+  attachmentName: text("attachmentName"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
