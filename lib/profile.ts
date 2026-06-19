@@ -11,6 +11,7 @@ export type Profile = {
   handle: string
   initials: string
   color: string
+  image: string | null
   followers: number
   following: number
   isSelf: boolean
@@ -46,6 +47,7 @@ export async function getProfile(userId: string): Promise<Profile | null> {
     handle: getHandle(row.name),
     initials: getInitials(row.name),
     color: getAvatarColor(row.id),
+    image: row.image,
     followers: followersRow?.value ?? 0,
     following: followingRow?.value ?? 0,
     isSelf: viewerId === userId,

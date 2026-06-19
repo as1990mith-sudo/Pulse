@@ -67,8 +67,18 @@ export function UserMenu() {
           />
         }
       >
-        <span className={cn("flex size-8 items-center justify-center rounded-full text-xs font-semibold", color)}>
-          {initials}
+        <span
+          className={cn(
+            "flex size-8 items-center justify-center overflow-hidden rounded-full text-xs font-semibold",
+            color,
+          )}
+        >
+          {session.user.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={session.user.image || "/placeholder.svg"} alt="" className="size-full object-cover" />
+          ) : (
+            initials
+          )}
         </span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">

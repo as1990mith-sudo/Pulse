@@ -10,7 +10,7 @@ import { toggleFollow } from "@/app/actions/follow"
 import type { CurrentUser } from "@/lib/session"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
@@ -180,7 +180,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
   )
 }
 
-function PostCard({ post, currentUser }: { post: FeedPostView; currentUser: CurrentUser | null }) {
+export function PostCard({ post, currentUser }: { post: FeedPostView; currentUser: CurrentUser | null }) {
   const router = useRouter()
   const [liked, setLiked] = useState(false)
   const [likes, setLikes] = useState(post.likes)
@@ -241,6 +241,7 @@ function PostCard({ post, currentUser }: { post: FeedPostView; currentUser: Curr
       <div className="flex gap-3">
         <Link href={`/u/${post.authorId}`} aria-label={`View ${post.user}'s profile`} className="shrink-0">
           <Avatar className="size-10">
+            {post.authorImage && <AvatarImage src={post.authorImage || "/placeholder.svg"} alt={post.user} />}
             <AvatarFallback className={post.color}>{post.initials}</AvatarFallback>
           </Avatar>
         </Link>
@@ -258,7 +259,9 @@ function PostCard({ post, currentUser }: { post: FeedPostView; currentUser: Curr
             )}
           </div>
 
-          {post.text && <p className="text-pretty leading-relaxed text-foreground/90">{post.text}</p>}
+          {post.text && (
+            <p className="leading-relaxed text-foreground/90 hyphens-auto text-justify">{post.text}</p>
+          )}
 
           {post.image && (
             <div className="overflow-hidden rounded-xl border border-border/60">
@@ -354,6 +357,9 @@ function PostCard({ post, currentUser }: { post: FeedPostView; currentUser: Curr
                   {post.comments.map((comment) => (
                     <li key={comment.id} className="flex gap-2.5">
                       <Avatar className="size-8 shrink-0">
+                        {comment.authorImage && (
+                          <AvatarImage src={comment.authorImage || "/placeholder.svg"} alt={comment.user} />
+                        )}
                         <AvatarFallback className={cn("text-xs", comment.color)}>{comment.initials}</AvatarFallback>
                       </Avatar>
                       <div className="space-y-0.5">
