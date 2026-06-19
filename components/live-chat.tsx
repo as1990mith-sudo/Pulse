@@ -5,8 +5,10 @@ import Link from "next/link"
 import { Send } from "lucide-react"
 import { type ChatMessage, chatPool, seedChat } from "@/lib/data"
 import type { CurrentUser } from "@/lib/session"
-import { Input } from "@/components/ui/input"
+import { getAvatarColor, getInitials } from "@/lib/identity"
 import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 
@@ -63,34 +65,48 @@ export function LiveChat({
   return (
     <div className="flex h-full flex-col">
       <ScrollArea className="flex-1">
-        <div ref={scrollRef} className="flex flex-col gap-2.5 p-4">
+        <ul ref={scrollRef} className="flex flex-col gap-5 p-4">
           {messages.map((m) => (
-            <div key={m.id} className="text-sm leading-relaxed">
-              <span className={cn("font-semibold", m.color)}>{m.user}</span>
-              {m.host && (
-                <span className="ml-1.5 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                  Host
-                </span>
-              )}
-              <span className="ml-2 text-foreground/90">{m.text}</span>
-            </div>
+            <li key={m.id} className="flex gap-3">
+              <Avatar className="size-9 shrink-0">
+                <AvatarFallback className={getAvatarColor(m.user)}>{getInitials(m.user)}</AvatarFallback>
+              </Avatar>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className={cn("text-sm font-medium", m.host && "text-primary")}>{m.user}</span>
+                  {m.host && (
+                    <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                      Host
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm leading-relaxed text-foreground/90">{m.text}</p>
+              </div>
+            </li>
           ))}
-        </div>
+        </ul>
       </ScrollArea>
 
       {asHost || currentUser ? (
-        <form onSubmit={send} className="flex items-center gap-2 border-t border-border/60 p-3">
-          <Input
+        <form onSubmit={send} className="space-y-3 border-t border-border/60 p-3">
+          <Textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault()
+                send(e)
+              }
+            }}
             placeholder={asHost ? "Say something to the room…" : `Chat as ${currentUser?.name}…`}
-            className="h-10"
+            className="min-h-16 resize-none"
             aria-label="Chat message"
           />
-          <Button type="submit" size="icon" className="size-10 shrink-0" disabled={!draft.trim()}>
-            <Send className="size-4" />
-            <span className="sr-only">Send message</span>
-          </Button>
+          <div className="flex justify-end">
+            <Button type="submit" className="gap-2" disabled={!draft.trim()}>
+              <Send className="size-4" /> Send
+            </Button>
+          </div>
         </form>
       ) : (
         <div className="border-t border-border/60 p-3 text-center text-sm text-muted-foreground">
