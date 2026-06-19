@@ -64,6 +64,7 @@ export const feedPost = pgTable("feed_post", {
   authorHandle: text("authorHandle").notNull(),
   text: text("text").notNull(),
   image: text("image"),
+  video: text("video"),
   likes: integer("likes").notNull().default(0),
   reposts: integer("reposts").notNull().default(0),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
@@ -144,6 +145,7 @@ export const chatroom = pgTable("chatroom", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   description: text("description"),
+  image: text("image"),
   ownerId: text("ownerId").notNull(),
   ownerName: text("ownerName").notNull(),
   inviteCode: text("inviteCode").notNull().unique(),
@@ -164,7 +166,10 @@ export const chatroomMessage = pgTable("chatroom_message", {
   chatroomId: integer("chatroomId").notNull(),
   userId: text("userId").notNull(),
   userName: text("userName").notNull(),
-  body: text("body").notNull(),
+  body: text("body"), // nullable — a message can be attachment-only
+  attachmentUrl: text("attachmentUrl"),
+  attachmentType: text("attachmentType"), // "image" | "video" | "document"
+  attachmentName: text("attachmentName"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
@@ -175,6 +180,39 @@ export const chatroomJoinRequest = pgTable("chatroom_join_request", {
   userName: text("userName").notNull(),
   status: text("status").notNull().default("pending"), // "pending" | "approved" | "rejected"
   createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// --- Announcements ---------------------------------------------------------
+// Paid promotional event banners shown at the top of the feed (tweet) tab.
+// A creator submits a flyer + event details and pays to publish; once active
+// it is visible to everyone and any user can add the event to their calendar.
+export const announcement = pgTable("announcement", {
+  id: serial("id").primaryKey(),
+  userId: text("userId").notNull(),
+  creatorName: text("creatorName").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  flyer: text("flyer"),
+  location: text("location"),
+  eventDate: text("eventDate").notNull(), // YYYY-MM-DD
+  eventTime: text("eventTime"), // HH:MM (24h), optional
+  status: text("status").notNull().default("active"), // "pending" | "active"
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// --- Status updates --------------------------------------------------------
+// WhatsApp-style ephemeral statuses. A user posts a photo or short video that
+// stays visible to everyone for 24 hours (expiresAt). Viewers see the statuses
+// of people they're connected to (follow or are followed by) first.
+export const statusUpdate = pgTable("status_update", {
+  id: serial("id").primaryKey(),
+  userId: text("userId").notNull(),
+  authorName: text("authorName").notNull(),
+  mediaUrl: text("mediaUrl").notNull(),
+  mediaType: text("mediaType").notNull(), // "image" | "video"
+  caption: text("caption"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  expiresAt: timestamp("expiresAt").notNull(),
 })
 
 // Per-user notifications. A row is created for each follower when someone they

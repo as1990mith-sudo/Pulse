@@ -37,6 +37,7 @@ export type FeedPostView = {
   postedAt: string
   text: string
   image: string | null
+  video: string | null
   likes: number
   reposts: number
   isFollowing: boolean
@@ -89,7 +90,16 @@ export async function getFeed(): Promise<FeedPostView[]> {
     ...comments.map((c) => c.userId),
   ])
 
-  return posts.map((p) => ({
+  // Surface posts from people the user follows (and their own) ahead of
+  // everyone else, while preserving most-recent-first order within each band.
+  const ordered = [...posts].sort((a, b) => {
+    const aPriority = currentUserId === a.userId || followingIds.has(a.userId) ? 0 : 1
+    const bPriority = currentUserId === b.userId || followingIds.has(b.userId) ? 0 : 1
+    if (aPriority !== bPriority) return aPriority - bPriority
+    return b.createdAt.getTime() - a.createdAt.getTime()
+  })
+
+  return ordered.map((p) => ({
     id: p.id,
     authorId: p.userId,
     user: p.authorName,
@@ -100,6 +110,7 @@ export async function getFeed(): Promise<FeedPostView[]> {
     postedAt: timeAgo(p.createdAt),
     text: p.text,
     image: p.image,
+    video: p.video,
     likes: p.likes,
     reposts: p.reposts,
     isFollowing: followingIds.has(p.userId),
@@ -157,6 +168,7 @@ export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
     postedAt: timeAgo(p.createdAt),
     text: p.text,
     image: p.image,
+    video: p.video,
     likes: p.likes,
     reposts: p.reposts,
     isFollowing: followingIds.has(p.userId),
@@ -176,10 +188,10 @@ export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
   }))
 }
 
-export async function createPost(input: { text: string; image?: string | null }) {
+export async function createPost(input: { text: string; image?: string | null; video?: string | null }) {
   const user = await requireUser()
   const text = input.text.trim()
-  if (!text && !input.image) throw new Error("Post cannot be empty.")
+  if (!text && !input.image && !input.video) throw new Error("Post cannot be empty.")
 
   await db.insert(feedPost).values({
     userId: user.id,
@@ -187,6 +199,7 @@ export async function createPost(input: { text: string; image?: string | null })
     authorHandle: getHandle(user.name),
     text,
     image: input.image ?? null,
+    video: input.video ?? null,
   })
 
   // Let everyone who follows this author know there's a new tweet.

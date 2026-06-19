@@ -1,13 +1,14 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Check, Clock, Loader2, Plus, Search, Users } from "lucide-react"
+import { Check, Clock, ImageIcon, Loader2, Plus, Search, Users } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -59,17 +60,23 @@ function MyRooms({ rooms }: { rooms: ChatroomSummary[] }) {
       {rooms.map((room) => (
         <Link key={room.id} href={`/chatrooms/${room.id}`}>
           <Card className="flex items-center justify-between gap-4 p-4 transition-colors hover:border-primary/60">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="truncate font-semibold">{room.name}</p>
-                {room.isOwner && <Badge variant="secondary">Admin</Badge>}
+            <div className="flex min-w-0 items-center gap-3">
+              <Avatar className="size-11 shrink-0">
+                {room.image && <AvatarImage src={room.image || "/placeholder.svg"} alt={room.name} />}
+                <AvatarFallback className="bg-secondary text-sm">{room.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="truncate font-semibold">{room.name}</p>
+                  {room.isOwner && <Badge variant="secondary">Admin</Badge>}
+                </div>
+                {room.description && (
+                  <p className="truncate text-sm text-muted-foreground">{room.description}</p>
+                )}
+                <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                  <Users className="size-3" /> {room.memberCount} {room.memberCount === 1 ? "member" : "members"}
+                </p>
               </div>
-              {room.description && (
-                <p className="truncate text-sm text-muted-foreground">{room.description}</p>
-              )}
-              <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                <Users className="size-3" /> {room.memberCount} {room.memberCount === 1 ? "member" : "members"}
-              </p>
             </div>
             <span className="text-sm font-medium text-primary">Open</span>
           </Card>
@@ -167,11 +174,17 @@ function DiscoverRooms() {
               key={room.id}
               className="flex items-center justify-between gap-3 rounded-lg border border-border/60 p-3"
             >
-              <div className="min-w-0">
-                <p className="truncate font-medium">{room.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  by {room.ownerName} · {room.memberCount} {room.memberCount === 1 ? "member" : "members"}
-                </p>
+              <div className="flex min-w-0 items-center gap-3">
+                <Avatar className="size-10 shrink-0">
+                  {room.image && <AvatarImage src={room.image || "/placeholder.svg"} alt={room.name} />}
+                  <AvatarFallback className="bg-secondary text-xs">{room.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{room.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    by {room.ownerName} · {room.memberCount} {room.memberCount === 1 ? "member" : "members"}
+                  </p>
+                </div>
               </div>
               {room.isMember ? (
                 <Link href={`/chatrooms/${room.id}`} className={buttonVariants({ variant: "secondary", size: "sm" })}>
@@ -202,8 +215,31 @@ function CreateRoom() {
   const router = useRouter()
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
+  const [image, setImage] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const imageInputRef = useRef<HTMLInputElement>(null)
+
+  async function handleImagePick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setError(null)
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      const res = await fetch("/api/upload-chat", { method: "POST", body: formData })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? "Upload failed")
+      setImage(data.url)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not upload the picture.")
+    } finally {
+      setUploading(false)
+      if (imageInputRef.current) imageInputRef.current.value = ""
+    }
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -212,7 +248,7 @@ function CreateRoom() {
     if (!trimmed) return
     startTransition(async () => {
       try {
-        const roomId = await createChatroom({ name: trimmed, description })
+        const roomId = await createChatroom({ name: trimmed, description, image })
         router.push(`/chatrooms/${roomId}`)
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not create the chatroom.")
@@ -223,6 +259,29 @@ function CreateRoom() {
   return (
     <Card className="p-6">
       <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="flex items-center gap-4">
+          <Avatar className="size-16">
+            {image && <AvatarImage src={image || "/placeholder.svg"} alt="Group picture preview" />}
+            <AvatarFallback className="bg-secondary text-base">
+              {name.trim() ? name.slice(0, 2).toUpperCase() : "GP"}
+            </AvatarFallback>
+          </Avatar>
+          <div className="space-y-1.5">
+            <p className="text-sm font-medium">Group picture <span className="text-muted-foreground">(optional)</span></p>
+            <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImagePick} />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => imageInputRef.current?.click()}
+              disabled={uploading}
+            >
+              {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <ImageIcon className="size-3.5" />}
+              {image ? "Change picture" : "Upload picture"}
+            </Button>
+          </div>
+        </div>
         <div className="space-y-2">
           <label htmlFor="room-name" className="text-sm font-medium">
             Chatroom name

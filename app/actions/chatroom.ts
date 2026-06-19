@@ -27,6 +27,7 @@ export type ChatroomSummary = {
   id: number
   name: string
   description: string | null
+  image: string | null
   ownerId: string
   ownerName: string
   inviteCode: string
@@ -39,11 +40,14 @@ export type ChatroomSearchResult = {
   id: number
   name: string
   description: string | null
+  image: string | null
   ownerName: string
   memberCount: number
   isMember: boolean
   requestStatus: "pending" | "approved" | "rejected" | null
 }
+
+export type ChatAttachmentType = "image" | "video" | "document"
 
 export type ChatMessageView = {
   id: number
@@ -51,7 +55,10 @@ export type ChatMessageView = {
   userName: string
   initials: string
   color: string
-  body: string
+  body: string | null
+  attachmentUrl: string | null
+  attachmentType: ChatAttachmentType | null
+  attachmentName: string | null
   isSelf: boolean
   postedAt: string
 }
@@ -69,6 +76,7 @@ export type ChatroomDetail = {
   id: number
   name: string
   description: string | null
+  image: string | null
   ownerId: string
   ownerName: string
   inviteCode: string
@@ -121,6 +129,7 @@ export async function getMyChatrooms(): Promise<ChatroomSummary[]> {
     id: r.id,
     name: r.name,
     description: r.description,
+    image: r.image,
     ownerId: r.ownerId,
     ownerName: r.ownerName,
     inviteCode: r.inviteCode,
@@ -168,6 +177,7 @@ export async function searchChatrooms(query: string): Promise<ChatroomSearchResu
     id: r.id,
     name: r.name,
     description: r.description,
+    image: r.image,
     ownerName: r.ownerName,
     memberCount: counts.get(r.id) ?? 0,
     isMember: myMemberships.has(r.id),
@@ -175,7 +185,11 @@ export async function searchChatrooms(query: string): Promise<ChatroomSearchResu
   }))
 }
 
-export async function createChatroom(input: { name: string; description?: string | null }) {
+export async function createChatroom(input: {
+  name: string
+  description?: string | null
+  image?: string | null
+}) {
   const user = await requireUser()
   const name = input.name.trim()
   if (!name) throw new Error("Chatroom name is required.")
@@ -185,6 +199,7 @@ export async function createChatroom(input: { name: string; description?: string
     .values({
       name,
       description: input.description?.trim() || null,
+      image: input.image?.trim() || null,
       ownerId: user.id,
       ownerName: user.name,
       inviteCode: generateInviteCode(),
@@ -241,6 +256,7 @@ export async function getChatroomDetail(chatroomId: number): Promise<ChatroomDet
     id: room.id,
     name: room.name,
     description: room.description,
+    image: room.image,
     ownerId: room.ownerId,
     ownerName: room.ownerName,
     inviteCode: room.inviteCode,
@@ -259,6 +275,9 @@ export async function getChatroomDetail(chatroomId: number): Promise<ChatroomDet
       initials: getInitials(m.userName),
       color: getAvatarColor(m.userId),
       body: m.body,
+      attachmentUrl: m.attachmentUrl,
+      attachmentType: (m.attachmentType as ChatAttachmentType | null) ?? null,
+      attachmentName: m.attachmentName,
       isSelf: m.userId === user.id,
       postedAt: timeAgo(m.createdAt),
     })),
@@ -273,10 +292,17 @@ export async function getChatroomDetail(chatroomId: number): Promise<ChatroomDet
   }
 }
 
-export async function sendChatMessage(input: { chatroomId: number; body: string }) {
+export async function sendChatMessage(input: {
+  chatroomId: number
+  body?: string
+  attachmentUrl?: string | null
+  attachmentType?: ChatAttachmentType | null
+  attachmentName?: string | null
+}) {
   const user = await requireUser()
-  const body = input.body.trim()
-  if (!body) throw new Error("Message cannot be empty.")
+  const body = (input.body ?? "").trim()
+  const hasAttachment = Boolean(input.attachmentUrl)
+  if (!body && !hasAttachment) throw new Error("Message cannot be empty.")
 
   const [membership] = await db
     .select()
@@ -288,9 +314,27 @@ export async function sendChatMessage(input: { chatroomId: number; body: string 
     chatroomId: input.chatroomId,
     userId: user.id,
     userName: user.name,
-    body,
+    body: body || null,
+    attachmentUrl: input.attachmentUrl ?? null,
+    attachmentType: hasAttachment ? input.attachmentType ?? "document" : null,
+    attachmentName: input.attachmentName ?? null,
   })
   revalidatePath(`/chatrooms/${input.chatroomId}`)
+}
+
+/** Admin updates (or removes) the chatroom's group profile picture. */
+export async function updateChatroomImage(input: { chatroomId: number; image: string | null }) {
+  const user = await requireUser()
+  const [room] = await db.select().from(chatroom).where(eq(chatroom.id, input.chatroomId))
+  if (!room) throw new Error("Chatroom not found.")
+  if (room.ownerId !== user.id) throw new Error("Only the chatroom admin can change the group picture.")
+
+  await db
+    .update(chatroom)
+    .set({ image: input.image?.trim() || null })
+    .where(eq(chatroom.id, input.chatroomId))
+  revalidatePath(`/chatrooms/${input.chatroomId}`)
+  revalidatePath("/chatrooms")
 }
 
 /** Join directly via an invite code (no approval needed). */
