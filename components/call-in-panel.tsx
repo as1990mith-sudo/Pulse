@@ -1,15 +1,33 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { Mic, PhoneCall, X } from "lucide-react"
+import type { CurrentUser } from "@/lib/session"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 
 type State = "idle" | "form" | "queued"
 
-export function CallInPanel() {
+export function CallInPanel({ currentUser = null }: { currentUser?: CurrentUser | null }) {
   const [state, setState] = useState<State>("idle")
   const [topic, setTopic] = useState("")
+
+  if (!currentUser) {
+    return (
+      <div className="flex items-center justify-between gap-4 rounded-xl border border-border/60 bg-card p-4">
+        <div>
+          <p className="font-semibold">Want to join on air?</p>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Sign in so the host knows who&apos;s calling in.
+          </p>
+        </div>
+        <Button render={<Link href="/sign-in" />} nativeButton={false} className="shrink-0 gap-1.5">
+          <PhoneCall className="size-4" /> Sign in to call in
+        </Button>
+      </div>
+    )
+  }
 
   if (state === "queued") {
     return (
@@ -21,7 +39,8 @@ export function CallInPanel() {
           <p className="font-semibold">You&apos;re in the call-in queue</p>
         </div>
         <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-          You&apos;re #3 in line. Keep your mic ready — the host will bring you on air when it&apos;s your turn.
+          You&apos;re #3 in line as <span className="font-medium text-foreground">{currentUser.name}</span>. Keep your
+          mic ready — the host will bring you on air when it&apos;s your turn.
         </p>
         {topic && (
           <p className="mt-2 rounded-lg bg-card px-3 py-2 text-sm text-foreground">

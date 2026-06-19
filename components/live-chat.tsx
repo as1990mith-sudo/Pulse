@@ -1,8 +1,10 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import Link from "next/link"
 import { Send } from "lucide-react"
 import { type ChatMessage, chatPool, seedChat } from "@/lib/data"
+import type { CurrentUser } from "@/lib/session"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -11,7 +13,13 @@ import { cn } from "@/lib/utils"
 const randomNames = ["echo_22", "lunar", "deepcut", "mara", "tunein_tom", "frequency_fan", "night_owl", "vinyl_kid"]
 const colors = ["text-chart-2", "text-chart-3", "text-chart-1"]
 
-export function LiveChat({ asHost = false }: { asHost?: boolean }) {
+export function LiveChat({
+  asHost = false,
+  currentUser = null,
+}: {
+  asHost?: boolean
+  currentUser?: CurrentUser | null
+}) {
   const [messages, setMessages] = useState<ChatMessage[]>(seedChat)
   const [draft, setDraft] = useState("")
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -43,7 +51,7 @@ export function LiveChat({ asHost = false }: { asHost?: boolean }) {
       ...prev.slice(-40),
       {
         id: crypto.randomUUID(),
-        user: asHost ? "Maya" : "you",
+        user: asHost ? "Maya" : (currentUser?.name ?? "guest"),
         color: asHost ? "text-primary" : "text-foreground",
         text,
         host: asHost,
@@ -70,19 +78,28 @@ export function LiveChat({ asHost = false }: { asHost?: boolean }) {
         </div>
       </ScrollArea>
 
-      <form onSubmit={send} className="flex items-center gap-2 border-t border-border/60 p-3">
-        <Input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder={asHost ? "Say something to the room…" : "Send a message…"}
-          className="h-10"
-          aria-label="Chat message"
-        />
-        <Button type="submit" size="icon" className="size-10 shrink-0" disabled={!draft.trim()}>
-          <Send className="size-4" />
-          <span className="sr-only">Send message</span>
-        </Button>
-      </form>
+      {asHost || currentUser ? (
+        <form onSubmit={send} className="flex items-center gap-2 border-t border-border/60 p-3">
+          <Input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder={asHost ? "Say something to the room…" : `Chat as ${currentUser?.name}…`}
+            className="h-10"
+            aria-label="Chat message"
+          />
+          <Button type="submit" size="icon" className="size-10 shrink-0" disabled={!draft.trim()}>
+            <Send className="size-4" />
+            <span className="sr-only">Send message</span>
+          </Button>
+        </form>
+      ) : (
+        <div className="border-t border-border/60 p-3 text-center text-sm text-muted-foreground">
+          <Link href="/sign-in" className="font-medium text-primary hover:underline">
+            Sign in
+          </Link>{" "}
+          to join the chat.
+        </div>
+      )}
     </div>
   )
 }

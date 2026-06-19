@@ -1,8 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Heart, Share2, MessageCircle, Check, Send } from "lucide-react"
-import type { DevotionalComment } from "@/lib/data"
+import { addDevotionalComment, type DevotionalCommentView } from "@/app/actions/devotional"
+import type { CurrentUser } from "@/lib/session"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -11,18 +14,23 @@ import { cn } from "@/lib/utils"
 
 export function DevotionalInteractions({
   title,
+  devotionalDate,
   initialLikes,
-  initialComments,
+  comments,
+  currentUser,
 }: {
   title: string
+  devotionalDate: string
   initialLikes: number
-  initialComments: DevotionalComment[]
+  comments: DevotionalCommentView[]
+  currentUser: CurrentUser | null
 }) {
+  const router = useRouter()
   const [liked, setLiked] = useState(false)
   const [likes, setLikes] = useState(initialLikes)
   const [shared, setShared] = useState(false)
-  const [comments, setComments] = useState<DevotionalComment[]>(initialComments)
   const [draft, setDraft] = useState("")
+  const [isPending, startTransition] = useTransition()
 
   function toggleLike() {
     setLiked((prev) => {
@@ -49,28 +57,18 @@ export function DevotionalInteractions({
   function submitComment(e: React.FormEvent) {
     e.preventDefault()
     const text = draft.trim()
-    if (!text) return
-    const newComment: DevotionalComment = {
-      id: `local-${Date.now()}`,
-      user: "You",
-      initials: "Y",
-      color: "bg-primary/20 text-primary",
-      text,
-      postedAt: "Just now",
-    }
-    setComments((prev) => [newComment, ...prev])
-    setDraft("")
+    if (!text || !currentUser) return
+    startTransition(async () => {
+      await addDevotionalComment({ devotionalDate, text })
+      setDraft("")
+      router.refresh()
+    })
   }
 
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-3">
-        <Button
-          variant={liked ? "default" : "secondary"}
-          onClick={toggleLike}
-          className="gap-2"
-          aria-pressed={liked}
-        >
+        <Button variant={liked ? "default" : "secondary"} onClick={toggleLike} className="gap-2" aria-pressed={liked}>
           <Heart className={cn("size-4", liked && "fill-current")} />
           {likes.toLocaleString()}
         </Button>
@@ -93,20 +91,29 @@ export function DevotionalInteractions({
           Comments <span className="text-muted-foreground">({comments.length})</span>
         </h2>
 
-        <form onSubmit={submitComment} className="space-y-3">
-          <Textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="Share a reflection, prayer, or encouragement..."
-            className="min-h-24 resize-none"
-            aria-label="Write a comment"
-          />
-          <div className="flex justify-end">
-            <Button type="submit" disabled={!draft.trim()} className="gap-2">
-              <Send className="size-4" /> Post comment
-            </Button>
+        {currentUser ? (
+          <form onSubmit={submitComment} className="space-y-3">
+            <Textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Share a reflection, prayer, or encouragement..."
+              className="min-h-24 resize-none"
+              aria-label="Write a comment"
+            />
+            <div className="flex justify-end">
+              <Button type="submit" disabled={isPending || !draft.trim()} className="gap-2">
+                <Send className="size-4" /> {isPending ? "Posting…" : "Post comment"}
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <div className="rounded-xl border border-border/60 bg-card p-4 text-sm text-muted-foreground">
+            <Link href="/sign-in" className="font-medium text-primary hover:underline">
+              Sign in
+            </Link>{" "}
+            to share a reflection. Your name will appear with your comment.
           </div>
-        </form>
+        )}
 
         <ul className="space-y-5">
           {comments.map((comment) => (

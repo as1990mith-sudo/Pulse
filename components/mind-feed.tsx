@@ -1,9 +1,12 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useRef, useState, useTransition } from "react"
 import Image from "next/image"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Heart, MessageCircle, Repeat2, Share2, Check, ImagePlus, X, Send } from "lucide-react"
-import type { FeedComment, FeedPost } from "@/lib/data"
+import { addPostComment, createPost, setPostLike, type FeedPostView } from "@/app/actions/feed"
+import type { CurrentUser } from "@/lib/session"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -11,17 +14,27 @@ import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 
-export function MindFeed({ initialPosts }: { initialPosts: FeedPost[] }) {
-  const [posts, setPosts] = useState<FeedPost[]>(initialPosts)
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; currentUser: CurrentUser | null }) {
+  const router = useRouter()
   const [draft, setDraft] = useState("")
   const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  function handleImagePick(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleImagePick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    const url = URL.createObjectURL(file)
-    setImagePreview(url)
+    const dataUrl = await readFileAsDataUrl(file)
+    setImagePreview(dataUrl)
   }
 
   function clearImage() {
@@ -33,26 +46,42 @@ export function MindFeed({ initialPosts }: { initialPosts: FeedPost[] }) {
     e.preventDefault()
     const text = draft.trim()
     if (!text && !imagePreview) return
-    const newPost: FeedPost = {
-      id: `local-${Date.now()}`,
-      user: "You",
-      handle: "@you",
-      initials: "Y",
-      color: "bg-primary/20 text-primary",
-      postedAt: "now",
-      text,
-      image: imagePreview ?? undefined,
-      likes: 0,
-      reposts: 0,
-      comments: [],
-    }
-    setPosts((prev) => [newPost, ...prev])
-    setDraft("")
-    clearImage()
+    startTransition(async () => {
+      await createPost({ text, image: imagePreview })
+      setDraft("")
+      clearImage()
+      router.refresh()
+    })
   }
 
-  function updatePost(id: string, updater: (post: FeedPost) => FeedPost) {
-    setPosts((prev) => prev.map((p) => (p.id === id ? updater(p) : p)))
+  if (!currentUser) {
+    return (
+      <div className="space-y-6">
+        <Card className="flex flex-col items-center gap-3 p-8 text-center">
+          <p className="text-lg font-semibold">Join the conversation</p>
+          <p className="max-w-sm text-pretty text-sm leading-relaxed text-muted-foreground">
+            Create a free account to post what&apos;s on your mind, reply to others, and like posts. Your name shows on
+            everything you share.
+          </p>
+          <div className="flex gap-2">
+            <Button render={<Link href="/sign-up" />} nativeButton={false}>
+              Create account
+            </Button>
+            <Button render={<Link href="/sign-in" />} nativeButton={false} variant="secondary">
+              Sign in
+            </Button>
+          </div>
+        </Card>
+
+        <ul className="space-y-4">
+          {posts.map((post) => (
+            <li key={post.id}>
+              <PostCard post={post} currentUser={currentUser} />
+            </li>
+          ))}
+        </ul>
+      </div>
+    )
   }
 
   return (
@@ -60,7 +89,7 @@ export function MindFeed({ initialPosts }: { initialPosts: FeedPost[] }) {
       <Card className="p-4">
         <form onSubmit={publish} className="flex gap-3">
           <Avatar className="size-10 shrink-0">
-            <AvatarFallback className="bg-primary/20 text-primary">Y</AvatarFallback>
+            <AvatarFallback className={currentUser.color}>{currentUser.initials}</AvatarFallback>
           </Avatar>
           <div className="flex-1 space-y-3">
             <Textarea
@@ -94,15 +123,9 @@ export function MindFeed({ initialPosts }: { initialPosts: FeedPost[] }) {
               >
                 <ImagePlus className="size-4" /> Photo
               </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleImagePick}
-              />
-              <Button type="submit" disabled={!draft.trim() && !imagePreview} className="gap-2">
-                <Send className="size-4" /> Post
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImagePick} />
+              <Button type="submit" disabled={isPending || (!draft.trim() && !imagePreview)} className="gap-2">
+                <Send className="size-4" /> {isPending ? "Posting…" : "Post"}
               </Button>
             </div>
           </div>
@@ -112,7 +135,7 @@ export function MindFeed({ initialPosts }: { initialPosts: FeedPost[] }) {
       <ul className="space-y-4">
         {posts.map((post) => (
           <li key={post.id}>
-            <PostCard post={post} onUpdate={(updater) => updatePost(post.id, updater)} />
+            <PostCard post={post} currentUser={currentUser} />
           </li>
         ))}
       </ul>
@@ -120,23 +143,31 @@ export function MindFeed({ initialPosts }: { initialPosts: FeedPost[] }) {
   )
 }
 
-function PostCard({ post, onUpdate }: { post: FeedPost; onUpdate: (updater: (post: FeedPost) => FeedPost) => void }) {
+function PostCard({ post, currentUser }: { post: FeedPostView; currentUser: CurrentUser | null }) {
+  const router = useRouter()
   const [liked, setLiked] = useState(false)
+  const [likes, setLikes] = useState(post.likes)
   const [reposted, setReposted] = useState(false)
+  const [reposts, setReposts] = useState(post.reposts)
   const [shared, setShared] = useState(false)
   const [showComments, setShowComments] = useState(false)
   const [commentDraft, setCommentDraft] = useState("")
+  const [isPending, startTransition] = useTransition()
 
   function toggleLike() {
-    setLiked((prev) => {
-      onUpdate((p) => ({ ...p, likes: prev ? p.likes - 1 : p.likes + 1 }))
-      return !prev
+    if (!currentUser) return
+    const next = !liked
+    setLiked(next)
+    setLikes((n) => (next ? n + 1 : n - 1))
+    startTransition(async () => {
+      await setPostLike({ postId: post.id, liked: next })
     })
   }
 
   function toggleRepost() {
+    if (!currentUser) return
     setReposted((prev) => {
-      onUpdate((p) => ({ ...p, reposts: prev ? p.reposts - 1 : p.reposts + 1 }))
+      setReposts((n) => (prev ? n - 1 : n + 1))
       return !prev
     })
   }
@@ -159,19 +190,13 @@ function PostCard({ post, onUpdate }: { post: FeedPost; onUpdate: (updater: (pos
   function submitComment(e: React.FormEvent) {
     e.preventDefault()
     const text = commentDraft.trim()
-    if (!text) return
-    const newComment: FeedComment = {
-      id: `c-${Date.now()}`,
-      user: "You",
-      handle: "@you",
-      initials: "Y",
-      color: "bg-primary/20 text-primary",
-      text,
-      postedAt: "now",
-    }
-    onUpdate((p) => ({ ...p, comments: [...p.comments, newComment] }))
-    setCommentDraft("")
-    setShowComments(true)
+    if (!text || !currentUser) return
+    startTransition(async () => {
+      await addPostComment({ postId: post.id, text })
+      setCommentDraft("")
+      setShowComments(true)
+      router.refresh()
+    })
   }
 
   return (
@@ -197,6 +222,7 @@ function PostCard({ post, onUpdate }: { post: FeedPost; onUpdate: (updater: (pos
                 width={600}
                 height={400}
                 className="h-auto w-full object-cover"
+                unoptimized={post.image.startsWith("data:")}
               />
             </div>
           )}
@@ -213,22 +239,30 @@ function PostCard({ post, onUpdate }: { post: FeedPost; onUpdate: (updater: (pos
 
             <button
               onClick={toggleRepost}
-              className={cn("flex items-center gap-1.5 text-sm transition-colors hover:text-chart-2", reposted && "text-chart-2")}
+              className={cn(
+                "flex items-center gap-1.5 text-sm transition-colors hover:text-chart-2",
+                reposted && "text-chart-2",
+                !currentUser && "cursor-not-allowed opacity-60",
+              )}
               aria-pressed={reposted}
               aria-label="Repost"
             >
               <Repeat2 className="size-[18px]" />
-              {post.reposts > 0 && post.reposts}
+              {reposts > 0 && reposts}
             </button>
 
             <button
               onClick={toggleLike}
-              className={cn("flex items-center gap-1.5 text-sm transition-colors hover:text-primary", liked && "text-primary")}
+              className={cn(
+                "flex items-center gap-1.5 text-sm transition-colors hover:text-primary",
+                liked && "text-primary",
+                !currentUser && "cursor-not-allowed opacity-60",
+              )}
               aria-pressed={liked}
               aria-label="Like"
             >
               <Heart className={cn("size-[18px]", liked && "fill-current")} />
-              {post.likes > 0 && post.likes}
+              {likes > 0 && likes}
             </button>
 
             <button
@@ -244,21 +278,30 @@ function PostCard({ post, onUpdate }: { post: FeedPost; onUpdate: (updater: (pos
             <div className="space-y-4 pt-2">
               <Separator />
 
-              <form onSubmit={submitComment} className="flex items-start gap-2">
-                <Avatar className="size-8 shrink-0">
-                  <AvatarFallback className="bg-primary/20 text-primary text-xs">Y</AvatarFallback>
-                </Avatar>
-                <Textarea
-                  value={commentDraft}
-                  onChange={(e) => setCommentDraft(e.target.value)}
-                  placeholder="Post your reply..."
-                  className="min-h-10 resize-none"
-                  aria-label="Write a reply"
-                />
-                <Button type="submit" size="icon" disabled={!commentDraft.trim()} aria-label="Send reply">
-                  <Send className="size-4" />
-                </Button>
-              </form>
+              {currentUser ? (
+                <form onSubmit={submitComment} className="flex items-start gap-2">
+                  <Avatar className="size-8 shrink-0">
+                    <AvatarFallback className={cn("text-xs", currentUser.color)}>{currentUser.initials}</AvatarFallback>
+                  </Avatar>
+                  <Textarea
+                    value={commentDraft}
+                    onChange={(e) => setCommentDraft(e.target.value)}
+                    placeholder="Post your reply..."
+                    className="min-h-10 resize-none"
+                    aria-label="Write a reply"
+                  />
+                  <Button type="submit" size="icon" disabled={isPending || !commentDraft.trim()} aria-label="Send reply">
+                    <Send className="size-4" />
+                  </Button>
+                </form>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  <Link href="/sign-in" className="font-medium text-primary hover:underline">
+                    Sign in
+                  </Link>{" "}
+                  to reply.
+                </p>
+              )}
 
               {post.comments.length > 0 && (
                 <ul className="space-y-4">

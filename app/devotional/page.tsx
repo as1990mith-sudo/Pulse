@@ -2,9 +2,12 @@ import { Clock, Calendar } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
 import { DevotionalInteractions } from "@/components/devotional-interactions"
 import { dailyDevotional } from "@/lib/data"
+import { getDevotionalComments } from "@/app/actions/devotional"
+import { getCurrentUser } from "@/lib/session"
 
-export default function DevotionalPage() {
+export default async function DevotionalPage() {
   const d = dailyDevotional
+  const [comments, currentUser] = await Promise.all([getDevotionalComments(d.date), getCurrentUser()])
 
   return (
     <div className="min-h-screen">
@@ -51,7 +54,13 @@ export default function DevotionalPage() {
             <p className="mt-3 text-pretty text-base leading-relaxed text-foreground/90 sm:text-lg">{d.prayer}</p>
           </div>
 
-          <DevotionalInteractions title={d.title} initialLikes={d.initialLikes} initialComments={d.comments} />
+          <DevotionalInteractions
+            title={d.title}
+            devotionalDate={d.date}
+            initialLikes={d.initialLikes}
+            comments={comments}
+            currentUser={currentUser}
+          />
         </article>
       </main>
 

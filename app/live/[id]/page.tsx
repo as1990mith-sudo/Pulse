@@ -2,6 +2,7 @@ import { notFound } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, MessageSquare, Share2 } from "lucide-react"
 import { getShow } from "@/lib/data"
+import { getCurrentUser } from "@/lib/session"
 import { SiteHeader } from "@/components/site-header"
 import { StreamPlayer } from "@/components/stream-player"
 import { LiveChat } from "@/components/live-chat"
@@ -15,6 +16,8 @@ export default async function LivePage({ params }: { params: Promise<{ id: strin
   const show = getShow(id)
 
   if (!show) notFound()
+
+  const currentUser = await getCurrentUser()
 
   return (
     <div className="min-h-screen">
@@ -60,7 +63,7 @@ export default async function LivePage({ params }: { params: Promise<{ id: strin
 
               <p className="text-pretty leading-relaxed text-muted-foreground">{show.description}</p>
 
-              <CallInPanel />
+              <CallInPanel currentUser={currentUser} />
             </div>
           </div>
 
@@ -72,7 +75,7 @@ export default async function LivePage({ params }: { params: Promise<{ id: strin
                 <h2 className="font-semibold">Live chat</h2>
               </div>
               <div className="min-h-0 flex-1">
-                <LiveChat />
+                <LiveChat currentUser={currentUser} />
               </div>
             </div>
           </aside>

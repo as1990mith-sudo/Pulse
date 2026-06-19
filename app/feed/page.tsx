@@ -1,8 +1,11 @@
 import { SiteHeader } from "@/components/site-header"
 import { MindFeed } from "@/components/mind-feed"
-import { feedPosts } from "@/lib/data"
+import { getFeed } from "@/app/actions/feed"
+import { getCurrentUser } from "@/lib/session"
 
-export default function FeedPage() {
+export default async function FeedPage() {
+  const [posts, currentUser] = await Promise.all([getFeed(), getCurrentUser()])
+
   return (
     <div className="min-h-screen">
       <SiteHeader />
@@ -18,14 +21,14 @@ export default function FeedPage() {
         </section>
 
         <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6">
-          <MindFeed initialPosts={feedPosts} />
+          <MindFeed posts={posts} currentUser={currentUser} />
         </div>
       </main>
 
       <footer className="border-t border-border/60">
         <div className="mx-auto flex w-full max-w-2xl flex-col items-center justify-between gap-2 px-4 py-8 text-sm text-muted-foreground sm:flex-row sm:px-6">
           <p>Frequency — live podcast streaming.</p>
-          <p>Built as a demo. Posts are stored locally.</p>
+          <p>Built as a demo. Posts are saved to your account.</p>
         </div>
       </footer>
     </div>
