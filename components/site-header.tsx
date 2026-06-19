@@ -13,6 +13,7 @@ const navItems = [
   { href: "/feed", label: "Tweet" },
   { href: "/live", label: "Live" },
   { href: "/catalog", label: "Catalogue" },
+  { href: "/chatrooms", label: "Chatroom" },
 ]
 
 export function SiteHeader() {

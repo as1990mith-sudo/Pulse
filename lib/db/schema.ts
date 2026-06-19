@@ -135,6 +135,48 @@ export const episode = pgTable("episode", {
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
+// --- Chatrooms -------------------------------------------------------------
+// WhatsApp-style group chats. The creator becomes the admin/owner and can
+// invite others via an invite code. Rooms are private — only members see them
+// and their messages — but anyone can search rooms by name and request to join.
+
+export const chatroom = pgTable("chatroom", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  ownerId: text("ownerId").notNull(),
+  ownerName: text("ownerName").notNull(),
+  inviteCode: text("inviteCode").notNull().unique(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+export const chatroomMember = pgTable("chatroom_member", {
+  id: serial("id").primaryKey(),
+  chatroomId: integer("chatroomId").notNull(),
+  userId: text("userId").notNull(),
+  userName: text("userName").notNull(),
+  role: text("role").notNull().default("member"), // "admin" | "member"
+  joinedAt: timestamp("joinedAt").notNull().defaultNow(),
+})
+
+export const chatroomMessage = pgTable("chatroom_message", {
+  id: serial("id").primaryKey(),
+  chatroomId: integer("chatroomId").notNull(),
+  userId: text("userId").notNull(),
+  userName: text("userName").notNull(),
+  body: text("body").notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+export const chatroomJoinRequest = pgTable("chatroom_join_request", {
+  id: serial("id").primaryKey(),
+  chatroomId: integer("chatroomId").notNull(),
+  userId: text("userId").notNull(),
+  userName: text("userName").notNull(),
+  status: text("status").notNull().default("pending"), // "pending" | "approved" | "rejected"
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
 // Per-user notifications. A row is created for each follower when someone they
 // follow posts a tweet or starts a live stream.
 export const notification = pgTable("notification", {

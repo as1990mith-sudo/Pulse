@@ -66,8 +66,8 @@ export default function LivePage() {
                   Your audience is waiting. Go live.
                 </h2>
                 <p className="text-muted-foreground leading-relaxed">
-                  Open the studio, turn on your camera and mic, and start broadcasting to listeners in seconds. Manage
-                  chat and call-ins all in one place.
+                  Open the studio, turn on your mic, add background music, and start broadcasting audio to listeners in
+                  seconds. Manage chat and call-ins all in one place.
                 </p>
               </div>
               <Link

@@ -430,7 +430,7 @@ function PublishPanel({
       <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-5 text-center">
         <CheckCircle2 className="mx-auto size-8 text-primary" />
         <p className="font-semibold">Session published to your catalogue</p>
-        <p className="text-sm text-muted-foreground">Your followers and anyone visiting your profile can watch it now.</p>
+        <p className="text-sm text-muted-foreground">Your followers and anyone visiting your profile can listen now.</p>
         <Button variant="secondary" onClick={onClose}>
           Done
         </Button>

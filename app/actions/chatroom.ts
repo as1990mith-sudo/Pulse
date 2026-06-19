@@ -1,0 +1,402 @@
+"use server"
+
+import { and, asc, desc, eq, ilike, inArray } from "drizzle-orm"
+import { headers } from "next/headers"
+import { revalidatePath } from "next/cache"
+import { auth } from "@/lib/auth"
+import { db } from "@/lib/db"
+import {
+  chatroom,
+  chatroomJoinRequest,
+  chatroomMember,
+  chatroomMessage,
+} from "@/lib/db/schema"
+import { getAvatarColor, getInitials } from "@/lib/identity"
+
+async function requireUser() {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) throw new Error("You must be signed in to do that.")
+  return session.user
+}
+
+function generateInviteCode(): string {
+  return Math.random().toString(36).slice(2, 10)
+}
+
+export type ChatroomSummary = {
+  id: number
+  name: string
+  description: string | null
+  ownerId: string
+  ownerName: string
+  inviteCode: string
+  memberCount: number
+  isOwner: boolean
+  createdAt: string
+}
+
+export type ChatroomSearchResult = {
+  id: number
+  name: string
+  description: string | null
+  ownerName: string
+  memberCount: number
+  isMember: boolean
+  requestStatus: "pending" | "approved" | "rejected" | null
+}
+
+export type ChatMessageView = {
+  id: number
+  userId: string
+  userName: string
+  initials: string
+  color: string
+  body: string
+  isSelf: boolean
+  postedAt: string
+}
+
+export type JoinRequestView = {
+  id: number
+  userId: string
+  userName: string
+  initials: string
+  color: string
+  createdAt: string
+}
+
+export type ChatroomDetail = {
+  id: number
+  name: string
+  description: string | null
+  ownerId: string
+  ownerName: string
+  inviteCode: string
+  isOwner: boolean
+  members: { userId: string; userName: string; initials: string; color: string; role: string }[]
+  messages: ChatMessageView[]
+  joinRequests: JoinRequestView[]
+}
+
+function timeAgo(date: Date): string {
+  const secs = Math.floor((Date.now() - date.getTime()) / 1000)
+  if (secs < 60) return "now"
+  const mins = Math.floor(secs / 60)
+  if (mins < 60) return `${mins}m`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h`
+  const days = Math.floor(hrs / 24)
+  return `${days}d`
+}
+
+async function memberCounts(chatroomIds: number[]): Promise<Map<number, number>> {
+  if (chatroomIds.length === 0) return new Map()
+  const rows = await db
+    .select({ chatroomId: chatroomMember.chatroomId })
+    .from(chatroomMember)
+    .where(inArray(chatroomMember.chatroomId, chatroomIds))
+  const map = new Map<number, number>()
+  for (const r of rows) map.set(r.chatroomId, (map.get(r.chatroomId) ?? 0) + 1)
+  return map
+}
+
+/** Rooms the current user is a member of. */
+export async function getMyChatrooms(): Promise<ChatroomSummary[]> {
+  const user = await requireUser()
+  const memberships = await db
+    .select({ chatroomId: chatroomMember.chatroomId })
+    .from(chatroomMember)
+    .where(eq(chatroomMember.userId, user.id))
+  const ids = memberships.map((m) => m.chatroomId)
+  if (ids.length === 0) return []
+
+  const rooms = await db
+    .select()
+    .from(chatroom)
+    .where(inArray(chatroom.id, ids))
+    .orderBy(desc(chatroom.createdAt))
+  const counts = await memberCounts(ids)
+
+  return rooms.map((r) => ({
+    id: r.id,
+    name: r.name,
+    description: r.description,
+    ownerId: r.ownerId,
+    ownerName: r.ownerName,
+    inviteCode: r.inviteCode,
+    memberCount: counts.get(r.id) ?? 0,
+    isOwner: r.ownerId === user.id,
+    createdAt: timeAgo(r.createdAt),
+  }))
+}
+
+/** Public search: find rooms by name. Returns membership + request status. */
+export async function searchChatrooms(query: string): Promise<ChatroomSearchResult[]> {
+  const user = await requireUser()
+  const q = query.trim()
+  if (!q) return []
+
+  const rooms = await db
+    .select()
+    .from(chatroom)
+    .where(ilike(chatroom.name, `%${q}%`))
+    .orderBy(asc(chatroom.name))
+    .limit(25)
+  const ids = rooms.map((r) => r.id)
+  const counts = await memberCounts(ids)
+
+  const myMemberships = ids.length
+    ? new Set(
+        (
+          await db
+            .select({ chatroomId: chatroomMember.chatroomId })
+            .from(chatroomMember)
+            .where(and(eq(chatroomMember.userId, user.id), inArray(chatroomMember.chatroomId, ids)))
+        ).map((m) => m.chatroomId),
+      )
+    : new Set<number>()
+
+  const myRequests = ids.length
+    ? await db
+        .select()
+        .from(chatroomJoinRequest)
+        .where(and(eq(chatroomJoinRequest.userId, user.id), inArray(chatroomJoinRequest.chatroomId, ids)))
+    : []
+  const requestMap = new Map(myRequests.map((r) => [r.chatroomId, r.status as "pending" | "approved" | "rejected"]))
+
+  return rooms.map((r) => ({
+    id: r.id,
+    name: r.name,
+    description: r.description,
+    ownerName: r.ownerName,
+    memberCount: counts.get(r.id) ?? 0,
+    isMember: myMemberships.has(r.id),
+    requestStatus: requestMap.get(r.id) ?? null,
+  }))
+}
+
+export async function createChatroom(input: { name: string; description?: string | null }) {
+  const user = await requireUser()
+  const name = input.name.trim()
+  if (!name) throw new Error("Chatroom name is required.")
+
+  const [room] = await db
+    .insert(chatroom)
+    .values({
+      name,
+      description: input.description?.trim() || null,
+      ownerId: user.id,
+      ownerName: user.name,
+      inviteCode: generateInviteCode(),
+    })
+    .returning()
+
+  await db.insert(chatroomMember).values({
+    chatroomId: room.id,
+    userId: user.id,
+    userName: user.name,
+    role: "admin",
+  })
+
+  revalidatePath("/chatrooms")
+  return room.id
+}
+
+/** Full detail for a room the user belongs to. Throws if not a member. */
+export async function getChatroomDetail(chatroomId: number): Promise<ChatroomDetail> {
+  const user = await requireUser()
+
+  const [membership] = await db
+    .select()
+    .from(chatroomMember)
+    .where(and(eq(chatroomMember.chatroomId, chatroomId), eq(chatroomMember.userId, user.id)))
+  if (!membership) throw new Error("You are not a member of this chatroom.")
+
+  const [room] = await db.select().from(chatroom).where(eq(chatroom.id, chatroomId))
+  if (!room) throw new Error("Chatroom not found.")
+
+  const isOwner = room.ownerId === user.id
+
+  const members = await db
+    .select()
+    .from(chatroomMember)
+    .where(eq(chatroomMember.chatroomId, chatroomId))
+    .orderBy(asc(chatroomMember.joinedAt))
+
+  const messages = await db
+    .select()
+    .from(chatroomMessage)
+    .where(eq(chatroomMessage.chatroomId, chatroomId))
+    .orderBy(asc(chatroomMessage.createdAt))
+
+  const joinRequests = isOwner
+    ? await db
+        .select()
+        .from(chatroomJoinRequest)
+        .where(and(eq(chatroomJoinRequest.chatroomId, chatroomId), eq(chatroomJoinRequest.status, "pending")))
+        .orderBy(asc(chatroomJoinRequest.createdAt))
+    : []
+
+  return {
+    id: room.id,
+    name: room.name,
+    description: room.description,
+    ownerId: room.ownerId,
+    ownerName: room.ownerName,
+    inviteCode: room.inviteCode,
+    isOwner,
+    members: members.map((m) => ({
+      userId: m.userId,
+      userName: m.userName,
+      initials: getInitials(m.userName),
+      color: getAvatarColor(m.userId),
+      role: m.role,
+    })),
+    messages: messages.map((m) => ({
+      id: m.id,
+      userId: m.userId,
+      userName: m.userName,
+      initials: getInitials(m.userName),
+      color: getAvatarColor(m.userId),
+      body: m.body,
+      isSelf: m.userId === user.id,
+      postedAt: timeAgo(m.createdAt),
+    })),
+    joinRequests: joinRequests.map((r) => ({
+      id: r.id,
+      userId: r.userId,
+      userName: r.userName,
+      initials: getInitials(r.userName),
+      color: getAvatarColor(r.userId),
+      createdAt: timeAgo(r.createdAt),
+    })),
+  }
+}
+
+export async function sendChatMessage(input: { chatroomId: number; body: string }) {
+  const user = await requireUser()
+  const body = input.body.trim()
+  if (!body) throw new Error("Message cannot be empty.")
+
+  const [membership] = await db
+    .select()
+    .from(chatroomMember)
+    .where(and(eq(chatroomMember.chatroomId, input.chatroomId), eq(chatroomMember.userId, user.id)))
+  if (!membership) throw new Error("You are not a member of this chatroom.")
+
+  await db.insert(chatroomMessage).values({
+    chatroomId: input.chatroomId,
+    userId: user.id,
+    userName: user.name,
+    body,
+  })
+  revalidatePath(`/chatrooms/${input.chatroomId}`)
+}
+
+/** Join directly via an invite code (no approval needed). */
+export async function joinByInviteCode(inviteCode: string) {
+  const user = await requireUser()
+  const code = inviteCode.trim()
+  if (!code) throw new Error("Invite code is required.")
+
+  const [room] = await db.select().from(chatroom).where(eq(chatroom.inviteCode, code))
+  if (!room) throw new Error("Invalid invite code.")
+
+  const [existing] = await db
+    .select()
+    .from(chatroomMember)
+    .where(and(eq(chatroomMember.chatroomId, room.id), eq(chatroomMember.userId, user.id)))
+  if (!existing) {
+    await db.insert(chatroomMember).values({
+      chatroomId: room.id,
+      userId: user.id,
+      userName: user.name,
+      role: "member",
+    })
+  }
+  revalidatePath("/chatrooms")
+  return room.id
+}
+
+/** Request to join a room found via search. */
+export async function requestToJoin(chatroomId: number) {
+  const user = await requireUser()
+
+  const [existingMember] = await db
+    .select()
+    .from(chatroomMember)
+    .where(and(eq(chatroomMember.chatroomId, chatroomId), eq(chatroomMember.userId, user.id)))
+  if (existingMember) return
+
+  const [existingReq] = await db
+    .select()
+    .from(chatroomJoinRequest)
+    .where(and(eq(chatroomJoinRequest.chatroomId, chatroomId), eq(chatroomJoinRequest.userId, user.id)))
+
+  if (existingReq) {
+    if (existingReq.status !== "pending") {
+      await db
+        .update(chatroomJoinRequest)
+        .set({ status: "pending", createdAt: new Date() })
+        .where(eq(chatroomJoinRequest.id, existingReq.id))
+    }
+  } else {
+    await db.insert(chatroomJoinRequest).values({
+      chatroomId,
+      userId: user.id,
+      userName: user.name,
+    })
+  }
+  revalidatePath("/chatrooms")
+}
+
+/** Admin approves a pending join request. */
+export async function approveJoinRequest(requestId: number) {
+  const user = await requireUser()
+
+  const [req] = await db.select().from(chatroomJoinRequest).where(eq(chatroomJoinRequest.id, requestId))
+  if (!req) throw new Error("Request not found.")
+
+  const [room] = await db.select().from(chatroom).where(eq(chatroom.id, req.chatroomId))
+  if (!room || room.ownerId !== user.id) throw new Error("Only the chatroom admin can approve requests.")
+
+  const [existing] = await db
+    .select()
+    .from(chatroomMember)
+    .where(and(eq(chatroomMember.chatroomId, req.chatroomId), eq(chatroomMember.userId, req.userId)))
+  if (!existing) {
+    await db.insert(chatroomMember).values({
+      chatroomId: req.chatroomId,
+      userId: req.userId,
+      userName: req.userName,
+      role: "member",
+    })
+  }
+  await db.update(chatroomJoinRequest).set({ status: "approved" }).where(eq(chatroomJoinRequest.id, requestId))
+  revalidatePath(`/chatrooms/${req.chatroomId}`)
+}
+
+/** Admin rejects a pending join request. */
+export async function rejectJoinRequest(requestId: number) {
+  const user = await requireUser()
+
+  const [req] = await db.select().from(chatroomJoinRequest).where(eq(chatroomJoinRequest.id, requestId))
+  if (!req) throw new Error("Request not found.")
+
+  const [room] = await db.select().from(chatroom).where(eq(chatroom.id, req.chatroomId))
+  if (!room || room.ownerId !== user.id) throw new Error("Only the chatroom admin can reject requests.")
+
+  await db.update(chatroomJoinRequest).set({ status: "rejected" }).where(eq(chatroomJoinRequest.id, requestId))
+  revalidatePath(`/chatrooms/${req.chatroomId}`)
+}
+
+/** Leave a chatroom (owner cannot leave their own room). */
+export async function leaveChatroom(chatroomId: number) {
+  const user = await requireUser()
+  const [room] = await db.select().from(chatroom).where(eq(chatroom.id, chatroomId))
+  if (room && room.ownerId === user.id) throw new Error("The admin cannot leave their own chatroom.")
+  await db
+    .delete(chatroomMember)
+    .where(and(eq(chatroomMember.chatroomId, chatroomId), eq(chatroomMember.userId, user.id)))
+  revalidatePath("/chatrooms")
+}
