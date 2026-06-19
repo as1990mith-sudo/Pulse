@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation"
-import { Mic } from "lucide-react"
 import { getProfile } from "@/lib/profile"
 import { getEpisodesByUser } from "@/lib/content"
+import { getPostsByUser } from "@/app/actions/feed"
+import { getCurrentUser } from "@/lib/session"
 import { SiteHeader } from "@/components/site-header"
-import { EpisodeCatalog } from "@/components/episode-catalog"
 import { ProfileFollowButton } from "@/components/profile/profile-follow-button"
+import { ProfileTabs } from "@/components/profile/profile-tabs"
 import { cn } from "@/lib/utils"
 
 export default async function ProfilePage({ params }: { params: Promise<{ id: string }> }) {
@@ -12,7 +13,11 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
   const profile = await getProfile(id)
   if (!profile) notFound()
 
-  const episodes = await getEpisodesByUser(id)
+  const [episodes, posts, currentUser] = await Promise.all([
+    getEpisodesByUser(id),
+    getPostsByUser(id),
+    getCurrentUser(),
+  ])
 
   return (
     <div className="min-h-screen">
@@ -44,6 +49,10 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
                   <span className="font-semibold text-foreground">{episodes.length}</span>{" "}
                   <span className="text-muted-foreground">episodes</span>
                 </span>
+                <span>
+                  <span className="font-semibold text-foreground">{posts.length}</span>{" "}
+                  <span className="text-muted-foreground">tweets</span>
+                </span>
               </div>
             </div>
           </div>
@@ -57,27 +66,13 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
           )}
         </header>
 
-        <section className="mt-8 space-y-5">
-          <h2 className="text-lg font-semibold tracking-tight">
-            {profile.isSelf ? "Your published episodes" : `Episodes by ${profile.name}`}
-          </h2>
-
-          {episodes.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-muted/30 px-6 py-16 text-center">
-              <span className="flex size-12 items-center justify-center rounded-full bg-secondary text-muted-foreground">
-                <Mic className="size-6" />
-              </span>
-              <p className="font-medium">No published episodes yet</p>
-              <p className="max-w-sm text-pretty text-sm text-muted-foreground">
-                {profile.isSelf
-                  ? "When you finish a live session in the studio, publish it and it will appear here for your followers to browse."
-                  : `${profile.name} hasn't published any episodes yet. Follow them to know when they go live.`}
-              </p>
-            </div>
-          ) : (
-            <EpisodeCatalog episodes={episodes} />
-          )}
-        </section>
+        <ProfileTabs
+          name={profile.name}
+          isSelf={profile.isSelf}
+          episodes={episodes}
+          posts={posts}
+          currentUser={currentUser}
+        />
       </main>
     </div>
   )

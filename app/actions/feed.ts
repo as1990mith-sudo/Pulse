@@ -99,6 +99,56 @@ export async function getFeed(): Promise<FeedPostView[]> {
   }))
 }
 
+export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  const currentUserId = session?.user?.id ?? null
+
+  const followingIds = currentUserId
+    ? new Set(
+        (
+          await db
+            .select({ followingId: follow.followingId })
+            .from(follow)
+            .where(eq(follow.followerId, currentUserId))
+        ).map((r) => r.followingId),
+      )
+    : new Set<string>()
+
+  const posts = await db
+    .select()
+    .from(feedPost)
+    .where(eq(feedPost.userId, userId))
+    .orderBy(desc(feedPost.createdAt))
+  const comments = await db.select().from(feedComment).orderBy(asc(feedComment.createdAt))
+
+  return posts.map((p) => ({
+    id: p.id,
+    authorId: p.userId,
+    user: p.authorName,
+    handle: p.authorHandle,
+    initials: getInitials(p.authorName),
+    color: getAvatarColor(p.userId),
+    postedAt: timeAgo(p.createdAt),
+    text: p.text,
+    image: p.image,
+    likes: p.likes,
+    reposts: p.reposts,
+    isFollowing: followingIds.has(p.userId),
+    isSelf: currentUserId === p.userId,
+    comments: comments
+      .filter((c) => c.postId === p.id)
+      .map((c) => ({
+        id: c.id,
+        user: c.authorName,
+        handle: c.authorHandle,
+        initials: getInitials(c.authorName),
+        color: getAvatarColor(c.userId),
+        text: c.text,
+        postedAt: timeAgo(c.createdAt),
+      })),
+  }))
+}
+
 export async function createPost(input: { text: string; image?: string | null }) {
   const user = await requireUser()
   const text = input.text.trim()

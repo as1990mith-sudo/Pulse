@@ -180,7 +180,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
   )
 }
 
-function PostCard({ post, currentUser }: { post: FeedPostView; currentUser: CurrentUser | null }) {
+export function PostCard({ post, currentUser }: { post: FeedPostView; currentUser: CurrentUser | null }) {
   const router = useRouter()
   const [liked, setLiked] = useState(false)
   const [likes, setLikes] = useState(post.likes)
