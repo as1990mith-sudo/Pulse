@@ -45,7 +45,7 @@ export default async function DevotionalPage() {
 
           <div className="space-y-5">
             {d.body.map((paragraph, i) => (
-              <p key={i} className="text-pretty text-base leading-relaxed text-foreground/90 sm:text-lg">
+              <p key={i} className="text-base leading-relaxed text-foreground/90 hyphens-auto text-justify sm:text-lg">
                 {paragraph}
               </p>
             ))}
@@ -53,7 +53,9 @@ export default async function DevotionalPage() {
 
           <div className="rounded-2xl border border-primary/30 bg-primary/5 p-6 sm:p-8">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-primary">A prayer for today</h2>
-            <p className="mt-3 text-pretty text-base leading-relaxed text-foreground/90 sm:text-lg">{d.prayer}</p>
+            <p className="mt-3 text-base leading-relaxed text-foreground/90 hyphens-auto text-justify sm:text-lg">
+              {d.prayer}
+            </p>
           </div>
 
           <div className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-card p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8">
