@@ -1,15 +1,18 @@
 import { SiteHeader } from "@/components/site-header"
 import { MindFeed } from "@/components/mind-feed"
 import { AnnouncementBanner } from "@/components/announcement-banner"
+import { StatusBar } from "@/components/status-bar"
 import { getFeed } from "@/app/actions/feed"
 import { getActiveAnnouncements } from "@/app/actions/announcements"
+import { getStatusFeed } from "@/app/actions/status"
 import { getCurrentUser } from "@/lib/session"
 
 export default async function FeedPage() {
-  const [posts, currentUser, announcements] = await Promise.all([
+  const [posts, currentUser, announcements, statusGroups] = await Promise.all([
     getFeed(),
     getCurrentUser(),
     getActiveAnnouncements(),
+    getStatusFeed(),
   ])
 
   return (
@@ -28,6 +31,7 @@ export default async function FeedPage() {
 
         <div className="mx-auto w-full max-w-2xl space-y-8 px-4 py-8 sm:px-6">
           <AnnouncementBanner announcements={announcements} currentUser={currentUser} />
+          <StatusBar groups={statusGroups} currentUser={currentUser} />
           <MindFeed posts={posts} currentUser={currentUser} />
         </div>
       </main>

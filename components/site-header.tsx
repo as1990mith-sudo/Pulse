@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Radio } from "lucide-react"
+import { BookOpen, Radio } from "lucide-react"
 import { ThemeSwitcher } from "@/components/theme-switcher"
 import { UserMenu } from "@/components/user-menu"
 import { NotificationBell } from "@/components/notification-bell"
@@ -51,6 +51,16 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <Link
+            href="/bible"
+            aria-label="Read the Bible"
+            className={cn(
+              "relative flex size-9 items-center justify-center rounded-full outline-none transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring",
+              isActive("/bible") ? "text-primary" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <BookOpen className="size-[18px]" />
+          </Link>
           <NotificationBell />
           <ThemeSwitcher />
           <UserMenu />

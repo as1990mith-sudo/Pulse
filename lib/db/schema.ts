@@ -64,6 +64,7 @@ export const feedPost = pgTable("feed_post", {
   authorHandle: text("authorHandle").notNull(),
   text: text("text").notNull(),
   image: text("image"),
+  video: text("video"),
   likes: integer("likes").notNull().default(0),
   reposts: integer("reposts").notNull().default(0),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
@@ -197,6 +198,21 @@ export const announcement = pgTable("announcement", {
   eventTime: text("eventTime"), // HH:MM (24h), optional
   status: text("status").notNull().default("active"), // "pending" | "active"
   createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// --- Status updates --------------------------------------------------------
+// WhatsApp-style ephemeral statuses. A user posts a photo or short video that
+// stays visible to everyone for 24 hours (expiresAt). Viewers see the statuses
+// of people they're connected to (follow or are followed by) first.
+export const statusUpdate = pgTable("status_update", {
+  id: serial("id").primaryKey(),
+  userId: text("userId").notNull(),
+  authorName: text("authorName").notNull(),
+  mediaUrl: text("mediaUrl").notNull(),
+  mediaType: text("mediaType").notNull(), // "image" | "video"
+  caption: text("caption"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  expiresAt: timestamp("expiresAt").notNull(),
 })
 
 // Per-user notifications. A row is created for each follower when someone they

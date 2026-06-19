@@ -21,7 +21,7 @@ function SectionHeading({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-primary">
+      <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-live">
         {Icon && <Icon className="size-3.5" />}
         {eyebrow}
       </span>

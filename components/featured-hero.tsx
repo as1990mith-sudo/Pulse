@@ -20,7 +20,7 @@ export function FeaturedHero({ show }: { show: Show }) {
       <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-16 sm:px-6 md:py-24">
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
           <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
-            <Radio className="size-4 text-primary" /> Streaming now on Frequency
+            <Radio className="size-4 text-live" /> Streaming now on Frequency
           </span>
         </div>
 

@@ -36,7 +36,7 @@ export function YouTubeCard({ show }: { show: Show }) {
           <AvatarFallback>{show.host.name[0]}</AvatarFallback>
         </Avatar>
         <div className="min-w-0 space-y-1">
-          <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-foreground group-hover:text-primary">
+          <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-foreground group-hover:text-live">
             {show.title}
           </h3>
           <p className="text-xs text-muted-foreground">{show.host.name}</p>
