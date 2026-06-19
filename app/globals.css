@@ -123,19 +123,19 @@
 /* Mid mode — a muted slate between light and dark */
 .theme-mid {
   color-scheme: dark;
-  --background: oklch(0.42 0.01 285);
+  --background: oklch(0.3 0.01 285);
   --foreground: oklch(0.98 0.002 285);
-  --card: oklch(0.47 0.012 285);
+  --card: oklch(0.34 0.012 285);
   --card-foreground: oklch(0.98 0.002 285);
-  --popover: oklch(0.47 0.012 285);
+  --popover: oklch(0.34 0.012 285);
   --popover-foreground: oklch(0.98 0.002 285);
   --primary: oklch(0.68 0.21 24);
   --primary-foreground: oklch(0.99 0.005 60);
-  --secondary: oklch(0.52 0.013 285);
+  --secondary: oklch(0.39 0.013 285);
   --secondary-foreground: oklch(0.98 0.002 285);
-  --muted: oklch(0.52 0.013 285);
-  --muted-foreground: oklch(0.86 0.006 285);
-  --accent: oklch(0.52 0.013 285);
+  --muted: oklch(0.39 0.013 285);
+  --muted-foreground: oklch(0.82 0.006 285);
+  --accent: oklch(0.39 0.013 285);
   --accent-foreground: oklch(0.98 0.002 285);
   --destructive: oklch(0.68 0.21 24);
   --border: oklch(1 0 0 / 16%);
@@ -143,13 +143,13 @@
   --ring: oklch(0.68 0.21 24);
   --live: oklch(0.68 0.21 24);
   --live-foreground: oklch(0.99 0.005 60);
-  --chart-5: oklch(0.86 0.006 285);
-  --sidebar: oklch(0.44 0.011 285);
+  --chart-5: oklch(0.82 0.006 285);
+  --sidebar: oklch(0.32 0.011 285);
   --sidebar-foreground: oklch(0.98 0.002 285);
-  --sidebar-accent: oklch(0.52 0.013 285);
+  --sidebar-accent: oklch(0.39 0.013 285);
   --sidebar-accent-foreground: oklch(0.98 0.002 285);
   --sidebar-border: oklch(1 0 0 / 16%);
-}
+  }
 
 /* Transparent mode — frosted glass over an ambient backdrop */
 .theme-transparent {
@@ -200,8 +200,8 @@
 
 /* Mid mode — cool wintry canvas with animated falling snow effect */
 .theme-mid body {
-  background-color: oklch(0.42 0.022 255);
-  background-image: linear-gradient(180deg, oklch(0.5 0.03 245), oklch(0.36 0.025 262));
+  background-color: oklch(0.3 0.02 255);
+  background-image: linear-gradient(180deg, oklch(0.36 0.028 245), oklch(0.25 0.022 262));
   background-attachment: fixed;
 }
 
