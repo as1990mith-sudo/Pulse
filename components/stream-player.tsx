@@ -1,21 +1,27 @@
 "use client"
 
 import { useState } from "react"
-import { Maximize2, Pause, Play, Volume2, VolumeX } from "lucide-react"
+import { Pause, Play, Volume2, VolumeX } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { LiveBadge } from "@/components/live-badge"
 import { cn } from "@/lib/utils"
 
-function Equalizer({ active }: { active: boolean }) {
+function Waveform({ active }: { active: boolean }) {
+  // A wider equalizer used as the centrepiece of the audio player.
+  const bars = Array.from({ length: 32 }, (_, i) => i)
   return (
-    <div className="flex h-5 items-end gap-0.5" aria-hidden="true">
-      {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+    <div className="flex h-16 items-end justify-center gap-1" aria-hidden="true">
+      {bars.map((i) => (
         <span
           key={i}
-          className={cn("w-1 rounded-full bg-primary", active ? "animate-live-pulse" : "h-1 opacity-40")}
+          className={cn("w-1.5 rounded-full bg-primary", active ? "animate-live-pulse" : "h-1.5 opacity-30")}
           style={
             active
-              ? { height: `${30 + ((i * 13) % 70)}%`, animationDelay: `${i * 0.12}s`, animationDuration: "0.9s" }
+              ? {
+                  height: `${20 + ((i * 37) % 80)}%`,
+                  animationDelay: `${(i % 8) * 0.1}s`,
+                  animationDuration: "0.9s",
+                }
               : undefined
           }
         />
@@ -29,48 +35,63 @@ export function StreamPlayer({ show }: { show: Show }) {
   const [muted, setMuted] = useState(false)
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border/60 bg-black">
-      <div className="relative aspect-video">
+    <div className="overflow-hidden rounded-2xl border border-border/60 bg-card">
+      <div className="relative flex flex-col items-center gap-6 px-6 py-8 sm:px-8">
+        {/* Ambient backdrop built from the cover art */}
         <img
           src={show.cover || "/placeholder.svg"}
-          alt={`${show.host.name} live video feed`}
-          className={cn("size-full object-cover transition-all", !playing && "blur-sm brightness-50")}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 size-full object-cover opacity-20 blur-2xl"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30" />
+        <div className="absolute inset-0 bg-gradient-to-b from-background/40 to-card" />
 
-        <div className="absolute left-4 top-4 flex items-center gap-2">
-          <LiveBadge />
-          <span className="rounded-full bg-black/50 px-2.5 py-1 text-xs font-medium text-white backdrop-blur">
-            {show.listeners.toLocaleString()} watching
-          </span>
+        <div className="relative flex w-full items-center justify-between">
+          <div className="flex items-center gap-2">
+            <LiveBadge />
+            <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-muted-foreground">
+              {show.listeners.toLocaleString()} listening
+            </span>
+          </div>
+          <span className="text-xs font-medium uppercase tracking-wider text-primary">Audio live</span>
         </div>
 
-        {!playing && (
-          <button
-            onClick={() => setPlaying(true)}
-            className="absolute inset-0 flex items-center justify-center"
-            aria-label="Resume stream"
+        {/* Album art */}
+        <div className="relative">
+          <div
+            className={cn(
+              "size-44 overflow-hidden rounded-2xl border border-border/60 shadow-lg transition-all sm:size-52",
+              !playing && "brightness-50",
+            )}
           >
-            <span className="flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground">
-              <Play className="size-7 translate-x-0.5" />
-            </span>
-          </button>
-        )}
-
-        <div className="absolute bottom-4 left-4 flex items-center gap-3">
-          <div className="rounded-lg bg-black/50 px-3 py-2 backdrop-blur">
-            <p className="text-sm font-semibold text-white">{show.host.name}</p>
-            <p className="text-xs text-white/70">{show.host.handle}</p>
+            <img
+              src={show.cover || "/placeholder.svg"}
+              alt={`${show.title} cover art`}
+              className="size-full object-cover"
+            />
           </div>
-          {playing && (
-            <div className="rounded-lg bg-black/50 px-3 py-2.5 backdrop-blur">
-              <Equalizer active={!muted} />
-            </div>
+          {!playing && (
+            <button
+              onClick={() => setPlaying(true)}
+              className="absolute inset-0 flex items-center justify-center"
+              aria-label="Resume stream"
+            >
+              <span className="flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                <Play className="size-7 translate-x-0.5" />
+              </span>
+            </button>
           )}
         </div>
+
+        <div className="relative text-center">
+          <p className="font-semibold">{show.host.name}</p>
+          <p className="text-sm text-muted-foreground">{show.host.handle}</p>
+        </div>
+
+        <Waveform active={playing && !muted} />
       </div>
 
-      <div className="flex items-center justify-between gap-3 bg-card px-4 py-3">
+      <div className="flex items-center justify-between gap-3 border-t border-border/60 bg-card px-4 py-3">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setPlaying((p) => !p)}
@@ -86,16 +107,8 @@ export function StreamPlayer({ show }: { show: Show }) {
           >
             {muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
           </button>
-          <span className="ml-1 text-sm text-muted-foreground">
-            {playing ? "Streaming live" : "Paused"}
-          </span>
+          <span className="ml-1 text-sm text-muted-foreground">{playing ? "Streaming live" : "Paused"}</span>
         </div>
-        <button
-          className="flex size-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-          aria-label="Fullscreen"
-        >
-          <Maximize2 className="size-5" />
-        </button>
       </div>
     </div>
   )

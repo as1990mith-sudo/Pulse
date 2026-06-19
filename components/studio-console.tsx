@@ -1,17 +1,17 @@
 "use client"
 
-import { useEffect, useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
-  Camera,
-  CameraOff,
   CheckCircle2,
   Loader2,
   Mic,
   MicOff,
-  MonitorUp,
+  Music,
+  Pause,
   PhoneCall,
+  Play,
   Radio,
   Upload,
   Users,
@@ -43,11 +43,29 @@ function formatDuration(s: number) {
   return `${h}h ${(m % 60).toString().padStart(2, "0")}m`
 }
 
+function StudioWaveform({ active }: { active: boolean }) {
+  const bars = Array.from({ length: 28 }, (_, i) => i)
+  return (
+    <div className="flex h-12 items-end justify-center gap-1" aria-hidden="true">
+      {bars.map((i) => (
+        <span
+          key={i}
+          className={cn("w-1.5 rounded-full bg-primary", active ? "animate-live-pulse" : "h-1.5 opacity-30")}
+          style={
+            active
+              ? { height: `${20 + ((i * 41) % 80)}%`, animationDelay: `${(i % 7) * 0.1}s`, animationDuration: "0.9s" }
+              : undefined
+          }
+        />
+      ))}
+    </div>
+  )
+}
+
 type EndedSession = { title: string; duration: string } | null
 
 export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
   const [live, setLive] = useState(false)
-  const [camOn, setCamOn] = useState(true)
   const [micOn, setMicOn] = useState(true)
   const [elapsed, setElapsed] = useState(0)
   const [viewers, setViewers] = useState(0)
@@ -122,20 +140,23 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
           </Button>
         </div>
 
-        {/* Camera preview */}
-        <div className="relative aspect-video overflow-hidden rounded-2xl border border-border/60 bg-black">
-          {camOn ? (
-            <div className="flex size-full items-center justify-center bg-gradient-to-b from-secondary to-background">
-              <span className={cn("flex size-24 items-center justify-center rounded-full text-3xl font-semibold", currentUser.color)}>
-                {currentUser.initials}
-              </span>
-            </div>
-          ) : (
-            <div className="flex size-full flex-col items-center justify-center gap-3 text-muted-foreground">
-              <CameraOff className="size-10" />
-              <p className="text-sm">Camera is off</p>
-            </div>
-          )}
+        {/* Audio stage */}
+        <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-b from-secondary to-background">
+          <div className="flex flex-col items-center gap-5 px-6 py-10">
+            <span
+              className={cn(
+                "flex size-28 items-center justify-center rounded-full text-3xl font-semibold",
+                currentUser.color,
+                live && micOn && "ring-4 ring-primary/40",
+              )}
+            >
+              {currentUser.initials}
+            </span>
+            <StudioWaveform active={live && micOn} />
+            <p className="text-sm text-muted-foreground">
+              {live ? (micOn ? "Your mic is live" : "Your mic is muted") : "Audio stage — go live to start broadcasting"}
+            </p>
+          </div>
 
           {onAir && (
             <div className="absolute right-4 top-4 w-40 overflow-hidden rounded-lg border border-primary/60 bg-card shadow-lg">
@@ -162,22 +183,6 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
             >
               {micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
             </button>
-            <button
-              onClick={() => setCamOn((c) => !c)}
-              className={cn(
-                "flex size-10 items-center justify-center rounded-full transition-colors",
-                camOn ? "bg-secondary text-foreground hover:bg-secondary/80" : "bg-primary text-primary-foreground",
-              )}
-              aria-label={camOn ? "Turn camera off" : "Turn camera on"}
-            >
-              {camOn ? <Camera className="size-5" /> : <CameraOff className="size-5" />}
-            </button>
-            <button
-              className="flex size-10 items-center justify-center rounded-full bg-secondary text-foreground transition-colors hover:bg-secondary/80"
-              aria-label="Share screen"
-            >
-              <MonitorUp className="size-5" />
-            </button>
           </div>
         </div>
 
@@ -188,6 +193,9 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
             onClose={() => setEndedSession(null)}
           />
         )}
+
+        {/* Background music */}
+        <BackgroundMusicPanel live={live} />
 
         {/* Show setup */}
         <div className="space-y-2 rounded-xl border border-border/60 bg-card p-4">
@@ -263,6 +271,117 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
           </TabsContent>
         </Tabs>
       </aside>
+    </div>
+  )
+}
+
+function BackgroundMusicPanel({ live }: { live: boolean }) {
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [track, setTrack] = useState<{ url: string; name: string } | null>(null)
+  const [playing, setPlaying] = useState(false)
+  const [volume, setVolume] = useState(0.4)
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = volume
+  }, [volume, track])
+
+  async function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setError(null)
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      const res = await fetch("/api/upload-audio", { method: "POST", body: formData })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? "Upload failed")
+      setTrack({ url: data.url, name: data.name ?? file.name })
+      setPlaying(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed")
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ""
+    }
+  }
+
+  function togglePlay() {
+    const el = audioRef.current
+    if (!el) return
+    if (playing) {
+      el.pause()
+      setPlaying(false)
+    } else {
+      el.play().catch(() => {})
+      setPlaying(true)
+    }
+  }
+
+  return (
+    <div className="space-y-3 rounded-xl border border-border/60 bg-card p-4">
+      <div className="flex items-center gap-2">
+        <Music className="size-4 text-primary" />
+        <h2 className="text-sm font-medium">Background music</h2>
+      </div>
+      <p className="text-xs text-muted-foreground leading-relaxed">
+        Upload a backing track to play under your live audio — intro music, bed loops, or stings.
+      </p>
+
+      <input ref={fileInputRef} type="file" accept="audio/*" className="hidden" onChange={handlePick} />
+
+      {track ? (
+        <div className="space-y-3 rounded-lg border border-border/60 bg-background p-3">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={togglePlay}
+              className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90"
+              aria-label={playing ? "Pause music" : "Play music"}
+            >
+              {playing ? <Pause className="size-4" /> : <Play className="size-4 translate-x-0.5" />}
+            </button>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{track.name}</p>
+              <p className="text-xs text-muted-foreground">{live ? "Mixed into your live audio" : "Go live to mix in"}</p>
+            </div>
+            <Button type="button" variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()}>
+              Replace
+            </Button>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Volume</span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={volume}
+              onChange={(e) => setVolume(Number(e.target.value))}
+              className="h-1.5 flex-1 cursor-pointer accent-primary"
+              aria-label="Background music volume"
+            />
+          </div>
+          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          <audio ref={audioRef} src={track.url} loop onEnded={() => setPlaying(false)} />
+        </div>
+      ) : (
+        <Button
+          type="button"
+          variant="secondary"
+          className="w-full gap-2"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+        >
+          {uploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+          {uploading ? "Uploading…" : "Upload a track"}
+        </Button>
+      )}
+
+      {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
   )
 }
