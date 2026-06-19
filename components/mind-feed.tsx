@@ -4,8 +4,9 @@ import { useRef, useState, useTransition } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Heart, MessageCircle, Repeat2, Share2, Check, ImagePlus, X, Send } from "lucide-react"
+import { Heart, MessageCircle, Repeat2, Share2, Check, ImagePlus, X, Send, UserPlus, UserCheck } from "lucide-react"
 import { addPostComment, createPost, setPostLike, type FeedPostView } from "@/app/actions/feed"
+import { toggleFollow } from "@/app/actions/follow"
 import type { CurrentUser } from "@/lib/session"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -28,7 +29,11 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
   const [draft, setDraft] = useState("")
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [tab, setTab] = useState<"for-you" | "following">("for-you")
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const followingCount = posts.filter((p) => p.isFollowing).length
+  const visiblePosts = tab === "following" ? posts.filter((p) => p.isFollowing) : posts
 
   async function handleImagePick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -132,13 +137,45 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
         </form>
       </Card>
 
-      <ul className="space-y-4">
-        {posts.map((post) => (
-          <li key={post.id}>
-            <PostCard post={post} currentUser={currentUser} />
-          </li>
-        ))}
-      </ul>
+      <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-card/40 p-1">
+        <button
+          onClick={() => setTab("for-you")}
+          className={cn(
+            "flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+            tab === "for-you" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
+          )}
+          aria-pressed={tab === "for-you"}
+        >
+          For you
+        </button>
+        <button
+          onClick={() => setTab("following")}
+          className={cn(
+            "flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+            tab === "following" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
+          )}
+          aria-pressed={tab === "following"}
+        >
+          Following{followingCount > 0 ? ` (${followingCount})` : ""}
+        </button>
+      </div>
+
+      {visiblePosts.length > 0 ? (
+        <ul className="space-y-4">
+          {visiblePosts.map((post) => (
+            <li key={post.id}>
+              <PostCard post={post} currentUser={currentUser} />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <Card className="p-8 text-center">
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            You&apos;re not following anyone yet. Tap <span className="font-medium text-foreground">Follow</span> on a
+            post to see their thoughts here.
+          </p>
+        </Card>
+      )}
     </div>
   )
 }
@@ -206,10 +243,15 @@ function PostCard({ post, currentUser }: { post: FeedPostView; currentUser: Curr
           <AvatarFallback className={post.color}>{post.initials}</AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex flex-wrap items-center gap-x-2 text-sm">
-            <span className="font-semibold">{post.user}</span>
-            <span className="text-muted-foreground">{post.handle}</span>
-            <span className="text-muted-foreground">· {post.postedAt}</span>
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-x-2 text-sm">
+              <span className="font-semibold">{post.user}</span>
+              <span className="text-muted-foreground">{post.handle}</span>
+              <span className="text-muted-foreground">· {post.postedAt}</span>
+            </div>
+            {currentUser && !post.isSelf && (
+              <FollowButton authorId={post.authorId} authorName={post.user} initialFollowing={post.isFollowing} />
+            )}
           </div>
 
           {post.text && <p className="text-pretty leading-relaxed text-foreground/90">{post.text}</p>}
@@ -327,5 +369,59 @@ function PostCard({ post, currentUser }: { post: FeedPostView; currentUser: Curr
         </div>
       </div>
     </Card>
+  )
+}
+
+function FollowButton({
+  authorId,
+  authorName,
+  initialFollowing,
+}: {
+  authorId: string
+  authorName: string
+  initialFollowing: boolean
+}) {
+  const router = useRouter()
+  const [following, setFollowing] = useState(initialFollowing)
+  const [hovering, setHovering] = useState(false)
+  const [isPending, startTransition] = useTransition()
+
+  function onClick() {
+    const next = !following
+    setFollowing(next)
+    startTransition(async () => {
+      try {
+        await toggleFollow({ targetUserId: authorId, follow: next })
+        router.refresh()
+      } catch {
+        setFollowing(!next)
+      }
+    })
+  }
+
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant={following ? "secondary" : "default"}
+      onClick={onClick}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+      disabled={isPending}
+      className="h-8 shrink-0 gap-1.5"
+      aria-label={following ? `Unfollow ${authorName}` : `Follow ${authorName}`}
+    >
+      {following ? (
+        <>
+          <UserCheck className="size-4" />
+          {hovering ? "Unfollow" : "Following"}
+        </>
+      ) : (
+        <>
+          <UserPlus className="size-4" />
+          Follow
+        </>
+      )}
+    </Button>
   )
 }

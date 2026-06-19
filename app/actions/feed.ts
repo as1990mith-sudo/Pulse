@@ -5,7 +5,7 @@ import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { feedComment, feedPost } from "@/lib/db/schema"
+import { feedComment, feedPost, follow } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 
 async function requireUser() {
@@ -26,6 +26,7 @@ export type FeedCommentView = {
 
 export type FeedPostView = {
   id: number
+  authorId: string
   user: string
   handle: string
   initials: string
@@ -35,6 +36,8 @@ export type FeedPostView = {
   image: string | null
   likes: number
   reposts: number
+  isFollowing: boolean
+  isSelf: boolean
   comments: FeedCommentView[]
 }
 
@@ -50,11 +53,26 @@ function timeAgo(date: Date): string {
 }
 
 export async function getFeed(): Promise<FeedPostView[]> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  const currentUserId = session?.user?.id ?? null
+
+  const followingIds = currentUserId
+    ? new Set(
+        (
+          await db
+            .select({ followingId: follow.followingId })
+            .from(follow)
+            .where(eq(follow.followerId, currentUserId))
+        ).map((r) => r.followingId),
+      )
+    : new Set<string>()
+
   const posts = await db.select().from(feedPost).orderBy(desc(feedPost.createdAt))
   const comments = await db.select().from(feedComment).orderBy(asc(feedComment.createdAt))
 
   return posts.map((p) => ({
     id: p.id,
+    authorId: p.userId,
     user: p.authorName,
     handle: p.authorHandle,
     initials: getInitials(p.authorName),
@@ -64,6 +82,8 @@ export async function getFeed(): Promise<FeedPostView[]> {
     image: p.image,
     likes: p.likes,
     reposts: p.reposts,
+    isFollowing: followingIds.has(p.userId),
+    isSelf: currentUserId === p.userId,
     comments: comments
       .filter((c) => c.postId === p.id)
       .map((c) => ({

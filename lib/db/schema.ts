@@ -64,6 +64,16 @@ export const feedPost = pgTable("feed_post", {
   authorHandle: text("authorHandle").notNull(),
   text: text("text").notNull(),
   image: text("image"),
+  likes: integer("likes").notNull().default(0),
+  reposts: integer("reposts").notNull().default(0),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// Follower / following relationships. followerId follows followingId.
+export const follow = pgTable("follow", {
+  id: serial("id").primaryKey(),
+  followerId: text("followerId").notNull(),
+  followingId: text("followingId").notNull(),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
