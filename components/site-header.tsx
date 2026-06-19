@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { Radio } from "lucide-react"
 import { ThemeSwitcher } from "@/components/theme-switcher"
 import { UserMenu } from "@/components/user-menu"
+import { NotificationBell } from "@/components/notification-bell"
 import { cn } from "@/lib/utils"
 
 const navItems = [
@@ -50,6 +51,7 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <NotificationBell />
           <ThemeSwitcher />
           <UserMenu />
         </div>

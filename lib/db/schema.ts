@@ -112,6 +112,10 @@ export const devotional = pgTable("devotional", {
   readingMinutes: integer("readingMinutes").notNull().default(3),
   publishDate: text("publishDate").notNull(),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
+  // Bumped whenever the devotional is (re)posted. The homepage shows the row
+  // with the most recent lastPostedAt, so any devotional can be reused without
+  // losing the others.
+  lastPostedAt: timestamp("lastPostedAt").notNull().defaultNow(),
 })
 
 export const episode = pgTable("episode", {
@@ -124,5 +128,23 @@ export const episode = pgTable("episode", {
   duration: text("duration"),
   cover: text("cover"),
   description: text("description").notNull(),
+  // Set when a host publishes their own streamed session. Null for episodes
+  // added by an admin from the content dashboard.
+  hostUserId: text("hostUserId"),
+  hostHandle: text("hostHandle"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// Per-user notifications. A row is created for each follower when someone they
+// follow posts a tweet or starts a live stream.
+export const notification = pgTable("notification", {
+  id: serial("id").primaryKey(),
+  userId: text("userId").notNull(),
+  actorId: text("actorId").notNull(),
+  actorName: text("actorName").notNull(),
+  type: text("type").notNull(), // "post" | "live"
+  message: text("message").notNull(),
+  link: text("link").notNull(),
+  read: boolean("read").notNull().default(false),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })

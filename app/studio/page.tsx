@@ -1,7 +1,13 @@
+import Link from "next/link"
 import { SiteHeader } from "@/components/site-header"
 import { StudioConsole } from "@/components/studio-console"
+import { getCurrentUser } from "@/lib/session"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
 
-export default function StudioPage() {
+export default async function StudioPage() {
+  const currentUser = await getCurrentUser()
+
   return (
     <div className="min-h-screen">
       <SiteHeader />
@@ -13,7 +19,25 @@ export default function StudioPage() {
             Set your camera and mic, go live, and manage the chat and call-in queue in real time.
           </p>
         </div>
-        <StudioConsole />
+
+        {currentUser ? (
+          <StudioConsole currentUser={currentUser} />
+        ) : (
+          <Card className="flex flex-col items-center gap-3 p-10 text-center">
+            <p className="text-lg font-semibold">Sign in to host</p>
+            <p className="max-w-sm text-pretty text-sm leading-relaxed text-muted-foreground">
+              You need an account to go live, notify your followers, and publish your sessions to your profile.
+            </p>
+            <div className="flex gap-2">
+              <Button render={<Link href="/sign-in" />} nativeButton={false}>
+                Sign in
+              </Button>
+              <Button render={<Link href="/sign-up" />} nativeButton={false} variant="secondary">
+                Create account
+              </Button>
+            </div>
+          </Card>
+        )}
       </main>
     </div>
   )

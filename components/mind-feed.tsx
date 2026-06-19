@@ -239,13 +239,17 @@ function PostCard({ post, currentUser }: { post: FeedPostView; currentUser: Curr
   return (
     <Card className="p-4">
       <div className="flex gap-3">
-        <Avatar className="size-10 shrink-0">
-          <AvatarFallback className={post.color}>{post.initials}</AvatarFallback>
-        </Avatar>
+        <Link href={`/u/${post.authorId}`} aria-label={`View ${post.user}'s profile`} className="shrink-0">
+          <Avatar className="size-10">
+            <AvatarFallback className={post.color}>{post.initials}</AvatarFallback>
+          </Avatar>
+        </Link>
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex items-start justify-between gap-2">
             <div className="flex flex-wrap items-center gap-x-2 text-sm">
-              <span className="font-semibold">{post.user}</span>
+              <Link href={`/u/${post.authorId}`} className="font-semibold hover:underline">
+                {post.user}
+              </Link>
               <span className="text-muted-foreground">{post.handle}</span>
               <span className="text-muted-foreground">· {post.postedAt}</span>
             </div>

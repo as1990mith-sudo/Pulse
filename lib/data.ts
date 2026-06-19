@@ -240,6 +240,16 @@ export type Devotional = {
   comments: DevotionalComment[]
 }
 
+/**
+ * Default attribution shown at the end of every devotional. The orderUrl is a
+ * placeholder template link — replace it with the real ordering page later.
+ */
+export const devotionalSource = {
+  author: "Andrew Smith",
+  name: "A Day With Jesus",
+  orderUrl: "https://example.com/order/a-day-with-jesus",
+}
+
 export const dailyDevotional: Devotional = {
   date: "Friday, June 19",
   title: "Be Still and Listen",

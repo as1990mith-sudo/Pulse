@@ -26,13 +26,23 @@ function hostFromName(name: string): Host {
 
 /** Maps a DB episode row to the Show shape the catalogue + live pages expect. */
 function episodeToShow(row: typeof episode.$inferSelect): Show {
+  // When a host published the session themselves, link their profile by userId.
+  const host: Host = row.hostUserId
+    ? {
+        id: row.hostUserId,
+        name: row.hostName,
+        avatar: "/placeholder.svg",
+        handle: row.hostHandle || "@" + row.hostName.toLowerCase().replace(/[^a-z0-9]+/g, ""),
+      }
+    : hostFromName(row.hostName)
+
   return {
     id: row.slug,
     title: row.title,
     tagline: row.tagline,
     cover: row.cover || "/placeholder.svg",
     category: row.category,
-    host: hostFromName(row.hostName),
+    host,
     status: "ended",
     listeners: 0,
     duration: row.duration || undefined,
@@ -41,12 +51,22 @@ function episodeToShow(row: typeof episode.$inferSelect): Show {
   }
 }
 
+/** Episodes a specific host has published, newest first. */
+export async function getEpisodesByUser(userId: string): Promise<Show[]> {
+  const rows = await db
+    .select()
+    .from(episode)
+    .where(eq(episode.hostUserId, userId))
+    .orderBy(desc(episode.createdAt))
+  return rows.map(episodeToShow)
+}
+
 /**
  * The devotional shown on the homepage: the most recently published row from
  * the database, or the bundled sample devotional when none exist yet.
  */
 export async function getLatestDevotional(): Promise<Devotional> {
-  const [row] = await db.select().from(devotional).orderBy(desc(devotional.createdAt)).limit(1)
+  const [row] = await db.select().from(devotional).orderBy(desc(devotional.lastPostedAt)).limit(1)
   if (!row) return dailyDevotional
   return {
     date: row.publishDate,
@@ -81,7 +101,7 @@ export async function resolveShow(id: string): Promise<Show | undefined> {
 /** All admin-managed rows, for listing/deleting inside the dashboard. */
 export async function getAdminContent() {
   const [devotionals, episodeRows] = await Promise.all([
-    db.select().from(devotional).orderBy(desc(devotional.createdAt)),
+    db.select().from(devotional).orderBy(desc(devotional.lastPostedAt)),
     db.select().from(episode).orderBy(desc(episode.createdAt)),
   ])
   return { devotionals, episodes: episodeRows }
