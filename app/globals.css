@@ -2,7 +2,7 @@
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:is(.dark *, .theme-mid *, .theme-transparent *));
 
 @theme inline {
   --font-heading: var(--font-sans);
@@ -50,7 +50,8 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-:root {
+:root,
+.dark {
   color-scheme: dark;
   --background: oklch(0.16 0.006 285);
   --foreground: oklch(0.97 0.002 285);
@@ -86,6 +87,114 @@
   --sidebar-accent-foreground: oklch(0.97 0.002 285);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.66 0.21 24);
+}
+
+/* Light mode */
+.theme-light {
+  color-scheme: light;
+  --background: oklch(0.99 0.003 285);
+  --foreground: oklch(0.2 0.006 285);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.006 285);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.006 285);
+  --primary: oklch(0.6 0.22 24);
+  --primary-foreground: oklch(0.99 0.005 60);
+  --secondary: oklch(0.96 0.005 285);
+  --secondary-foreground: oklch(0.24 0.006 285);
+  --muted: oklch(0.96 0.005 285);
+  --muted-foreground: oklch(0.5 0.008 285);
+  --accent: oklch(0.96 0.005 285);
+  --accent-foreground: oklch(0.24 0.006 285);
+  --destructive: oklch(0.6 0.22 24);
+  --border: oklch(0.2 0.01 285 / 12%);
+  --input: oklch(0.2 0.01 285 / 16%);
+  --ring: oklch(0.6 0.22 24);
+  --live: oklch(0.6 0.22 24);
+  --live-foreground: oklch(0.99 0.005 60);
+  --chart-5: oklch(0.5 0.008 285);
+  --sidebar: oklch(0.97 0.004 285);
+  --sidebar-foreground: oklch(0.2 0.006 285);
+  --sidebar-accent: oklch(0.96 0.005 285);
+  --sidebar-accent-foreground: oklch(0.24 0.006 285);
+  --sidebar-border: oklch(0.2 0.01 285 / 12%);
+}
+
+/* Mid mode — a muted slate between light and dark */
+.theme-mid {
+  color-scheme: dark;
+  --background: oklch(0.42 0.01 285);
+  --foreground: oklch(0.98 0.002 285);
+  --card: oklch(0.47 0.012 285);
+  --card-foreground: oklch(0.98 0.002 285);
+  --popover: oklch(0.47 0.012 285);
+  --popover-foreground: oklch(0.98 0.002 285);
+  --primary: oklch(0.68 0.21 24);
+  --primary-foreground: oklch(0.99 0.005 60);
+  --secondary: oklch(0.52 0.013 285);
+  --secondary-foreground: oklch(0.98 0.002 285);
+  --muted: oklch(0.52 0.013 285);
+  --muted-foreground: oklch(0.86 0.006 285);
+  --accent: oklch(0.52 0.013 285);
+  --accent-foreground: oklch(0.98 0.002 285);
+  --destructive: oklch(0.68 0.21 24);
+  --border: oklch(1 0 0 / 16%);
+  --input: oklch(1 0 0 / 20%);
+  --ring: oklch(0.68 0.21 24);
+  --live: oklch(0.68 0.21 24);
+  --live-foreground: oklch(0.99 0.005 60);
+  --chart-5: oklch(0.86 0.006 285);
+  --sidebar: oklch(0.44 0.011 285);
+  --sidebar-foreground: oklch(0.98 0.002 285);
+  --sidebar-accent: oklch(0.52 0.013 285);
+  --sidebar-accent-foreground: oklch(0.98 0.002 285);
+  --sidebar-border: oklch(1 0 0 / 16%);
+}
+
+/* Transparent mode — frosted glass over an ambient backdrop */
+.theme-transparent {
+  color-scheme: dark;
+  --background: oklch(0.16 0.006 285 / 40%);
+  --foreground: oklch(0.99 0.002 285);
+  --card: oklch(0.7 0.02 285 / 14%);
+  --card-foreground: oklch(0.99 0.002 285);
+  --popover: oklch(0.2 0.01 285 / 78%);
+  --popover-foreground: oklch(0.99 0.002 285);
+  --primary: oklch(0.68 0.21 24);
+  --primary-foreground: oklch(0.99 0.005 60);
+  --secondary: oklch(0.8 0.02 285 / 16%);
+  --secondary-foreground: oklch(0.99 0.002 285);
+  --muted: oklch(0.8 0.02 285 / 12%);
+  --muted-foreground: oklch(0.92 0.006 285);
+  --accent: oklch(0.8 0.02 285 / 18%);
+  --accent-foreground: oklch(0.99 0.002 285);
+  --destructive: oklch(0.68 0.21 24);
+  --border: oklch(1 0 0 / 22%);
+  --input: oklch(1 0 0 / 26%);
+  --ring: oklch(0.68 0.21 24);
+  --live: oklch(0.68 0.21 24);
+  --live-foreground: oklch(0.99 0.005 60);
+  --chart-5: oklch(0.92 0.006 285);
+  --sidebar: oklch(0.16 0.006 285 / 40%);
+  --sidebar-foreground: oklch(0.99 0.002 285);
+  --sidebar-accent: oklch(0.8 0.02 285 / 16%);
+  --sidebar-accent-foreground: oklch(0.99 0.002 285);
+  --sidebar-border: oklch(1 0 0 / 22%);
+}
+
+.theme-transparent body {
+  background-image: linear-gradient(180deg, oklch(0.16 0.02 285 / 55%), oklch(0.12 0.02 24 / 55%)),
+    url("/themes/ambient.png");
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+}
+
+/* Frost the common surfaces so the glass effect reads */
+.theme-transparent :is(.bg-card, .bg-popover, .bg-secondary, .bg-muted, .bg-accent) {
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
 }
 
 @layer base {
