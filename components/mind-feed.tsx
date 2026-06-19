@@ -105,9 +105,13 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
               aria-label="Write a post"
             />
             {imagePreview && (
-              <div className="relative w-fit overflow-hidden rounded-xl border border-border/60">
+              <div className="relative aspect-square w-full max-w-sm overflow-hidden rounded-xl border border-border/60">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={imagePreview || "/placeholder.svg"} alt="Selected upload preview" className="max-h-72 w-auto" />
+                <img
+                  src={imagePreview || "/placeholder.svg"}
+                  alt="Selected upload preview"
+                  className="size-full object-cover"
+                />
                 <button
                   type="button"
                   onClick={clearImage}
@@ -238,27 +242,29 @@ export function PostCard({ post, currentUser }: { post: FeedPostView; currentUse
 
   return (
     <Card className="p-4">
-      <div className="flex gap-3">
-        <Link href={`/u/${post.authorId}`} aria-label={`View ${post.user}'s profile`} className="shrink-0">
-          <Avatar className="size-10">
-            {post.authorImage && <AvatarImage src={post.authorImage || "/placeholder.svg"} alt={post.user} />}
-            <AvatarFallback className={post.color}>{post.initials}</AvatarFallback>
-          </Avatar>
-        </Link>
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-x-2 text-sm">
+      <div className="space-y-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <Link href={`/u/${post.authorId}`} aria-label={`View ${post.user}'s profile`} className="shrink-0">
+              <Avatar className="size-8">
+                {post.authorImage && <AvatarImage src={post.authorImage || "/placeholder.svg"} alt={post.user} />}
+                <AvatarFallback className={cn("text-xs", post.color)}>{post.initials}</AvatarFallback>
+              </Avatar>
+            </Link>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 text-sm">
               <Link href={`/u/${post.authorId}`} className="font-semibold hover:underline">
                 {post.user}
               </Link>
-              <span className="text-muted-foreground">{post.handle}</span>
+              <span className="truncate text-muted-foreground">{post.handle}</span>
               <span className="text-muted-foreground">· {post.postedAt}</span>
             </div>
-            {currentUser && !post.isSelf && (
-              <FollowButton authorId={post.authorId} authorName={post.user} initialFollowing={post.isFollowing} />
-            )}
           </div>
+          {currentUser && !post.isSelf && (
+            <FollowButton authorId={post.authorId} authorName={post.user} initialFollowing={post.isFollowing} />
+          )}
+        </div>
 
+        <div className="space-y-2">
           {post.text && (
             <p className="leading-relaxed text-foreground/90 hyphens-auto text-justify">{post.text}</p>
           )}
@@ -268,9 +274,9 @@ export function PostCard({ post, currentUser }: { post: FeedPostView; currentUse
               <Image
                 src={post.image || "/placeholder.svg"}
                 alt="Post attachment"
-                width={600}
-                height={400}
-                className="h-auto w-full object-cover"
+                width={1080}
+                height={1080}
+                className="aspect-square h-auto w-full object-cover"
                 unoptimized={post.image.startsWith("data:")}
               />
             </div>

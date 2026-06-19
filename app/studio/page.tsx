@@ -16,7 +16,7 @@ export default async function StudioPage() {
           <span className="text-xs font-semibold uppercase tracking-wider text-primary">Host studio</span>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl text-balance">Your control room</h1>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Set your camera and mic, go live, and manage the chat and call-in queue in real time.
+            Set your mic, add background music, go live, and manage the chat and call-in queue in real time.
           </p>
         </div>
 
