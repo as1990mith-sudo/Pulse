@@ -20,6 +20,8 @@ export const auth = betterAuth({
     ...(process.env.VERCEL_PROJECT_PRODUCTION_URL
       ? [`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`]
       : []),
+    // In development the app is also reachable directly on localhost.
+    ...(process.env.NODE_ENV === "development" ? ["http://localhost:*", "https://localhost:*"] : []),
   ],
   session: {
     expiresIn: 60 * 60 * 24 * 7, // 7 days

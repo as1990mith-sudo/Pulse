@@ -1,0 +1,90 @@
+"use client"
+
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { LogOut, Radio } from "lucide-react"
+import { authClient } from "@/lib/auth-client"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
+import { cn } from "@/lib/utils"
+
+export function UserMenu() {
+  const router = useRouter()
+  const { data: session, isPending } = authClient.useSession()
+
+  if (isPending) {
+    return <div className="size-8 animate-pulse rounded-full bg-muted" aria-hidden />
+  }
+
+  if (!session?.user) {
+    return (
+      <>
+        <Button
+          render={<Link href="/sign-in" />}
+          nativeButton={false}
+          variant="ghost"
+          size="sm"
+          className="hidden sm:inline-flex"
+        >
+          Sign in
+        </Button>
+        <Button render={<Link href="/sign-up" />} nativeButton={false} size="sm">
+          Join
+        </Button>
+      </>
+    )
+  }
+
+  const name = session.user.name || "Listener"
+  const initials = getInitials(name)
+  const color = getAvatarColor(session.user.id)
+
+  async function handleSignOut() {
+    await authClient.signOut()
+    router.refresh()
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <button
+            type="button"
+            aria-label="Account menu"
+            className="flex items-center gap-2 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        }
+      >
+        <span className={cn("flex size-8 items-center justify-center rounded-full text-xs font-semibold", color)}>
+          {initials}
+        </span>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="flex flex-col gap-0.5">
+            <span className="truncate font-medium text-foreground">{name}</span>
+            <span className="truncate text-xs font-normal text-muted-foreground">{getHandle(name)}</span>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem render={<Link href="/studio" />} className="gap-2">
+            <Radio className="size-4" />
+            Open studio
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleSignOut} className="gap-2 text-destructive">
+            <LogOut className="size-4" />
+            Sign out
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}

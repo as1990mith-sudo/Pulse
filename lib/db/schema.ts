@@ -62,8 +62,7 @@ export const feedPost = pgTable("feed_post", {
   userId: text("userId").notNull(),
   authorName: text("authorName").notNull(),
   authorHandle: text("authorHandle").notNull(),
-  authorInitials: text("authorInitials").notNull(),
-  body: text("body").notNull(),
+  text: text("text").notNull(),
   image: text("image"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
@@ -74,8 +73,7 @@ export const feedComment = pgTable("feed_comment", {
   userId: text("userId").notNull(),
   authorName: text("authorName").notNull(),
   authorHandle: text("authorHandle").notNull(),
-  authorInitials: text("authorInitials").notNull(),
-  body: text("body").notNull(),
+  text: text("text").notNull(),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
@@ -84,7 +82,6 @@ export const devotionalComment = pgTable("devotional_comment", {
   devotionalDate: text("devotionalDate").notNull(),
   userId: text("userId").notNull(),
   authorName: text("authorName").notNull(),
-  authorInitials: text("authorInitials").notNull(),
-  body: text("body").notNull(),
+  text: text("text").notNull(),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })

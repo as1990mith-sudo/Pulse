@@ -3,8 +3,8 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Radio } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { ThemeSwitcher } from "@/components/theme-switcher"
+import { UserMenu } from "@/components/user-menu"
 import { cn } from "@/lib/utils"
 
 const navItems = [
@@ -51,18 +51,7 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-2">
           <ThemeSwitcher />
-          <Button
-            render={<Link href="/login" />}
-            nativeButton={false}
-            variant="ghost"
-            size="sm"
-            className="hidden sm:inline-flex"
-          >
-            Host sign in
-          </Button>
-          <Button render={<Link href="/studio" />} nativeButton={false} size="sm">
-            Go live
-          </Button>
+          <UserMenu />
         </div>
       </div>
 
