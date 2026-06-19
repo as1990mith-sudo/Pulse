@@ -198,6 +198,64 @@
   -webkit-backdrop-filter: blur(16px) saturate(150%);
 }
 
+/* Mid mode — cool wintry canvas with animated falling snow effect */
+.theme-mid body {
+  background-color: oklch(0.42 0.022 255);
+  background-image: linear-gradient(180deg, oklch(0.5 0.03 245), oklch(0.36 0.025 262));
+  background-attachment: fixed;
+}
+
+/* Two layers of snowflakes at different sizes and speeds */
+.theme-mid body::before,
+.theme-mid body::after {
+  content: "";
+  position: fixed;
+  top: -120px;
+  left: 0;
+  width: 100%;
+  height: calc(100% + 120px);
+  pointer-events: none;
+  z-index: 60;
+}
+
+.theme-mid body::before {
+  background-image:
+    radial-gradient(2px 2px at 20px 30px, oklch(1 0 0 / 85%), transparent),
+    radial-gradient(2px 2px at 110px 80px, oklch(1 0 0 / 70%), transparent),
+    radial-gradient(1.5px 1.5px at 160px 140px, oklch(1 0 0 / 80%), transparent),
+    radial-gradient(2px 2px at 70px 190px, oklch(1 0 0 / 65%), transparent);
+  background-size: 200px 200px;
+  animation: snow-fall-near 9s linear infinite;
+}
+
+.theme-mid body::after {
+  background-image:
+    radial-gradient(3px 3px at 60px 50px, oklch(1 0 0 / 60%), transparent),
+    radial-gradient(3.5px 3.5px at 240px 160px, oklch(1 0 0 / 50%), transparent),
+    radial-gradient(2.5px 2.5px at 320px 280px, oklch(1 0 0 / 55%), transparent);
+  background-size: 380px 380px;
+  animation: snow-fall-far 17s linear infinite;
+}
+
+@keyframes snow-fall-near {
+  to {
+    background-position-y: 200px;
+  }
+}
+
+@keyframes snow-fall-far {
+  to {
+    background-position-y: 380px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-mid body::before,
+  .theme-mid body::after {
+    animation: none;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
