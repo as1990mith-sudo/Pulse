@@ -129,10 +129,8 @@ export function EpisodeRow({ show, owned = false }: { show: Show; owned?: boolea
                 {confirming ? (
                   <DropdownMenuItem
                     variant="destructive"
-                    onSelect={(e) => {
-                      e.preventDefault()
-                      handleDelete()
-                    }}
+                    closeOnClick={false}
+                    onClick={() => handleDelete()}
                     disabled={isPending}
                   >
                     {isPending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
@@ -141,10 +139,8 @@ export function EpisodeRow({ show, owned = false }: { show: Show; owned?: boolea
                 ) : (
                   <DropdownMenuItem
                     variant="destructive"
-                    onSelect={(e) => {
-                      e.preventDefault()
-                      setConfirming(true)
-                    }}
+                    closeOnClick={false}
+                    onClick={() => setConfirming(true)}
                   >
                     <Trash2 className="size-4" /> Delete
                   </DropdownMenuItem>
