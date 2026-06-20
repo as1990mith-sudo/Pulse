@@ -212,6 +212,30 @@ export async function createPost(input: { text: string; image?: string | null; v
   revalidatePath("/feed")
 }
 
+/** Edits the text of one of the signed-in user's own posts (media is unchanged). */
+export async function editPost(input: { postId: number; text: string }) {
+  const user = await requireUser()
+  const [row] = await db
+    .select({ userId: feedPost.userId, image: feedPost.image, video: feedPost.video })
+    .from(feedPost)
+    .where(eq(feedPost.id, input.postId))
+  if (!row) throw new Error("Post not found.")
+  if (row.userId !== user.id) throw new Error("You can only edit your own posts.")
+
+  const text = input.text.trim()
+  // A post must still have content after the edit — keep it non-empty unless
+  // there's attached media to carry it.
+  if (!text && !row.image && !row.video) throw new Error("Post cannot be empty.")
+
+  await db
+    .update(feedPost)
+    .set({ text })
+    .where(and(eq(feedPost.id, input.postId), eq(feedPost.userId, user.id)))
+
+  revalidatePath("/feed")
+  revalidatePath(`/u/${user.id}`)
+}
+
 /** Deletes one of the signed-in user's own posts (and its comments). */
 export async function deletePost(postId: number) {
   const user = await requireUser()
