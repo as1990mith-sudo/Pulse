@@ -17,8 +17,9 @@ import {
   Loader2,
   Trash2,
   MoreHorizontal,
+  Pencil,
 } from "lucide-react"
-import { addPostComment, createPost, deletePost, getFeed, setPostLike, type FeedPostView } from "@/app/actions/feed"
+import { addPostComment, createPost, deletePost, editPost, getFeed, setPostLike, type FeedPostView } from "@/app/actions/feed"
 import { toggleFollow } from "@/app/actions/follow"
 import type { CurrentUser } from "@/lib/session"
 import { uploadMedia } from "@/lib/upload-media"
@@ -271,12 +272,33 @@ export function PostCard({
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleted, setDeleted] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editDraft, setEditDraft] = useState(post.text)
+  const [text, setText] = useState(post.text)
   const [isPending, startTransition] = useTransition()
 
   function handleDelete() {
     startTransition(async () => {
       await deletePost(post.id)
       setDeleted(true)
+      await globalMutate("feed")
+      router.refresh()
+    })
+  }
+
+  function startEditing() {
+    setEditDraft(text)
+    setIsEditing(true)
+  }
+
+  function handleEditSave() {
+    const next = editDraft.trim()
+    // Require some text unless the post carries media.
+    if (!next && !post.image && !post.video) return
+    startTransition(async () => {
+      await editPost({ postId: post.id, text: next })
+      setText(next)
+      setIsEditing(false)
       await globalMutate("feed")
       router.refresh()
     })
@@ -379,6 +401,9 @@ export function PostCard({
                 <MoreHorizontal className="size-5" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={startEditing} className="gap-2">
+                  <Pencil className="size-4" /> Edit post
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   variant="destructive"
                   onSelect={() => setConfirmDelete(true)}
@@ -406,17 +431,49 @@ export function PostCard({
         </div>
       )}
 
-      {/* Caption — shown above the media */}
-      {post.text && (
-        <p
-          className={cn(
-            "whitespace-pre-wrap leading-relaxed text-foreground/90",
-            feed ? "px-4 text-lg" : "px-3 text-[15px]",
-            hasMedia ? "pb-3" : "pb-1",
-          )}
-        >
-          {post.text}
-        </p>
+      {/* Caption — shown above the media, or an inline editor while editing */}
+      {isEditing ? (
+        <div className={cn("pb-3", feed ? "px-4" : "px-3")}>
+          <Textarea
+            value={editDraft}
+            onChange={(e) => setEditDraft(e.target.value)}
+            placeholder="Edit your post…"
+            autoFocus
+            className="min-h-24 resize-none text-[15px] leading-relaxed"
+            aria-label="Edit post text"
+          />
+          <div className="mt-2 flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setIsEditing(false)}
+              disabled={isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleEditSave}
+              disabled={isPending || (!editDraft.trim() && !post.image && !post.video)}
+            >
+              {isPending ? <Loader2 className="size-4 animate-spin" /> : "Save"}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        text && (
+          <p
+            className={cn(
+              "whitespace-pre-wrap leading-relaxed text-foreground/90",
+              feed ? "px-4 text-lg" : "px-3 text-[15px]",
+              hasMedia ? "pb-3" : "pb-1",
+            )}
+          >
+            {text}
+          </p>
+        )
       )}
 
       {/* Media — large, edge-to-edge Instagram-style */}
