@@ -324,6 +324,9 @@ export const dmMessage = pgTable("dm_message", {
   attachmentUrl: text("attachmentUrl"),
   attachmentType: text("attachmentType"), // "image" | "video" | "audio" | "document"
   attachmentName: text("attachmentName"),
+  // When set, this message is a reply/reaction to the given status update. The
+  // inbox links to the status while it's still live (see app/status/[id]).
+  statusId: integer("statusId"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 

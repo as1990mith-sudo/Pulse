@@ -40,12 +40,13 @@ export function SiteHeader() {
               key={item.href}
               href={item.href}
               className={cn(
-                "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                isActive(item.href)
-                  ? "bg-secondary text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
+                "relative rounded-md px-3 py-1.5 text-sm font-medium transition-[color,transform] duration-200 active:scale-95",
+                isActive(item.href) ? "text-foreground" : "text-muted-foreground hover:text-foreground",
               )}
             >
+              {isActive(item.href) && (
+                <span className="nav-pill-active absolute inset-0 -z-10 rounded-md bg-secondary" aria-hidden="true" />
+              )}
               {item.label}
             </Link>
           ))}
@@ -75,10 +76,13 @@ export function SiteHeader() {
             key={item.href}
             href={item.href}
             className={cn(
-              "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-              isActive(item.href) ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
+              "relative rounded-md px-3 py-1.5 text-sm font-medium transition-[color,transform] duration-200 active:scale-95",
+              isActive(item.href) ? "text-foreground" : "text-muted-foreground hover:text-foreground",
             )}
           >
+            {isActive(item.href) && (
+              <span className="nav-pill-active absolute inset-0 -z-10 rounded-md bg-secondary" aria-hidden="true" />
+            )}
             {item.label}
           </Link>
         ))}

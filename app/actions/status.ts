@@ -310,9 +310,10 @@ export async function reactToStatus(statusId: number, emoji: string) {
       set: { reaction: emoji },
     })
 
-  // Let the status owner know someone reacted to their status.
+  // Let the status owner know someone reacted, and drop the reaction into their
+  // inbox as a status-linked message (skip when reacting to your own status).
   const [row] = await db.select().from(statusUpdate).where(eq(statusUpdate.id, statusId)).limit(1)
-  if (row) {
+  if (row && row.userId !== user.id) {
     await notifyUser({
       userId: row.userId,
       actorId: user.id,
@@ -321,6 +322,8 @@ export async function reactToStatus(statusId: number, emoji: string) {
       message: `${user.name} reacted ${emoji} to your status`,
       link: "/feed",
     })
+    const conversationId = await getOrCreateConversation(row.userId)
+    await sendDirectMessage({ conversationId, body: emoji, statusId })
   }
 }
 
@@ -337,6 +340,8 @@ export async function replyToStatus(statusId: number, body: string) {
   if (!row) throw new Error("That status no longer exists.")
   if (row.userId === user.id) throw new Error("You can't reply to your own status.")
 
+  // Land the reply in the author's inbox, linked back to the status so they can
+  // tap through to it while it's still live.
   const conversationId = await getOrCreateConversation(row.userId)
-  await sendDirectMessage({ conversationId, body: `↩️ Replied to your status: ${text}` })
+  await sendDirectMessage({ conversationId, body: text, statusId })
 }
