@@ -221,11 +221,23 @@ export const statusUpdate = pgTable("status_update", {
   id: serial("id").primaryKey(),
   userId: text("userId").notNull(),
   authorName: text("authorName").notNull(),
-  mediaUrl: text("mediaUrl").notNull(),
-  mediaType: text("mediaType").notNull(), // "image" | "video"
+  mediaUrl: text("mediaUrl"), // null for text-only statuses
+  mediaType: text("mediaType").notNull(), // "image" | "video" | "text"
   caption: text("caption"),
+  backgroundColor: text("backgroundColor"), // gradient/solid key for text statuses
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   expiresAt: timestamp("expiresAt").notNull(),
+})
+
+// Tracks who has viewed each status (drives seen rings + the owner's viewers
+// list) and an optional emoji reaction left by the viewer.
+export const statusView = pgTable("status_view", {
+  id: serial("id").primaryKey(),
+  statusId: integer("statusId").notNull(),
+  viewerId: text("viewerId").notNull(),
+  viewerName: text("viewerName").notNull(),
+  reaction: text("reaction"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
 // --- Live streams ----------------------------------------------------------

@@ -22,7 +22,10 @@ export default async function FeedPage() {
       <SiteHeader />
       <main>
         <div className="mx-auto w-full max-w-xl pb-8">
-          {/* Chrome (promos + stories) keeps comfortable side padding… */}
+          {/* Stories rail sits at the very top, edge-to-edge like Instagram. */}
+          <div className="border-b border-border/60 px-4 py-3 sm:px-0">
+            <StatusBar groups={statusGroups} currentUser={currentUser} />
+          </div>
           <div className="space-y-5 px-4 pt-4 pb-5 sm:px-0">
             <AnnouncementBanner
               announcements={announcements}
@@ -30,7 +33,6 @@ export default async function FeedPage() {
               currentUser={currentUser}
               isAdmin={isAdmin}
             />
-            <StatusBar groups={statusGroups} currentUser={currentUser} />
           </div>
           {/* …while the feed itself runs edge-to-edge for an immersive scroll. */}
           <MindFeed posts={posts} currentUser={currentUser} />

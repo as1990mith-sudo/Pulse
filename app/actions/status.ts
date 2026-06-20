@@ -5,8 +5,9 @@ import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { follow, statusUpdate, user as userTable } from "@/lib/db/schema"
+import { follow, statusUpdate, statusView, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getInitials } from "@/lib/identity"
+import { getOrCreateConversation, sendDirectMessage } from "@/app/actions/dm"
 
 const STATUS_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours, WhatsApp-style
 
@@ -18,10 +19,12 @@ async function requireUser() {
 
 export type StatusItem = {
   id: number
-  mediaUrl: string
-  mediaType: "image" | "video"
+  mediaUrl: string | null
+  mediaType: "image" | "video" | "text"
   caption: string | null
+  backgroundColor: string | null
   postedAt: string
+  viewed: boolean // whether the signed-in viewer has already seen this item
 }
 
 export type StatusGroup = {
@@ -32,7 +35,17 @@ export type StatusGroup = {
   authorImage: string | null
   isSelf: boolean
   isConnection: boolean
+  allViewed: boolean // every item seen -> grey ring instead of gradient
   items: StatusItem[]
+}
+
+export type StatusViewer = {
+  viewerId: string
+  viewerName: string
+  initials: string
+  color: string
+  reaction: string | null
+  viewedAt: string
 }
 
 function timeAgo(date: Date): string {
@@ -82,6 +95,24 @@ export async function getStatusFeed(): Promise<StatusGroup[]> {
     .where(inArray(userTable.id, [...new Set(rows.map((r) => r.userId))]))
   const imageMap = new Map(imageRows.map((r) => [r.id, r.image]))
 
+  // Which of these statuses has the current user already viewed?
+  const seen = new Set<number>()
+  if (currentUserId) {
+    const viewRows = await db
+      .select({ statusId: statusView.statusId })
+      .from(statusView)
+      .where(
+        and(
+          eq(statusView.viewerId, currentUserId),
+          inArray(
+            statusView.statusId,
+            rows.map((r) => r.id),
+          ),
+        ),
+      )
+    for (const v of viewRows) seen.add(v.statusId)
+  }
+
   // Group by author, preserving most-recent-first author discovery.
   const groups = new Map<string, StatusGroup>()
   for (const r of rows) {
@@ -95,6 +126,7 @@ export async function getStatusFeed(): Promise<StatusGroup[]> {
         authorImage: imageMap.get(r.userId) ?? null,
         isSelf: currentUserId === r.userId,
         isConnection: connections.has(r.userId),
+        allViewed: false,
         items: [],
       }
       groups.set(r.userId, group)
@@ -102,14 +134,20 @@ export async function getStatusFeed(): Promise<StatusGroup[]> {
     group.items.push({
       id: r.id,
       mediaUrl: r.mediaUrl,
-      mediaType: r.mediaType === "video" ? "video" : "image",
+      mediaType: r.mediaType === "video" ? "video" : r.mediaType === "text" ? "text" : "image",
       caption: r.caption,
+      backgroundColor: r.backgroundColor,
       postedAt: timeAgo(r.createdAt),
+      viewed: seen.has(r.id),
     })
   }
 
-  // Items came in newest-first; flip to oldest-first per author.
-  const list = [...groups.values()].map((g) => ({ ...g, items: [...g.items].reverse() }))
+  // Items came in newest-first; flip to oldest-first per author, and compute the
+  // "all viewed" flag that drives the grey (seen) vs gradient (new) ring.
+  const list = [...groups.values()].map((g) => {
+    const items = [...g.items].reverse()
+    return { ...g, items, allViewed: items.every((i) => i.viewed) }
+  })
 
   // Self first, then connections, then everyone else. Stable within each band
   // (already ordered by most recent status because of insertion order).
@@ -122,19 +160,26 @@ export async function getStatusFeed(): Promise<StatusGroup[]> {
 }
 
 export async function createStatus(input: {
-  mediaUrl: string
-  mediaType: "image" | "video"
+  mediaUrl?: string | null
+  mediaType: "image" | "video" | "text"
   caption?: string | null
+  backgroundColor?: string | null
 }) {
   const user = await requireUser()
-  if (!input.mediaUrl) throw new Error("A photo or video is required.")
+
+  if (input.mediaType === "text") {
+    if (!input.caption?.trim()) throw new Error("Type something to share a text status.")
+  } else if (!input.mediaUrl) {
+    throw new Error("A photo or video is required.")
+  }
 
   await db.insert(statusUpdate).values({
     userId: user.id,
     authorName: user.name,
-    mediaUrl: input.mediaUrl,
-    mediaType: input.mediaType === "video" ? "video" : "image",
+    mediaUrl: input.mediaType === "text" ? null : input.mediaUrl,
+    mediaType: input.mediaType,
     caption: input.caption?.trim() || null,
+    backgroundColor: input.mediaType === "text" ? input.backgroundColor || "sunset" : null,
     expiresAt: new Date(Date.now() + STATUS_TTL_MS),
   })
   revalidatePath("/feed")
@@ -143,5 +188,76 @@ export async function createStatus(input: {
 export async function deleteStatus(id: number) {
   const user = await requireUser()
   await db.delete(statusUpdate).where(and(eq(statusUpdate.id, id), eq(statusUpdate.userId, user.id)))
+  await db.delete(statusView).where(eq(statusView.statusId, id))
   revalidatePath("/feed")
+}
+
+/**
+ * Records that the signed-in user has viewed a status. Idempotent via the
+ * unique (statusId, viewerId) index, so re-viewing is a no-op for ordering.
+ */
+export async function markStatusViewed(statusId: number) {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) return // anonymous views aren't tracked
+  const user = session.user
+
+  // Don't record the owner viewing their own status.
+  const [row] = await db.select().from(statusUpdate).where(eq(statusUpdate.id, statusId)).limit(1)
+  if (!row || row.userId === user.id) return
+
+  await db
+    .insert(statusView)
+    .values({ statusId, viewerId: user.id, viewerName: user.name })
+    .onConflictDoNothing()
+}
+
+/** Owner-only: the list of people who have viewed a given status. */
+export async function getStatusViewers(statusId: number): Promise<StatusViewer[]> {
+  const user = await requireUser()
+  const [row] = await db.select().from(statusUpdate).where(eq(statusUpdate.id, statusId)).limit(1)
+  if (!row || row.userId !== user.id) return []
+
+  const rows = await db
+    .select()
+    .from(statusView)
+    .where(eq(statusView.statusId, statusId))
+    .orderBy(desc(statusView.createdAt))
+
+  return rows.map((r) => ({
+    viewerId: r.viewerId,
+    viewerName: r.viewerName,
+    initials: getInitials(r.viewerName),
+    color: getAvatarColor(r.viewerId),
+    reaction: r.reaction,
+    viewedAt: timeAgo(r.createdAt),
+  }))
+}
+
+/** Leaves/updates an emoji reaction on a status (recorded on the view row). */
+export async function reactToStatus(statusId: number, emoji: string) {
+  const user = await requireUser()
+  await db
+    .insert(statusView)
+    .values({ statusId, viewerId: user.id, viewerName: user.name, reaction: emoji })
+    .onConflictDoUpdate({
+      target: [statusView.statusId, statusView.viewerId],
+      set: { reaction: emoji },
+    })
+}
+
+/**
+ * Replies to a status by opening (or reusing) a DM with the author and sending
+ * the message there — mirroring Instagram's "reply to story" behaviour.
+ */
+export async function replyToStatus(statusId: number, body: string) {
+  const user = await requireUser()
+  const text = body.trim()
+  if (!text) throw new Error("Write a reply first.")
+
+  const [row] = await db.select().from(statusUpdate).where(eq(statusUpdate.id, statusId)).limit(1)
+  if (!row) throw new Error("That status no longer exists.")
+  if (row.userId === user.id) throw new Error("You can't reply to your own status.")
+
+  const conversationId = await getOrCreateConversation(row.userId)
+  await sendDirectMessage({ conversationId, body: `↩️ Replied to your status: ${text}` })
 }

@@ -8,6 +8,7 @@ export type CurrentUser = {
   handle: string
   initials: string
   color: string
+  image: string | null
 }
 
 /** Returns the signed-in user (with derived handle + initials), or null. */
@@ -20,5 +21,6 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     handle: getHandle(session.user.name),
     initials: getInitials(session.user.name),
     color: getAvatarColor(session.user.id),
+    image: session.user.image ?? null,
   }
 }
