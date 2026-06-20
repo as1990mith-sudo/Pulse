@@ -21,20 +21,24 @@ export default async function FeedPage() {
     <div className="min-h-screen">
       <SiteHeader />
       <main>
-        <div className="mx-auto w-full max-w-2xl space-y-8 px-4 py-8 sm:px-6">
-          <AnnouncementBanner
-            announcements={announcements}
-            myRequests={myRequests}
-            currentUser={currentUser}
-            isAdmin={isAdmin}
-          />
-          <StatusBar groups={statusGroups} currentUser={currentUser} />
+        <div className="mx-auto w-full max-w-xl pb-8">
+          {/* Chrome (promos + stories) keeps comfortable side padding… */}
+          <div className="space-y-5 px-4 pt-4 pb-5 sm:px-0">
+            <AnnouncementBanner
+              announcements={announcements}
+              myRequests={myRequests}
+              currentUser={currentUser}
+              isAdmin={isAdmin}
+            />
+            <StatusBar groups={statusGroups} currentUser={currentUser} />
+          </div>
+          {/* …while the feed itself runs edge-to-edge for an immersive scroll. */}
           <MindFeed posts={posts} currentUser={currentUser} />
         </div>
       </main>
 
       <footer className="border-t border-border/60">
-        <div className="mx-auto flex w-full max-w-2xl flex-col items-center justify-between gap-2 px-4 py-8 text-sm text-muted-foreground sm:flex-row sm:px-6">
+        <div className="mx-auto flex w-full max-w-xl flex-col items-center justify-between gap-2 px-4 py-8 text-sm text-muted-foreground sm:flex-row">
           <p>Frequency — live podcast streaming.</p>
         </div>
       </footer>
