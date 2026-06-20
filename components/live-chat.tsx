@@ -110,24 +110,39 @@ export function LiveChat({
               No messages yet. Say hello to the room.
             </li>
           )}
-          {messages.map((m) => (
-            <li key={m.id} className="flex gap-3">
-              <Avatar className="size-9 shrink-0">
-                <AvatarFallback className={getAvatarColor(m.userName)}>{getInitials(m.userName)}</AvatarFallback>
-              </Avatar>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className={cn("text-sm font-medium", m.isHost && "text-primary")}>{m.userName}</span>
-                  {m.isHost && (
-                    <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                      Host
+          {messages.map((m) => {
+            // The viewer's own messages sit on the right; everyone else's on the left.
+            const isMine = currentUser ? m.userId === currentUser.id : false
+            return (
+              <li key={m.id} className={cn("flex gap-3", isMine && "flex-row-reverse")}>
+                <Avatar className="size-9 shrink-0">
+                  <AvatarFallback className={getAvatarColor(m.userName)}>{getInitials(m.userName)}</AvatarFallback>
+                </Avatar>
+                <div className={cn("flex max-w-[78%] flex-col gap-1", isMine && "items-end")}>
+                  <div className={cn("flex items-center gap-2", isMine && "flex-row-reverse")}>
+                    <span className={cn("text-sm font-medium", m.isHost && "text-primary")}>
+                      {isMine ? "You" : m.userName}
                     </span>
-                  )}
+                    {m.isHost && (
+                      <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                        Host
+                      </span>
+                    )}
+                  </div>
+                  <p
+                    className={cn(
+                      "rounded-2xl px-3 py-2 text-sm leading-relaxed",
+                      isMine
+                        ? "rounded-tr-sm bg-primary text-primary-foreground"
+                        : "rounded-tl-sm bg-secondary text-foreground/90",
+                    )}
+                  >
+                    {m.body}
+                  </p>
                 </div>
-                <p className="text-sm leading-relaxed text-foreground/90">{m.body}</p>
-              </div>
-            </li>
-          ))}
+              </li>
+            )
+          })}
         </ul>
       </ScrollArea>
 

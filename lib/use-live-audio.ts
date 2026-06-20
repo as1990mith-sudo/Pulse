@@ -68,6 +68,10 @@ export function useLiveAudio() {
   const musicGainRef = useRef<GainNode | null>(null)
   const musicElRef = useRef<HTMLAudioElement | null>(null)
   const musicTrackRef = useRef<LocalAudioTrack | null>(null)
+  // The single MediaElementSourceNode for the music element. A media element can
+  // only ever be wired to ONE source node, so we create it once and reuse it for
+  // every track — recreating it is what previously threw and stopped playback.
+  const musicSourceRef = useRef<MediaElementAudioSourceNode | null>(null)
   // The MediaStream of the currently-mixed music, so the recorder can mix it in.
   const musicStreamRef = useRef<MediaStream | null>(null)
   // Session recording graph (host side): mic + music mixed into one MediaRecorder.
@@ -261,55 +265,62 @@ export function useLiveAudio() {
     const room = roomRef.current
     if (!room) return
 
-    // Tear down any previous music track first.
-    if (musicTrackRef.current) {
-      await room.localParticipant.unpublishTrack(musicTrackRef.current)
-      musicTrackRef.current.stop()
-      musicTrackRef.current = null
-    }
-
     const ctx = musicCtxRef.current ?? new AudioContext()
     musicCtxRef.current = ctx
     if (ctx.state === "suspended") await ctx.resume()
 
-    const el = musicElRef.current ?? new Audio()
-    el.crossOrigin = "anonymous"
-    el.src = url
+    // Build the audio element + graph exactly once, then reuse it for every
+    // track. Switching tracks is just a src swap through the persistent graph,
+    // so the previous track stops cleanly and no second source node is created.
+    let el = musicElRef.current
+    if (!el) {
+      el = new Audio()
+      el.crossOrigin = "anonymous"
+      musicElRef.current = el
+      // Report duration + position so the host can scrub the track.
+      el.onloadedmetadata = () => update({ musicDuration: el!.duration || 0, musicPosition: 0 })
+      el.ontimeupdate = () => update({ musicPosition: el!.currentTime })
+    }
+    if (!musicSourceRef.current) {
+      const source = ctx.createMediaElementSource(el)
+      const gain = ctx.createGain()
+      gain.gain.value = 0.4
+      source.connect(gain)
+      // Route the music to the host's own speakers so they can monitor it (and
+      // hear volume changes) exactly as it's broadcast/recorded.
+      gain.connect(ctx.destination)
+      musicSourceRef.current = source
+      musicGainRef.current = gain
+    }
+
+    // Swap to the requested track and (re)start playback.
     el.loop = false
-    musicElRef.current = el
-
-    // Report duration + position so the host can scrub the track.
-    el.onloadedmetadata = () => update({ musicDuration: el.duration || 0, musicPosition: 0 })
-    el.ontimeupdate = () => update({ musicPosition: el.currentTime })
-
-    const source = ctx.createMediaElementSource(el)
-    const gain = musicGainRef.current ?? ctx.createGain()
-    gain.gain.value = musicGainRef.current?.gain.value ?? 0.4
-    musicGainRef.current = gain
-    const dest = ctx.createMediaStreamDestination()
-    source.connect(gain)
-    gain.connect(dest)
-    // Also route the music to the host's own speakers so they can monitor it
-    // (and hear their volume changes) exactly as it's broadcast/recorded. The
-    // gain node sits before this split, so volume affects monitor + broadcast.
-    gain.connect(ctx.destination)
-
+    el.src = url
+    el.currentTime = 0
+    update({ musicPosition: 0 })
     await el.play().catch(() => {})
 
-    const [mediaTrack] = dest.stream.getAudioTracks()
-    const localTrack = new LocalAudioTrack(mediaTrack)
-    await room.localParticipant.publishTrack(localTrack, { name: "background-music" })
-    musicTrackRef.current = localTrack
-    musicStreamRef.current = dest.stream
+    // Publish the music to LiveKit once. Later track swaps keep flowing through
+    // this same published stream, so listeners hear the change seamlessly.
+    if (!musicTrackRef.current) {
+      const gain = musicGainRef.current!
+      const dest = ctx.createMediaStreamDestination()
+      gain.connect(dest)
+      const [mediaTrack] = dest.stream.getAudioTracks()
+      const localTrack = new LocalAudioTrack(mediaTrack)
+      await room.localParticipant.publishTrack(localTrack, { name: "background-music" })
+      musicTrackRef.current = localTrack
+      musicStreamRef.current = dest.stream
 
-    // If a session recording is in progress, mix this music into it too.
-    const recCtx = recordCtxRef.current
-    const recDest = recordDestRef.current
-    if (recCtx && recDest) {
-      try {
-        recCtx.createMediaStreamSource(dest.stream).connect(recDest)
-      } catch {
-        // ignore — music will still play live, just not captured in the recording
+      // If a session recording is in progress, mix this music into it too.
+      const recCtx = recordCtxRef.current
+      const recDest = recordDestRef.current
+      if (recCtx && recDest) {
+        try {
+          recCtx.createMediaStreamSource(dest.stream).connect(recDest)
+        } catch {
+          // ignore — music will still play live, just not captured in the recording
+        }
       }
     }
   }, [update])

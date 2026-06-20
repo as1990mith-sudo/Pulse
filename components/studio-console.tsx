@@ -248,7 +248,7 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
           disabled={!live}
           onClick={() => setPanel((p) => (p === "background" ? null : "background"))}
         />
-        {live && roomName && <ShareButton roomName={roomName} />}
+        {live && roomName && <ShareButton roomName={roomName} title={title} />}
       </div>
 
       {/* Chat: the ONLY scrollable region */}
@@ -350,21 +350,29 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
   )
 }
 
-function ShareButton({ roomName }: { roomName: string }) {
+function ShareButton({ roomName, title }: { roomName: string; title?: string }) {
   const [copied, setCopied] = useState(false)
   const url = typeof window !== "undefined" ? `${window.location.origin}/live/${roomName}` : `/live/${roomName}`
-  async function copy() {
+  async function share() {
+    // Prefer the device's native share sheet so the host can send the link to
+    // WhatsApp, Messages, etc. Fall back to copying when it isn't available.
     try {
-      await navigator.clipboard.writeText(url)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share({ title: title || "Live on Frequency", text: "Join my live session on Frequency", url })
+        return
+      }
+      if (typeof navigator !== "undefined" && navigator.clipboard) {
+        await navigator.clipboard.writeText(url)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      }
     } catch {
-      // ignore
+      // user dismissed the share sheet — ignore
     }
   }
   return (
     <button
-      onClick={copy}
+      onClick={share}
       aria-label="Share session link"
       className="flex size-11 items-center justify-center rounded-full bg-secondary text-foreground transition-colors hover:bg-secondary/80"
     >

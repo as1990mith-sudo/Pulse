@@ -23,26 +23,29 @@ export default async function LiveStreamPage({ params }: { params: Promise<{ id:
   const currentUser = await getCurrentUser()
 
   return (
-    <div className="min-h-screen">
+    // On mobile the whole experience is pinned to the viewport height so the
+    // listener controls + chat fit without scrolling the page (only the chat
+    // message list scrolls). On desktop it reverts to the normal scroll layout.
+    <div className="flex h-[100dvh] flex-col lg:block lg:h-auto lg:min-h-screen">
       <SiteHeader />
-      <main className="mx-auto w-full max-w-6xl px-4 py-4 sm:px-6">
+      <main className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col px-4 py-3 sm:px-6 lg:block lg:flex-none lg:py-4">
         <Link
           href="/live"
-          className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          className="mb-2 inline-flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground lg:mb-3"
         >
           <ArrowLeft className="size-4" /> Back to all shows
         </Link>
 
-        <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 lg:grid lg:flex-none lg:gap-4 lg:grid-cols-[1fr_360px]">
           {/* Main column */}
-          <div>
+          <div className="shrink-0 lg:shrink">
             <LiveListener stream={stream} canListen={Boolean(currentUser)} currentUserId={currentUser?.id ?? null} />
           </div>
 
-          {/* Chat sidebar */}
-          <aside className="lg:sticky lg:top-20 lg:h-[calc(100vh-6rem)]">
-            <div className="flex h-[420px] flex-col overflow-hidden rounded-2xl border border-border/60 bg-card lg:h-full">
-              <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
+          {/* Chat sidebar — fills the remaining space on mobile, sticky on desktop */}
+          <aside className="flex min-h-0 flex-1 flex-col lg:block lg:flex-none lg:sticky lg:top-20 lg:h-[calc(100vh-6rem)]">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border/60 bg-card lg:h-full lg:flex-none">
+              <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-4 py-3">
                 <MessageSquare className="size-4 text-primary" />
                 <h2 className="font-semibold">Live chat</h2>
               </div>
