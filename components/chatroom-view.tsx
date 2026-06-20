@@ -510,6 +510,7 @@ function MessageBubble({
     return (
       <div className={cn("flex gap-2.5", m.isSelf && "flex-row-reverse")}>
         <Avatar className="size-7 shrink-0">
+          {m.image && <AvatarImage src={m.image || "/placeholder.svg"} alt={m.userName} />}
           <AvatarFallback className={cn("text-[10px]", m.color)}>{m.initials}</AvatarFallback>
         </Avatar>
         <div className={cn("max-w-[75%]", m.isSelf && "text-right")}>
@@ -532,6 +533,7 @@ function MessageBubble({
     >
       <Link href={`/u/${m.userId}`} aria-label={`View ${m.userName}'s profile`} className="shrink-0">
         <Avatar className="size-7 transition-opacity hover:opacity-80">
+          {m.image && <AvatarImage src={m.image || "/placeholder.svg"} alt={m.userName} />}
           <AvatarFallback className={cn("text-[10px]", m.color)}>{m.initials}</AvatarFallback>
         </Avatar>
       </Link>
