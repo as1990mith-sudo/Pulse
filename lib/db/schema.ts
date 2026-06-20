@@ -327,6 +327,21 @@ export const dmMessage = pgTable("dm_message", {
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
+// 1:1 audio/video call signaling between two DM users. The pair share a
+// LiveKit room (room name derived from the call id). mode = "audio" | "video";
+// status = "ringing" | "active" | "declined" | "ended" | "missed".
+export const dmCall = pgTable("dm_call", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversationId").notNull(),
+  callerId: text("callerId").notNull(),
+  callerName: text("callerName").notNull(),
+  calleeId: text("calleeId").notNull(),
+  mode: text("mode").notNull().default("audio"),
+  status: text("status").notNull().default("ringing"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})
+
 // Per-user notifications. A row is created for each follower when someone they
 // follow posts a tweet or starts a live stream.
 export const notification = pgTable("notification", {

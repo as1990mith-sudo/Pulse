@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState } from "react"
 import useSWR from "swr"
 import Link from "next/link"
-import { ArrowLeft, FileText, Mic, Music, Paperclip, Send, Smile, X } from "lucide-react"
+import { ArrowLeft, FileText, Mic, Music, Paperclip, Phone, Send, Smile, Video, X } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ImageLightbox } from "@/components/image-lightbox"
 import { VoiceRecorder } from "@/components/voice-recorder"
+import { DmCall } from "@/components/dm-call"
 import { cn } from "@/lib/utils"
 import { uploadMedia } from "@/lib/upload-media"
 import {
@@ -18,6 +19,7 @@ import {
   type DmConversationDetail,
   type DmMessageView,
 } from "@/app/actions/dm"
+import { getActiveCall, startCall, type CallMode, type DmCallView } from "@/app/actions/dm-call"
 
 const EMOJIS = [
   "😀", "😂", "🥰", "😎", "🤔", "😴", "😭", "😡",
@@ -47,6 +49,29 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
   )
 
   const serverMessages = liveMessages ?? detail.messages
+
+  // Call signaling: poll for a ringing/active call in this conversation. Once a
+  // call is dismissed locally we suppress that id until a newer one appears.
+  const [dismissedCallId, setDismissedCallId] = useState<number | null>(null)
+  const [starting, setStarting] = useState(false)
+  const { data: activeCall, mutate: mutateCall } = useSWR<DmCallView | null>(
+    ["dm-active-call", detail.id],
+    () => getActiveCall({ conversationId: detail.id }),
+    { refreshInterval: 2500, revalidateOnFocus: true },
+  )
+
+  const liveCall = activeCall && activeCall.id !== dismissedCallId ? activeCall : null
+
+  async function beginCall(mode: CallMode) {
+    setStarting(true)
+    try {
+      const call = await startCall({ conversationId: detail.id, mode })
+      setDismissedCallId(null)
+      await mutateCall(call, { revalidate: false })
+    } finally {
+      setStarting(false)
+    }
+  }
 
   useEffect(() => {
     setPending([])
@@ -168,7 +193,45 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
             <p className="truncate text-xs text-muted-foreground">{detail.otherUserHandle}</p>
           </div>
         </Link>
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => beginCall("audio")}
+            disabled={starting || Boolean(liveCall)}
+            aria-label="Start voice call"
+          >
+            <Phone className="size-5" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => beginCall("video")}
+            disabled={starting || Boolean(liveCall)}
+            aria-label="Start video call"
+          >
+            <Video className="size-5" />
+          </Button>
+        </div>
       </div>
+
+      {liveCall && (
+        <DmCall
+          call={liveCall}
+          peer={{
+            name: detail.otherUserName,
+            initials: detail.initials,
+            color: detail.color,
+            image: detail.image,
+          }}
+          onClosed={() => {
+            setDismissedCallId(liveCall.id)
+            void mutateCall()
+          }}
+        />
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto bg-card/30">
