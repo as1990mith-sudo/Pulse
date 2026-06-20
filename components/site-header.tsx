@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation"
 import { BookOpen, Radio } from "lucide-react"
 import { ThemeSwitcher } from "@/components/theme-switcher"
 import { UserMenu } from "@/components/user-menu"
-import { NotificationBell } from "@/components/notification-bell"
+import { UserSearch } from "@/components/user-search"
 import { MessagesBell } from "@/components/messages-bell"
 import { cn } from "@/lib/utils"
 
@@ -64,7 +64,7 @@ export function SiteHeader() {
             <BookOpen className="size-[18px]" />
           </Link>
           <MessagesBell />
-          <NotificationBell />
+          <UserSearch />
           <ThemeSwitcher />
           <UserMenu />
         </div>

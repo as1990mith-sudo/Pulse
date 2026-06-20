@@ -1,4 +1,4 @@
-import { and, count, eq } from "drizzle-orm"
+import { and, count, eq, ilike } from "drizzle-orm"
 import { headers } from "next/headers"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
@@ -73,6 +73,19 @@ function toSummary(row: { id: string; name: string; image: string | null }): Pro
     color: getAvatarColor(row.id),
     image: row.image,
   }
+}
+
+/** Searches users by name for the header search box. Returns up to 8 matches. */
+export async function searchUsers(query: string): Promise<ProfileSummary[]> {
+  const q = query.trim()
+  if (q.length < 1) return []
+  const rows = await db
+    .select({ id: userTable.id, name: userTable.name, image: userTable.image })
+    .from(userTable)
+    .where(ilike(userTable.name, `%${q}%`))
+    .orderBy(userTable.name)
+    .limit(8)
+  return rows.map(toSummary)
 }
 
 /** Users who follow the given user. */
