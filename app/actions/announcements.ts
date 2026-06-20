@@ -5,6 +5,7 @@ import { and, asc, desc, eq, gt, lte } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { announcement } from "@/lib/db/schema"
 import { getCurrentUser } from "@/lib/session"
+import { getAdminUser, requireAdmin } from "@/lib/admin"
 import { AD_MAX_HOURS, AD_BLOCK_HOURS } from "@/lib/ads"
 
 export type AnnouncementView = {
@@ -101,18 +102,25 @@ export async function createAnnouncement(input: {
 
   const hours = Math.min(AD_MAX_HOURS, Math.max(AD_BLOCK_HOURS, input.durationHours))
 
-  // Auto-approval, first-come-first-served: if an approved ad already holds this
-  // date, decline the new request. Otherwise approve and publish immediately.
+  // Singleton: only ONE live advert is allowed at a time. If any approved,
+  // not-yet-expired advert already exists, block the new request entirely.
+  await expireDueAnnouncements()
   const [taken] = await db
     .select({ id: announcement.id })
     .from(announcement)
-    .where(and(eq(announcement.eventDate, input.eventDate), eq(announcement.status, "approved")))
+    .where(and(eq(announcement.status, "approved"), gt(announcement.expiresAt, new Date())))
     .limit(1)
 
-  const approved = !taken
+  if (taken) {
+    throw new Error(
+      "There's already a live advert running. Only one advert can be active at a time — please try again once the current one expires.",
+    )
+  }
+
+  const approved = true
   const now = new Date()
-  const expiresAt = approved ? new Date(now.getTime() + hours * 60 * 60 * 1000) : null
-  const declineReason = approved ? null : "Declined due to high demand for the selected date."
+  const expiresAt = new Date(now.getTime() + hours * 60 * 60 * 1000)
+  const declineReason = null
 
   await db.insert(announcement).values({
     userId: user.id,
@@ -149,4 +157,21 @@ export async function deleteAnnouncement(id: number) {
   }
   await db.delete(announcement).where(and(eq(announcement.id, id), eq(announcement.userId, user.id)))
   revalidatePath("/feed")
+}
+
+/**
+ * Platform-admin removal of any advert, including a live approved one. Used by
+ * the inline "remove" control admins see on banners. Frees the singleton slot
+ * so a new advert can be posted immediately.
+ */
+export async function adminDeleteAnnouncement(id: number) {
+  await requireAdmin()
+  await db.delete(announcement).where(eq(announcement.id, id))
+  revalidatePath("/feed")
+  revalidatePath("/admin")
+}
+
+/** Whether the signed-in user is a platform admin (drives the admin UI). */
+export async function isPlatformAdmin(): Promise<boolean> {
+  return (await getAdminUser()) !== null
 }

@@ -384,6 +384,24 @@ function MessageBubble({
   onTogglePin: (messageId: number, pinned: boolean) => void
 }) {
   const [lightbox, setLightbox] = useState(false)
+  // Long-press (press-and-hold) opens a moderation menu with pin/delete.
+  const [menuOpen, setMenuOpen] = useState(false)
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Only the admin can pin; admin or the author can delete.
+  const canDelete = isAdmin || (m.isSelf && m.id > 0)
+  const canModerate = (isAdmin || m.isSelf) && m.id > 0
+
+  function startPress() {
+    if (!canModerate) return
+    pressTimer.current = setTimeout(() => setMenuOpen(true), 450)
+  }
+  function cancelPress() {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current)
+      pressTimer.current = null
+    }
+  }
 
   // Soft-deleted messages render a tombstone with no moderation controls.
   if (m.deleted) {
@@ -401,10 +419,6 @@ function MessageBubble({
     )
   }
 
-  // Only the admin can pin; admin or the author can delete.
-  const canDelete = isAdmin || m.isSelf && m.id > 0
-  const showControls = (isAdmin || m.isSelf) && m.id > 0
-
   return (
     <div className={cn("group flex gap-2.5", m.isSelf && "flex-row-reverse")}>
       <Link href={`/u/${m.userId}`} aria-label={`View ${m.userName}'s profile`} className="shrink-0">
@@ -412,7 +426,7 @@ function MessageBubble({
           <AvatarFallback className={cn("text-[10px]", m.color)}>{m.initials}</AvatarFallback>
         </Avatar>
       </Link>
-      <div className={cn("max-w-[75%] space-y-0.5", m.isSelf && "items-end text-right")}>
+      <div className={cn("relative max-w-[75%] space-y-0.5", m.isSelf && "items-end text-right")}>
         <div className={cn("flex items-center gap-2", m.isSelf && "flex-row-reverse")}>
           <Link
             href={`/u/${m.userId}`}
@@ -422,35 +436,23 @@ function MessageBubble({
           </Link>
           <span className="text-[10px] text-muted-foreground">{m.postedAt}</span>
           {m.pinned && <Pin className="size-3 text-primary" />}
-          {showControls && (
-            <span className={cn("flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100", m.isSelf && "flex-row-reverse")}>
-              {isAdmin && (
-                <button
-                  type="button"
-                  onClick={() => onTogglePin(m.id, !m.pinned)}
-                  className="text-muted-foreground hover:text-foreground"
-                  aria-label={m.pinned ? "Unpin message" : "Pin message"}
-                >
-                  {m.pinned ? <PinOff className="size-3" /> : <Pin className="size-3" />}
-                </button>
-              )}
-              {canDelete && (
-                <button
-                  type="button"
-                  onClick={() => onDelete(m.id)}
-                  className="text-muted-foreground hover:text-destructive"
-                  aria-label="Delete message"
-                >
-                  <Trash2 className="size-3" />
-                </button>
-              )}
-            </span>
-          )}
         </div>
         <div
+          onContextMenu={(e) => {
+            // Right-click / long-press context menu also opens moderation.
+            if (canModerate) {
+              e.preventDefault()
+              setMenuOpen(true)
+            }
+          }}
+          onPointerDown={startPress}
+          onPointerUp={cancelPress}
+          onPointerLeave={cancelPress}
+          onPointerCancel={cancelPress}
           className={cn(
-            "inline-block overflow-hidden rounded-2xl text-sm leading-relaxed",
+            "relative inline-block overflow-hidden rounded-2xl text-sm leading-relaxed",
             m.attachmentType === "image" || m.attachmentType === "video" ? "p-1" : "px-3 py-2",
+            canModerate && "cursor-pointer select-none",
             m.isSelf
               ? "rounded-tr-sm bg-primary text-primary-foreground"
               : "rounded-tl-sm bg-secondary text-foreground",
@@ -498,6 +500,50 @@ function MessageBubble({
           )}
           {m.body && <p className={cn(m.attachmentUrl && "px-2 pb-1 pt-1.5")}>{m.body}</p>}
         </div>
+
+        {/* Press-and-hold moderation menu */}
+        {menuOpen && (
+          <>
+            <button
+              type="button"
+              className="fixed inset-0 z-40 cursor-default"
+              aria-hidden="true"
+              onClick={() => setMenuOpen(false)}
+            />
+            <div
+              className={cn(
+                "absolute z-50 mt-1 w-40 overflow-hidden rounded-xl border border-border bg-popover p-1 shadow-lg",
+                m.isSelf ? "right-0" : "left-0",
+              )}
+            >
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onTogglePin(m.id, !m.pinned)
+                    setMenuOpen(false)
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary"
+                >
+                  {m.pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+                  {m.pinned ? "Unpin message" : "Pin message"}
+                </button>
+              )}
+              {canDelete && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onDelete(m.id)
+                    setMenuOpen(false)
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10"
+                >
+                  <Trash2 className="size-4" /> Delete message
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

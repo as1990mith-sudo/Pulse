@@ -29,7 +29,7 @@ function Waveform({ active }: { active: boolean }) {
 }
 
 export function LiveListener({ stream, canListen }: { stream: LiveStreamView; canListen: boolean }) {
-  const { state, connect, disconnect, setListenerMuted } = useLiveAudio()
+  const { state, connect, disconnect, setListenerMuted, startAudioPlayback } = useLiveAudio()
   const [muted, setMuted] = useState(false)
   const [joining, setJoining] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -107,6 +107,16 @@ export function LiveListener({ stream, canListen }: { stream: LiveStreamView; ca
         </div>
 
         <Waveform active={state.connected && state.speaking && !muted} />
+
+        {state.connected && state.audioBlocked && (
+          <button
+            type="button"
+            onClick={() => void startAudioPlayback()}
+            className="relative flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg transition-opacity hover:opacity-90"
+          >
+            <Volume2 className="size-4" /> Tap to enable sound
+          </button>
+        )}
       </div>
 
       <div className="flex items-center justify-between gap-3 border-t border-border/60 bg-card px-4 py-3">

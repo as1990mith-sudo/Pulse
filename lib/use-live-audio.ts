@@ -18,6 +18,9 @@ export type LiveAudioState = {
   listeners: number
   speaking: boolean
   error: string | null
+  // True when the browser is blocking autoplay of the live audio until the
+  // listener performs a gesture (tap). Drives a "tap to enable sound" prompt.
+  audioBlocked: boolean
 }
 
 /** Pick the best MediaRecorder audio container the browser supports. */
@@ -62,6 +65,7 @@ export function useLiveAudio() {
     listeners: 0,
     speaking: false,
     error: null,
+    audioBlocked: false,
   })
 
   const update = useCallback((patch: Partial<LiveAudioState>) => {
@@ -102,12 +106,28 @@ export function useLiveAudio() {
           .on(RoomEvent.Disconnected, () => {
             update({ connected: false, micEnabled: false })
           })
+          .on(RoomEvent.AudioPlaybackStatusChanged, () => {
+            // Reflect whether the browser is currently allowing audio playback.
+            update({ audioBlocked: !room.canPlaybackAudio })
+          })
 
         await room.connect(opts.serverUrl, opts.token)
 
         if (opts.publish) {
           await room.localParticipant.setMicrophoneEnabled(true)
           update({ micEnabled: true })
+        }
+
+        // Listeners: browsers often block autoplay until a user gesture. Try to
+        // start playback; if it's blocked, surface a prompt so the listener can
+        // tap to enable sound (this was why nothing was audible while live).
+        if (!opts.publish) {
+          try {
+            await room.startAudio()
+          } catch {
+            // ignore — handled via audioBlocked below
+          }
+          update({ audioBlocked: !room.canPlaybackAudio })
         }
 
         refreshCounts(room)
@@ -136,6 +156,26 @@ export function useLiveAudio() {
       el.muted = muted
     })
   }, [])
+
+  /**
+   * Called from a user gesture (tap) to unblock audio playback when the browser
+   * has suspended it. Resumes LiveKit's audio context and replays attached
+   * elements, then clears the audioBlocked flag.
+   */
+  const startAudioPlayback = useCallback(async () => {
+    const room = roomRef.current
+    if (!room) return
+    try {
+      await room.startAudio()
+    } catch {
+      // ignore
+    }
+    audioElsRef.current.forEach((el) => {
+      el.muted = false
+      void el.play().catch(() => {})
+    })
+    update({ audioBlocked: !room.canPlaybackAudio })
+  }, [update])
 
   /**
    * Publishes an audio file as a second track so listeners actually hear the
@@ -170,6 +210,10 @@ export function useLiveAudio() {
     const dest = ctx.createMediaStreamDestination()
     source.connect(gain)
     gain.connect(dest)
+    // Also route the music to the host's own speakers so they can monitor it
+    // (and hear their volume changes) exactly as it's broadcast/recorded. The
+    // gain node sits before this split, so volume affects monitor + broadcast.
+    gain.connect(ctx.destination)
 
     await el.play().catch(() => {})
 
@@ -320,6 +364,7 @@ export function useLiveAudio() {
     disconnect,
     toggleMic,
     setListenerMuted,
+    startAudioPlayback,
     publishMusic,
     setMusicVolume,
     setMusicPlaying,

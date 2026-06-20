@@ -23,6 +23,10 @@ export function EpisodeOwnerControls({ show }: { show: Show }) {
     e.stopPropagation()
   }
 
+  // Derive a sensible download filename from the audio URL's extension.
+  const ext = show.audioUrl?.split("?")[0].split(".").pop()?.slice(0, 5) || "mp3"
+  const downloadName = `${show.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.${ext}`
+
   function handleDelete(e: React.MouseEvent) {
     stop(e)
     setError(null)
@@ -48,7 +52,7 @@ export function EpisodeOwnerControls({ show }: { show: Show }) {
       {show.audioUrl ? (
         <a
           href={show.audioUrl}
-          download={`${show.title}.audio`}
+          download={downloadName}
           onClick={stop}
           className="flex size-8 items-center justify-center rounded-full bg-background/90 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-background hover:text-foreground"
           aria-label={`Download ${show.title}`}

@@ -23,7 +23,12 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { ImageLightbox } from "@/components/image-lightbox"
 import { ImageCropper } from "@/components/image-cropper"
-import { createAnnouncement, deleteAnnouncement, type AnnouncementView } from "@/app/actions/announcements"
+import {
+  adminDeleteAnnouncement,
+  createAnnouncement,
+  deleteAnnouncement,
+  type AnnouncementView,
+} from "@/app/actions/announcements"
 import { AD_BLOCK_HOURS, AD_MAX_HOURS, priceForHours } from "@/lib/ads"
 import { downloadIcs, formatEventDate, googleCalendarUrl } from "@/lib/calendar"
 import type { CurrentUser } from "@/lib/session"
@@ -34,16 +39,22 @@ export function AnnouncementBanner({
   announcements,
   myRequests,
   currentUser,
+  isAdmin = false,
 }: {
   announcements: AnnouncementView[]
   myRequests: AnnouncementView[]
   currentUser: CurrentUser | null
+  isAdmin?: boolean
 }) {
   const [showForm, setShowForm] = useState(false)
 
   // Pending/declined requests still worth surfacing to their owner (approved
   // ones already appear in the public list above).
   const trackable = myRequests.filter((r) => r.status !== "approved")
+
+  // Only one live advert is allowed at a time. When one is already running, the
+  // "Advertise" entry point is hidden so a second cannot be created.
+  const slotTaken = announcements.length > 0
 
   return (
     <section aria-label="Announcements" className="space-y-3">
@@ -57,7 +68,7 @@ export function AnnouncementBanner({
             <p className="text-xs text-muted-foreground">Promoted events from creators</p>
           </div>
         </div>
-        {currentUser && (
+        {currentUser && !slotTaken && (
           <Button size="sm" variant="secondary" className="gap-1.5" onClick={() => setShowForm(true)}>
             <Plus className="size-4" /> Advertise here
           </Button>
@@ -65,11 +76,18 @@ export function AnnouncementBanner({
       </div>
 
       {announcements.length > 0 ? (
-        <div className="flex flex-col gap-3">
-          {announcements.map((a) => (
-            <AnnouncementCard key={a.id} announcement={a} />
-          ))}
-        </div>
+        <>
+          <div className="flex flex-col gap-3">
+            {announcements.map((a) => (
+              <AnnouncementCard key={a.id} announcement={a} isAdmin={isAdmin} />
+            ))}
+          </div>
+          {currentUser && (
+            <p className="text-xs text-muted-foreground">
+              Only one advert can run at a time. You can post a new advert once the current one expires.
+            </p>
+          )}
+        </>
       ) : (
         <Card className="flex flex-col items-center gap-3 border-dashed bg-card/50 p-6 text-center">
           <Sparkles className="size-6 text-primary" />
@@ -169,9 +187,17 @@ function RequestStatusRow({ request: r }: { request: AnnouncementView }) {
   )
 }
 
-function AnnouncementCard({ announcement: a }: { announcement: AnnouncementView }) {
+function AnnouncementCard({ announcement: a, isAdmin = false }: { announcement: AnnouncementView; isAdmin?: boolean }) {
   const [lightbox, setLightbox] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [isDeleting, startDelete] = useTransition()
+
+  function handleAdminDelete() {
+    startDelete(async () => {
+      await adminDeleteAnnouncement(a.id)
+    })
+  }
 
   const calEvent = {
     title: a.title,
@@ -267,6 +293,35 @@ function AnnouncementCard({ announcement: a }: { announcement: AnnouncementView 
               </div>
             </>
           )}
+
+          {/* Platform-admin override: remove any live advert, freeing the slot. */}
+          {isAdmin &&
+            (confirmingDelete ? (
+              <div className="mt-2 flex items-center gap-1.5">
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="flex-1 gap-1.5"
+                  onClick={handleAdminDelete}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                  Confirm
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setConfirmingDelete(false)} disabled={isDeleting}>
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="mt-2 w-full gap-1.5 text-destructive hover:text-destructive"
+                onClick={() => setConfirmingDelete(true)}
+              >
+                <Trash2 className="size-3.5" /> Remove advert
+              </Button>
+            ))}
         </div>
       </div>
 
