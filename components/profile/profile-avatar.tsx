@@ -6,6 +6,7 @@ import { Camera, Loader2 } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
 import { cn } from "@/lib/utils"
 import { ImageCropper } from "@/components/image-cropper"
+import { uploadMedia } from "@/lib/upload-media"
 
 export function ProfileAvatar({
   initials,
@@ -34,11 +35,8 @@ export function ProfileAvatar({
     setUploading(true)
     setCropSrc(null)
     try {
-      const formData = new FormData()
-      formData.append("file", new File([blob], "avatar.jpg", { type: "image/jpeg" }))
-      const res = await fetch("/api/upload", { method: "POST", body: formData })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Upload failed")
+      const file = new File([blob], "avatar.jpg", { type: "image/jpeg" })
+      const data = await uploadMedia(file, "avatars")
 
       // Persist the URL on the user via Better Auth so the session stays in sync.
       const result = await authClient.updateUser({ image: data.url })

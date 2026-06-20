@@ -28,6 +28,7 @@ import { AD_BLOCK_HOURS, AD_MAX_HOURS, priceForHours } from "@/lib/ads"
 import { downloadIcs, formatEventDate, googleCalendarUrl } from "@/lib/calendar"
 import type { CurrentUser } from "@/lib/session"
 import { cn } from "@/lib/utils"
+import { uploadMedia } from "@/lib/upload-media"
 
 export function AnnouncementBanner({
   announcements,
@@ -303,11 +304,8 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
     setCropSrc(null)
     setUploading(true)
     try {
-      const formData = new FormData()
-      formData.append("file", new File([blob], "flyer.jpg", { type: "image/jpeg" }))
-      const res = await fetch("/api/upload-chat", { method: "POST", body: formData })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? "Upload failed")
+      const file = new File([blob], "flyer.jpg", { type: "image/jpeg" })
+      const data = await uploadMedia(file, "chat")
       setFlyer(data.url)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not upload the flyer.")

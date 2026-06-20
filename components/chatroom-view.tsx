@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge"
 import { ImageLightbox } from "@/components/image-lightbox"
 import { ImageCropper } from "@/components/image-cropper"
 import { cn } from "@/lib/utils"
+import { uploadMedia } from "@/lib/upload-media"
 import {
   approveJoinRequest,
   getChatMessages,
@@ -96,11 +97,7 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
     setUploadError(null)
     setUploading(true)
     try {
-      const formData = new FormData()
-      formData.append("file", file)
-      const res = await fetch("/api/upload-chat", { method: "POST", body: formData })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? "Upload failed")
+      const data = await uploadMedia(file, "chat")
       setAttachment({ url: data.url, type: data.type, name: data.name })
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Upload failed")
@@ -402,11 +399,8 @@ function MembersPanel({ detail }: { detail: ChatroomDetail }) {
     setGroupCropSrc(null)
     setUploading(true)
     try {
-      const formData = new FormData()
-      formData.append("file", new File([blob], "group.jpg", { type: "image/jpeg" }))
-      const res = await fetch("/api/upload-chat", { method: "POST", body: formData })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? "Upload failed")
+      const file = new File([blob], "group.jpg", { type: "image/jpeg" })
+      const data = await uploadMedia(file, "chat")
       await updateChatroomImage({ chatroomId: detail.id, image: data.url })
       router.refresh()
     } catch {

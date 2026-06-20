@@ -23,6 +23,7 @@ import type { CurrentUser } from "@/lib/session"
 import { publishShow } from "@/app/actions/shows"
 import { startBroadcast, endBroadcast } from "@/app/actions/live"
 import { useLiveAudio } from "@/lib/use-live-audio"
+import { uploadMedia } from "@/lib/upload-media"
 import { LiveChat } from "@/components/live-chat"
 import { CoverUpload } from "@/components/admin/cover-upload"
 import { Button } from "@/components/ui/button"
@@ -315,13 +316,13 @@ function BackgroundMusicPanel({
     const file = e.target.files?.[0]
     if (!file) return
     setError(null)
+    if (!file.type.startsWith("audio/")) {
+      setError("Please choose an audio file")
+      return
+    }
     setUploading(true)
     try {
-      const formData = new FormData()
-      formData.append("file", file)
-      const res = await fetch("/api/upload-audio", { method: "POST", body: formData })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? "Upload failed")
+      const data = await uploadMedia(file, "live-music")
       setTrack({ url: data.url, name: data.name ?? file.name })
       setPlaying(false)
     } catch (err) {

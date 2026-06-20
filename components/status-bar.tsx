@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation"
 import { Plus, X, Trash2, Loader2, Timer } from "lucide-react"
 import { createStatus, deleteStatus, type StatusGroup } from "@/app/actions/status"
 import type { CurrentUser } from "@/lib/session"
+import { uploadMedia } from "@/lib/upload-media"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
@@ -74,11 +75,7 @@ export function StatusBar({
 
     setUploading(true)
     try {
-      const body = new FormData()
-      body.append("file", file)
-      const res = await fetch("/api/upload-chat", { method: "POST", body })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Upload failed.")
+      const data = await uploadMedia(file, "status")
       await createStatus({ mediaUrl: data.url, mediaType: isVideo ? "video" : "image" })
       router.refresh()
     } catch (err) {

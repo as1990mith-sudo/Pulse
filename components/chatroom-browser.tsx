@@ -20,6 +20,7 @@ import {
   type ChatroomSummary,
 } from "@/app/actions/chatroom"
 import { ImageCropper } from "@/components/image-cropper"
+import { uploadMedia } from "@/lib/upload-media"
 
 export function ChatroomBrowser({ rooms }: { rooms: ChatroomSummary[] }) {
   return (
@@ -234,11 +235,8 @@ function CreateRoom() {
     setUploading(true)
     setCropSrc(null)
     try {
-      const formData = new FormData()
-      formData.append("file", new File([blob], "group.jpg", { type: "image/jpeg" }))
-      const res = await fetch("/api/upload-chat", { method: "POST", body: formData })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? "Upload failed")
+      const file = new File([blob], "group.jpg", { type: "image/jpeg" })
+      const data = await uploadMedia(file, "chat")
       setImage(data.url)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not upload the picture.")
