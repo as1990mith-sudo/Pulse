@@ -38,25 +38,19 @@ export default async function LiveStreamPage({ params }: { params: Promise<{ id:
         <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
           {/* Main column */}
           <div className="space-y-6">
-            <LiveListener stream={stream} canListen={Boolean(currentUser)} />
+            <LiveListener stream={stream} canListen={Boolean(currentUser)} currentUserId={currentUser?.id ?? null} />
 
-            <div className="space-y-4">
-              <div className="space-y-1">
-                {stream.category && <Badge variant="secondary">{stream.category}</Badge>}
-                <h1 className="text-2xl font-bold tracking-tight text-balance">{stream.title}</h1>
-              </div>
-
-              <div className="flex items-center justify-between gap-4 rounded-xl border border-border/60 bg-card p-4">
-                <div className="flex items-center gap-3">
-                  <Avatar className="size-11">
-                    <AvatarFallback>{stream.hostName[0]}</AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-semibold leading-none">{stream.hostName}</p>
-                    <p className="text-sm text-muted-foreground">{stream.hostHandle}</p>
-                  </div>
+            <div className="flex items-center justify-between gap-4 rounded-xl border border-border/60 bg-card p-4">
+              <div className="flex items-center gap-3">
+                <Avatar className="size-11">
+                  <AvatarFallback>{stream.hostName[0]}</AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="font-semibold leading-none">{stream.hostName}</p>
+                  <p className="text-sm text-muted-foreground">{stream.hostHandle}</p>
                 </div>
               </div>
+              {stream.category && <Badge variant="secondary">{stream.category}</Badge>}
             </div>
           </div>
 
@@ -68,7 +62,12 @@ export default async function LiveStreamPage({ params }: { params: Promise<{ id:
                 <h2 className="font-semibold">Live chat</h2>
               </div>
               <div className="min-h-0 flex-1">
-                <LiveChat currentUser={currentUser} roomName={stream.roomName} />
+                <LiveChat
+                  currentUser={currentUser}
+                  roomName={stream.roomName}
+                  bgUrl={stream.chatBgUrl ?? null}
+                  bgEffect={stream.chatBgEffect ?? "none"}
+                />
               </div>
             </div>
           </aside>

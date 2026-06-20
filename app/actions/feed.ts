@@ -1,13 +1,12 @@
 "use server"
 
-import { asc, desc, eq, inArray } from "drizzle-orm"
+import { and, asc, desc, eq, inArray } from "drizzle-orm"
 import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { feedComment, feedPost, follow, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
-import { notifyFollowers, notifyUser } from "@/app/actions/notifications"
 
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -202,17 +201,23 @@ export async function createPost(input: { text: string; image?: string | null; v
     video: input.video ?? null,
   })
 
-  // Let everyone who follows this author know there's a new tweet.
-  const preview = text.length > 80 ? `${text.slice(0, 80)}…` : text || "shared a photo"
-  await notifyFollowers({
-    actorId: user.id,
-    actorName: user.name,
-    type: "post",
-    message: preview,
-    link: "/feed",
-  })
+  // Note: new posts intentionally do NOT notify followers. Notifications are
+  // reserved for when a followed user goes live (see app/actions/live.ts).
+  revalidatePath("/feed")
+}
+
+/** Deletes one of the signed-in user's own posts (and its comments). */
+export async function deletePost(postId: number) {
+  const user = await requireUser()
+  const [row] = await db.select({ userId: feedPost.userId }).from(feedPost).where(eq(feedPost.id, postId))
+  if (!row) return
+  if (row.userId !== user.id) throw new Error("You can only delete your own posts.")
+
+  await db.delete(feedComment).where(eq(feedComment.postId, postId))
+  await db.delete(feedPost).where(and(eq(feedPost.id, postId), eq(feedPost.userId, user.id)))
 
   revalidatePath("/feed")
+  revalidatePath(`/u/${user.id}`)
 }
 
 export async function addPostComment(input: { postId: number; text: string }) {
@@ -228,47 +233,22 @@ export async function addPostComment(input: { postId: number; text: string }) {
     text,
   })
 
-  // Notify the post's author that someone replied.
-  const [post] = await db
-    .select({ authorId: feedPost.userId })
-    .from(feedPost)
-    .where(eq(feedPost.id, input.postId))
-  if (post) {
-    const preview = text.length > 80 ? `${text.slice(0, 80)}…` : text
-    await notifyUser({
-      userId: post.authorId,
-      actorId: user.id,
-      actorName: user.name,
-      type: "comment",
-      message: preview,
-      link: "/feed",
-    })
-  }
-
+  // Note: comments don't create notifications. Only "followed user is live"
+  // notifications are surfaced (see app/actions/live.ts).
   revalidatePath("/feed")
 }
 
 export async function setPostLike(input: { postId: number; liked: boolean }) {
-  const user = await requireUser()
+  await requireUser()
   const [row] = await db
-    .select({ likes: feedPost.likes, authorId: feedPost.userId })
+    .select({ likes: feedPost.likes })
     .from(feedPost)
     .where(eq(feedPost.id, input.postId))
   if (!row) return
   const next = Math.max(0, row.likes + (input.liked ? 1 : -1))
   await db.update(feedPost).set({ likes: next }).where(eq(feedPost.id, input.postId))
 
-  // Only notify on a new like (not on un-like).
-  if (input.liked) {
-    await notifyUser({
-      userId: row.authorId,
-      actorId: user.id,
-      actorName: user.name,
-      type: "like",
-      message: "liked your post",
-      link: "/feed",
-    })
-  }
-
+  // Note: likes don't create notifications. Only "followed user is live"
+  // notifications are surfaced (see app/actions/live.ts).
   revalidatePath("/feed")
 }

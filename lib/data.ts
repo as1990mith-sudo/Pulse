@@ -34,6 +34,8 @@ export type Show = {
   publishedAt?: string
   description: string
   audioUrl?: string // recorded audio for on-demand episodes
+  episodeId?: number // numeric DB id for published episodes (likes/comments)
+  likes?: number // like count for published episodes
 }
 
 export type DevotionalComment = {

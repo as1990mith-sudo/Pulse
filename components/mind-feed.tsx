@@ -15,8 +15,9 @@ import {
   UserPlus,
   UserCheck,
   Loader2,
+  Trash2,
 } from "lucide-react"
-import { addPostComment, createPost, getFeed, setPostLike, type FeedPostView } from "@/app/actions/feed"
+import { addPostComment, createPost, deletePost, getFeed, setPostLike, type FeedPostView } from "@/app/actions/feed"
 import { toggleFollow } from "@/app/actions/follow"
 import type { CurrentUser } from "@/lib/session"
 import { uploadMedia } from "@/lib/upload-media"
@@ -137,7 +138,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder="Share a thought…"
-              className="min-h-20 resize-none border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0"
+              className="min-h-20 resize-none border-0 bg-transparent px-3 text-sm shadow-none focus-visible:ring-0"
               aria-label="Write a post"
             />
             {media && (
@@ -254,7 +255,18 @@ export function PostCard({
   const [showComments, setShowComments] = useState(false)
   const [commentDraft, setCommentDraft] = useState("")
   const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleted, setDeleted] = useState(false)
   const [isPending, startTransition] = useTransition()
+
+  function handleDelete() {
+    startTransition(async () => {
+      await deletePost(post.id)
+      setDeleted(true)
+      await globalMutate("feed")
+      router.refresh()
+    })
+  }
 
   function toggleLike() {
     if (!currentUser) return
@@ -307,6 +319,8 @@ export function PostCard({
 
   const hasMedia = !!post.image || !!post.video
 
+  if (deleted) return null
+
   return (
     <article
       className={cn(
@@ -334,10 +348,37 @@ export function PostCard({
             </span>
           </div>
         </div>
-        {currentUser && !post.isSelf && (
-          <FollowButton authorId={post.authorId} authorName={post.user} initialFollowing={post.isFollowing} />
-        )}
+        <div className="flex shrink-0 items-center gap-1">
+          {currentUser && !post.isSelf && (
+            <FollowButton authorId={post.authorId} authorName={post.user} initialFollowing={post.isFollowing} />
+          )}
+          {currentUser && post.isSelf && (
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              disabled={isPending}
+              aria-label="Delete post"
+              className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="size-4" />
+            </button>
+          )}
+        </div>
       </div>
+
+      {confirmDelete && (
+        <div className="mx-3 mb-2 flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
+          <p className="text-sm text-foreground">Delete this post?</p>
+          <div className="flex items-center gap-2">
+            <Button type="button" size="sm" variant="ghost" onClick={() => setConfirmDelete(false)} disabled={isPending}>
+              Cancel
+            </Button>
+            <Button type="button" size="sm" variant="destructive" onClick={handleDelete} disabled={isPending}>
+              {isPending ? <Loader2 className="size-4 animate-spin" /> : "Delete"}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Caption — shown above the media */}
       {post.text && (

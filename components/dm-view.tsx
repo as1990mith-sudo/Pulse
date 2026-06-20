@@ -3,11 +3,13 @@
 import { useEffect, useRef, useState } from "react"
 import useSWR from "swr"
 import Link from "next/link"
-import { ArrowLeft, FileText, Music, Paperclip, Send, Smile, X } from "lucide-react"
+import { ArrowLeft, FileText, Mic, Music, Paperclip, Phone, Send, Smile, Video, X } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ImageLightbox } from "@/components/image-lightbox"
+import { VoiceRecorder } from "@/components/voice-recorder"
+import { DmCall } from "@/components/dm-call"
 import { cn } from "@/lib/utils"
 import { uploadMedia } from "@/lib/upload-media"
 import {
@@ -17,6 +19,7 @@ import {
   type DmConversationDetail,
   type DmMessageView,
 } from "@/app/actions/dm"
+import { getActiveCall, startCall, type CallMode, type DmCallView } from "@/app/actions/dm-call"
 
 const EMOJIS = [
   "😀", "😂", "🥰", "😎", "🤔", "😴", "😭", "😡",
@@ -34,6 +37,8 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [showEmoji, setShowEmoji] = useState(false)
   const [pending, setPending] = useState<DmMessageView[]>([])
+  const [recording, setRecording] = useState(false)
+  const [sendingVoice, setSendingVoice] = useState(false)
   const scrollEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -44,6 +49,29 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
   )
 
   const serverMessages = liveMessages ?? detail.messages
+
+  // Call signaling: poll for a ringing/active call in this conversation. Once a
+  // call is dismissed locally we suppress that id until a newer one appears.
+  const [dismissedCallId, setDismissedCallId] = useState<number | null>(null)
+  const [starting, setStarting] = useState(false)
+  const { data: activeCall, mutate: mutateCall } = useSWR<DmCallView | null>(
+    ["dm-active-call", detail.id],
+    () => getActiveCall({ conversationId: detail.id }),
+    { refreshInterval: 2500, revalidateOnFocus: true },
+  )
+
+  const liveCall = activeCall && activeCall.id !== dismissedCallId ? activeCall : null
+
+  async function beginCall(mode: CallMode) {
+    setStarting(true)
+    try {
+      const call = await startCall({ conversationId: detail.id, mode })
+      setDismissedCallId(null)
+      await mutateCall(call, { revalidate: false })
+    } finally {
+      setStarting(false)
+    }
+  }
 
   useEffect(() => {
     setPending([])
@@ -69,6 +97,43 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ""
+    }
+  }
+
+  async function handleSendVoice(blob: Blob, durationSecs: number) {
+    setSendingVoice(true)
+    setUploadError(null)
+    try {
+      const fileName = `voice-note-${Date.now()}.webm`
+      const data = await uploadMedia(blob, "dm", fileName)
+      const label = `Voice note (${Math.floor(durationSecs / 60)}:${String(durationSecs % 60).padStart(2, "0")})`
+
+      setRecording(false)
+      setPending((prev) => [
+        ...prev,
+        {
+          id: -Date.now(),
+          senderId: detail.currentUserId,
+          body: null,
+          attachmentUrl: data.url,
+          attachmentType: "audio",
+          attachmentName: label,
+          isSelf: true,
+          postedAt: "now",
+        },
+      ])
+
+      await sendDirectMessage({
+        conversationId: detail.id,
+        attachmentUrl: data.url,
+        attachmentType: "audio",
+        attachmentName: label,
+      })
+      await mutateMessages()
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Could not send voice note")
+    } finally {
+      setSendingVoice(false)
     }
   }
 
@@ -128,7 +193,45 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
             <p className="truncate text-xs text-muted-foreground">{detail.otherUserHandle}</p>
           </div>
         </Link>
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => beginCall("audio")}
+            disabled={starting || Boolean(liveCall)}
+            aria-label="Start voice call"
+          >
+            <Phone className="size-5" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => beginCall("video")}
+            disabled={starting || Boolean(liveCall)}
+            aria-label="Start video call"
+          >
+            <Video className="size-5" />
+          </Button>
+        </div>
       </div>
+
+      {liveCall && (
+        <DmCall
+          call={liveCall}
+          peer={{
+            name: detail.otherUserName,
+            initials: detail.initials,
+            color: detail.color,
+            image: detail.image,
+          }}
+          onClosed={() => {
+            setDismissedCallId(liveCall.id)
+            void mutateCall()
+          }}
+        />
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto bg-card/30">
@@ -184,51 +287,75 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
             </div>
           )}
 
-          <form onSubmit={handleSend} className="flex items-center gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip"
-              className="hidden"
-              onChange={handleFilePick}
+          {recording ? (
+            <VoiceRecorder
+              onSend={handleSendVoice}
+              onCancel={() => setRecording(false)}
+              sending={sendingVoice}
             />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="shrink-0 text-muted-foreground"
-              onClick={() => setShowEmoji((s) => !s)}
-              aria-label="Toggle emoji picker"
-            >
-              <Smile className="size-5" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="shrink-0 text-muted-foreground"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              aria-label="Attach a file"
-            >
-              <Paperclip className={cn("size-5", uploading && "animate-pulse")} />
-            </Button>
-            <Input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder={uploading ? "Uploading attachment…" : "Type a message"}
-              aria-label="Message"
-            />
-            <Button
-              type="submit"
-              size="icon"
-              className="shrink-0"
-              disabled={uploading || (!draft.trim() && !attachment)}
-              aria-label="Send message"
-            >
-              <Send className="size-4" />
-            </Button>
-          </form>
+          ) : (
+            <form onSubmit={handleSend} className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip"
+                className="hidden"
+                onChange={handleFilePick}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="shrink-0 text-muted-foreground"
+                onClick={() => setShowEmoji((s) => !s)}
+                aria-label="Toggle emoji picker"
+              >
+                <Smile className="size-5" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="shrink-0 text-muted-foreground"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                aria-label="Attach a file"
+              >
+                <Paperclip className={cn("size-5", uploading && "animate-pulse")} />
+              </Button>
+              <Input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder={uploading ? "Uploading attachment…" : "Type a message"}
+                aria-label="Message"
+              />
+              {draft.trim() || attachment ? (
+                <Button
+                  type="submit"
+                  size="icon"
+                  className="shrink-0"
+                  disabled={uploading}
+                  aria-label="Send message"
+                >
+                  <Send className="size-4" />
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  size="icon"
+                  className="shrink-0"
+                  onClick={() => {
+                    setShowEmoji(false)
+                    setRecording(true)
+                  }}
+                  disabled={uploading}
+                  aria-label="Record a voice note"
+                >
+                  <Mic className="size-4" />
+                </Button>
+              )}
+            </form>
+          )}
         </div>
       </div>
     </div>

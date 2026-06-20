@@ -50,6 +50,8 @@ function episodeToShow(row: typeof episode.$inferSelect): Show {
     publishedAt: relativeTime(row.createdAt),
     description: row.description,
     audioUrl: row.audioUrl || undefined,
+    episodeId: row.id,
+    likes: row.likes,
   }
 }
 

@@ -85,6 +85,7 @@ export const feedComment = pgTable("feed_comment", {
   authorName: text("authorName").notNull(),
   authorHandle: text("authorHandle").notNull(),
   text: text("text").notNull(),
+  likes: integer("likes").notNull().default(0),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
@@ -136,6 +137,19 @@ export const episode = pgTable("episode", {
   // added by an admin from the content dashboard.
   hostUserId: text("hostUserId"),
   hostHandle: text("hostHandle"),
+  likes: integer("likes").notNull().default(0),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// Comments left on a published, on-demand episode.
+export const episodeComment = pgTable("episode_comment", {
+  id: serial("id").primaryKey(),
+  episodeId: integer("episodeId").notNull(),
+  userId: text("userId").notNull(),
+  authorName: text("authorName").notNull(),
+  authorHandle: text("authorHandle").notNull(),
+  text: text("text").notNull(),
+  likes: integer("likes").notNull().default(0),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
@@ -221,11 +235,23 @@ export const statusUpdate = pgTable("status_update", {
   id: serial("id").primaryKey(),
   userId: text("userId").notNull(),
   authorName: text("authorName").notNull(),
-  mediaUrl: text("mediaUrl").notNull(),
-  mediaType: text("mediaType").notNull(), // "image" | "video"
+  mediaUrl: text("mediaUrl"), // null for text-only statuses
+  mediaType: text("mediaType").notNull(), // "image" | "video" | "text"
   caption: text("caption"),
+  backgroundColor: text("backgroundColor"), // gradient/solid key for text statuses
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   expiresAt: timestamp("expiresAt").notNull(),
+})
+
+// Tracks who has viewed each status (drives seen rings + the owner's viewers
+// list) and an optional emoji reaction left by the viewer.
+export const statusView = pgTable("status_view", {
+  id: serial("id").primaryKey(),
+  statusId: integer("statusId").notNull(),
+  viewerId: text("viewerId").notNull(),
+  viewerName: text("viewerName").notNull(),
+  reaction: text("reaction"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
 // --- Live streams ----------------------------------------------------------
@@ -242,8 +268,24 @@ export const liveStream = pgTable("live_stream", {
   category: text("category"),
   cover: text("cover"),
   status: text("status").notNull().default("live"), // "live" | "ended"
+  chatBgUrl: text("chatBgUrl"), // host-uploaded chat background image
+  chatBgEffect: text("chatBgEffect").notNull().default("none"), // "none" | "blur" | "dim"
   startedAt: timestamp("startedAt").notNull().defaultNow(),
   endedAt: timestamp("endedAt"),
+})
+
+// Call-in requests (listener -> host) and invites (host -> listener) for a live
+// room. kind = "request" | "invite"; status = "pending" | "accepted" |
+// "declined" | "ended". Drives the guest call-in flow on top of LiveKit.
+export const liveCallRequest = pgTable("live_call_request", {
+  id: serial("id").primaryKey(),
+  roomName: text("roomName").notNull(),
+  userId: text("userId").notNull(),
+  userName: text("userName").notNull(),
+  kind: text("kind").notNull(),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 })
 
 // Real-time chat messages for a live stream room. Listeners poll for new
@@ -283,6 +325,21 @@ export const dmMessage = pgTable("dm_message", {
   attachmentType: text("attachmentType"), // "image" | "video" | "audio" | "document"
   attachmentName: text("attachmentName"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// 1:1 audio/video call signaling between two DM users. The pair share a
+// LiveKit room (room name derived from the call id). mode = "audio" | "video";
+// status = "ringing" | "active" | "declined" | "ended" | "missed".
+export const dmCall = pgTable("dm_call", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversationId").notNull(),
+  callerId: text("callerId").notNull(),
+  callerName: text("callerName").notNull(),
+  calleeId: text("calleeId").notNull(),
+  mode: text("mode").notNull().default("audio"),
+  status: text("status").notNull().default("ringing"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 })
 
 // Per-user notifications. A row is created for each follower when someone they

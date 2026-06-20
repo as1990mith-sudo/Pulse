@@ -183,6 +183,17 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
 
   const pinnedMessages = messages.filter((m) => m.pinned && !m.deleted)
 
+  // Tapping a pinned message scrolls to its bubble in the thread and briefly
+  // highlights it so the user can find the exact message that was pinned.
+  const [flashId, setFlashId] = useState<number | null>(null)
+  function jumpToMessage(messageId: number) {
+    const el = document.getElementById(`chat-msg-${messageId}`)
+    if (!el) return
+    el.scrollIntoView({ behavior: "smooth", block: "center" })
+    setFlashId(messageId)
+    window.setTimeout(() => setFlashId((cur) => (cur === messageId ? null : cur)), 1800)
+  }
+
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden">
       {/* Header */}
@@ -236,12 +247,17 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
             {pinnedMessages.map((m) => (
               <div key={`pin-${m.id}`} className="flex items-center gap-2 text-xs">
                 <Pin className="size-3.5 shrink-0 text-primary" />
-                <span className="min-w-0 flex-1 truncate">
+                <button
+                  type="button"
+                  onClick={() => jumpToMessage(m.id)}
+                  className="min-w-0 flex-1 truncate text-left transition-colors hover:text-foreground"
+                  aria-label="Jump to pinned message"
+                >
                   <span className="font-medium">{m.isSelf ? "You" : m.userName}: </span>
                   <span className="text-muted-foreground">
                     {m.body || (m.attachmentType ? `${m.attachmentType} attachment` : "Message")}
                   </span>
-                </span>
+                </button>
                 {detail.isOwner && (
                   <button
                     type="button"
@@ -271,6 +287,7 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
               key={m.id}
               message={m}
               isAdmin={detail.isOwner}
+              flashed={flashId === m.id}
               onDelete={handleDeleteMessage}
               onTogglePin={handleTogglePin}
             />
@@ -375,11 +392,13 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
 function MessageBubble({
   message: m,
   isAdmin,
+  flashed = false,
   onDelete,
   onTogglePin,
 }: {
   message: ChatMessageView
   isAdmin: boolean
+  flashed?: boolean
   onDelete: (messageId: number) => void
   onTogglePin: (messageId: number, pinned: boolean) => void
 }) {
@@ -420,7 +439,14 @@ function MessageBubble({
   }
 
   return (
-    <div className={cn("group flex gap-2.5", m.isSelf && "flex-row-reverse")}>
+    <div
+      id={`chat-msg-${m.id}`}
+      className={cn(
+        "group flex gap-2.5 rounded-2xl transition-colors duration-500",
+        m.isSelf && "flex-row-reverse",
+        flashed && "bg-primary/10 ring-2 ring-primary/40",
+      )}
+    >
       <Link href={`/u/${m.userId}`} aria-label={`View ${m.userName}'s profile`} className="shrink-0">
         <Avatar className="size-7 transition-opacity hover:opacity-80">
           <AvatarFallback className={cn("text-[10px]", m.color)}>{m.initials}</AvatarFallback>

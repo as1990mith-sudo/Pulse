@@ -5,10 +5,12 @@ import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { liveStream, liveChatMessage } from "@/lib/db/schema"
-import { getHandle } from "@/lib/identity"
-import { createAccessToken, isLiveKitConfigured, LIVEKIT_URL } from "@/lib/livekit"
+import { liveStream, liveChatMessage, liveCallRequest } from "@/lib/db/schema"
+import { getHandle, getAvatarColor, getInitials } from "@/lib/identity"
+import { createAccessToken, isLiveKitConfigured, LIVEKIT_URL, setParticipantPublish } from "@/lib/livekit"
 import { notifyFollowers } from "@/app/actions/notifications"
+
+const MAX_GUESTS = 3
 
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -25,6 +27,8 @@ export type LiveStreamView = {
   title: string
   category: string | null
   cover: string | null
+  chatBgUrl?: string | null
+  chatBgEffect?: ChatBgEffect
   startedAt: string
 }
 
@@ -210,6 +214,202 @@ export async function getLiveStream(roomName: string): Promise<LiveStreamView | 
     title: r.title,
     category: r.category,
     cover: r.cover,
+    chatBgUrl: r.chatBgUrl,
+    chatBgEffect: (r.chatBgEffect as ChatBgEffect) ?? "none",
     startedAt: r.startedAt.toISOString(),
   }
+}
+
+// --- Guest call-in system --------------------------------------------------
+
+export type CallRequestView = {
+  id: number
+  userId: string
+  userName: string
+  initials: string
+  color: string
+  kind: "request" | "invite"
+  status: "pending" | "accepted" | "declined" | "ended"
+}
+
+async function getHostId(roomName: string): Promise<string | null> {
+  const [s] = await db.select({ hostId: liveStream.hostId }).from(liveStream).where(eq(liveStream.roomName, roomName))
+  return s?.hostId ?? null
+}
+
+function mapRequest(r: typeof liveCallRequest.$inferSelect): CallRequestView {
+  return {
+    id: r.id,
+    userId: r.userId,
+    userName: r.userName,
+    initials: getInitials(r.userName),
+    color: getAvatarColor(r.userId),
+    kind: r.kind as "request" | "invite",
+    status: r.status as CallRequestView["status"],
+  }
+}
+
+/** Count of guests currently allowed live (accepted requests/invites). */
+async function acceptedGuestCount(roomName: string): Promise<number> {
+  const rows = await db
+    .select({ id: liveCallRequest.id })
+    .from(liveCallRequest)
+    .where(and(eq(liveCallRequest.roomName, roomName), eq(liveCallRequest.status, "accepted")))
+  return rows.length
+}
+
+/** Listener asks to come on as a guest. */
+export async function requestToJoin(input: { roomName: string }): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser()
+  // Clear any prior resolved row for this user so they can re-request.
+  await db
+    .delete(liveCallRequest)
+    .where(
+      and(
+        eq(liveCallRequest.roomName, input.roomName),
+        eq(liveCallRequest.userId, user.id),
+        eq(liveCallRequest.kind, "request"),
+      ),
+    )
+  await db.insert(liveCallRequest).values({
+    roomName: input.roomName,
+    userId: user.id,
+    userName: user.name,
+    kind: "request",
+    status: "pending",
+  })
+  return { ok: true }
+}
+
+/** Host invites a specific listener to come on as a guest. */
+export async function inviteToStage(input: { roomName: string; userId: string; userName: string }): Promise<void> {
+  const user = await requireUser()
+  if ((await getHostId(input.roomName)) !== user.id) throw new Error("Only the host can invite guests.")
+  await db
+    .delete(liveCallRequest)
+    .where(
+      and(
+        eq(liveCallRequest.roomName, input.roomName),
+        eq(liveCallRequest.userId, input.userId),
+        eq(liveCallRequest.kind, "invite"),
+      ),
+    )
+  await db.insert(liveCallRequest).values({
+    roomName: input.roomName,
+    userId: input.userId,
+    userName: input.userName,
+    kind: "invite",
+    status: "pending",
+  })
+}
+
+/** Host accepts a pending request (or listener accepts an invite is handled separately). */
+export async function respondToCallRequest(input: {
+  id: number
+  accept: boolean
+}): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser()
+  const [req] = await db.select().from(liveCallRequest).where(eq(liveCallRequest.id, input.id))
+  if (!req) return { ok: false, error: "Request no longer exists." }
+
+  const hostId = await getHostId(req.roomName)
+
+  // Authorization: host responds to "request"; the invited user responds to "invite".
+  if (req.kind === "request" && hostId !== user.id) return { ok: false, error: "Not authorized." }
+  if (req.kind === "invite" && req.userId !== user.id) return { ok: false, error: "Not authorized." }
+
+  if (input.accept) {
+    if ((await acceptedGuestCount(req.roomName)) >= MAX_GUESTS) {
+      return { ok: false, error: "All 3 guest spots are full." }
+    }
+    await setParticipantPublish({ roomName: req.roomName, identity: req.userId, canPublish: true })
+    await db
+      .update(liveCallRequest)
+      .set({ status: "accepted", updatedAt: new Date() })
+      .where(eq(liveCallRequest.id, input.id))
+  } else {
+    await db
+      .update(liveCallRequest)
+      .set({ status: "declined", updatedAt: new Date() })
+      .where(eq(liveCallRequest.id, input.id))
+  }
+  return { ok: true }
+}
+
+/** Removes a guest from the stage (host action or guest leaving) -> back to listener. */
+export async function removeFromStage(input: { roomName: string; userId: string }): Promise<void> {
+  const user = await requireUser()
+  const hostId = await getHostId(input.roomName)
+  if (hostId !== user.id && user.id !== input.userId) throw new Error("Not authorized.")
+
+  await setParticipantPublish({ roomName: input.roomName, identity: input.userId, canPublish: false })
+  await db
+    .update(liveCallRequest)
+    .set({ status: "ended", updatedAt: new Date() })
+    .where(
+      and(
+        eq(liveCallRequest.roomName, input.roomName),
+        eq(liveCallRequest.userId, input.userId),
+        eq(liveCallRequest.status, "accepted"),
+      ),
+    )
+}
+
+/**
+ * Polled by host (sees pending requests + accepted guests) and by listeners
+ * (sees their own invite + whether they were accepted).
+ */
+export async function getCallState(input: { roomName: string }): Promise<{
+  pendingRequests: CallRequestView[]
+  guests: CallRequestView[]
+  myInvite: CallRequestView | null
+  myStatus: CallRequestView["status"] | null
+  chatBgUrl: string | null
+  chatBgEffect: ChatBgEffect
+}> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  const me = session?.user?.id ?? null
+
+  const [stream] = await db
+    .select({ chatBgUrl: liveStream.chatBgUrl, chatBgEffect: liveStream.chatBgEffect })
+    .from(liveStream)
+    .where(eq(liveStream.roomName, input.roomName))
+
+  const rows = await db
+    .select()
+    .from(liveCallRequest)
+    .where(eq(liveCallRequest.roomName, input.roomName))
+    .orderBy(asc(liveCallRequest.createdAt))
+
+  const pendingRequests = rows.filter((r) => r.kind === "request" && r.status === "pending").map(mapRequest)
+  const guests = rows.filter((r) => r.status === "accepted").map(mapRequest)
+  const myRows = me ? rows.filter((r) => r.userId === me) : []
+  const myInvite = myRows.find((r) => r.kind === "invite" && r.status === "pending")
+  const mine = [...myRows].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0]
+
+  return {
+    pendingRequests,
+    guests,
+    myInvite: myInvite ? mapRequest(myInvite) : null,
+    myStatus: mine ? (mine.status as CallRequestView["status"]) : null,
+    chatBgUrl: stream?.chatBgUrl ?? null,
+    chatBgEffect: (stream?.chatBgEffect as ChatBgEffect) ?? "none",
+  }
+}
+
+// --- Host-controlled chat background ---------------------------------------
+
+export type ChatBgEffect = "none" | "blur" | "dim"
+
+export async function setChatBackground(input: {
+  roomName: string
+  url?: string | null
+  effect?: ChatBgEffect
+}): Promise<void> {
+  const user = await requireUser()
+  if ((await getHostId(input.roomName)) !== user.id) throw new Error("Only the host can change the background.")
+  const patch: { chatBgUrl?: string | null; chatBgEffect?: ChatBgEffect } = {}
+  if (input.url !== undefined) patch.chatBgUrl = input.url
+  if (input.effect !== undefined) patch.chatBgEffect = input.effect
+  await db.update(liveStream).set(patch).where(eq(liveStream.roomName, input.roomName))
 }

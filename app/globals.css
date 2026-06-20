@@ -347,3 +347,40 @@
   animation: page-enter 280ms cubic-bezier(0.22, 1, 0.36, 1);
   will-change: opacity, transform;
 }
+
+/* Slow right-to-left scrolling marquee for long episode titles. The track holds
+   two copies of the text so the loop is seamless. */
+@keyframes title-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.marquee {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.marquee__track {
+  display: inline-flex;
+  width: max-content;
+  animation: title-marquee 14s linear infinite;
+  will-change: transform;
+}
+
+.marquee:hover .marquee__track {
+  animation-play-state: paused;
+}
+
+.marquee__track > * {
+  padding-right: 2.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee__track {
+    animation: none;
+  }
+}

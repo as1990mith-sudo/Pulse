@@ -3,11 +3,19 @@ import { ArrowLeft, Clock } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { SiteHeader } from "@/components/site-header"
 import { EpisodePlayer } from "@/components/episode-player"
+import { EpisodeInteractions } from "@/components/episode-interactions"
+import { getEpisodeComments } from "@/app/actions/episodes"
+import { getCurrentUser } from "@/lib/session"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 
 /** Full page shown for a published, on-demand episode (a recorded session). */
-export function EpisodePage({ show }: { show: Show }) {
+export async function EpisodePage({ show }: { show: Show }) {
+  const [currentUser, comments] = await Promise.all([
+    getCurrentUser(),
+    show.episodeId ? getEpisodeComments(show.episodeId) : Promise.resolve([]),
+  ])
+
   return (
     <div className="min-h-screen">
       <SiteHeader />
@@ -21,6 +29,8 @@ export function EpisodePage({ show }: { show: Show }) {
 
         <div className="space-y-6">
           <EpisodePlayer show={show} />
+
+          <EpisodeInteractions show={show} currentUser={currentUser} initialComments={comments} />
 
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">

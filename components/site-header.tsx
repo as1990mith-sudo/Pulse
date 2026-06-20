@@ -2,10 +2,11 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BookOpen, MessageCircle, Radio } from "lucide-react"
+import { BookOpen, Radio } from "lucide-react"
 import { ThemeSwitcher } from "@/components/theme-switcher"
 import { UserMenu } from "@/components/user-menu"
 import { NotificationBell } from "@/components/notification-bell"
+import { MessagesBell } from "@/components/messages-bell"
 import { cn } from "@/lib/utils"
 
 const navItems = [
@@ -61,16 +62,7 @@ export function SiteHeader() {
           >
             <BookOpen className="size-[18px]" />
           </Link>
-          <Link
-            href="/messages"
-            aria-label="Direct messages"
-            className={cn(
-              "relative flex size-9 items-center justify-center rounded-full outline-none transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring",
-              isActive("/messages") ? "text-primary" : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <MessageCircle className="size-[18px]" />
-          </Link>
+          <MessagesBell />
           <NotificationBell />
           <ThemeSwitcher />
           <UserMenu />
