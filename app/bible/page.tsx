@@ -5,7 +5,7 @@ import { BibleReader } from "@/components/bible-reader"
 
 export const metadata: Metadata = {
   title: "Bible — Frequency",
-  description: "Read the Bible for free, book by book, in the public-domain World English Bible translation.",
+  description: "Read the Bible for free, book by book, in the public-domain King James Version.",
 }
 
 export default function BiblePage() {
@@ -20,7 +20,7 @@ export default function BiblePage() {
             </span>
             <h1 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl">Read the Bible</h1>
             <p className="text-pretty text-base text-muted-foreground leading-relaxed">
-              Choose any book and chapter to read. Free and always available — the complete World English Bible.
+              Choose any book and chapter to read. Free and always available — the complete King James Version.
             </p>
           </div>
         </section>
@@ -33,7 +33,7 @@ export default function BiblePage() {
       <footer className="border-t border-border/60">
         <div className="mx-auto flex w-full max-w-3xl flex-col items-center justify-between gap-2 px-4 py-8 text-sm text-muted-foreground sm:flex-row sm:px-6">
           <p>Frequency — live podcast streaming.</p>
-          <p>Scripture: World English Bible (public domain).</p>
+          <p>Scripture: King James Version (public domain).</p>
         </div>
       </footer>
     </div>
