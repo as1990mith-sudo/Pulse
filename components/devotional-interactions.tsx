@@ -1,10 +1,10 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import useSWR from "swr"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { Heart, Share2, MessageCircle, Check, Send } from "lucide-react"
-import { addDevotionalComment, type DevotionalCommentView } from "@/app/actions/devotional"
+import { addDevotionalComment, getDevotionalComments, type DevotionalCommentView } from "@/app/actions/devotional"
 import type { CurrentUser } from "@/lib/session"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -16,7 +16,7 @@ export function DevotionalInteractions({
   title,
   devotionalDate,
   initialLikes,
-  comments,
+  comments: initialComments,
   currentUser,
 }: {
   title: string
@@ -25,7 +25,16 @@ export function DevotionalInteractions({
   comments: DevotionalCommentView[]
   currentUser: CurrentUser | null
 }) {
-  const router = useRouter()
+  // Poll the comments so replies from others show up without a manual refresh.
+  const { data: comments = initialComments, mutate: mutateComments } = useSWR(
+    ["devotional-comments", devotionalDate],
+    () => getDevotionalComments(devotionalDate),
+    {
+      fallbackData: initialComments,
+      refreshInterval: 5000,
+      revalidateOnFocus: true,
+    },
+  )
   const [liked, setLiked] = useState(false)
   const [likes, setLikes] = useState(initialLikes)
   const [shared, setShared] = useState(false)
@@ -61,7 +70,7 @@ export function DevotionalInteractions({
     startTransition(async () => {
       await addDevotionalComment({ devotionalDate, text })
       setDraft("")
-      router.refresh()
+      await mutateComments()
     })
   }
 

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react"
 import { createPortal } from "react-dom"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Plus, X, Trash2, Loader2 } from "lucide-react"
+import { Plus, X, Trash2, Loader2, Timer } from "lucide-react"
 import { createStatus, deleteStatus, type StatusGroup } from "@/app/actions/status"
 import type { CurrentUser } from "@/lib/session"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -110,7 +110,9 @@ export function StatusBar({
     <Card className="p-4">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold">Status updates</h2>
-        <span className="text-xs text-muted-foreground">Disappears after 24 hours</span>
+        <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-muted-foreground">
+          <Timer className="size-3.5" /> 24h
+        </span>
       </div>
 
       <div className="flex gap-4 overflow-x-auto pb-1">

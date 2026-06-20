@@ -63,7 +63,7 @@ export function ProfileTabs({
             }
           />
         ) : (
-          <EpisodeCatalog episodes={episodes} />
+          <EpisodeCatalog episodes={episodes} layout="list" />
         )
       ) : posts.length === 0 ? (
         <EmptyState

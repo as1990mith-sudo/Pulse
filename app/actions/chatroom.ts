@@ -328,6 +328,40 @@ export async function sendChatMessage(input: {
   revalidatePath(`/chatrooms/${input.chatroomId}`)
 }
 
+/**
+ * Lightweight message fetch used for real-time polling from the client. Returns
+ * the full ordered message list for a room the user belongs to.
+ */
+export async function getChatMessages(chatroomId: number): Promise<ChatMessageView[]> {
+  const user = await requireUser()
+
+  const [membership] = await db
+    .select()
+    .from(chatroomMember)
+    .where(and(eq(chatroomMember.chatroomId, chatroomId), eq(chatroomMember.userId, user.id)))
+  if (!membership) throw new Error("You are not a member of this chatroom.")
+
+  const messages = await db
+    .select()
+    .from(chatroomMessage)
+    .where(eq(chatroomMessage.chatroomId, chatroomId))
+    .orderBy(asc(chatroomMessage.createdAt))
+
+  return messages.map((m) => ({
+    id: m.id,
+    userId: m.userId,
+    userName: m.userName,
+    initials: getInitials(m.userName),
+    color: getAvatarColor(m.userId),
+    body: m.body,
+    attachmentUrl: m.attachmentUrl,
+    attachmentType: (m.attachmentType as ChatAttachmentType | null) ?? null,
+    attachmentName: m.attachmentName,
+    isSelf: m.userId === user.id,
+    postedAt: timeAgo(m.createdAt),
+  }))
+}
+
 /** Admin updates (or removes) the chatroom's group profile picture. */
 export async function updateChatroomImage(input: { chatroomId: number; image: string | null }) {
   const user = await requireUser()

@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
+  LocalAudioTrack,
   Room,
   RoomEvent,
   Track,
   type RemoteTrack,
   type RemoteTrackPublication,
   type RemoteParticipant,
-  type LocalAudioTrack,
 } from "livekit-client"
 
 export type LiveAudioState = {
@@ -28,6 +28,11 @@ export type LiveAudioState = {
 export function useLiveAudio() {
   const roomRef = useRef<Room | null>(null)
   const audioElsRef = useRef<Map<string, HTMLAudioElement>>(new Map())
+  // Background-music mixing graph (host side).
+  const musicCtxRef = useRef<AudioContext | null>(null)
+  const musicGainRef = useRef<GainNode | null>(null)
+  const musicElRef = useRef<HTMLAudioElement | null>(null)
+  const musicTrackRef = useRef<LocalAudioTrack | null>(null)
   const [state, setState] = useState<LiveAudioState>({
     connected: false,
     connecting: false,
@@ -110,9 +115,82 @@ export function useLiveAudio() {
     })
   }, [])
 
+  /**
+   * Publishes an audio file as a second track so listeners actually hear the
+   * backing music mixed into the broadcast. Routes the <audio> element through
+   * a WebAudio gain node (for live volume control) into a MediaStreamTrack.
+   */
+  const publishMusic = useCallback(async (url: string) => {
+    const room = roomRef.current
+    if (!room) return
+
+    // Tear down any previous music track first.
+    if (musicTrackRef.current) {
+      await room.localParticipant.unpublishTrack(musicTrackRef.current)
+      musicTrackRef.current.stop()
+      musicTrackRef.current = null
+    }
+
+    const ctx = musicCtxRef.current ?? new AudioContext()
+    musicCtxRef.current = ctx
+    if (ctx.state === "suspended") await ctx.resume()
+
+    const el = musicElRef.current ?? new Audio()
+    el.crossOrigin = "anonymous"
+    el.src = url
+    el.loop = true
+    musicElRef.current = el
+
+    const source = ctx.createMediaElementSource(el)
+    const gain = musicGainRef.current ?? ctx.createGain()
+    gain.gain.value = musicGainRef.current?.gain.value ?? 0.4
+    musicGainRef.current = gain
+    const dest = ctx.createMediaStreamDestination()
+    source.connect(gain)
+    gain.connect(dest)
+
+    await el.play().catch(() => {})
+
+    const [mediaTrack] = dest.stream.getAudioTracks()
+    const localTrack = new LocalAudioTrack(mediaTrack)
+    await room.localParticipant.publishTrack(localTrack, { name: "background-music" })
+    musicTrackRef.current = localTrack
+  }, [])
+
+  /** Adjusts the live background-music volume (0–1). */
+  const setMusicVolume = useCallback((value: number) => {
+    if (musicGainRef.current) musicGainRef.current.gain.value = value
+  }, [])
+
+  /** Pause/resume the backing track without unpublishing it. */
+  const setMusicPlaying = useCallback((playing: boolean) => {
+    const el = musicElRef.current
+    if (!el) return
+    if (playing) void el.play().catch(() => {})
+    else el.pause()
+  }, [])
+
+  /** Stops and unpublishes the backing track entirely. */
+  const stopMusic = useCallback(async () => {
+    const room = roomRef.current
+    if (musicTrackRef.current && room) {
+      await room.localParticipant.unpublishTrack(musicTrackRef.current)
+      musicTrackRef.current.stop()
+      musicTrackRef.current = null
+    }
+    if (musicElRef.current) {
+      musicElRef.current.pause()
+    }
+  }, [])
+
   const disconnect = useCallback(async () => {
     const room = roomRef.current
     if (!room) return
+    if (musicTrackRef.current) {
+      musicTrackRef.current.stop()
+      musicTrackRef.current = null
+    }
+    if (musicElRef.current) musicElRef.current.pause()
     await room.disconnect()
     audioElsRef.current.forEach((el) => el.remove())
     audioElsRef.current.clear()
@@ -131,5 +209,15 @@ export function useLiveAudio() {
     }
   }, [])
 
-  return { state, connect, disconnect, toggleMic, setListenerMuted, publishTrackRef: useRef<LocalAudioTrack | null>(null) }
+  return {
+    state,
+    connect,
+    disconnect,
+    toggleMic,
+    setListenerMuted,
+    publishMusic,
+    setMusicVolume,
+    setMusicPlaying,
+    stopMusic,
+  }
 }
