@@ -253,17 +253,21 @@ function ParticipantTile({ participant }: { participant: Participant }) {
       }
     }
     sync()
-    const events: ParticipantEvent[] = [
-      ParticipantEvent.TrackSubscribed,
-      ParticipantEvent.TrackUnsubscribed,
-      ParticipantEvent.TrackMuted,
-      ParticipantEvent.TrackUnmuted,
-      ParticipantEvent.LocalTrackPublished,
-      ParticipantEvent.LocalTrackUnpublished,
-    ]
-    events.forEach((e) => participant.on(e, sync))
+    participant
+      .on(ParticipantEvent.TrackSubscribed, sync)
+      .on(ParticipantEvent.TrackUnsubscribed, sync)
+      .on(ParticipantEvent.TrackMuted, sync)
+      .on(ParticipantEvent.TrackUnmuted, sync)
+      .on(ParticipantEvent.LocalTrackPublished, sync)
+      .on(ParticipantEvent.LocalTrackUnpublished, sync)
     return () => {
-      events.forEach((e) => participant.off(e, sync))
+      participant
+        .off(ParticipantEvent.TrackSubscribed, sync)
+        .off(ParticipantEvent.TrackUnsubscribed, sync)
+        .off(ParticipantEvent.TrackMuted, sync)
+        .off(ParticipantEvent.TrackUnmuted, sync)
+        .off(ParticipantEvent.LocalTrackPublished, sync)
+        .off(ParticipantEvent.LocalTrackUnpublished, sync)
     }
   }, [participant])
 
