@@ -60,6 +60,7 @@ export type DmConversationDetail = {
   currentUserId: string
   currentUserInitials: string
   currentUserColor: string
+  currentUserImage: string | null
   messages: DmMessageView[]
 }
 
@@ -297,6 +298,7 @@ export async function getConversationDetail(conversationId: number): Promise<DmC
     currentUserId: user.id,
     currentUserInitials: getInitials(user.name),
     currentUserColor: getAvatarColor(user.id),
+    currentUserImage: user.image ?? null,
     messages: messages.map((m) => toMessageView(m, user.id, statusMap)),
   }
 }

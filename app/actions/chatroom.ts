@@ -10,6 +10,7 @@ import {
   chatroomJoinRequest,
   chatroomMember,
   chatroomMessage,
+  user as userTable,
 } from "@/lib/db/schema"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 
@@ -55,6 +56,7 @@ export type ChatMessageView = {
   userName: string
   initials: string
   color: string
+  image: string | null
   body: string | null
   attachmentUrl: string | null
   attachmentType: ChatAttachmentType | null
@@ -86,6 +88,7 @@ export type ChatroomDetail = {
   currentUserId: string
   currentUserInitials: string
   currentUserColor: string
+  currentUserImage: string | null
   members: { userId: string; userName: string; initials: string; color: string; role: string }[]
   messages: ChatMessageView[]
   joinRequests: JoinRequestView[]
@@ -115,14 +118,35 @@ type ChatMessageRow = {
   createdAt: Date
 }
 
+/**
+ * Resolves profile images for a set of message-sender ids. Images live on the
+ * user table (messages only denormalize the name), so we batch-fetch them.
+ */
+async function resolveSenderImages(userIds: string[]): Promise<Map<string, string | null>> {
+  const map = new Map<string, string | null>()
+  const ids = [...new Set(userIds)]
+  if (ids.length === 0) return map
+  const rows = await db
+    .select({ id: userTable.id, image: userTable.image })
+    .from(userTable)
+    .where(inArray(userTable.id, ids))
+  for (const r of rows) map.set(r.id, r.image ?? null)
+  return map
+}
+
 /** Maps a DB message row to the client view, hiding content of deleted ones. */
-function toMessageView(m: ChatMessageRow, viewerId: string): ChatMessageView {
+function toMessageView(
+  m: ChatMessageRow,
+  viewerId: string,
+  imageMap: Map<string, string | null>,
+): ChatMessageView {
   return {
     id: m.id,
     userId: m.userId,
     userName: m.userName,
     initials: getInitials(m.userName),
     color: getAvatarColor(m.userId),
+    image: imageMap.get(m.userId) ?? null,
     body: m.deleted ? null : m.body,
     attachmentUrl: m.deleted ? null : m.attachmentUrl,
     attachmentType: m.deleted ? null : (m.attachmentType as ChatAttachmentType | null) ?? null,
@@ -289,6 +313,8 @@ export async function getChatroomDetail(chatroomId: number): Promise<ChatroomDet
         .orderBy(asc(chatroomJoinRequest.createdAt))
     : []
 
+  const imageMap = await resolveSenderImages([user.id, ...messages.map((m) => m.userId)])
+
   return {
     id: room.id,
     name: room.name,
@@ -301,6 +327,7 @@ export async function getChatroomDetail(chatroomId: number): Promise<ChatroomDet
     currentUserId: user.id,
     currentUserInitials: getInitials(user.name),
     currentUserColor: getAvatarColor(user.id),
+    currentUserImage: imageMap.get(user.id) ?? null,
     members: members.map((m) => ({
       userId: m.userId,
       userName: m.userName,
@@ -308,7 +335,7 @@ export async function getChatroomDetail(chatroomId: number): Promise<ChatroomDet
       color: getAvatarColor(m.userId),
       role: m.role,
     })),
-    messages: messages.map((m) => toMessageView(m, user.id)),
+    messages: messages.map((m) => toMessageView(m, user.id, imageMap)),
     joinRequests: joinRequests.map((r) => ({
       id: r.id,
       userId: r.userId,
@@ -369,7 +396,8 @@ export async function getChatMessages(chatroomId: number): Promise<ChatMessageVi
     .where(eq(chatroomMessage.chatroomId, chatroomId))
     .orderBy(asc(chatroomMessage.createdAt))
 
-  return messages.map((m) => toMessageView(m, user.id))
+  const imageMap = await resolveSenderImages(messages.map((m) => m.userId))
+  return messages.map((m) => toMessageView(m, user.id, imageMap))
 }
 
 /** Admin deletes a message (soft delete — content is cleared but order kept). */
