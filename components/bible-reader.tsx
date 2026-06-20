@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react"
 import useSWR from "swr"
 import { BookOpen, ChevronDown, ChevronLeft, ChevronRight, Highlighter, Loader2, X } from "lucide-react"
 import { BIBLE_BOOKS, getBook } from "@/lib/bible-books"
-import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 
 type Verse = { verse: number; text: string }
@@ -171,13 +170,13 @@ export function BibleReader() {
         </span>
       </div>
 
-      {/* Reading pane */}
-      <Card className="p-6 sm:p-8">
-        <div className="mb-5 flex flex-col gap-1 border-b border-border/60 pb-4">
-          <h2 className="text-2xl font-bold tracking-tight">
+      {/* Reading pane — borderless and immersive */}
+      <div className="py-2">
+        <div className="mb-7 flex flex-col gap-1 text-center">
+          <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl">
             {book} {chapter}
           </h2>
-          <p className="text-xs text-muted-foreground">King James Version</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">King James Version</p>
         </div>
 
         {isLoading && (
@@ -194,7 +193,7 @@ export function BibleReader() {
         )}
 
         {data && !isLoading && (
-          <ol className="space-y-2.5">
+          <ol className="mx-auto max-w-prose space-y-1">
             {verses.map((v) => {
               const id = `${bookIndex}:${chapter}:${v.verse}`
               const hl = highlights[id]
@@ -204,19 +203,19 @@ export function BibleReader() {
                   key={v.verse}
                   onClick={() => toggleHighlight(v.verse)}
                   className={cn(
-                    "flex gap-3 rounded-md px-2 py-1 text-[0.95rem] leading-relaxed text-justify [text-justify:inter-word]",
+                    "flex gap-3 rounded-md px-2 py-1.5 text-lg leading-loose text-justify [text-justify:inter-word]",
                     activeColor ? "cursor-pointer hover:bg-secondary/60" : "cursor-default",
                   )}
                   style={color ? { backgroundColor: color.bg } : undefined}
                 >
-                  <span className="select-none pt-0.5 text-xs font-semibold text-primary tabular-nums">{v.verse}</span>
+                  <span className="select-none pt-1.5 text-xs font-semibold text-primary tabular-nums">{v.verse}</span>
                   <span className="flex-1">{v.text}</span>
                 </li>
               )
             })}
           </ol>
         )}
-      </Card>
+      </div>
 
       {/* Footer nav */}
       <div className="flex items-center justify-between">
