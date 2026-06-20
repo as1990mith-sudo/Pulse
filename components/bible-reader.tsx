@@ -203,12 +203,12 @@ export function BibleReader() {
                   key={v.verse}
                   onClick={() => toggleHighlight(v.verse)}
                   className={cn(
-                    "flex gap-3 rounded-md px-2 py-1.5 text-lg leading-loose text-justify [text-justify:inter-word]",
+                    "flex gap-3 rounded-md px-2 py-0.5 text-lg leading-relaxed text-justify [text-justify:inter-word]",
                     activeColor ? "cursor-pointer hover:bg-secondary/60" : "cursor-default",
                   )}
                   style={color ? { backgroundColor: color.bg } : undefined}
                 >
-                  <span className="select-none pt-1.5 text-xs font-semibold text-primary tabular-nums">{v.verse}</span>
+                  <span className="select-none pt-1 text-xs font-semibold text-primary tabular-nums">{v.verse}</span>
                   <span className="flex-1">{v.text}</span>
                 </li>
               )
