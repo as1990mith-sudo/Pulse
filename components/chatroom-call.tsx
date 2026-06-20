@@ -283,7 +283,9 @@ function ParticipantTile({ participant }: { participant: Participant }) {
         autoPlay
         playsInline
         muted={isLocal}
-        className={cn("h-full w-full object-cover", hasVideo ? "block" : "hidden")}
+        // Mirror only the local self-view so it reads like a mirror; remote
+        // participants are shown un-mirrored.
+        className={cn("h-full w-full object-cover", isLocal && "-scale-x-100", hasVideo ? "block" : "hidden")}
       />
       {!hasVideo && (
         <Avatar className="size-16">
