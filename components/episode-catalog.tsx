@@ -3,9 +3,19 @@
 import { useMemo, useState } from "react"
 import type { Show } from "@/lib/data"
 import { ShowCard, ShowRow } from "@/components/show-card"
+import { EpisodeOwnerControls } from "@/components/profile/episode-owner-controls"
 import { cn } from "@/lib/utils"
 
-export function EpisodeCatalog({ episodes, layout = "grid" }: { episodes: Show[]; layout?: "grid" | "list" }) {
+export function EpisodeCatalog({
+  episodes,
+  layout = "grid",
+  owned = false,
+}: {
+  episodes: Show[]
+  layout?: "grid" | "list"
+  // When true, render download + delete controls over each row (own profile).
+  owned?: boolean
+}) {
   const categories = useMemo(() => ["All", ...Array.from(new Set(episodes.map((e) => e.category)))], [episodes])
   const [active, setActive] = useState("All")
 
@@ -42,9 +52,16 @@ export function EpisodeCatalog({ episodes, layout = "grid" }: { episodes: Show[]
 
       {layout === "list" ? (
         <div className="flex flex-col gap-3">
-          {filtered.map((show) => (
-            <ShowRow key={show.id} show={show} />
-          ))}
+          {filtered.map((show) =>
+            owned ? (
+              <div key={show.id} className="relative">
+                <ShowRow show={show} />
+                <EpisodeOwnerControls show={show} />
+              </div>
+            ) : (
+              <ShowRow key={show.id} show={show} />
+            ),
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
