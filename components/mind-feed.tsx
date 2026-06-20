@@ -394,9 +394,13 @@ export function PostCard({
           {currentUser && post.isSelf && (
             <DropdownMenu>
               <DropdownMenuTrigger
-                disabled={isPending}
-                aria-label="Post options"
-                className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                render={
+                  <button
+                    type="button"
+                    aria-label="Post options"
+                    className="rounded-full p-1.5 text-muted-foreground outline-none transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                }
               >
                 <MoreHorizontal className="size-5" />
               </DropdownMenuTrigger>
