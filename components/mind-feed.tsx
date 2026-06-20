@@ -401,12 +401,12 @@ export function PostCard({
                 <MoreHorizontal className="size-5" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={startEditing} className="gap-2">
+                <DropdownMenuItem onClick={startEditing} className="gap-2">
                   <Pencil className="size-4" /> Edit post
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   variant="destructive"
-                  onSelect={() => setConfirmDelete(true)}
+                  onClick={() => setConfirmDelete(true)}
                   className="gap-2"
                 >
                   <Trash2 className="size-4" /> Delete post
