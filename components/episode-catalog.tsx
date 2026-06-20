@@ -1,25 +1,29 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { Search } from "lucide-react"
 import type { Show } from "@/lib/data"
-import { ShowCard, ShowRow } from "@/components/show-card"
-import { EpisodeOwnerControls } from "@/components/profile/episode-owner-controls"
-import { cn } from "@/lib/utils"
+import { EpisodeRow } from "@/components/profile/episode-row"
 
+/**
+ * The episode list shown on a profile. All episodes show by default; a search
+ * box filters by title. Rows are edge-to-edge and separated by divider lines.
+ */
 export function EpisodeCatalog({
   episodes,
-  layout = "grid",
   owned = false,
 }: {
   episodes: Show[]
-  layout?: "grid" | "list"
-  // When true, render download + delete controls over each row (own profile).
+  // When true, each row's menu also offers Delete (own profile only).
   owned?: boolean
 }) {
-  const categories = useMemo(() => ["All", ...Array.from(new Set(episodes.map((e) => e.category)))], [episodes])
-  const [active, setActive] = useState("All")
+  const [query, setQuery] = useState("")
 
-  const filtered = active === "All" ? episodes : episodes.filter((e) => e.category === active)
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return episodes
+    return episodes.filter((e) => e.title.toLowerCase().includes(q))
+  }, [episodes, query])
 
   if (episodes.length === 0) {
     return (
@@ -32,41 +36,27 @@ export function EpisodeCatalog({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap gap-2">
-        {categories.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => setActive(cat)}
-            className={cn(
-              "rounded-full border px-4 py-1.5 text-sm font-medium transition-colors",
-              active === cat
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-foreground",
-            )}
-          >
-            {cat}
-          </button>
-        ))}
+    <div className="space-y-3">
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search episodes by title…"
+          aria-label="Search episodes by title"
+          className="w-full rounded-full border border-border/60 bg-card py-2 pl-9 pr-4 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
+        />
       </div>
 
-      {layout === "list" ? (
-        <div className="flex flex-col gap-3">
-          {filtered.map((show) =>
-            owned ? (
-              <div key={show.id} className="relative">
-                <ShowRow show={show} />
-                <EpisodeOwnerControls show={show} />
-              </div>
-            ) : (
-              <ShowRow key={show.id} show={show} />
-            ),
-          )}
-        </div>
+      {filtered.length === 0 ? (
+        <p className="px-1 py-8 text-center text-sm text-muted-foreground">
+          No episodes match &ldquo;{query}&rdquo;.
+        </p>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
+        <div className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/60 bg-card/40">
           {filtered.map((show) => (
-            <ShowCard key={show.id} show={show} />
+            <EpisodeRow key={show.id} show={show} owned={owned} />
           ))}
         </div>
       )}

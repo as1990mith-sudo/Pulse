@@ -8,6 +8,7 @@ import { db } from "@/lib/db"
 import { follow, statusUpdate, statusView, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { getOrCreateConversation, sendDirectMessage } from "@/app/actions/dm"
+import { notifyUser } from "@/app/actions/notifications"
 
 const STATUS_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours, WhatsApp-style
 
@@ -308,6 +309,19 @@ export async function reactToStatus(statusId: number, emoji: string) {
       target: [statusView.statusId, statusView.viewerId],
       set: { reaction: emoji },
     })
+
+  // Let the status owner know someone reacted to their status.
+  const [row] = await db.select().from(statusUpdate).where(eq(statusUpdate.id, statusId)).limit(1)
+  if (row) {
+    await notifyUser({
+      userId: row.userId,
+      actorId: user.id,
+      actorName: user.name,
+      type: "like",
+      message: `${user.name} reacted ${emoji} to your status`,
+      link: "/feed",
+    })
+  }
 }
 
 /**

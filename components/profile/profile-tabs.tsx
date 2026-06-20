@@ -63,7 +63,7 @@ export function ProfileTabs({
             }
           />
         ) : (
-          <EpisodeCatalog episodes={episodes} layout="list" owned={isSelf} />
+          <EpisodeCatalog episodes={episodes} owned={isSelf} />
         )
       ) : posts.length === 0 ? (
         <EmptyState

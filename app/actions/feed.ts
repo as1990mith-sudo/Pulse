@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { feedComment, feedPost, follow, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
+import { notifyUser } from "@/app/actions/notifications"
 
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -233,22 +234,46 @@ export async function addPostComment(input: { postId: number; text: string }) {
     text,
   })
 
-  // Note: comments don't create notifications. Only "followed user is live"
-  // notifications are surfaced (see app/actions/live.ts).
+  // Notify the post's author that someone engaged with their post.
+  const [post] = await db
+    .select({ userId: feedPost.userId })
+    .from(feedPost)
+    .where(eq(feedPost.id, input.postId))
+  if (post) {
+    await notifyUser({
+      userId: post.userId,
+      actorId: user.id,
+      actorName: user.name,
+      type: "comment",
+      message: `${user.name} commented on your post`,
+      link: "/feed",
+    })
+  }
+
   revalidatePath("/feed")
 }
 
 export async function setPostLike(input: { postId: number; liked: boolean }) {
-  await requireUser()
+  const user = await requireUser()
   const [row] = await db
-    .select({ likes: feedPost.likes })
+    .select({ likes: feedPost.likes, userId: feedPost.userId })
     .from(feedPost)
     .where(eq(feedPost.id, input.postId))
   if (!row) return
   const next = Math.max(0, row.likes + (input.liked ? 1 : -1))
   await db.update(feedPost).set({ likes: next }).where(eq(feedPost.id, input.postId))
 
-  // Note: likes don't create notifications. Only "followed user is live"
-  // notifications are surfaced (see app/actions/live.ts).
+  // Notify the author when their post is liked (not on un-like).
+  if (input.liked) {
+    await notifyUser({
+      userId: row.userId,
+      actorId: user.id,
+      actorName: user.name,
+      type: "like",
+      message: `${user.name} liked your post`,
+      link: "/feed",
+    })
+  }
+
   revalidatePath("/feed")
 }

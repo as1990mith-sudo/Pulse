@@ -37,7 +37,7 @@ export default async function MessagesPage() {
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Messages</h1>
           <p className="text-muted-foreground">Your private conversations with other members.</p>
         </header>
-        <DmInbox conversations={conversations} />
+        <DmInbox conversations={conversations} currentUser={currentUser} />
       </main>
     </div>
   )

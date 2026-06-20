@@ -338,6 +338,9 @@ export const dmCall = pgTable("dm_call", {
   calleeId: text("calleeId").notNull(),
   mode: text("mode").notNull().default("audio"),
   status: text("status").notNull().default("ringing"),
+  // Flipped to true once the callee's device has registered the incoming call
+  // (i.e. they're online). Lets the caller show "Ringing" vs "Calling".
+  calleeAck: boolean("calleeAck").notNull().default(false),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 })
