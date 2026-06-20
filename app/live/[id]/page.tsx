@@ -1,21 +1,19 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, MessageSquare, Share2 } from "lucide-react"
-import { resolveShow } from "@/lib/content"
+import { ArrowLeft, MessageSquare } from "lucide-react"
+import { getLiveStream } from "@/app/actions/live"
 import { getCurrentUser } from "@/lib/session"
 import { SiteHeader } from "@/components/site-header"
-import { StreamPlayer } from "@/components/stream-player"
+import { LiveListener } from "@/components/live-listener"
 import { LiveChat } from "@/components/live-chat"
-import { CallInPanel } from "@/components/call-in-panel"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 
-export default async function LivePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function LiveStreamPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const show = await resolveShow(id)
+  const stream = await getLiveStream(id)
 
-  if (!show) notFound()
+  if (!stream) notFound()
 
   const currentUser = await getCurrentUser()
 
@@ -33,37 +31,25 @@ export default async function LivePage({ params }: { params: Promise<{ id: strin
         <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
           {/* Main column */}
           <div className="space-y-6">
-            <StreamPlayer show={show} />
+            <LiveListener stream={stream} canListen={Boolean(currentUser)} />
 
             <div className="space-y-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <Badge variant="secondary">{show.category}</Badge>
-                  <h1 className="text-2xl font-bold tracking-tight text-balance">{show.title}</h1>
-                  <p className="text-muted-foreground">{show.tagline}</p>
-                </div>
-                <Button variant="secondary" className="gap-1.5">
-                  <Share2 className="size-4" /> Share
-                </Button>
+              <div className="space-y-1">
+                {stream.category && <Badge variant="secondary">{stream.category}</Badge>}
+                <h1 className="text-2xl font-bold tracking-tight text-balance">{stream.title}</h1>
               </div>
 
               <div className="flex items-center justify-between gap-4 rounded-xl border border-border/60 bg-card p-4">
                 <div className="flex items-center gap-3">
                   <Avatar className="size-11">
-                    <AvatarImage src={show.host.avatar || "/placeholder.svg"} alt={show.host.name} />
-                    <AvatarFallback>{show.host.name[0]}</AvatarFallback>
+                    <AvatarFallback>{stream.hostName[0]}</AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="font-semibold leading-none">{show.host.name}</p>
-                    <p className="text-sm text-muted-foreground">{show.host.handle}</p>
+                    <p className="font-semibold leading-none">{stream.hostName}</p>
+                    <p className="text-sm text-muted-foreground">{stream.hostHandle}</p>
                   </div>
                 </div>
-                <Button variant="outline">Follow</Button>
               </div>
-
-              <p className="text-pretty leading-relaxed text-muted-foreground">{show.description}</p>
-
-              <CallInPanel currentUser={currentUser} />
             </div>
           </div>
 
@@ -75,7 +61,7 @@ export default async function LivePage({ params }: { params: Promise<{ id: strin
                 <h2 className="font-semibold">Live chat</h2>
               </div>
               <div className="min-h-0 flex-1">
-                <LiveChat currentUser={currentUser} />
+                <LiveChat currentUser={currentUser} roomName={stream.roomName} />
               </div>
             </div>
           </aside>

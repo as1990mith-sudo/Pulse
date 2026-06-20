@@ -20,8 +20,8 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { ImageLightbox } from "@/components/image-lightbox"
+import { ImageCropper } from "@/components/image-cropper"
 import { cn } from "@/lib/utils"
 import {
   approveJoinRequest,
@@ -55,14 +55,22 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [showMembers, setShowMembers] = useState(false)
   const [showEmoji, setShowEmoji] = useState(false)
-  const [isSending, startSend] = useTransition()
   const [isLeaving, startLeave] = useTransition()
+  // Optimistic messages shown instantly while the server round-trips.
+  const [pending, setPending] = useState<ChatMessageView[]>([])
   const scrollEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Drop optimistic messages once the server version arrives.
+  useEffect(() => {
+    setPending([])
+  }, [detail.messages.length])
+
+  const messages = [...detail.messages, ...pending]
+
   useEffect(() => {
     scrollEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [detail.messages.length])
+  }, [messages.length])
 
   async function handleFilePick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -92,7 +100,26 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
     setShowEmoji(false)
     const sentAttachment = attachment
     setAttachment(null)
-    startSend(async () => {
+
+    // Show the message immediately for a snappy feel.
+    setPending((prev) => [
+      ...prev,
+      {
+        id: -Date.now(),
+        userId: detail.currentUserId,
+        userName: "You",
+        initials: detail.currentUserInitials,
+        color: detail.currentUserColor,
+        body,
+        attachmentUrl: sentAttachment?.url ?? null,
+        attachmentType: sentAttachment?.type ?? null,
+        attachmentName: sentAttachment?.name ?? null,
+        postedAt: "now",
+        isSelf: true,
+      },
+    ])
+
+    void (async () => {
       await sendChatMessage({
         chatroomId: detail.id,
         body,
@@ -101,7 +128,7 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
         attachmentName: sentAttachment?.name ?? null,
       })
       router.refresh()
-    })
+    })()
   }
 
   function handleLeave() {
@@ -112,9 +139,9 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-4">
+    <div className="flex h-full flex-1 flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3 border-b border-border/60 pb-4">
+      <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <Link
             href="/chatrooms"
@@ -150,25 +177,31 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
         )}
       </div>
 
-      {showMembers && <MembersPanel detail={detail} />}
+      {(showMembers || (detail.isOwner && detail.joinRequests.length > 0)) && (
+        <div className="space-y-3 border-b border-border/60 px-4 py-3 sm:px-6">
+          {showMembers && <MembersPanel detail={detail} />}
+          {detail.isOwner && detail.joinRequests.length > 0 && <JoinRequests detail={detail} />}
+        </div>
+      )}
 
-      {detail.isOwner && detail.joinRequests.length > 0 && <JoinRequests detail={detail} />}
-
-      {/* Messages */}
-      <ScrollArea className="h-[55vh] rounded-xl border border-border/60 bg-card/40">
-        <div className="flex flex-col gap-3 p-4">
-          {detail.messages.length === 0 && (
+      {/* Messages — fills remaining height */}
+      <div className="flex-1 overflow-y-auto bg-card/30">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 py-5 sm:px-6">
+          {messages.length === 0 && (
             <p className="py-10 text-center text-sm text-muted-foreground">
               No messages yet. Say hello to get the conversation started.
             </p>
           )}
-          {detail.messages.map((m) => (
+          {messages.map((m) => (
             <MessageBubble key={m.id} message={m} />
           ))}
           <div ref={scrollEndRef} />
         </div>
-      </ScrollArea>
+      </div>
 
+      {/* Composer area pinned to the bottom */}
+      <div className="border-t border-border/60 bg-background px-4 py-3 sm:px-6">
+        <div className="mx-auto w-full max-w-3xl space-y-3">
       {/* Attachment preview */}
       {attachment && (
         <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card p-2.5">
@@ -247,12 +280,14 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
           type="submit"
           size="icon"
           className="shrink-0"
-          disabled={isSending || uploading || (!draft.trim() && !attachment)}
+          disabled={uploading || (!draft.trim() && !attachment)}
           aria-label="Send message"
         >
           <Send className="size-4" />
         </Button>
       </form>
+        </div>
+      </div>
     </div>
   )
 }
@@ -323,6 +358,7 @@ function MembersPanel({ detail }: { detail: ChatroomDetail }) {
   const router = useRouter()
   const [copied, setCopied] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [groupCropSrc, setGroupCropSrc] = useState<string | null>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -337,13 +373,18 @@ function MembersPanel({ detail }: { detail: ChatroomDetail }) {
     })
   }
 
-  async function handleGroupImage(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleGroupImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    if (!file) return
+    if (file) setGroupCropSrc(URL.createObjectURL(file))
+    if (imageInputRef.current) imageInputRef.current.value = ""
+  }
+
+  async function handleGroupCropped(blob: Blob) {
+    setGroupCropSrc(null)
     setUploading(true)
     try {
       const formData = new FormData()
-      formData.append("file", file)
+      formData.append("file", new File([blob], "group.jpg", { type: "image/jpeg" }))
       const res = await fetch("/api/upload-chat", { method: "POST", body: formData })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? "Upload failed")
@@ -353,7 +394,6 @@ function MembersPanel({ detail }: { detail: ChatroomDetail }) {
       // ignore — surfaced via no change
     } finally {
       setUploading(false)
-      if (imageInputRef.current) imageInputRef.current.value = ""
     }
   }
 
@@ -417,6 +457,17 @@ function MembersPanel({ detail }: { detail: ChatroomDetail }) {
       <p className="text-xs text-muted-foreground">
         Invite code: <span className="font-mono font-medium text-foreground">{detail.inviteCode}</span>
       </p>
+
+      {groupCropSrc && (
+        <ImageCropper
+          src={groupCropSrc}
+          aspect={1}
+          round
+          title="Adjust group picture"
+          onCancel={() => setGroupCropSrc(null)}
+          onCropped={handleGroupCropped}
+        />
+      )}
     </div>
   )
 }

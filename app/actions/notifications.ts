@@ -7,14 +7,36 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { follow, notification } from "@/lib/db/schema"
 
+export type NotificationType = "post" | "live" | "like" | "comment" | "follow"
+
 export type NotificationView = {
   id: number
   actorName: string
-  type: "post" | "live"
+  type: NotificationType
   message: string
   link: string
   read: boolean
   postedAt: string
+}
+
+/** Creates a single notification for one recipient (skips self-notifications). */
+export async function notifyUser(input: {
+  userId: string
+  actorId: string
+  actorName: string
+  type: NotificationType
+  message: string
+  link: string
+}): Promise<void> {
+  if (input.userId === input.actorId) return
+  await db.insert(notification).values({
+    userId: input.userId,
+    actorId: input.actorId,
+    actorName: input.actorName,
+    type: input.type,
+    message: input.message,
+    link: input.link,
+  })
 }
 
 function timeAgo(date: Date): string {
@@ -73,12 +95,23 @@ export async function getNotifications(): Promise<NotificationView[] | null> {
   return rows.map((r) => ({
     id: r.id,
     actorName: r.actorName,
-    type: r.type as "post" | "live",
+    type: r.type as NotificationType,
     message: r.message,
     link: r.link,
     read: r.read,
     postedAt: timeAgo(r.createdAt),
   }))
+}
+
+/** Count of unread notifications for the badge. */
+export async function getUnreadCount(): Promise<number> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) return 0
+  const rows = await db
+    .select({ id: notification.id })
+    .from(notification)
+    .where(and(eq(notification.userId, session.user.id), eq(notification.read, false)))
+  return rows.length
 }
 
 /** Marks all of the current user's notifications as read. */

@@ -6,6 +6,7 @@ import Image from "next/image"
 import {
   CalendarPlus,
   Check,
+  Clock,
   ImageIcon,
   Loader2,
   MapPin,
@@ -21,25 +22,27 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { ImageLightbox } from "@/components/image-lightbox"
-import {
-  createAnnouncement,
-  deleteAnnouncement,
-  type AnnouncementView,
-} from "@/app/actions/announcements"
+import { ImageCropper } from "@/components/image-cropper"
+import { createAnnouncement, deleteAnnouncement, type AnnouncementView } from "@/app/actions/announcements"
+import { AD_BLOCK_HOURS, AD_MAX_HOURS, priceForHours } from "@/lib/ads"
 import { downloadIcs, formatEventDate, googleCalendarUrl } from "@/lib/calendar"
 import type { CurrentUser } from "@/lib/session"
 import { cn } from "@/lib/utils"
 
-const PLACEMENT_FEE = "$49"
-
 export function AnnouncementBanner({
   announcements,
+  myRequests,
   currentUser,
 }: {
   announcements: AnnouncementView[]
+  myRequests: AnnouncementView[]
   currentUser: CurrentUser | null
 }) {
   const [showForm, setShowForm] = useState(false)
+
+  // Pending/declined requests still worth surfacing to their owner (approved
+  // ones already appear in the public list above).
+  const trackable = myRequests.filter((r) => r.status !== "approved")
 
   return (
     <section aria-label="Announcements" className="space-y-3">
@@ -85,15 +88,89 @@ export function AnnouncementBanner({
         </Card>
       )}
 
+      {/* Owner's request tracker: pending + declined */}
+      {trackable.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-muted-foreground">Your advert requests</p>
+          {trackable.map((r) => (
+            <RequestStatusRow key={r.id} request={r} />
+          ))}
+        </div>
+      )}
+
       {showForm && currentUser && <AdvertiseForm onClose={() => setShowForm(false)} />}
     </section>
+  )
+}
+
+function StatusBadge({ status }: { status: AnnouncementView["status"] }) {
+  if (status === "approved") {
+    return <Badge className="gap-1 bg-live text-live-foreground">Published</Badge>
+  }
+  if (status === "declined") {
+    return (
+      <Badge variant="secondary" className="gap-1 text-destructive">
+        Declined
+      </Badge>
+    )
+  }
+  return (
+    <Badge variant="secondary" className="gap-1">
+      <Clock className="size-3" /> Pending
+    </Badge>
+  )
+}
+
+function RequestStatusRow({ request: r }: { request: AnnouncementView }) {
+  const [isPending, startTransition] = useTransition()
+  return (
+    <Card className="flex items-center gap-3 p-3">
+      <div className="relative aspect-[16/9] w-20 shrink-0 overflow-hidden rounded-md bg-secondary">
+        {r.flyer ? (
+          <Image
+            src={r.flyer || "/placeholder.svg"}
+            alt=""
+            fill
+            className="object-cover"
+            unoptimized={r.flyer.startsWith("data:")}
+            sizes="80px"
+          />
+        ) : (
+          <div className="flex size-full items-center justify-center text-muted-foreground">
+            <ImageIcon className="size-4" />
+          </div>
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p className="truncate text-sm font-medium">{r.title}</p>
+          <StatusBadge status={r.status} />
+        </div>
+        <p className="text-xs text-muted-foreground">{formatEventDate(r.eventDate, r.eventTime)}</p>
+        {r.status === "declined" && r.declineReason && (
+          <p className="mt-0.5 text-xs text-destructive">{r.declineReason}</p>
+        )}
+        {r.status === "pending" && (
+          <p className="mt-0.5 text-xs text-muted-foreground">Awaiting approval — you&apos;ll be published if your date is free.</p>
+        )}
+      </div>
+      <Button
+        size="icon"
+        variant="ghost"
+        className="shrink-0 text-muted-foreground hover:text-destructive"
+        aria-label="Remove request"
+        disabled={isPending}
+        onClick={() => startTransition(() => deleteAnnouncement(r.id))}
+      >
+        {isPending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+      </Button>
+    </Card>
   )
 }
 
 function AnnouncementCard({ announcement: a }: { announcement: AnnouncementView }) {
   const [lightbox, setLightbox] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [isPending, startTransition] = useTransition()
 
   const calEvent = {
     title: a.title,
@@ -153,8 +230,8 @@ function AnnouncementCard({ announcement: a }: { announcement: AnnouncementView 
           <p>by {a.creatorName}</p>
         </div>
 
-        <div className="mt-auto flex items-center gap-2 pt-2">
-          <div className="relative flex-1">
+        <div className="mt-auto pt-2">
+          <div className="relative">
             <Button size="sm" className="w-full gap-1.5" onClick={() => setMenuOpen((o) => !o)}>
               <CalendarPlus className="size-4" /> Add to calendar
             </Button>
@@ -190,18 +267,7 @@ function AnnouncementCard({ announcement: a }: { announcement: AnnouncementView 
               </>
             )}
           </div>
-          {a.isOwner && (
-            <Button
-              size="icon"
-              variant="ghost"
-              className="shrink-0 text-muted-foreground hover:text-destructive"
-              aria-label="Remove announcement"
-              disabled={isPending}
-              onClick={() => startTransition(() => deleteAnnouncement(a.id))}
-            >
-              {isPending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-            </Button>
-          )}
+          {/* Approved adverts can't be edited or deleted — they auto-expire. */}
         </div>
       </div>
 
@@ -212,28 +278,33 @@ function AnnouncementCard({ announcement: a }: { announcement: AnnouncementView 
   )
 }
 
+const DURATION_OPTIONS = Array.from({ length: AD_MAX_HOURS / AD_BLOCK_HOURS }, (_, i) => (i + 1) * AD_BLOCK_HOURS)
+
 function AdvertiseForm({ onClose }: { onClose: () => void }) {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [location, setLocation] = useState("")
   const [eventDate, setEventDate] = useState("")
   const [eventTime, setEventTime] = useState("")
+  const [durationHours, setDurationHours] = useState(AD_BLOCK_HOURS)
   const [flyer, setFlyer] = useState<string | null>(null)
+  const [cropSrc, setCropSrc] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [result, setResult] = useState<{ status: "approved" | "declined"; declineReason?: string } | null>(null)
   const [isPending, startTransition] = useTransition()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const today = new Date().toISOString().slice(0, 10)
+  const price = priceForHours(durationHours)
 
-  async function handleFlyerPick(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+  async function handleCropped(blob: Blob) {
     setError(null)
+    setCropSrc(null)
     setUploading(true)
     try {
       const formData = new FormData()
-      formData.append("file", file)
+      formData.append("file", new File([blob], "flyer.jpg", { type: "image/jpeg" }))
       const res = await fetch("/api/upload-chat", { method: "POST", body: formData })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? "Upload failed")
@@ -242,7 +313,6 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
       setError(err instanceof Error ? err.message : "Could not upload the flyer.")
     } finally {
       setUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ""
     }
   }
 
@@ -259,17 +329,18 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
     }
     startTransition(async () => {
       try {
-        await createAnnouncement({
+        const res = await createAnnouncement({
           title,
           description,
           location,
           eventDate,
           eventTime: eventTime || null,
+          durationHours,
           flyer,
         })
-        onClose()
+        setResult(res)
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not publish the announcement.")
+        setError(err instanceof Error ? err.message : "Could not submit your advert.")
       }
     })
   }
@@ -284,10 +355,7 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-background/90 p-4 backdrop-blur-sm sm:items-center"
       onClick={onClose}
     >
-      <Card
-        className="my-auto w-full max-w-lg p-6"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <Card className="my-auto w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="flex size-8 items-center justify-center rounded-md bg-primary/10 text-primary">
@@ -303,134 +371,208 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
           </Button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Flyer */}
-          <div className="flex items-center gap-4">
-            <div className="relative aspect-[16/9] w-28 shrink-0 overflow-hidden rounded-lg border border-border bg-secondary">
-              {flyer ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={flyer || "/placeholder.svg"} alt="Flyer preview" className="size-full object-cover" />
-              ) : (
-                <div className="flex size-full items-center justify-center text-muted-foreground">
-                  <ImageIcon className="size-5" />
-                </div>
-              )}
+        {result ? (
+          <ResultPanel result={result} onClose={onClose} />
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Flyer — rectangular 16:9 to match the published banner */}
+            <div className="flex items-center gap-4">
+              <div className="relative aspect-[16/9] w-32 shrink-0 overflow-hidden rounded-lg border border-border bg-secondary">
+                {flyer ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={flyer || "/placeholder.svg"} alt="Flyer preview" className="size-full object-cover" />
+                ) : (
+                  <div className="flex size-full items-center justify-center text-muted-foreground">
+                    <ImageIcon className="size-5" />
+                  </div>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <p className="text-sm font-medium">Event flyer</p>
+                <p className="text-xs text-muted-foreground">You can adjust the crop to fit the box.</p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) setCropSrc(URL.createObjectURL(file))
+                    if (fileInputRef.current) fileInputRef.current.value = ""
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                >
+                  {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <ImageIcon className="size-3.5" />}
+                  {flyer ? "Change flyer" : "Upload flyer"}
+                </Button>
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <p className="text-sm font-medium">Event flyer</p>
-              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFlyerPick} />
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                className="gap-1.5"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
+
+            <div className="space-y-2">
+              <label htmlFor="ann-title" className="text-sm font-medium">
+                Event title
+              </label>
+              <Input
+                id="ann-title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Summer Worship Night"
+                maxLength={80}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="ann-desc" className="text-sm font-medium">
+                Details
+              </label>
+              <Textarea
+                id="ann-desc"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Tell people what to expect, who's hosting, ticket info…"
+                rows={3}
+                maxLength={400}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <label htmlFor="ann-date" className="text-sm font-medium">
+                  Date
+                </label>
+                <Input
+                  id="ann-date"
+                  type="date"
+                  min={today}
+                  value={eventDate}
+                  onChange={(e) => setEventDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="ann-time" className="text-sm font-medium">
+                  Time <span className="text-muted-foreground">(optional)</span>
+                </label>
+                <Input id="ann-time" type="time" value={eventTime} onChange={(e) => setEventTime(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="ann-loc" className="text-sm font-medium">
+                Location <span className="text-muted-foreground">(optional)</span>
+              </label>
+              <Input
+                id="ann-loc"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="e.g. Online, or 123 Main St"
+              />
+            </div>
+
+            {/* Duration */}
+            <div className="space-y-2">
+              <label htmlFor="ann-duration" className="text-sm font-medium">
+                Run time
+              </label>
+              <select
+                id="ann-duration"
+                value={durationHours}
+                onChange={(e) => setDurationHours(Number(e.target.value))}
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <ImageIcon className="size-3.5" />}
-                {flyer ? "Change flyer" : "Upload flyer"}
+                {DURATION_OPTIONS.map((h) => (
+                  <option key={h} value={h}>
+                    {h} hours — ${priceForHours(h)}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                $5 per {AD_BLOCK_HOURS} hours, up to {AD_MAX_HOURS} hours. Your advert auto-expires when the time is
+                up.
+              </p>
+            </div>
+
+            {/* Paid placement summary */}
+            <div className="rounded-lg border border-border bg-secondary/50 p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Total due</span>
+                <span className="text-sm font-semibold">${price}</span>
+              </div>
+              <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                <li className="flex items-center gap-1.5">
+                  <Check className="size-3 text-primary" /> Reviewed and approved on a first-come, first-served basis
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <Check className="size-3 text-primary" /> One-tap calendar reminders for every listener
+                </li>
+              </ul>
+            </div>
+
+            {error && <p className="text-sm text-destructive">{error}</p>}
+
+            <div className="flex items-center justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={onClose} disabled={isPending}>
+                Cancel
+              </Button>
+              <Button type="submit" className="gap-1.5" disabled={isPending || uploading}>
+                {isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                {isPending ? "Submitting…" : `Pay $${price} & submit`}
               </Button>
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="ann-title" className="text-sm font-medium">
-              Event title
-            </label>
-            <Input
-              id="ann-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Summer Worship Night"
-              maxLength={80}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="ann-desc" className="text-sm font-medium">
-              Details
-            </label>
-            <Textarea
-              id="ann-desc"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Tell people what to expect, who's hosting, ticket info…"
-              rows={3}
-              maxLength={400}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <label htmlFor="ann-date" className="text-sm font-medium">
-                Date
-              </label>
-              <Input
-                id="ann-date"
-                type="date"
-                min={today}
-                value={eventDate}
-                onChange={(e) => setEventDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="ann-time" className="text-sm font-medium">
-                Time <span className="text-muted-foreground">(optional)</span>
-              </label>
-              <Input
-                id="ann-time"
-                type="time"
-                value={eventTime}
-                onChange={(e) => setEventTime(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="ann-loc" className="text-sm font-medium">
-              Location <span className="text-muted-foreground">(optional)</span>
-            </label>
-            <Input
-              id="ann-loc"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="e.g. Online, or 123 Main St"
-            />
-          </div>
-
-          {/* Paid placement summary */}
-          <div className="rounded-lg border border-border bg-secondary/50 p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Promoted placement</span>
-              <span className="text-sm font-semibold">{PLACEMENT_FEE}</span>
-            </div>
-            <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-              <li className="flex items-center gap-1.5">
-                <Check className="size-3 text-primary" /> Pinned to the top of the feed until your event date
-              </li>
-              <li className="flex items-center gap-1.5">
-                <Check className="size-3 text-primary" /> One-tap calendar reminders for every listener
-              </li>
-            </ul>
-          </div>
-
-          {error && <p className="text-sm text-destructive">{error}</p>}
-
-          <div className="flex items-center justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={onClose} disabled={isPending}>
-              Cancel
-            </Button>
-            <Button type="submit" className="gap-1.5" disabled={isPending || uploading}>
-              {isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-              {isPending ? "Processing…" : `Pay ${PLACEMENT_FEE} & publish`}
-            </Button>
-          </div>
-          <p className="text-center text-[11px] text-muted-foreground">
-            Demo checkout — no real payment is processed.
-          </p>
-        </form>
+            <p className="text-center text-[11px] text-muted-foreground">
+              Demo checkout — no real payment is processed.
+            </p>
+          </form>
+        )}
       </Card>
+
+      {cropSrc && (
+        <ImageCropper
+          src={cropSrc}
+          aspect={16 / 9}
+          title="Adjust your flyer"
+          onCancel={() => setCropSrc(null)}
+          onCropped={handleCropped}
+        />
+      )}
     </div>,
     document.body,
+  )
+}
+
+function ResultPanel({
+  result,
+  onClose,
+}: {
+  result: { status: "approved" | "declined"; declineReason?: string }
+  onClose: () => void
+}) {
+  const approved = result.status === "approved"
+  return (
+    <div className="flex flex-col items-center gap-4 py-4 text-center">
+      <span
+        className={cn(
+          "flex size-12 items-center justify-center rounded-full",
+          approved ? "bg-live/10 text-live" : "bg-destructive/10 text-destructive",
+        )}
+      >
+        {approved ? <Check className="size-6" /> : <X className="size-6" />}
+      </span>
+      <div className="space-y-1">
+        <h3 className="font-semibold">{approved ? "Your advert is published!" : "Request declined"}</h3>
+        <p className="text-sm text-muted-foreground text-pretty">
+          {approved
+            ? "It's now live at the top of the feed and will disappear automatically when your run time is up."
+            : result.declineReason || "Declined due to high demand for the selected date."}
+        </p>
+      </div>
+      <Button onClick={onClose}>Done</Button>
+    </div>
   )
 }

@@ -19,7 +19,9 @@ import {
 } from "lucide-react"
 import { callInQueue } from "@/lib/data"
 import type { CurrentUser } from "@/lib/session"
-import { goLive, publishShow } from "@/app/actions/shows"
+import { publishShow } from "@/app/actions/shows"
+import { startBroadcast, endBroadcast } from "@/app/actions/live"
+import { useLiveAudio } from "@/lib/use-live-audio"
 import { LiveChat } from "@/components/live-chat"
 import { CoverUpload } from "@/components/admin/cover-upload"
 import { Button } from "@/components/ui/button"
@@ -65,14 +67,20 @@ function StudioWaveform({ active }: { active: boolean }) {
 type EndedSession = { title: string; duration: string } | null
 
 export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
-  const [live, setLive] = useState(false)
-  const [micOn, setMicOn] = useState(true)
+  const { state, connect, disconnect, toggleMic } = useLiveAudio()
+  const live = state.connected
+  const micOn = state.micEnabled
   const [elapsed, setElapsed] = useState(0)
-  const [viewers, setViewers] = useState(0)
   const [title, setTitle] = useState(`${currentUser.name} — live session`)
   const [queue, setQueue] = useState(callInQueue)
   const [onAir, setOnAir] = useState<string | null>(null)
   const [endedSession, setEndedSession] = useState<EndedSession>(null)
+  const [roomName, setRoomName] = useState<string | null>(null)
+  const [starting, setStarting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Listeners = participants in the room minus the host.
+  const viewers = Math.max(0, state.listeners - 1)
 
   useEffect(() => {
     if (!live) return
@@ -80,30 +88,29 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
     return () => clearInterval(t)
   }, [live])
 
-  useEffect(() => {
-    if (!live) {
-      setViewers(0)
-      return
-    }
-    const t = setInterval(() => {
-      setViewers((v) => Math.max(0, v + Math.floor(Math.random() * 9) - 2))
-    }, 1800)
-    setViewers(128)
-    return () => clearInterval(t)
-  }, [live])
-
-  function toggleLive() {
+  async function toggleLive() {
+    setError(null)
     if (live) {
-      // Ending the stream: offer to publish the recorded session.
-      setEndedSession({ title, duration: formatDuration(elapsed) })
-      setLive(false)
+      // Ending the stream: stop the broadcast and offer to publish the session.
+      const duration = formatDuration(elapsed)
+      if (roomName) await endBroadcast({ roomName }).catch(() => {})
+      await disconnect()
+      setRoomName(null)
+      setEndedSession({ title, duration })
       setElapsed(0)
       setOnAir(null)
     } else {
-      setLive(true)
+      setStarting(true)
+      const res = await startBroadcast({ title })
+      setStarting(false)
+      if (!res.ok) {
+        setError(res.error)
+        return
+      }
+      setRoomName(res.roomName)
       setEndedSession(null)
-      // Notify followers that this host just went live (fire and forget).
-      goLive({ title }).catch(() => {})
+      setElapsed(0)
+      await connect({ serverUrl: res.serverUrl, token: res.token, publish: true })
     }
   }
 
@@ -134,11 +141,17 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
               </span>
             )}
           </div>
-          <Button onClick={toggleLive} variant={live ? "secondary" : "default"} className="gap-2">
-            <Radio className="size-4" />
-            {live ? "End stream" : "Go live"}
+          <Button onClick={toggleLive} variant={live ? "secondary" : "default"} className="gap-2" disabled={starting || state.connecting}>
+            {starting || state.connecting ? <Loader2 className="size-4 animate-spin" /> : <Radio className="size-4" />}
+            {live ? "End stream" : starting || state.connecting ? "Connecting…" : "Go live"}
           </Button>
         </div>
+
+        {error && (
+          <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {error}
+          </div>
+        )}
 
         {/* Audio stage */}
         <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-b from-secondary to-background">
@@ -174,9 +187,10 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
 
           <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/60 p-1.5 backdrop-blur">
             <button
-              onClick={() => setMicOn((m) => !m)}
+              onClick={() => toggleMic()}
+              disabled={!live}
               className={cn(
-                "flex size-10 items-center justify-center rounded-full transition-colors",
+                "flex size-10 items-center justify-center rounded-full transition-colors disabled:opacity-50",
                 micOn ? "bg-secondary text-foreground hover:bg-secondary/80" : "bg-primary text-primary-foreground",
               )}
               aria-label={micOn ? "Mute microphone" : "Unmute microphone"}
@@ -230,7 +244,7 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
           </TabsList>
 
           <TabsContent value="chat" className="m-0 min-h-0 flex-1">
-            <LiveChat asHost />
+            <LiveChat asHost currentUser={currentUser} roomName={roomName ?? undefined} />
           </TabsContent>
 
           <TabsContent value="callins" className="m-0 min-h-0 flex-1 overflow-y-auto p-3">

@@ -184,8 +184,10 @@ export const chatroomJoinRequest = pgTable("chatroom_join_request", {
 
 // --- Announcements ---------------------------------------------------------
 // Paid promotional event banners shown at the top of the feed (tweet) tab.
-// A creator submits a flyer + event details and pays to publish; once active
-// it is visible to everyone and any user can add the event to their calendar.
+// A creator pays ($5 per 12h, up to 72h) and submits a flyer + event details.
+// Requests are auto-approved first-come-first-served per date; if the slot is
+// already taken they are declined. Approved ads publish for the paid duration
+// then auto-expire. Any user can add an active event to their calendar.
 export const announcement = pgTable("announcement", {
   id: serial("id").primaryKey(),
   userId: text("userId").notNull(),
@@ -196,7 +198,11 @@ export const announcement = pgTable("announcement", {
   location: text("location"),
   eventDate: text("eventDate").notNull(), // YYYY-MM-DD
   eventTime: text("eventTime"), // HH:MM (24h), optional
-  status: text("status").notNull().default("active"), // "pending" | "active"
+  durationHours: integer("durationHours").notNull().default(12), // 12..72
+  status: text("status").notNull().default("pending"), // "pending" | "approved" | "declined"
+  declineReason: text("declineReason"),
+  publishedAt: timestamp("publishedAt"),
+  expiresAt: timestamp("expiresAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
@@ -213,6 +219,36 @@ export const statusUpdate = pgTable("status_update", {
   caption: text("caption"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   expiresAt: timestamp("expiresAt").notNull(),
+})
+
+// --- Live streams ----------------------------------------------------------
+// A real, in-progress audio broadcast. A row is created when a host opens the
+// studio and goes live (status "live"), and is marked "ended" when they stop.
+// The roomName is the LiveKit room used for the WebRTC audio session.
+export const liveStream = pgTable("live_stream", {
+  id: serial("id").primaryKey(),
+  roomName: text("roomName").notNull().unique(),
+  hostId: text("hostId").notNull(),
+  hostName: text("hostName").notNull(),
+  hostHandle: text("hostHandle").notNull(),
+  title: text("title").notNull(),
+  category: text("category"),
+  cover: text("cover"),
+  status: text("status").notNull().default("live"), // "live" | "ended"
+  startedAt: timestamp("startedAt").notNull().defaultNow(),
+  endedAt: timestamp("endedAt"),
+})
+
+// Real-time chat messages for a live stream room. Listeners poll for new
+// messages while a broadcast is running.
+export const liveChatMessage = pgTable("live_chat_message", {
+  id: serial("id").primaryKey(),
+  roomName: text("roomName").notNull(),
+  userId: text("userId").notNull(),
+  userName: text("userName").notNull(),
+  isHost: boolean("isHost").notNull().default(false),
+  body: text("body").notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
 // Per-user notifications. A row is created for each follower when someone they

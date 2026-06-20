@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Camera, Loader2 } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
 import { cn } from "@/lib/utils"
+import { ImageCropper } from "@/components/image-cropper"
 
 export function ProfileAvatar({
   initials,
@@ -25,13 +26,16 @@ export function ProfileAvatar({
   const [error, setError] = useState<string | null>(null)
   // Show the freshly chosen image immediately, before the page refreshes.
   const [preview, setPreview] = useState<string | null>(image)
+  // Object URL of the file being adjusted in the cropper.
+  const [cropSrc, setCropSrc] = useState<string | null>(null)
 
-  async function handleFile(file: File) {
+  async function handleCropped(blob: Blob) {
     setError(null)
     setUploading(true)
+    setCropSrc(null)
     try {
       const formData = new FormData()
-      formData.append("file", file)
+      formData.append("file", new File([blob], "avatar.jpg", { type: "image/jpeg" }))
       const res = await fetch("/api/upload", { method: "POST", body: formData })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Upload failed")
@@ -86,13 +90,24 @@ export function ProfileAvatar({
             className="sr-only"
             onChange={(e) => {
               const file = e.target.files?.[0]
-              if (file) handleFile(file)
+              if (file) setCropSrc(URL.createObjectURL(file))
               e.target.value = ""
             }}
           />
         )}
       </div>
       {error && <p className="max-w-[12rem] text-center text-xs text-destructive">{error}</p>}
+
+      {cropSrc && (
+        <ImageCropper
+          src={cropSrc}
+          aspect={1}
+          round
+          title="Adjust profile picture"
+          onCancel={() => setCropSrc(null)}
+          onCropped={handleCropped}
+        />
+      )}
     </div>
   )
 }

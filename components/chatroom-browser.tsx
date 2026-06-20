@@ -19,6 +19,7 @@ import {
   type ChatroomSearchResult,
   type ChatroomSummary,
 } from "@/app/actions/chatroom"
+import { ImageCropper } from "@/components/image-cropper"
 
 export function ChatroomBrowser({ rooms }: { rooms: ChatroomSummary[] }) {
   return (
@@ -219,16 +220,22 @@ function CreateRoom() {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [cropSrc, setCropSrc] = useState<string | null>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
 
-  async function handleImagePick(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleImagePick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    if (!file) return
+    if (file) setCropSrc(URL.createObjectURL(file))
+    if (imageInputRef.current) imageInputRef.current.value = ""
+  }
+
+  async function handleCropped(blob: Blob) {
     setError(null)
     setUploading(true)
+    setCropSrc(null)
     try {
       const formData = new FormData()
-      formData.append("file", file)
+      formData.append("file", new File([blob], "group.jpg", { type: "image/jpeg" }))
       const res = await fetch("/api/upload-chat", { method: "POST", body: formData })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? "Upload failed")
@@ -237,7 +244,6 @@ function CreateRoom() {
       setError(err instanceof Error ? err.message : "Could not upload the picture.")
     } finally {
       setUploading(false)
-      if (imageInputRef.current) imageInputRef.current.value = ""
     }
   }
 
@@ -317,6 +323,17 @@ function CreateRoom() {
           request to join.
         </p>
       </form>
+
+      {cropSrc && (
+        <ImageCropper
+          src={cropSrc}
+          aspect={1}
+          round
+          title="Adjust group picture"
+          onCancel={() => setCropSrc(null)}
+          onCropped={handleCropped}
+        />
+      )}
     </Card>
   )
 }

@@ -7,7 +7,7 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { feedComment, feedPost, follow, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
-import { notifyFollowers } from "@/app/actions/notifications"
+import { notifyFollowers, notifyUser } from "@/app/actions/notifications"
 
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -227,14 +227,48 @@ export async function addPostComment(input: { postId: number; text: string }) {
     authorHandle: getHandle(user.name),
     text,
   })
+
+  // Notify the post's author that someone replied.
+  const [post] = await db
+    .select({ authorId: feedPost.userId })
+    .from(feedPost)
+    .where(eq(feedPost.id, input.postId))
+  if (post) {
+    const preview = text.length > 80 ? `${text.slice(0, 80)}…` : text
+    await notifyUser({
+      userId: post.authorId,
+      actorId: user.id,
+      actorName: user.name,
+      type: "comment",
+      message: preview,
+      link: "/feed",
+    })
+  }
+
   revalidatePath("/feed")
 }
 
 export async function setPostLike(input: { postId: number; liked: boolean }) {
-  await requireUser()
-  const [row] = await db.select({ likes: feedPost.likes }).from(feedPost).where(eq(feedPost.id, input.postId))
+  const user = await requireUser()
+  const [row] = await db
+    .select({ likes: feedPost.likes, authorId: feedPost.userId })
+    .from(feedPost)
+    .where(eq(feedPost.id, input.postId))
   if (!row) return
   const next = Math.max(0, row.likes + (input.liked ? 1 : -1))
   await db.update(feedPost).set({ likes: next }).where(eq(feedPost.id, input.postId))
+
+  // Only notify on a new like (not on un-like).
+  if (input.liked) {
+    await notifyUser({
+      userId: row.authorId,
+      actorId: user.id,
+      actorName: user.name,
+      type: "like",
+      message: "liked your post",
+      link: "/feed",
+    })
+  }
+
   revalidatePath("/feed")
 }

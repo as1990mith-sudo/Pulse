@@ -81,6 +81,9 @@ export type ChatroomDetail = {
   ownerName: string
   inviteCode: string
   isOwner: boolean
+  currentUserId: string
+  currentUserInitials: string
+  currentUserColor: string
   members: { userId: string; userName: string; initials: string; color: string; role: string }[]
   messages: ChatMessageView[]
   joinRequests: JoinRequestView[]
@@ -261,6 +264,9 @@ export async function getChatroomDetail(chatroomId: number): Promise<ChatroomDet
     ownerName: room.ownerName,
     inviteCode: room.inviteCode,
     isOwner,
+    currentUserId: user.id,
+    currentUserInitials: getInitials(user.name),
+    currentUserColor: getAvatarColor(user.id),
     members: members.map((m) => ({
       userId: m.userId,
       userName: m.userName,
