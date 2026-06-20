@@ -10,7 +10,26 @@ import { getCurrentUser } from "@/lib/session"
 
 export default async function DevotionalPage() {
   const d = await getLatestDevotional()
-  const [comments, currentUser] = await Promise.all([getDevotionalComments(d.date), getCurrentUser()])
+  const currentUser = await getCurrentUser()
+
+  if (!d) {
+    return (
+      <div className="min-h-screen">
+        <SiteHeader />
+        <main className="mx-auto flex w-full max-w-3xl flex-col items-center justify-center gap-3 px-4 py-24 text-center sm:px-6">
+          <span className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <BookHeart className="size-6" />
+          </span>
+          <h1 className="text-2xl font-bold tracking-tight">No devotional yet</h1>
+          <p className="max-w-md text-pretty text-muted-foreground">
+            The latest weekly devotional will appear here as soon as it&apos;s published.
+          </p>
+        </main>
+      </div>
+    )
+  }
+
+  const comments = await getDevotionalComments(d.date)
 
   return (
     <div className="min-h-screen">
@@ -96,7 +115,6 @@ export default async function DevotionalPage() {
       <footer className="border-t border-border/60">
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-2 px-4 py-8 text-sm text-muted-foreground sm:flex-row sm:px-6">
           <p>Frequency — live podcast streaming.</p>
-          <p>Built as a demo. Streaming is simulated.</p>
         </div>
       </footer>
     </div>

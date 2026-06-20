@@ -4,20 +4,21 @@ import { useEffect, useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
+  Check,
   CheckCircle2,
+  Copy,
   Loader2,
   Mic,
   MicOff,
   Music,
   Pause,
-  PhoneCall,
   Play,
   Radio,
+  Share2,
   Upload,
   Users,
   X,
 } from "lucide-react"
-import { callInQueue } from "@/lib/data"
 import type { CurrentUser } from "@/lib/session"
 import { publishShow } from "@/app/actions/shows"
 import { startBroadcast, endBroadcast } from "@/app/actions/live"
@@ -28,7 +29,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 
 function formatTime(s: number) {
@@ -72,8 +72,6 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
   const micOn = state.micEnabled
   const [elapsed, setElapsed] = useState(0)
   const [title, setTitle] = useState(`${currentUser.name} — live session`)
-  const [queue, setQueue] = useState(callInQueue)
-  const [onAir, setOnAir] = useState<string | null>(null)
   const [endedSession, setEndedSession] = useState<EndedSession>(null)
   const [roomName, setRoomName] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
@@ -98,7 +96,6 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
       setRoomName(null)
       setEndedSession({ title, duration })
       setElapsed(0)
-      setOnAir(null)
     } else {
       setStarting(true)
       const res = await startBroadcast({ title })
@@ -112,11 +109,6 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
       setElapsed(0)
       await connect({ serverUrl: res.serverUrl, token: res.token, publish: true })
     }
-  }
-
-  function bringOnAir(id: string) {
-    setOnAir(id)
-    setQueue((q) => q.filter((c) => c.id !== id))
   }
 
   return (
@@ -171,20 +163,6 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
             </p>
           </div>
 
-          {onAir && (
-            <div className="absolute right-4 top-4 w-40 overflow-hidden rounded-lg border border-primary/60 bg-card shadow-lg">
-              <div className="flex items-center justify-between bg-primary/15 px-2 py-1">
-                <span className="text-xs font-semibold text-primary">Caller on air</span>
-                <button onClick={() => setOnAir(null)} aria-label="Remove caller">
-                  <X className="size-3 text-primary" />
-                </button>
-              </div>
-              <div className="flex items-center justify-center bg-secondary py-6">
-                <Mic className="size-6 text-foreground" />
-              </div>
-            </div>
-          )}
-
           <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/60 p-1.5 backdrop-blur">
             <button
               onClick={() => toggleMic()}
@@ -216,7 +194,18 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
           <label htmlFor="show-title" className="text-sm font-medium">
             Stream title
           </label>
-          <Input id="show-title" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <Input
+            id="show-title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            disabled={live}
+            aria-describedby={live ? "title-locked" : undefined}
+          />
+          {live && (
+            <p id="title-locked" className="text-xs text-muted-foreground">
+              The title is locked while you&apos;re on air.
+            </p>
+          )}
           <div className="flex items-center gap-3 pt-1">
             <Avatar className="size-8">
               <AvatarFallback className={currentUser.color}>{currentUser.initials}</AvatarFallback>
@@ -226,65 +215,57 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
             </span>
           </div>
         </div>
+
+        {/* Shareable session link — visible once live */}
+        {live && roomName && <ShareLink roomName={roomName} />}
       </div>
 
-      {/* Chat + call-ins */}
+      {/* Live chat */}
       <aside className="lg:sticky lg:top-20 lg:h-[calc(100vh-7rem)]">
-        <Tabs defaultValue="chat" className="flex h-[560px] flex-col overflow-hidden rounded-2xl border border-border/60 bg-card lg:h-full">
-          <TabsList className="m-3 grid grid-cols-2">
-            <TabsTrigger value="chat">Chat</TabsTrigger>
-            <TabsTrigger value="callins" className="gap-1.5">
-              Call-ins
-              {queue.length > 0 && (
-                <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
-                  {queue.length}
-                </span>
-              )}
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="chat" className="m-0 min-h-0 flex-1">
+        <div className="flex h-[560px] flex-col overflow-hidden rounded-2xl border border-border/60 bg-card lg:h-full">
+          <div className="border-b border-border/60 px-4 py-3">
+            <h2 className="text-sm font-semibold">Live chat</h2>
+          </div>
+          <div className="min-h-0 flex-1">
             <LiveChat asHost currentUser={currentUser} roomName={roomName ?? undefined} />
-          </TabsContent>
-
-          <TabsContent value="callins" className="m-0 min-h-0 flex-1 overflow-y-auto p-3">
-            {queue.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-muted-foreground">
-                <PhoneCall className="size-8" />
-                <p className="text-sm">No one in the queue right now.</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {queue.map((c) => (
-                  <div key={c.id} className="rounded-xl border border-border/60 bg-background p-3">
-                    <div className="flex items-center justify-between">
-                      <p className="font-semibold">{c.name}</p>
-                      <span className="font-mono text-xs text-muted-foreground">{c.waiting}</span>
-                    </div>
-                    <p className="mt-0.5 text-sm text-muted-foreground leading-relaxed">{c.topic}</p>
-                    <div className="mt-2.5 flex items-center gap-2">
-                      <Button size="sm" className="h-8 gap-1.5" onClick={() => bringOnAir(c.id)} disabled={!live}>
-                        <Mic className="size-3.5" /> Bring on air
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 text-muted-foreground"
-                        onClick={() => setQueue((q) => q.filter((x) => x.id !== c.id))}
-                      >
-                        Dismiss
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-                {!live && (
-                  <p className="px-1 pt-1 text-xs text-muted-foreground">Go live to bring callers on air.</p>
-                )}
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+          </div>
+        </div>
       </aside>
+    </div>
+  )
+}
+
+/** Read-only share box for the live session, with copy-to-clipboard. */
+function ShareLink({ roomName }: { roomName: string }) {
+  const [copied, setCopied] = useState(false)
+  const url = typeof window !== "undefined" ? `${window.location.origin}/live/${roomName}` : `/live/${roomName}`
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // clipboard may be unavailable; the input is still selectable
+    }
+  }
+
+  return (
+    <div className="space-y-2 rounded-xl border border-border/60 bg-card p-4">
+      <div className="flex items-center gap-2">
+        <Share2 className="size-4 text-primary" />
+        <h2 className="text-sm font-medium">Share this session</h2>
+      </div>
+      <p className="text-xs text-muted-foreground leading-relaxed">
+        Send this link so anyone can join and listen in real time.
+      </p>
+      <div className="flex items-center gap-2">
+        <Input value={url} readOnly onFocus={(e) => e.currentTarget.select()} aria-label="Live session link" />
+        <Button type="button" variant="secondary" className="shrink-0 gap-1.5" onClick={copy}>
+          {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+          {copied ? "Copied" : "Copy"}
+        </Button>
+      </div>
     </div>
   )
 }

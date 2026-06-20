@@ -1,7 +1,7 @@
 import { desc, eq } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { devotional, episode } from "@/lib/db/schema"
-import { dailyDevotional, episodes as staticEpisodes, getShow, type Devotional, type Show, type Host } from "@/lib/data"
+import type { Devotional, Show, Host } from "@/lib/data"
 
 function relativeTime(date: Date): string {
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
@@ -63,11 +63,11 @@ export async function getEpisodesByUser(userId: string): Promise<Show[]> {
 
 /**
  * The devotional shown on the homepage: the most recently published row from
- * the database, or the bundled sample devotional when none exist yet.
+ * the database, or null when none have been posted yet.
  */
-export async function getLatestDevotional(): Promise<Devotional> {
+export async function getLatestDevotional(): Promise<Devotional | null> {
   const [row] = await db.select().from(devotional).orderBy(desc(devotional.lastPostedAt)).limit(1)
-  if (!row) return dailyDevotional
+  if (!row) return null
   return {
     date: row.publishDate,
     title: row.title,
@@ -82,20 +82,16 @@ export async function getLatestDevotional(): Promise<Devotional> {
   }
 }
 
-/**
- * Catalogue episodes: admin-uploaded episodes first (newest first), followed by
- * the bundled sample episodes so the grid is never empty.
- */
+/** Catalogue episodes: real published episodes, newest first. */
 export async function getCatalogEpisodes(): Promise<Show[]> {
   const rows = await db.select().from(episode).orderBy(desc(episode.createdAt))
-  return [...rows.map(episodeToShow), ...staticEpisodes]
+  return rows.map(episodeToShow)
 }
 
-/** Resolves a show/episode by id, checking admin-uploaded episodes first. */
+/** Resolves a published episode by its slug. */
 export async function resolveShow(id: string): Promise<Show | undefined> {
   const [row] = await db.select().from(episode).where(eq(episode.slug, id)).limit(1)
-  if (row) return episodeToShow(row)
-  return getShow(id)
+  return row ? episodeToShow(row) : undefined
 }
 
 /** All admin-managed rows, for listing/deleting inside the dashboard. */

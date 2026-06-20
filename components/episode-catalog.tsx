@@ -11,6 +11,16 @@ export function EpisodeCatalog({ episodes }: { episodes: Show[] }) {
 
   const filtered = active === "All" ? episodes : episodes.filter((e) => e.category === active)
 
+  if (episodes.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-border/60 p-10 text-center">
+        <p className="text-sm text-muted-foreground">
+          No episodes published yet. Recorded live sessions will appear here once hosts publish them.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap gap-2">

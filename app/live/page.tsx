@@ -1,11 +1,9 @@
 import Link from "next/link"
-import { ArrowRight, Headphones, Library, Mic, Radio } from "lucide-react"
+import { ArrowRight, Headphones, Library, Radio } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
-import { ShowCard } from "@/components/show-card"
 import { LiveStreamCard } from "@/components/live-stream-card"
 import { EpisodeCatalog } from "@/components/episode-catalog"
 import { LiveBadge } from "@/components/live-badge"
-import { upcomingShows } from "@/lib/data"
 import { getCatalogEpisodes } from "@/lib/content"
 import { getLiveStreams } from "@/app/actions/live"
 
@@ -70,23 +68,6 @@ export default async function LivePage() {
             )}
           </section>
 
-          {/* Coming up */}
-          {upcomingShows.length > 0 && (
-            <section className="space-y-6">
-              <SectionHeading
-                eyebrow="Coming up"
-                icon={Mic}
-                title="Scheduled shows"
-                description="Set a reminder and be in the room when the mics go live."
-              />
-              <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
-                {upcomingShows.map((show) => (
-                  <ShowCard key={show.id} show={show} />
-                ))}
-              </div>
-            </section>
-          )}
-
           {/* On demand library (merged catalogue) */}
           <section id="library" className="space-y-6">
             <SectionHeading
@@ -107,7 +88,7 @@ export default async function LivePage() {
                 </h2>
                 <p className="text-muted-foreground leading-relaxed">
                   Open the studio, turn on your mic, add background music, and start broadcasting audio to listeners in
-                  seconds. Manage chat and call-ins all in one place.
+                  seconds. Chat with your audience in real time, all in one place.
                 </p>
               </div>
               <Link

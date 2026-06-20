@@ -130,7 +130,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
             <Textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="What's on your mind."
+              placeholder="Share a thought…"
               className="min-h-20 resize-none border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0"
               aria-label="Write a post"
             />
@@ -230,6 +230,7 @@ export function PostCard({ post, currentUser }: { post: FeedPostView; currentUse
   const [reposted, setReposted] = useState(false)
   const [reposts, setReposts] = useState(post.reposts)
   const [shared, setShared] = useState(false)
+  const [shares, setShares] = useState(0)
   const [showComments, setShowComments] = useState(false)
   const [commentDraft, setCommentDraft] = useState("")
   const [lightboxOpen, setLightboxOpen] = useState(false)
@@ -265,6 +266,7 @@ export function PostCard({ post, currentUser }: { post: FeedPostView; currentUse
       // user dismissed the share sheet; ignore
     }
     setShared(true)
+    setShares((n) => n + 1)
     setTimeout(() => setShared(false), 2000)
   }
 
@@ -344,12 +346,12 @@ export function PostCard({ post, currentUser }: { post: FeedPostView; currentUse
         </>
       ) : null}
 
-      {/* Actions */}
-      <div className="flex items-center gap-4 px-3 pt-3 text-foreground">
+      {/* Actions — each count sits to the right of its button */}
+      <div className="flex items-center gap-5 px-3 pb-3 pt-3 text-foreground">
         <button
           onClick={toggleLike}
           className={cn(
-            "flex items-center gap-1.5 text-sm transition-colors hover:text-primary",
+            "flex items-center gap-1.5 text-sm tabular-nums transition-colors hover:text-primary",
             liked && "text-primary",
             !currentUser && "cursor-not-allowed opacity-60",
           )}
@@ -357,20 +359,22 @@ export function PostCard({ post, currentUser }: { post: FeedPostView; currentUse
           aria-label="Like"
         >
           <Heart className={cn("size-6", liked && "fill-current")} />
+          {likes > 0 && <span>{likes}</span>}
         </button>
 
         <button
           onClick={() => setShowComments((v) => !v)}
-          className="flex items-center gap-1.5 text-sm transition-colors hover:text-muted-foreground"
+          className="flex items-center gap-1.5 text-sm tabular-nums transition-colors hover:text-muted-foreground"
           aria-label="Toggle comments"
         >
           <MessageCircle className="size-6" />
+          {post.comments.length > 0 && <span>{post.comments.length}</span>}
         </button>
 
         <button
           onClick={toggleRepost}
           className={cn(
-            "flex items-center gap-1.5 text-sm transition-colors hover:text-chart-2",
+            "flex items-center gap-1.5 text-sm tabular-nums transition-colors hover:text-chart-2",
             reposted && "text-chart-2",
             !currentUser && "cursor-not-allowed opacity-60",
           )}
@@ -378,33 +382,17 @@ export function PostCard({ post, currentUser }: { post: FeedPostView; currentUse
           aria-label="Repost"
         >
           <Repeat2 className="size-6" />
+          {reposts > 0 && <span>{reposts}</span>}
         </button>
 
         <button
           onClick={share}
-          className="ml-auto flex items-center gap-1.5 text-sm transition-colors hover:text-muted-foreground"
+          className="flex items-center gap-1.5 text-sm tabular-nums transition-colors hover:text-muted-foreground"
           aria-label="Share"
         >
           {shared ? <Check className="size-6 text-chart-2" /> : <Share2 className="size-6" />}
+          {shares > 0 && <span>{shares}</span>}
         </button>
-      </div>
-
-      {/* Like count + caption */}
-      <div className="space-y-1 px-3 pb-3 pt-2">
-        {likes > 0 && (
-          <p className="text-sm font-semibold">
-            {likes} {likes === 1 ? "like" : "likes"}
-          </p>
-        )}
-        {reposts > 0 && <p className="text-xs text-muted-foreground">{reposts} reposts</p>}
-        {post.comments.length > 0 && !showComments && (
-          <button
-            onClick={() => setShowComments(true)}
-            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            View all {post.comments.length} {post.comments.length === 1 ? "comment" : "comments"}
-          </button>
-        )}
       </div>
 
       {showComments && (

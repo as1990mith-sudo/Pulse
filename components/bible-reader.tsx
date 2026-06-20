@@ -286,7 +286,7 @@ function Picker({
       {open && (
         <div
           className={cn(
-            "absolute left-0 top-full z-50 mt-1 max-h-[60vh] overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg",
+            "absolute left-0 top-full z-50 mt-1 max-h-[60vh] overflow-y-auto rounded-lg border border-border bg-popover-solid p-1 text-popover-foreground shadow-lg",
             width,
           )}
         >
@@ -347,20 +347,20 @@ function ChapterPicker({
   onSelect: (n: number) => void
 }) {
   return (
-    <Picker label={`Chapter ${chapter}`} width="w-64">
+    <Picker label={`Chapter ${chapter}`} width="w-44">
       {(close) => (
-        <div className="grid grid-cols-5 gap-1 p-1">
+        <div className="flex flex-col gap-0.5 p-1">
           {Array.from({ length: count }, (_, i) => i + 1).map((n) => (
             <button
               key={n}
               type="button"
               onClick={() => { onSelect(n); close() }}
               className={cn(
-                "flex h-9 items-center justify-center rounded-md text-sm transition-colors hover:bg-secondary",
-                n === chapter ? "bg-primary text-primary-foreground" : "text-foreground",
+                "flex h-9 items-center rounded-md px-3 text-left text-sm transition-colors hover:bg-secondary",
+                n === chapter ? "bg-primary font-medium text-primary-foreground" : "text-foreground",
               )}
             >
-              {n}
+              Chapter {n}
             </button>
           ))}
         </div>
