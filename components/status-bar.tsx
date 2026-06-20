@@ -52,13 +52,30 @@ function getVideoDuration(file: File): Promise<number> {
 }
 
 export function StatusBar({
-  groups,
+  groups: initialGroups,
   currentUser,
 }: {
   groups: StatusGroup[]
   currentUser: CurrentUser | null
 }) {
   const router = useRouter()
+  // Keep a local copy so viewing a status can flip its ring to "seen" instantly,
+  // without waiting for a server refresh. Re-syncs whenever the server data changes.
+  const [groups, setGroups] = useState(initialGroups)
+  useEffect(() => {
+    setGroups(initialGroups)
+  }, [initialGroups])
+
+  // Optimistically mark a viewed item as seen and recompute the author's ring.
+  function markGroupItemViewed(userId: string, itemId: number) {
+    setGroups((prev) =>
+      prev.map((g) => {
+        if (g.userId !== userId) return g
+        const items = g.items.map((it) => (it.id === itemId ? { ...it, viewed: true } : it))
+        return { ...g, items, allViewed: items.every((i) => i.viewed) }
+      }),
+    )
+  }
   // Separate inputs so we can request the camera vs the library on mobile.
   const cameraPhotoRef = useRef<HTMLInputElement>(null)
   const cameraVideoRef = useRef<HTMLInputElement>(null)
@@ -267,6 +284,7 @@ export function StatusBar({
           currentUser={currentUser}
           onClose={() => setViewerIndex(null)}
           onDelete={removeStatus}
+          onItemViewed={markGroupItemViewed}
         />
       )}
 
@@ -543,18 +561,22 @@ function TextStatusComposer({
 export function StatusViewer({
   groups,
   startIndex,
+  startItemIndex = 0,
   currentUser,
   onClose,
   onDelete,
+  onItemViewed,
 }: {
   groups: StatusGroup[]
   startIndex: number
+  startItemIndex?: number
   currentUser: CurrentUser | null
   onClose: () => void
   onDelete: (id: number) => void
+  onItemViewed?: (userId: string, itemId: number) => void
 }) {
   const [groupIndex, setGroupIndex] = useState(startIndex)
-  const [itemIndex, setItemIndex] = useState(0)
+  const [itemIndex, setItemIndex] = useState(startItemIndex)
   const [progress, setProgress] = useState(0)
   const [paused, setPaused] = useState(false)
   const [reaction, setReaction] = useState<string | null>(null)
@@ -603,7 +625,10 @@ export function StatusViewer({
     setReplyText("")
     setReplySent(false)
     setShowViewers(false)
-    if (item && !group.isSelf) void markStatusViewed(item.id)
+    if (item && !group.isSelf) {
+      onItemViewed?.(group.userId, item.id)
+      void markStatusViewed(item.id)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupIndex, itemIndex])
 

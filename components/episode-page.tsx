@@ -40,7 +40,7 @@ export async function EpisodePage({ show }: { show: Show }) {
                   <Clock className="size-3.5" /> {show.duration}
                 </span>
               )}
-              {show.publishedAt && <span className="text-sm text-muted-foreground">· {show.publishedAt}</span>}
+              {show.publishedDate && <span className="text-sm text-muted-foreground">· {show.publishedDate}</span>}
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-balance">{show.title}</h1>
             {show.tagline && <p className="text-pretty text-muted-foreground">{show.tagline}</p>}

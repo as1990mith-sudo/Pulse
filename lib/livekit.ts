@@ -47,6 +47,25 @@ export async function createAccessToken(opts: {
   return at.toJwt()
 }
 
+/**
+ * Lists the participants currently connected to a room. Returns an empty array
+ * when the room doesn't exist yet (no active call) — LiveKit throws for unknown
+ * rooms, so we swallow that case. Used for group-call presence in chatrooms.
+ */
+export async function listRoomParticipants(
+  roomName: string,
+): Promise<{ identity: string; name: string }[]> {
+  if (!isLiveKitConfigured()) return []
+  try {
+    const svc = roomService()
+    const participants = await svc.listParticipants(roomName)
+    return participants.map((p) => ({ identity: p.identity, name: p.name || p.identity }))
+  } catch {
+    // Room not found / not created yet → no one is on a call.
+    return []
+  }
+}
+
 /** Server-side admin client used to elevate/demote participants mid-session. */
 function roomService(): RoomServiceClient {
   const apiKey = process.env.LIVEKIT_API_KEY

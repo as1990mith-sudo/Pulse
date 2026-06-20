@@ -31,12 +31,11 @@ export function ShowRow({ show }: { show: Show }) {
           </Badge>
           {show.status === "live" ? (
             <ListenerCount count={show.listeners} />
-          ) : (
-            <span className="text-xs text-muted-foreground">
-              {show.duration ? `${show.duration} · ` : ""}
-              {show.publishedAt}
+          ) : show.duration ? (
+            <span className="inline-flex items-center gap-1 text-xs tabular-nums text-muted-foreground">
+              <Clock className="size-3" /> {show.duration}
             </span>
-          )}
+          ) : null}
         </div>
         <MarqueeTitle
           text={show.title}
@@ -104,11 +103,7 @@ export function ShowCard({ show }: { show: Show }) {
             </Avatar>
             <span className="text-xs text-muted-foreground">{show.host.name}</span>
           </div>
-          {show.status === "live" ? (
-            <ListenerCount count={show.listeners} />
-          ) : (
-            <span className="text-xs text-muted-foreground">{show.publishedAt}</span>
-          )}
+          {show.status === "live" && <ListenerCount count={show.listeners} />}
         </div>
       </div>
     </Link>

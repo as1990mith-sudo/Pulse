@@ -84,7 +84,7 @@ export default async function DevotionalPage() {
               </span>
               <div className="space-y-0.5">
                 <p className="text-sm text-muted-foreground">
-                  From the devotional{" "}
+                  Excerpt From{" "}
                   <span className="font-semibold text-foreground">{devotionalSource.name}</span>
                 </p>
                 <p className="text-sm text-muted-foreground">

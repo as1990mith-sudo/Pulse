@@ -16,6 +16,11 @@ function relativeTime(date: Date): string {
   return "just now"
 }
 
+/** Absolute published date, e.g. "Jun 20, 2026" — shown in the player. */
+function formatPublishedDate(date: Date): string {
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+}
+
 function hostFromName(name: string): Host {
   return {
     id: name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
@@ -48,6 +53,7 @@ function episodeToShow(row: typeof episode.$inferSelect): Show {
     listeners: 0,
     duration: row.duration || undefined,
     publishedAt: relativeTime(row.createdAt),
+    publishedDate: formatPublishedDate(row.createdAt),
     description: row.description,
     audioUrl: row.audioUrl || undefined,
     episodeId: row.id,

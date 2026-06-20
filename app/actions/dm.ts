@@ -25,6 +25,11 @@ export type DmMessageView = {
   attachmentName: string | null
   isSelf: boolean
   postedAt: string
+  // Set when this message is a reply/reaction to a status. statusActive is true
+  // while the status is still live (clickable); statusThumb is a preview image.
+  statusId: number | null
+  statusActive: boolean
+  statusThumb: string | null
 }
 
 export type DmConversationSummary = {
@@ -81,6 +86,55 @@ function previewOf(body: string | null, attachmentType: string | null): string |
   if (attachmentType === "audio") return "Audio"
   if (attachmentType === "document") return "Document"
   return null
+}
+
+type RawDmMessage = {
+  id: number
+  senderId: string
+  body: string | null
+  attachmentUrl: string | null
+  attachmentType: string | null
+  attachmentName: string | null
+  statusId: number | null
+  createdAt: Date
+}
+
+/**
+ * For a batch of messages, resolves which referenced statuses are still live
+ * (not expired) and grabs a thumbnail for the inbox preview.
+ */
+async function resolveStatusRefs(messages: RawDmMessage[]) {
+  const ids = [...new Set(messages.map((m) => m.statusId).filter((v): v is number => v != null))]
+  const map = new Map<number, { active: boolean; thumb: string | null }>()
+  if (ids.length === 0) return map
+  const rows = await db
+    .select({ id: statusUpdate.id, mediaUrl: statusUpdate.mediaUrl, expiresAt: statusUpdate.expiresAt })
+    .from(statusUpdate)
+    .where(inArray(statusUpdate.id, ids))
+  const now = Date.now()
+  for (const r of rows) map.set(r.id, { active: r.expiresAt.getTime() > now, thumb: r.mediaUrl })
+  return map
+}
+
+function toMessageView(
+  m: RawDmMessage,
+  userId: string,
+  statusMap: Map<number, { active: boolean; thumb: string | null }>,
+): DmMessageView {
+  const ref = m.statusId != null ? statusMap.get(m.statusId) : undefined
+  return {
+    id: m.id,
+    senderId: m.senderId,
+    body: m.body,
+    attachmentUrl: m.attachmentUrl,
+    attachmentType: (m.attachmentType as DmAttachmentType | null) ?? null,
+    attachmentName: m.attachmentName,
+    isSelf: m.senderId === userId,
+    postedAt: timeAgo(m.createdAt),
+    statusId: m.statusId ?? null,
+    statusActive: ref?.active ?? false,
+    statusThumb: ref?.thumb ?? null,
+  }
 }
 
 /**
@@ -230,6 +284,8 @@ export async function getConversationDetail(conversationId: number): Promise<DmC
     .set(conv.userAId === user.id ? { userALastReadAt: new Date() } : { userBLastReadAt: new Date() })
     .where(eq(dmConversation.id, conversationId))
 
+  const statusMap = await resolveStatusRefs(messages)
+
   return {
     id: conv.id,
     otherUserId: otherId,
@@ -241,16 +297,7 @@ export async function getConversationDetail(conversationId: number): Promise<DmC
     currentUserId: user.id,
     currentUserInitials: getInitials(user.name),
     currentUserColor: getAvatarColor(user.id),
-    messages: messages.map((m) => ({
-      id: m.id,
-      senderId: m.senderId,
-      body: m.body,
-      attachmentUrl: m.attachmentUrl,
-      attachmentType: (m.attachmentType as DmAttachmentType | null) ?? null,
-      attachmentName: m.attachmentName,
-      isSelf: m.senderId === user.id,
-      postedAt: timeAgo(m.createdAt),
-    })),
+    messages: messages.map((m) => toMessageView(m, user.id, statusMap)),
   }
 }
 
@@ -270,16 +317,8 @@ export async function getDmMessages(conversationId: number): Promise<DmMessageVi
     .set(conv.userAId === user.id ? { userALastReadAt: new Date() } : { userBLastReadAt: new Date() })
     .where(eq(dmConversation.id, conversationId))
 
-  return messages.map((m) => ({
-    id: m.id,
-    senderId: m.senderId,
-    body: m.body,
-    attachmentUrl: m.attachmentUrl,
-    attachmentType: (m.attachmentType as DmAttachmentType | null) ?? null,
-    attachmentName: m.attachmentName,
-    isSelf: m.senderId === user.id,
-    postedAt: timeAgo(m.createdAt),
-  }))
+  const statusMap = await resolveStatusRefs(messages)
+  return messages.map((m) => toMessageView(m, user.id, statusMap))
 }
 
 export async function sendDirectMessage(input: {
@@ -288,6 +327,7 @@ export async function sendDirectMessage(input: {
   attachmentUrl?: string | null
   attachmentType?: DmAttachmentType | null
   attachmentName?: string | null
+  statusId?: number | null
 }) {
   const user = await requireUser()
   await loadConversationForUser(input.conversationId, user.id)
@@ -303,6 +343,7 @@ export async function sendDirectMessage(input: {
     attachmentUrl: input.attachmentUrl ?? null,
     attachmentType: hasAttachment ? input.attachmentType ?? "document" : null,
     attachmentName: input.attachmentName ?? null,
+    statusId: input.statusId ?? null,
   })
 
   // Bump ordering + mark the sender's side read.

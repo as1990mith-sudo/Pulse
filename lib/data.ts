@@ -31,7 +31,8 @@ export type Show = {
   listeners: number
   startsAt?: string // human readable for upcoming
   duration?: string // for ended episodes
-  publishedAt?: string
+  publishedAt?: string // relative "time ago" (legacy)
+  publishedDate?: string // absolute published date, shown only in the player
   description: string
   audioUrl?: string // recorded audio for on-demand episodes
   episodeId?: number // numeric DB id for published episodes (likes/comments)

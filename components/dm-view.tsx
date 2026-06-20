@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import useSWR from "swr"
 import Link from "next/link"
-import { ArrowLeft, FileText, Mic, Music, Paperclip, Phone, Send, Smile, Video, X } from "lucide-react"
+import { ArrowLeft, CornerUpLeft, FileText, Mic, Music, Paperclip, Phone, Send, Smile, Video, X } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -120,6 +120,9 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
           attachmentName: label,
           isSelf: true,
           postedAt: "now",
+          statusId: null,
+          statusActive: false,
+          statusThumb: null,
         },
       ])
 
@@ -157,6 +160,9 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
         attachmentName: sent?.name ?? null,
         isSelf: true,
         postedAt: "now",
+        statusId: null,
+        statusActive: false,
+        statusThumb: null,
       },
     ])
 
@@ -379,6 +385,58 @@ function DmBubble({ message: m, color, initials }: { message: DmMessageView; col
             m.isSelf ? "rounded-tr-sm bg-primary text-primary-foreground" : "rounded-tl-sm bg-secondary text-foreground",
           )}
         >
+          {m.statusId != null &&
+            (m.statusActive ? (
+              <Link
+                href={`/status/${m.statusId}`}
+                className={cn(
+                  "mb-1.5 flex items-center gap-2 rounded-lg p-1.5 text-left transition-opacity hover:opacity-80",
+                  m.isSelf ? "bg-primary-foreground/15" : "bg-foreground/5",
+                )}
+              >
+                {m.statusThumb ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={m.statusThumb || "/placeholder.svg"} alt="" className="size-9 shrink-0 rounded-md object-cover" />
+                ) : (
+                  <span
+                    className={cn(
+                      "flex size-9 shrink-0 items-center justify-center rounded-md",
+                      m.isSelf ? "bg-primary-foreground/20" : "bg-secondary",
+                    )}
+                  >
+                    <CornerUpLeft className="size-4" />
+                  </span>
+                )}
+                <span className="flex min-w-0 flex-col leading-tight">
+                  <span className="text-xs font-medium">Reply to status</span>
+                  <span className={cn("text-[11px]", m.isSelf ? "text-primary-foreground/70" : "text-muted-foreground")}>
+                    Tap to view
+                  </span>
+                </span>
+              </Link>
+            ) : (
+              <div
+                className={cn(
+                  "mb-1.5 flex items-center gap-2 rounded-lg p-1.5",
+                  m.isSelf ? "bg-primary-foreground/10" : "bg-foreground/5",
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex size-9 shrink-0 items-center justify-center rounded-md",
+                    m.isSelf ? "bg-primary-foreground/15" : "bg-secondary",
+                  )}
+                >
+                  <CornerUpLeft className="size-4 opacity-60" />
+                </span>
+                <span className="flex min-w-0 flex-col leading-tight">
+                  <span className="text-xs font-medium opacity-80">Reply to status</span>
+                  <span className={cn("text-[11px]", m.isSelf ? "text-primary-foreground/60" : "text-muted-foreground")}>
+                    Status expired
+                  </span>
+                </span>
+              </div>
+            ))}
           {m.attachmentUrl && m.attachmentType === "image" && (
             <>
               <button type="button" onClick={() => setLightbox(true)} className="block" aria-label="Expand image">
