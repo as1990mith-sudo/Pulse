@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Check, Loader2, Pause, Phone, PhoneOff, Play, Radio, Users, Volume2, VolumeX, X } from "lucide-react"
 import type { CallRequestView, LiveStreamView } from "@/app/actions/live"
 import {
@@ -20,7 +21,7 @@ import { cn } from "@/lib/utils"
 function Waveform({ active }: { active: boolean }) {
   const bars = Array.from({ length: 32 }, (_, i) => i)
   return (
-    <div className="flex h-12 items-end justify-center gap-1" aria-hidden="true">
+    <div className="flex h-8 items-end justify-center gap-1" aria-hidden="true">
       {bars.map((i) => (
         <span
           key={i}
@@ -45,11 +46,15 @@ export function LiveListener({
   canListen: boolean
   currentUserId?: string | null
 }) {
+  const router = useRouter()
   const { state, speakers, connect, disconnect, toggleMic, setListenerMuted, startAudioPlayback } = useLiveAudio()
   const [muted, setMuted] = useState(false)
   const [joining, setJoining] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [ended, setEnded] = useState(false)
+  // Set when the host ends the broadcast — shows a "Session ended" splash then
+  // bounces the listener back to the Live tab.
+  const [hostEnded, setHostEnded] = useState(false)
 
   // Call-in state, polled from the server.
   const [myStatus, setMyStatus] = useState<CallRequestView["status"] | null>(null)
@@ -85,6 +90,13 @@ export function LiveListener({
     const tick = async () => {
       const s = await getCallState({ roomName: stream.roomName })
       if (cancelled) return
+      // Host ended the session: tear down audio, show the splash, then redirect.
+      if (s.ended) {
+        setHostEnded(true)
+        void disconnect()
+        setTimeout(() => router.push("/live"), 2600)
+        return
+      }
       setMyInvite(s.myInvite)
       // Flash a "declined" toast when status transitions to declined.
       if (s.myStatus === "declined" && prevStatus.current && prevStatus.current !== "declined") {
@@ -144,6 +156,19 @@ export function LiveListener({
   const colorById: Record<string, string> = {}
   for (const s of speakers) colorById[s.identity] = getAvatarColor(s.identity)
 
+  if (hostEnded) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-border/60 bg-card px-6 py-14 text-center">
+        <span className="flex size-12 items-center justify-center rounded-full bg-secondary text-muted-foreground">
+          <Radio className="size-6" />
+        </span>
+        <p className="text-lg font-semibold">Session Ended</p>
+        <p className="text-sm text-muted-foreground">The host has ended this live session. Taking you back to Live…</p>
+        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
   return (
     <div className="overflow-hidden rounded-2xl border border-border/60 bg-card">
       {/* Room title + host header sits on top of the live show. */}
@@ -160,7 +185,7 @@ export function LiveListener({
         </span>
       </div>
 
-      <div className="relative flex flex-col items-center gap-5 px-4 py-6 sm:px-6">
+      <div className="relative flex flex-col items-center gap-3 px-4 py-4 sm:px-6">
         {stream.cover && (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}

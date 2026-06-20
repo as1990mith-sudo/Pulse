@@ -41,11 +41,12 @@ export async function publishShow(input: {
 
   const title = input.title.trim()
   const tagline = input.tagline.trim()
-  const category = input.category.trim()
+  // Category is optional now — only title + description are required to publish.
+  const category = input.category.trim() || "Episode"
   const description = input.description.trim()
 
-  if (!title || !category || !description) {
-    return { ok: false, error: "Title, category, and description are required." }
+  if (!title || !description) {
+    return { ok: false, error: "Title and description are required." }
   }
 
   const base = slugify(title) || "session"

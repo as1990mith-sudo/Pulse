@@ -1,11 +1,11 @@
 "use server"
 
-import { and, asc, desc, eq, or } from "drizzle-orm"
+import { and, asc, desc, eq, gt, inArray, or } from "drizzle-orm"
 import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { dmConversation, dmMessage, user as userTable } from "@/lib/db/schema"
+import { dmConversation, dmMessage, statusUpdate, statusView, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 
 async function requireUser() {
@@ -38,6 +38,10 @@ export type DmConversationSummary = {
   lastMessage: string | null
   lastMessageAt: string
   unread: boolean
+  // Story-ring state: does the other user have a live (non-expired) status, and
+  // has the current user already seen all of it?
+  hasActiveStatus: boolean
+  statusAllViewed: boolean
 }
 
 export type DmConversationDetail = {
@@ -118,10 +122,45 @@ export async function getConversations(): Promise<DmConversationSummary[]> {
 
   if (rows.length === 0) return []
 
+  // Pre-compute which conversation partners have a live status, and whether the
+  // current user has viewed all of it (grey ring) or not (gradient ring).
+  const otherIds = rows.map((conv) => (conv.userAId === user.id ? conv.userBId : conv.userAId))
+  const activeStatuses = await db
+    .select({ id: statusUpdate.id, userId: statusUpdate.userId })
+    .from(statusUpdate)
+    .where(and(inArray(statusUpdate.userId, otherIds), gt(statusUpdate.expiresAt, new Date())))
+
+  const statusIdsByUser = new Map<string, number[]>()
+  for (const s of activeStatuses) {
+    const arr = statusIdsByUser.get(s.userId) ?? []
+    arr.push(s.id)
+    statusIdsByUser.set(s.userId, arr)
+  }
+
+  const viewedStatusIds = new Set<number>()
+  if (activeStatuses.length > 0) {
+    const viewRows = await db
+      .select({ statusId: statusView.statusId })
+      .from(statusView)
+      .where(
+        and(
+          eq(statusView.viewerId, user.id),
+          inArray(
+            statusView.statusId,
+            activeStatuses.map((s) => s.id),
+          ),
+        ),
+      )
+    for (const v of viewRows) viewedStatusIds.add(v.statusId)
+  }
+
   const summaries = await Promise.all(
     rows.map(async (conv) => {
       const otherId = conv.userAId === user.id ? conv.userBId : conv.userAId
       const myLastRead = conv.userAId === user.id ? conv.userALastReadAt : conv.userBLastReadAt
+      const statusIds = statusIdsByUser.get(otherId) ?? []
+      const hasActiveStatus = statusIds.length > 0
+      const statusAllViewed = hasActiveStatus && statusIds.every((id) => viewedStatusIds.has(id))
 
       const [other] = await db.select().from(userTable).where(eq(userTable.id, otherId)).limit(1)
       const [last] = await db
@@ -146,6 +185,8 @@ export async function getConversations(): Promise<DmConversationSummary[]> {
         lastMessage: last ? previewOf(last.body, last.attachmentType) : null,
         lastMessageAt: timeAgo(conv.lastMessageAt),
         unread,
+        hasActiveStatus,
+        statusAllViewed,
       }
     }),
   )

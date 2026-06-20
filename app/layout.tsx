@@ -1,6 +1,6 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import { Geist, Geist_Mono, Sora } from 'next/font/google'
 import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
 
@@ -9,6 +9,8 @@ const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
   subsets: ['latin'],
 })
+// Distinctive display face used for episode titles.
+const sora = Sora({ variable: '--font-sora', subsets: ['latin'], weight: ['600', '700'] })
 
 export const metadata: Metadata = {
   title: 'Frequency — Live Podcast Streaming',
@@ -47,7 +49,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} bg-background`}
+      className={`${geistSans.variable} ${geistMono.variable} ${sora.variable} bg-background`}
       suppressHydrationWarning
     >
       <body className="font-sans antialiased">

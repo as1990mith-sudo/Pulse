@@ -366,12 +366,14 @@ export async function getCallState(input: { roomName: string }): Promise<{
   myStatus: CallRequestView["status"] | null
   chatBgUrl: string | null
   chatBgEffect: ChatBgEffect
+  // True once the host has ended the broadcast — lets listeners auto-close.
+  ended: boolean
 }> {
   const session = await auth.api.getSession({ headers: await headers() })
   const me = session?.user?.id ?? null
 
   const [stream] = await db
-    .select({ chatBgUrl: liveStream.chatBgUrl, chatBgEffect: liveStream.chatBgEffect })
+    .select({ chatBgUrl: liveStream.chatBgUrl, chatBgEffect: liveStream.chatBgEffect, status: liveStream.status })
     .from(liveStream)
     .where(eq(liveStream.roomName, input.roomName))
 
@@ -394,6 +396,8 @@ export async function getCallState(input: { roomName: string }): Promise<{
     myStatus: mine ? (mine.status as CallRequestView["status"]) : null,
     chatBgUrl: stream?.chatBgUrl ?? null,
     chatBgEffect: (stream?.chatBgEffect as ChatBgEffect) ?? "none",
+    // No row, or row flipped to "ended", both mean the session is over.
+    ended: !stream || stream.status !== "live",
   }
 }
 

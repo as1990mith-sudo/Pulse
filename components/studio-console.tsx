@@ -162,8 +162,19 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
           >
             {currentUser.initials}
           </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold leading-tight">{title || "Untitled session"}</p>
+          <div className="min-w-0 flex-1">
+            {live ? (
+              <p className="truncate text-sm font-semibold leading-tight">{title || "Untitled session"}</p>
+            ) : (
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Name your session…"
+                aria-label="Session title"
+                maxLength={80}
+                className="w-full truncate rounded-md border border-transparent bg-transparent text-sm font-semibold leading-tight outline-none transition-colors placeholder:text-muted-foreground hover:border-border/60 focus:border-primary focus:bg-background focus:px-2 focus:py-1"
+              />
+            )}
             <p className="truncate text-xs text-muted-foreground">{currentUser.name}</p>
           </div>
         </div>
@@ -691,8 +702,6 @@ function PublishOverlay({ session, onClose }: { session: { title: string; durati
   const [published, setPublished] = useState(false)
 
   const [title, setTitle] = useState(session.title)
-  const [tagline, setTagline] = useState("")
-  const [category, setCategory] = useState("")
   const [description, setDescription] = useState("")
   const [cover, setCover] = useState<string | null>(null)
 
@@ -711,7 +720,7 @@ function PublishOverlay({ session, onClose }: { session: { title: string; durati
           // publish without audio rather than failing
         }
       }
-      const res = await publishShow({ title, tagline, category, duration: session.duration, description, cover, audioUrl })
+      const res = await publishShow({ title, tagline: "", category: "", duration: session.duration, description, cover, audioUrl })
       if (res.ok) {
         setPublished(true)
         router.refresh()
@@ -739,12 +748,8 @@ function PublishOverlay({ session, onClose }: { session: { title: string; durati
             {session.audioBlob ? "Audio attached for on-demand playback." : "No audio captured — publishes as a show page."}
           </p>
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Episode title" aria-label="Episode title" />
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Category" aria-label="Category" />
-            <Input value={tagline} onChange={(e) => setTagline(e.target.value)} placeholder="Tagline (optional)" aria-label="Tagline" />
-          </div>
           <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What was this session about?" className="min-h-20" aria-label="Description" />
-          <CoverUpload value={cover} onChange={setCover} label="Cover image (optional)" />
+          <CoverUpload value={cover} onChange={setCover} label="Cover art" />
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex items-center gap-2">
             <Button type="submit" disabled={isPending} className="gap-2">
