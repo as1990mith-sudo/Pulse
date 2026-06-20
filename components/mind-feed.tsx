@@ -16,6 +16,7 @@ import {
   UserCheck,
   Loader2,
   Trash2,
+  MoreHorizontal,
 } from "lucide-react"
 import { addPostComment, createPost, deletePost, getFeed, setPostLike, type FeedPostView } from "@/app/actions/feed"
 import { toggleFollow } from "@/app/actions/follow"
@@ -26,7 +27,14 @@ import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { ImageLightbox } from "@/components/image-lightbox"
+import { FeedVideo } from "@/components/feed-video"
 import { cn } from "@/lib/utils"
 
 type DraftMedia = { url: string; type: "image" | "video" }
@@ -131,6 +139,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
       <div className="border-y border-border/60 bg-gradient-to-b from-card/60 to-background px-4 py-5 sm:px-5">
         <form onSubmit={publish} className="flex gap-4">
           <Avatar className="size-12 shrink-0 ring-2 ring-border/60">
+            {currentUser.image && <AvatarImage src={currentUser.image || "/placeholder.svg"} alt={currentUser.name} />}
             <AvatarFallback className={currentUser.color}>{currentUser.initials}</AvatarFallback>
           </Avatar>
           <div className="flex-1 space-y-3">
@@ -361,15 +370,24 @@ export function PostCard({
             <FollowButton authorId={post.authorId} authorName={post.user} initialFollowing={post.isFollowing} />
           )}
           {currentUser && post.isSelf && (
-            <button
-              type="button"
-              onClick={() => setConfirmDelete(true)}
-              disabled={isPending}
-              aria-label="Delete post"
-              className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-            >
-              <Trash2 className="size-4" />
-            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                disabled={isPending}
+                aria-label="Post options"
+                className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <MoreHorizontal className="size-5" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  variant="destructive"
+                  onSelect={() => setConfirmDelete(true)}
+                  className="gap-2"
+                >
+                  <Trash2 className="size-4" /> Delete post
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </div>
@@ -392,7 +410,7 @@ export function PostCard({
       {post.text && (
         <p
           className={cn(
-            "leading-relaxed text-foreground/90",
+            "whitespace-pre-wrap leading-relaxed text-foreground/90",
             feed ? "px-4 text-lg" : "px-3 text-[15px]",
             hasMedia ? "pb-3" : "pb-1",
           )}
@@ -404,7 +422,7 @@ export function PostCard({
       {/* Media — large, edge-to-edge Instagram-style */}
       {post.video ? (
         <div className="bg-black">
-          <video src={post.video} controls playsInline className="max-h-[640px] w-full" />
+          <FeedVideo src={post.video} className="max-h-[640px] w-full" />
         </div>
       ) : post.image ? (
         <>

@@ -64,34 +64,38 @@ function MyRooms({ rooms }: { rooms: ChatroomSummary[] }) {
   }
 
   return (
-    <div className="space-y-4">
+    // Edge-to-edge immersive list: break out of the page's horizontal padding
+    // and use full-width divided rows instead of boxed cards.
+    <div className="-mx-4 divide-y divide-border/60 border-y border-border/60 sm:-mx-6">
       {rooms.map((room) => (
-        <Link key={room.id} href={`/chatrooms/${room.id}`} className="group block">
-          <Card className="flex items-center justify-between gap-4 rounded-2xl p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-lg hover:shadow-primary/5">
-            <div className="flex min-w-0 items-center gap-4">
-              <Avatar className="size-16 shrink-0 ring-2 ring-border/60 transition-transform duration-200 group-hover:scale-105">
-                {room.image && <AvatarImage src={room.image || "/placeholder.svg"} alt={room.name} />}
-                <AvatarFallback className="bg-secondary text-lg font-semibold">
-                  {room.name.slice(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="truncate text-lg font-semibold tracking-tight">{room.name}</p>
-                  {room.isOwner && <Badge variant="secondary">Admin</Badge>}
-                </div>
-                {room.description && (
-                  <p className="truncate text-sm leading-relaxed text-muted-foreground">{room.description}</p>
-                )}
-                <p className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                  <Users className="size-3.5" /> {room.memberCount} {room.memberCount === 1 ? "member" : "members"}
-                </p>
+        <Link
+          key={room.id}
+          href={`/chatrooms/${room.id}`}
+          className="group flex items-center justify-between gap-4 px-4 py-4 transition-colors hover:bg-secondary/40 sm:px-6"
+        >
+          <div className="flex min-w-0 items-center gap-4">
+            <Avatar className="size-16 shrink-0 ring-2 ring-border/60 transition-transform duration-200 group-hover:scale-105">
+              {room.image && <AvatarImage src={room.image || "/placeholder.svg"} alt={room.name} />}
+              <AvatarFallback className="bg-secondary text-lg font-semibold">
+                {room.name.slice(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="truncate text-lg font-semibold tracking-tight">{room.name}</p>
+                {room.isOwner && <Badge variant="secondary">Admin</Badge>}
               </div>
+              {room.description && (
+                <p className="truncate text-sm leading-relaxed text-muted-foreground">{room.description}</p>
+              )}
+              <p className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <Users className="size-3.5" /> {room.memberCount} {room.memberCount === 1 ? "member" : "members"}
+              </p>
             </div>
-            <span className="shrink-0 rounded-full bg-primary/10 px-4 py-2 text-sm font-semibold text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-              Open
-            </span>
-          </Card>
+          </div>
+          <span className="shrink-0 rounded-full bg-primary/10 px-4 py-2 text-sm font-semibold text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+            Open
+          </span>
         </Link>
       ))}
     </div>
