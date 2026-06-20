@@ -18,6 +18,9 @@ import {
   Trash2,
   MoreHorizontal,
   Pencil,
+  Camera,
+  Video,
+  ImageIcon,
 } from "lucide-react"
 import { addPostComment, createPost, deletePost, editPost, getFeed, setPostLike, type FeedPostView } from "@/app/actions/feed"
 import { toggleFollow } from "@/app/actions/follow"
@@ -49,6 +52,12 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
   const [isPending, startTransition] = useTransition()
   const [tab, setTab] = useState<"for-you" | "following">("for-you")
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Separate inputs so we can request the device camera directly: one for
+  // capturing a photo and one for recording a video. The "capture" attribute
+  // opens the camera on supported mobile devices and falls back to the normal
+  // picker on desktop.
+  const photoCaptureRef = useRef<HTMLInputElement>(null)
+  const videoCaptureRef = useRef<HTMLInputElement>(null)
 
   // Poll the feed so new tweets and comments from others appear without a manual
   // refresh. The server-rendered posts seed the initial data.
@@ -80,13 +89,16 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
       setError(err instanceof Error ? err.message : "Upload failed.")
     } finally {
       setUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ""
+      // Reset the originating input so picking the same file again re-fires.
+      e.target.value = ""
     }
   }
 
   function clearMedia() {
     setMedia(null)
     if (fileInputRef.current) fileInputRef.current.value = ""
+    if (photoCaptureRef.current) photoCaptureRef.current.value = ""
+    if (videoCaptureRef.current) videoCaptureRef.current.value = ""
   }
 
   function publish(e: React.FormEvent) {
@@ -171,21 +183,54 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
             )}
             {error && <p className="text-xs text-destructive">{error}</p>}
             <div className="flex items-center justify-between">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="text-primary"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-                aria-label="Add a photo or video"
-              >
-                {uploading ? <Loader2 className="size-5 animate-spin" /> : <ImagePlus className="size-5" />}
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  disabled={uploading}
+                  render={
+                    <button
+                      type="button"
+                      aria-label="Add a photo or video"
+                      className="inline-flex size-9 items-center justify-center rounded-md text-primary outline-none transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                    />
+                  }
+                >
+                  {uploading ? <Loader2 className="size-5 animate-spin" /> : <ImagePlus className="size-5" />}
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem onClick={() => photoCaptureRef.current?.click()} className="gap-2">
+                    <Camera className="size-4" /> Take photo
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => videoCaptureRef.current?.click()} className="gap-2">
+                    <Video className="size-4" /> Record video
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="gap-2">
+                    <ImageIcon className="size-4" /> Upload from library
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              {/* Library picker (photos + videos) */}
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/*,video/*"
+                className="hidden"
+                onChange={handleMediaPick}
+              />
+              {/* Camera photo capture */}
+              <input
+                ref={photoCaptureRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleMediaPick}
+              />
+              {/* Camera video capture */}
+              <input
+                ref={videoCaptureRef}
+                type="file"
+                accept="video/*"
+                capture="environment"
                 className="hidden"
                 onChange={handleMediaPick}
               />
