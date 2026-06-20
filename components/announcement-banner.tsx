@@ -58,7 +58,7 @@ export function AnnouncementBanner({
 
   return (
     <section aria-label="Announcements" className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 px-4 sm:px-0">
         <div className="flex items-center gap-2">
           <span className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary">
             <Megaphone className="size-4" />
@@ -77,19 +77,19 @@ export function AnnouncementBanner({
 
       {announcements.length > 0 ? (
         <>
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col">
             {announcements.map((a) => (
               <AnnouncementCard key={a.id} announcement={a} isAdmin={isAdmin} />
             ))}
           </div>
           {currentUser && (
-            <p className="text-xs text-muted-foreground">
+            <p className="px-4 text-xs text-muted-foreground sm:px-0">
               Only one advert can run at a time. You can post a new advert once the current one expires.
             </p>
           )}
         </>
       ) : (
-        <Card className="flex flex-col items-center gap-3 border-dashed bg-card/50 p-6 text-center">
+        <Card className="mx-4 flex flex-col items-center gap-3 border-dashed bg-card/50 p-6 text-center sm:mx-0">
           <Sparkles className="size-6 text-primary" />
           <div className="space-y-1">
             <p className="text-sm font-medium text-balance">Promote your event to the whole community</p>
@@ -109,7 +109,7 @@ export function AnnouncementBanner({
 
       {/* Owner's request tracker: pending + declined */}
       {trackable.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-2 px-4 sm:px-0">
           <p className="text-xs font-medium text-muted-foreground">Your advert requests</p>
           {trackable.map((r) => (
             <RequestStatusRow key={r.id} request={r} />
@@ -208,7 +208,7 @@ function AnnouncementCard({ announcement: a, isAdmin = false }: { announcement: 
   }
 
   return (
-    <Card className="flex w-full flex-col overflow-hidden sm:flex-row sm:items-stretch">
+    <div className="flex w-full flex-col overflow-hidden border-y border-border/60 bg-card sm:flex-row sm:items-stretch sm:rounded-none">
       {/* Flyer — fixed-width thumbnail on the left at larger sizes */}
       {a.flyer ? (
         <button
@@ -328,7 +328,7 @@ function AnnouncementCard({ announcement: a, isAdmin = false }: { announcement: 
       {lightbox && a.flyer && (
         <ImageLightbox src={a.flyer} alt={`${a.title} flyer`} onClose={() => setLightbox(false)} />
       )}
-    </Card>
+    </div>
   )
 }
 

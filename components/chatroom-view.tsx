@@ -11,8 +11,10 @@ import {
   FileText,
   ImageIcon,
   LogOut,
+  Mic,
   Music,
   Paperclip,
+  Phone,
   Pin,
   PinOff,
   Send,
@@ -27,6 +29,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { ImageLightbox } from "@/components/image-lightbox"
 import { ImageCropper } from "@/components/image-cropper"
+import { VoiceRecorder } from "@/components/voice-recorder"
+import { ChatroomCall } from "@/components/chatroom-call"
 import { cn } from "@/lib/utils"
 import { uploadMedia } from "@/lib/upload-media"
 import {
@@ -64,6 +68,10 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [showMembers, setShowMembers] = useState(false)
   const [showEmoji, setShowEmoji] = useState(false)
+  const [recording, setRecording] = useState(false)
+  const [sendingVoice, setSendingVoice] = useState(false)
+  // Bumped when the header call button is tapped to tell ChatroomCall to join.
+  const [callStartNonce, setCallStartNonce] = useState(0)
   const [isLeaving, startLeave] = useTransition()
   // Optimistic messages shown instantly while the server round-trips.
   const [pending, setPending] = useState<ChatMessageView[]>([])
@@ -110,6 +118,48 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ""
+    }
+  }
+
+  async function handleSendVoice(blob: Blob, durationSecs: number) {
+    setSendingVoice(true)
+    setUploadError(null)
+    try {
+      const fileName = `voice-note-${Date.now()}.webm`
+      const data = await uploadMedia(blob, "chat", fileName)
+      const label = `Voice note (${Math.floor(durationSecs / 60)}:${String(durationSecs % 60).padStart(2, "0")})`
+
+      setRecording(false)
+      setPending((prev) => [
+        ...prev,
+        {
+          id: -Date.now(),
+          userId: detail.currentUserId,
+          userName: "You",
+          initials: detail.currentUserInitials,
+          color: detail.currentUserColor,
+          body: null,
+          attachmentUrl: data.url,
+          attachmentType: "audio",
+          attachmentName: label,
+          postedAt: "now",
+          isSelf: true,
+          pinned: false,
+          deleted: false,
+        },
+      ])
+
+      await sendChatMessage({
+        chatroomId: detail.id,
+        attachmentUrl: data.url,
+        attachmentType: "audio",
+        attachmentName: label,
+      })
+      await mutateMessages()
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Could not send voice note")
+    } finally {
+      setSendingVoice(false)
     }
   }
 
@@ -226,12 +276,25 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
             </button>
           </div>
         </div>
-        {!detail.isOwner && (
-          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={handleLeave} disabled={isLeaving}>
-            <LogOut className="size-4" /> Leave
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => setCallStartNonce((n) => n + 1)}
+            aria-label="Start or join group call"
+          >
+            <Phone className="size-5" />
           </Button>
-        )}
+          {!detail.isOwner && (
+            <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={handleLeave} disabled={isLeaving}>
+              <LogOut className="size-4" /> Leave
+            </Button>
+          )}
+        </div>
       </div>
+
+      <ChatroomCall chatroomId={detail.id} roomTitle={detail.name} startNonce={callStartNonce} />
 
       {(showMembers || (detail.isOwner && detail.joinRequests.length > 0)) && (
         <div className="space-y-3 border-b border-border/60 px-4 py-3 sm:px-6">
@@ -338,51 +401,71 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
       )}
 
       {/* Composer */}
-      <form onSubmit={handleSend} className="flex items-center gap-2">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip"
-          className="hidden"
-          onChange={handleFilePick}
-        />
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="shrink-0 text-muted-foreground"
-          onClick={() => setShowEmoji((s) => !s)}
-          aria-label="Toggle emoji picker"
-        >
-          <Smile className="size-5" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="shrink-0 text-muted-foreground"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-          aria-label="Attach a file"
-        >
-          <Paperclip className={cn("size-5", uploading && "animate-pulse")} />
-        </Button>
-        <Input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder={uploading ? "Uploading attachment…" : "Type a message"}
-          aria-label="Message"
-        />
-        <Button
-          type="submit"
-          size="icon"
-          className="shrink-0"
-          disabled={uploading || (!draft.trim() && !attachment)}
-          aria-label="Send message"
-        >
-          <Send className="size-4" />
-        </Button>
-      </form>
+      {recording ? (
+        <VoiceRecorder onSend={handleSendVoice} onCancel={() => setRecording(false)} sending={sendingVoice} />
+      ) : (
+        <form onSubmit={handleSend} className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip"
+            className="hidden"
+            onChange={handleFilePick}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="shrink-0 text-muted-foreground"
+            onClick={() => setShowEmoji((s) => !s)}
+            aria-label="Toggle emoji picker"
+          >
+            <Smile className="size-5" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="shrink-0 text-muted-foreground"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            aria-label="Attach a file"
+          >
+            <Paperclip className={cn("size-5", uploading && "animate-pulse")} />
+          </Button>
+          <Input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder={uploading ? "Uploading attachment…" : "Type a message"}
+            aria-label="Message"
+          />
+          {draft.trim() || attachment ? (
+            <Button
+              type="submit"
+              size="icon"
+              className="shrink-0"
+              disabled={uploading}
+              aria-label="Send message"
+            >
+              <Send className="size-4" />
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="icon"
+              className="shrink-0"
+              onClick={() => {
+                setShowEmoji(false)
+                setRecording(true)
+              }}
+              disabled={uploading}
+              aria-label="Record a voice note"
+            >
+              <Mic className="size-4" />
+            </Button>
+          )}
+        </form>
+      )}
         </div>
       </div>
     </div>

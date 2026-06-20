@@ -26,7 +26,7 @@ export default async function FeedPage() {
           <div className="border-b border-border/60 px-4 py-3 sm:px-0">
             <StatusBar groups={statusGroups} currentUser={currentUser} />
           </div>
-          <div className="space-y-5 px-4 pt-4 pb-5 sm:px-0">
+          <div className="pt-4 pb-5">
             <AnnouncementBanner
               announcements={announcements}
               myRequests={myRequests}

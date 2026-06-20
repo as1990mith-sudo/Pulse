@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Download, Loader2, MoreVertical, Play, Trash2 } from "lucide-react"
+import { Clock, Download, Loader2, MoreVertical, Play, Trash2 } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { deleteEpisode } from "@/app/actions/shows"
 import { Badge } from "@/components/ui/badge"
@@ -69,14 +69,7 @@ export function EpisodeRow({ show, owned = false }: { show: Show; owned?: boolea
             <Badge variant="outline" className="border-border/60 text-[10px] text-muted-foreground">
               {show.category}
             </Badge>
-            {show.status === "live" ? (
-              <ListenerCount count={show.listeners} />
-            ) : (
-              <span className="text-xs text-muted-foreground">
-                {show.duration ? `${show.duration} · ` : ""}
-                {show.publishedAt}
-              </span>
-            )}
+            {show.status === "live" && <ListenerCount count={show.listeners} />}
           </div>
           <MarqueeTitle
             text={show.title}
@@ -86,14 +79,20 @@ export function EpisodeRow({ show, owned = false }: { show: Show; owned?: boolea
         </div>
       </Link>
 
-      <div className="flex shrink-0 items-center gap-1">
-        <Link
-          href={href}
-          aria-label={`Open ${show.title}`}
-          className="flex size-9 items-center justify-center rounded-full bg-secondary text-foreground transition-colors group-hover:bg-live group-hover:text-white"
-        >
-          <Play className="size-4" />
-        </Link>
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        {show.status !== "live" && show.duration && (
+          <span className="inline-flex items-center gap-1 text-xs tabular-nums text-muted-foreground">
+            <Clock className="size-3" /> {show.duration}
+          </span>
+        )}
+        <div className="flex items-center gap-1">
+          <Link
+            href={href}
+            aria-label={`Open ${show.title}`}
+            className="flex size-9 items-center justify-center rounded-full bg-secondary text-foreground transition-colors group-hover:bg-live group-hover:text-white"
+          >
+            <Play className="size-4" />
+          </Link>
 
         <DropdownMenu
           onOpenChange={(open) => {
@@ -154,6 +153,7 @@ export function EpisodeRow({ show, owned = false }: { show: Show; owned?: boolea
             )}
           </DropdownMenuContent>
         </DropdownMenu>
+        </div>
       </div>
 
       {error && (
