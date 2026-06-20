@@ -4,6 +4,7 @@ import type { Show } from "@/lib/data"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { LiveBadge, ListenerCount } from "@/components/live-badge"
+import { MarqueeTitle } from "@/components/marquee-title"
 
 /** Compact horizontal row used for list layouts (e.g. a profile's episodes). */
 export function ShowRow({ show }: { show: Show }) {
@@ -14,20 +15,13 @@ export function ShowRow({ show }: { show: Show }) {
       href={href}
       className="group flex items-center gap-4 rounded-xl border border-border/60 bg-card p-3 transition-colors hover:border-live/50"
     >
-      <div className="relative aspect-video w-32 shrink-0 overflow-hidden rounded-lg sm:w-40">
+      <div className="relative size-14 shrink-0 overflow-hidden rounded-lg sm:size-16">
         <img
           src={show.cover || "/placeholder.svg"}
           alt={`${show.title} cover art`}
           className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
-        <div className="absolute left-2 top-2 flex items-center gap-1.5">
-          {show.status === "live" && <LiveBadge />}
-          {show.status === "ended" && (
-            <Badge variant="secondary" className="gap-1 px-1.5 py-0 text-[10px] font-medium">
-              <Play className="size-2.5" /> {show.duration}
-            </Badge>
-          )}
-        </div>
+        {show.status === "live" && <span className="absolute left-1 top-1"><LiveBadge /></span>}
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -38,13 +32,17 @@ export function ShowRow({ show }: { show: Show }) {
           {show.status === "live" ? (
             <ListenerCount count={show.listeners} />
           ) : (
-            <span className="text-xs text-muted-foreground">{show.publishedAt}</span>
+            <span className="text-xs text-muted-foreground">
+              {show.duration ? `${show.duration} · ` : ""}
+              {show.publishedAt}
+            </span>
           )}
         </div>
-        <h3 className="truncate font-semibold leading-tight transition-colors group-hover:text-live">
-          {show.title}
-        </h3>
-        <p className="line-clamp-2 text-sm text-muted-foreground leading-relaxed">{show.tagline}</p>
+        <MarqueeTitle
+          text={show.title}
+          className="font-semibold leading-tight transition-colors group-hover:text-live"
+        />
+        <p className="line-clamp-1 text-sm text-muted-foreground leading-relaxed">{show.tagline}</p>
       </div>
 
       <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-secondary text-foreground transition-colors group-hover:bg-live group-hover:text-white">
@@ -92,9 +90,10 @@ export function ShowCard({ show }: { show: Show }) {
 
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="space-y-1">
-          <h3 className="font-semibold leading-tight text-balance transition-colors group-hover:text-live">
-            {show.title}
-          </h3>
+          <MarqueeTitle
+            text={show.title}
+            className="font-semibold leading-tight transition-colors group-hover:text-live"
+          />
           <p className="line-clamp-2 text-sm text-muted-foreground leading-relaxed">{show.tagline}</p>
         </div>
         <div className="mt-auto flex items-center justify-between">

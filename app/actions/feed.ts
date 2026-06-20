@@ -215,6 +215,20 @@ export async function createPost(input: { text: string; image?: string | null; v
   revalidatePath("/feed")
 }
 
+/** Deletes one of the signed-in user's own posts (and its comments). */
+export async function deletePost(postId: number) {
+  const user = await requireUser()
+  const [row] = await db.select({ userId: feedPost.userId }).from(feedPost).where(eq(feedPost.id, postId))
+  if (!row) return
+  if (row.userId !== user.id) throw new Error("You can only delete your own posts.")
+
+  await db.delete(feedComment).where(eq(feedComment.postId, postId))
+  await db.delete(feedPost).where(and(eq(feedPost.id, postId), eq(feedPost.userId, user.id)))
+
+  revalidatePath("/feed")
+  revalidatePath(`/u/${user.id}`)
+}
+
 export async function addPostComment(input: { postId: number; text: string }) {
   const user = await requireUser()
   const text = input.text.trim()

@@ -6,7 +6,7 @@ import type { Show } from "@/lib/data"
 import type { FeedPostView } from "@/app/actions/feed"
 import type { CurrentUser } from "@/lib/session"
 import { EpisodeCatalog } from "@/components/episode-catalog"
-import { PostCard } from "@/components/mind-feed"
+import { ProfilePostsGrid } from "@/components/profile/profile-posts-grid"
 import { cn } from "@/lib/utils"
 
 export function ProfileTabs({
@@ -76,13 +76,7 @@ export function ProfileTabs({
           }
         />
       ) : (
-        <ul className="mx-auto max-w-2xl space-y-4">
-          {posts.map((post) => (
-            <li key={post.id}>
-              <PostCard post={post} currentUser={currentUser} />
-            </li>
-          ))}
-        </ul>
+        <ProfilePostsGrid posts={posts} currentUser={currentUser} />
       )}
     </section>
   )

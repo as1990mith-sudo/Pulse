@@ -7,6 +7,9 @@ import { authClient } from "@/lib/auth-client"
 import { cn } from "@/lib/utils"
 import { ImageCropper } from "@/components/image-cropper"
 import { uploadMedia } from "@/lib/upload-media"
+import { StatusViewer } from "@/components/status-bar"
+import type { StatusGroup } from "@/app/actions/status"
+import type { CurrentUser } from "@/lib/session"
 
 export function ProfileAvatar({
   initials,
@@ -14,14 +17,21 @@ export function ProfileAvatar({
   image,
   name,
   editable,
+  statusGroup = null,
+  currentUser = null,
 }: {
   initials: string
   color: string
   image: string | null
   name: string
   editable: boolean
+  statusGroup?: StatusGroup | null
+  currentUser?: CurrentUser | null
 }) {
   const router = useRouter()
+  const [viewerOpen, setViewerOpen] = useState(false)
+  const hasStatus = Boolean(statusGroup && statusGroup.items.length > 0)
+  const ringActive = hasStatus && !statusGroup!.allViewed
   const inputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -54,19 +64,48 @@ export function ProfileAvatar({
   return (
     <div className="flex flex-col items-center gap-2">
       <div className="relative">
-        <span
-          className={cn(
-            "flex size-16 items-center justify-center overflow-hidden rounded-full text-xl font-semibold sm:size-20 sm:text-2xl",
-            color,
-          )}
-        >
-          {preview ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={preview || "/placeholder.svg"} alt={`${name}'s profile picture`} className="size-full object-cover" />
-          ) : (
-            initials
-          )}
-        </span>
+        {(() => {
+          const inner = (
+            <span
+              className={cn(
+                "flex size-16 items-center justify-center overflow-hidden rounded-full text-xl font-semibold sm:size-20 sm:text-2xl",
+                color,
+              )}
+            >
+              {preview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={preview || "/placeholder.svg"}
+                  alt={`${name}'s profile picture`}
+                  className="size-full object-cover"
+                />
+              ) : (
+                initials
+              )}
+            </span>
+          )
+
+          if (!hasStatus) return inner
+
+          // Tappable story ring (Instagram/WhatsApp style) when the user has a live status.
+          return (
+            <button
+              type="button"
+              onClick={() => setViewerOpen(true)}
+              aria-label={`View ${name}'s status`}
+              className={cn(
+                "flex items-center justify-center rounded-full p-[3px] transition-transform hover:scale-[1.03]",
+                ringActive
+                  ? "bg-gradient-to-tr from-amber-500 via-rose-500 to-fuchsia-600"
+                  : "bg-border",
+              )}
+            >
+              <span className="flex items-center justify-center rounded-full border-2 border-background bg-card p-[2px]">
+                {inner}
+              </span>
+            </button>
+          )
+        })()}
 
         {editable && (
           <button
@@ -104,6 +143,19 @@ export function ProfileAvatar({
           title="Adjust profile picture"
           onCancel={() => setCropSrc(null)}
           onCropped={handleCropped}
+        />
+      )}
+
+      {viewerOpen && statusGroup && (
+        <StatusViewer
+          groups={[statusGroup]}
+          startIndex={0}
+          currentUser={currentUser}
+          onClose={() => setViewerOpen(false)}
+          onDelete={() => {
+            setViewerOpen(false)
+            router.refresh()
+          }}
         />
       )}
     </div>

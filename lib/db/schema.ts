@@ -85,6 +85,7 @@ export const feedComment = pgTable("feed_comment", {
   authorName: text("authorName").notNull(),
   authorHandle: text("authorHandle").notNull(),
   text: text("text").notNull(),
+  likes: integer("likes").notNull().default(0),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
@@ -136,6 +137,19 @@ export const episode = pgTable("episode", {
   // added by an admin from the content dashboard.
   hostUserId: text("hostUserId"),
   hostHandle: text("hostHandle"),
+  likes: integer("likes").notNull().default(0),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// Comments left on a published, on-demand episode.
+export const episodeComment = pgTable("episode_comment", {
+  id: serial("id").primaryKey(),
+  episodeId: integer("episodeId").notNull(),
+  userId: text("userId").notNull(),
+  authorName: text("authorName").notNull(),
+  authorHandle: text("authorHandle").notNull(),
+  text: text("text").notNull(),
+  likes: integer("likes").notNull().default(0),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 

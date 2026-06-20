@@ -540,7 +540,7 @@ function TextStatusComposer({
   )
 }
 
-function StatusViewer({
+export function StatusViewer({
   groups,
   startIndex,
   currentUser,

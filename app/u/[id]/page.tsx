@@ -2,6 +2,7 @@ import { notFound } from "next/navigation"
 import { getProfile } from "@/lib/profile"
 import { getEpisodesByUser } from "@/lib/content"
 import { getPostsByUser } from "@/app/actions/feed"
+import { getActiveStatusForUser } from "@/app/actions/status"
 import { getCurrentUser } from "@/lib/session"
 import { SiteHeader } from "@/components/site-header"
 import { ProfileFollowButton } from "@/components/profile/profile-follow-button"
@@ -9,16 +10,18 @@ import { ProfileMessageButton } from "@/components/profile/profile-message-butto
 import { ProfileFollowStats } from "@/components/profile/profile-follow-stats"
 import { ProfileTabs } from "@/components/profile/profile-tabs"
 import { ProfileAvatar } from "@/components/profile/profile-avatar"
+import { ProfileName } from "@/components/profile/profile-name"
 
 export default async function ProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const profile = await getProfile(id)
   if (!profile) notFound()
 
-  const [episodes, posts, currentUser] = await Promise.all([
+  const [episodes, posts, currentUser, statusGroup] = await Promise.all([
     getEpisodesByUser(id),
     getPostsByUser(id),
     getCurrentUser(),
+    getActiveStatusForUser(id),
   ])
 
   return (
@@ -33,10 +36,11 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
               image={profile.image}
               name={profile.name}
               editable={profile.isSelf}
+              statusGroup={statusGroup}
+              currentUser={currentUser}
             />
             <div className="space-y-1">
-              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{profile.name}</h1>
-              <p className="text-muted-foreground">{profile.handle}</p>
+              <ProfileName name={profile.name} handle={profile.handle} editable={profile.isSelf} />
               <ProfileFollowStats
                 userId={profile.id}
                 followers={profile.followers}

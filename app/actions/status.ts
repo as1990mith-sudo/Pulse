@@ -159,6 +159,71 @@ export async function getStatusFeed(): Promise<StatusGroup[]> {
   return list.sort((a, b) => rank(a) - rank(b))
 }
 
+/**
+ * Returns a single user's active status as a one-element group (or null when
+ * they have no live status). Powers the story ring around a profile avatar.
+ */
+export async function getActiveStatusForUser(userId: string): Promise<StatusGroup | null> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  const currentUserId = session?.user?.id ?? null
+
+  const now = new Date()
+  const rows = await db
+    .select()
+    .from(statusUpdate)
+    .where(and(eq(statusUpdate.userId, userId), gt(statusUpdate.expiresAt, now)))
+    .orderBy(desc(statusUpdate.createdAt))
+
+  if (rows.length === 0) return null
+
+  const [imageRow] = await db
+    .select({ image: userTable.image, name: userTable.name })
+    .from(userTable)
+    .where(eq(userTable.id, userId))
+    .limit(1)
+
+  const seen = new Set<number>()
+  if (currentUserId) {
+    const viewRows = await db
+      .select({ statusId: statusView.statusId })
+      .from(statusView)
+      .where(
+        and(
+          eq(statusView.viewerId, currentUserId),
+          inArray(
+            statusView.statusId,
+            rows.map((r) => r.id),
+          ),
+        ),
+      )
+    for (const v of viewRows) seen.add(v.statusId)
+  }
+
+  const items: StatusItem[] = [...rows]
+    .reverse()
+    .map((r) => ({
+      id: r.id,
+      mediaUrl: r.mediaUrl,
+      mediaType: r.mediaType === "video" ? "video" : r.mediaType === "text" ? "text" : "image",
+      caption: r.caption,
+      backgroundColor: r.backgroundColor,
+      postedAt: timeAgo(r.createdAt),
+      viewed: seen.has(r.id),
+    }))
+
+  return {
+    userId,
+    authorName: imageRow?.name ?? rows[0].authorName,
+    initials: getInitials(imageRow?.name ?? rows[0].authorName),
+    color: getAvatarColor(userId),
+    authorImage: imageRow?.image ?? null,
+    isSelf: currentUserId === userId,
+    isConnection: false,
+    allViewed: items.every((i) => i.viewed),
+    items,
+  }
+}
+
 export async function createStatus(input: {
   mediaUrl?: string | null
   mediaType: "image" | "video" | "text"

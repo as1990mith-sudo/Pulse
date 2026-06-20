@@ -41,6 +41,26 @@ export function EpisodePlayer({ show }: { show: Show }) {
     setCurrent(t)
   }
 
+  // Recorded sessions (webm/streamed blobs) often report duration as Infinity
+  // until the browser scans to the end. Force a seek to the end to make the
+  // real length available, then restore the position.
+  function onMeta(e: React.SyntheticEvent<HTMLAudioElement>) {
+    const el = e.currentTarget
+    if (el.duration === Infinity || Number.isNaN(el.duration)) {
+      const onUpdate = () => {
+        if (el.duration !== Infinity && !Number.isNaN(el.duration)) {
+          setDuration(el.duration)
+          el.currentTime = 0
+          el.removeEventListener("timeupdate", onUpdate)
+        }
+      }
+      el.addEventListener("timeupdate", onUpdate)
+      el.currentTime = 1e7
+    } else {
+      setDuration(el.duration)
+    }
+  }
+
   return (
     <div className="overflow-hidden rounded-2xl border border-border/60 bg-card">
       <div className="relative flex flex-col items-center gap-6 px-6 py-8 sm:px-8">
@@ -105,7 +125,11 @@ export function EpisodePlayer({ show }: { show: Show }) {
               onPlay={() => setPlaying(true)}
               onPause={() => setPlaying(false)}
               onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
-              onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+              onLoadedMetadata={onMeta}
+              onDurationChange={(e) => {
+                const d = e.currentTarget.duration
+                if (d !== Infinity && !Number.isNaN(d)) setDuration(d)
+              }}
               onEnded={() => setPlaying(false)}
             />
           </div>
