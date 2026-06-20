@@ -6,7 +6,8 @@ import useSWR from "swr"
 import { Send } from "lucide-react"
 import type { CurrentUser } from "@/lib/session"
 import { getAvatarColor, getInitials } from "@/lib/identity"
-import { getLiveChat, getCallState, sendLiveChat, type LiveChatMessageView } from "@/app/actions/live"
+import { getLiveChat, getCallState, sendLiveChat, sendLiveReaction, type LiveChatMessageView } from "@/app/actions/live"
+import { QUICK_REACTIONS } from "@/components/live-reactions"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -148,6 +149,20 @@ export function LiveChat({
 
       {canSend ? (
         <form onSubmit={send} className="relative space-y-3 border-t border-border/60 bg-card/80 p-3 backdrop-blur">
+          {/* Quick reactions — broadcast an emoji that floats over the stage. */}
+          <div className="flex items-center gap-1.5">
+            {QUICK_REACTIONS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => roomName && void sendLiveReaction({ roomName, emoji, kind: "reaction" }).catch(() => {})}
+                className="flex size-8 items-center justify-center rounded-full bg-secondary text-base transition-transform hover:scale-110 active:scale-95"
+                aria-label={`Send ${emoji} reaction`}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
           <Textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}

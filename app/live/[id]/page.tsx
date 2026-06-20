@@ -43,7 +43,10 @@ export default async function LiveStreamPage({ params }: { params: Promise<{ id:
           </div>
 
           {/* Chat sidebar — fills the remaining space on mobile, sticky on desktop */}
-          <aside className="flex min-h-0 flex-1 flex-col lg:block lg:flex-none lg:sticky lg:top-20 lg:h-[calc(100vh-6rem)]">
+          <aside
+            id="live-chat"
+            className="flex min-h-0 flex-1 scroll-mt-20 flex-col lg:block lg:flex-none lg:sticky lg:top-20 lg:h-[calc(100vh-6rem)]"
+          >
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border/60 bg-card lg:h-full lg:flex-none">
               <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-4 py-3">
                 <MessageSquare className="size-4 text-primary" />

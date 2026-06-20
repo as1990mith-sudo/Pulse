@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
+  ConnectionQuality,
   LocalAudioTrack,
   Room,
   RoomEvent,
@@ -12,11 +13,29 @@ import {
   type RemoteParticipant,
 } from "livekit-client"
 
+// Normalised connection quality surfaced to the UI for the signal dots.
+export type ConnQuality = "excellent" | "good" | "poor" | "unknown"
+
+function normalizeQuality(q: ConnectionQuality | undefined): ConnQuality {
+  switch (q) {
+    case ConnectionQuality.Excellent:
+      return "excellent"
+    case ConnectionQuality.Good:
+      return "good"
+    case ConnectionQuality.Poor:
+      return "poor"
+    default:
+      return "unknown"
+  }
+}
+
 export type LiveParticipant = {
   identity: string
   name: string
   isLocal: boolean
   isSpeaking: boolean
+  // Real-time connection quality from LiveKit (drives the signal indicator).
+  quality: ConnQuality
 }
 
 export type LiveAudioState = {
@@ -39,6 +58,8 @@ export type LiveAudioState = {
   // Live background-music playback position + length (seconds) for the scrubber.
   musicPosition: number
   musicDuration: number
+  // Local participant's real-time connection quality.
+  connectionQuality: ConnQuality
 }
 
 /** Pick the best MediaRecorder audio container the browser supports. */
@@ -53,6 +74,98 @@ function pickAudioMime(): { mime: string; ext: string } {
     if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(c.mime)) return c
   }
   return { mime: "", ext: "webm" }
+}
+
+export type SoundEffectName = "applause" | "drumroll" | "chime" | "airhorn" | "ding" | "riser"
+
+/** All available sound effects with the emoji + label shown in the soundboard. */
+export const SOUND_EFFECTS: { name: SoundEffectName; label: string; emoji: string }[] = [
+  { name: "applause", label: "Applause", emoji: "👏" },
+  { name: "drumroll", label: "Drumroll", emoji: "🥁" },
+  { name: "chime", label: "Chime", emoji: "🔔" },
+  { name: "ding", label: "Ding", emoji: "✨" },
+  { name: "airhorn", label: "Air horn", emoji: "📢" },
+  { name: "riser", label: "Riser", emoji: "🚀" },
+]
+
+/** Builds a short white-noise buffer used for applause / drumroll textures. */
+function noiseBuffer(ctx: AudioContext, seconds: number): AudioBuffer {
+  const len = Math.floor(ctx.sampleRate * seconds)
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate)
+  const data = buf.getChannelData(0)
+  for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1
+  return buf
+}
+
+/** Synthesizes a sound effect entirely with the Web Audio API (no assets). */
+function synthesizeEffect(ctx: AudioContext, out: GainNode, name: SoundEffectName) {
+  const now = ctx.currentTime
+  const tone = (freq: number, start: number, dur: number, type: OscillatorType = "sine", peak = 0.5) => {
+    const osc = ctx.createOscillator()
+    const g = ctx.createGain()
+    osc.type = type
+    osc.frequency.setValueAtTime(freq, now + start)
+    g.gain.setValueAtTime(0.0001, now + start)
+    g.gain.exponentialRampToValueAtTime(peak, now + start + 0.02)
+    g.gain.exponentialRampToValueAtTime(0.0001, now + start + dur)
+    osc.connect(g).connect(out)
+    osc.start(now + start)
+    osc.stop(now + start + dur + 0.05)
+  }
+  const noise = (start: number, dur: number, freq: number, q: number, peak = 0.5) => {
+    const src = ctx.createBufferSource()
+    src.buffer = noiseBuffer(ctx, dur + 0.1)
+    const filter = ctx.createBiquadFilter()
+    filter.type = "bandpass"
+    filter.frequency.value = freq
+    filter.Q.value = q
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0.0001, now + start)
+    g.gain.exponentialRampToValueAtTime(peak, now + start + 0.03)
+    g.gain.exponentialRampToValueAtTime(0.0001, now + start + dur)
+    src.connect(filter).connect(g).connect(out)
+    src.start(now + start)
+    src.stop(now + start + dur + 0.05)
+  }
+
+  switch (name) {
+    case "applause":
+      // Layered noise bursts to imitate a crowd clapping.
+      for (let i = 0; i < 26; i++) noise(Math.random() * 1.4, 0.06, 1800 + Math.random() * 1400, 1, 0.25)
+      noise(0, 1.6, 1200, 0.6, 0.18)
+      break
+    case "drumroll":
+      for (let i = 0; i < 28; i++) noise(i * 0.05, 0.05, 220, 6, 0.4)
+      noise(1.45, 0.4, 180, 3, 0.6)
+      break
+    case "chime":
+      ;[523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, i * 0.12, 0.9, "sine", 0.4))
+      break
+    case "ding":
+      tone(1318.5, 0, 0.7, "sine", 0.5)
+      tone(1975.5, 0, 0.6, "sine", 0.2)
+      break
+    case "airhorn":
+      ;[0, 0.28, 0.56].forEach((s) => {
+        tone(233, s, 0.22, "sawtooth", 0.35)
+        tone(466, s, 0.22, "square", 0.18)
+      })
+      break
+    case "riser": {
+      const osc = ctx.createOscillator()
+      const g = ctx.createGain()
+      osc.type = "sawtooth"
+      osc.frequency.setValueAtTime(120, now)
+      osc.frequency.exponentialRampToValueAtTime(1600, now + 1.2)
+      g.gain.setValueAtTime(0.0001, now)
+      g.gain.exponentialRampToValueAtTime(0.35, now + 1.0)
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 1.4)
+      osc.connect(g).connect(out)
+      osc.start(now)
+      osc.stop(now + 1.45)
+      break
+    }
+  }
 }
 
 /**
@@ -80,6 +193,11 @@ export function useLiveAudio() {
   const recordCtxRef = useRef<AudioContext | null>(null)
   const recordDestRef = useRef<MediaStreamAudioDestinationNode | null>(null)
   const recordMimeRef = useRef<string>("")
+  // Sound-effects bus (host side): a single published track through which
+  // synthesized chimes are mixed into the broadcast (and recording).
+  const fxCtxRef = useRef<AudioContext | null>(null)
+  const fxGainRef = useRef<GainNode | null>(null)
+  const fxTrackRef = useRef<LocalAudioTrack | null>(null)
   const [state, setState] = useState<LiveAudioState>({
     connected: false,
     connecting: false,
@@ -92,6 +210,7 @@ export function useLiveAudio() {
     activeSpeakers: [],
     musicPosition: 0,
     musicDuration: 0,
+    connectionQuality: "unknown",
   })
 
   // Roster of participants who can publish (host + guests), surfaced to the UI
@@ -114,7 +233,13 @@ export function useLiveAudio() {
     const consider = (p: Participant, isLocal: boolean) => {
       const canPub = p.permissions?.canPublish ?? false
       if (canPub) {
-        out.push({ identity: p.identity, name: p.name || "Guest", isLocal, isSpeaking: p.isSpeaking })
+        out.push({
+          identity: p.identity,
+          name: p.name || "Guest",
+          isLocal,
+          isSpeaking: p.isSpeaking,
+          quality: normalizeQuality(p.connectionQuality),
+        })
       }
     }
     consider(room.localParticipant, true)
@@ -177,6 +302,14 @@ export function useLiveAudio() {
           })
           .on(RoomEvent.TrackPublished, () => refreshSpeakers(room))
           .on(RoomEvent.TrackUnpublished, () => refreshSpeakers(room))
+          .on(RoomEvent.ConnectionQualityChanged, (quality, participant) => {
+            // Surface the local participant's quality, and refresh the roster so
+            // each speaker tile shows its own up-to-date signal indicator.
+            if (participant.identity === room.localParticipant.identity) {
+              update({ connectionQuality: normalizeQuality(quality) })
+            }
+            refreshSpeakers(room)
+          })
           .on(RoomEvent.Disconnected, () => {
             update({ connected: false, micEnabled: false })
           })
@@ -360,6 +493,52 @@ export function useLiveAudio() {
   }, [])
 
   /**
+   * Plays a short synthesized sound effect (no external assets) and mixes it
+   * into the broadcast so every listener hears it — just like background music.
+   * Lazily publishes a dedicated "sound-effects" track on first use.
+   */
+  const playEffect = useCallback(async (name: SoundEffectName) => {
+    const room = roomRef.current
+    if (!room) return
+
+    const ctx = fxCtxRef.current ?? new AudioContext()
+    fxCtxRef.current = ctx
+    if (ctx.state === "suspended") await ctx.resume()
+
+    // Master FX gain → host speakers (monitor) + a published track for listeners.
+    let gain = fxGainRef.current
+    if (!gain) {
+      gain = ctx.createGain()
+      gain.gain.value = 0.8
+      gain.connect(ctx.destination)
+      fxGainRef.current = gain
+
+      const dest = ctx.createMediaStreamDestination()
+      gain.connect(dest)
+      const [mediaTrack] = dest.stream.getAudioTracks()
+      const localTrack = new LocalAudioTrack(mediaTrack)
+      try {
+        await room.localParticipant.publishTrack(localTrack, { name: "sound-effects" })
+        fxTrackRef.current = localTrack
+        // Fold effects into any in-progress recording too.
+        const recCtx = recordCtxRef.current
+        const recDest = recordDestRef.current
+        if (recCtx && recDest) {
+          try {
+            recCtx.createMediaStreamSource(dest.stream).connect(recDest)
+          } catch {
+            // best-effort
+          }
+        }
+      } catch {
+        // If publishing fails the host still hears the monitor output.
+      }
+    }
+
+    synthesizeEffect(ctx, gain, name)
+  }, [])
+
+  /**
    * Starts recording the broadcast (host mic + any background music) into a
    * single audio file using a WebAudio mixing bus and MediaRecorder. Safe to
    * call right after going live; music added later is wired in automatically.
@@ -438,6 +617,13 @@ export function useLiveAudio() {
     }
     if (musicElRef.current) musicElRef.current.pause()
     musicStreamRef.current = null
+    if (fxTrackRef.current) {
+      fxTrackRef.current.stop()
+      fxTrackRef.current = null
+    }
+    await fxCtxRef.current?.close().catch(() => {})
+    fxCtxRef.current = null
+    fxGainRef.current = null
     await room.disconnect()
     audioElsRef.current.forEach((el) => el.remove())
     audioElsRef.current.clear()
@@ -469,6 +655,7 @@ export function useLiveAudio() {
     setMusicPlaying,
     seekMusic,
     stopMusic,
+    playEffect,
     startRecording,
     stopRecording,
   }
