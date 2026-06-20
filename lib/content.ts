@@ -1,7 +1,8 @@
 import { desc, eq } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { devotional, episode } from "@/lib/db/schema"
-import type { Devotional, Show, Host } from "@/lib/data"
+import { devotional, episode, user as userTable } from "@/lib/db/schema"
+import type { Devotional, Show, Host, PodcastHost } from "@/lib/data"
+import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 
 function relativeTime(date: Date): string {
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
@@ -87,6 +88,52 @@ export async function getLatestDevotional(): Promise<Devotional | null> {
 export async function getCatalogEpisodes(): Promise<Show[]> {
   const rows = await db.select().from(episode).orderBy(desc(episode.createdAt))
   return rows.map(episodeToShow)
+}
+
+/**
+ * Podcast hosts for the library: every real user account that has published at
+ * least one episode, aggregated with their catalogue summary. Episodes added by
+ * the admin without a linked user account (hostUserId is null) are excluded so
+ * the library only lists genuine host accounts.
+ */
+export async function getPodcastHosts(): Promise<PodcastHost[]> {
+  const rows = await db
+    .select({
+      hostUserId: episode.hostUserId,
+      title: episode.title,
+      category: episode.category,
+      createdAt: episode.createdAt,
+      userName: userTable.name,
+      userImage: userTable.image,
+    })
+    .from(episode)
+    .innerJoin(userTable, eq(episode.hostUserId, userTable.id))
+    .orderBy(desc(episode.createdAt))
+
+  const byHost = new Map<string, PodcastHost>()
+  for (const row of rows) {
+    const id = row.hostUserId as string
+    const existing = byHost.get(id)
+    if (existing) {
+      existing.episodeCount += 1
+      if (!existing.categories.includes(row.category)) existing.categories.push(row.category)
+    } else {
+      // Rows are newest-first, so the first one seen is the latest episode.
+      byHost.set(id, {
+        id,
+        name: row.userName,
+        handle: getHandle(row.userName),
+        initials: getInitials(row.userName),
+        color: getAvatarColor(id),
+        image: row.userImage,
+        episodeCount: 1,
+        categories: [row.category],
+        latestTitle: row.title,
+        latestAt: relativeTime(row.createdAt),
+      })
+    }
+  }
+  return Array.from(byHost.values())
 }
 
 /** Resolves a published episode by its slug. */
