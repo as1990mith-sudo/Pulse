@@ -313,7 +313,7 @@ export async function getChatroomDetail(chatroomId: number): Promise<ChatroomDet
         .orderBy(asc(chatroomJoinRequest.createdAt))
     : []
 
-  const imageMap = await resolveSenderImages(messages.map((m) => m.userId))
+  const imageMap = await resolveSenderImages([user.id, ...messages.map((m) => m.userId)])
 
   return {
     id: room.id,
@@ -327,6 +327,7 @@ export async function getChatroomDetail(chatroomId: number): Promise<ChatroomDet
     currentUserId: user.id,
     currentUserInitials: getInitials(user.name),
     currentUserColor: getAvatarColor(user.id),
+    currentUserImage: imageMap.get(user.id) ?? null,
     members: members.map((m) => ({
       userId: m.userId,
       userName: m.userName,

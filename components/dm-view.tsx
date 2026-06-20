@@ -248,7 +248,14 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
             </p>
           )}
           {messages.map((m) => (
-            <DmBubble key={m.id} message={m} color={m.isSelf ? detail.currentUserColor : detail.color} initials={m.isSelf ? detail.currentUserInitials : detail.initials} />
+            <DmBubble
+              key={m.id}
+              message={m}
+              color={m.isSelf ? detail.currentUserColor : detail.color}
+              initials={m.isSelf ? detail.currentUserInitials : detail.initials}
+              image={m.isSelf ? detail.currentUserImage : detail.image}
+              name={m.isSelf ? "You" : detail.otherUserName}
+            />
           ))}
           <div ref={scrollEndRef} />
         </div>
@@ -368,12 +375,25 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
   )
 }
 
-function DmBubble({ message: m, color, initials }: { message: DmMessageView; color: string; initials: string }) {
+function DmBubble({
+  message: m,
+  color,
+  initials,
+  image,
+  name,
+}: {
+  message: DmMessageView
+  color: string
+  initials: string
+  image: string | null
+  name: string
+}) {
   const [lightbox, setLightbox] = useState(false)
 
   return (
     <div className={cn("flex gap-2.5", m.isSelf && "flex-row-reverse")}>
       <Avatar className="size-7 shrink-0">
+        {image && <AvatarImage src={image || "/placeholder.svg"} alt={name} />}
         <AvatarFallback className={cn("text-[10px]", color)}>{initials}</AvatarFallback>
       </Avatar>
       <div className={cn("max-w-[75%] space-y-0.5", m.isSelf && "items-end text-right")}>
