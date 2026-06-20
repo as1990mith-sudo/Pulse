@@ -184,8 +184,10 @@ export const chatroomJoinRequest = pgTable("chatroom_join_request", {
 
 // --- Announcements ---------------------------------------------------------
 // Paid promotional event banners shown at the top of the feed (tweet) tab.
-// A creator submits a flyer + event details and pays to publish; once active
-// it is visible to everyone and any user can add the event to their calendar.
+// A creator pays ($5 per 12h, up to 72h) and submits a flyer + event details.
+// Requests are auto-approved first-come-first-served per date; if the slot is
+// already taken they are declined. Approved ads publish for the paid duration
+// then auto-expire. Any user can add an active event to their calendar.
 export const announcement = pgTable("announcement", {
   id: serial("id").primaryKey(),
   userId: text("userId").notNull(),
@@ -196,7 +198,11 @@ export const announcement = pgTable("announcement", {
   location: text("location"),
   eventDate: text("eventDate").notNull(), // YYYY-MM-DD
   eventTime: text("eventTime"), // HH:MM (24h), optional
-  status: text("status").notNull().default("active"), // "pending" | "active"
+  durationHours: integer("durationHours").notNull().default(12), // 12..72
+  status: text("status").notNull().default("pending"), // "pending" | "approved" | "declined"
+  declineReason: text("declineReason"),
+  publishedAt: timestamp("publishedAt"),
+  expiresAt: timestamp("expiresAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 

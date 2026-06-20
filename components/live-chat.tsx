@@ -24,7 +24,7 @@ export function LiveChat({
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>(seedChat)
   const [draft, setDraft] = useState("")
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLUListElement>(null)
 
   // Simulate incoming chat messages
   useEffect(() => {
