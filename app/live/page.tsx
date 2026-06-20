@@ -1,12 +1,13 @@
 import Link from "next/link"
 import { ArrowRight, Headphones, Library, Mic, Radio } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
-import { FeaturedHero } from "@/components/featured-hero"
 import { ShowCard } from "@/components/show-card"
+import { LiveStreamCard } from "@/components/live-stream-card"
 import { EpisodeCatalog } from "@/components/episode-catalog"
 import { LiveBadge } from "@/components/live-badge"
-import { liveShows, upcomingShows } from "@/lib/data"
+import { upcomingShows } from "@/lib/data"
 import { getCatalogEpisodes } from "@/lib/content"
+import { getLiveStreams } from "@/app/actions/live"
 
 function SectionHeading({
   eyebrow,
@@ -32,40 +33,39 @@ function SectionHeading({
 }
 
 export default async function LivePage() {
-  const featured = liveShows[0]
-  const liveCount = liveShows.length
-  const episodes = await getCatalogEpisodes()
+  const [streams, episodes] = await Promise.all([getLiveStreams(), getCatalogEpisodes()])
+  const liveCount = streams.length
 
   return (
     <div className="min-h-screen">
       <SiteHeader />
       <main>
-        {featured && <FeaturedHero show={featured} />}
-
+        {/* Live now */}
         <div className="mx-auto w-full max-w-6xl space-y-16 px-4 py-16 sm:px-6">
-          {/* Live now */}
           <section className="space-y-6">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <SectionHeading
                 eyebrow="On air"
                 icon={Radio}
                 title="Live right now"
-                description="Jump into a stream, drop into the chat, or request to call in."
+                description="Jump into a stream and listen in real time, or open the studio to start your own."
               />
               <span className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-card px-3 py-1.5 text-sm font-medium">
                 <LiveBadge />
                 {liveCount} {liveCount === 1 ? "show" : "shows"} streaming
               </span>
             </div>
-            {liveShows.length > 0 ? (
+            {streams.length > 0 ? (
               <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
-                {liveShows.map((show) => (
-                  <ShowCard key={show.id} show={show} />
+                {streams.map((stream) => (
+                  <LiveStreamCard key={stream.id} stream={stream} />
                 ))}
               </div>
             ) : (
               <div className="rounded-2xl border border-dashed border-border/60 p-10 text-center">
-                <p className="text-sm text-muted-foreground">No shows are live at the moment. Check the schedule below.</p>
+                <p className="text-sm text-muted-foreground">
+                  No one is live right now. Be the first — open the studio and go on air.
+                </p>
               </div>
             )}
           </section>
@@ -93,7 +93,7 @@ export default async function LivePage() {
               eyebrow="On demand"
               icon={Library}
               title="Episode library"
-              description="Every recorded live show, ready when you are. Filter by category or switch to the YouTube-style view."
+              description="Every recorded live show, ready when you are. Filter by category to find your next listen."
             />
             <EpisodeCatalog episodes={episodes} />
           </section>
@@ -124,7 +124,7 @@ export default async function LivePage() {
       <footer className="border-t border-border/60">
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-2 px-4 py-8 text-sm text-muted-foreground sm:flex-row sm:px-6">
           <p>Frequency — live podcast streaming.</p>
-          <p>Built as a demo. Streaming is simulated.</p>
+          <p>Real-time audio powered by WebRTC.</p>
         </div>
       </footer>
     </div>

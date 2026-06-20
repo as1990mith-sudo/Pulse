@@ -7,7 +7,6 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { episode } from "@/lib/db/schema"
 import { getHandle } from "@/lib/identity"
-import { notifyFollowers } from "@/app/actions/notifications"
 
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -24,21 +23,6 @@ function slugify(input: string): string {
 }
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
-
-/**
- * Called when a host starts a stream. Notifies all of the host's followers so
- * they can jump in and watch.
- */
-export async function goLive(input: { title: string }): Promise<void> {
-  const user = await requireUser()
-  await notifyFollowers({
-    actorId: user.id,
-    actorName: user.name,
-    type: "live",
-    message: input.title?.trim() || "started a live stream",
-    link: "/live",
-  })
-}
 
 /**
  * Publishes a finished session to the host's catalogue. The episode is

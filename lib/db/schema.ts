@@ -221,6 +221,36 @@ export const statusUpdate = pgTable("status_update", {
   expiresAt: timestamp("expiresAt").notNull(),
 })
 
+// --- Live streams ----------------------------------------------------------
+// A real, in-progress audio broadcast. A row is created when a host opens the
+// studio and goes live (status "live"), and is marked "ended" when they stop.
+// The roomName is the LiveKit room used for the WebRTC audio session.
+export const liveStream = pgTable("live_stream", {
+  id: serial("id").primaryKey(),
+  roomName: text("roomName").notNull().unique(),
+  hostId: text("hostId").notNull(),
+  hostName: text("hostName").notNull(),
+  hostHandle: text("hostHandle").notNull(),
+  title: text("title").notNull(),
+  category: text("category"),
+  cover: text("cover"),
+  status: text("status").notNull().default("live"), // "live" | "ended"
+  startedAt: timestamp("startedAt").notNull().defaultNow(),
+  endedAt: timestamp("endedAt"),
+})
+
+// Real-time chat messages for a live stream room. Listeners poll for new
+// messages while a broadcast is running.
+export const liveChatMessage = pgTable("live_chat_message", {
+  id: serial("id").primaryKey(),
+  roomName: text("roomName").notNull(),
+  userId: text("userId").notNull(),
+  userName: text("userName").notNull(),
+  isHost: boolean("isHost").notNull().default(false),
+  body: text("body").notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
 // Per-user notifications. A row is created for each follower when someone they
 // follow posts a tweet or starts a live stream.
 export const notification = pgTable("notification", {
