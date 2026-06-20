@@ -81,9 +81,9 @@ function MyRooms({ rooms }: { rooms: ChatroomSummary[] }) {
               </AvatarFallback>
             </Avatar>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="truncate text-lg font-semibold tracking-tight">{room.name}</p>
-                {room.isOwner && <Badge variant="secondary">Admin</Badge>}
+              <div className="flex min-w-0 items-center gap-2">
+                <p className="min-w-0 truncate text-lg font-semibold tracking-tight">{room.name}</p>
+                {room.isOwner && <Badge variant="secondary" className="shrink-0">Admin</Badge>}
               </div>
               {room.description && (
                 <p className="truncate text-sm leading-relaxed text-muted-foreground">{room.description}</p>
