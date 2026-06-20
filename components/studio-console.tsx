@@ -6,7 +6,8 @@ import useSWR from "swr"
 import {
   Check,
   CheckCircle2,
-  Copy,
+  Circle,
+  Disc3,
   ImageIcon,
   Loader2,
   Mic,
@@ -20,8 +21,10 @@ import {
   Share2,
   SkipBack,
   SkipForward,
+  Sparkles,
   Trash2,
   Upload,
+  UserPlus,
   Users,
   X,
 } from "lucide-react"
@@ -37,10 +40,12 @@ import {
   type CallRequestView,
   type ChatBgEffect,
 } from "@/app/actions/live"
-import { useLiveAudio } from "@/lib/use-live-audio"
+import { useLiveAudio, SOUND_EFFECTS, type SoundEffectName } from "@/lib/use-live-audio"
 import { uploadMedia } from "@/lib/upload-media"
 import { LiveChat } from "@/components/live-chat"
 import { LiveStage } from "@/components/live-stage"
+import { LiveAudience } from "@/components/live-audience"
+import { ReactionLayer, ReactionPicker } from "@/components/live-reactions"
 import { CoverUpload } from "@/components/admin/cover-upload"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -76,6 +81,7 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
     setMusicPlaying,
     seekMusic,
     stopMusic,
+    playEffect,
     startRecording,
     stopRecording,
   } = useLiveAudio()
@@ -83,13 +89,17 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
   const micOn = state.micEnabled
   const [elapsed, setElapsed] = useState(0)
   const [title, setTitle] = useState(`${currentUser.name} — live session`)
+  const [cover, setCover] = useState<string | null>(null)
   const [endedSession, setEndedSession] = useState<EndedSession>(null)
   const [roomName, setRoomName] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // Which slide-up panel is open (music / listeners / background). Only one at a
-  // time keeps the studio compact and free of scroll.
-  const [panel, setPanel] = useState<null | "music" | "people" | "background">(null)
+  const [recording, setRecording] = useState(false)
+  // The most recent captured recording blob, kept when the host stops recording
+  // mid-session so it can still be published when they go off air.
+  const recordedBlobRef = useRef<Blob | null>(null)
+  // Which slide-up panel is open. Only one at a time keeps the studio compact.
+  const [panel, setPanel] = useState<null | "music" | "people" | "background" | "soundboard">(null)
 
   const viewers = Math.max(0, state.listeners - 1 - speakers.filter((s) => !s.isLocal).length)
 
@@ -100,6 +110,7 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
     { refreshInterval: 2500 },
   )
   const pending = callState?.pendingRequests ?? []
+  const guests = callState?.guests ?? []
 
   useEffect(() => {
     if (!live) return
@@ -111,16 +122,18 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
     setError(null)
     if (live) {
       const duration = formatDuration(elapsed)
-      const audioBlob = await stopRecording().catch(() => null)
+      const audioBlob = recording ? await stopRecording().catch(() => null) : recordedBlobRef.current
       if (roomName) await endBroadcast({ roomName }).catch(() => {})
       await disconnect()
       setRoomName(null)
       setPanel(null)
+      setRecording(false)
+      recordedBlobRef.current = null
       setEndedSession({ title, duration, audioBlob })
       setElapsed(0)
     } else {
       setStarting(true)
-      const res = await startBroadcast({ title })
+      const res = await startBroadcast({ title, cover })
       setStarting(false)
       if (!res.ok) {
         setError(res.error)
@@ -131,6 +144,19 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
       setElapsed(0)
       await connect({ serverUrl: res.serverUrl, token: res.token, publish: true })
       startRecording()
+      setRecording(true)
+    }
+  }
+
+  async function toggleRecording() {
+    if (!live) return
+    if (recording) {
+      const blob = await stopRecording().catch(() => null)
+      if (blob) recordedBlobRef.current = blob
+      setRecording(false)
+    } else {
+      startRecording()
+      setRecording(true)
     }
   }
 
@@ -151,48 +177,72 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
 
   return (
     <div className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col gap-3 px-3 py-3 sm:px-4">
-      {/* Room header: title + host, always visible */}
-      <header className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-card px-4 py-2.5">
-        <div className="flex min-w-0 items-center gap-3">
-          <span
-            className={cn(
-              "flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
-              currentUser.color,
-            )}
-          >
-            {currentUser.initials}
-          </span>
-          <div className="min-w-0 flex-1">
-            {live ? (
-              <p className="truncate text-sm font-semibold leading-tight">{title || "Untitled session"}</p>
-            ) : (
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Name your session…"
-                aria-label="Session title"
-                maxLength={80}
-                className="w-full truncate rounded-md border border-transparent bg-transparent text-sm font-semibold leading-tight outline-none transition-colors placeholder:text-muted-foreground hover:border-border/60 focus:border-primary focus:bg-background focus:px-2 focus:py-1"
+      {/* Broadcast header: cover artwork + live indicator + title + stats */}
+      <header className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card p-3 shadow-sm">
+        <div className="relative size-16 shrink-0 overflow-hidden rounded-xl bg-secondary sm:size-20">
+          {cover ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={cover || "/placeholder.svg"} alt="Session cover art" className="size-full object-cover" />
+          ) : (
+            <span className="flex size-full items-center justify-center text-muted-foreground">
+              <Radio className="size-6" />
+            </span>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex items-center gap-2">
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide",
+                live ? "bg-live text-live-foreground" : "bg-secondary text-muted-foreground",
+              )}
+            >
+              <span
+                className={cn(
+                  "size-1.5 rounded-full",
+                  live ? "bg-live-foreground animate-live-pulse" : "bg-muted-foreground",
+                )}
               />
+              {live ? "Live" : "Offline"}
+            </span>
+            {live && (
+              <span className="font-mono text-xs tabular-nums text-muted-foreground">{formatTime(elapsed)}</span>
             )}
-            <p className="truncate text-xs text-muted-foreground">{currentUser.name}</p>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
-              live ? "bg-live text-live-foreground" : "bg-secondary text-muted-foreground",
+
+          {live ? (
+            <p className="truncate text-sm font-semibold leading-tight sm:text-base">{title || "Untitled session"}</p>
+          ) : (
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Name your session…"
+              aria-label="Session title"
+              maxLength={80}
+              className="w-full truncate rounded-md border border-transparent bg-transparent text-sm font-semibold leading-tight outline-none transition-colors placeholder:text-muted-foreground hover:border-border/60 focus:border-primary focus:bg-background focus:px-2 focus:py-1 sm:text-base"
+            />
+          )}
+          <p className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="truncate">{currentUser.name}</span>
+            {live && (
+              <span className="flex shrink-0 items-center gap-1">
+                <Users className="size-3" /> {viewers.toLocaleString()}
+              </span>
             )}
-          >
-            <span className={cn("size-1.5 rounded-full", live ? "bg-live-foreground animate-live-pulse" : "bg-muted-foreground")} />
-            {live ? formatTime(elapsed) : "Offline"}
-          </span>
-          <Button onClick={toggleLive} size="sm" variant={live ? "secondary" : "default"} className="gap-1.5" disabled={starting || state.connecting}>
-            {starting || state.connecting ? <Loader2 className="size-4 animate-spin" /> : <Radio className="size-4" />}
-            {live ? "End" : starting || state.connecting ? "…" : "Go live"}
-          </Button>
+          </p>
         </div>
+
+        <Button
+          onClick={toggleLive}
+          size="sm"
+          variant={live ? "secondary" : "default"}
+          className="shrink-0 gap-1.5"
+          disabled={starting || state.connecting}
+        >
+          {starting || state.connecting ? <Loader2 className="size-4 animate-spin" /> : <Radio className="size-4" />}
+          {live ? "End" : starting || state.connecting ? "…" : "Go live"}
+        </Button>
       </header>
 
       {error && (
@@ -201,72 +251,134 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
         </div>
       )}
 
-      {/* Stage: host + 3 guests, always visible (no scroll) */}
-      <div className="rounded-xl border border-border/60 bg-gradient-to-b from-secondary/60 to-card p-3">
+      {/* Pre-live: pick cover art */}
+      {!live && (
+        <div className="rounded-2xl border border-border/60 bg-card p-3">
+          <CoverUpload value={cover} onChange={setCover} label="Cover artwork (optional)" />
+        </div>
+      )}
+
+      {/* Speaker stage with floating reactions */}
+      <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-b from-secondary/50 to-card p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">On stage</h2>
+          {pending.length > 0 && (
+            <span className="flex items-center gap-1 rounded-full bg-live/15 px-2 py-0.5 text-[11px] font-semibold text-live">
+              <Phone className="size-3" /> {pending.length} waiting
+            </span>
+          )}
+        </div>
         <LiveStage
           host={{ id: currentUser.id, name: currentUser.name, color: currentUser.color }}
           speakers={speakers}
           activeSpeakers={state.activeSpeakers}
+          hostQuality={state.connectionQuality}
           isHost
           onRemoveGuest={dropGuest}
         />
+        {live && roomName && <ReactionLayer roomName={roomName} />}
       </div>
 
-      {/* Control bar: mic + tool icons, always visible */}
-      <div className="flex items-center justify-center gap-2">
-        <button
-          onClick={() => toggleMic()}
-          disabled={!live}
-          className={cn(
-            "flex size-11 items-center justify-center rounded-full transition-colors disabled:opacity-50",
-            micOn ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground",
-          )}
-          aria-label={micOn ? "Mute microphone" : "Unmute microphone"}
-        >
-          {micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
-        </button>
+      {/* Call-in queue (only when someone is waiting) */}
+      {live && pending.length > 0 && (
+        <div className="rounded-2xl border border-live/30 bg-live/5 p-3">
+          <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-live">
+            <Phone className="size-3.5" /> Call-in queue
+          </h2>
+          <ul className="flex flex-col gap-2">
+            {pending.map((r) => (
+              <li key={r.id} className="flex items-center justify-between gap-2 rounded-xl bg-card/80 p-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className={cn("flex size-8 items-center justify-center rounded-full text-xs font-semibold", r.color)}>
+                    {r.initials}
+                  </span>
+                  <span className="truncate text-sm font-medium">{r.userName}</span>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Button size="sm" className="h-8 gap-1 bg-call-accept text-call-accept-foreground hover:bg-call-accept/90" onClick={() => acceptCall(r.id)}>
+                    <Phone className="size-3.5" /> Accept
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-8" onClick={() => declineCall(r.id)} aria-label="Decline">
+                    <PhoneOff className="size-4" />
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
-        <ToolButton
-          icon={<Users className="size-5" />}
-          label="People"
-          badge={pending.length}
-          active={panel === "people"}
-          disabled={!live}
-          onClick={() => setPanel((p) => (p === "people" ? null : "people"))}
-        />
-        <ToolButton
-          icon={<Music className="size-5" />}
-          label="Music"
-          active={panel === "music"}
-          disabled={!live}
-          onClick={() => setPanel((p) => (p === "music" ? null : "music"))}
-        />
-        <ToolButton
-          icon={<ImageIcon className="size-5" />}
-          label="Background"
-          active={panel === "background"}
-          disabled={!live}
-          onClick={() => setPanel((p) => (p === "background" ? null : "background"))}
-        />
-        {live && roomName && <ShareButton roomName={roomName} title={title} />}
-      </div>
+      {/* Audience strip */}
+      {live && <LiveAudience count={viewers} />}
 
       {/* Chat: the ONLY scrollable region */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/60 bg-card">
-        <div className="border-b border-border/60 px-4 py-2">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border/60 bg-card">
+        <div className="flex items-center justify-between border-b border-border/60 px-4 py-2">
           <h2 className="text-sm font-semibold">Live chat</h2>
+          <span className="text-xs text-muted-foreground">{guests.length}/3 on stage</span>
         </div>
         <div className="min-h-0 flex-1">
           <LiveChat asHost currentUser={currentUser} roomName={roomName ?? undefined} />
         </div>
       </div>
 
-      {/* Slide-up panels (overlay, don't push layout) */}
+      {/* Host control dock */}
+      <div className="rounded-2xl border border-border/60 bg-card/90 p-2 shadow-lg backdrop-blur">
+        <div className="flex items-center justify-center gap-1.5 overflow-x-auto sm:gap-2">
+          <DockButton
+            icon={micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
+            label={micOn ? "Mute mic" : "Unmute mic"}
+            primary={micOn}
+            disabled={!live}
+            onClick={() => toggleMic()}
+          />
+          <ReactionPicker roomName={live ? (roomName ?? undefined) : undefined} disabled={!live} />
+          <DockButton
+            icon={<Sparkles className="size-5" />}
+            label="Sound effects"
+            active={panel === "soundboard"}
+            disabled={!live}
+            onClick={() => setPanel((p) => (p === "soundboard" ? null : "soundboard"))}
+          />
+          <DockButton
+            icon={<Music className="size-5" />}
+            label="Background music"
+            active={panel === "music"}
+            disabled={!live}
+            onClick={() => setPanel((p) => (p === "music" ? null : "music"))}
+          />
+          <DockButton
+            icon={<Users className="size-5" />}
+            label="Manage speakers & audience"
+            badge={pending.length}
+            active={panel === "people"}
+            disabled={!live}
+            onClick={() => setPanel((p) => (p === "people" ? null : "people"))}
+          />
+          <DockButton
+            icon={<ImageIcon className="size-5" />}
+            label="Chat background"
+            active={panel === "background"}
+            disabled={!live}
+            onClick={() => setPanel((p) => (p === "background" ? null : "background"))}
+          />
+          <DockButton
+            icon={recording ? <Disc3 className="size-5 animate-spin [animation-duration:3s]" /> : <Circle className="size-5" />}
+            label={recording ? "Stop recording" : "Start recording"}
+            recording={recording}
+            disabled={!live}
+            onClick={toggleRecording}
+          />
+          {live && roomName && <ShareButton roomName={roomName} title={title} />}
+        </div>
+      </div>
+
+      {/* Slide-up panels */}
       {panel === "people" && (
         <PeoplePanel
           roomName={roomName}
           pending={pending}
-          guests={callState?.guests ?? []}
+          guests={guests}
           viewers={viewers}
           onAccept={acceptCall}
           onDecline={declineCall}
@@ -274,6 +386,7 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
           onClose={() => setPanel(null)}
         />
       )}
+      {panel === "soundboard" && <SoundboardPanel onPlay={playEffect} onClose={() => setPanel(null)} />}
       {panel === "music" && (
         <MusicPanel
           live={live}
@@ -296,18 +409,22 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
   )
 }
 
-function ToolButton({
+function DockButton({
   icon,
   label,
   badge = 0,
   active,
+  primary,
+  recording,
   disabled,
   onClick,
 }: {
   icon: React.ReactNode
   label: string
   badge?: number
-  active: boolean
+  active?: boolean
+  primary?: boolean
+  recording?: boolean
   disabled?: boolean
   onClick: () => void
 }) {
@@ -317,9 +434,16 @@ function ToolButton({
       disabled={disabled}
       aria-label={label}
       aria-pressed={active}
+      title={label}
       className={cn(
-        "relative flex size-11 items-center justify-center rounded-full transition-colors disabled:opacity-50",
-        active ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground hover:bg-secondary/80",
+        "relative flex size-11 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-40",
+        recording
+          ? "bg-live text-live-foreground"
+          : primary
+            ? "bg-call-accept text-call-accept-foreground"
+            : active
+              ? "bg-primary text-primary-foreground"
+              : "bg-secondary text-foreground hover:bg-secondary/80",
       )}
     >
       {icon}
@@ -354,8 +478,6 @@ function ShareButton({ roomName, title }: { roomName: string; title?: string }) 
   const [copied, setCopied] = useState(false)
   const url = typeof window !== "undefined" ? `${window.location.origin}/live/${roomName}` : `/live/${roomName}`
   async function share() {
-    // Prefer the device's native share sheet so the host can send the link to
-    // WhatsApp, Messages, etc. Fall back to copying when it isn't available.
     try {
       if (typeof navigator !== "undefined" && navigator.share) {
         await navigator.share({ title: title || "Live on Frequency", text: "Join my live session on Frequency", url })
@@ -373,11 +495,42 @@ function ShareButton({ roomName, title }: { roomName: string; title?: string }) 
   return (
     <button
       onClick={share}
-      aria-label="Share session link"
-      className="flex size-11 items-center justify-center rounded-full bg-secondary text-foreground transition-colors hover:bg-secondary/80"
+      aria-label="Invite people / share room link"
+      title="Invite people"
+      className="flex size-11 shrink-0 items-center justify-center rounded-full bg-secondary text-foreground transition-colors hover:bg-secondary/80"
     >
-      {copied ? <Check className="size-5" /> : <Share2 className="size-5" />}
+      {copied ? <Check className="size-5" /> : <UserPlus className="size-5" />}
     </button>
+  )
+}
+
+/** Soundboard: tap a synthesized chime that mixes into the broadcast. */
+function SoundboardPanel({
+  onPlay,
+  onClose,
+}: {
+  onPlay: (name: SoundEffectName) => Promise<void>
+  onClose: () => void
+}) {
+  return (
+    <Sheet title="Sound effects" onClose={onClose}>
+      <p className="mb-3 text-sm text-muted-foreground">Tap to play a sound effect into your broadcast.</p>
+      <div className="grid grid-cols-3 gap-2">
+        {SOUND_EFFECTS.map((fx) => (
+          <button
+            key={fx.name}
+            type="button"
+            onClick={() => void onPlay(fx.name)}
+            className="flex flex-col items-center gap-1.5 rounded-xl border border-border/60 bg-secondary/50 py-4 transition-transform hover:scale-105 active:scale-95"
+          >
+            <span className="text-2xl" aria-hidden="true">
+              {fx.emoji}
+            </span>
+            <span className="text-xs font-medium">{fx.label}</span>
+          </button>
+        ))}
+      </div>
+    </Sheet>
   )
 }
 
@@ -402,7 +555,7 @@ function PeoplePanel({
   onClose: () => void
 }) {
   return (
-    <Sheet title="People" onClose={onClose}>
+    <Sheet title="Speakers & audience" onClose={onClose}>
       <div className="space-y-4">
         <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <Users className="size-4" /> {viewers.toLocaleString()} listening
@@ -425,7 +578,7 @@ function PeoplePanel({
                     <span className="truncate text-sm">{r.userName}</span>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
-                    <Button size="sm" className="h-8 gap-1" onClick={() => onAccept(r.id)}>
+                    <Button size="sm" className="h-8 gap-1 bg-call-accept text-call-accept-foreground hover:bg-call-accept/90" onClick={() => onAccept(r.id)}>
                       <Phone className="size-3.5" /> Accept
                     </Button>
                     <Button size="sm" variant="ghost" className="h-8" onClick={() => onDecline(r.id)} aria-label="Decline">
@@ -559,7 +712,6 @@ function MusicPanel({
       <div className="space-y-3">
         <input ref={fileInputRef} type="file" accept="audio/*" multiple className="hidden" onChange={handlePick} />
 
-        {/* Now playing + scrubber */}
         {activeIndex !== null && (
           <div className="space-y-2 rounded-lg border border-border/60 bg-background p-3">
             <div className="flex items-center gap-3">
@@ -575,7 +727,6 @@ function MusicPanel({
               <p className="min-w-0 flex-1 truncate text-sm font-medium">{tracks[activeIndex]?.name}</p>
             </div>
 
-            {/* Scrub bar */}
             <div className="flex items-center gap-2">
               <button type="button" onClick={() => onSeek(Math.max(0, position - 15))} aria-label="Back 15s">
                 <SkipBack className="size-4 text-muted-foreground" />
@@ -599,7 +750,6 @@ function MusicPanel({
               <span>{formatTime(duration || 0)}</span>
             </div>
 
-            {/* Volume */}
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">Vol</span>
               <input
@@ -617,7 +767,6 @@ function MusicPanel({
           </div>
         )}
 
-        {/* Playlist */}
         <ul className="space-y-1.5">
           {tracks.map((t, i) => (
             <li key={t.url} className="flex items-center justify-between gap-2 rounded-lg border border-border/60 p-2">

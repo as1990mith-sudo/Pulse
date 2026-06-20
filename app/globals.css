@@ -337,6 +337,70 @@
   animation: live-pulse 1.4s ease-in-out infinite;
 }
 
+/* Concentric "talking" ripple around a speaking avatar on the live stage. */
+@keyframes audio-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  70% {
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+.audio-ring {
+  animation: audio-ring 1.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+/* Floating reaction/gift emoji that drifts up over the stage then fades. */
+@keyframes reaction-float {
+  0% {
+    transform: translateY(0) scale(0.6);
+    opacity: 0;
+  }
+  15% {
+    transform: translateY(-10px) scale(1.1);
+    opacity: 1;
+  }
+  80% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(-150px) scale(1) rotate(var(--reaction-rot, 8deg));
+    opacity: 0;
+  }
+}
+
+.reaction-float {
+  animation: reaction-float 2.6s ease-out forwards;
+}
+
+/* Soft equalizer bounce for the "now speaking" mini bars. */
+@keyframes eq-bounce {
+  0%, 100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.animate-eq-bounce {
+  animation: eq-bounce 0.7s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .audio-ring,
+  .reaction-float,
+  .animate-eq-bounce {
+    animation: none;
+  }
+}
+
 /* Subtle page-entry transition played on every route change (see app/template.tsx) */
 @keyframes page-enter {
   from {

@@ -300,6 +300,21 @@ export const liveChatMessage = pgTable("live_chat_message", {
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
+// Ephemeral reactions + virtual gifts sent during a live broadcast. Every
+// participant polls for new rows and floats the emoji up over the stage so the
+// whole room sees the same reaction in near real time. kind = "reaction" |
+// "gift"; label names the gift (e.g. "Rose", "Applause").
+export const liveReaction = pgTable("live_reaction", {
+  id: serial("id").primaryKey(),
+  roomName: text("roomName").notNull(),
+  userId: text("userId").notNull(),
+  userName: text("userName").notNull(),
+  kind: text("kind").notNull().default("reaction"), // "reaction" | "gift"
+  emoji: text("emoji").notNull(),
+  label: text("label"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
 // --- Direct messages -------------------------------------------------------
 // 1:1 private conversations between two users (WhatsApp-style). A conversation
 // row is created the first time either user messages the other. The pair is

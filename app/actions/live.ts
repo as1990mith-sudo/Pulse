@@ -5,7 +5,7 @@ import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { liveStream, liveChatMessage, liveCallRequest } from "@/lib/db/schema"
+import { liveStream, liveChatMessage, liveCallRequest, liveReaction } from "@/lib/db/schema"
 import { getHandle, getAvatarColor, getInitials } from "@/lib/identity"
 import { createAccessToken, isLiveKitConfigured, LIVEKIT_URL, setParticipantPublish } from "@/lib/livekit"
 import { notifyFollowers } from "@/app/actions/notifications"
@@ -195,6 +195,63 @@ export async function getLiveChat(input: { roomName: string; afterId?: number })
     userName: r.userName,
     isHost: r.isHost,
     body: r.body,
+  }))
+}
+
+// --- Reactions & virtual gifts ---------------------------------------------
+
+export type LiveReactionView = {
+  id: number
+  userId: string
+  userName: string
+  kind: "reaction" | "gift"
+  emoji: string
+  label: string | null
+}
+
+/** Sends a reaction or virtual gift that every participant will see float up. */
+export async function sendLiveReaction(input: {
+  roomName: string
+  emoji: string
+  kind?: "reaction" | "gift"
+  label?: string
+}): Promise<void> {
+  const user = await requireUser()
+  const emoji = input.emoji.trim().slice(0, 8)
+  if (!emoji) return
+  await db.insert(liveReaction).values({
+    roomName: input.roomName,
+    userId: user.id,
+    userName: user.name,
+    kind: input.kind ?? "reaction",
+    emoji,
+    label: input.label?.trim().slice(0, 40) ?? null,
+  })
+}
+
+/** Polls recent reactions for a room (only those after `afterId`). */
+export async function getLiveReactions(input: {
+  roomName: string
+  afterId?: number
+}): Promise<LiveReactionView[]> {
+  const rows = await db
+    .select()
+    .from(liveReaction)
+    .where(
+      input.afterId
+        ? and(eq(liveReaction.roomName, input.roomName), gt(liveReaction.id, input.afterId))
+        : eq(liveReaction.roomName, input.roomName),
+    )
+    .orderBy(asc(liveReaction.id))
+    .limit(60)
+
+  return rows.map((r) => ({
+    id: r.id,
+    userId: r.userId,
+    userName: r.userName,
+    kind: r.kind as "reaction" | "gift",
+    emoji: r.emoji,
+    label: r.label,
   }))
 }
 
