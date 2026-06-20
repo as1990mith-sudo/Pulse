@@ -1,6 +1,6 @@
 "use server"
 
-import { eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
@@ -68,6 +68,26 @@ export async function publishShow(input: {
     description,
     audioUrl: input.audioUrl ?? null,
   })
+
+  revalidatePath("/live")
+  revalidatePath(`/u/${user.id}`)
+  return { ok: true }
+}
+
+/**
+ * Deletes one of the signed-in user's own published episodes (identified by its
+ * slug). Scoped to hostUserId so a user can only remove their own episodes.
+ */
+export async function deleteEpisode(slug: string): Promise<ActionResult> {
+  const user = await requireUser()
+
+  const [row] = await db.select().from(episode).where(eq(episode.slug, slug)).limit(1)
+  if (!row) return { ok: false, error: "Episode not found." }
+  if (row.hostUserId !== user.id) {
+    return { ok: false, error: "You can only delete your own episodes." }
+  }
+
+  await db.delete(episode).where(and(eq(episode.slug, slug), eq(episode.hostUserId, user.id)))
 
   revalidatePath("/live")
   revalidatePath(`/u/${user.id}`)
