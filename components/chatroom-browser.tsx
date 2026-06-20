@@ -25,10 +25,16 @@ import { uploadMedia } from "@/lib/upload-media"
 export function ChatroomBrowser({ rooms }: { rooms: ChatroomSummary[] }) {
   return (
     <Tabs defaultValue="my-rooms" className="space-y-6">
-      <TabsList className="grid w-full grid-cols-3">
-        <TabsTrigger value="my-rooms">My rooms</TabsTrigger>
-        <TabsTrigger value="discover">Discover</TabsTrigger>
-        <TabsTrigger value="create">Create</TabsTrigger>
+      <TabsList className="grid h-12 w-full grid-cols-3 rounded-full p-1">
+        <TabsTrigger value="my-rooms" className="rounded-full text-[15px] font-medium">
+          My rooms
+        </TabsTrigger>
+        <TabsTrigger value="discover" className="rounded-full text-[15px] font-medium">
+          Discover
+        </TabsTrigger>
+        <TabsTrigger value="create" className="rounded-full text-[15px] font-medium">
+          Create
+        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="my-rooms">
@@ -58,29 +64,33 @@ function MyRooms({ rooms }: { rooms: ChatroomSummary[] }) {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {rooms.map((room) => (
-        <Link key={room.id} href={`/chatrooms/${room.id}`}>
-          <Card className="flex items-center justify-between gap-4 p-4 transition-colors hover:border-primary/60">
-            <div className="flex min-w-0 items-center gap-3">
-              <Avatar className="size-11 shrink-0">
+        <Link key={room.id} href={`/chatrooms/${room.id}`} className="group block">
+          <Card className="flex items-center justify-between gap-4 rounded-2xl p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-lg hover:shadow-primary/5">
+            <div className="flex min-w-0 items-center gap-4">
+              <Avatar className="size-16 shrink-0 ring-2 ring-border/60 transition-transform duration-200 group-hover:scale-105">
                 {room.image && <AvatarImage src={room.image || "/placeholder.svg"} alt={room.name} />}
-                <AvatarFallback className="bg-secondary text-sm">{room.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+                <AvatarFallback className="bg-secondary text-lg font-semibold">
+                  {room.name.slice(0, 2).toUpperCase()}
+                </AvatarFallback>
               </Avatar>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <p className="truncate font-semibold">{room.name}</p>
+                  <p className="truncate text-lg font-semibold tracking-tight">{room.name}</p>
                   {room.isOwner && <Badge variant="secondary">Admin</Badge>}
                 </div>
                 {room.description && (
-                  <p className="truncate text-sm text-muted-foreground">{room.description}</p>
+                  <p className="truncate text-sm leading-relaxed text-muted-foreground">{room.description}</p>
                 )}
-                <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                  <Users className="size-3" /> {room.memberCount} {room.memberCount === 1 ? "member" : "members"}
+                <p className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <Users className="size-3.5" /> {room.memberCount} {room.memberCount === 1 ? "member" : "members"}
                 </p>
               </div>
             </div>
-            <span className="text-sm font-medium text-primary">Open</span>
+            <span className="shrink-0 rounded-full bg-primary/10 px-4 py-2 text-sm font-semibold text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+              Open
+            </span>
           </Card>
         </Link>
       ))}

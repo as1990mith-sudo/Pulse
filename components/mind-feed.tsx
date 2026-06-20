@@ -128,9 +128,9 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
 
   return (
     <div>
-      <div className="border-y border-border/60 bg-background px-4 py-3 sm:px-3">
-        <form onSubmit={publish} className="flex gap-3">
-          <Avatar className="size-10 shrink-0">
+      <div className="border-y border-border/60 bg-gradient-to-b from-card/60 to-background px-4 py-5 sm:px-5">
+        <form onSubmit={publish} className="flex gap-4">
+          <Avatar className="size-12 shrink-0 ring-2 ring-border/60">
             <AvatarFallback className={currentUser.color}>{currentUser.initials}</AvatarFallback>
           </Avatar>
           <div className="flex-1 space-y-3">
@@ -138,7 +138,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder="Share a thought…"
-              className="min-h-20 resize-none border-0 bg-transparent px-3 text-sm shadow-none focus-visible:ring-0"
+              className="min-h-24 resize-none border-0 bg-transparent px-3 text-lg leading-relaxed shadow-none placeholder:text-muted-foreground/70 focus-visible:ring-0"
               aria-label="Write a post"
             />
             {media && (
@@ -179,7 +179,12 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
                 className="hidden"
                 onChange={handleMediaPick}
               />
-              <Button type="submit" disabled={isPending || uploading || (!draft.trim() && !media)} className="gap-2">
+              <Button
+                type="submit"
+                size="lg"
+                disabled={isPending || uploading || (!draft.trim() && !media)}
+                className="gap-2 rounded-full px-6 font-semibold"
+              >
                 <Send className="size-4" /> {isPending ? "Posting…" : "Post"}
               </Button>
             </div>
@@ -192,24 +197,24 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
         <button
           onClick={() => setTab("for-you")}
           className={cn(
-            "relative flex-1 px-3 py-3 text-sm font-medium transition-colors",
+            "relative flex-1 px-3 py-4 text-[15px] font-semibold transition-colors",
             tab === "for-you" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
           )}
           aria-pressed={tab === "for-you"}
         >
           For you
-          {tab === "for-you" && <span className="absolute inset-x-0 -bottom-px mx-auto h-0.5 w-12 rounded-full bg-primary" />}
+          {tab === "for-you" && <span className="absolute inset-x-0 -bottom-px mx-auto h-1 w-14 rounded-full bg-primary" />}
         </button>
         <button
           onClick={() => setTab("following")}
           className={cn(
-            "relative flex-1 px-3 py-3 text-sm font-medium transition-colors",
+            "relative flex-1 px-3 py-4 text-[15px] font-semibold transition-colors",
             tab === "following" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
           )}
           aria-pressed={tab === "following"}
         >
           Following{followingCount > 0 ? ` (${followingCount})` : ""}
-          {tab === "following" && <span className="absolute inset-x-0 -bottom-px mx-auto h-0.5 w-12 rounded-full bg-primary" />}
+          {tab === "following" && <span className="absolute inset-x-0 -bottom-px mx-auto h-1 w-14 rounded-full bg-primary" />}
         </button>
       </div>
 
@@ -331,19 +336,22 @@ export function PostCard({
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 px-3 py-2.5">
-        <div className="flex min-w-0 items-center gap-2.5">
+      <div className={cn("flex items-center justify-between gap-2", feed ? "px-4 py-4" : "px-3 py-2.5")}>
+        <div className="flex min-w-0 items-center gap-3">
           <Link href={`/u/${post.authorId}`} aria-label={`View ${post.user}'s profile`} className="shrink-0">
-            <Avatar className="size-9">
+            <Avatar className={cn(feed ? "size-12 ring-2 ring-border/60" : "size-9")}>
               {post.authorImage && <AvatarImage src={post.authorImage || "/placeholder.svg"} alt={post.user} />}
-              <AvatarFallback className={cn("text-xs", post.color)}>{post.initials}</AvatarFallback>
+              <AvatarFallback className={cn(feed ? "text-sm" : "text-xs", post.color)}>{post.initials}</AvatarFallback>
             </Avatar>
           </Link>
           <div className="flex min-w-0 flex-col leading-tight">
-            <Link href={`/u/${post.authorId}`} className="truncate text-sm font-semibold hover:underline">
+            <Link
+              href={`/u/${post.authorId}`}
+              className={cn("truncate font-semibold hover:underline", feed ? "text-base" : "text-sm")}
+            >
               {post.user}
             </Link>
-            <span className="truncate text-xs text-muted-foreground">
+            <span className={cn("truncate text-muted-foreground", feed ? "text-sm" : "text-xs")}>
               {post.handle} · {post.postedAt}
             </span>
           </div>
@@ -382,7 +390,13 @@ export function PostCard({
 
       {/* Caption — shown above the media */}
       {post.text && (
-        <p className={cn("px-3 text-[15px] leading-relaxed text-foreground/90", hasMedia ? "pb-2.5" : "pb-1")}>
+        <p
+          className={cn(
+            "leading-relaxed text-foreground/90",
+            feed ? "px-4 text-lg" : "px-3 text-[15px]",
+            hasMedia ? "pb-3" : "pb-1",
+          )}
+        >
           {post.text}
         </p>
       )}
@@ -418,50 +432,67 @@ export function PostCard({
       ) : null}
 
       {/* Actions — each count sits to the right of its button */}
-      <div className="flex items-center gap-5 px-3 pb-3 pt-3 text-foreground">
+      <div
+        className={cn(
+          "flex items-center text-foreground",
+          feed ? "gap-7 px-4 pb-4 pt-3.5" : "gap-5 px-3 pb-3 pt-3",
+        )}
+      >
         <button
           onClick={toggleLike}
           className={cn(
-            "flex items-center gap-1.5 text-sm tabular-nums transition-colors hover:text-primary",
+            "flex items-center gap-1.5 tabular-nums transition-colors hover:text-primary",
+            feed ? "text-[15px]" : "text-sm",
             liked && "text-primary",
             !currentUser && "cursor-not-allowed opacity-60",
           )}
           aria-pressed={liked}
           aria-label="Like"
         >
-          <Heart className={cn("size-6", liked && "fill-current")} />
+          <Heart className={cn(feed ? "size-7" : "size-6", liked && "fill-current")} />
           {likes > 0 && <span>{likes}</span>}
         </button>
 
         <button
           onClick={() => setShowComments((v) => !v)}
-          className="flex items-center gap-1.5 text-sm tabular-nums transition-colors hover:text-muted-foreground"
+          className={cn(
+            "flex items-center gap-1.5 tabular-nums transition-colors hover:text-muted-foreground",
+            feed ? "text-[15px]" : "text-sm",
+          )}
           aria-label="Toggle comments"
         >
-          <MessageCircle className="size-6" />
+          <MessageCircle className={cn(feed ? "size-7" : "size-6")} />
           {post.comments.length > 0 && <span>{post.comments.length}</span>}
         </button>
 
         <button
           onClick={toggleRepost}
           className={cn(
-            "flex items-center gap-1.5 text-sm tabular-nums transition-colors hover:text-chart-2",
+            "flex items-center gap-1.5 tabular-nums transition-colors hover:text-chart-2",
+            feed ? "text-[15px]" : "text-sm",
             reposted && "text-chart-2",
             !currentUser && "cursor-not-allowed opacity-60",
           )}
           aria-pressed={reposted}
           aria-label="Repost"
         >
-          <Repeat2 className="size-6" />
+          <Repeat2 className={cn(feed ? "size-7" : "size-6")} />
           {reposts > 0 && <span>{reposts}</span>}
         </button>
 
         <button
           onClick={share}
-          className="flex items-center gap-1.5 text-sm tabular-nums transition-colors hover:text-muted-foreground"
+          className={cn(
+            "ml-auto flex items-center gap-1.5 tabular-nums transition-colors hover:text-muted-foreground",
+            feed ? "text-[15px]" : "text-sm",
+          )}
           aria-label="Share"
         >
-          {shared ? <Check className="size-6 text-chart-2" /> : <Send className="size-6" />}
+          {shared ? (
+            <Check className={cn("text-chart-2", feed ? "size-7" : "size-6")} />
+          ) : (
+            <Send className={cn(feed ? "size-7" : "size-6")} />
+          )}
           {shares > 0 && <span>{shares}</span>}
         </button>
       </div>
