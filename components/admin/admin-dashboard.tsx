@@ -340,7 +340,7 @@ function EpisodeManager({ episodes }: { episodes: EpisodeRow[] }) {
               <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Culture" />
             </Field>
             <Field label="Host name">
-              <Input value={hostName} onChange={(e) => setHostName(e.target.value)} placeholder="Maya Okafor" />
+              <Input value={hostName} onChange={(e) => setHostName(e.target.value)} placeholder="Host name" />
             </Field>
           </div>
 

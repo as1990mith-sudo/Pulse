@@ -1,0 +1,142 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import { createPortal } from "react-dom"
+import Link from "next/link"
+import { X, Loader2 } from "lucide-react"
+import { listFollowers, listFollowing } from "@/app/actions/follow"
+import type { ProfileSummary } from "@/lib/profile"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { cn } from "@/lib/utils"
+
+type Mode = "followers" | "following"
+
+export function ProfileFollowStats({
+  userId,
+  followers,
+  following,
+  episodes,
+  posts,
+}: {
+  userId: string
+  followers: number
+  following: number
+  episodes: number
+  posts: number
+}) {
+  const [mode, setMode] = useState<Mode | null>(null)
+
+  return (
+    <div className="flex items-center gap-4 pt-1 text-sm">
+      <button
+        type="button"
+        onClick={() => setMode("followers")}
+        className="transition-colors hover:text-foreground"
+      >
+        <span className="font-semibold text-foreground">{followers}</span>{" "}
+        <span className="text-muted-foreground">followers</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => setMode("following")}
+        className="transition-colors hover:text-foreground"
+      >
+        <span className="font-semibold text-foreground">{following}</span>{" "}
+        <span className="text-muted-foreground">following</span>
+      </button>
+      <span>
+        <span className="font-semibold text-foreground">{episodes}</span>{" "}
+        <span className="text-muted-foreground">episodes</span>
+      </span>
+      <span>
+        <span className="font-semibold text-foreground">{posts}</span>{" "}
+        <span className="text-muted-foreground">posts</span>
+      </span>
+
+      {mode && <FollowListDialog userId={userId} mode={mode} onClose={() => setMode(null)} />}
+    </div>
+  )
+}
+
+function FollowListDialog({ userId, mode, onClose }: { userId: string; mode: Mode; onClose: () => void }) {
+  const [users, setUsers] = useState<ProfileSummary[] | null>(null)
+
+  useEffect(() => {
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = ""
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    const fetcher = mode === "followers" ? listFollowers : listFollowing
+    fetcher(userId).then((rows) => {
+      if (active) setUsers(rows)
+    })
+    return () => {
+      active = false
+    }
+  }, [userId, mode])
+
+  if (typeof document === "undefined") return null
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        className="flex max-h-[70vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={mode === "followers" ? "Followers" : "Following"}
+      >
+        <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
+          <h2 className="text-sm font-semibold capitalize">{mode}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            aria-label="Close"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-2">
+          {users === null ? (
+            <div className="flex items-center justify-center py-10 text-muted-foreground">
+              <Loader2 className="size-5 animate-spin" />
+            </div>
+          ) : users.length === 0 ? (
+            <p className="py-10 text-center text-sm text-muted-foreground">
+              {mode === "followers" ? "No followers yet." : "Not following anyone yet."}
+            </p>
+          ) : (
+            users.map((u) => (
+              <Link
+                key={u.id}
+                href={`/u/${u.id}`}
+                onClick={onClose}
+                className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-secondary"
+              >
+                <Avatar className="size-9">
+                  <AvatarImage src={u.image ?? undefined} alt={u.name} />
+                  <AvatarFallback className={cn("text-xs", u.color)}>{u.initials}</AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{u.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">{u.handle}</p>
+                </div>
+              </Link>
+            ))
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}

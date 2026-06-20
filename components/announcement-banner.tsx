@@ -28,6 +28,7 @@ import { AD_BLOCK_HOURS, AD_MAX_HOURS, priceForHours } from "@/lib/ads"
 import { downloadIcs, formatEventDate, googleCalendarUrl } from "@/lib/calendar"
 import type { CurrentUser } from "@/lib/session"
 import { cn } from "@/lib/utils"
+import { uploadMedia } from "@/lib/upload-media"
 
 export function AnnouncementBanner({
   announcements,
@@ -64,7 +65,7 @@ export function AnnouncementBanner({
       </div>
 
       {announcements.length > 0 ? (
-        <div className="-mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-2">
+        <div className="flex flex-col gap-3">
           {announcements.map((a) => (
             <AnnouncementCard key={a.id} announcement={a} />
           ))}
@@ -181,12 +182,13 @@ function AnnouncementCard({ announcement: a }: { announcement: AnnouncementView 
   }
 
   return (
-    <Card className="flex w-[280px] shrink-0 snap-start flex-col overflow-hidden sm:w-[340px]">
+    <Card className="flex w-full flex-col overflow-hidden sm:flex-row sm:items-stretch">
+      {/* Flyer — fixed-width thumbnail on the left at larger sizes */}
       {a.flyer ? (
         <button
           type="button"
           onClick={() => setLightbox(true)}
-          className="relative aspect-[16/9] w-full overflow-hidden bg-secondary"
+          className="relative aspect-[16/9] w-full shrink-0 overflow-hidden bg-secondary sm:aspect-auto sm:w-56 md:w-64"
           aria-label={`View ${a.title} flyer full screen`}
         >
           <Image
@@ -195,79 +197,76 @@ function AnnouncementCard({ announcement: a }: { announcement: AnnouncementView 
             fill
             className="object-cover transition-transform duration-500 hover:scale-105"
             unoptimized={a.flyer.startsWith("data:")}
-            sizes="340px"
+            sizes="256px"
           />
           <Badge className="absolute left-2 top-2 gap-1 bg-background/70 text-foreground backdrop-blur">
             <Megaphone className="size-3" /> Promoted
           </Badge>
         </button>
       ) : (
-        <div className="flex aspect-[16/9] w-full items-center justify-center bg-secondary">
+        <div className="flex aspect-[16/9] w-full shrink-0 items-center justify-center bg-secondary sm:aspect-auto sm:w-56 md:w-64">
           <Badge className="gap-1">
             <Megaphone className="size-3" /> Promoted
           </Badge>
         </div>
       )}
 
-      <div className="flex flex-1 flex-col gap-2 p-4">
-        <div className="space-y-1">
+      {/* Info + action laid out horizontally across the remaining width */}
+      <div className="flex flex-1 flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+        <div className="min-w-0 flex-1 space-y-1">
           <h3 className="font-semibold leading-tight text-balance">{a.title}</h3>
           {a.description && (
             <p className="line-clamp-2 text-sm text-muted-foreground leading-relaxed">{a.description}</p>
           )}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5 font-medium text-foreground">
+              <CalendarPlus className="size-3.5 text-primary" />
+              {formatEventDate(a.eventDate, a.eventTime)}
+            </span>
+            {a.location && (
+              <span className="flex items-center gap-1.5">
+                <MapPin className="size-3.5" /> {a.location}
+              </span>
+            )}
+            <span>by {a.creatorName}</span>
+          </div>
         </div>
 
-        <div className="mt-1 space-y-1 text-xs text-muted-foreground">
-          <p className="flex items-center gap-1.5 font-medium text-foreground">
-            <CalendarPlus className="size-3.5 text-primary" />
-            {formatEventDate(a.eventDate, a.eventTime)}
-          </p>
-          {a.location && (
-            <p className="flex items-center gap-1.5">
-              <MapPin className="size-3.5" /> {a.location}
-            </p>
-          )}
-          <p>by {a.creatorName}</p>
-        </div>
-
-        <div className="mt-auto pt-2">
-          <div className="relative">
-            <Button size="sm" className="w-full gap-1.5" onClick={() => setMenuOpen((o) => !o)}>
-              <CalendarPlus className="size-4" /> Add to calendar
-            </Button>
-            {menuOpen && (
-              <>
+        <div className="relative shrink-0 sm:w-44">
+          <Button size="sm" className="w-full gap-1.5" onClick={() => setMenuOpen((o) => !o)}>
+            <CalendarPlus className="size-4" /> Add to calendar
+          </Button>
+          {menuOpen && (
+            <>
+              <button
+                type="button"
+                className="fixed inset-0 z-10 cursor-default"
+                aria-hidden="true"
+                onClick={() => setMenuOpen(false)}
+              />
+              <div className="absolute bottom-full left-0 z-20 mb-1 w-full overflow-hidden rounded-lg border border-border bg-popover p-1 shadow-md">
+                <a
+                  href={googleCalendarUrl(calEvent)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setMenuOpen(false)}
+                  className="block rounded-md px-3 py-2 text-sm hover:bg-secondary"
+                >
+                  Google Calendar
+                </a>
                 <button
                   type="button"
-                  className="fixed inset-0 z-10 cursor-default"
-                  aria-hidden="true"
-                  onClick={() => setMenuOpen(false)}
-                />
-                <div className="absolute bottom-full left-0 z-20 mb-1 w-full overflow-hidden rounded-lg border border-border bg-popover p-1 shadow-md">
-                  <a
-                    href={googleCalendarUrl(calEvent)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => setMenuOpen(false)}
-                    className="block rounded-md px-3 py-2 text-sm hover:bg-secondary"
-                  >
-                    Google Calendar
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      downloadIcs(calEvent)
-                      setMenuOpen(false)
-                    }}
-                    className="block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-secondary"
-                  >
-                    Apple / Outlook (.ics)
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-          {/* Approved adverts can't be edited or deleted — they auto-expire. */}
+                  onClick={() => {
+                    downloadIcs(calEvent)
+                    setMenuOpen(false)
+                  }}
+                  className="block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-secondary"
+                >
+                  Apple / Outlook (.ics)
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -303,11 +302,8 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
     setCropSrc(null)
     setUploading(true)
     try {
-      const formData = new FormData()
-      formData.append("file", new File([blob], "flyer.jpg", { type: "image/jpeg" }))
-      const res = await fetch("/api/upload-chat", { method: "POST", body: formData })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? "Upload failed")
+      const file = new File([blob], "flyer.jpg", { type: "image/jpeg" })
+      const data = await uploadMedia(file, "chat")
       setFlyer(data.url)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not upload the flyer.")
@@ -353,7 +349,12 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
       aria-modal="true"
       aria-label="Advertise your event"
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-background/90 p-4 backdrop-blur-sm sm:items-center"
-      onClick={onClose}
+      onClick={(e) => {
+        // Only close on a genuine backdrop click. Without this guard, clicks
+        // inside the image cropper (a React child rendered via its own portal)
+        // bubble through React's tree to here and close the form mid-crop.
+        if (e.target === e.currentTarget) onClose()
+      }}
     >
       <Card className="my-auto w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-start justify-between gap-3">

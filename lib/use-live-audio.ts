@@ -20,6 +20,20 @@ export type LiveAudioState = {
   error: string | null
 }
 
+/** Pick the best MediaRecorder audio container the browser supports. */
+function pickAudioMime(): { mime: string; ext: string } {
+  const candidates: { mime: string; ext: string }[] = [
+    { mime: "audio/webm;codecs=opus", ext: "webm" },
+    { mime: "audio/webm", ext: "webm" },
+    { mime: "audio/mp4", ext: "mp4" },
+    { mime: "audio/ogg;codecs=opus", ext: "ogg" },
+  ]
+  for (const c of candidates) {
+    if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(c.mime)) return c
+  }
+  return { mime: "", ext: "webm" }
+}
+
 /**
  * Wraps a LiveKit Room for audio-only broadcasting.
  * - Hosts (canPublish) capture the mic and publish it.
@@ -33,6 +47,14 @@ export function useLiveAudio() {
   const musicGainRef = useRef<GainNode | null>(null)
   const musicElRef = useRef<HTMLAudioElement | null>(null)
   const musicTrackRef = useRef<LocalAudioTrack | null>(null)
+  // The MediaStream of the currently-mixed music, so the recorder can mix it in.
+  const musicStreamRef = useRef<MediaStream | null>(null)
+  // Session recording graph (host side): mic + music mixed into one MediaRecorder.
+  const recorderRef = useRef<MediaRecorder | null>(null)
+  const recordChunksRef = useRef<BlobPart[]>([])
+  const recordCtxRef = useRef<AudioContext | null>(null)
+  const recordDestRef = useRef<MediaStreamAudioDestinationNode | null>(null)
+  const recordMimeRef = useRef<string>("")
   const [state, setState] = useState<LiveAudioState>({
     connected: false,
     connecting: false,
@@ -155,6 +177,18 @@ export function useLiveAudio() {
     const localTrack = new LocalAudioTrack(mediaTrack)
     await room.localParticipant.publishTrack(localTrack, { name: "background-music" })
     musicTrackRef.current = localTrack
+    musicStreamRef.current = dest.stream
+
+    // If a session recording is in progress, mix this music into it too.
+    const recCtx = recordCtxRef.current
+    const recDest = recordDestRef.current
+    if (recCtx && recDest) {
+      try {
+        recCtx.createMediaStreamSource(dest.stream).connect(recDest)
+      } catch {
+        // ignore — music will still play live, just not captured in the recording
+      }
+    }
   }, [])
 
   /** Adjusts the live background-music volume (0–1). */
@@ -183,6 +217,76 @@ export function useLiveAudio() {
     }
   }, [])
 
+  /**
+   * Starts recording the broadcast (host mic + any background music) into a
+   * single audio file using a WebAudio mixing bus and MediaRecorder. Safe to
+   * call right after going live; music added later is wired in automatically.
+   */
+  const startRecording = useCallback(() => {
+    const room = roomRef.current
+    if (!room || recorderRef.current) return
+    if (typeof MediaRecorder === "undefined") return
+
+    try {
+      const ctx = new AudioContext()
+      const dest = ctx.createMediaStreamDestination()
+      recordCtxRef.current = ctx
+      recordDestRef.current = dest
+
+      // Mic: tap the host's published microphone track.
+      const micPub = room.localParticipant.getTrackPublication(Track.Source.Microphone)
+      const micTrack = micPub?.audioTrack?.mediaStreamTrack
+      if (micTrack) {
+        ctx.createMediaStreamSource(new MediaStream([micTrack])).connect(dest)
+      }
+
+      // Any music already mixing gets folded in too.
+      if (musicStreamRef.current) {
+        ctx.createMediaStreamSource(musicStreamRef.current).connect(dest)
+      }
+
+      const { mime } = pickAudioMime()
+      recordMimeRef.current = mime || "audio/webm"
+      const chunks: BlobPart[] = []
+      const recorder = mime
+        ? new MediaRecorder(dest.stream, { mimeType: mime })
+        : new MediaRecorder(dest.stream)
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data)
+      }
+      recorder.start(1000)
+      recorderRef.current = recorder
+      recordChunksRef.current = chunks
+    } catch {
+      // Recording is best-effort; a failure here must not break the broadcast.
+      recorderRef.current = null
+    }
+  }, [])
+
+  /** Stops the session recording and resolves with the captured audio Blob. */
+  const stopRecording = useCallback(async (): Promise<Blob | null> => {
+    const recorder = recorderRef.current
+    if (!recorder) return null
+
+    const done = new Promise<void>((resolve) => {
+      recorder.onstop = () => resolve()
+    })
+    try {
+      recorder.stop()
+    } catch {
+      // already stopped
+    }
+    await done
+
+    const blob = new Blob(recordChunksRef.current, { type: recordMimeRef.current || "audio/webm" })
+    recorderRef.current = null
+    recordChunksRef.current = []
+    await recordCtxRef.current?.close().catch(() => {})
+    recordCtxRef.current = null
+    recordDestRef.current = null
+    return blob.size > 0 ? blob : null
+  }, [])
+
   const disconnect = useCallback(async () => {
     const room = roomRef.current
     if (!room) return
@@ -191,6 +295,7 @@ export function useLiveAudio() {
       musicTrackRef.current = null
     }
     if (musicElRef.current) musicElRef.current.pause()
+    musicStreamRef.current = null
     await room.disconnect()
     audioElsRef.current.forEach((el) => el.remove())
     audioElsRef.current.clear()
@@ -219,5 +324,7 @@ export function useLiveAudio() {
     setMusicVolume,
     setMusicPlaying,
     stopMusic,
+    startRecording,
+    stopRecording,
   }
 }

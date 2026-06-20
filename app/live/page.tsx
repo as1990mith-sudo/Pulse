@@ -2,9 +2,9 @@ import Link from "next/link"
 import { ArrowRight, Headphones, Library, Radio } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
 import { LiveStreamCard } from "@/components/live-stream-card"
-import { EpisodeCatalog } from "@/components/episode-catalog"
+import { PodcastLibrary } from "@/components/podcast-library"
 import { LiveBadge } from "@/components/live-badge"
-import { getCatalogEpisodes } from "@/lib/content"
+import { getPodcastHosts } from "@/lib/content"
 import { getLiveStreams } from "@/app/actions/live"
 
 function SectionHeading({
@@ -31,7 +31,7 @@ function SectionHeading({
 }
 
 export default async function LivePage() {
-  const [streams, episodes] = await Promise.all([getLiveStreams(), getCatalogEpisodes()])
+  const [streams, hosts] = await Promise.all([getLiveStreams(), getPodcastHosts()])
   const liveCount = streams.length
 
   return (
@@ -68,15 +68,15 @@ export default async function LivePage() {
             )}
           </section>
 
-          {/* On demand library (merged catalogue) */}
+          {/* Podcast library — host accounts who publish episodes */}
           <section id="library" className="space-y-6">
             <SectionHeading
               eyebrow="On demand"
               icon={Library}
-              title="Episode library"
-              description="Every recorded live show, ready when you are. Filter by category to find your next listen."
+              title="Podcast library"
+              description="Browse the hosts publishing on Frequency. Open a host to hear their recorded episodes."
             />
-            <EpisodeCatalog episodes={episodes} />
+            <PodcastLibrary hosts={hosts} />
           </section>
 
           {/* Host CTA */}

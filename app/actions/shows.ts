@@ -35,6 +35,7 @@ export async function publishShow(input: {
   duration: string
   description: string
   cover: string | null
+  audioUrl?: string | null
 }): Promise<ActionResult> {
   const user = await requireUser()
 
@@ -65,6 +66,7 @@ export async function publishShow(input: {
     duration: input.duration.trim() || null,
     cover: input.cover,
     description,
+    audioUrl: input.audioUrl ?? null,
   })
 
   revalidatePath("/live")

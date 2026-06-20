@@ -8,7 +8,6 @@ import {
   Heart,
   MessageCircle,
   Repeat2,
-  Share2,
   Check,
   ImagePlus,
   X,
@@ -20,6 +19,7 @@ import {
 import { addPostComment, createPost, getFeed, setPostLike, type FeedPostView } from "@/app/actions/feed"
 import { toggleFollow } from "@/app/actions/follow"
 import type { CurrentUser } from "@/lib/session"
+import { uploadMedia } from "@/lib/upload-media"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -64,11 +64,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
     }
     setUploading(true)
     try {
-      const body = new FormData()
-      body.append("file", file)
-      const res = await fetch("/api/upload-chat", { method: "POST", body })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Upload failed.")
+      const data = await uploadMedia(file, "chat")
       setMedia({ url: data.url, type: isVideo ? "video" : "image" })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed.")
@@ -403,7 +399,7 @@ export function PostCard({ post, currentUser }: { post: FeedPostView; currentUse
           className="flex items-center gap-1.5 text-sm tabular-nums transition-colors hover:text-muted-foreground"
           aria-label="Share"
         >
-          {shared ? <Check className="size-6 text-chart-2" /> : <Share2 className="size-6" />}
+          {shared ? <Check className="size-6 text-chart-2" /> : <Send className="size-6" />}
           {shares > 0 && <span>{shares}</span>}
         </button>
       </div>

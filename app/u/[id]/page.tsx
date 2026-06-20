@@ -5,6 +5,8 @@ import { getPostsByUser } from "@/app/actions/feed"
 import { getCurrentUser } from "@/lib/session"
 import { SiteHeader } from "@/components/site-header"
 import { ProfileFollowButton } from "@/components/profile/profile-follow-button"
+import { ProfileMessageButton } from "@/components/profile/profile-message-button"
+import { ProfileFollowStats } from "@/components/profile/profile-follow-stats"
 import { ProfileTabs } from "@/components/profile/profile-tabs"
 import { ProfileAvatar } from "@/components/profile/profile-avatar"
 
@@ -35,33 +37,25 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
             <div className="space-y-1">
               <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{profile.name}</h1>
               <p className="text-muted-foreground">{profile.handle}</p>
-              <div className="flex items-center gap-4 pt-1 text-sm">
-                <span>
-                  <span className="font-semibold text-foreground">{profile.followers}</span>{" "}
-                  <span className="text-muted-foreground">followers</span>
-                </span>
-                <span>
-                  <span className="font-semibold text-foreground">{profile.following}</span>{" "}
-                  <span className="text-muted-foreground">following</span>
-                </span>
-                <span>
-                  <span className="font-semibold text-foreground">{episodes.length}</span>{" "}
-                  <span className="text-muted-foreground">episodes</span>
-                </span>
-                <span>
-                  <span className="font-semibold text-foreground">{posts.length}</span>{" "}
-                  <span className="text-muted-foreground">tweets</span>
-                </span>
-              </div>
+              <ProfileFollowStats
+                userId={profile.id}
+                followers={profile.followers}
+                following={profile.following}
+                episodes={episodes.length}
+                posts={posts.length}
+              />
             </div>
           </div>
 
           {!profile.isSelf && (
-            <ProfileFollowButton
-              targetUserId={profile.id}
-              targetName={profile.name}
-              initialFollowing={profile.isFollowing}
-            />
+            <div className="flex items-center gap-2">
+              <ProfileFollowButton
+                targetUserId={profile.id}
+                targetName={profile.name}
+                initialFollowing={profile.isFollowing}
+              />
+              {currentUser && <ProfileMessageButton targetUserId={profile.id} targetName={profile.name} />}
+            </div>
           )}
         </header>
 

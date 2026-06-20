@@ -22,11 +22,22 @@ export function ProfileTabs({
   posts: FeedPostView[]
   currentUser: CurrentUser | null
 }) {
-  const [tab, setTab] = useState<"episodes" | "tweets">("episodes")
+  const [tab, setTab] = useState<"posts" | "episodes">("posts")
 
   return (
     <section className="mt-8 space-y-6">
       <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-card/40 p-1">
+        <button
+          onClick={() => setTab("posts")}
+          className={cn(
+            "flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+            tab === "posts" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
+          )}
+          aria-pressed={tab === "posts"}
+        >
+          <MessageSquare className="size-4" />
+          Posts{posts.length > 0 ? ` (${posts.length})` : ""}
+        </button>
         <button
           onClick={() => setTab("episodes")}
           className={cn(
@@ -37,17 +48,6 @@ export function ProfileTabs({
         >
           <Mic className="size-4" />
           Episodes{episodes.length > 0 ? ` (${episodes.length})` : ""}
-        </button>
-        <button
-          onClick={() => setTab("tweets")}
-          className={cn(
-            "flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-            tab === "tweets" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
-          )}
-          aria-pressed={tab === "tweets"}
-        >
-          <MessageSquare className="size-4" />
-          Tweets{posts.length > 0 ? ` (${posts.length})` : ""}
         </button>
       </div>
 
@@ -68,10 +68,10 @@ export function ProfileTabs({
       ) : posts.length === 0 ? (
         <EmptyState
           icon={<MessageSquare className="size-6" />}
-          title="No tweets yet"
+          title="No posts yet"
           message={
             isSelf
-              ? "Share what's on your mind from the Tweet tab and your posts will show up here."
+              ? "Share what's on your mind from the Post tab and your posts will show up here."
               : `${name} hasn't posted anything yet.`
           }
         />

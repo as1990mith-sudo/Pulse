@@ -3,6 +3,7 @@
 import { useRef, useState } from "react"
 import { ImagePlus, Loader2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { uploadMedia } from "@/lib/upload-media"
 
 export function CoverUpload({
   value,
@@ -21,11 +22,7 @@ export function CoverUpload({
     setError(null)
     setUploading(true)
     try {
-      const formData = new FormData()
-      formData.append("file", file)
-      const res = await fetch("/api/upload", { method: "POST", body: formData })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Upload failed")
+      const data = await uploadMedia(file, "covers")
       onChange(data.url)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed")

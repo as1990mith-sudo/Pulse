@@ -5,6 +5,21 @@ export type Host = {
   handle: string
 }
 
+// A podcast host account surfaced in the library: a real user who has
+// published at least one episode, plus a summary of their catalogue.
+export type PodcastHost = {
+  id: string // user id (links to their profile)
+  name: string
+  handle: string
+  initials: string
+  color: string
+  image: string | null
+  episodeCount: number
+  categories: string[]
+  latestTitle: string
+  latestAt: string
+}
+
 export type Show = {
   id: string
   title: string
@@ -18,6 +33,7 @@ export type Show = {
   duration?: string // for ended episodes
   publishedAt?: string
   description: string
+  audioUrl?: string // recorded audio for on-demand episodes
 }
 
 export type DevotionalComment = {

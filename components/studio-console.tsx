@@ -23,6 +23,7 @@ import type { CurrentUser } from "@/lib/session"
 import { publishShow } from "@/app/actions/shows"
 import { startBroadcast, endBroadcast } from "@/app/actions/live"
 import { useLiveAudio } from "@/lib/use-live-audio"
+import { uploadMedia } from "@/lib/upload-media"
 import { LiveChat } from "@/components/live-chat"
 import { CoverUpload } from "@/components/admin/cover-upload"
 import { Button } from "@/components/ui/button"
@@ -64,11 +65,21 @@ function StudioWaveform({ active }: { active: boolean }) {
   )
 }
 
-type EndedSession = { title: string; duration: string } | null
+type EndedSession = { title: string; duration: string; audioBlob: Blob | null } | null
 
 export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
-  const { state, connect, disconnect, toggleMic, publishMusic, setMusicVolume, setMusicPlaying, stopMusic } =
-    useLiveAudio()
+  const {
+    state,
+    connect,
+    disconnect,
+    toggleMic,
+    publishMusic,
+    setMusicVolume,
+    setMusicPlaying,
+    stopMusic,
+    startRecording,
+    stopRecording,
+  } = useLiveAudio()
   const live = state.connected
   const micOn = state.micEnabled
   const [elapsed, setElapsed] = useState(0)
@@ -90,12 +101,13 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
   async function toggleLive() {
     setError(null)
     if (live) {
-      // Ending the stream: stop the broadcast and offer to publish the session.
+      // Ending the stream: stop recording, stop the broadcast, offer to publish.
       const duration = formatDuration(elapsed)
+      const audioBlob = await stopRecording().catch(() => null)
       if (roomName) await endBroadcast({ roomName }).catch(() => {})
       await disconnect()
       setRoomName(null)
-      setEndedSession({ title, duration })
+      setEndedSession({ title, duration, audioBlob })
       setElapsed(0)
     } else {
       setStarting(true)
@@ -109,6 +121,8 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
       setEndedSession(null)
       setElapsed(0)
       await connect({ serverUrl: res.serverUrl, token: res.token, publish: true })
+      // Capture the session so it can be published with playable audio.
+      startRecording()
     }
   }
 
@@ -180,12 +194,7 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
         </div>
 
         {/* Publish panel — shown after a stream ends */}
-        {endedSession && (
-          <PublishPanel
-            session={endedSession}
-            onClose={() => setEndedSession(null)}
-          />
-        )}
+        {endedSession && <PublishPanel session={endedSession} onClose={() => setEndedSession(null)} />}
 
         {/* Background music */}
         <BackgroundMusicPanel
@@ -315,13 +324,13 @@ function BackgroundMusicPanel({
     const file = e.target.files?.[0]
     if (!file) return
     setError(null)
+    if (!file.type.startsWith("audio/")) {
+      setError("Please choose an audio file")
+      return
+    }
     setUploading(true)
     try {
-      const formData = new FormData()
-      formData.append("file", file)
-      const res = await fetch("/api/upload-audio", { method: "POST", body: formData })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? "Upload failed")
+      const data = await uploadMedia(file, "live-music")
       setTrack({ url: data.url, name: data.name ?? file.name })
       setPlaying(false)
     } catch (err) {
@@ -433,7 +442,7 @@ function PublishPanel({
   session,
   onClose,
 }: {
-  session: { title: string; duration: string }
+  session: { title: string; duration: string; audioBlob: Blob | null }
   onClose: () => void
 }) {
   const router = useRouter()
@@ -451,6 +460,20 @@ function PublishPanel({
     e.preventDefault()
     setError(null)
     startTransition(async () => {
+      // Upload the recorded session audio first (best-effort) so the published
+      // episode is playable on demand.
+      let audioUrl: string | null = null
+      if (session.audioBlob) {
+        try {
+          const ext = session.audioBlob.type.includes("mp4") ? "mp4" : "webm"
+          const file = new File([session.audioBlob], `session.${ext}`, { type: session.audioBlob.type })
+          const data = await uploadMedia(file, "episodes")
+          audioUrl = data.url
+        } catch {
+          // Continue publishing without audio rather than failing the publish.
+        }
+      }
+
       const res = await publishShow({
         title,
         tagline,
@@ -458,6 +481,7 @@ function PublishPanel({
         duration: session.duration,
         description,
         cover,
+        audioUrl,
       })
       if (res.ok) {
         setPublished(true)
@@ -488,7 +512,12 @@ function PublishPanel({
           <Upload className="size-5 text-primary" />
           <div>
             <h2 className="font-semibold">Publish this session</h2>
-            <p className="text-xs text-muted-foreground">Recorded {session.duration}. Save it to your profile catalogue.</p>
+            <p className="text-xs text-muted-foreground">
+              Recorded {session.duration}.{" "}
+              {session.audioBlob
+                ? "The audio is attached so listeners can play it on demand."
+                : "No audio was captured — it will publish as a show page."}
+            </p>
           </div>
         </div>
         <Button type="button" size="icon" variant="ghost" className="size-8 shrink-0" onClick={onClose} aria-label="Dismiss">
