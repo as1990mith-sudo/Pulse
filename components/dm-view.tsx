@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState } from "react"
 import useSWR from "swr"
 import Link from "next/link"
-import { ArrowLeft, FileText, Music, Paperclip, Send, Smile, X } from "lucide-react"
+import { ArrowLeft, FileText, Mic, Music, Paperclip, Send, Smile, X } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ImageLightbox } from "@/components/image-lightbox"
+import { VoiceRecorder } from "@/components/voice-recorder"
 import { cn } from "@/lib/utils"
 import { uploadMedia } from "@/lib/upload-media"
 import {
@@ -34,6 +35,8 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [showEmoji, setShowEmoji] = useState(false)
   const [pending, setPending] = useState<DmMessageView[]>([])
+  const [recording, setRecording] = useState(false)
+  const [sendingVoice, setSendingVoice] = useState(false)
   const scrollEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -69,6 +72,43 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ""
+    }
+  }
+
+  async function handleSendVoice(blob: Blob, durationSecs: number) {
+    setSendingVoice(true)
+    setUploadError(null)
+    try {
+      const fileName = `voice-note-${Date.now()}.webm`
+      const data = await uploadMedia(blob, "dm", fileName)
+      const label = `Voice note (${Math.floor(durationSecs / 60)}:${String(durationSecs % 60).padStart(2, "0")})`
+
+      setRecording(false)
+      setPending((prev) => [
+        ...prev,
+        {
+          id: -Date.now(),
+          senderId: detail.currentUserId,
+          body: null,
+          attachmentUrl: data.url,
+          attachmentType: "audio",
+          attachmentName: label,
+          isSelf: true,
+          postedAt: "now",
+        },
+      ])
+
+      await sendDirectMessage({
+        conversationId: detail.id,
+        attachmentUrl: data.url,
+        attachmentType: "audio",
+        attachmentName: label,
+      })
+      await mutateMessages()
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Could not send voice note")
+    } finally {
+      setSendingVoice(false)
     }
   }
 
@@ -184,51 +224,75 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
             </div>
           )}
 
-          <form onSubmit={handleSend} className="flex items-center gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip"
-              className="hidden"
-              onChange={handleFilePick}
+          {recording ? (
+            <VoiceRecorder
+              onSend={handleSendVoice}
+              onCancel={() => setRecording(false)}
+              sending={sendingVoice}
             />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="shrink-0 text-muted-foreground"
-              onClick={() => setShowEmoji((s) => !s)}
-              aria-label="Toggle emoji picker"
-            >
-              <Smile className="size-5" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="shrink-0 text-muted-foreground"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              aria-label="Attach a file"
-            >
-              <Paperclip className={cn("size-5", uploading && "animate-pulse")} />
-            </Button>
-            <Input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder={uploading ? "Uploading attachment…" : "Type a message"}
-              aria-label="Message"
-            />
-            <Button
-              type="submit"
-              size="icon"
-              className="shrink-0"
-              disabled={uploading || (!draft.trim() && !attachment)}
-              aria-label="Send message"
-            >
-              <Send className="size-4" />
-            </Button>
-          </form>
+          ) : (
+            <form onSubmit={handleSend} className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip"
+                className="hidden"
+                onChange={handleFilePick}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="shrink-0 text-muted-foreground"
+                onClick={() => setShowEmoji((s) => !s)}
+                aria-label="Toggle emoji picker"
+              >
+                <Smile className="size-5" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="shrink-0 text-muted-foreground"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                aria-label="Attach a file"
+              >
+                <Paperclip className={cn("size-5", uploading && "animate-pulse")} />
+              </Button>
+              <Input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder={uploading ? "Uploading attachment…" : "Type a message"}
+                aria-label="Message"
+              />
+              {draft.trim() || attachment ? (
+                <Button
+                  type="submit"
+                  size="icon"
+                  className="shrink-0"
+                  disabled={uploading}
+                  aria-label="Send message"
+                >
+                  <Send className="size-4" />
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  size="icon"
+                  className="shrink-0"
+                  onClick={() => {
+                    setShowEmoji(false)
+                    setRecording(true)
+                  }}
+                  disabled={uploading}
+                  aria-label="Record a voice note"
+                >
+                  <Mic className="size-4" />
+                </Button>
+              )}
+            </form>
+          )}
         </div>
       </div>
     </div>
