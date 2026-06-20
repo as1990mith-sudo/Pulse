@@ -49,6 +49,14 @@ export function DmCall({
   const [camOn, setCamOn] = useState(call.mode === "video")
   const [remoteVideoOn, setRemoteVideoOn] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Seconds elapsed since the call actually connected (callee accepted).
+  const [elapsed, setElapsed] = useState(0)
+
+  // The call is truly "live" only once the callee has accepted (status flips to
+  // "active") AND this client is connected to the LiveKit room. The caller
+  // joins LiveKit immediately while ringing, so we must NOT treat that as
+  // connected — otherwise the caller would see "Connected" before pickup.
+  const isLive = call.status === "active" && connected
 
   // For the callee, an unanswered ringing call shows the accept prompt. The
   // caller goes straight to the "ringing" connecting state.
@@ -130,6 +138,18 @@ export function DmCall({
 
   useEffect(() => () => cleanup(), [cleanup])
 
+  // Once the call goes live (callee accepted + connected), start ticking the
+  // call duration. Resets if the call ever drops back out of the live state.
+  useEffect(() => {
+    if (!isLive) {
+      setElapsed(0)
+      return
+    }
+    const start = Date.now()
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000)
+    return () => clearInterval(id)
+  }, [isLive])
+
   // Callee: as soon as the ringing call appears on this device, acknowledge it
   // so the caller's UI can switch from "Calling" to "Ringing".
   useEffect(() => {
@@ -188,6 +208,15 @@ export function DmCall({
 
   const showVideo = call.mode === "video"
 
+  function formatDuration(totalSeconds: number): string {
+    const h = Math.floor(totalSeconds / 3600)
+    const m = Math.floor((totalSeconds % 3600) / 60)
+    const s = totalSeconds % 60
+    const mm = String(m).padStart(2, "0")
+    const ss = String(s).padStart(2, "0")
+    return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background">
       {/* Remote media layer */}
@@ -214,8 +243,9 @@ export function DmCall({
               <p className="text-sm text-muted-foreground">
                 {phase === "prompt"
                   ? `Incoming ${call.mode} call…`
-                  : connected
-                    ? "Connected"
+                  : isLive
+                    ? // Connected: show the live, ticking call duration.
+                      formatDuration(elapsed)
                     : call.isCaller
                       ? // Caller: "Calling" until the callee's device rings, then "Ringing".
                         call.calleeAck
@@ -234,7 +264,8 @@ export function DmCall({
             autoPlay
             playsInline
             muted
-            className="absolute bottom-4 right-4 h-40 w-28 rounded-xl border border-border object-cover shadow-lg"
+            // Mirror the local self-view so it reads like a mirror to the user.
+            className="absolute bottom-4 right-4 h-40 w-28 -scale-x-100 rounded-xl border border-border object-cover shadow-lg"
           />
         )}
 
