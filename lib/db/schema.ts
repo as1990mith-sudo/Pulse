@@ -268,8 +268,24 @@ export const liveStream = pgTable("live_stream", {
   category: text("category"),
   cover: text("cover"),
   status: text("status").notNull().default("live"), // "live" | "ended"
+  chatBgUrl: text("chatBgUrl"), // host-uploaded chat background image
+  chatBgEffect: text("chatBgEffect").notNull().default("none"), // "none" | "blur" | "dim"
   startedAt: timestamp("startedAt").notNull().defaultNow(),
   endedAt: timestamp("endedAt"),
+})
+
+// Call-in requests (listener -> host) and invites (host -> listener) for a live
+// room. kind = "request" | "invite"; status = "pending" | "accepted" |
+// "declined" | "ended". Drives the guest call-in flow on top of LiveKit.
+export const liveCallRequest = pgTable("live_call_request", {
+  id: serial("id").primaryKey(),
+  roomName: text("roomName").notNull(),
+  userId: text("userId").notNull(),
+  userName: text("userName").notNull(),
+  kind: text("kind").notNull(),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 })
 
 // Real-time chat messages for a live stream room. Listeners poll for new

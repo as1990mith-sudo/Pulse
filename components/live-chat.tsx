@@ -6,7 +6,7 @@ import useSWR from "swr"
 import { Send } from "lucide-react"
 import type { CurrentUser } from "@/lib/session"
 import { getAvatarColor, getInitials } from "@/lib/identity"
-import { getLiveChat, sendLiveChat, type LiveChatMessageView } from "@/app/actions/live"
+import { getLiveChat, getCallState, sendLiveChat, type LiveChatMessageView } from "@/app/actions/live"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -21,10 +21,15 @@ export function LiveChat({
   asHost = false,
   currentUser = null,
   roomName,
+  bgUrl = null,
+  bgEffect = "none",
 }: {
   asHost?: boolean
   currentUser?: CurrentUser | null
   roomName?: string
+  // Host-controlled chat background (image URL + blur/dim treatment).
+  bgUrl?: string | null
+  bgEffect?: "none" | "blur" | "dim"
 }) {
   const [draft, setDraft] = useState("")
   const [isPending, startTransition] = useTransition()
@@ -64,8 +69,29 @@ export function LiveChat({
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <ScrollArea className="flex-1">
+    <div className="relative flex h-full flex-col">
+      {/* Host-controlled background image sits behind the messages. */}
+      {bgUrl && (
+        <>
+          <div
+            aria-hidden="true"
+            className={cn(
+              "pointer-events-none absolute inset-0 bg-cover bg-center",
+              bgEffect === "blur" && "blur-sm scale-105",
+            )}
+            style={{ backgroundImage: `url(${bgUrl})` }}
+          />
+          {/* Scrim keeps text legible over any image (stronger when dimmed). */}
+          <div
+            aria-hidden="true"
+            className={cn(
+              "pointer-events-none absolute inset-0",
+              bgEffect === "dim" ? "bg-background/80" : "bg-background/55",
+            )}
+          />
+        </>
+      )}
+      <ScrollArea className="relative flex-1">
         <ul ref={scrollRef} className="flex flex-col gap-5 p-4">
           {messages.length === 0 && (
             <li className="py-8 text-center text-sm text-muted-foreground">
@@ -94,7 +120,7 @@ export function LiveChat({
       </ScrollArea>
 
       {canSend ? (
-        <form onSubmit={send} className="space-y-3 border-t border-border/60 p-3">
+        <form onSubmit={send} className="relative space-y-3 border-t border-border/60 bg-card/80 p-3 backdrop-blur">
           <Textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}

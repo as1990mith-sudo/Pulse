@@ -1,40 +1,55 @@
 "use client"
 
 import { useEffect, useRef, useState, useTransition } from "react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
+import useSWR from "swr"
 import {
   Check,
   CheckCircle2,
   Copy,
+  ImageIcon,
   Loader2,
   Mic,
   MicOff,
   Music,
   Pause,
+  Phone,
+  PhoneOff,
   Play,
   Radio,
   Share2,
+  SkipBack,
+  SkipForward,
+  Trash2,
   Upload,
   Users,
   X,
 } from "lucide-react"
 import type { CurrentUser } from "@/lib/session"
 import { publishShow } from "@/app/actions/shows"
-import { startBroadcast, endBroadcast } from "@/app/actions/live"
+import {
+  startBroadcast,
+  endBroadcast,
+  getCallState,
+  respondToCallRequest,
+  removeFromStage,
+  setChatBackground,
+  type CallRequestView,
+  type ChatBgEffect,
+} from "@/app/actions/live"
 import { useLiveAudio } from "@/lib/use-live-audio"
 import { uploadMedia } from "@/lib/upload-media"
 import { LiveChat } from "@/components/live-chat"
+import { LiveStage } from "@/components/live-stage"
 import { CoverUpload } from "@/components/admin/cover-upload"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 
 function formatTime(s: number) {
   const m = Math.floor(s / 60)
-  const sec = s % 60
+  const sec = Math.floor(s % 60)
   return `${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`
 }
 
@@ -46,36 +61,20 @@ function formatDuration(s: number) {
   return `${h}h ${(m % 60).toString().padStart(2, "0")}m`
 }
 
-function StudioWaveform({ active }: { active: boolean }) {
-  const bars = Array.from({ length: 28 }, (_, i) => i)
-  return (
-    <div className="flex h-12 items-end justify-center gap-1" aria-hidden="true">
-      {bars.map((i) => (
-        <span
-          key={i}
-          className={cn("w-1.5 rounded-full bg-primary", active ? "animate-live-pulse" : "h-1.5 opacity-30")}
-          style={
-            active
-              ? { height: `${20 + ((i * 41) % 80)}%`, animationDelay: `${(i % 7) * 0.1}s`, animationDuration: "0.9s" }
-              : undefined
-          }
-        />
-      ))}
-    </div>
-  )
-}
-
 type EndedSession = { title: string; duration: string; audioBlob: Blob | null } | null
+type Track = { url: string; name: string }
 
 export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
   const {
     state,
+    speakers,
     connect,
     disconnect,
     toggleMic,
     publishMusic,
     setMusicVolume,
     setMusicPlaying,
+    seekMusic,
     stopMusic,
     startRecording,
     stopRecording,
@@ -88,9 +87,19 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
   const [roomName, setRoomName] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Which slide-up panel is open (music / listeners / background). Only one at a
+  // time keeps the studio compact and free of scroll.
+  const [panel, setPanel] = useState<null | "music" | "people" | "background">(null)
 
-  // Listeners = participants in the room minus the host.
-  const viewers = Math.max(0, state.listeners - 1)
+  const viewers = Math.max(0, state.listeners - 1 - speakers.filter((s) => !s.isLocal).length)
+
+  // Host polls the call state to surface pending guest requests.
+  const { data: callState, mutate: refreshCalls } = useSWR(
+    live && roomName ? ["call-state", roomName] : null,
+    () => getCallState({ roomName: roomName! }),
+    { refreshInterval: 2500 },
+  )
+  const pending = callState?.pendingRequests ?? []
 
   useEffect(() => {
     if (!live) return
@@ -101,12 +110,12 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
   async function toggleLive() {
     setError(null)
     if (live) {
-      // Ending the stream: stop recording, stop the broadcast, offer to publish.
       const duration = formatDuration(elapsed)
       const audioBlob = await stopRecording().catch(() => null)
       if (roomName) await endBroadcast({ roomName }).catch(() => {})
       await disconnect()
       setRoomName(null)
+      setPanel(null)
       setEndedSession({ title, duration, audioBlob })
       setElapsed(0)
     } else {
@@ -121,198 +130,359 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
       setEndedSession(null)
       setElapsed(0)
       await connect({ serverUrl: res.serverUrl, token: res.token, publish: true })
-      // Capture the session so it can be published with playable audio.
       startRecording()
     }
   }
 
+  async function acceptCall(id: number) {
+    const res = await respondToCallRequest({ id, accept: true })
+    if (!res.ok && res.error) setError(res.error)
+    refreshCalls()
+  }
+  async function declineCall(id: number) {
+    await respondToCallRequest({ id, accept: false })
+    refreshCalls()
+  }
+  async function dropGuest(identity: string) {
+    if (!roomName) return
+    await removeFromStage({ roomName, userId: identity })
+    refreshCalls()
+  }
+
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-      {/* Stage + controls */}
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-card px-4 py-3">
-          <div className="flex items-center gap-4">
-            <span
-              className={cn(
-                "inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold",
-                live ? "bg-live text-live-foreground" : "bg-secondary text-muted-foreground",
-              )}
-            >
-              <span className={cn("size-2 rounded-full", live ? "bg-live-foreground animate-live-pulse" : "bg-muted-foreground")} />
-              {live ? "On air" : "Offline"}
-            </span>
-            {live && <span className="font-mono text-sm tabular-nums text-muted-foreground">{formatTime(elapsed)}</span>}
-            {live && (
-              <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                <Users className="size-4" /> {viewers.toLocaleString()}
-              </span>
+    <div className="flex h-[calc(100dvh-4rem)] flex-col gap-3 px-3 py-3 sm:px-4">
+      {/* Room header: title + host, always visible */}
+      <header className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-card px-4 py-2.5">
+        <div className="flex min-w-0 items-center gap-3">
+          <span
+            className={cn(
+              "flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
+              currentUser.color,
             )}
+          >
+            {currentUser.initials}
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold leading-tight">{title || "Untitled session"}</p>
+            <p className="truncate text-xs text-muted-foreground">{currentUser.name}</p>
           </div>
-          <Button onClick={toggleLive} variant={live ? "secondary" : "default"} className="gap-2" disabled={starting || state.connecting}>
+        </div>
+        <div className="flex items-center gap-2">
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
+              live ? "bg-live text-live-foreground" : "bg-secondary text-muted-foreground",
+            )}
+          >
+            <span className={cn("size-1.5 rounded-full", live ? "bg-live-foreground animate-live-pulse" : "bg-muted-foreground")} />
+            {live ? formatTime(elapsed) : "Offline"}
+          </span>
+          <Button onClick={toggleLive} size="sm" variant={live ? "secondary" : "default"} className="gap-1.5" disabled={starting || state.connecting}>
             {starting || state.connecting ? <Loader2 className="size-4 animate-spin" /> : <Radio className="size-4" />}
-            {live ? "End stream" : starting || state.connecting ? "Connecting…" : "Go live"}
+            {live ? "End" : starting || state.connecting ? "…" : "Go live"}
           </Button>
         </div>
+      </header>
 
-        {error && (
-          <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {error}
-          </div>
-        )}
-
-        {/* Audio stage */}
-        <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-b from-secondary to-background">
-          <div className="flex flex-col items-center gap-5 px-6 py-10">
-            <span
-              className={cn(
-                "flex size-28 items-center justify-center rounded-full text-3xl font-semibold",
-                currentUser.color,
-                live && micOn && "ring-4 ring-primary/40",
-              )}
-            >
-              {currentUser.initials}
-            </span>
-            <StudioWaveform active={live && micOn} />
-            <p className="text-sm text-muted-foreground">
-              {live ? (micOn ? "Your mic is live" : "Your mic is muted") : "Audio stage — go live to start broadcasting"}
-            </p>
-          </div>
-
-          <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/60 p-1.5 backdrop-blur">
-            <button
-              onClick={() => toggleMic()}
-              disabled={!live}
-              className={cn(
-                "flex size-10 items-center justify-center rounded-full transition-colors disabled:opacity-50",
-                micOn ? "bg-secondary text-foreground hover:bg-secondary/80" : "bg-primary text-primary-foreground",
-              )}
-              aria-label={micOn ? "Mute microphone" : "Unmute microphone"}
-            >
-              {micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
-            </button>
-          </div>
+      {error && (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
         </div>
+      )}
 
-        {/* Publish panel — shown after a stream ends */}
-        {endedSession && <PublishPanel session={endedSession} onClose={() => setEndedSession(null)} />}
+      {/* Stage: host + 3 guests, always visible (no scroll) */}
+      <div className="rounded-xl border border-border/60 bg-gradient-to-b from-secondary/60 to-card p-3">
+        <LiveStage
+          host={{ id: currentUser.id, name: currentUser.name, color: currentUser.color }}
+          speakers={speakers}
+          activeSpeakers={state.activeSpeakers}
+          isHost
+          onRemoveGuest={dropGuest}
+        />
+      </div>
 
-        {/* Background music */}
-        <BackgroundMusicPanel
+      {/* Control bar: mic + tool icons, always visible */}
+      <div className="flex items-center justify-center gap-2">
+        <button
+          onClick={() => toggleMic()}
+          disabled={!live}
+          className={cn(
+            "flex size-11 items-center justify-center rounded-full transition-colors disabled:opacity-50",
+            micOn ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground",
+          )}
+          aria-label={micOn ? "Mute microphone" : "Unmute microphone"}
+        >
+          {micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
+        </button>
+
+        <ToolButton
+          icon={<Users className="size-5" />}
+          label="People"
+          badge={pending.length}
+          active={panel === "people"}
+          disabled={!live}
+          onClick={() => setPanel((p) => (p === "people" ? null : "people"))}
+        />
+        <ToolButton
+          icon={<Music className="size-5" />}
+          label="Music"
+          active={panel === "music"}
+          disabled={!live}
+          onClick={() => setPanel((p) => (p === "music" ? null : "music"))}
+        />
+        <ToolButton
+          icon={<ImageIcon className="size-5" />}
+          label="Background"
+          active={panel === "background"}
+          disabled={!live}
+          onClick={() => setPanel((p) => (p === "background" ? null : "background"))}
+        />
+        {live && roomName && <ShareButton roomName={roomName} />}
+      </div>
+
+      {/* Chat: the ONLY scrollable region */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/60 bg-card">
+        <div className="border-b border-border/60 px-4 py-2">
+          <h2 className="text-sm font-semibold">Live chat</h2>
+        </div>
+        <div className="min-h-0 flex-1">
+          <LiveChat asHost currentUser={currentUser} roomName={roomName ?? undefined} />
+        </div>
+      </div>
+
+      {/* Slide-up panels (overlay, don't push layout) */}
+      {panel === "people" && (
+        <PeoplePanel
+          roomName={roomName}
+          pending={pending}
+          guests={callState?.guests ?? []}
+          viewers={viewers}
+          onAccept={acceptCall}
+          onDecline={declineCall}
+          onRemove={dropGuest}
+          onClose={() => setPanel(null)}
+        />
+      )}
+      {panel === "music" && (
+        <MusicPanel
           live={live}
+          position={state.musicPosition}
+          duration={state.musicDuration}
           onPublish={publishMusic}
           onVolume={setMusicVolume}
           onPlayingChange={setMusicPlaying}
+          onSeek={seekMusic}
           onStop={stopMusic}
+          onClose={() => setPanel(null)}
         />
+      )}
+      {panel === "background" && roomName && (
+        <BackgroundPanel roomName={roomName} onClose={() => setPanel(null)} />
+      )}
 
-        {/* Show setup */}
-        <div className="space-y-2 rounded-xl border border-border/60 bg-card p-4">
-          <label htmlFor="show-title" className="text-sm font-medium">
-            Stream title
-          </label>
-          <Input
-            id="show-title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            disabled={live}
-            aria-describedby={live ? "title-locked" : undefined}
-          />
-          {live && (
-            <p id="title-locked" className="text-xs text-muted-foreground">
-              The title is locked while you&apos;re on air.
-            </p>
-          )}
-          <div className="flex items-center gap-3 pt-1">
-            <Avatar className="size-8">
-              <AvatarFallback className={currentUser.color}>{currentUser.initials}</AvatarFallback>
-            </Avatar>
-            <span className="text-sm text-muted-foreground">
-              Broadcasting as <span className="font-medium text-foreground">{currentUser.name}</span>
-            </span>
-          </div>
-        </div>
-
-        {/* Shareable session link — visible once live */}
-        {live && roomName && <ShareLink roomName={roomName} />}
-      </div>
-
-      {/* Live chat */}
-      <aside className="lg:sticky lg:top-20 lg:h-[calc(100vh-7rem)]">
-        <div className="flex h-[560px] flex-col overflow-hidden rounded-2xl border border-border/60 bg-card lg:h-full">
-          <div className="border-b border-border/60 px-4 py-3">
-            <h2 className="text-sm font-semibold">Live chat</h2>
-          </div>
-          <div className="min-h-0 flex-1">
-            <LiveChat asHost currentUser={currentUser} roomName={roomName ?? undefined} />
-          </div>
-        </div>
-      </aside>
+      {endedSession && <PublishOverlay session={endedSession} onClose={() => setEndedSession(null)} />}
     </div>
   )
 }
 
-/** Read-only share box for the live session, with copy-to-clipboard. */
-function ShareLink({ roomName }: { roomName: string }) {
+function ToolButton({
+  icon,
+  label,
+  badge = 0,
+  active,
+  disabled,
+  onClick,
+}: {
+  icon: React.ReactNode
+  label: string
+  badge?: number
+  active: boolean
+  disabled?: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      aria-pressed={active}
+      className={cn(
+        "relative flex size-11 items-center justify-center rounded-full transition-colors disabled:opacity-50",
+        active ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground hover:bg-secondary/80",
+      )}
+    >
+      {icon}
+      {badge > 0 && (
+        <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-live text-[10px] font-bold text-live-foreground">
+          {badge}
+        </span>
+      )}
+    </button>
+  )
+}
+
+/** Bottom sheet shell shared by all studio panels. */
+function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative z-10 max-h-[80dvh] w-full overflow-y-auto rounded-t-2xl border border-border/60 bg-card p-4 sm:max-w-md sm:rounded-2xl">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold">{title}</h2>
+          <Button type="button" size="icon" variant="ghost" className="size-8" onClick={onClose} aria-label="Close">
+            <X className="size-4" />
+          </Button>
+        </div>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function ShareButton({ roomName }: { roomName: string }) {
   const [copied, setCopied] = useState(false)
   const url = typeof window !== "undefined" ? `${window.location.origin}/live/${roomName}` : `/live/${roomName}`
-
   async function copy() {
     try {
       await navigator.clipboard.writeText(url)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      // clipboard may be unavailable; the input is still selectable
+      // ignore
     }
   }
-
   return (
-    <div className="space-y-2 rounded-xl border border-border/60 bg-card p-4">
-      <div className="flex items-center gap-2">
-        <Share2 className="size-4 text-primary" />
-        <h2 className="text-sm font-medium">Share this session</h2>
-      </div>
-      <p className="text-xs text-muted-foreground leading-relaxed">
-        Send this link so anyone can join and listen in real time.
-      </p>
-      <div className="flex items-center gap-2">
-        <Input value={url} readOnly onFocus={(e) => e.currentTarget.select()} aria-label="Live session link" />
-        <Button type="button" variant="secondary" className="shrink-0 gap-1.5" onClick={copy}>
-          {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-          {copied ? "Copied" : "Copy"}
-        </Button>
-      </div>
-    </div>
+    <button
+      onClick={copy}
+      aria-label="Share session link"
+      className="flex size-11 items-center justify-center rounded-full bg-secondary text-foreground transition-colors hover:bg-secondary/80"
+    >
+      {copied ? <Check className="size-5" /> : <Share2 className="size-5" />}
+    </button>
   )
 }
 
-function BackgroundMusicPanel({
+/** People panel: pending call-in requests, current guests, listener invites. */
+function PeoplePanel({
+  roomName,
+  pending,
+  guests,
+  viewers,
+  onAccept,
+  onDecline,
+  onRemove,
+  onClose,
+}: {
+  roomName: string | null
+  pending: CallRequestView[]
+  guests: CallRequestView[]
+  viewers: number
+  onAccept: (id: number) => void
+  onDecline: (id: number) => void
+  onRemove: (identity: string) => void
+  onClose: () => void
+}) {
+  return (
+    <Sheet title="People" onClose={onClose}>
+      <div className="space-y-4">
+        <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <Users className="size-4" /> {viewers.toLocaleString()} listening
+        </p>
+
+        <section className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Requests to join {pending.length > 0 && `(${pending.length})`}
+          </h3>
+          {pending.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No pending requests.</p>
+          ) : (
+            <ul className="space-y-2">
+              {pending.map((r) => (
+                <li key={r.id} className="flex items-center justify-between gap-2 rounded-lg border border-border/60 p-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className={cn("flex size-8 items-center justify-center rounded-full text-xs font-semibold", r.color)}>
+                      {r.initials}
+                    </span>
+                    <span className="truncate text-sm">{r.userName}</span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <Button size="sm" className="h-8 gap-1" onClick={() => onAccept(r.id)}>
+                      <Phone className="size-3.5" /> Accept
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-8" onClick={() => onDecline(r.id)} aria-label="Decline">
+                      <PhoneOff className="size-4" />
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            On stage {guests.length > 0 && `(${guests.length}/3)`}
+          </h3>
+          {guests.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No guests on stage yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {guests.map((g) => (
+                <li key={g.id} className="flex items-center justify-between gap-2 rounded-lg border border-border/60 p-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className={cn("flex size-8 items-center justify-center rounded-full text-xs font-semibold", g.color)}>
+                      {g.initials}
+                    </span>
+                    <span className="truncate text-sm">{g.userName}</span>
+                  </div>
+                  <Button size="sm" variant="ghost" className="h-8 text-destructive" onClick={() => onRemove(g.userId)} disabled={!roomName}>
+                    Remove
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+    </Sheet>
+  )
+}
+
+/** Background music: multi-track playlist with volume + scrub controls. */
+function MusicPanel({
   live,
+  position,
+  duration,
   onPublish,
   onVolume,
   onPlayingChange,
+  onSeek,
   onStop,
+  onClose,
 }: {
   live: boolean
+  position: number
+  duration: number
   onPublish: (url: string) => Promise<void>
   onVolume: (value: number) => void
   onPlayingChange: (playing: boolean) => void
+  onSeek: (seconds: number) => void
   onStop: () => Promise<void>
+  onClose: () => void
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [track, setTrack] = useState<{ url: string; name: string } | null>(null)
+  const [tracks, setTracks] = useState<Track[]>([])
+  const [activeIndex, setActiveIndex] = useState<number | null>(null)
   const [playing, setPlaying] = useState(false)
   const [volume, setVolume] = useState(0.4)
   const [uploading, setUploading] = useState(false)
   const [mixing, setMixing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Keep the live mix volume in sync with the slider.
   useEffect(() => {
     onVolume(volume)
   }, [volume, onVolume])
 
-  // When the host goes off air, drop the mixed track.
   useEffect(() => {
     if (!live && playing) {
       setPlaying(false)
@@ -321,18 +491,16 @@ function BackgroundMusicPanel({
   }, [live, playing, onStop])
 
   async function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const files = Array.from(e.target.files ?? [])
+    if (files.length === 0) return
     setError(null)
-    if (!file.type.startsWith("audio/")) {
-      setError("Please choose an audio file")
-      return
-    }
     setUploading(true)
     try {
-      const data = await uploadMedia(file, "live-music")
-      setTrack({ url: data.url, name: data.name ?? file.name })
-      setPlaying(false)
+      for (const file of files) {
+        if (!file.type.startsWith("audio/")) continue
+        const data = await uploadMedia(file, "live-music")
+        setTracks((t) => [...t, { url: data.url, name: data.name ?? file.name }])
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed")
     } finally {
@@ -341,110 +509,182 @@ function BackgroundMusicPanel({
     }
   }
 
-  async function togglePlay() {
-    if (!track) return
-    if (playing) {
-      onPlayingChange(false)
-      setPlaying(false)
-      return
-    }
-    // First play: publish the track into the live broadcast; later toggles just resume.
+  async function playTrack(index: number) {
     setError(null)
     setMixing(true)
     try {
-      await onPublish(track.url)
+      await onPublish(tracks[index].url)
       onVolume(volume)
+      setActiveIndex(index)
       setPlaying(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not mix the track into your stream.")
+      setError(err instanceof Error ? err.message : "Could not mix the track in.")
     } finally {
       setMixing(false)
     }
   }
 
+  function togglePlay() {
+    if (activeIndex === null) return
+    if (playing) {
+      onPlayingChange(false)
+      setPlaying(false)
+    } else {
+      onPlayingChange(true)
+      setPlaying(true)
+    }
+  }
+
   return (
-    <div className="space-y-3 rounded-xl border border-border/60 bg-card p-4">
-      <div className="flex items-center gap-2">
-        <Music className="size-4 text-primary" />
-        <h2 className="text-sm font-medium">Background music</h2>
-      </div>
-      <p className="text-xs text-muted-foreground leading-relaxed">
-        Upload a backing track to play under your live audio — intro music, bed loops, or stings. Listeners hear it
-        mixed in with your voice.
-      </p>
+    <Sheet title="Background music" onClose={onClose}>
+      <div className="space-y-3">
+        <input ref={fileInputRef} type="file" accept="audio/*" multiple className="hidden" onChange={handlePick} />
 
-      <input ref={fileInputRef} type="file" accept="audio/*" className="hidden" onChange={handlePick} />
-
-      {track ? (
-        <div className="space-y-3 rounded-lg border border-border/60 bg-background p-3">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={togglePlay}
-              disabled={!live || mixing}
-              className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
-              aria-label={playing ? "Pause music" : "Play music"}
-            >
-              {mixing ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : playing ? (
-                <Pause className="size-4" />
-              ) : (
-                <Play className="size-4 translate-x-0.5" />
-              )}
-            </button>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{track.name}</p>
-              <p className="text-xs text-muted-foreground">
-                {!live ? "Go live to mix in" : playing ? "Mixed into your live audio" : "Press play to mix in"}
-              </p>
+        {/* Now playing + scrubber */}
+        {activeIndex !== null && (
+          <div className="space-y-2 rounded-lg border border-border/60 bg-background p-3">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={togglePlay}
+                disabled={!live || mixing}
+                className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-50"
+                aria-label={playing ? "Pause" : "Play"}
+              >
+                {mixing ? <Loader2 className="size-4 animate-spin" /> : playing ? <Pause className="size-4" /> : <Play className="size-4 translate-x-0.5" />}
+              </button>
+              <p className="min-w-0 flex-1 truncate text-sm font-medium">{tracks[activeIndex]?.name}</p>
             </div>
-            <Button type="button" variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()} disabled={playing}>
-              Replace
-            </Button>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Volume</span>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={volume}
-              onChange={(e) => setVolume(Number(e.target.value))}
-              className="h-1.5 flex-1 cursor-pointer accent-primary"
-              aria-label="Background music volume"
-            />
-            <span className="w-9 text-right text-xs tabular-nums text-muted-foreground">
-              {Math.round(volume * 100)}%
-            </span>
-          </div>
-        </div>
-      ) : (
-        <Button
-          type="button"
-          variant="secondary"
-          className="w-full gap-2"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-        >
-          {uploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-          {uploading ? "Uploading…" : "Upload a track"}
-        </Button>
-      )}
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
-    </div>
+            {/* Scrub bar */}
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => onSeek(Math.max(0, position - 15))} aria-label="Back 15s">
+                <SkipBack className="size-4 text-muted-foreground" />
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={duration || 0}
+                step={1}
+                value={Math.min(position, duration || 0)}
+                onChange={(e) => onSeek(Number(e.target.value))}
+                className="h-1.5 flex-1 cursor-pointer accent-primary"
+                aria-label="Seek background music"
+              />
+              <button type="button" onClick={() => onSeek(position + 15)} aria-label="Forward 15s">
+                <SkipForward className="size-4 text-muted-foreground" />
+              </button>
+            </div>
+            <div className="flex justify-between font-mono text-[11px] tabular-nums text-muted-foreground">
+              <span>{formatTime(position)}</span>
+              <span>{formatTime(duration || 0)}</span>
+            </div>
+
+            {/* Volume */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Vol</span>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={volume}
+                onChange={(e) => setVolume(Number(e.target.value))}
+                className="h-1.5 flex-1 cursor-pointer accent-primary"
+                aria-label="Music volume"
+              />
+              <span className="w-8 text-right text-xs tabular-nums text-muted-foreground">{Math.round(volume * 100)}%</span>
+            </div>
+          </div>
+        )}
+
+        {/* Playlist */}
+        <ul className="space-y-1.5">
+          {tracks.map((t, i) => (
+            <li key={t.url} className="flex items-center justify-between gap-2 rounded-lg border border-border/60 p-2">
+              <button
+                type="button"
+                onClick={() => playTrack(i)}
+                disabled={!live || mixing}
+                className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:opacity-50"
+              >
+                <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full", activeIndex === i ? "bg-primary text-primary-foreground" : "bg-secondary")}>
+                  <Play className="size-3.5 translate-x-px" />
+                </span>
+                <span className="truncate text-sm">{t.name}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTracks((arr) => arr.filter((_, idx) => idx !== i))}
+                aria-label={`Remove ${t.name}`}
+                className="text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="size-4" />
+              </button>
+            </li>
+          ))}
+        </ul>
+
+        <Button type="button" variant="secondary" className="w-full gap-2" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+          {uploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+          {uploading ? "Uploading…" : "Add tracks"}
+        </Button>
+        {!live && <p className="text-xs text-muted-foreground">Go live to mix music into your broadcast.</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
+      </div>
+    </Sheet>
   )
 }
 
-function PublishPanel({
-  session,
-  onClose,
-}: {
-  session: { title: string; duration: string; audioBlob: Blob | null }
-  onClose: () => void
-}) {
+/** Host-controlled chat background: upload an image and choose blur/dim. */
+function BackgroundPanel({ roomName, onClose }: { roomName: string; onClose: () => void }) {
+  const [url, setUrl] = useState<string | null>(null)
+  const [effect, setEffect] = useState<ChatBgEffect>("none")
+  const [saving, startSave] = useTransition()
+
+  function apply(nextUrl: string | null, nextEffect: ChatBgEffect) {
+    setUrl(nextUrl)
+    setEffect(nextEffect)
+    startSave(async () => {
+      await setChatBackground({ roomName, url: nextUrl, effect: nextEffect })
+    })
+  }
+
+  return (
+    <Sheet title="Chat background" onClose={onClose}>
+      <div className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          Upload an image to sit behind the chat for everyone in the room. Blur or dim it so messages stay readable.
+        </p>
+        <CoverUpload value={url} onChange={(v) => apply(v, effect)} label="Background image" />
+        <div className="grid grid-cols-3 gap-2">
+          {(["none", "blur", "dim"] as ChatBgEffect[]).map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => apply(url, opt)}
+              className={cn(
+                "rounded-lg border px-3 py-2 text-sm capitalize transition-colors",
+                effect === opt ? "border-primary bg-primary/10 text-primary" : "border-border/60 hover:bg-secondary",
+              )}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+        {url && (
+          <Button type="button" variant="ghost" className="w-full gap-2 text-destructive" onClick={() => apply(null, "none")}>
+            <Trash2 className="size-4" /> Remove background
+          </Button>
+        )}
+        {saving && <p className="text-xs text-muted-foreground">Saving…</p>}
+      </div>
+    </Sheet>
+  )
+}
+
+/** Full-screen overlay to publish the recorded session after going off air. */
+function PublishOverlay({ session, onClose }: { session: { title: string; duration: string; audioBlob: Blob | null }; onClose: () => void }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -460,8 +700,6 @@ function PublishPanel({
     e.preventDefault()
     setError(null)
     startTransition(async () => {
-      // Upload the recorded session audio first (best-effort) so the published
-      // episode is playable on demand.
       let audioUrl: string | null = null
       if (session.audioBlob) {
         try {
@@ -470,19 +708,10 @@ function PublishPanel({
           const data = await uploadMedia(file, "episodes")
           audioUrl = data.url
         } catch {
-          // Continue publishing without audio rather than failing the publish.
+          // publish without audio rather than failing
         }
       }
-
-      const res = await publishShow({
-        title,
-        tagline,
-        category,
-        duration: session.duration,
-        description,
-        cover,
-        audioUrl,
-      })
+      const res = await publishShow({ title, tagline, category, duration: session.duration, description, cover, audioUrl })
       if (res.ok) {
         setPublished(true)
         router.refresh()
@@ -492,64 +721,42 @@ function PublishPanel({
     })
   }
 
-  if (published) {
-    return (
-      <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-5 text-center">
-        <CheckCircle2 className="mx-auto size-8 text-primary" />
-        <p className="font-semibold">Session published to your catalogue</p>
-        <p className="text-sm text-muted-foreground">Your followers and anyone visiting your profile can listen now.</p>
-        <Button variant="secondary" onClick={onClose}>
-          Done
-        </Button>
-      </div>
-    )
-  }
-
   return (
-    <form onSubmit={submit} className="space-y-4 rounded-xl border border-primary/30 bg-primary/5 p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Upload className="size-5 text-primary" />
-          <div>
-            <h2 className="font-semibold">Publish this session</h2>
-            <p className="text-xs text-muted-foreground">
-              Recorded {session.duration}.{" "}
-              {session.audioBlob
-                ? "The audio is attached so listeners can play it on demand."
-                : "No audio was captured — it will publish as a show page."}
-            </p>
-          </div>
+    <Sheet title={published ? "Published" : "Publish this session"} onClose={onClose}>
+      {published ? (
+        <div className="space-y-3 py-4 text-center">
+          <CheckCircle2 className="mx-auto size-8 text-primary" />
+          <p className="font-semibold">Session published to your catalogue</p>
+          <p className="text-sm text-muted-foreground">Anyone visiting your profile can listen now.</p>
+          <Button variant="secondary" onClick={onClose}>
+            Done
+          </Button>
         </div>
-        <Button type="button" size="icon" variant="ghost" className="size-8 shrink-0" onClick={onClose} aria-label="Dismiss">
-          <X className="size-4" />
-        </Button>
-      </div>
-
-      <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Episode title" aria-label="Episode title" />
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Category (e.g. Culture)" aria-label="Category" />
-        <Input value={tagline} onChange={(e) => setTagline(e.target.value)} placeholder="Short tagline (optional)" aria-label="Tagline" />
-      </div>
-      <Textarea
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        placeholder="What was this session about?"
-        className="min-h-24"
-        aria-label="Description"
-      />
-      <CoverUpload value={cover} onChange={setCover} label="Cover image (optional)" />
-
-      {error && <p className="text-sm text-destructive">{error}</p>}
-
-      <div className="flex items-center gap-2">
-        <Button type="submit" disabled={isPending} className="gap-2">
-          {isPending ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-          Publish to my catalogue
-        </Button>
-        <Button type="button" variant="ghost" onClick={onClose}>
-          Not now
-        </Button>
-      </div>
-    </form>
+      ) : (
+        <form onSubmit={submit} className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Recorded {session.duration}.{" "}
+            {session.audioBlob ? "Audio attached for on-demand playback." : "No audio captured — publishes as a show page."}
+          </p>
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Episode title" aria-label="Episode title" />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Category" aria-label="Category" />
+            <Input value={tagline} onChange={(e) => setTagline(e.target.value)} placeholder="Tagline (optional)" aria-label="Tagline" />
+          </div>
+          <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What was this session about?" className="min-h-20" aria-label="Description" />
+          <CoverUpload value={cover} onChange={setCover} label="Cover image (optional)" />
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <div className="flex items-center gap-2">
+            <Button type="submit" disabled={isPending} className="gap-2">
+              {isPending ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+              Publish
+            </Button>
+            <Button type="button" variant="ghost" onClick={onClose}>
+              Not now
+            </Button>
+          </div>
+        </form>
+      )}
+    </Sheet>
   )
 }

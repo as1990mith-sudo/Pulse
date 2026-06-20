@@ -6,10 +6,18 @@ import {
   Room,
   RoomEvent,
   Track,
+  type Participant,
   type RemoteTrack,
   type RemoteTrackPublication,
   type RemoteParticipant,
 } from "livekit-client"
+
+export type LiveParticipant = {
+  identity: string
+  name: string
+  isLocal: boolean
+  isSpeaking: boolean
+}
 
 export type LiveAudioState = {
   connected: boolean
@@ -21,6 +29,16 @@ export type LiveAudioState = {
   // True when the browser is blocking autoplay of the live audio until the
   // listener performs a gesture (tap). Drives a "tap to enable sound" prompt.
   audioBlocked: boolean
+  // Whether the local participant currently has publish permission. Flips to
+  // true when the host accepts a call-in request (LiveKit pushes a permission
+  // update), at which point the mic is enabled automatically.
+  canPublish: boolean
+  // Identities of participants currently speaking (drives the talking ring on
+  // host/guest avatars). Includes the local participant when they speak.
+  activeSpeakers: string[]
+  // Live background-music playback position + length (seconds) for the scrubber.
+  musicPosition: number
+  musicDuration: number
 }
 
 /** Pick the best MediaRecorder audio container the browser supports. */
@@ -66,7 +84,15 @@ export function useLiveAudio() {
     speaking: false,
     error: null,
     audioBlocked: false,
+    canPublish: false,
+    activeSpeakers: [],
+    musicPosition: 0,
+    musicDuration: 0,
   })
+
+  // Roster of participants who can publish (host + guests), surfaced to the UI
+  // for the stage avatars. Listeners are not included here (only their count).
+  const [speakers, setSpeakers] = useState<LiveParticipant[]>([])
 
   const update = useCallback((patch: Partial<LiveAudioState>) => {
     setState((s) => ({ ...s, ...patch }))
@@ -76,6 +102,21 @@ export function useLiveAudio() {
     // Total participants minus the local one = listeners for a host view.
     update({ listeners: room.numParticipants })
   }, [update])
+
+  // Recomputes the publisher roster (host + accepted guests) from current room
+  // state. A participant is a "speaker" slot if they have publish permission.
+  const refreshSpeakers = useCallback((room: Room) => {
+    const out: LiveParticipant[] = []
+    const consider = (p: Participant, isLocal: boolean) => {
+      const canPub = p.permissions?.canPublish ?? false
+      if (canPub) {
+        out.push({ identity: p.identity, name: p.name || "Guest", isLocal, isSpeaking: p.isSpeaking })
+      }
+    }
+    consider(room.localParticipant, true)
+    room.remoteParticipants.forEach((p) => consider(p, false))
+    setSpeakers(out)
+  }, [])
 
   const connect = useCallback(
     async (opts: { serverUrl: string; token: string; publish: boolean; muted?: boolean }) => {
@@ -98,11 +139,40 @@ export function useLiveAudio() {
             track.detach().forEach((el) => el.remove())
             audioElsRef.current.delete(participant.identity)
           })
-          .on(RoomEvent.ParticipantConnected, () => refreshCounts(room))
-          .on(RoomEvent.ParticipantDisconnected, () => refreshCounts(room))
-          .on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
-            update({ speaking: speakers.length > 0 })
+          .on(RoomEvent.ParticipantConnected, () => {
+            refreshCounts(room)
+            refreshSpeakers(room)
           })
+          .on(RoomEvent.ParticipantDisconnected, () => {
+            refreshCounts(room)
+            refreshSpeakers(room)
+          })
+          .on(RoomEvent.ActiveSpeakersChanged, (active) => {
+            update({ speaking: active.length > 0, activeSpeakers: active.map((p) => p.identity) })
+            refreshSpeakers(room)
+          })
+          // Fired when the host grants/revokes this client's publish permission
+          // (the guest call-in accept/decline). When granted, enable the mic so
+          // the guest immediately goes live without any extra tap.
+          .on(RoomEvent.ParticipantPermissionsChanged, async () => {
+            const canPub = room.localParticipant.permissions?.canPublish ?? false
+            update({ canPublish: canPub })
+            if (canPub && !room.localParticipant.isMicrophoneEnabled) {
+              try {
+                await room.localParticipant.setMicrophoneEnabled(true)
+                update({ micEnabled: true })
+              } catch {
+                // mic permission denied — UI still reflects canPublish
+              }
+            }
+            if (!canPub && room.localParticipant.isMicrophoneEnabled) {
+              await room.localParticipant.setMicrophoneEnabled(false).catch(() => {})
+              update({ micEnabled: false })
+            }
+            refreshSpeakers(room)
+          })
+          .on(RoomEvent.TrackPublished, () => refreshSpeakers(room))
+          .on(RoomEvent.TrackUnpublished, () => refreshSpeakers(room))
           .on(RoomEvent.Disconnected, () => {
             update({ connected: false, micEnabled: false })
           })
@@ -131,7 +201,12 @@ export function useLiveAudio() {
         }
 
         refreshCounts(room)
-        update({ connected: true, connecting: false })
+        refreshSpeakers(room)
+        update({
+          connected: true,
+          connecting: false,
+          canPublish: room.localParticipant.permissions?.canPublish ?? opts.publish,
+        })
       } catch (e) {
         roomRef.current = null
         update({
@@ -140,7 +215,7 @@ export function useLiveAudio() {
         })
       }
     },
-    [refreshCounts, update],
+    [refreshCounts, refreshSpeakers, update],
   )
 
   const toggleMic = useCallback(async () => {
@@ -200,8 +275,12 @@ export function useLiveAudio() {
     const el = musicElRef.current ?? new Audio()
     el.crossOrigin = "anonymous"
     el.src = url
-    el.loop = true
+    el.loop = false
     musicElRef.current = el
+
+    // Report duration + position so the host can scrub the track.
+    el.onloadedmetadata = () => update({ musicDuration: el.duration || 0, musicPosition: 0 })
+    el.ontimeupdate = () => update({ musicPosition: el.currentTime })
 
     const source = ctx.createMediaElementSource(el)
     const gain = musicGainRef.current ?? ctx.createGain()
@@ -233,7 +312,7 @@ export function useLiveAudio() {
         // ignore — music will still play live, just not captured in the recording
       }
     }
-  }, [])
+  }, [update])
 
   /** Adjusts the live background-music volume (0–1). */
   const setMusicVolume = useCallback((value: number) => {
@@ -247,6 +326,14 @@ export function useLiveAudio() {
     if (playing) void el.play().catch(() => {})
     else el.pause()
   }, [])
+
+  /** Jump the backing track to an absolute position (seconds) — the scrubber. */
+  const seekMusic = useCallback((seconds: number) => {
+    const el = musicElRef.current
+    if (!el) return
+    el.currentTime = Math.max(0, Math.min(seconds, el.duration || seconds))
+    update({ musicPosition: el.currentTime })
+  }, [update])
 
   /** Stops and unpublishes the backing track entirely. */
   const stopMusic = useCallback(async () => {
@@ -360,6 +447,7 @@ export function useLiveAudio() {
 
   return {
     state,
+    speakers,
     connect,
     disconnect,
     toggleMic,
@@ -368,6 +456,7 @@ export function useLiveAudio() {
     publishMusic,
     setMusicVolume,
     setMusicPlaying,
+    seekMusic,
     stopMusic,
     startRecording,
     stopRecording,

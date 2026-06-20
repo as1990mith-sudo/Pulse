@@ -1,5 +1,5 @@
 import "server-only"
-import { AccessToken } from "livekit-server-sdk"
+import { AccessToken, RoomServiceClient } from "livekit-server-sdk"
 
 /**
  * Real-time audio is powered by LiveKit (a WebRTC SFU). These three values come
@@ -45,4 +45,37 @@ export async function createAccessToken(opts: {
   })
 
   return at.toJwt()
+}
+
+/** Server-side admin client used to elevate/demote participants mid-session. */
+function roomService(): RoomServiceClient {
+  const apiKey = process.env.LIVEKIT_API_KEY
+  const apiSecret = process.env.LIVEKIT_API_SECRET
+  if (!apiKey || !apiSecret || !LIVEKIT_URL) {
+    throw new Error("LiveKit is not configured.")
+  }
+  // RoomServiceClient needs the HTTP(S) host, not the wss:// signalling URL.
+  const httpUrl = LIVEKIT_URL.replace(/^ws/, "http")
+  return new RoomServiceClient(httpUrl, apiKey, apiSecret)
+}
+
+/**
+ * Grants or revokes publish permission for a participant already in the room.
+ * This is how a listener/guest is promoted to "live" (or sent back to the
+ * audience) without rejoining — LiveKit pushes a permission update and the
+ * client reacts to ParticipantPermissionsChanged.
+ */
+export async function setParticipantPublish(opts: {
+  roomName: string
+  identity: string
+  canPublish: boolean
+}): Promise<void> {
+  const svc = roomService()
+  await svc.updateParticipant(opts.roomName, opts.identity, {
+    permission: {
+      canPublish: opts.canPublish,
+      canSubscribe: true,
+      canPublishData: true,
+    },
+  })
 }
