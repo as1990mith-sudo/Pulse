@@ -2,10 +2,10 @@
 
 import { useMemo, useState } from "react"
 import type { Show } from "@/lib/data"
-import { ShowCard } from "@/components/show-card"
+import { ShowCard, ShowRow } from "@/components/show-card"
 import { cn } from "@/lib/utils"
 
-export function EpisodeCatalog({ episodes }: { episodes: Show[] }) {
+export function EpisodeCatalog({ episodes, layout = "grid" }: { episodes: Show[]; layout?: "grid" | "list" }) {
   const categories = useMemo(() => ["All", ...Array.from(new Set(episodes.map((e) => e.category)))], [episodes])
   const [active, setActive] = useState("All")
 
@@ -40,11 +40,19 @@ export function EpisodeCatalog({ episodes }: { episodes: Show[] }) {
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
-        {filtered.map((show) => (
-          <ShowCard key={show.id} show={show} />
-        ))}
-      </div>
+      {layout === "list" ? (
+        <div className="flex flex-col gap-3">
+          {filtered.map((show) => (
+            <ShowRow key={show.id} show={show} />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
+          {filtered.map((show) => (
+            <ShowCard key={show.id} show={show} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

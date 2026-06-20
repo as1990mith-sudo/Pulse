@@ -1,6 +1,7 @@
 "use client"
 
 import { useRef, useState, useTransition } from "react"
+import useSWR, { mutate as globalMutate } from "swr"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -16,7 +17,7 @@ import {
   UserCheck,
   Loader2,
 } from "lucide-react"
-import { addPostComment, createPost, setPostLike, type FeedPostView } from "@/app/actions/feed"
+import { addPostComment, createPost, getFeed, setPostLike, type FeedPostView } from "@/app/actions/feed"
 import { toggleFollow } from "@/app/actions/follow"
 import type { CurrentUser } from "@/lib/session"
 import { Button } from "@/components/ui/button"
@@ -39,8 +40,17 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
   const [tab, setTab] = useState<"for-you" | "following">("for-you")
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const followingCount = posts.filter((p) => p.isFollowing).length
-  const visiblePosts = tab === "following" ? posts.filter((p) => p.isFollowing) : posts
+  // Poll the feed so new tweets and comments from others appear without a manual
+  // refresh. The server-rendered posts seed the initial data.
+  const { data: livePosts, mutate: mutateFeed } = useSWR("feed", () => getFeed(), {
+    fallbackData: posts,
+    refreshInterval: 5000,
+    revalidateOnFocus: true,
+  })
+  const allPosts = livePosts ?? posts
+
+  const followingCount = allPosts.filter((p) => p.isFollowing).length
+  const visiblePosts = tab === "following" ? allPosts.filter((p) => p.isFollowing) : allPosts
 
   async function handleMediaPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -85,7 +95,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
       })
       setDraft("")
       clearMedia()
-      router.refresh()
+      await mutateFeed()
     })
   }
 
@@ -109,7 +119,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
         </Card>
 
         <ul className="space-y-6">
-          {posts.map((post) => (
+          {allPosts.map((post) => (
             <li key={post.id}>
               <PostCard post={post} currentUser={currentUser} />
             </li>
@@ -278,6 +288,9 @@ export function PostCard({ post, currentUser }: { post: FeedPostView; currentUse
       await addPostComment({ postId: post.id, text })
       setCommentDraft("")
       setShowComments(true)
+      // Refresh the polled feed (used on the Tweet tab) and the server tree
+      // (used on profile pages where the feed isn't polled).
+      await globalMutate("feed")
       router.refresh()
     })
   }

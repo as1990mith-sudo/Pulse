@@ -25,7 +25,7 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
+      <div className="relative mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
         <Link href="/" className="flex items-center gap-2">
           <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Radio className="size-4" />
@@ -33,7 +33,7 @@ export function SiteHeader() {
           <span className="text-lg font-semibold tracking-tight">Frequency</span>
         </Link>
 
-        <nav className="hidden items-center gap-1 md:flex">
+        <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-1 md:flex">
           {navItems.map((item) => (
             <Link
               key={item.href}
@@ -67,7 +67,7 @@ export function SiteHeader() {
         </div>
       </div>
 
-      <nav className="flex items-center gap-1 border-t border-border/60 px-4 py-2 md:hidden">
+      <nav className="flex items-center justify-center gap-1 border-t border-border/60 px-4 py-2 md:hidden">
         {navItems.map((item) => (
           <Link
             key={item.href}

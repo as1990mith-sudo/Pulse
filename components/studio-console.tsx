@@ -67,7 +67,8 @@ function StudioWaveform({ active }: { active: boolean }) {
 type EndedSession = { title: string; duration: string } | null
 
 export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
-  const { state, connect, disconnect, toggleMic } = useLiveAudio()
+  const { state, connect, disconnect, toggleMic, publishMusic, setMusicVolume, setMusicPlaying, stopMusic } =
+    useLiveAudio()
   const live = state.connected
   const micOn = state.micEnabled
   const [elapsed, setElapsed] = useState(0)
@@ -187,7 +188,13 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
         )}
 
         {/* Background music */}
-        <BackgroundMusicPanel live={live} />
+        <BackgroundMusicPanel
+          live={live}
+          onPublish={publishMusic}
+          onVolume={setMusicVolume}
+          onPlayingChange={setMusicPlaying}
+          onStop={stopMusic}
+        />
 
         {/* Show setup */}
         <div className="space-y-2 rounded-xl border border-border/60 bg-card p-4">
@@ -270,18 +277,39 @@ function ShareLink({ roomName }: { roomName: string }) {
   )
 }
 
-function BackgroundMusicPanel({ live }: { live: boolean }) {
-  const audioRef = useRef<HTMLAudioElement>(null)
+function BackgroundMusicPanel({
+  live,
+  onPublish,
+  onVolume,
+  onPlayingChange,
+  onStop,
+}: {
+  live: boolean
+  onPublish: (url: string) => Promise<void>
+  onVolume: (value: number) => void
+  onPlayingChange: (playing: boolean) => void
+  onStop: () => Promise<void>
+}) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [track, setTrack] = useState<{ url: string; name: string } | null>(null)
   const [playing, setPlaying] = useState(false)
   const [volume, setVolume] = useState(0.4)
   const [uploading, setUploading] = useState(false)
+  const [mixing, setMixing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Keep the live mix volume in sync with the slider.
   useEffect(() => {
-    if (audioRef.current) audioRef.current.volume = volume
-  }, [volume, track])
+    onVolume(volume)
+  }, [volume, onVolume])
+
+  // When the host goes off air, drop the mixed track.
+  useEffect(() => {
+    if (!live && playing) {
+      setPlaying(false)
+      void onStop()
+    }
+  }, [live, playing, onStop])
 
   async function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -304,15 +332,24 @@ function BackgroundMusicPanel({ live }: { live: boolean }) {
     }
   }
 
-  function togglePlay() {
-    const el = audioRef.current
-    if (!el) return
+  async function togglePlay() {
+    if (!track) return
     if (playing) {
-      el.pause()
+      onPlayingChange(false)
       setPlaying(false)
-    } else {
-      el.play().catch(() => {})
+      return
+    }
+    // First play: publish the track into the live broadcast; later toggles just resume.
+    setError(null)
+    setMixing(true)
+    try {
+      await onPublish(track.url)
+      onVolume(volume)
       setPlaying(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not mix the track into your stream.")
+    } finally {
+      setMixing(false)
     }
   }
 
@@ -323,7 +360,8 @@ function BackgroundMusicPanel({ live }: { live: boolean }) {
         <h2 className="text-sm font-medium">Background music</h2>
       </div>
       <p className="text-xs text-muted-foreground leading-relaxed">
-        Upload a backing track to play under your live audio — intro music, bed loops, or stings.
+        Upload a backing track to play under your live audio — intro music, bed loops, or stings. Listeners hear it
+        mixed in with your voice.
       </p>
 
       <input ref={fileInputRef} type="file" accept="audio/*" className="hidden" onChange={handlePick} />
@@ -334,16 +372,25 @@ function BackgroundMusicPanel({ live }: { live: boolean }) {
             <button
               type="button"
               onClick={togglePlay}
-              className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90"
+              disabled={!live || mixing}
+              className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
               aria-label={playing ? "Pause music" : "Play music"}
             >
-              {playing ? <Pause className="size-4" /> : <Play className="size-4 translate-x-0.5" />}
+              {mixing ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : playing ? (
+                <Pause className="size-4" />
+              ) : (
+                <Play className="size-4 translate-x-0.5" />
+              )}
             </button>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{track.name}</p>
-              <p className="text-xs text-muted-foreground">{live ? "Mixed into your live audio" : "Go live to mix in"}</p>
+              <p className="text-xs text-muted-foreground">
+                {!live ? "Go live to mix in" : playing ? "Mixed into your live audio" : "Press play to mix in"}
+              </p>
             </div>
-            <Button type="button" variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()}>
+            <Button type="button" variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()} disabled={playing}>
               Replace
             </Button>
           </div>
@@ -359,9 +406,10 @@ function BackgroundMusicPanel({ live }: { live: boolean }) {
               className="h-1.5 flex-1 cursor-pointer accent-primary"
               aria-label="Background music volume"
             />
+            <span className="w-9 text-right text-xs tabular-nums text-muted-foreground">
+              {Math.round(volume * 100)}%
+            </span>
           </div>
-          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-          <audio ref={audioRef} src={track.url} loop onEnded={() => setPlaying(false)} />
         </div>
       ) : (
         <Button

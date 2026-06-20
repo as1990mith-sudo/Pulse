@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState, useTransition } from "react"
+import useSWR from "swr"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import {
@@ -25,6 +26,7 @@ import { ImageCropper } from "@/components/image-cropper"
 import { cn } from "@/lib/utils"
 import {
   approveJoinRequest,
+  getChatMessages,
   leaveChatroom,
   rejectJoinRequest,
   sendChatMessage,
@@ -61,12 +63,28 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
   const scrollEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Drop optimistic messages once the server version arrives.
+  // Poll for new messages every 3s so the room updates in real time without a
+  // manual refresh. The server-rendered messages seed the initial data.
+  const { data: liveMessages, mutate: mutateMessages } = useSWR(
+    ["chat-messages", detail.id],
+    () => getChatMessages(detail.id),
+    {
+      fallbackData: detail.messages,
+      refreshInterval: 3000,
+      revalidateOnFocus: true,
+    },
+  )
+
+  const serverMessages = liveMessages ?? detail.messages
+
+  // Drop optimistic messages once a matching server message arrives.
   useEffect(() => {
     setPending([])
-  }, [detail.messages.length])
+  }, [serverMessages.length])
 
-  const messages = [...detail.messages, ...pending]
+  // Avoid showing an optimistic copy alongside its persisted server version.
+  const serverIds = new Set(serverMessages.map((m) => m.id))
+  const messages = [...serverMessages, ...pending.filter((p) => !serverIds.has(p.id))]
 
   useEffect(() => {
     scrollEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -127,7 +145,8 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
         attachmentType: sentAttachment?.type ?? null,
         attachmentName: sentAttachment?.name ?? null,
       })
-      router.refresh()
+      // Pull the persisted message in immediately rather than waiting for the poll.
+      await mutateMessages()
     })()
   }
 
