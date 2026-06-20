@@ -14,7 +14,8 @@ import { Mic, MicOff, Phone, PhoneOff, Video, VideoOff } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import { acceptCall, endCall, getCallToken, type DmCallView } from "@/app/actions/dm-call"
+import { startRingtone } from "@/lib/ringtone"
+import { ackCall, acceptCall, endCall, getCallToken, type DmCallView } from "@/app/actions/dm-call"
 
 type Peer = {
   name: string
@@ -129,6 +130,26 @@ export function DmCall({
 
   useEffect(() => () => cleanup(), [cleanup])
 
+  // Callee: as soon as the ringing call appears on this device, acknowledge it
+  // so the caller's UI can switch from "Calling" to "Ringing".
+  useEffect(() => {
+    if (!call.isCaller && call.status === "ringing" && !call.calleeAck) {
+      void ackCall({ callId: call.id })
+    }
+  }, [call.isCaller, call.status, call.calleeAck, call.id])
+
+  // Ringtone: the callee hears the incoming warble while the prompt is up; the
+  // caller hears a ringback tone while waiting for an answer. Both stop once the
+  // call connects, is answered, or ends.
+  useEffect(() => {
+    const ringingForCaller = call.isCaller && call.status === "ringing"
+    const ringingForCallee = !call.isCaller && phase === "prompt" && call.status === "ringing"
+    if (!ringingForCaller && !ringingForCallee) return
+
+    const stop = startRingtone(call.isCaller ? "ringback" : "incoming")
+    return stop
+  }, [call.isCaller, call.status, phase])
+
   async function handleAccept() {
     setPhase("connecting")
     try {
@@ -193,13 +214,14 @@ export function DmCall({
               <p className="text-sm text-muted-foreground">
                 {phase === "prompt"
                   ? `Incoming ${call.mode} call…`
-                  : phase === "connecting"
-                    ? call.isCaller
-                      ? "Ringing…"
-                      : "Connecting…"
-                    : connected
-                      ? "Connected"
-                      : "Calling…"}
+                  : connected
+                    ? "Connected"
+                    : call.isCaller
+                      ? // Caller: "Calling" until the callee's device rings, then "Ringing".
+                        call.calleeAck
+                        ? "Ringing…"
+                        : "Calling…"
+                      : "Connecting…"}
               </p>
             </div>
           </div>
@@ -226,25 +248,32 @@ export function DmCall({
       {/* Controls */}
       <div className="flex items-center justify-center gap-4 border-t border-border bg-card px-6 py-6">
         {phase === "prompt" ? (
-          <>
-            <Button
-              size="icon"
-              variant="destructive"
-              className="size-14 rounded-full"
-              onClick={() => handleEnd(true)}
-              aria-label="Decline call"
-            >
-              <PhoneOff className="size-6" />
-            </Button>
-            <Button
-              size="icon"
-              className="size-14 rounded-full bg-live text-white hover:bg-live/90"
-              onClick={handleAccept}
-              aria-label="Accept call"
-            >
-              <Phone className="size-6" />
-            </Button>
-          </>
+          <div className="flex w-full max-w-sm items-center justify-center gap-10">
+            {/* Decline (red) */}
+            <div className="flex flex-col items-center gap-2">
+              <Button
+                size="icon"
+                className="size-16 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => handleEnd(true)}
+                aria-label="Decline call"
+              >
+                <PhoneOff className="size-7" />
+              </Button>
+              <span className="text-sm font-medium text-muted-foreground">Decline</span>
+            </div>
+            {/* Answer (green) */}
+            <div className="flex flex-col items-center gap-2">
+              <Button
+                size="icon"
+                className="size-16 rounded-full bg-call-accept text-call-accept-foreground hover:bg-call-accept/90"
+                onClick={handleAccept}
+                aria-label="Answer call"
+              >
+                <Phone className="size-7" />
+              </Button>
+              <span className="text-sm font-medium text-muted-foreground">Answer</span>
+            </div>
+          </div>
         ) : (
           <>
             <Button

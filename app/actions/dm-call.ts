@@ -25,6 +25,8 @@ export type DmCallView = {
   mode: CallMode
   status: CallStatus
   isCaller: boolean
+  // True once the callee's device has registered the ring (they're online).
+  calleeAck: boolean
   roomName: string
 }
 
@@ -42,6 +44,7 @@ function mapCall(row: typeof dmCall.$inferSelect, meId: string): DmCallView {
     mode: row.mode as CallMode,
     status: row.status as CallStatus,
     isCaller: row.callerId === meId,
+    calleeAck: row.calleeAck,
     roomName: roomNameFor(row.id),
   }
 }
@@ -79,6 +82,17 @@ export async function startCall(input: { conversationId: number; mode: CallMode 
     .returning()
 
   return mapCall(row, me.id)
+}
+
+/**
+ * Callee's device acknowledges that it has received and is ringing the call.
+ * This is what lets the caller switch from "Calling" (offline) to "Ringing".
+ */
+export async function ackCall(input: { callId: number }): Promise<void> {
+  const me = await requireUser()
+  const [row] = await db.select().from(dmCall).where(eq(dmCall.id, input.callId))
+  if (!row || row.calleeId !== me.id || row.calleeAck) return
+  await db.update(dmCall).set({ calleeAck: true, updatedAt: new Date() }).where(eq(dmCall.id, input.callId))
 }
 
 /** Callee accepts — flips the call to active so both sides connect. */
