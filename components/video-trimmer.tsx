@@ -55,7 +55,7 @@ export function VideoTrimmer({
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
-  const window = Math.max(0, end - start)
+  const clipLength = Math.max(0, end - start)
 
   useEffect(() => {
     document.body.style.overflow = "hidden"
@@ -155,7 +155,7 @@ export function VideoTrimmer({
       const draw = () => {
         ctx.drawImage(v, 0, 0, canvas.width, canvas.height)
         const elapsed = v.currentTime - start
-        setProgress(Math.min(100, (elapsed / window) * 100))
+        setProgress(Math.min(100, (elapsed / clipLength) * 100))
         if (v.currentTime >= end - 0.03 || v.ended) {
           recorder.stop()
           cancelAnimationFrame(raf)
@@ -189,7 +189,7 @@ export function VideoTrimmer({
       setError(e instanceof Error ? e.message : "Could not trim the video.")
       setEncoding(false)
     }
-  }, [start, end, window, onTrimmed])
+  }, [start, end, clipLength, onTrimmed])
 
   if (typeof document === "undefined") return null
 
@@ -217,8 +217,8 @@ export function VideoTrimmer({
           <div className="mt-4 space-y-4">
             <div className="flex items-center justify-between text-xs tabular-nums text-muted-foreground">
               <span>Start {fmt(start)}</span>
-              <span className={window > maxDuration ? "text-destructive" : "text-foreground"}>
-                Clip {fmt(window)}
+              <span className={clipLength > maxDuration ? "text-destructive" : "text-foreground"}>
+                Clip {fmt(clipLength)}
               </span>
               <span>End {fmt(end)}</span>
             </div>

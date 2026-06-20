@@ -48,6 +48,7 @@ function episodeToShow(row: typeof episode.$inferSelect): Show {
     duration: row.duration || undefined,
     publishedAt: relativeTime(row.createdAt),
     description: row.description,
+    audioUrl: row.audioUrl || undefined,
   }
 }
 

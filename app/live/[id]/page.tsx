@@ -2,10 +2,12 @@ import { notFound } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, MessageSquare } from "lucide-react"
 import { getLiveStream } from "@/app/actions/live"
+import { resolveShow } from "@/lib/content"
 import { getCurrentUser } from "@/lib/session"
 import { SiteHeader } from "@/components/site-header"
 import { LiveListener } from "@/components/live-listener"
 import { LiveChat } from "@/components/live-chat"
+import { EpisodePage } from "@/components/episode-page"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 
@@ -13,7 +15,12 @@ export default async function LiveStreamPage({ params }: { params: Promise<{ id:
   const { id } = await params
   const stream = await getLiveStream(id)
 
-  if (!stream) notFound()
+  // Not live? It may be a published, on-demand episode (looked up by slug).
+  if (!stream) {
+    const show = await resolveShow(id)
+    if (!show) notFound()
+    return <EpisodePage show={show} />
+  }
 
   const currentUser = await getCurrentUser()
 

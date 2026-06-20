@@ -18,6 +18,7 @@ export type Show = {
   duration?: string // for ended episodes
   publishedAt?: string
   description: string
+  audioUrl?: string // recorded audio for on-demand episodes
 }
 
 export type DevotionalComment = {

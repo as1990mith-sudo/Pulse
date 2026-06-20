@@ -4,12 +4,13 @@ import { useEffect, useRef, useState, useTransition } from "react"
 import { createPortal } from "react-dom"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Plus, X, Trash2, Loader2, Timer } from "lucide-react"
+import { Plus, X, Trash2, Loader2, Timer, Send } from "lucide-react"
 import { createStatus, deleteStatus, type StatusGroup } from "@/app/actions/status"
 import type { CurrentUser } from "@/lib/session"
 import { uploadMedia } from "@/lib/upload-media"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card } from "@/components/ui/card"
+import { VideoTrimmer } from "@/components/video-trimmer"
 import { cn } from "@/lib/utils"
 
 const MAX_VIDEO_SECONDS = 60
@@ -42,13 +43,30 @@ export function StatusBar({
   const [error, setError] = useState<string | null>(null)
   const [viewerIndex, setViewerIndex] = useState<number | null>(null)
   const [, startTransition] = useTransition()
+  // The video chosen for trimming (object URL) before it enters the composer.
+  const [trimSrc, setTrimSrc] = useState<string | null>(null)
+  // The media staged in the WhatsApp-style composer (preview + caption).
+  const [compose, setCompose] = useState<{ file: File; url: string; type: "image" | "video" } | null>(null)
 
   const myGroup = groups.find((g) => g.isSelf) ?? null
   // Everyone else, already ordered connections-first by the server action.
   const otherGroups = groups.filter((g) => !g.isSelf)
 
+  /** Stages media in the composer, creating an object URL for the preview. */
+  function openComposer(file: File, type: "image" | "video") {
+    setCompose({ file, url: URL.createObjectURL(file), type })
+  }
+
+  function closeComposer() {
+    setCompose((c) => {
+      if (c) URL.revokeObjectURL(c.url)
+      return null
+    })
+  }
+
   async function handleFilePick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
+    if (fileInputRef.current) fileInputRef.current.value = ""
     if (!file) return
     setError(null)
 
@@ -62,9 +80,9 @@ export function StatusBar({
     if (isVideo) {
       try {
         const duration = await getVideoDuration(file)
+        // Longer than a minute: send the user through the in-browser trimmer.
         if (duration > MAX_VIDEO_SECONDS + 0.5) {
-          setError("Videos must be 1 minute or shorter.")
-          if (fileInputRef.current) fileInputRef.current.value = ""
+          setTrimSrc(URL.createObjectURL(file))
           return
         }
       } catch {
@@ -73,16 +91,29 @@ export function StatusBar({
       }
     }
 
+    openComposer(file, isVideo ? "video" : "image")
+  }
+
+  /** The trimmer hands back a ≤60s clip; carry it into the composer. */
+  function handleTrimmed(file: File) {
+    if (trimSrc) URL.revokeObjectURL(trimSrc)
+    setTrimSrc(null)
+    openComposer(file, "video")
+  }
+
+  async function shareStatus(caption: string) {
+    if (!compose) return
     setUploading(true)
+    setError(null)
     try {
-      const data = await uploadMedia(file, "status")
-      await createStatus({ mediaUrl: data.url, mediaType: isVideo ? "video" : "image" })
+      const data = await uploadMedia(compose.file, "status")
+      await createStatus({ mediaUrl: data.url, mediaType: compose.type, caption })
+      closeComposer()
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed.")
     } finally {
       setUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ""
     }
   }
 
@@ -214,7 +245,103 @@ export function StatusBar({
           onDelete={removeStatus}
         />
       )}
+
+      {trimSrc && (
+        <VideoTrimmer
+          src={trimSrc}
+          maxDuration={MAX_VIDEO_SECONDS}
+          title="Trim to 1 minute"
+          onCancel={() => {
+            URL.revokeObjectURL(trimSrc)
+            setTrimSrc(null)
+          }}
+          onTrimmed={handleTrimmed}
+        />
+      )}
+
+      {compose && (
+        <StatusComposer
+          media={compose}
+          uploading={uploading}
+          onCancel={closeComposer}
+          onShare={shareStatus}
+        />
+      )}
     </Card>
+  )
+}
+
+/** WhatsApp-style preview + caption screen shown before a status is posted. */
+function StatusComposer({
+  media,
+  uploading,
+  onCancel,
+  onShare,
+}: {
+  media: { url: string; type: "image" | "video" }
+  uploading: boolean
+  onCancel: () => void
+  onShare: (caption: string) => void
+}) {
+  const [caption, setCaption] = useState("")
+
+  useEffect(() => {
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = ""
+    }
+  }, [])
+
+  if (typeof document === "undefined") return null
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex flex-col bg-black/95">
+      <div className="flex items-center justify-between p-3">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={uploading}
+          className="flex size-10 items-center justify-center rounded-full text-white/90 transition-colors hover:bg-white/15"
+          aria-label="Cancel"
+        >
+          <X className="size-5" />
+        </button>
+        <span className="text-sm font-medium text-white/80">New status</span>
+        <span className="size-10" />
+      </div>
+
+      <div className="flex flex-1 items-center justify-center overflow-hidden px-4">
+        {media.type === "video" ? (
+          <video src={media.url} className="max-h-full max-w-full rounded-lg" controls autoPlay loop playsInline />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={media.url || "/placeholder.svg"} alt="Status preview" className="max-h-full max-w-full rounded-lg object-contain" />
+        )}
+      </div>
+
+      <div className="flex items-center gap-2 p-3">
+        <input
+          type="text"
+          value={caption}
+          onChange={(e) => setCaption(e.target.value)}
+          placeholder="Add a caption…"
+          maxLength={200}
+          disabled={uploading}
+          className="h-11 flex-1 rounded-full border border-white/20 bg-white/10 px-4 text-sm text-white placeholder:text-white/50 focus:border-white/40 focus:outline-none"
+          aria-label="Status caption"
+        />
+        <button
+          type="button"
+          onClick={() => onShare(caption)}
+          disabled={uploading}
+          className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
+          aria-label="Share status"
+        >
+          {uploading ? <Loader2 className="size-5 animate-spin" /> : <Send className="size-5" />}
+        </button>
+      </div>
+    </div>,
+    document.body,
   )
 }
 
