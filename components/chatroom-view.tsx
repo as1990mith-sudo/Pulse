@@ -22,6 +22,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { ImageLightbox } from "@/components/image-lightbox"
+import { ImageCropper } from "@/components/image-cropper"
 import { cn } from "@/lib/utils"
 import {
   approveJoinRequest,
@@ -323,6 +324,7 @@ function MembersPanel({ detail }: { detail: ChatroomDetail }) {
   const router = useRouter()
   const [copied, setCopied] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [groupCropSrc, setGroupCropSrc] = useState<string | null>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -337,13 +339,18 @@ function MembersPanel({ detail }: { detail: ChatroomDetail }) {
     })
   }
 
-  async function handleGroupImage(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleGroupImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    if (!file) return
+    if (file) setGroupCropSrc(URL.createObjectURL(file))
+    if (imageInputRef.current) imageInputRef.current.value = ""
+  }
+
+  async function handleGroupCropped(blob: Blob) {
+    setGroupCropSrc(null)
     setUploading(true)
     try {
       const formData = new FormData()
-      formData.append("file", file)
+      formData.append("file", new File([blob], "group.jpg", { type: "image/jpeg" }))
       const res = await fetch("/api/upload-chat", { method: "POST", body: formData })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? "Upload failed")
@@ -353,7 +360,6 @@ function MembersPanel({ detail }: { detail: ChatroomDetail }) {
       // ignore — surfaced via no change
     } finally {
       setUploading(false)
-      if (imageInputRef.current) imageInputRef.current.value = ""
     }
   }
 
@@ -417,6 +423,17 @@ function MembersPanel({ detail }: { detail: ChatroomDetail }) {
       <p className="text-xs text-muted-foreground">
         Invite code: <span className="font-mono font-medium text-foreground">{detail.inviteCode}</span>
       </p>
+
+      {groupCropSrc && (
+        <ImageCropper
+          src={groupCropSrc}
+          aspect={1}
+          round
+          title="Adjust group picture"
+          onCancel={() => setGroupCropSrc(null)}
+          onCropped={handleGroupCropped}
+        />
+      )}
     </div>
   )
 }

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react"
 import { createPortal } from "react-dom"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Plus, X, Trash2, ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
+import { Plus, X, Trash2, Loader2 } from "lucide-react"
 import { createStatus, deleteStatus, type StatusGroup } from "@/app/actions/status"
 import type { CurrentUser } from "@/lib/session"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -233,7 +233,16 @@ function StatusViewer({
   const [groupIndex, setGroupIndex] = useState(startIndex)
   const [itemIndex, setItemIndex] = useState(0)
   const [progress, setProgress] = useState(0)
+  const [paused, setPaused] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const pausedRef = useRef(false)
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const wasHold = useRef(false)
+
+  // Keep a ref in sync so the progress interval reads the latest paused value.
+  useEffect(() => {
+    pausedRef.current = paused
+  }, [paused])
 
   const group = groups[groupIndex]
   const item = group?.items[itemIndex]
@@ -260,15 +269,22 @@ function StatusViewer({
     }
   }
 
-  // Reset + drive the progress bar for the active item.
+  // Reset + drive the progress bar for the active item. Time only accrues while
+  // not paused, so press-and-hold freezes the story until the user releases.
   useEffect(() => {
     setProgress(0)
+    setPaused(false)
+    pausedRef.current = false
     if (!item) return
     if (item.mediaType === "video") return // video drives its own progress via timeupdate
 
-    const start = Date.now()
+    let elapsed = 0
+    let last = Date.now()
     const interval = setInterval(() => {
-      const pct = Math.min(100, ((Date.now() - start) / IMAGE_DURATION_MS) * 100)
+      const now = Date.now()
+      if (!pausedRef.current) elapsed += now - last
+      last = now
+      const pct = Math.min(100, (elapsed / IMAGE_DURATION_MS) * 100)
       setProgress(pct)
       if (pct >= 100) {
         clearInterval(interval)
@@ -278,6 +294,14 @@ function StatusViewer({
     return () => clearInterval(interval)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupIndex, itemIndex])
+
+  // Pause/resume the active video when the user presses and holds.
+  useEffect(() => {
+    const v = videoRef.current
+    if (!v) return
+    if (paused) v.pause()
+    else void v.play().catch(() => {})
+  }, [paused])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -293,6 +317,43 @@ function StatusViewer({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupIndex, itemIndex])
+
+  function handlePointerDown() {
+    wasHold.current = false
+    holdTimer.current = setTimeout(() => {
+      wasHold.current = true
+      setPaused(true)
+    }, 180)
+  }
+
+  function handlePointerUp(e: React.PointerEvent) {
+    if (holdTimer.current) {
+      clearTimeout(holdTimer.current)
+      holdTimer.current = null
+    }
+    if (wasHold.current) {
+      // Was a press-and-hold: just resume, don't navigate.
+      wasHold.current = false
+      setPaused(false)
+      return
+    }
+    // Quick tap: navigate based on which side was tapped.
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    if (x < rect.width / 3) goPrev()
+    else goNext()
+  }
+
+  function handlePointerCancel() {
+    if (holdTimer.current) {
+      clearTimeout(holdTimer.current)
+      holdTimer.current = null
+    }
+    if (wasHold.current) {
+      wasHold.current = false
+      setPaused(false)
+    }
+  }
 
   if (typeof document === "undefined" || !group || !item) return null
 
@@ -380,23 +441,29 @@ function StatusViewer({
           </div>
         )}
 
-        {/* Tap zones for prev/next */}
-        <button
-          type="button"
-          onClick={goPrev}
-          className="absolute bottom-0 left-0 top-0 z-10 w-1/3"
-          aria-label="Previous"
-        >
-          <ChevronLeft className="ml-1 size-6 text-white/0" />
+        {/* Press-and-hold to pause; quick tap on the left third goes back, elsewhere advances. */}
+        <div
+          className="absolute inset-0 z-10"
+          onPointerDown={handlePointerDown}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+          onContextMenu={(e) => e.preventDefault()}
+        />
+
+        {/* Accessible navigation controls (keyboard / screen readers) */}
+        <button type="button" onClick={goPrev} className="sr-only">
+          Previous status
         </button>
-        <button
-          type="button"
-          onClick={goNext}
-          className="absolute bottom-0 right-0 top-0 z-10 w-1/3"
-          aria-label="Next"
-        >
-          <ChevronRight className="mr-1 ml-auto size-6 text-white/0" />
+        <button type="button" onClick={goNext} className="sr-only">
+          Next status
         </button>
+
+        {/* Paused indicator */}
+        {paused && (
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+            <span className="rounded-full bg-black/50 px-3 py-1 text-xs font-medium text-white/90">Paused</span>
+          </div>
+        )}
       </div>
     </div>,
     document.body,
