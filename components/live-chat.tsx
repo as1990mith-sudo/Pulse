@@ -41,6 +41,18 @@ export function LiveChat({
     { refreshInterval: 2000, revalidateOnFocus: true },
   )
 
+  // Keep the host-controlled background in sync for everyone in the room.
+  const { data: bg } = useSWR(
+    roomName ? ["live-chat-bg", roomName] : null,
+    async () => {
+      const s = await getCallState({ roomName: roomName! })
+      return { url: s.chatBgUrl, effect: s.chatBgEffect }
+    },
+    { refreshInterval: 5000, fallbackData: { url: bgUrl, effect: bgEffect } },
+  )
+  const activeBgUrl = bg?.url ?? bgUrl
+  const activeBgEffect = bg?.effect ?? bgEffect
+
   useEffect(() => {
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
@@ -71,22 +83,22 @@ export function LiveChat({
   return (
     <div className="relative flex h-full flex-col">
       {/* Host-controlled background image sits behind the messages. */}
-      {bgUrl && (
+      {activeBgUrl && (
         <>
           <div
             aria-hidden="true"
             className={cn(
               "pointer-events-none absolute inset-0 bg-cover bg-center",
-              bgEffect === "blur" && "blur-sm scale-105",
+              activeBgEffect === "blur" && "blur-sm scale-105",
             )}
-            style={{ backgroundImage: `url(${bgUrl})` }}
+            style={{ backgroundImage: `url(${activeBgUrl})` }}
           />
           {/* Scrim keeps text legible over any image (stronger when dimmed). */}
           <div
             aria-hidden="true"
             className={cn(
               "pointer-events-none absolute inset-0",
-              bgEffect === "dim" ? "bg-background/80" : "bg-background/55",
+              activeBgEffect === "dim" ? "bg-background/80" : "bg-background/55",
             )}
           />
         </>

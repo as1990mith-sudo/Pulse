@@ -150,7 +150,7 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
   }
 
   return (
-    <div className="flex h-[calc(100dvh-4rem)] flex-col gap-3 px-3 py-3 sm:px-4">
+    <div className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col gap-3 px-3 py-3 sm:px-4">
       {/* Room header: title + host, always visible */}
       <header className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-card px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-3">
