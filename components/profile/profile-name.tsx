@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Pencil, Check, X, Loader2 } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
+import { syncUserDisplayName } from "@/app/actions/users"
 
 /**
  * Renders the profile display name. On the user's own profile a pencil button
@@ -39,6 +40,8 @@ export function ProfileName({
     try {
       const result = await authClient.updateUser({ name: next })
       if (result.error) throw new Error(result.error.message || "Could not update your name.")
+      // Propagate the new name to all past posts, comments, messages, etc.
+      await syncUserDisplayName()
       setEditing(false)
       router.refresh()
     } catch (e) {
