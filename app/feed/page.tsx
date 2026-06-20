@@ -21,7 +21,7 @@ export default async function FeedPage() {
     <div className="min-h-screen">
       <SiteHeader />
       <main>
-        <div className="mx-auto w-full max-w-xl pb-8">
+        <div className="mx-auto w-full max-w-2xl pb-8">
           {/* Stories rail sits at the very top, edge-to-edge like Instagram. */}
           <div className="border-b border-border/60 px-4 py-3 sm:px-0">
             <StatusBar groups={statusGroups} currentUser={currentUser} />
@@ -40,7 +40,7 @@ export default async function FeedPage() {
       </main>
 
       <footer className="border-t border-border/60">
-        <div className="mx-auto flex w-full max-w-xl flex-col items-center justify-between gap-2 px-4 py-8 text-sm text-muted-foreground sm:flex-row">
+        <div className="mx-auto flex w-full max-w-2xl flex-col items-center justify-between gap-2 px-4 py-8 text-sm text-muted-foreground sm:flex-row">
           <p>Frequency — live podcast streaming.</p>
         </div>
       </footer>

@@ -45,15 +45,20 @@ export type FeedPostView = {
   comments: FeedCommentView[]
 }
 
-/** Builds a map of userId -> profile image for the given user ids. */
-async function getUserImageMap(userIds: string[]): Promise<Map<string, string | null>> {
+/**
+ * Builds a map of userId -> live profile info (current name + image) for the
+ * given user ids. Posts/comments store a denormalized name at creation time,
+ * but we resolve the *current* name here so renaming a user retroactively
+ * updates the author name shown on all of their past posts and comments.
+ */
+async function getUserInfoMap(userIds: string[]): Promise<Map<string, { name: string; image: string | null }>> {
   const unique = [...new Set(userIds)]
   if (unique.length === 0) return new Map()
   const rows = await db
-    .select({ id: userTable.id, image: userTable.image })
+    .select({ id: userTable.id, name: userTable.name, image: userTable.image })
     .from(userTable)
     .where(inArray(userTable.id, unique))
-  return new Map(rows.map((r) => [r.id, r.image]))
+  return new Map(rows.map((r) => [r.id, { name: r.name, image: r.image }]))
 }
 
 function timeAgo(date: Date): string {
@@ -85,7 +90,7 @@ export async function getFeed(): Promise<FeedPostView[]> {
   const posts = await db.select().from(feedPost).orderBy(desc(feedPost.createdAt))
   const comments = await db.select().from(feedComment).orderBy(asc(feedComment.createdAt))
 
-  const imageMap = await getUserImageMap([
+  const infoMap = await getUserInfoMap([
     ...posts.map((p) => p.userId),
     ...comments.map((c) => c.userId),
   ])
@@ -102,11 +107,11 @@ export async function getFeed(): Promise<FeedPostView[]> {
   return ordered.map((p) => ({
     id: p.id,
     authorId: p.userId,
-    user: p.authorName,
-    handle: p.authorHandle,
-    initials: getInitials(p.authorName),
+    user: infoMap.get(p.userId)?.name ?? p.authorName,
+    handle: getHandle(infoMap.get(p.userId)?.name ?? p.authorName),
+    initials: getInitials(infoMap.get(p.userId)?.name ?? p.authorName),
     color: getAvatarColor(p.userId),
-    authorImage: imageMap.get(p.userId) ?? null,
+    authorImage: infoMap.get(p.userId)?.image ?? null,
     postedAt: timeAgo(p.createdAt),
     text: p.text,
     image: p.image,
@@ -119,11 +124,11 @@ export async function getFeed(): Promise<FeedPostView[]> {
       .filter((c) => c.postId === p.id)
       .map((c) => ({
         id: c.id,
-        user: c.authorName,
-        handle: c.authorHandle,
-        initials: getInitials(c.authorName),
+        user: infoMap.get(c.userId)?.name ?? c.authorName,
+        handle: getHandle(infoMap.get(c.userId)?.name ?? c.authorName),
+        initials: getInitials(infoMap.get(c.userId)?.name ?? c.authorName),
         color: getAvatarColor(c.userId),
-        authorImage: imageMap.get(c.userId) ?? null,
+        authorImage: infoMap.get(c.userId)?.image ?? null,
         text: c.text,
         postedAt: timeAgo(c.createdAt),
       })),
@@ -152,7 +157,7 @@ export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
     .orderBy(desc(feedPost.createdAt))
   const comments = await db.select().from(feedComment).orderBy(asc(feedComment.createdAt))
 
-  const imageMap = await getUserImageMap([
+  const infoMap = await getUserInfoMap([
     ...posts.map((p) => p.userId),
     ...comments.map((c) => c.userId),
   ])
@@ -160,11 +165,11 @@ export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
   return posts.map((p) => ({
     id: p.id,
     authorId: p.userId,
-    user: p.authorName,
-    handle: p.authorHandle,
-    initials: getInitials(p.authorName),
+    user: infoMap.get(p.userId)?.name ?? p.authorName,
+    handle: getHandle(infoMap.get(p.userId)?.name ?? p.authorName),
+    initials: getInitials(infoMap.get(p.userId)?.name ?? p.authorName),
     color: getAvatarColor(p.userId),
-    authorImage: imageMap.get(p.userId) ?? null,
+    authorImage: infoMap.get(p.userId)?.image ?? null,
     postedAt: timeAgo(p.createdAt),
     text: p.text,
     image: p.image,
@@ -177,11 +182,11 @@ export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
       .filter((c) => c.postId === p.id)
       .map((c) => ({
         id: c.id,
-        user: c.authorName,
-        handle: c.authorHandle,
-        initials: getInitials(c.authorName),
+        user: infoMap.get(c.userId)?.name ?? c.authorName,
+        handle: getHandle(infoMap.get(c.userId)?.name ?? c.authorName),
+        initials: getInitials(infoMap.get(c.userId)?.name ?? c.authorName),
         color: getAvatarColor(c.userId),
-        authorImage: imageMap.get(c.userId) ?? null,
+        authorImage: infoMap.get(c.userId)?.image ?? null,
         text: c.text,
         postedAt: timeAgo(c.createdAt),
       })),
