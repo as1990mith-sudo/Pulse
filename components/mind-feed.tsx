@@ -97,8 +97,8 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
 
   if (!currentUser) {
     return (
-      <div className="space-y-6">
-        <Card className="flex flex-col items-center gap-3 p-8 text-center">
+      <div>
+        <Card className="mx-4 flex flex-col items-center gap-3 p-8 text-center sm:mx-0">
           <p className="text-lg font-semibold">Join the conversation</p>
           <p className="max-w-sm text-pretty text-sm leading-relaxed text-muted-foreground">
             Create a free account to post photos and videos, reply to others, and like posts. Your name shows on
@@ -114,10 +114,10 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
           </div>
         </Card>
 
-        <ul className="space-y-6">
+        <ul className="mt-5 divide-y divide-border/60 border-y border-border/60">
           {allPosts.map((post) => (
             <li key={post.id}>
-              <PostCard post={post} currentUser={currentUser} />
+              <PostCard post={post} currentUser={currentUser} variant="feed" />
             </li>
           ))}
         </ul>
@@ -126,8 +126,8 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
   }
 
   return (
-    <div className="space-y-6">
-      <Card className="p-4">
+    <div>
+      <div className="border-y border-border/60 bg-background px-4 py-3 sm:px-3">
         <form onSubmit={publish} className="flex gap-3">
           <Avatar className="size-10 shrink-0">
             <AvatarFallback className={currentUser.color}>{currentUser.initials}</AvatarFallback>
@@ -184,41 +184,44 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
             </div>
           </div>
         </form>
-      </Card>
+      </div>
 
-      <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-card/40 p-1">
+      {/* Sticky segmented tabs that blend into the feed */}
+      <div className="sticky top-0 z-10 flex items-center border-b border-border/60 bg-background/85 backdrop-blur">
         <button
           onClick={() => setTab("for-you")}
           className={cn(
-            "flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-            tab === "for-you" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
+            "relative flex-1 px-3 py-3 text-sm font-medium transition-colors",
+            tab === "for-you" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
           )}
           aria-pressed={tab === "for-you"}
         >
           For you
+          {tab === "for-you" && <span className="absolute inset-x-0 -bottom-px mx-auto h-0.5 w-12 rounded-full bg-primary" />}
         </button>
         <button
           onClick={() => setTab("following")}
           className={cn(
-            "flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-            tab === "following" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
+            "relative flex-1 px-3 py-3 text-sm font-medium transition-colors",
+            tab === "following" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
           )}
           aria-pressed={tab === "following"}
         >
           Following{followingCount > 0 ? ` (${followingCount})` : ""}
+          {tab === "following" && <span className="absolute inset-x-0 -bottom-px mx-auto h-0.5 w-12 rounded-full bg-primary" />}
         </button>
       </div>
 
       {visiblePosts.length > 0 ? (
-        <ul className="space-y-6">
+        <ul className="divide-y divide-border/60 border-b border-border/60">
           {visiblePosts.map((post) => (
             <li key={post.id}>
-              <PostCard post={post} currentUser={currentUser} />
+              <PostCard post={post} currentUser={currentUser} variant="feed" />
             </li>
           ))}
         </ul>
       ) : (
-        <Card className="p-8 text-center">
+        <Card className="m-4 p-8 text-center sm:mx-0">
           <p className="text-sm text-muted-foreground leading-relaxed">
             You&apos;re not following anyone yet. Tap <span className="font-medium text-foreground">Follow</span> on a
             post to see their thoughts here.
@@ -229,7 +232,18 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
   )
 }
 
-export function PostCard({ post, currentUser }: { post: FeedPostView; currentUser: CurrentUser | null }) {
+export function PostCard({
+  post,
+  currentUser,
+  variant = "card",
+}: {
+  post: FeedPostView
+  currentUser: CurrentUser | null
+  // "feed" blends edge-to-edge into the immersive scroll; "card" keeps the
+  // boxed look used on profile pages.
+  variant?: "card" | "feed"
+}) {
+  const feed = variant === "feed"
   const router = useRouter()
   const [liked, setLiked] = useState(false)
   const [likes, setLikes] = useState(post.likes)
@@ -294,9 +308,16 @@ export function PostCard({ post, currentUser }: { post: FeedPostView; currentUse
   const hasMedia = !!post.image || !!post.video
 
   return (
-    <Card className="overflow-hidden p-0">
+    <article
+      className={cn(
+        "overflow-hidden",
+        feed
+          ? "bg-background"
+          : "rounded-xl border border-border bg-card text-card-foreground",
+      )}
+    >
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 p-3">
+      <div className="flex items-center justify-between gap-2 px-3 py-2.5">
         <div className="flex min-w-0 items-center gap-2.5">
           <Link href={`/u/${post.authorId}`} aria-label={`View ${post.user}'s profile`} className="shrink-0">
             <Avatar className="size-9">
@@ -320,7 +341,7 @@ export function PostCard({ post, currentUser }: { post: FeedPostView; currentUse
 
       {/* Caption — shown above the media */}
       {post.text && (
-        <p className={cn("px-3 text-sm leading-relaxed text-foreground/90", hasMedia ? "pb-3" : "pb-1")}>
+        <p className={cn("px-3 text-[15px] leading-relaxed text-foreground/90", hasMedia ? "pb-2.5" : "pb-1")}>
           {post.text}
         </p>
       )}
@@ -457,7 +478,7 @@ export function PostCard({ post, currentUser }: { post: FeedPostView; currentUse
           )}
         </div>
       )}
-    </Card>
+    </article>
   )
 }
 
