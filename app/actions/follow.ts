@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { follow } from "@/lib/db/schema"
+import { getFollowers, getFollowing, type ProfileSummary } from "@/lib/profile"
 
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -33,6 +34,15 @@ export async function toggleFollow(input: { targetUserId: string; follow: boolea
 
   revalidatePath("/feed")
   return { following: input.follow }
+}
+
+/** Server-action wrappers so client dialogs can fetch follower/following lists. */
+export async function listFollowers(userId: string): Promise<ProfileSummary[]> {
+  return getFollowers(userId)
+}
+
+export async function listFollowing(userId: string): Promise<ProfileSummary[]> {
+  return getFollowing(userId)
 }
 
 /** Returns the set of userIds the current user follows (empty when signed out). */

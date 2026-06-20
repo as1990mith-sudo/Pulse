@@ -54,3 +54,45 @@ export async function getProfile(userId: string): Promise<Profile | null> {
     isFollowing,
   }
 }
+
+export type ProfileSummary = {
+  id: string
+  name: string
+  handle: string
+  initials: string
+  color: string
+  image: string | null
+}
+
+function toSummary(row: { id: string; name: string; image: string | null }): ProfileSummary {
+  return {
+    id: row.id,
+    name: row.name,
+    handle: getHandle(row.name),
+    initials: getInitials(row.name),
+    color: getAvatarColor(row.id),
+    image: row.image,
+  }
+}
+
+/** Users who follow the given user. */
+export async function getFollowers(userId: string): Promise<ProfileSummary[]> {
+  const rows = await db
+    .select({ id: userTable.id, name: userTable.name, image: userTable.image })
+    .from(follow)
+    .innerJoin(userTable, eq(follow.followerId, userTable.id))
+    .where(eq(follow.followingId, userId))
+    .orderBy(userTable.name)
+  return rows.map(toSummary)
+}
+
+/** Users the given user is following. */
+export async function getFollowing(userId: string): Promise<ProfileSummary[]> {
+  const rows = await db
+    .select({ id: userTable.id, name: userTable.name, image: userTable.image })
+    .from(follow)
+    .innerJoin(userTable, eq(follow.followingId, userTable.id))
+    .where(eq(follow.followerId, userId))
+    .orderBy(userTable.name)
+  return rows.map(toSummary)
+}

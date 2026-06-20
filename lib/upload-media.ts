@@ -2,13 +2,14 @@ import { upload } from "@vercel/blob/client"
 
 export type UploadedMedia = {
   url: string
-  type: "image" | "video" | "document"
+  type: "image" | "video" | "audio" | "document"
   name: string
 }
 
-function detectType(mime: string): "image" | "video" | "document" {
+function detectType(mime: string): "image" | "video" | "audio" | "document" {
   if (mime.startsWith("image/")) return "image"
   if (mime.startsWith("video/")) return "video"
+  if (mime.startsWith("audio/")) return "audio"
   return "document"
 }
 
@@ -20,11 +21,11 @@ function detectType(mime: string): "image" | "video" | "document" {
  *
  * `folder` becomes the blob key prefix and must be one of the allow-listed
  * prefixes in the token route (chat, status, covers, avatars, live-music,
- * episodes).
+ * episodes, dm).
  */
 export async function uploadMedia(
   file: File | Blob,
-  folder: "chat" | "status" | "covers" | "avatars" | "live-music" | "episodes",
+  folder: "chat" | "status" | "covers" | "avatars" | "live-music" | "episodes" | "dm",
   fileName?: string,
 ): Promise<UploadedMedia> {
   const name = fileName ?? (file instanceof File ? file.name : "upload")

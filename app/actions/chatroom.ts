@@ -47,7 +47,7 @@ export type ChatroomSearchResult = {
   requestStatus: "pending" | "approved" | "rejected" | null
 }
 
-export type ChatAttachmentType = "image" | "video" | "document"
+export type ChatAttachmentType = "image" | "video" | "audio" | "document"
 
 export type ChatMessageView = {
   id: number
@@ -60,6 +60,8 @@ export type ChatMessageView = {
   attachmentType: ChatAttachmentType | null
   attachmentName: string | null
   isSelf: boolean
+  pinned: boolean
+  deleted: boolean
   postedAt: string
 }
 
@@ -98,6 +100,38 @@ function timeAgo(date: Date): string {
   if (hrs < 24) return `${hrs}h`
   const days = Math.floor(hrs / 24)
   return `${days}d`
+}
+
+type ChatMessageRow = {
+  id: number
+  userId: string
+  userName: string
+  body: string | null
+  attachmentUrl: string | null
+  attachmentType: string | null
+  attachmentName: string | null
+  pinned: boolean
+  deleted: boolean
+  createdAt: Date
+}
+
+/** Maps a DB message row to the client view, hiding content of deleted ones. */
+function toMessageView(m: ChatMessageRow, viewerId: string): ChatMessageView {
+  return {
+    id: m.id,
+    userId: m.userId,
+    userName: m.userName,
+    initials: getInitials(m.userName),
+    color: getAvatarColor(m.userId),
+    body: m.deleted ? null : m.body,
+    attachmentUrl: m.deleted ? null : m.attachmentUrl,
+    attachmentType: m.deleted ? null : (m.attachmentType as ChatAttachmentType | null) ?? null,
+    attachmentName: m.deleted ? null : m.attachmentName,
+    isSelf: m.userId === viewerId,
+    pinned: m.pinned,
+    deleted: m.deleted,
+    postedAt: timeAgo(m.createdAt),
+  }
 }
 
 async function memberCounts(chatroomIds: number[]): Promise<Map<number, number>> {
@@ -274,19 +308,7 @@ export async function getChatroomDetail(chatroomId: number): Promise<ChatroomDet
       color: getAvatarColor(m.userId),
       role: m.role,
     })),
-    messages: messages.map((m) => ({
-      id: m.id,
-      userId: m.userId,
-      userName: m.userName,
-      initials: getInitials(m.userName),
-      color: getAvatarColor(m.userId),
-      body: m.body,
-      attachmentUrl: m.attachmentUrl,
-      attachmentType: (m.attachmentType as ChatAttachmentType | null) ?? null,
-      attachmentName: m.attachmentName,
-      isSelf: m.userId === user.id,
-      postedAt: timeAgo(m.createdAt),
-    })),
+    messages: messages.map((m) => toMessageView(m, user.id)),
     joinRequests: joinRequests.map((r) => ({
       id: r.id,
       userId: r.userId,
@@ -347,19 +369,34 @@ export async function getChatMessages(chatroomId: number): Promise<ChatMessageVi
     .where(eq(chatroomMessage.chatroomId, chatroomId))
     .orderBy(asc(chatroomMessage.createdAt))
 
-  return messages.map((m) => ({
-    id: m.id,
-    userId: m.userId,
-    userName: m.userName,
-    initials: getInitials(m.userName),
-    color: getAvatarColor(m.userId),
-    body: m.body,
-    attachmentUrl: m.attachmentUrl,
-    attachmentType: (m.attachmentType as ChatAttachmentType | null) ?? null,
-    attachmentName: m.attachmentName,
-    isSelf: m.userId === user.id,
-    postedAt: timeAgo(m.createdAt),
-  }))
+  return messages.map((m) => toMessageView(m, user.id))
+}
+
+/** Admin deletes a message (soft delete — content is cleared but order kept). */
+export async function deleteChatMessage(messageId: number) {
+  const user = await requireUser()
+  const [msg] = await db.select().from(chatroomMessage).where(eq(chatroomMessage.id, messageId))
+  if (!msg) throw new Error("Message not found.")
+  const [room] = await db.select().from(chatroom).where(eq(chatroom.id, msg.chatroomId))
+  // The admin can remove anyone's message; a member can remove their own.
+  const canDelete = room && (room.ownerId === user.id || msg.userId === user.id)
+  if (!canDelete) throw new Error("You can't delete this message.")
+
+  await db.update(chatroomMessage).set({ deleted: true, pinned: false }).where(eq(chatroomMessage.id, messageId))
+  revalidatePath(`/chatrooms/${msg.chatroomId}`)
+}
+
+/** Admin pins or unpins a message so it surfaces at the top of the room. */
+export async function togglePinMessage(input: { messageId: number; pinned: boolean }) {
+  const user = await requireUser()
+  const [msg] = await db.select().from(chatroomMessage).where(eq(chatroomMessage.id, input.messageId))
+  if (!msg) throw new Error("Message not found.")
+  const [room] = await db.select().from(chatroom).where(eq(chatroom.id, msg.chatroomId))
+  if (!room || room.ownerId !== user.id) throw new Error("Only the chatroom admin can pin messages.")
+  if (msg.deleted) throw new Error("You can't pin a deleted message.")
+
+  await db.update(chatroomMessage).set({ pinned: input.pinned }).where(eq(chatroomMessage.id, input.messageId))
+  revalidatePath(`/chatrooms/${msg.chatroomId}`)
 }
 
 /** Admin updates (or removes) the chatroom's group profile picture. */

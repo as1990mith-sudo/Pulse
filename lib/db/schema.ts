@@ -171,8 +171,12 @@ export const chatroomMessage = pgTable("chatroom_message", {
   userName: text("userName").notNull(),
   body: text("body"), // nullable — a message can be attachment-only
   attachmentUrl: text("attachmentUrl"),
-  attachmentType: text("attachmentType"), // "image" | "video" | "document"
+  attachmentType: text("attachmentType"), // "image" | "video" | "audio" | "document"
   attachmentName: text("attachmentName"),
+  // Admin moderation: pinned messages surface at the top; deleted messages are
+  // soft-deleted (kept for ordering) and shown as "message removed".
+  pinned: boolean("pinned").notNull().default(false),
+  deleted: boolean("deleted").notNull().default(false),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
@@ -251,6 +255,33 @@ export const liveChatMessage = pgTable("live_chat_message", {
   userName: text("userName").notNull(),
   isHost: boolean("isHost").notNull().default(false),
   body: text("body").notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// --- Direct messages -------------------------------------------------------
+// 1:1 private conversations between two users (WhatsApp-style). A conversation
+// row is created the first time either user messages the other. The pair is
+// stored with the lexicographically-smaller id as userAId so each pair is
+// unique regardless of who started it. lastMessageAt powers inbox ordering and
+// the per-user lastReadAt columns drive unread badges.
+export const dmConversation = pgTable("dm_conversation", {
+  id: serial("id").primaryKey(),
+  userAId: text("userAId").notNull(),
+  userBId: text("userBId").notNull(),
+  lastMessageAt: timestamp("lastMessageAt").notNull().defaultNow(),
+  userALastReadAt: timestamp("userALastReadAt").notNull().defaultNow(),
+  userBLastReadAt: timestamp("userBLastReadAt").notNull().defaultNow(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+export const dmMessage = pgTable("dm_message", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversationId").notNull(),
+  senderId: text("senderId").notNull(),
+  body: text("body"), // nullable — a message can be attachment-only
+  attachmentUrl: text("attachmentUrl"),
+  attachmentType: text("attachmentType"), // "image" | "video" | "audio" | "document"
+  attachmentName: text("attachmentName"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 

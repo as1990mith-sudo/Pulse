@@ -11,9 +11,13 @@ import {
   FileText,
   ImageIcon,
   LogOut,
+  Music,
   Paperclip,
+  Pin,
+  PinOff,
   Send,
   Smile,
+  Trash2,
   Users,
   X,
 } from "lucide-react"
@@ -27,10 +31,12 @@ import { cn } from "@/lib/utils"
 import { uploadMedia } from "@/lib/upload-media"
 import {
   approveJoinRequest,
+  deleteChatMessage,
   getChatMessages,
   leaveChatroom,
   rejectJoinRequest,
   sendChatMessage,
+  togglePinMessage,
   updateChatroomImage,
   type ChatAttachmentType,
   type ChatMessageView,
@@ -131,6 +137,8 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
         attachmentName: sentAttachment?.name ?? null,
         postedAt: "now",
         isSelf: true,
+        pinned: false,
+        deleted: false,
       },
     ])
 
@@ -153,6 +161,27 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
       router.push("/chatrooms")
     })
   }
+
+  async function handleDeleteMessage(messageId: number) {
+    // Optimistically mark deleted, then persist.
+    await mutateMessages(
+      (current) => (current ?? []).map((m) => (m.id === messageId ? { ...m, deleted: true, pinned: false, body: null, attachmentUrl: null, attachmentType: null, attachmentName: null } : m)),
+      { revalidate: false },
+    )
+    await deleteChatMessage(messageId)
+    await mutateMessages()
+  }
+
+  async function handleTogglePin(messageId: number, pinned: boolean) {
+    await mutateMessages(
+      (current) => (current ?? []).map((m) => (m.id === messageId ? { ...m, pinned } : m)),
+      { revalidate: false },
+    )
+    await togglePinMessage({ messageId, pinned })
+    await mutateMessages()
+  }
+
+  const pinnedMessages = messages.filter((m) => m.pinned && !m.deleted)
 
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden">
@@ -200,6 +229,35 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
         </div>
       )}
 
+      {/* Pinned messages banner */}
+      {pinnedMessages.length > 0 && (
+        <div className="border-b border-border/60 bg-secondary/40 px-4 py-2 sm:px-6">
+          <div className="mx-auto w-full max-w-3xl space-y-1">
+            {pinnedMessages.map((m) => (
+              <div key={`pin-${m.id}`} className="flex items-center gap-2 text-xs">
+                <Pin className="size-3.5 shrink-0 text-primary" />
+                <span className="min-w-0 flex-1 truncate">
+                  <span className="font-medium">{m.isSelf ? "You" : m.userName}: </span>
+                  <span className="text-muted-foreground">
+                    {m.body || (m.attachmentType ? `${m.attachmentType} attachment` : "Message")}
+                  </span>
+                </span>
+                {detail.isOwner && (
+                  <button
+                    type="button"
+                    onClick={() => handleTogglePin(m.id, false)}
+                    className="shrink-0 text-muted-foreground hover:text-foreground"
+                    aria-label="Unpin message"
+                  >
+                    <PinOff className="size-3.5" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Messages — fills remaining height */}
       <div className="flex-1 overflow-y-auto bg-card/30">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 py-5 sm:px-6">
@@ -209,7 +267,13 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
             </p>
           )}
           {messages.map((m) => (
-            <MessageBubble key={m.id} message={m} />
+            <MessageBubble
+              key={m.id}
+              message={m}
+              isAdmin={detail.isOwner}
+              onDelete={handleDeleteMessage}
+              onTogglePin={handleTogglePin}
+            />
           ))}
           <div ref={scrollEndRef} />
         </div>
@@ -228,7 +292,7 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
             <video src={attachment.url} className="size-12 rounded-md object-cover" />
           ) : (
             <span className="flex size-12 items-center justify-center rounded-md bg-secondary">
-              <FileText className="size-5" />
+              {attachment.type === "audio" ? <Music className="size-5" /> : <FileText className="size-5" />}
             </span>
           )}
           <span className="min-w-0 flex-1 truncate text-sm">{attachment.name}</span>
@@ -261,7 +325,7 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip"
+          accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip"
           className="hidden"
           onChange={handleFilePick}
         />
@@ -308,18 +372,80 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
   )
 }
 
-function MessageBubble({ message: m }: { message: ChatMessageView }) {
+function MessageBubble({
+  message: m,
+  isAdmin,
+  onDelete,
+  onTogglePin,
+}: {
+  message: ChatMessageView
+  isAdmin: boolean
+  onDelete: (messageId: number) => void
+  onTogglePin: (messageId: number, pinned: boolean) => void
+}) {
   const [lightbox, setLightbox] = useState(false)
 
+  // Soft-deleted messages render a tombstone with no moderation controls.
+  if (m.deleted) {
+    return (
+      <div className={cn("flex gap-2.5", m.isSelf && "flex-row-reverse")}>
+        <Avatar className="size-7 shrink-0">
+          <AvatarFallback className={cn("text-[10px]", m.color)}>{m.initials}</AvatarFallback>
+        </Avatar>
+        <div className={cn("max-w-[75%]", m.isSelf && "text-right")}>
+          <div className="inline-flex items-center gap-1.5 rounded-2xl border border-dashed border-border bg-transparent px-3 py-2 text-xs italic text-muted-foreground">
+            <Trash2 className="size-3.5" /> This message was removed
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Only the admin can pin; admin or the author can delete.
+  const canDelete = isAdmin || m.isSelf && m.id > 0
+  const showControls = (isAdmin || m.isSelf) && m.id > 0
+
   return (
-    <div className={cn("flex gap-2.5", m.isSelf && "flex-row-reverse")}>
-      <Avatar className="size-7 shrink-0">
-        <AvatarFallback className={cn("text-[10px]", m.color)}>{m.initials}</AvatarFallback>
-      </Avatar>
+    <div className={cn("group flex gap-2.5", m.isSelf && "flex-row-reverse")}>
+      <Link href={`/u/${m.userId}`} aria-label={`View ${m.userName}'s profile`} className="shrink-0">
+        <Avatar className="size-7 transition-opacity hover:opacity-80">
+          <AvatarFallback className={cn("text-[10px]", m.color)}>{m.initials}</AvatarFallback>
+        </Avatar>
+      </Link>
       <div className={cn("max-w-[75%] space-y-0.5", m.isSelf && "items-end text-right")}>
         <div className={cn("flex items-center gap-2", m.isSelf && "flex-row-reverse")}>
-          <span className="text-xs font-medium">{m.isSelf ? "You" : m.userName}</span>
+          <Link
+            href={`/u/${m.userId}`}
+            className="text-xs font-medium hover:underline"
+          >
+            {m.isSelf ? "You" : m.userName}
+          </Link>
           <span className="text-[10px] text-muted-foreground">{m.postedAt}</span>
+          {m.pinned && <Pin className="size-3 text-primary" />}
+          {showControls && (
+            <span className={cn("flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100", m.isSelf && "flex-row-reverse")}>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => onTogglePin(m.id, !m.pinned)}
+                  className="text-muted-foreground hover:text-foreground"
+                  aria-label={m.pinned ? "Unpin message" : "Pin message"}
+                >
+                  {m.pinned ? <PinOff className="size-3" /> : <Pin className="size-3" />}
+                </button>
+              )}
+              {canDelete && (
+                <button
+                  type="button"
+                  onClick={() => onDelete(m.id)}
+                  className="text-muted-foreground hover:text-destructive"
+                  aria-label="Delete message"
+                >
+                  <Trash2 className="size-3" />
+                </button>
+              )}
+            </span>
+          )}
         </div>
         <div
           className={cn(
@@ -348,6 +474,13 @@ function MessageBubble({ message: m }: { message: ChatMessageView }) {
           {m.attachmentUrl && m.attachmentType === "video" && (
             // eslint-disable-next-line jsx-a11y/media-has-caption
             <video src={m.attachmentUrl} controls className="max-h-64 rounded-xl" />
+          )}
+          {m.attachmentUrl && m.attachmentType === "audio" && (
+            <div className="flex items-center gap-2 px-1 py-1">
+              <Music className="size-4 shrink-0" />
+              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+              <audio src={m.attachmentUrl} controls className="h-9 max-w-[220px]" />
+            </div>
           )}
           {m.attachmentUrl && m.attachmentType === "document" && (
             <a
@@ -458,13 +591,17 @@ function MembersPanel({ detail }: { detail: ChatroomDetail }) {
       </div>
       <div className="flex flex-wrap gap-2">
         {detail.members.map((m) => (
-          <div key={m.userId} className="flex items-center gap-2 rounded-full border border-border/60 py-1 pl-1 pr-3">
+          <Link
+            key={m.userId}
+            href={`/u/${m.userId}`}
+            className="flex items-center gap-2 rounded-full border border-border/60 py-1 pl-1 pr-3 transition-colors hover:bg-secondary"
+          >
             <Avatar className="size-6">
               <AvatarFallback className={cn("text-[10px]", m.color)}>{m.initials}</AvatarFallback>
             </Avatar>
             <span className="text-xs font-medium">{m.userName}</span>
             {m.role === "admin" && <Badge variant="secondary">Admin</Badge>}
-          </div>
+          </Link>
         ))}
       </div>
       <p className="text-xs text-muted-foreground">
