@@ -111,11 +111,13 @@ export function EpisodeRow({ show, owned = false }: { show: Show; owned?: boolea
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44">
             {show.audioUrl ? (
-              <DropdownMenuItem asChild>
-                <a href={show.audioUrl} download={downloadName}>
-                  <Download className="size-4" /> Download
-                </a>
-              </DropdownMenuItem>
+              <DropdownMenuItem
+                render={
+                  <a href={show.audioUrl} download={downloadName}>
+                    <Download className="size-4" /> Download
+                  </a>
+                }
+              />
             ) : (
               <DropdownMenuItem disabled>
                 <Download className="size-4" /> No audio
