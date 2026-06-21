@@ -3,8 +3,10 @@
 import { useState, useTransition } from "react"
 import useSWR from "swr"
 import Link from "next/link"
-import { Heart, Share2, MessageCircle, Check, Send } from "lucide-react"
+import { Heart, Share2, MessageCircle, Send } from "lucide-react"
 import { addDevotionalComment, getDevotionalComments, type DevotionalCommentView } from "@/app/actions/devotional"
+import { ShareSheet } from "@/components/share-sheet"
+import type { ShareTarget } from "@/lib/share-types"
 import type { CurrentUser } from "@/lib/session"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -37,30 +39,26 @@ export function DevotionalInteractions({
   )
   const [liked, setLiked] = useState(false)
   const [likes, setLikes] = useState(initialLikes)
-  const [shared, setShared] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   const [draft, setDraft] = useState("")
   const [isPending, startTransition] = useTransition()
+
+  const shareTarget: ShareTarget = {
+    type: "devotional",
+    key: devotionalDate,
+    title,
+    subtitle: "Daily devotional on Frequency",
+    url: typeof window !== "undefined" ? window.location.pathname + window.location.search : "/bible",
+    image: null,
+    downloadUrl: null,
+    downloadKind: null,
+  }
 
   function toggleLike() {
     setLiked((prev) => {
       setLikes((n) => (prev ? n - 1 : n + 1))
       return !prev
     })
-  }
-
-  async function share() {
-    const url = typeof window !== "undefined" ? window.location.href : ""
-    try {
-      if (typeof navigator !== "undefined" && navigator.share) {
-        await navigator.share({ title, text: title, url })
-      } else if (typeof navigator !== "undefined" && navigator.clipboard) {
-        await navigator.clipboard.writeText(url)
-      }
-    } catch {
-      // user dismissed the share sheet; ignore
-    }
-    setShared(true)
-    setTimeout(() => setShared(false), 2000)
   }
 
   function submitComment(e: React.FormEvent) {
@@ -82,9 +80,9 @@ export function DevotionalInteractions({
           {likes.toLocaleString()}
         </Button>
 
-        <Button variant="secondary" onClick={share} className="gap-2">
-          {shared ? <Check className="size-4 text-chart-2" /> : <Share2 className="size-4" />}
-          {shared ? "Link copied" : "Share"}
+        <Button variant="secondary" onClick={() => setShareOpen(true)} className="gap-2">
+          <Share2 className="size-4" />
+          Share
         </Button>
 
         <div className="ml-auto flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -141,6 +139,8 @@ export function DevotionalInteractions({
           ))}
         </ul>
       </div>
+
+      <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
     </div>
   )
 }

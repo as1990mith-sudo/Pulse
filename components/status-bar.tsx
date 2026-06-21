@@ -20,6 +20,8 @@ import type { CurrentUser } from "@/lib/session"
 import { uploadMedia } from "@/lib/upload-media"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { VideoTrimmer } from "@/components/video-trimmer"
+import { ShareSheet } from "@/components/share-sheet"
+import type { ShareTarget } from "@/lib/share-types"
 import { cn } from "@/lib/utils"
 
 const MAX_VIDEO_SECONDS = 60
@@ -584,6 +586,7 @@ export function StatusViewer({
   const [replyText, setReplyText] = useState("")
   const [replySent, setReplySent] = useState(false)
   const [showViewers, setShowViewers] = useState(false)
+  const [showShare, setShowShare] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const pausedRef = useRef(false)
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -738,15 +741,11 @@ export function StatusViewer({
     }
   }
 
-  async function handleShare() {
+  function handleShare() {
     if (!group) return
-    const url = `${window.location.origin}/u/${group.userId}`
-    try {
-      if (navigator.share) await navigator.share({ title: `${group.authorName} on Frequency`, url })
-      else await navigator.clipboard.writeText(url)
-    } catch {
-      /* user dismissed */
-    }
+    // Pause playback while the share sheet is open, then resume on close.
+    setPaused(true)
+    setShowShare(true)
   }
 
   if (typeof document === "undefined" || !group || !item) return null
@@ -957,6 +956,26 @@ export function StatusViewer({
             statusId={item.id}
             onClose={() => {
               setShowViewers(false)
+              setPaused(false)
+            }}
+          />
+        )}
+
+        {item && group && (
+          <ShareSheet
+            target={{
+              type: "status",
+              key: String(item.id),
+              title: `${group.authorName}'s status on Frequency`,
+              subtitle: item.caption ?? null,
+              url: `/u/${group.userId}`,
+              image: item.mediaType === "text" ? null : item.mediaUrl ?? null,
+              downloadUrl: item.mediaType === "text" ? null : item.mediaUrl ?? null,
+              downloadKind: item.mediaType === "video" ? "video" : item.mediaType === "image" ? "image" : null,
+            }}
+            open={showShare}
+            onClose={() => {
+              setShowShare(false)
               setPaused(false)
             }}
           />
