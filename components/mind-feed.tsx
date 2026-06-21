@@ -39,6 +39,7 @@ import {
 import { ImageLightbox } from "@/components/image-lightbox"
 import { FeedVideo } from "@/components/feed-video"
 import { ShareSheet } from "@/components/share-sheet"
+import { FindProfiles } from "@/components/find-profiles"
 import type { ShareTarget } from "@/lib/share-types"
 import { cn } from "@/lib/utils"
 
@@ -51,7 +52,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
-  const [tab, setTab] = useState<"for-you" | "following">("for-you")
+  const [tab, setTab] = useState<"for-you" | "following" | "find">("for-you")
   const fileInputRef = useRef<HTMLInputElement>(null)
   // Separate inputs so we can request the device camera directly: one for
   // capturing a photo and one for recording a video. The "capture" attribute
@@ -272,9 +273,22 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
           Following{followingCount > 0 ? ` (${followingCount})` : ""}
           {tab === "following" && <span className="absolute inset-x-0 -bottom-px mx-auto h-1 w-14 rounded-full bg-primary" />}
         </button>
+        <button
+          onClick={() => setTab("find")}
+          className={cn(
+            "relative flex-1 px-3 py-4 text-[15px] font-semibold transition-colors",
+            tab === "find" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+          )}
+          aria-pressed={tab === "find"}
+        >
+          Find
+          {tab === "find" && <span className="absolute inset-x-0 -bottom-px mx-auto h-1 w-14 rounded-full bg-primary" />}
+        </button>
       </div>
 
-      {visiblePosts.length > 0 ? (
+      {tab === "find" ? (
+        <FindProfiles />
+      ) : visiblePosts.length > 0 ? (
         <ul className="divide-y divide-border/60 border-b border-border/60">
           {visiblePosts.map((post) => (
             <li key={post.id}>
@@ -286,7 +300,11 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
         <Card className="m-4 p-8 text-center sm:mx-0">
           <p className="text-sm text-muted-foreground leading-relaxed">
             You&apos;re not following anyone yet. Tap <span className="font-medium text-foreground">Follow</span> on a
-            post to see their thoughts here.
+            post to see their thoughts here, or use the{" "}
+            <button onClick={() => setTab("find")} className="font-medium text-primary underline-offset-2 hover:underline">
+              Find
+            </button>{" "}
+            tab to discover people.
           </p>
         </Card>
       )}
@@ -407,7 +425,7 @@ export function PostCard({
       )}
     >
       {/* Header */}
-      <div className={cn("flex items-center justify-between gap-2", feed ? "px-4 py-4" : "px-3 py-2.5")}>
+      <div className={cn("flex items-center justify-between gap-2", feed ? "px-[0.825rem] py-[0.7rem]" : "px-3 py-2.5")}>
         <div className="flex min-w-0 items-center gap-3">
           <Link href={`/u/${post.authorId}`} aria-label={`View ${post.user}'s profile`} className="shrink-0">
             <Avatar className={cn(feed ? "size-12 ring-2 ring-border/60" : "size-9")}>
@@ -477,7 +495,7 @@ export function PostCard({
 
       {/* Caption — shown above the media, or an inline editor while editing */}
       {isEditing ? (
-        <div className={cn("pb-3", feed ? "px-4" : "px-3")}>
+        <div className={cn("pb-3", feed ? "px-[0.825rem]" : "px-3")}>
           <Textarea
             value={editDraft}
             onChange={(e) => setEditDraft(e.target.value)}
@@ -511,7 +529,7 @@ export function PostCard({
           <p
             className={cn(
               "whitespace-pre-wrap leading-relaxed text-foreground/90",
-              feed ? "px-4 text-lg" : "px-3 text-[15px]",
+              feed ? "px-[0.825rem] text-lg" : "px-3 text-[15px]",
               hasMedia ? "pb-3" : "pb-1",
             )}
           >
@@ -554,7 +572,7 @@ export function PostCard({
       <div
         className={cn(
           "flex items-center text-foreground",
-          feed ? "gap-7 px-4 pb-4 pt-3.5" : "gap-5 px-3 pb-3 pt-3",
+          feed ? "gap-7 px-[0.825rem] pb-[0.7rem] pt-3.5" : "gap-5 px-3 pb-3 pt-3",
         )}
       >
         <button

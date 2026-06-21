@@ -22,9 +22,36 @@ import {
 import { ImageCropper } from "@/components/image-cropper"
 import { uploadMedia } from "@/lib/upload-media"
 
+function CommunityHelpEntry() {
+  return (
+    <Link
+      href="/chatrooms/community"
+      className="group flex items-center gap-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-4 transition-colors hover:bg-emerald-500/10 sm:px-5"
+    >
+      <Avatar className="size-14 shrink-0 ring-2 ring-emerald-500/40 transition-transform duration-200 group-hover:scale-105">
+        <AvatarImage src="/community-help-avatar.png" alt="Community Help" />
+        <AvatarFallback className="bg-emerald-600 text-lg font-bold text-white">?</AvatarFallback>
+      </Avatar>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p className="truncate text-lg font-semibold tracking-tight">Community Help</p>
+          <Badge className="shrink-0 border-0 bg-emerald-600 text-white hover:bg-emerald-600">Anonymous</Badge>
+        </div>
+        <p className="truncate text-sm leading-relaxed text-muted-foreground">
+          Ask anything anonymously — anyone in the community can help.
+        </p>
+      </div>
+      <span className="shrink-0 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-opacity group-hover:opacity-90">
+        Open
+      </span>
+    </Link>
+  )
+}
+
 export function ChatroomBrowser({ rooms }: { rooms: ChatroomSummary[] }) {
   return (
     <Tabs defaultValue="my-rooms" className="space-y-6">
+      <CommunityHelpEntry />
       <TabsList className="grid h-12 w-full grid-cols-3 rounded-full p-1">
         <TabsTrigger value="my-rooms" className="rounded-full text-[15px] font-medium">
           My rooms
