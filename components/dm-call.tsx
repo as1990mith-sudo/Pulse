@@ -103,7 +103,8 @@ export function DmCall({
       await room.localParticipant.setMicrophoneEnabled(true)
       if (call.mode === "video") {
         await room.localParticipant.setCameraEnabled(true)
-        attachLocalVideo(room)
+        // Self-view attachment is handled by the effect that watches `camOn`
+        // and `connected`, ensuring the <video> element is mounted first.
       }
       setConnected(true)
       setPhase("active")
@@ -137,6 +138,16 @@ export function DmCall({
   }, [call.status, cleanup, onClosed])
 
   useEffect(() => () => cleanup(), [cleanup])
+
+  // Attach (or re-attach) the local camera track to the self-view whenever the
+  // preview becomes visible — on connect and every time the camera is toggled
+  // back on. This runs after React has mounted the <video> element, so the ref
+  // is guaranteed to exist (fixes the self-view going blank after toggling).
+  useEffect(() => {
+    if (call.mode !== "video" || !camOn || !connected) return
+    const room = roomRef.current
+    if (room) attachLocalVideo(room)
+  }, [call.mode, camOn, connected])
 
   // Once the call goes live (callee accepted + connected), start ticking the
   // call duration. Resets if the call ever drops back out of the live state.
@@ -202,7 +213,9 @@ export function DmCall({
     if (!room) return
     const next = !camOn
     await room.localParticipant.setCameraEnabled(next)
-    if (next) attachLocalVideo(room)
+    // Don't attach here: the local <video> element is only mounted once
+    // `camOn` flips to true and React re-renders. Attaching is handled by the
+    // effect below, which runs after the element exists in the DOM.
     setCamOn(next)
   }
 
