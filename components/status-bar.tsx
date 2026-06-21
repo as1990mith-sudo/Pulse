@@ -770,7 +770,15 @@ export function StatusViewer({
 
         {/* Header */}
         <div className="absolute left-0 right-0 top-0 z-30 flex items-center justify-between px-3 pb-3 pt-6">
-          <div className="flex items-center gap-2">
+          <Link
+            href={`/u/${group.userId}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              onClose()
+            }}
+            className="flex items-center gap-2 rounded-full transition-opacity hover:opacity-90"
+            aria-label={group.isSelf ? "View your profile" : `View ${group.authorName}'s profile`}
+          >
             <Avatar className="size-9 ring-2 ring-white/40">
               {group.authorImage && <AvatarImage src={group.authorImage || "/placeholder.svg"} alt={group.authorName} />}
               <AvatarFallback className={group.color}>{group.initials}</AvatarFallback>
@@ -779,7 +787,7 @@ export function StatusViewer({
               <p className="text-sm font-semibold text-white">{group.isSelf ? "Your status" : group.authorName}</p>
               <p className="text-xs text-white/70">{item.postedAt}</p>
             </div>
-          </div>
+          </Link>
           <div className="flex items-center gap-1">
             {group.isSelf && (
               <button
