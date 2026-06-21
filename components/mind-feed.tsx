@@ -8,7 +8,6 @@ import {
   Heart,
   MessageCircle,
   Repeat2,
-  Check,
   ImagePlus,
   X,
   Send,
@@ -39,6 +38,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ImageLightbox } from "@/components/image-lightbox"
 import { FeedVideo } from "@/components/feed-video"
+import { ShareSheet } from "@/components/share-sheet"
+import type { ShareTarget } from "@/lib/share-types"
 import { cn } from "@/lib/utils"
 
 type DraftMedia = { url: string; type: "image" | "video" }
@@ -310,8 +311,7 @@ export function PostCard({
   const [likes, setLikes] = useState(post.likes)
   const [reposted, setReposted] = useState(false)
   const [reposts, setReposts] = useState(post.reposts)
-  const [shared, setShared] = useState(false)
-  const [shares, setShares] = useState(0)
+  const [shareOpen, setShareOpen] = useState(false)
   const [showComments, setShowComments] = useState(false)
   const [commentDraft, setCommentDraft] = useState("")
   const [lightboxOpen, setLightboxOpen] = useState(false)
@@ -367,20 +367,15 @@ export function PostCard({
     })
   }
 
-  async function share() {
-    const url = typeof window !== "undefined" ? window.location.href : ""
-    try {
-      if (typeof navigator !== "undefined" && navigator.share) {
-        await navigator.share({ title: `${post.user} on Frequency`, text: post.text, url })
-      } else if (typeof navigator !== "undefined" && navigator.clipboard) {
-        await navigator.clipboard.writeText(url)
-      }
-    } catch {
-      // user dismissed the share sheet; ignore
-    }
-    setShared(true)
-    setShares((n) => n + 1)
-    setTimeout(() => setShared(false), 2000)
+  const shareTarget: ShareTarget = {
+    type: "post",
+    key: String(post.id),
+    title: `${post.user} on Frequency`,
+    subtitle: post.text ? post.text.slice(0, 120) : null,
+    url: `/feed?post=${post.id}`,
+    image: post.image ?? post.video ?? null,
+    downloadUrl: post.image ?? post.video ?? null,
+    downloadKind: post.image ? "image" : post.video ? "video" : null,
   }
 
   function submitComment(e: React.FormEvent) {
@@ -605,19 +600,14 @@ export function PostCard({
         </button>
 
         <button
-          onClick={share}
+          onClick={() => setShareOpen(true)}
           className={cn(
             "ml-auto flex items-center gap-1.5 tabular-nums transition-colors hover:text-muted-foreground",
             feed ? "text-[15px]" : "text-sm",
           )}
           aria-label="Share"
         >
-          {shared ? (
-            <Check className={cn("text-chart-2", feed ? "size-7" : "size-6")} />
-          ) : (
-            <Send className={cn(feed ? "size-7" : "size-6")} />
-          )}
-          {shares > 0 && <span>{shares}</span>}
+          <Send className={cn(feed ? "size-7" : "size-6")} />
         </button>
       </div>
 
@@ -674,6 +664,8 @@ export function PostCard({
           )}
         </div>
       )}
+
+      <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
     </article>
   )
 }

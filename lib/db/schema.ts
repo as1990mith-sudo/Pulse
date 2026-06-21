@@ -380,3 +380,17 @@ export const notification = pgTable("notification", {
   read: boolean("read").notNull().default(false),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
+
+// Items a user has saved via the share sheet ("Save Post" quick action). One
+// row per (user, itemType, itemKey) — see the unique index in the DB.
+export const savedItem = pgTable("saved_item", {
+  id: serial("id").primaryKey(),
+  userId: text("userId").notNull(),
+  itemType: text("itemType").notNull(), // "post" | "episode" | "devotional" | "status" | "live"
+  itemKey: text("itemKey").notNull(), // stable identifier within the type
+  title: text("title"),
+  subtitle: text("subtitle"),
+  url: text("url").notNull(),
+  image: text("image"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})

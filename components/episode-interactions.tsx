@@ -2,7 +2,9 @@
 
 import { useState, useTransition } from "react"
 import Link from "next/link"
-import { Heart, MessageCircle, Share2, Check, Send, Loader2 } from "lucide-react"
+import { Heart, MessageCircle, Share2, Send, Loader2 } from "lucide-react"
+import { ShareSheet } from "@/components/share-sheet"
+import type { ShareTarget } from "@/lib/share-types"
 import type { Show } from "@/lib/data"
 import type { CurrentUser } from "@/lib/session"
 import type { EpisodeCommentView } from "@/app/actions/episodes"
@@ -29,10 +31,21 @@ export function EpisodeInteractions({
   const [likes, setLikes] = useState(show.likes ?? 0)
   const [comments, setComments] = useState<EpisodeCommentView[]>(initialComments)
   const [draft, setDraft] = useState("")
-  const [shared, setShared] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
 
   if (!episodeId) return null
+
+  const shareTarget: ShareTarget = {
+    type: "episode",
+    key: String(episodeId),
+    title: `${show.title} on Frequency`,
+    subtitle: show.tagline,
+    url: typeof window !== "undefined" ? window.location.pathname + window.location.search : "/catalog",
+    image: show.cover,
+    downloadUrl: show.audioUrl ?? null,
+    downloadKind: show.audioUrl ? "audio" : null,
+  }
 
   function toggleLike() {
     if (!currentUser) return
@@ -53,21 +66,6 @@ export function EpisodeInteractions({
       await addEpisodeComment({ episodeId: episodeId!, text })
       setComments(await getEpisodeComments(episodeId!))
     })
-  }
-
-  async function share() {
-    const url = typeof window !== "undefined" ? window.location.href : ""
-    try {
-      if (typeof navigator !== "undefined" && navigator.share) {
-        await navigator.share({ title: `${show.title} on Frequency`, text: show.tagline, url })
-      } else if (typeof navigator !== "undefined" && navigator.clipboard) {
-        await navigator.clipboard.writeText(url)
-      }
-    } catch {
-      // user dismissed the share sheet — ignore
-    }
-    setShared(true)
-    setTimeout(() => setShared(false), 2000)
   }
 
   return (
@@ -94,12 +92,12 @@ export function EpisodeInteractions({
         </span>
 
         <button
-          onClick={share}
+          onClick={() => setShareOpen(true)}
           className="ml-auto flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
           aria-label="Share episode"
         >
-          {shared ? <Check className="size-5 text-live" /> : <Share2 className="size-5" />}
-          {shared ? "Copied" : "Share"}
+          <Share2 className="size-5" />
+          Share
         </button>
       </div>
 
@@ -144,6 +142,8 @@ export function EpisodeInteractions({
           ))}
         </ul>
       )}
+
+      <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
     </div>
   )
 }
