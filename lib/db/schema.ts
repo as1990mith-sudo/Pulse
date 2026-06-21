@@ -394,3 +394,26 @@ export const savedItem = pgTable("saved_item", {
   image: text("image"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
+
+// --- Community Help (Jodel-style anonymous Q&A room) -----------------------
+// A single global room every user can post to. Posts are ANONYMOUS — the author
+// id is kept only for moderation/rate-limiting and is never sent to the client.
+export const communityPost = pgTable("community_post", {
+  id: serial("id").primaryKey(),
+  userId: text("userId").notNull(), // hidden author — never exposed to clients
+  body: text("body").notNull(),
+  deleted: boolean("deleted").notNull().default(false),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// Replies to a community post. Unlike posts, comments are NOT anonymous — the
+// commenter's name/profile is shown and links to their profile.
+export const communityComment = pgTable("community_comment", {
+  id: serial("id").primaryKey(),
+  postId: integer("postId").notNull(),
+  userId: text("userId").notNull(),
+  userName: text("userName").notNull(),
+  body: text("body").notNull(),
+  deleted: boolean("deleted").notNull().default(false),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
