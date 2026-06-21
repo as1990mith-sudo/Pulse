@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { dmConversation, dmMessage, statusUpdate, statusView, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
+import { DM_DELETE_WINDOW_MS } from "@/lib/dm-constants"
 
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -36,9 +37,6 @@ export type DmMessageView = {
   statusActive: boolean
   statusThumb: string | null
 }
-
-/** How long after sending a user may still delete their own DM. */
-export const DM_DELETE_WINDOW_MS = 15 * 60 * 1000
 
 export type DmConversationSummary = {
   id: number

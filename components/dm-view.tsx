@@ -18,11 +18,11 @@ import {
   getDmMessages,
   sendDirectMessage,
   togglePinDirectMessage,
-  DM_DELETE_WINDOW_MS,
   type DmAttachmentType,
   type DmConversationDetail,
   type DmMessageView,
 } from "@/app/actions/dm"
+import { DM_DELETE_WINDOW_MS } from "@/lib/dm-constants"
 import { getActiveCall, startCall, type CallMode, type DmCallView } from "@/app/actions/dm-call"
 
 const EMOJIS = [
