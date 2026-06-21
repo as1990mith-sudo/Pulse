@@ -865,7 +865,12 @@ export function StatusViewer({
           {group.isSelf ? (
             <button
               type="button"
-              onClick={() => setShowViewers(true)}
+              onClick={() => {
+                // Pause the auto-advance timer while the owner reviews who
+                // has seen their status.
+                setPaused(true)
+                setShowViewers(true)
+              }}
               className="mx-auto flex items-center gap-1.5 rounded-full bg-white/15 px-4 py-2 text-sm font-medium text-white backdrop-blur transition-colors hover:bg-white/25"
             >
               <Eye className="size-4" /> Viewers
@@ -947,7 +952,15 @@ export function StatusViewer({
           Next status
         </button>
 
-        {showViewers && item && <ViewersSheet statusId={item.id} onClose={() => setShowViewers(false)} />}
+        {showViewers && item && (
+          <ViewersSheet
+            statusId={item.id}
+            onClose={() => {
+              setShowViewers(false)
+              setPaused(false)
+            }}
+          />
+        )}
       </div>
     </div>,
     document.body,
