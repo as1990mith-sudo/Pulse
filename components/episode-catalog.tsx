@@ -36,7 +36,7 @@ export function EpisodeCatalog({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <input
@@ -54,7 +54,9 @@ export function EpisodeCatalog({
           No episodes match &ldquo;{query}&rdquo;.
         </p>
       ) : (
-        <div className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/60 bg-card/40">
+        // Edge-to-edge immersive list: break out of the page padding and use
+        // full-bleed divided rows instead of a boxed card.
+        <div className="-mx-4 divide-y divide-border/60 border-y border-border/60 sm:-mx-6">
           {filtered.map((show) => (
             <EpisodeRow key={show.id} show={show} owned={owned} />
           ))}
