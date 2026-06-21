@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { dmConversation, dmMessage, statusUpdate, statusView, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
+import { DM_DELETE_WINDOW_MS } from "@/lib/dm-constants"
 
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -25,6 +26,11 @@ export type DmMessageView = {
   attachmentName: string | null
   isSelf: boolean
   postedAt: string
+  // Epoch ms of when the message was sent — lets the client decide whether the
+  // 15-minute delete window is still open.
+  createdAtMs: number
+  pinned: boolean
+  deleted: boolean
   // Set when this message is a reply/reaction to a status. statusActive is true
   // while the status is still live (clickable); statusThumb is a preview image.
   statusId: number | null
@@ -97,6 +103,8 @@ type RawDmMessage = {
   attachmentType: string | null
   attachmentName: string | null
   statusId: number | null
+  pinned: boolean
+  deleted: boolean
   createdAt: Date
 }
 
@@ -123,18 +131,23 @@ function toMessageView(
   statusMap: Map<number, { active: boolean; thumb: string | null }>,
 ): DmMessageView {
   const ref = m.statusId != null ? statusMap.get(m.statusId) : undefined
+  // Soft-deleted messages keep their slot in the thread but their content is
+  // cleared so neither side can read it.
   return {
     id: m.id,
     senderId: m.senderId,
-    body: m.body,
-    attachmentUrl: m.attachmentUrl,
-    attachmentType: (m.attachmentType as DmAttachmentType | null) ?? null,
-    attachmentName: m.attachmentName,
+    body: m.deleted ? null : m.body,
+    attachmentUrl: m.deleted ? null : m.attachmentUrl,
+    attachmentType: m.deleted ? null : (m.attachmentType as DmAttachmentType | null) ?? null,
+    attachmentName: m.deleted ? null : m.attachmentName,
     isSelf: m.senderId === userId,
     postedAt: timeAgo(m.createdAt),
-    statusId: m.statusId ?? null,
-    statusActive: ref?.active ?? false,
-    statusThumb: ref?.thumb ?? null,
+    createdAtMs: m.createdAt.getTime(),
+    pinned: m.pinned,
+    deleted: m.deleted,
+    statusId: m.deleted ? null : m.statusId ?? null,
+    statusActive: m.deleted ? false : ref?.active ?? false,
+    statusThumb: m.deleted ? null : ref?.thumb ?? null,
   }
 }
 
@@ -237,7 +250,7 @@ export async function getConversations(): Promise<DmConversationSummary[]> {
         initials: getInitials(other?.name ?? "?"),
         color: getAvatarColor(otherId),
         image: other?.image ?? null,
-        lastMessage: last ? previewOf(last.body, last.attachmentType) : null,
+        lastMessage: last ? (last.deleted ? "Message deleted" : previewOf(last.body, last.attachmentType)) : null,
         lastMessageAt: timeAgo(conv.lastMessageAt),
         unread,
         hasActiveStatus,
@@ -356,4 +369,38 @@ export async function sendDirectMessage(input: {
 
   revalidatePath(`/messages/${input.conversationId}`)
   revalidatePath("/messages")
+}
+
+/**
+ * Soft-deletes one of the current user's own messages, but only within the
+ * 15-minute window after it was sent. Content is cleared while the row stays
+ * so ordering is preserved.
+ */
+export async function deleteDirectMessage(messageId: number) {
+  const user = await requireUser()
+  const [msg] = await db.select().from(dmMessage).where(eq(dmMessage.id, messageId)).limit(1)
+  if (!msg) throw new Error("Message not found.")
+  await loadConversationForUser(msg.conversationId, user.id)
+
+  if (msg.senderId !== user.id) throw new Error("You can only delete your own messages.")
+  if (msg.deleted) return
+  if (Date.now() - msg.createdAt.getTime() > DM_DELETE_WINDOW_MS) {
+    throw new Error("This message can no longer be deleted.")
+  }
+
+  await db.update(dmMessage).set({ deleted: true, pinned: false }).where(eq(dmMessage.id, messageId))
+  revalidatePath(`/messages/${msg.conversationId}`)
+  revalidatePath("/messages")
+}
+
+/** Pins or unpins a message in the conversation (either participant may pin). */
+export async function togglePinDirectMessage(input: { messageId: number; pinned: boolean }) {
+  const user = await requireUser()
+  const [msg] = await db.select().from(dmMessage).where(eq(dmMessage.id, input.messageId)).limit(1)
+  if (!msg) throw new Error("Message not found.")
+  await loadConversationForUser(msg.conversationId, user.id)
+  if (msg.deleted) throw new Error("You can't pin a deleted message.")
+
+  await db.update(dmMessage).set({ pinned: input.pinned }).where(eq(dmMessage.id, input.messageId))
+  revalidatePath(`/messages/${msg.conversationId}`)
 }

@@ -342,6 +342,10 @@ export const dmMessage = pgTable("dm_message", {
   // When set, this message is a reply/reaction to the given status update. The
   // inbox links to the status while it's still live (see app/status/[id]).
   statusId: integer("statusId"),
+  // Pinned messages stay highlighted in the thread; deleted ones are soft-
+  // deleted (content cleared) so message ordering is preserved.
+  pinned: boolean("pinned").notNull().default(false),
+  deleted: boolean("deleted").notNull().default(false),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import useSWR from "swr"
 import Link from "next/link"
-import { ArrowLeft, CornerUpLeft, FileText, Mic, Music, Paperclip, Phone, Send, Smile, Video, X } from "lucide-react"
+import { ArrowLeft, CornerUpLeft, FileText, Mic, Music, Paperclip, Phone, Pin, PinOff, Send, Smile, Trash2, Video, X } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -11,14 +11,18 @@ import { ImageLightbox } from "@/components/image-lightbox"
 import { VoiceRecorder } from "@/components/voice-recorder"
 import { DmCall } from "@/components/dm-call"
 import { cn } from "@/lib/utils"
+import { linkify } from "@/lib/linkify"
 import { uploadMedia } from "@/lib/upload-media"
 import {
+  deleteDirectMessage,
   getDmMessages,
   sendDirectMessage,
+  togglePinDirectMessage,
   type DmAttachmentType,
   type DmConversationDetail,
   type DmMessageView,
 } from "@/app/actions/dm"
+import { DM_DELETE_WINDOW_MS } from "@/lib/dm-constants"
 import { getActiveCall, startCall, type CallMode, type DmCallView } from "@/app/actions/dm-call"
 
 const EMOJIS = [
@@ -120,6 +124,9 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
           attachmentName: label,
           isSelf: true,
           postedAt: "now",
+          createdAtMs: Date.now(),
+          pinned: false,
+          deleted: false,
           statusId: null,
           statusActive: false,
           statusThumb: null,
@@ -160,6 +167,9 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
         attachmentName: sent?.name ?? null,
         isSelf: true,
         postedAt: "now",
+        createdAtMs: Date.now(),
+        pinned: false,
+        deleted: false,
         statusId: null,
         statusActive: false,
         statusThumb: null,
@@ -176,6 +186,30 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
       })
       await mutateMessages()
     })()
+  }
+
+  async function handleDeleteMessage(id: number) {
+    // Optimistically blank the message, then persist the soft-delete.
+    await mutateMessages(
+      (curr) => (curr ?? []).map((m) => (m.id === id ? { ...m, deleted: true, body: null, attachmentUrl: null } : m)),
+      { revalidate: false },
+    )
+    try {
+      await deleteDirectMessage(id)
+    } finally {
+      await mutateMessages()
+    }
+  }
+
+  async function handleTogglePin(id: number, pinned: boolean) {
+    await mutateMessages((curr) => (curr ?? []).map((m) => (m.id === id ? { ...m, pinned } : m)), {
+      revalidate: false,
+    })
+    try {
+      await togglePinDirectMessage({ messageId: id, pinned })
+    } finally {
+      await mutateMessages()
+    }
   }
 
   return (
@@ -255,6 +289,8 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
               initials={m.isSelf ? detail.currentUserInitials : detail.initials}
               image={m.isSelf ? detail.currentUserImage : detail.image}
               name={m.isSelf ? "You" : detail.otherUserName}
+              onDelete={handleDeleteMessage}
+              onTogglePin={handleTogglePin}
             />
           ))}
           <div ref={scrollEndRef} />
@@ -381,14 +417,59 @@ function DmBubble({
   initials,
   image,
   name,
+  onDelete,
+  onTogglePin,
 }: {
   message: DmMessageView
   color: string
   initials: string
   image: string | null
   name: string
+  onDelete: (id: number) => void
+  onTogglePin: (id: number, pinned: boolean) => void
 }) {
   const [lightbox, setLightbox] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Only persisted (positive id), non-deleted messages can be acted on. The
+  // delete option only exists within the 15-minute window after sending.
+  const actionable = m.id > 0 && !m.deleted
+  const canDelete = actionable && m.isSelf && Date.now() - m.createdAtMs < DM_DELETE_WINDOW_MS
+
+  function startPress() {
+    if (!actionable) return
+    longPressRef.current = setTimeout(() => setMenuOpen(true), 450)
+  }
+  function cancelPress() {
+    if (longPressRef.current) {
+      clearTimeout(longPressRef.current)
+      longPressRef.current = null
+    }
+  }
+
+  // Deleted messages keep their slot but show a tombstone instead of content.
+  if (m.deleted) {
+    return (
+      <div className={cn("flex gap-2.5", m.isSelf && "flex-row-reverse")}>
+        <Avatar className="size-7 shrink-0">
+          {image && <AvatarImage src={image || "/placeholder.svg"} alt={name} />}
+          <AvatarFallback className={cn("text-[10px]", color)}>{initials}</AvatarFallback>
+        </Avatar>
+        <div className={cn("max-w-[75%] space-y-0.5", m.isSelf && "text-right")}>
+          <span className="text-[10px] text-muted-foreground">{m.postedAt}</span>
+          <div
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-2xl border border-dashed border-border/70 px-3 py-2 text-sm italic text-muted-foreground",
+              m.isSelf ? "rounded-tr-sm" : "rounded-tl-sm",
+            )}
+          >
+            <Trash2 className="size-3.5 shrink-0" /> This message was deleted
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className={cn("flex gap-2.5", m.isSelf && "flex-row-reverse")}>
@@ -396,11 +477,23 @@ function DmBubble({
         {image && <AvatarImage src={image || "/placeholder.svg"} alt={name} />}
         <AvatarFallback className={cn("text-[10px]", color)}>{initials}</AvatarFallback>
       </Avatar>
-      <div className={cn("max-w-[75%] space-y-0.5", m.isSelf && "items-end text-right")}>
-        <span className="text-[10px] text-muted-foreground">{m.postedAt}</span>
+      <div className={cn("relative max-w-[75%] space-y-0.5", m.isSelf && "text-right")}>
+        <span className={cn("flex items-center gap-1 text-[10px] text-muted-foreground", m.isSelf && "justify-end")}>
+          {m.pinned && <Pin className="size-3 fill-current" aria-label="Pinned" />}
+          {m.postedAt}
+        </span>
         <div
+          onPointerDown={startPress}
+          onPointerUp={cancelPress}
+          onPointerLeave={cancelPress}
+          onPointerCancel={cancelPress}
+          onContextMenu={(e) => {
+            if (!actionable) return
+            e.preventDefault()
+            setMenuOpen(true)
+          }}
           className={cn(
-            "inline-block overflow-hidden rounded-2xl text-sm leading-relaxed",
+            "inline-block select-none overflow-hidden rounded-2xl text-sm leading-relaxed",
             m.attachmentType === "image" || m.attachmentType === "video" ? "p-1" : "px-3 py-2",
             m.isSelf ? "rounded-tr-sm bg-primary text-primary-foreground" : "rounded-tl-sm bg-secondary text-foreground",
           )}
@@ -488,8 +581,54 @@ function DmBubble({
               <span className="truncate">{m.attachmentName ?? "Document"}</span>
             </a>
           )}
-          {m.body && <p className={cn(m.attachmentUrl && "px-2 pb-1 pt-1.5")}>{m.body}</p>}
+          {m.body && (
+            <p className={cn("whitespace-pre-wrap break-words", m.attachmentUrl && "px-2 pb-1 pt-1.5")}>
+              {linkify(m.body, "font-medium underline underline-offset-2 hover:opacity-80")}
+            </p>
+          )}
         </div>
+
+        {menuOpen && (
+          <>
+            {/* Backdrop closes the menu when tapping elsewhere. */}
+            <button
+              type="button"
+              aria-label="Close menu"
+              className="fixed inset-0 z-40 cursor-default"
+              onClick={() => setMenuOpen(false)}
+            />
+            <div
+              className={cn(
+                "absolute z-50 mt-1 min-w-36 overflow-hidden rounded-xl border border-border/60 bg-popover p-1 text-popover-foreground shadow-lg",
+                m.isSelf ? "right-0" : "left-0",
+              )}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false)
+                  onTogglePin(m.id, !m.pinned)
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
+              >
+                {m.pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+                {m.pinned ? "Unpin" : "Pin"}
+              </button>
+              {canDelete && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    onDelete(m.id)
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-destructive transition-colors hover:bg-destructive/10"
+                >
+                  <Trash2 className="size-4" /> Delete
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
