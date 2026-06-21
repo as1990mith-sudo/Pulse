@@ -575,6 +575,7 @@ export function StatusViewer({
   onDelete: (id: number) => void
   onItemViewed?: (userId: string, itemId: number) => void
 }) {
+  const router = useRouter()
   const [groupIndex, setGroupIndex] = useState(startIndex)
   const [itemIndex, setItemIndex] = useState(startItemIndex)
   const [progress, setProgress] = useState(0)
@@ -773,7 +774,12 @@ export function StatusViewer({
           <Link
             href={`/u/${group.userId}`}
             onClick={(e) => {
+              // Navigate imperatively first, then close the viewer. Closing
+              // unmounts this portal, which would otherwise interrupt the
+              // Link's own client-side navigation transition.
+              e.preventDefault()
               e.stopPropagation()
+              router.push(`/u/${group.userId}`)
               onClose()
             }}
             className="flex items-center gap-2 rounded-full transition-opacity hover:opacity-90"
