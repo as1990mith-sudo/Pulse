@@ -27,9 +27,9 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
   return (
     <div className="min-h-screen">
       <SiteHeader />
-      <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
-        <header className="flex flex-col gap-5 border-b border-border/60 pb-8 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4">
+      <main className="mx-auto w-full max-w-4xl px-4 py-5 sm:px-6">
+        <header className="flex flex-col gap-4 pb-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4 sm:gap-6">
             <ProfileAvatar
               initials={profile.initials}
               color={profile.color}
@@ -39,7 +39,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
               statusGroup={statusGroup}
               currentUser={currentUser}
             />
-            <div className="space-y-1">
+            <div className="min-w-0 space-y-1.5">
               <ProfileName name={profile.name} handle={profile.handle} editable={profile.isSelf} />
               <ProfileFollowStats
                 userId={profile.id}

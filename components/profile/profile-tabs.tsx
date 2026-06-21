@@ -25,60 +25,94 @@ export function ProfileTabs({
   const [tab, setTab] = useState<"posts" | "episodes">("posts")
 
   return (
-    <section className="mt-8 space-y-6">
-      <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-card/40 p-1">
-        <button
+    <section className="mt-2">
+      {/* Instagram-style tab bar: full-width, uppercase labels, sliding top
+          indicator on the active tab. Sits on a top border like IG. */}
+      <div className="relative -mx-4 grid grid-cols-2 border-t border-border/60 sm:-mx-6">
+        <TabButton
+          active={tab === "posts"}
           onClick={() => setTab("posts")}
-          className={cn(
-            "flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-            tab === "posts" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
-          )}
-          aria-pressed={tab === "posts"}
-        >
-          <MessageSquare className="size-4" />
-          Posts{posts.length > 0 ? ` (${posts.length})` : ""}
-        </button>
-        <button
+          icon={<MessageSquare className="size-4" />}
+          label="Posts"
+          count={posts.length}
+        />
+        <TabButton
+          active={tab === "episodes"}
           onClick={() => setTab("episodes")}
-          className={cn(
-            "flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-            tab === "episodes" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
-          )}
-          aria-pressed={tab === "episodes"}
-        >
-          <Mic className="size-4" />
-          Episodes{episodes.length > 0 ? ` (${episodes.length})` : ""}
-        </button>
+          icon={<Mic className="size-4" />}
+          label="Episodes"
+          count={episodes.length}
+        />
+        {/* Sliding active indicator */}
+        <span
+          className="absolute -top-px left-0 h-0.5 w-1/2 bg-foreground transition-transform duration-300 ease-out"
+          style={{ transform: `translateX(${tab === "posts" ? "0%" : "100%"})` }}
+          aria-hidden
+        />
       </div>
 
-      {tab === "episodes" ? (
-        episodes.length === 0 ? (
+      {/* Content with a smooth fade/slide transition between tabs. */}
+      <div key={tab} className="animate-in fade-in slide-in-from-bottom-1 duration-300 pt-4">
+        {tab === "episodes" ? (
+          episodes.length === 0 ? (
+            <EmptyState
+              icon={<Mic className="size-6" />}
+              title="No published episodes yet"
+              message={
+                isSelf
+                  ? "When you finish a live session in the studio, publish it and it will appear here for your followers to browse."
+                  : `${name} hasn't published any episodes yet. Follow them to know when they go live.`
+              }
+            />
+          ) : (
+            <EpisodeCatalog episodes={episodes} owned={isSelf} />
+          )
+        ) : posts.length === 0 ? (
           <EmptyState
-            icon={<Mic className="size-6" />}
-            title="No published episodes yet"
+            icon={<MessageSquare className="size-6" />}
+            title="No posts yet"
             message={
               isSelf
-                ? "When you finish a live session in the studio, publish it and it will appear here for your followers to browse."
-                : `${name} hasn't published any episodes yet. Follow them to know when they go live.`
+                ? "Share what's on your mind from the Post tab and your posts will show up here."
+                : `${name} hasn't posted anything yet.`
             }
           />
         ) : (
-          <EpisodeCatalog episodes={episodes} owned={isSelf} />
-        )
-      ) : posts.length === 0 ? (
-        <EmptyState
-          icon={<MessageSquare className="size-6" />}
-          title="No posts yet"
-          message={
-            isSelf
-              ? "Share what's on your mind from the Post tab and your posts will show up here."
-              : `${name} hasn't posted anything yet.`
-          }
-        />
-      ) : (
-        <ProfilePostsGrid posts={posts} currentUser={currentUser} />
-      )}
+          <ProfilePostsGrid posts={posts} currentUser={currentUser} />
+        )}
+      </div>
     </section>
+  )
+}
+
+function TabButton({
+  active,
+  onClick,
+  icon,
+  label,
+  count,
+}: {
+  active: boolean
+  onClick: () => void
+  icon: React.ReactNode
+  label: string
+  count: number
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "flex items-center justify-center gap-2 py-3 text-xs font-semibold uppercase tracking-wider transition-colors",
+        active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {icon}
+      <span>
+        {label}
+        {count > 0 ? ` ${count}` : ""}
+      </span>
+    </button>
   )
 }
 
