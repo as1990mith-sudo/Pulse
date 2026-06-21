@@ -582,8 +582,8 @@ function DmBubble({
             </a>
           )}
           {m.body && (
-            <p className={cn("whitespace-pre-wrap break-words", m.attachmentUrl && "px-2 pb-1 pt-1.5")}>
-              {linkify(m.body, "font-medium underline underline-offset-2 hover:opacity-80")}
+            <p className={cn("whitespace-pre-wrap [overflow-wrap:anywhere]", m.attachmentUrl && "px-2 pb-1 pt-1.5")}>
+              {linkify(m.body, "font-medium underline underline-offset-2 [overflow-wrap:anywhere] hover:opacity-80")}
             </p>
           )}
         </div>

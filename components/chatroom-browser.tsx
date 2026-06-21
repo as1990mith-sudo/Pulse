@@ -33,10 +33,7 @@ function CommunityHelpEntry() {
         <AvatarFallback className="bg-emerald-600 text-lg font-bold text-white">?</AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <p className="truncate text-lg font-semibold tracking-tight">Community Help</p>
-          <Badge className="shrink-0 border-0 bg-emerald-600 text-white hover:bg-emerald-600">Anonymous</Badge>
-        </div>
+        <p className="truncate text-lg font-semibold tracking-tight">Community Help</p>
         <p className="truncate text-sm leading-relaxed text-muted-foreground">
           Ask anything anonymously — anyone in the community can help.
         </p>
