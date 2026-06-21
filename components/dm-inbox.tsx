@@ -39,7 +39,7 @@ export function DmInbox({
 
   if (list.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-muted/30 px-6 py-16 text-center">
+      <div className="mx-4 flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-muted/30 px-6 py-16 text-center sm:mx-6">
         <span className="flex size-12 items-center justify-center rounded-full bg-secondary text-muted-foreground">
           <MessageSquare className="size-6" />
         </span>
@@ -53,12 +53,12 @@ export function DmInbox({
 
   return (
     <>
-      <ul className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/60 bg-card/40">
+      <ul className="divide-y divide-border/60 border-y border-border/60">
         {list.map((c) => (
           <li key={c.id}>
             <Link
               href={`/messages/${c.id}`}
-              className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-secondary/60"
+              className="flex items-center gap-3 px-4 py-4 transition-colors hover:bg-secondary/40 sm:px-5"
             >
               {c.hasActiveStatus ? (
                 // Tappable story ring (Instagram/WhatsApp style). Tapping opens

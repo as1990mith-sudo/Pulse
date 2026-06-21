@@ -39,6 +39,7 @@ import {
 import { ImageLightbox } from "@/components/image-lightbox"
 import { FeedVideo } from "@/components/feed-video"
 import { ShareSheet } from "@/components/share-sheet"
+import { FindProfiles } from "@/components/find-profiles"
 import type { ShareTarget } from "@/lib/share-types"
 import { cn } from "@/lib/utils"
 
@@ -51,7 +52,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
-  const [tab, setTab] = useState<"for-you" | "following">("for-you")
+  const [tab, setTab] = useState<"for-you" | "following" | "find">("for-you")
   const fileInputRef = useRef<HTMLInputElement>(null)
   // Separate inputs so we can request the device camera directly: one for
   // capturing a photo and one for recording a video. The "capture" attribute
@@ -272,9 +273,22 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
           Following{followingCount > 0 ? ` (${followingCount})` : ""}
           {tab === "following" && <span className="absolute inset-x-0 -bottom-px mx-auto h-1 w-14 rounded-full bg-primary" />}
         </button>
+        <button
+          onClick={() => setTab("find")}
+          className={cn(
+            "relative flex-1 px-3 py-4 text-[15px] font-semibold transition-colors",
+            tab === "find" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+          )}
+          aria-pressed={tab === "find"}
+        >
+          Find
+          {tab === "find" && <span className="absolute inset-x-0 -bottom-px mx-auto h-1 w-14 rounded-full bg-primary" />}
+        </button>
       </div>
 
-      {visiblePosts.length > 0 ? (
+      {tab === "find" ? (
+        <FindProfiles />
+      ) : visiblePosts.length > 0 ? (
         <ul className="divide-y divide-border/60 border-b border-border/60">
           {visiblePosts.map((post) => (
             <li key={post.id}>
@@ -286,7 +300,11 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
         <Card className="m-4 p-8 text-center sm:mx-0">
           <p className="text-sm text-muted-foreground leading-relaxed">
             You&apos;re not following anyone yet. Tap <span className="font-medium text-foreground">Follow</span> on a
-            post to see their thoughts here.
+            post to see their thoughts here, or use the{" "}
+            <button onClick={() => setTab("find")} className="font-medium text-primary underline-offset-2 hover:underline">
+              Find
+            </button>{" "}
+            tab to discover people.
           </p>
         </Card>
       )}
