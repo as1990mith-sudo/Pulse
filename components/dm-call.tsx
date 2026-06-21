@@ -12,7 +12,7 @@ import {
 } from "livekit-client"
 import { Mic, MicOff, Phone, PhoneOff, Video, VideoOff } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Button } from "@/components/ui/button"
+import { CallButton } from "@/components/call-controls"
 import { cn } from "@/lib/utils"
 import { startRingtone } from "@/lib/ringtone"
 import { ackCall, acceptCall, endCall, getCallToken, type DmCallView } from "@/app/actions/dm-call"
@@ -217,128 +217,200 @@ export function DmCall({
     return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-background">
-      {/* Remote media layer */}
-      <audio ref={remoteAudioRef} autoPlay className="hidden" />
-      <div className="relative flex flex-1 items-center justify-center overflow-hidden">
-        {showVideo && (
-          <video
-            ref={remoteVideoRef}
-            autoPlay
-            playsInline
-            className={cn("h-full w-full object-cover", remoteVideoOn ? "block" : "hidden")}
-          />
-        )}
+  // The full-bleed remote camera fills the screen only once it's actually live.
+  const remoteFilling = showVideo && remoteVideoOn
+  // Show the breathing rings/spinner state while the call hasn't connected yet.
+  const ringing = !isLive
 
-        {/* Avatar shown until/unless remote video is live */}
-        {(!showVideo || !remoteVideoOn) && (
-          <div className="flex flex-col items-center gap-4 text-center">
-            <Avatar className="size-28">
-              {peer.image && <AvatarImage src={peer.image || "/placeholder.svg"} alt={peer.name} />}
-              <AvatarFallback className={cn("text-3xl text-white", peer.color)}>{peer.initials}</AvatarFallback>
-            </Avatar>
-            <div>
-              <p className="text-xl font-semibold">{peer.name}</p>
-              <p className="text-sm text-muted-foreground">
-                {phase === "prompt"
-                  ? `Incoming ${call.mode} call…`
-                  : isLive
-                    ? // Connected: show the live, ticking call duration.
-                      formatDuration(elapsed)
-                    : call.isCaller
-                      ? // Caller: "Calling" until the callee's device rings, then "Ringing".
-                        call.calleeAck
-                        ? "Ringing…"
-                        : "Calling…"
-                      : "Connecting…"}
+  const statusText =
+    phase === "prompt"
+      ? `Incoming ${call.mode} call`
+      : isLive
+        ? formatDuration(elapsed)
+        : call.isCaller
+          ? call.calleeAck
+            ? "Ringing…"
+            : "Calling…"
+          : "Connecting…"
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-neutral-950 text-white">
+      {/* Remote audio is always present but hidden. */}
+      <audio ref={remoteAudioRef} autoPlay className="hidden" />
+
+      {/* ── Cinematic background ─────────────────────────────────────────── */}
+      {/* Blurred peer avatar wash (voice calls / before remote video). */}
+      {peer.image && !remoteFilling && (
+        <div
+          aria-hidden="true"
+          className="call-ambient absolute inset-0 scale-125 bg-cover bg-center opacity-30 blur-3xl"
+          style={{ backgroundImage: `url(${peer.image})` }}
+        />
+      )}
+      {!remoteFilling && (
+        <>
+          <div
+            aria-hidden="true"
+            className="call-ambient pointer-events-none absolute -left-24 -top-24 size-[28rem] rounded-full bg-primary/25 blur-3xl"
+          />
+          <div
+            aria-hidden="true"
+            className="call-ambient pointer-events-none absolute -bottom-32 -right-24 size-[26rem] rounded-full bg-call-accept/20 blur-3xl"
+            style={{ animationDelay: "-6s" }}
+          />
+        </>
+      )}
+      <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/70" />
+
+      {/* Full-bleed remote camera */}
+      {showVideo && (
+        <video
+          ref={remoteVideoRef}
+          autoPlay
+          playsInline
+          className={cn(
+            "absolute inset-0 h-full w-full object-cover transition-opacity duration-500",
+            remoteFilling ? "opacity-100" : "opacity-0",
+          )}
+        />
+      )}
+
+      {/* ── Top status bar ───────────────────────────────────────────────── */}
+      <div className="relative z-10 flex items-center justify-center px-6 pt-[calc(env(safe-area-inset-top)+1.25rem)]">
+        <div className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-xs font-medium text-white/80 ring-1 ring-inset ring-white/15 backdrop-blur-md">
+          <span className="relative flex size-2">
+            <span
+              className={cn(
+                "absolute inline-flex size-full rounded-full opacity-75",
+                isLive ? "bg-call-accept" : "bg-primary",
+                ringing && "animate-ping",
+              )}
+            />
+            <span className={cn("relative inline-flex size-2 rounded-full", isLive ? "bg-call-accept" : "bg-primary")} />
+          </span>
+          {showVideo ? "Video call" : "Voice call"}
+          <span aria-hidden="true" className="text-white/30">
+            ·
+          </span>
+          End-to-end encrypted
+        </div>
+      </div>
+
+      {/* ── Stage ────────────────────────────────────────────────────────── */}
+      <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 text-center">
+        {/* When the remote camera fills the screen we float a compact caption
+            instead of the big centered avatar. */}
+        {!remoteFilling && (
+          <div className="flex flex-col items-center gap-6">
+            <div className="relative flex items-center justify-center">
+              {ringing && (
+                <>
+                  <span className="call-ring absolute size-44 rounded-full bg-white/10" />
+                  <span
+                    className="call-ring absolute size-44 rounded-full bg-white/10"
+                    style={{ animationDelay: "-1.2s" }}
+                  />
+                </>
+              )}
+              <Avatar className={cn("size-40 shadow-2xl ring-4 ring-white/15", ringing && "call-breathe")}>
+                {peer.image && <AvatarImage src={peer.image || "/placeholder.svg"} alt={peer.name} />}
+                <AvatarFallback className={cn("text-5xl font-semibold text-white", peer.color)}>
+                  {peer.initials}
+                </AvatarFallback>
+              </Avatar>
+            </div>
+            <div className="space-y-2">
+              <h1 className="text-pretty text-3xl font-semibold tracking-tight">{peer.name}</h1>
+              <p
+                className={cn(
+                  "text-base font-medium tabular-nums",
+                  isLive ? "text-call-accept" : "text-white/60",
+                )}
+              >
+                {statusText}
               </p>
             </div>
           </div>
         )}
 
-        {/* Local video preview (picture-in-picture) */}
+        {/* Caption pill over full-bleed remote video. */}
+        {remoteFilling && (
+          <div className="absolute left-1/2 top-[calc(env(safe-area-inset-top)+4.5rem)] -translate-x-1/2 rounded-2xl bg-black/40 px-4 py-2 text-center backdrop-blur-md">
+            <p className="font-semibold">{peer.name}</p>
+            <p className="text-sm tabular-nums text-white/70">{statusText}</p>
+          </div>
+        )}
+
+        {/* Local self-view (picture-in-picture) */}
         {showVideo && camOn && (
           <video
             ref={localVideoRef}
             autoPlay
             playsInline
             muted
-            // Mirror the local self-view so it reads like a mirror to the user.
-            className="absolute bottom-4 right-4 h-40 w-28 -scale-x-100 rounded-xl border border-border object-cover shadow-lg"
+            className="absolute bottom-2 right-4 h-44 w-32 -scale-x-100 rounded-3xl object-cover shadow-2xl ring-2 ring-white/20"
           />
         )}
 
         {error && (
-          <p className="absolute bottom-24 left-1/2 -translate-x-1/2 rounded-full bg-destructive px-4 py-1.5 text-sm text-destructive-foreground">
+          <p className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-destructive px-4 py-1.5 text-sm font-medium text-destructive-foreground shadow-lg">
             {error}
           </p>
         )}
       </div>
 
-      {/* Controls */}
-      <div className="flex items-center justify-center gap-4 border-t border-border bg-card px-6 py-6">
+      {/* ── Control dock ─────────────────────────────────────────────────── */}
+      <div className="relative z-10 flex justify-center px-6 pb-[calc(env(safe-area-inset-bottom)+2rem)]">
         {phase === "prompt" ? (
-          <div className="flex w-full max-w-sm items-center justify-center gap-10">
-            {/* Decline (red) */}
-            <div className="flex flex-col items-center gap-2">
-              <Button
-                size="icon"
-                className="size-16 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={() => handleEnd(true)}
-                aria-label="Decline call"
-              >
-                <PhoneOff className="size-7" />
-              </Button>
-              <span className="text-sm font-medium text-muted-foreground">Decline</span>
-            </div>
-            {/* Answer (green) */}
-            <div className="flex flex-col items-center gap-2">
-              <Button
-                size="icon"
-                className="size-16 rounded-full bg-call-accept text-call-accept-foreground hover:bg-call-accept/90"
+          <div className="flex w-full max-w-xs items-end justify-between">
+            <CallButton
+              icon={PhoneOff}
+              label="Decline"
+              tone="danger"
+              size="lg"
+              onClick={() => handleEnd(true)}
+              ariaLabel="Decline call"
+            />
+            <div className="call-breathe">
+              <CallButton
+                icon={Phone}
+                label="Answer"
+                tone="accept"
+                size="lg"
                 onClick={handleAccept}
-                aria-label="Answer call"
-              >
-                <Phone className="size-7" />
-              </Button>
-              <span className="text-sm font-medium text-muted-foreground">Answer</span>
+                ariaLabel="Answer call"
+              />
             </div>
           </div>
         ) : (
-          <>
-            <Button
-              size="icon"
-              variant={micOn ? "secondary" : "destructive"}
-              className="size-12 rounded-full"
+          <div className="flex items-end gap-5 rounded-[2.25rem] bg-white/5 px-6 py-5 ring-1 ring-inset ring-white/10 backdrop-blur-2xl">
+            <CallButton
+              icon={micOn ? Mic : MicOff}
+              label={micOn ? "Mute" : "Unmute"}
+              tone={micOn ? "glass" : "muted"}
               onClick={toggleMic}
               disabled={!connected}
-              aria-label={micOn ? "Mute microphone" : "Unmute microphone"}
-            >
-              {micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
-            </Button>
+              ariaLabel={micOn ? "Mute microphone" : "Unmute microphone"}
+            />
             {showVideo && (
-              <Button
-                size="icon"
-                variant={camOn ? "secondary" : "destructive"}
-                className="size-12 rounded-full"
+              <CallButton
+                icon={camOn ? Video : VideoOff}
+                label={camOn ? "Camera" : "Camera off"}
+                tone={camOn ? "glass" : "muted"}
                 onClick={toggleCam}
                 disabled={!connected}
-                aria-label={camOn ? "Turn off camera" : "Turn on camera"}
-              >
-                {camOn ? <Video className="size-5" /> : <VideoOff className="size-5" />}
-              </Button>
+                ariaLabel={camOn ? "Turn off camera" : "Turn on camera"}
+              />
             )}
-            <Button
-              size="icon"
-              variant="destructive"
-              className="size-12 rounded-full"
+            <CallButton
+              icon={PhoneOff}
+              label="End"
+              tone="danger"
+              size="lg"
               onClick={() => handleEnd(false)}
-              aria-label="End call"
-            >
-              <PhoneOff className="size-5" />
-            </Button>
-          </>
+              ariaLabel="End call"
+            />
+          </div>
         )}
       </div>
     </div>

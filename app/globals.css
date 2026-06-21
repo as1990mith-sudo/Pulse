@@ -480,3 +480,65 @@
     animation: none;
   }
 }
+
+/* ── Calling UI ─────────────────────────────────────────────────────────────
+   Expanding concentric rings behind the caller avatar while a call is ringing
+   or connecting, plus a soft breathing glow and an ambient drift for the
+   cinematic background blobs. */
+@keyframes call-ring-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  70% {
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.1);
+    opacity: 0;
+  }
+}
+
+.call-ring {
+  animation: call-ring-pulse 2.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite;
+}
+
+@keyframes call-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+
+.call-breathe {
+  animation: call-breathe 3.6s ease-in-out infinite;
+}
+
+@keyframes call-ambient-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(6%, -4%, 0) scale(1.08);
+  }
+  66% {
+    transform: translate3d(-5%, 5%, 0) scale(0.96);
+  }
+}
+
+.call-ambient {
+  animation: call-ambient-drift 16s ease-in-out infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .call-ring,
+  .call-breathe,
+  .call-ambient {
+    animation: none;
+  }
+}

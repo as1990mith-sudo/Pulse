@@ -15,6 +15,7 @@ import {
 import { Mic, MicOff, PhoneOff, Users, Video, VideoOff } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import { CallButton } from "@/components/call-controls"
 import { cn } from "@/lib/utils"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { getChatroomCallStatus, getChatroomCallToken } from "@/app/actions/chatroom-call"
@@ -178,57 +179,80 @@ export function ChatroomCall({
       )}
 
       {joined && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-background">
-          <div className="flex items-center justify-between border-b border-border bg-card px-4 py-3 sm:px-6">
-            <div className="min-w-0">
-              <p className="truncate font-semibold">{roomTitle}</p>
-              <p className="text-xs text-muted-foreground">
-                {participants.length} {participants.length === 1 ? "person" : "people"} on the call
-              </p>
+        <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-neutral-950 text-white">
+          {/* Ambient cinematic background */}
+          <div
+            aria-hidden="true"
+            className="call-ambient pointer-events-none absolute -left-24 -top-24 size-[28rem] rounded-full bg-primary/20 blur-3xl"
+          />
+          <div
+            aria-hidden="true"
+            className="call-ambient pointer-events-none absolute -bottom-32 -right-24 size-[26rem] rounded-full bg-call-accept/15 blur-3xl"
+            style={{ animationDelay: "-6s" }}
+          />
+
+          {/* Header */}
+          <div className="relative z-10 flex items-center justify-center px-6 pt-[calc(env(safe-area-inset-top)+1.25rem)]">
+            <div className="flex max-w-full items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-xs font-medium text-white/80 ring-1 ring-inset ring-white/15 backdrop-blur-md">
+              <span className="relative flex size-2">
+                <span className="absolute inline-flex size-full animate-ping rounded-full bg-call-accept opacity-75" />
+                <span className="relative inline-flex size-2 rounded-full bg-call-accept" />
+              </span>
+              <span className="truncate">{roomTitle}</span>
+              <span aria-hidden="true" className="text-white/30">
+                ·
+              </span>
+              <span className="shrink-0">
+                {participants.length} {participants.length === 1 ? "person" : "people"}
+              </span>
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-            <div className="mx-auto grid w-full max-w-3xl grid-cols-2 gap-3 sm:grid-cols-3">
+          {/* Participant grid */}
+          <div className="relative z-10 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+            <div
+              className={cn(
+                "mx-auto grid w-full max-w-3xl gap-3",
+                participants.length <= 1 ? "max-w-md grid-cols-1" : "grid-cols-2 sm:grid-cols-3",
+              )}
+            >
               {participants.map((p) => (
                 <ParticipantTile key={p.sid || p.identity} participant={p} />
               ))}
             </div>
             {error && (
-              <p className="mx-auto mt-4 w-fit rounded-full bg-destructive px-4 py-1.5 text-sm text-destructive-foreground">
+              <p className="mx-auto mt-4 w-fit rounded-full bg-destructive px-4 py-1.5 text-sm font-medium text-destructive-foreground shadow-lg">
                 {error}
               </p>
             )}
           </div>
 
-          <div className="flex items-center justify-center gap-4 border-t border-border bg-card px-6 py-6">
-            <Button
-              size="icon"
-              variant={micOn ? "secondary" : "destructive"}
-              className="size-12 rounded-full"
-              onClick={toggleMic}
-              aria-label={micOn ? "Mute microphone" : "Unmute microphone"}
-            >
-              {micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
-            </Button>
-            <Button
-              size="icon"
-              variant={camOn ? "secondary" : "destructive"}
-              className="size-12 rounded-full"
-              onClick={toggleCam}
-              aria-label={camOn ? "Turn off camera" : "Turn on camera"}
-            >
-              {camOn ? <Video className="size-5" /> : <VideoOff className="size-5" />}
-            </Button>
-            <Button
-              size="icon"
-              variant="destructive"
-              className="size-12 rounded-full"
-              onClick={leave}
-              aria-label="Leave call"
-            >
-              <PhoneOff className="size-5" />
-            </Button>
+          {/* Control dock */}
+          <div className="relative z-10 flex justify-center px-6 pb-[calc(env(safe-area-inset-bottom)+2rem)]">
+            <div className="flex items-end gap-5 rounded-[2.25rem] bg-white/5 px-6 py-5 ring-1 ring-inset ring-white/10 backdrop-blur-2xl">
+              <CallButton
+                icon={micOn ? Mic : MicOff}
+                label={micOn ? "Mute" : "Unmute"}
+                tone={micOn ? "glass" : "muted"}
+                onClick={toggleMic}
+                ariaLabel={micOn ? "Mute microphone" : "Unmute microphone"}
+              />
+              <CallButton
+                icon={camOn ? Video : VideoOff}
+                label={camOn ? "Camera" : "Camera off"}
+                tone={camOn ? "glass" : "muted"}
+                onClick={toggleCam}
+                ariaLabel={camOn ? "Turn off camera" : "Turn on camera"}
+              />
+              <CallButton
+                icon={PhoneOff}
+                label="Leave"
+                tone="danger"
+                size="lg"
+                onClick={leave}
+                ariaLabel="Leave call"
+              />
+            </div>
           </div>
         </div>
       )}
@@ -277,7 +301,7 @@ function ParticipantTile({ participant }: { participant: Participant }) {
   const isLocal = participant.isLocal
 
   return (
-    <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl border border-border/60 bg-card">
+    <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-3xl bg-white/5 ring-1 ring-inset ring-white/10">
       <video
         ref={videoRef}
         autoPlay
@@ -288,11 +312,11 @@ function ParticipantTile({ participant }: { participant: Participant }) {
         className={cn("h-full w-full object-cover", isLocal && "-scale-x-100", hasVideo ? "block" : "hidden")}
       />
       {!hasVideo && (
-        <Avatar className="size-16">
-          <AvatarFallback className={cn("text-xl text-white", color)}>{initials}</AvatarFallback>
+        <Avatar className="size-20 shadow-xl ring-2 ring-white/10">
+          <AvatarFallback className={cn("text-2xl font-semibold text-white", color)}>{initials}</AvatarFallback>
         </Avatar>
       )}
-      <span className="absolute bottom-2 left-2 max-w-[80%] truncate rounded-md bg-background/70 px-2 py-0.5 text-xs font-medium backdrop-blur">
+      <span className="absolute bottom-2 left-2 max-w-[80%] truncate rounded-lg bg-black/50 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-md">
         {isLocal ? "You" : name}
       </span>
     </div>
