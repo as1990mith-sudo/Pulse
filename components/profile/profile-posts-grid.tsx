@@ -24,7 +24,10 @@ export function ProfilePostsGrid({
 
   return (
     <>
-      <ul className="grid grid-cols-2 gap-3 sm:gap-4">
+      {/* Instagram-style grid: strict 3 columns, square tiles, minimal gap,
+          stretched edge-to-edge by breaking out of the page's horizontal
+          padding (px-4 / sm:px-6 on the profile <main>). */}
+      <ul className="-mx-4 grid grid-cols-3 gap-px sm:-mx-6">
         {posts.map((post, i) => (
           <li key={post.id}>
             <PostTile post={post} onOpen={() => setOpenIndex(i)} />
@@ -45,29 +48,46 @@ export function ProfilePostsGrid({
 }
 
 function PostTile({ post, onOpen }: { post: FeedPostView; onOpen: () => void }) {
+  const hasMedia = Boolean(post.image || post.video)
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="group relative flex aspect-square w-full flex-col overflow-hidden rounded-xl border border-border/60 bg-card text-left transition-colors hover:border-primary/50"
+      className="group relative block aspect-square w-full overflow-hidden bg-muted text-left"
     >
       {post.image ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={post.image || "/placeholder.svg"}
           alt=""
+          loading="lazy"
           className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
       ) : post.video ? (
-        <video src={post.video} muted playsInline className="size-full object-cover" />
+        <video
+          src={post.video}
+          muted
+          playsInline
+          preload="metadata"
+          className="size-full object-cover"
+        />
       ) : (
-        <div className="flex size-full items-center justify-center p-4">
-          <p className="line-clamp-5 text-pretty text-sm leading-relaxed text-foreground/90">{post.text}</p>
+        <div className="flex size-full items-center justify-center bg-secondary/60 p-3">
+          <p className="line-clamp-6 text-pretty text-center text-[13px] font-medium leading-snug text-foreground/90">
+            {post.text}
+          </p>
         </div>
       )}
 
-      {/* Engagement overlay */}
-      <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-3 bg-gradient-to-t from-black/70 to-transparent px-3 py-2 text-xs font-medium text-white">
+      {/* Subtle engagement overlay anchored to the bottom of each tile. */}
+      <span
+        className={cn(
+          "pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-3 px-2 py-1.5 text-[11px] font-semibold",
+          hasMedia
+            ? "bg-gradient-to-t from-black/60 to-transparent text-white"
+            : "text-muted-foreground",
+        )}
+      >
         <span className="flex items-center gap-1">
           <Heart className="size-3.5" /> {post.likes}
         </span>
