@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
-  Check,
   Loader2,
   MessageSquare,
   Mic,
@@ -18,6 +17,8 @@ import {
   VolumeX,
   X,
 } from "lucide-react"
+import { ShareSheet } from "@/components/share-sheet"
+import type { ShareTarget } from "@/lib/share-types"
 import type { CallRequestView, LiveStreamView } from "@/app/actions/live"
 import {
   getCallState,
@@ -98,7 +99,7 @@ export function LiveListener({
   const [joining, setJoining] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [ended, setEnded] = useState(false)
-  const [shared, setShared] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   // Set when the host ends the broadcast — shows a "Session ended" splash then
   // bounces the listener back to the Live tab.
   const [hostEnded, setHostEnded] = useState(false)
@@ -209,21 +210,15 @@ export function LiveListener({
     await removeFromStage({ roomName: stream.roomName, userId: currentUserId })
   }
 
-  async function share() {
-    const url = typeof window !== "undefined" ? `${window.location.origin}/live/${stream.roomName}` : ""
-    try {
-      if (typeof navigator !== "undefined" && navigator.share) {
-        await navigator.share({ title: stream.title, text: `Join ${stream.hostName} live on Frequency`, url })
-        return
-      }
-      if (typeof navigator !== "undefined" && navigator.clipboard) {
-        await navigator.clipboard.writeText(url)
-        setShared(true)
-        setTimeout(() => setShared(false), 2000)
-      }
-    } catch {
-      // user dismissed the share sheet — ignore
-    }
+  const shareTarget: ShareTarget = {
+    type: "live",
+    key: stream.roomName,
+    title: stream.title,
+    subtitle: `Join ${stream.hostName} live on Frequency`,
+    url: `/live/${stream.roomName}`,
+    image: stream.cover ?? null,
+    downloadUrl: null,
+    downloadKind: null,
   }
 
   // Audience count excludes the host + guests on stage.
@@ -396,8 +391,8 @@ export function LiveListener({
             >
               <Play className="size-4 translate-x-0.5" /> Join the room
             </button>
-            <DockButton label="Share room" onClick={() => void share()}>
-              {shared ? <Check className="size-5" /> : <Share2 className="size-5" />}
+            <DockButton label="Share room" onClick={() => setShareOpen(true)}>
+              <Share2 className="size-5" />
             </DockButton>
           </div>
         ) : (
@@ -449,8 +444,8 @@ export function LiveListener({
                   <MessageSquare className="size-5" />
                 </DockButton>
               </a>
-              <DockButton label="Share room" onClick={() => void share()}>
-                {shared ? <Check className="size-5" /> : <Share2 className="size-5" />}
+              <DockButton label="Share room" onClick={() => setShareOpen(true)}>
+                <Share2 className="size-5" />
               </DockButton>
               {!isOnStage && myStatus !== "pending" && (
                 <button
@@ -465,6 +460,8 @@ export function LiveListener({
         )}
         {error && !ended && <p className="mt-2 text-xs text-destructive">{error}</p>}
       </div>
+
+      <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
     </div>
   )
 }

@@ -139,6 +139,8 @@ export function DevotionalInteractions({
           ))}
         </ul>
       </div>
+
+      <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
     </div>
   )
 }
