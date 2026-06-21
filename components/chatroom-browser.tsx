@@ -146,9 +146,11 @@ function DiscoverRooms() {
   }
 
   return (
-    <div className="space-y-6">
-      <Card className="space-y-3 p-4">
-        <h2 className="text-sm font-medium">Have an invite code?</h2>
+    // Edge-to-edge immersive layout: break out of the page padding and stack
+    // full-bleed sections divided by borders instead of boxed cards.
+    <div className="-mx-4 divide-y divide-border/60 border-y border-border/60 sm:-mx-6">
+      <section className="space-y-3 px-4 py-5 sm:px-6">
+        <h2 className="text-sm font-semibold">Have an invite code?</h2>
         <form onSubmit={handleInvite} className="flex gap-2">
           <Input
             value={inviteCode}
@@ -161,10 +163,10 @@ function DiscoverRooms() {
           </Button>
         </form>
         {error && <p className="text-sm text-destructive">{error}</p>}
-      </Card>
+      </section>
 
-      <Card className="space-y-3 p-4">
-        <h2 className="text-sm font-medium">Search rooms by name</h2>
+      <section className="space-y-4 px-4 py-5 sm:px-6">
+        <h2 className="text-sm font-semibold">Search rooms by name</h2>
         <form onSubmit={handleSearch} className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -181,48 +183,53 @@ function DiscoverRooms() {
           </Button>
         </form>
 
-        <div className="space-y-2">
-          {searched && results.length === 0 && !isSearching && (
-            <p className="py-4 text-center text-sm text-muted-foreground">No chatrooms match that name.</p>
-          )}
-          {results.map((room) => (
-            <div
-              key={room.id}
-              className="flex items-center justify-between gap-3 rounded-lg border border-border/60 p-3"
-            >
-              <div className="flex min-w-0 items-center gap-3">
-                <Avatar className="size-10 shrink-0">
-                  {room.image && <AvatarImage src={room.image || "/placeholder.svg"} alt={room.name} />}
-                  <AvatarFallback className="bg-secondary text-xs">{room.name.slice(0, 2).toUpperCase()}</AvatarFallback>
-                </Avatar>
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{room.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    by {room.ownerName} · {room.memberCount} {room.memberCount === 1 ? "member" : "members"}
-                  </p>
+        {searched && results.length === 0 && !isSearching && (
+          <p className="py-4 text-center text-sm text-muted-foreground">No chatrooms match that name.</p>
+        )}
+
+        {results.length > 0 && (
+          <div className="-mx-4 divide-y divide-border/60 border-y border-border/60 sm:-mx-6">
+            {results.map((room) => (
+              <div
+                key={room.id}
+                className="flex items-center justify-between gap-3 px-4 py-3.5 transition-colors hover:bg-secondary/40 sm:px-6"
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <Avatar className="size-12 shrink-0 ring-2 ring-border/60">
+                    {room.image && <AvatarImage src={room.image || "/placeholder.svg"} alt={room.name} />}
+                    <AvatarFallback className="bg-secondary text-sm">
+                      {room.name.slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold">{room.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      by {room.ownerName} · {room.memberCount} {room.memberCount === 1 ? "member" : "members"}
+                    </p>
+                  </div>
                 </div>
+                {room.isMember ? (
+                  <Link href={`/chatrooms/${room.id}`} className={buttonVariants({ variant: "secondary", size: "sm" })}>
+                    Open
+                  </Link>
+                ) : room.requestStatus === "pending" ? (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Clock className="size-3" /> Requested
+                  </span>
+                ) : room.requestStatus === "approved" ? (
+                  <span className="flex items-center gap-1 text-xs text-primary">
+                    <Check className="size-3" /> Approved
+                  </span>
+                ) : (
+                  <Button size="sm" disabled={isJoining} onClick={() => handleRequest(room.id)}>
+                    Request to join
+                  </Button>
+                )}
               </div>
-              {room.isMember ? (
-                <Link href={`/chatrooms/${room.id}`} className={buttonVariants({ variant: "secondary", size: "sm" })}>
-                  Open
-                </Link>
-              ) : room.requestStatus === "pending" ? (
-                <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Clock className="size-3" /> Requested
-                </span>
-              ) : room.requestStatus === "approved" ? (
-                <span className="flex items-center gap-1 text-xs text-primary">
-                  <Check className="size-3" /> Approved
-                </span>
-              ) : (
-                <Button size="sm" disabled={isJoining} onClick={() => handleRequest(room.id)}>
-                  Request to join
-                </Button>
-              )}
-            </div>
-          ))}
-        </div>
-      </Card>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   )
 }
@@ -275,7 +282,8 @@ function CreateRoom() {
   }
 
   return (
-    <Card className="p-6">
+    // Edge-to-edge immersive form: full-bleed section bounded by borders.
+    <div className="-mx-4 border-y border-border/60 px-4 py-6 sm:-mx-6 sm:px-6">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="flex items-center gap-4">
           <Avatar className="size-16">
@@ -346,6 +354,6 @@ function CreateRoom() {
           onCropped={handleCropped}
         />
       )}
-    </Card>
+    </div>
   )
 }

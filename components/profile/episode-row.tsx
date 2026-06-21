@@ -48,7 +48,7 @@ export function EpisodeRow({ show, owned = false }: { show: Show; owned?: boolea
   }
 
   return (
-    <div className="group relative flex items-center gap-3 px-3 py-3 transition-colors hover:bg-secondary/40 sm:px-4">
+    <div className="group relative flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-secondary/40 sm:px-6">
       <Link href={href} className="flex min-w-0 flex-1 items-center gap-3">
         <div className="relative size-14 shrink-0 overflow-hidden rounded-lg sm:size-16">
           {/* eslint-disable-next-line @next/next/no-img-element */}
