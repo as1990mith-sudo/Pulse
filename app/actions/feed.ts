@@ -72,6 +72,57 @@ function timeAgo(date: Date): string {
   return `${days}d`
 }
 
+/** Small seeded PRNG so a shuffle stays stable within a time window. */
+function mulberry32(seed: number): () => number {
+  return () => {
+    seed |= 0
+    seed = (seed + 0x6d2b79f5) | 0
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+/**
+ * Posts come in newest-first (banded into discovery vs. followed/own). Most of
+ * the time we keep that chronological order, but on some time windows we apply
+ * a seeded shuffle *within each band* for variety. The seed rotates every ~2
+ * minutes and is per-viewer, so the order is stable across the SWR polls in a
+ * given window instead of jumping on every refresh.
+ */
+function maybeShuffleFeed<T extends { userId: string; createdAt: Date }>(
+  posts: T[],
+  followingIds: Set<string>,
+  currentUserId: string | null,
+): void {
+  const windowBucket = Math.floor(Date.now() / 120_000) // changes every 2 minutes
+  // Only shuffle on roughly 1 of every 3 windows — "sometimes a shuffle".
+  if (windowBucket % 3 !== 0) return
+
+  const seedBase = windowBucket ^ hashString(currentUserId ?? "anon")
+  const isDiscovery = (p: T) => currentUserId !== p.userId && !followingIds.has(p.userId)
+
+  shuffleRange(posts, (p) => isDiscovery(p), mulberry32(seedBase))
+  shuffleRange(posts, (p) => !isDiscovery(p), mulberry32(seedBase + 1))
+}
+
+/** In-place Fisher–Yates shuffle restricted to indices matching `inBand`. */
+function shuffleRange<T>(arr: T[], inBand: (item: T) => boolean, rand: () => number): void {
+  const indices = arr.map((item, i) => (inBand(item) ? i : -1)).filter((i) => i >= 0)
+  for (let k = indices.length - 1; k > 0; k--) {
+    const j = Math.floor(rand() * (k + 1))
+    const a = indices[k]
+    const b = indices[j]
+    ;[arr[a], arr[b]] = [arr[b], arr[a]]
+  }
+}
+
+function hashString(s: string): number {
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0
+  return h
+}
+
 export async function getFeed(): Promise<FeedPostView[]> {
   const session = await auth.api.getSession({ headers: await headers() })
   const currentUserId = session?.user?.id ?? null
@@ -95,14 +146,18 @@ export async function getFeed(): Promise<FeedPostView[]> {
     ...comments.map((c) => c.userId),
   ])
 
-  // Surface posts from people the user follows (and their own) ahead of
-  // everyone else, while preserving most-recent-first order within each band.
+  // "For you" is a discovery feed: surface posts from people the viewer does
+  // NOT follow ahead of their own/followed posts (those live in the Following
+  // tab). Within each band posts are newest-first, with an occasional shuffle
+  // for variety so the feed doesn't feel static between visits.
   const ordered = [...posts].sort((a, b) => {
-    const aPriority = currentUserId === a.userId || followingIds.has(a.userId) ? 0 : 1
-    const bPriority = currentUserId === b.userId || followingIds.has(b.userId) ? 0 : 1
-    if (aPriority !== bPriority) return aPriority - bPriority
+    const aDiscovery = currentUserId !== a.userId && !followingIds.has(a.userId) ? 0 : 1
+    const bDiscovery = currentUserId !== b.userId && !followingIds.has(b.userId) ? 0 : 1
+    if (aDiscovery !== bDiscovery) return aDiscovery - bDiscovery
     return b.createdAt.getTime() - a.createdAt.getTime()
   })
+
+  maybeShuffleFeed(ordered, followingIds, currentUserId)
 
   return ordered.map((p) => ({
     id: p.id,

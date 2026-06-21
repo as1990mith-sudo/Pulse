@@ -61,6 +61,29 @@ function AnonIdentity({ postedAt }: { postedAt: string }) {
   )
 }
 
+/**
+ * Shown to the post's author on their OWN post: their real name + avatar, with
+ * a hint that everyone else still sees it anonymously.
+ */
+function SelfIdentity({ post }: { post: CommunityPostView }) {
+  return (
+    <div className="flex items-center gap-3">
+      <Avatar className="size-11 shrink-0 ring-2 ring-border">
+        {post.authorImage && <AvatarImage src={post.authorImage || "/placeholder.svg"} alt={post.authorName ?? ""} />}
+        <AvatarFallback className={cn("font-semibold text-white", post.authorColor ?? "bg-muted")}>
+          {post.authorInitials}
+        </AvatarFallback>
+      </Avatar>
+      <div className="min-w-0">
+        <p className="truncate font-semibold tracking-tight">{post.authorName}</p>
+        <p className="text-xs text-muted-foreground">
+          {post.postedAt} · <span className="text-emerald-600 dark:text-emerald-400">Only you see your name</span>
+        </p>
+      </div>
+    </div>
+  )
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Comments                                                                  */
 /* -------------------------------------------------------------------------- */
@@ -273,7 +296,7 @@ function PostItem({
   return (
     <article className="px-4 py-5 transition-colors hover:bg-secondary/20 sm:px-6">
       <div className="flex items-start justify-between gap-3">
-        <AnonIdentity postedAt={post.postedAt} />
+        {post.isSelf ? <SelfIdentity post={post} /> : <AnonIdentity postedAt={post.postedAt} />}
         <div ref={menuRef} className="relative">
           <button
             type="button"

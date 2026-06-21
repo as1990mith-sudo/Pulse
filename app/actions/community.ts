@@ -32,8 +32,15 @@ export type CommunityPostView = {
   postedAt: string
   commentCount: number
   // True when the signed-in user authored this post. Used to allow self-delete
-  // WITHOUT exposing the author identity to anyone else.
+  // and to reveal the author's own identity to themselves only.
   isSelf: boolean
+  // Author identity — ONLY populated for the author's own posts (isSelf). For
+  // everyone else these stay null so posts render anonymously to viewers.
+  authorName: string | null
+  authorHandle: string | null
+  authorInitials: string | null
+  authorColor: string | null
+  authorImage: string | null
 }
 
 export type CommunityCommentView = {
@@ -71,13 +78,32 @@ export async function getCommunityPosts(): Promise<CommunityPostView[]> {
     for (const c of comments) countMap.set(c.postId, (countMap.get(c.postId) ?? 0) + 1)
   }
 
-  return posts.map((p) => ({
-    id: p.id,
-    body: p.body,
-    postedAt: timeAgo(p.createdAt),
-    commentCount: countMap.get(p.id) ?? 0,
-    isSelf: viewerId === p.userId,
-  }))
+  // The author can see their own posts de-anonymized, so resolve the viewer's
+  // current name + avatar once (only needed for their own posts).
+  let viewer: { name: string; image: string | null } | null = null
+  if (viewerId && posts.some((p) => p.userId === viewerId)) {
+    const [row] = await db
+      .select({ name: userTable.name, image: userTable.image })
+      .from(userTable)
+      .where(eq(userTable.id, viewerId))
+    if (row) viewer = row
+  }
+
+  return posts.map((p) => {
+    const isSelf = viewerId === p.userId
+    return {
+      id: p.id,
+      body: p.body,
+      postedAt: timeAgo(p.createdAt),
+      commentCount: countMap.get(p.id) ?? 0,
+      isSelf,
+      authorName: isSelf && viewer ? viewer.name : null,
+      authorHandle: isSelf && viewer ? getHandle(viewer.name) : null,
+      authorInitials: isSelf && viewer ? getInitials(viewer.name) : null,
+      authorColor: isSelf ? getAvatarColor(p.userId) : null,
+      authorImage: isSelf && viewer ? viewer.image : null,
+    }
+  })
 }
 
 /** Creates an anonymous post in the Community Help room. */
@@ -99,6 +125,11 @@ export async function createCommunityPost(body: string): Promise<CommunityPostVi
     postedAt: "now",
     commentCount: 0,
     isSelf: true,
+    authorName: user.name,
+    authorHandle: getHandle(user.name),
+    authorInitials: getInitials(user.name),
+    authorColor: getAvatarColor(user.id),
+    authorImage: user.image ?? null,
   }
 }
 
