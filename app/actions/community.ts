@@ -175,6 +175,22 @@ export async function addCommunityComment(input: {
   }
 }
 
+/** Author-only edit of their own anonymous post. Returns the new body. */
+export async function editCommunityPost(input: { postId: number; body: string }): Promise<string> {
+  const user = await requireUser()
+  const text = input.body.trim()
+  if (!text) throw new Error("Your question can't be empty.")
+  if (text.length > 1000) throw new Error("Please keep it under 1000 characters.")
+
+  const [post] = await db.select().from(communityPost).where(eq(communityPost.id, input.postId))
+  if (!post || post.deleted) throw new Error("This post no longer exists.")
+  if (post.userId !== user.id) throw new Error("You can only edit your own post.")
+
+  await db.update(communityPost).set({ body: text }).where(eq(communityPost.id, input.postId))
+  revalidatePath("/chatrooms/community")
+  return text
+}
+
 /** Author-only soft delete of their own anonymous post. */
 export async function deleteCommunityPost(postId: number) {
   const user = await requireUser()

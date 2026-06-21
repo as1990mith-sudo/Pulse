@@ -6,9 +6,13 @@ import Link from "next/link"
 import useSWR, { useSWRConfig } from "swr"
 import {
   ArrowLeft,
+  Check,
+  Copy,
   Info,
   Loader2,
   MessageCircle,
+  MoreHorizontal,
+  Pencil,
   Plus,
   Send,
   Share2,
@@ -28,6 +32,7 @@ import {
   createCommunityPost,
   deleteCommunityComment,
   deleteCommunityPost,
+  editCommunityPost,
   getCommunityComments,
   getCommunityPosts,
   type CommunityCommentView,
@@ -187,13 +192,30 @@ function PostItem({
   const [open, setOpen] = useState(false)
   const [count, setCount] = useState(post.commentCount)
   const [shareOpen, setShareOpen] = useState(false)
-  const [, startTransition] = useTransition()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [body, setBody] = useState(post.body)
+  const [draft, setDraft] = useState(post.body)
+  const [copied, setCopied] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  // Close the menu when clicking anywhere outside it.
+  useEffect(() => {
+    if (!menuOpen) return
+    function onDown(e: PointerEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
+    }
+    document.addEventListener("pointerdown", onDown)
+    return () => document.removeEventListener("pointerdown", onDown)
+  }, [menuOpen])
 
   const shareTarget: ShareTarget = {
     type: "community",
     key: String(post.id),
     title: "A question on Community Help",
-    subtitle: post.body.length > 120 ? `${post.body.slice(0, 120)}…` : post.body,
+    subtitle: body.length > 120 ? `${body.slice(0, 120)}…` : body,
     url: "/chatrooms/community",
     image: null,
     downloadUrl: null,
@@ -201,6 +223,7 @@ function PostItem({
   }
 
   function handleDelete() {
+    setMenuOpen(false)
     startTransition(async () => {
       try {
         await deleteCommunityPost(post.id)
@@ -211,25 +234,137 @@ function PostItem({
     })
   }
 
+  async function handleCopy() {
+    setMenuOpen(false)
+    try {
+      await navigator.clipboard.writeText(body)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      /* clipboard unavailable */
+    }
+  }
+
+  function startEdit() {
+    setMenuOpen(false)
+    setDraft(body)
+    setError(null)
+    setEditing(true)
+  }
+
+  function saveEdit() {
+    const text = draft.trim()
+    if (!text || text === body) {
+      setEditing(false)
+      return
+    }
+    setError(null)
+    startTransition(async () => {
+      try {
+        const updated = await editCommunityPost({ postId: post.id, body: text })
+        setBody(updated)
+        setEditing(false)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not save your changes.")
+      }
+    })
+  }
+
   return (
     <article className="px-4 py-5 transition-colors hover:bg-secondary/20 sm:px-6">
       <div className="flex items-start justify-between gap-3">
         <AnonIdentity postedAt={post.postedAt} />
-        {post.isSelf && (
+        <div ref={menuRef} className="relative">
           <button
             type="button"
-            onClick={handleDelete}
-            className="text-muted-foreground transition-colors hover:text-destructive"
-            aria-label="Delete your post"
+            onClick={() => setMenuOpen((o) => !o)}
+            className={cn(
+              "rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
+              menuOpen && "bg-secondary text-foreground",
+            )}
+            aria-label="Post options"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
           >
-            <Trash2 className="size-4" />
+            <MoreHorizontal className="size-5" />
           </button>
-        )}
+          {menuOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-2xl border border-border/60 bg-card p-1 shadow-xl duration-150 animate-in fade-in zoom-in-95"
+            >
+              {post.isSelf && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={startEdit}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-secondary"
+                >
+                  <Pencil className="size-4" /> Edit
+                </button>
+              )}
+              <button
+                type="button"
+                role="menuitem"
+                onClick={handleCopy}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-secondary"
+              >
+                <Copy className="size-4" /> Copy text
+              </button>
+              {post.isSelf && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={handleDelete}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
+                >
+                  <Trash2 className="size-4" /> Delete
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      <p className="mt-3 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-pretty">
-        {linkify(post.body)}
-      </p>
+      {editing ? (
+        <div className="mt-3">
+          <Textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={3}
+            maxLength={1000}
+            autoFocus
+            className="resize-none rounded-2xl text-[15px]"
+          />
+          {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
+          <div className="mt-2 flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="rounded-full"
+              onClick={() => setEditing(false)}
+              disabled={isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="gap-1.5 rounded-full"
+              onClick={saveEdit}
+              disabled={isPending || !draft.trim()}
+            >
+              {isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+              Save
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <p className="mt-3 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-pretty">
+          {linkify(body)}
+        </p>
+      )}
 
       <div className="mt-3 flex items-center gap-1">
         <button
@@ -252,6 +387,11 @@ function PostItem({
           <Share2 className="size-4" />
           Share
         </button>
+        {copied && (
+          <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+            <Check className="size-3.5" /> Copied
+          </span>
+        )}
       </div>
 
       {open && (
