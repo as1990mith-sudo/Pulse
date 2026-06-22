@@ -6,8 +6,6 @@ import useSWR from "swr"
 import {
   Check,
   CheckCircle2,
-  Circle,
-  Disc3,
   Loader2,
   Lock,
   MessageSquare,
@@ -131,6 +129,18 @@ export function StudioConsole({
     onMeta?.({ title, cover, live, subtitle: live ? "You're live" : "Setting up" })
   }, [title, cover, live, onMeta])
 
+  // Guard against an accidental refresh / tab close while broadcasting — it
+  // would silently drop the live stream. The browser shows its native prompt.
+  useEffect(() => {
+    if (!live) return
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ""
+    }
+    window.addEventListener("beforeunload", onBeforeUnload)
+    return () => window.removeEventListener("beforeunload", onBeforeUnload)
+  }, [live])
+
   async function toggleLive() {
     setError(null)
     if (live) {
@@ -156,18 +166,6 @@ export function StudioConsole({
       setEndedSession(null)
       setElapsed(0)
       await connect({ serverUrl: res.serverUrl, token: res.token, publish: true })
-      startRecording()
-      setRecording(true)
-    }
-  }
-
-  async function toggleRecording() {
-    if (!live) return
-    if (recording) {
-      const blob = await stopRecording().catch(() => null)
-      if (blob) recordedBlobRef.current = blob
-      setRecording(false)
-    } else {
       startRecording()
       setRecording(true)
     }
@@ -223,7 +221,7 @@ export function StudioConsole({
 
       <div className="relative flex min-h-0 w-full flex-1 flex-col">
         {/* Broadcast header: cover artwork + live indicator + title + stats */}
-        <header className="relative z-30 flex items-center gap-3 border-b border-white/[0.07] px-4 py-4 pt-safe sm:px-6">
+        <header className="relative z-30 flex items-center gap-3 border-b border-white/[0.07] px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)] sm:px-6">
           <BackExitMenu
             showMenu={live}
             exitLabel="End"
@@ -289,20 +287,24 @@ export function StudioConsole({
             </div>
           </div>
 
-          <Button
-            onClick={toggleLive}
-            size="sm"
-            variant={live ? "secondary" : "default"}
-            className="shrink-0 gap-1.5 rounded-full px-4 font-bold shadow-lg"
-            disabled={starting || state.connecting}
-          >
-            {starting || state.connecting ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Radio className="size-4" strokeWidth={2.75} />
-            )}
-            {live ? "End" : starting || state.connecting ? "…" : "Go live"}
-          </Button>
+          {/* While offline the host needs a way to go live; once live, the
+              back arrow's menu handles ending the stream, so no End button. */}
+          {!live && (
+            <Button
+              onClick={toggleLive}
+              size="sm"
+              variant="default"
+              className="shrink-0 gap-1.5 rounded-full px-4 font-bold shadow-lg"
+              disabled={starting || state.connecting}
+            >
+              {starting || state.connecting ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Radio className="size-4" strokeWidth={2.75} />
+              )}
+              {starting || state.connecting ? "…" : "Go live"}
+            </Button>
+          )}
         </header>
 
         {error && (
@@ -370,13 +372,6 @@ export function StudioConsole({
               active={panel === "people"}
               disabled={!live}
               onClick={() => setPanel((p) => (p === "people" ? null : "people"))}
-            />
-            <DockButton
-              icon={recording ? <Disc3 className="size-5 animate-spin [animation-duration:3s]" /> : <Circle className="size-5" />}
-              label={recording ? "Stop recording" : "Start recording"}
-              recording={recording}
-              disabled={!live}
-              onClick={toggleRecording}
             />
             {live && roomName && <ShareButton roomName={roomName} title={title} />}
           </div>
