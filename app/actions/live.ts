@@ -86,6 +86,7 @@ export async function startBroadcast(input: {
     identity: user.id,
     name: user.name,
     canPublish: true,
+    metadata: JSON.stringify({ image: user.image ?? null }),
   })
 
   // Let followers know they're on air.
@@ -131,6 +132,7 @@ export async function joinBroadcast(input: { roomName: string }): Promise<JoinRe
     identity: user.id,
     name: user.name,
     canPublish: isHost,
+    metadata: JSON.stringify({ image: user.image ?? null }),
   })
 
   return { ok: true, token, serverUrl: LIVEKIT_URL, roomName: input.roomName, canPublish: isHost }

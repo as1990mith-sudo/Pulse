@@ -34,9 +34,11 @@ export type LiveParticipant = {
   name: string
   isLocal: boolean
   isSpeaking: boolean
+  // Profile image URL (from participant metadata) for real stage avatars.
+  image: string | null
   // Real-time connection quality from LiveKit (drives the signal indicator).
   quality: ConnQuality
-}
+  }
 
 export type LiveAudioState = {
   connected: boolean
@@ -237,11 +239,20 @@ export function useLiveAudio() {
     const consider = (p: Participant, isLocal: boolean) => {
       const canPub = p.permissions?.canPublish ?? false
       if (canPub) {
+        let image: string | null = null
+        if (p.metadata) {
+          try {
+            image = (JSON.parse(p.metadata) as { image?: string | null }).image ?? null
+          } catch {
+            image = null
+          }
+        }
         out.push({
           identity: p.identity,
           name: p.name || "Guest",
           isLocal,
           isSpeaking: p.isSpeaking,
+          image,
           quality: normalizeQuality(p.connectionQuality),
         })
       }
