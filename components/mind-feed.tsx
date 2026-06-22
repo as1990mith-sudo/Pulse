@@ -692,7 +692,7 @@ export function PostCard({
                 paragraphs (~half the height of a full empty line) instead of
                 rendering each blank line at full line-height. */}
             {text.split(/\n{2,}/).map((para, i) => (
-              <p key={i} className={cn("whitespace-pre-wrap leading-relaxed", i > 0 && "mt-3")}>
+              <p key={i} className={cn("whitespace-pre-wrap leading-snug", i > 0 && "mt-1.5")}>
                 {para}
               </p>
             ))}
