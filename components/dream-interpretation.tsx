@@ -7,6 +7,7 @@ import useSWR, { useSWRConfig } from "swr"
 import {
   ArrowLeft,
   Check,
+  ChevronDown,
   Copy,
   Heart,
   Info,
@@ -499,22 +500,30 @@ function DreamItem({
         </p>
       )}
 
-      {!showInbox && (
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          className={cn(
-            "mt-3 flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
-            open ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : "text-muted-foreground hover:bg-secondary",
-          )}
-          aria-expanded={open}
-        >
-          <MessageCircle className="size-4" />
-          {count > 0
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          "mt-3 flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+          open ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : "text-muted-foreground hover:bg-secondary",
+        )}
+        aria-expanded={open}
+      >
+        <MessageCircle className="size-4" />
+        {showInbox
+          ? // Admin can collapse the thread after interpreting to make room for newer dreams.
+            open
+            ? count > 0
+              ? "Hide interpretation"
+              : "Hide reply box"
+            : count > 0
+              ? `Show ${count} ${count === 1 ? "interpretation" : "interpretations"}`
+              : "Interpret this dream"
+          : count > 0
             ? `${count} ${count === 1 ? "interpretation" : "interpretations"}`
             : "View interpretation"}
-        </button>
-      )}
+        <ChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} />
+      </button>
 
       {open && (
         <DreamReplies

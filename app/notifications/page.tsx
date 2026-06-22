@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { SiteHeader } from "@/components/site-header"
 import { NotificationsList } from "@/components/notifications-list"
-import { getNotifications, markNotificationsRead } from "@/app/actions/notifications"
+import { getNotifications } from "@/app/actions/notifications"
 import { getCurrentUser } from "@/lib/session"
 
 export const metadata = {
@@ -13,8 +13,9 @@ export default async function NotificationsPage() {
   if (!user) redirect("/sign-in")
 
   const notifications = (await getNotifications()) ?? []
-  // Opening the page marks everything as read.
-  await markNotificationsRead()
+  // Note: marking everything as read happens on the client after mount —
+  // calling it here would invoke revalidatePath() during render, which Next.js
+  // disallows (and previously crashed this page with a 500).
 
   return (
     <div className="min-h-screen">

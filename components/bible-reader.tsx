@@ -143,7 +143,7 @@ export function BibleReader() {
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
-            <Languages className="size-4" /> Interlinear
+            <Languages className="size-4" /> Strong&apos;s
           </button>
         </div>
       </div>

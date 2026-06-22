@@ -1,10 +1,11 @@
 "use client"
 
+import { useState } from "react"
 import useSWR from "swr"
 import { Loader2, ScrollText } from "lucide-react"
 
-// Word-level interlinear data (Textus Receptus Greek NT). Field names are kept
-// short in the bundled JSON to reduce payload size.
+// Word-level data (Textus Receptus Greek NT) used to render a Strong's-tagged
+// reading. Field names are kept short in the bundled JSON to reduce payload size.
 type InterWord = {
   g: string // Greek word as printed
   t: string // transliteration
@@ -23,10 +24,11 @@ const fetcher = async (url: string): Promise<InterBook> => {
 }
 
 /**
- * Renders the Greek interlinear for a single chapter. Each verse shows its
- * words stacked: Greek over transliteration, English gloss, and Strong's
- * number — the classic interlinear layout. Interlinear data is bundled only
- * for the New Testament; Old Testament books show a friendly notice.
+ * Renders a "Bible with Strong's numbers" for a single chapter: the verse reads
+ * as flowing English, and every word carries a tappable Strong's number. Tapping
+ * a word reveals its original Greek, transliteration, lemma and morphology.
+ * Strong's data is bundled only for the New Testament; Old Testament books show
+ * a friendly notice.
  */
 export function InterlinearPane({
   book,
@@ -54,17 +56,17 @@ export function InterlinearPane({
           {book} {chapter}
         </h2>
         <p className="text-xs uppercase tracking-wider text-muted-foreground">
-          Greek Interlinear · Textus Receptus
+          Strong&apos;s Numbers · Textus Receptus
         </p>
       </div>
 
       {!isNewTestament && (
         <div className="mx-auto max-w-md rounded-xl border border-border/60 bg-card px-6 py-12 text-center">
           <ScrollText className="mx-auto mb-3 size-6 text-muted-foreground" />
-          <p className="text-sm font-medium text-foreground">Interlinear coming soon for this book</p>
+          <p className="text-sm font-medium text-foreground">Strong&apos;s numbers coming soon for this book</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            The word-by-word Greek interlinear currently covers the New Testament. Switch to a New Testament book to
-            explore the original language, or read this book in the King James Version.
+            Strong&apos;s-tagged reading currently covers the New Testament. Switch to a New Testament book to study the
+            original-language words, or read this book in the King James Version.
           </p>
         </div>
       )}
@@ -72,7 +74,7 @@ export function InterlinearPane({
       {isNewTestament && isLoading && (
         <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
           <Loader2 className="size-5 animate-spin" />
-          <span className="text-sm">Loading interlinear…</span>
+          <span className="text-sm">Loading Strong&apos;s text…</span>
         </div>
       )}
 
@@ -83,33 +85,60 @@ export function InterlinearPane({
       )}
 
       {isNewTestament && data && !isLoading && (
-        <ol className="mx-auto max-w-3xl space-y-6">
-          {verses.map((v) => (
-            <li key={v.verse} className="flex gap-3">
-              <span className="select-none pt-1.5 text-xs font-semibold text-primary tabular-nums">{v.verse}</span>
-              <div className="flex flex-1 flex-wrap gap-x-1 gap-y-3">
+        <>
+          <p className="mb-5 text-center text-xs text-muted-foreground">Tap any word to see its original Greek.</p>
+          <ol className="mx-auto max-w-2xl space-y-4">
+            {verses.map((v) => (
+              <li key={v.verse} className="leading-loose">
+                <span className="mr-1.5 select-none align-super text-xs font-semibold text-primary tabular-nums">
+                  {v.verse}
+                </span>
                 {v.words.map((w, i) => (
-                  <InterlinearWord key={i} word={w} />
+                  <StrongsWord key={i} word={w} />
                 ))}
-              </div>
-            </li>
-          ))}
-        </ol>
+              </li>
+            ))}
+          </ol>
+        </>
       )}
     </div>
   )
 }
 
-function InterlinearWord({ word }: { word: InterWord }) {
+function StrongsWord({ word }: { word: InterWord }) {
+  const [open, setOpen] = useState(false)
+
   return (
-    <span
-      className="group inline-flex min-w-[3.5rem] flex-col items-center rounded-md px-1.5 py-1 transition-colors hover:bg-secondary/70"
-      title={`${word.d} · ${word.m}`}
-    >
-      <span className="text-xl font-semibold leading-tight text-foreground">{word.g}</span>
-      <span className="text-xs italic leading-tight text-muted-foreground">{word.t}</span>
-      <span className="mt-0.5 max-w-[12ch] text-center text-[11px] leading-tight text-foreground/70">{word.e}</span>
-      <span className="mt-0.5 font-mono text-[10px] leading-none text-primary">G{word.s}</span>
+    <span className="relative mr-1.5 inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="group rounded px-0.5 text-left align-baseline text-[15px] text-foreground transition-colors hover:bg-secondary/70 aria-expanded:bg-secondary"
+      >
+        <span className="underline decoration-primary/30 decoration-dotted underline-offset-4 group-hover:decoration-primary">
+          {word.e}
+        </span>
+        <span className="ml-0.5 align-super font-mono text-[10px] leading-none text-primary">G{word.s}</span>
+      </button>
+
+      {open && (
+        <span
+          role="tooltip"
+          className="absolute left-1/2 top-full z-30 mt-1 w-52 -translate-x-1/2 rounded-xl border border-border/60 bg-card p-3 text-left shadow-xl duration-150 animate-in fade-in zoom-in-95"
+        >
+          <span className="block text-lg font-semibold leading-tight text-foreground">{word.g}</span>
+          <span className="block text-sm italic leading-tight text-muted-foreground">{word.t}</span>
+          <span className="mt-1.5 flex items-center gap-1.5">
+            <span className="rounded bg-primary/10 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-primary">
+              G{word.s}
+            </span>
+            <span className="truncate text-sm text-foreground/80">{word.d}</span>
+          </span>
+          <span className="mt-1 block text-xs text-muted-foreground">{word.m}</span>
+          <span className="mt-1.5 block border-t border-border/60 pt-1.5 text-sm text-foreground">{word.e}</span>
+        </span>
+      )}
     </span>
   )
 }

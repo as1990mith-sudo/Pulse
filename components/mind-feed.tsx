@@ -741,6 +741,7 @@ export function PostCard({
             comments={post.comments.map(toThreadComment)}
             canInteract={!!currentUser}
             showCopy={false}
+            enforceTimeWindows={false}
             onLike={handleCommentLike}
             onReply={handleCommentReply}
             onEdit={handleCommentEdit}

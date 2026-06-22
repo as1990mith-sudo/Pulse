@@ -44,6 +44,13 @@ export type CommentThreadProps = {
    * tab) comments per product rules; enabled everywhere else.
    */
   showCopy?: boolean
+  /**
+   * When false, the author may always edit/delete their own comments regardless
+   * of how long ago they were posted. When true (default), the 15-min edit /
+   * 30-min delete windows apply. The post tab opts out so users keep full
+   * control of their comments.
+   */
+  enforceTimeWindows?: boolean
 }
 
 /**
@@ -59,6 +66,7 @@ export function CommentThread({
   onEdit,
   onDelete,
   showCopy = true,
+  enforceTimeWindows = true,
 }: CommentThreadProps) {
   // Group replies under their parent. Unknown parents fall back to top level.
   const { roots, repliesByParent } = useMemo(() => {
@@ -91,6 +99,7 @@ export function CommentThread({
             onEdit={onEdit}
             onDelete={onDelete}
             showCopy={showCopy}
+            enforceTimeWindows={enforceTimeWindows}
           />
           {(repliesByParent.get(comment.id) ?? []).length > 0 && (
             <ul className="mt-3 space-y-3 border-l border-border/50 pl-3.5">
@@ -104,6 +113,7 @@ export function CommentThread({
                     onEdit={onEdit}
                     onDelete={onDelete}
                     showCopy={showCopy}
+                    enforceTimeWindows={enforceTimeWindows}
                     isReply
                   />
                 </li>
@@ -124,6 +134,7 @@ function CommentItem({
   onEdit,
   onDelete,
   showCopy,
+  enforceTimeWindows = true,
   isReply = false,
 }: {
   comment: ThreadComment
@@ -133,6 +144,7 @@ function CommentItem({
   onEdit: (commentId: number, text: string) => Promise<void> | void
   onDelete: (commentId: number) => Promise<void> | void
   showCopy: boolean
+  enforceTimeWindows?: boolean
   isReply?: boolean
 }) {
   const [liked, setLiked] = useState(false)
@@ -148,8 +160,8 @@ function CommentItem({
   const [copied, setCopied] = useState(false)
   let pressTimer: ReturnType<typeof setTimeout> | null = null
 
-  const editable = comment.isSelf && canEdit(comment.createdAtMs)
-  const deletable = comment.isSelf && canDelete(comment.createdAtMs)
+  const editable = comment.isSelf && (!enforceTimeWindows || canEdit(comment.createdAtMs))
+  const deletable = comment.isSelf && (!enforceTimeWindows || canDelete(comment.createdAtMs))
 
   function toggleLike() {
     if (!canInteract) return

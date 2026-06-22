@@ -1,9 +1,15 @@
 "use client"
 
+import { useEffect } from "react"
 import Link from "next/link"
-import useSWR from "swr"
+import useSWR, { useSWRConfig } from "swr"
 import { Bell, Heart, MessageCircle, Radio, UserPlus, Megaphone } from "lucide-react"
-import { getNotifications, type NotificationType, type NotificationView } from "@/app/actions/notifications"
+import {
+  getNotifications,
+  markNotificationsRead,
+  type NotificationType,
+  type NotificationView,
+} from "@/app/actions/notifications"
 import { cn } from "@/lib/utils"
 
 const ICONS: Record<NotificationType, typeof Bell> = {
@@ -30,10 +36,18 @@ function verb(type: NotificationType) {
 }
 
 export function NotificationsList({ initial }: { initial: NotificationView[] }) {
+  const { mutate } = useSWRConfig()
   const { data } = useSWR("notifications-page", () => getNotifications(), {
     fallbackData: initial,
     refreshInterval: 20000,
   })
+
+  // Opening the page marks everything read. Done here (client, post-mount) so
+  // the underlying revalidatePath() runs outside of render, and the unread
+  // badge in the header clears immediately.
+  useEffect(() => {
+    void markNotificationsRead().then(() => mutate("notifications-unread"))
+  }, [mutate])
 
   const notifications = data ?? []
 
