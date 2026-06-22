@@ -243,14 +243,19 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
                 className="w-full truncate rounded-md border border-transparent bg-transparent text-sm font-semibold leading-tight text-white outline-none transition-colors placeholder:text-white/40 hover:border-white/20 focus:border-primary focus:bg-white/10 focus:px-2 focus:py-1 sm:text-base"
               />
             )}
-            <p className="mt-0.5 flex items-center gap-2 text-xs text-white/60">
+            <div className="mt-0.5 flex items-center gap-2 text-xs text-white/60">
               <span className="truncate">{currentUser.name}</span>
               {live && (
-                <span className="flex shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setPanel("people")}
+                  aria-label="See listeners and manage the stage"
+                  className="flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 transition-colors hover:bg-white/10 hover:text-white"
+                >
                   <Users className="size-3" /> {viewers.toLocaleString()}
-                </span>
+                </button>
               )}
-            </p>
+            </div>
           </div>
 
           <Button
@@ -278,7 +283,7 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
           </div>
         )}
 
-        {/* Speaker stage — unified 2-col × 4-row grid (host first, then guests) */}
+        {/* Speaker stage — unified 4-col × 2-row grid (host first, then guests) */}
         <div className="relative shrink-0">
           <div className="mb-2 flex items-center justify-between px-1">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-white/60">On stage</h2>

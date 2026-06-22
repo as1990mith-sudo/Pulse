@@ -105,6 +105,9 @@ export function LiveListener({
   const [muted, setMuted] = useState(false)
   // Mobile chat sheet (desktop shows the chat in a side rail instead).
   const [chatOpen, setChatOpen] = useState(false)
+  // The audience/crowd view is hidden by default (frees space for the stage +
+  // chat) and revealed by tapping the audience pill in the header.
+  const [showAudience, setShowAudience] = useState(false)
   const [joining, setJoining] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [ended, setEnded] = useState(false)
@@ -314,9 +317,20 @@ export function LiveListener({
         </div>
 
         <div className="relative flex shrink-0 flex-col items-end gap-1">
-          <span className="flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-xs font-medium text-white/80 ring-1 ring-inset ring-white/10">
+          <button
+            type="button"
+            onClick={() => setShowAudience((s) => !s)}
+            aria-label="See who's listening"
+            aria-pressed={showAudience}
+            className={cn(
+              "flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset transition-colors",
+              showAudience
+                ? "bg-primary/20 text-primary ring-primary/30"
+                : "bg-white/10 text-white/80 ring-white/10 hover:bg-white/20",
+            )}
+          >
             <Users className="size-3" /> {audience.toLocaleString()}
-          </span>
+          </button>
           {state.connected && (
             <span className="font-mono text-[11px] tabular-nums text-white/50">{formatElapsed(elapsed)}</span>
           )}
@@ -380,8 +394,8 @@ export function LiveListener({
           </p>
         )}
 
-        {/* Audience section */}
-        <LiveAudience count={audience} glass className="relative" />
+        {/* Audience section — revealed via the header pill (see who's listening). */}
+        {showAudience && <LiveAudience count={audience} glass className="relative" />}
       </div>
 
       {/* ─────────────────────────── Guest dock ─────────────────────────── */}
@@ -412,72 +426,68 @@ export function LiveListener({
             </DockButton>
           </div>
         ) : (
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              {isOnStage ? (
-                <>
-                  {/* On-stage guest: mute own mic + leave stage. */}
-                  <DockButton
-                    label={state.micEnabled ? "Mute your mic" : "Unmute your mic"}
-                    onClick={() => void toggleMic()}
-                    active={state.micEnabled}
-                    tone="live"
-                  >
-                    {state.micEnabled ? <Mic className="size-5" /> : <MicOff className="size-5" />}
-                  </DockButton>
-                  <DockButton label="Leave the stage" onClick={() => void leaveStage()} tone="danger">
-                    <PhoneOff className="size-5" />
-                  </DockButton>
-                  <span className="ml-1 hidden text-xs font-medium text-live sm:inline">You&apos;re on stage</span>
-                </>
-              ) : (
-                <>
-                  {/* Listener: mute incoming audio. */}
-                  <DockButton
-                    label={muted ? "Unmute audio" : "Mute audio"}
-                    onClick={toggleMute}
-                    active={muted}
-                  >
-                    {muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
-                  </DockButton>
-                  {myStatus === "pending" ? (
-                    <span className="ml-1 flex items-center gap-1.5 text-xs text-white/70">
-                      <Mic className="size-3.5 animate-pulse" /> Waiting for host…
-                    </span>
-                  ) : (
-                    <span className="ml-1 hidden text-xs text-white/60 sm:inline">Listening live</span>
-                  )}
-                </>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              {/* Audio live uses emoji reactions only (no virtual gifts). */}
-              <ReactionPicker roomName={stream.roomName} showGifts={false} />
-              {/* Open the live chat (mobile: slides up as a sheet). */}
-              <span className="lg:hidden">
-                <DockButton label="Open chat" onClick={() => setChatOpen(true)}>
-                  <MessageSquare className="size-5" />
+          // One compact, centered control row (no edge-pinned buttons).
+          <div className="flex items-center justify-center gap-2 sm:gap-3">
+            {isOnStage ? (
+              <>
+                {/* On-stage guest: mute own mic + leave stage. */}
+                <DockButton
+                  label={state.micEnabled ? "Mute your mic" : "Unmute your mic"}
+                  onClick={() => void toggleMic()}
+                  active={state.micEnabled}
+                  tone="live"
+                >
+                  {state.micEnabled ? <Mic className="size-5" /> : <MicOff className="size-5" />}
                 </DockButton>
-              </span>
-              <DockButton label="Share room" onClick={() => setShareOpen(true)}>
-                <Share2 className="size-5" />
+                <DockButton label="Leave the stage" onClick={() => void leaveStage()} tone="danger">
+                  <PhoneOff className="size-5" />
+                </DockButton>
+              </>
+            ) : (
+              <>
+                {/* Listener: mute incoming audio. */}
+                <DockButton
+                  label={muted ? "Unmute audio" : "Mute audio"}
+                  onClick={toggleMute}
+                  active={muted}
+                >
+                  {muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
+                </DockButton>
+              </>
+            )}
+
+            {/* Audio live uses emoji reactions only (no virtual gifts). */}
+            <ReactionPicker roomName={stream.roomName} showGifts={false} />
+
+            {/* Open the live chat (mobile: slides up as a sheet). */}
+            <span className="lg:hidden">
+              <DockButton label="Open chat" onClick={() => setChatOpen(true)}>
+                <MessageSquare className="size-5" />
               </DockButton>
-              {!isOnStage &&
-                myStatus !== "pending" &&
-                (locked ? (
-                  <span className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-2 text-xs font-semibold text-white/60 ring-1 ring-inset ring-white/10">
-                    <Lock className="size-4" /> Stage locked
-                  </span>
-                ) : (
-                  <button
-                    onClick={handleRequestCall}
-                    className="flex items-center gap-1.5 rounded-full bg-call-accept/15 px-3 py-2 text-xs font-semibold text-call-accept transition-colors hover:bg-call-accept/25"
-                  >
-                    <Mic className="size-4" /> Request to speak
-                  </button>
-                ))}
-            </div>
+            </span>
+
+            <DockButton label="Share room" onClick={() => setShareOpen(true)}>
+              <Share2 className="size-5" />
+            </DockButton>
+
+            {/* Request-to-speak affordance for listeners. */}
+            {!isOnStage &&
+              (myStatus === "pending" ? (
+                <span className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-2 text-xs font-semibold text-white/70 ring-1 ring-inset ring-white/10">
+                  <Mic className="size-4 animate-pulse" /> Waiting…
+                </span>
+              ) : locked ? (
+                <span className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-2 text-xs font-semibold text-white/60 ring-1 ring-inset ring-white/10">
+                  <Lock className="size-4" /> Locked
+                </span>
+              ) : (
+                <button
+                  onClick={handleRequestCall}
+                  className="flex items-center gap-1.5 rounded-full bg-call-accept/15 px-3 py-2 text-xs font-semibold text-call-accept transition-colors hover:bg-call-accept/25"
+                >
+                  <Mic className="size-4" /> Speak
+                </button>
+              ))}
           </div>
         )}
         {error && !ended && <p className="mt-2 text-xs text-destructive">{error}</p>}
