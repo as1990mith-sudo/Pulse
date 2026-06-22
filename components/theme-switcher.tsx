@@ -17,9 +17,9 @@ import { SKINS, useSkin } from "@/components/skin-provider"
 import { cn } from "@/lib/utils"
 
 const themes = [
-  { value: "light", label: "Light", icon: Sun },
   { value: "dark", label: "Dark", icon: Moon },
   { value: "mid", label: "Mid", icon: Contrast },
+  { value: "light", label: "Light", icon: Sun },
 ] as const
 
 // Preview swatch per skin — each shows its accent ring gradient.
