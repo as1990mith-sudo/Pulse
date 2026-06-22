@@ -357,7 +357,12 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
         <ul className="divide-y divide-border/60 border-b border-border/60">
           {visiblePosts.map((post) => (
             <li key={post.id}>
-              <PostCard post={post} currentUser={currentUser} variant="feed" />
+              <PostCard
+                post={post}
+                currentUser={currentUser}
+                variant="feed"
+                highlighted={highlightedPost === String(post.id)}
+              />
             </li>
           ))}
         </ul>

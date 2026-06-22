@@ -201,9 +201,11 @@ function CommentSection({
 function PostItem({
   post,
   onDeleted,
+  highlighted = false,
 }: {
   post: CommunityPostView
   onDeleted: (id: number) => void
+  highlighted?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [count, setCount] = useState(post.commentCount)
@@ -233,7 +235,7 @@ function PostItem({
     key: String(post.id),
     title: "A question on Community Help",
     subtitle: body.length > 120 ? `${body.slice(0, 120)}…` : body,
-    url: "/chatrooms/community",
+    url: `/chatrooms/community?q=${post.id}`,
     image: null,
     downloadUrl: null,
     downloadKind: null,
@@ -289,7 +291,13 @@ function PostItem({
   }
 
   return (
-    <article className="px-4 py-5 transition-colors hover:bg-secondary/20 sm:px-6">
+      <article
+        id={`q-${post.id}`}
+        className={cn(
+          "scroll-mt-24 px-4 py-5 transition-colors hover:bg-secondary/20 sm:px-6",
+          highlighted && "rounded-lg ring-2 ring-primary ring-inset",
+        )}
+      >
       <div className="flex items-start justify-between gap-3">
         {post.isSelf ? <SelfIdentity post={post} /> : <AnonIdentity postedAt={post.postedAt} />}
         <div ref={menuRef} className="relative">
@@ -571,6 +579,24 @@ export function CommunityHelp({ initialPosts }: { initialPosts: CommunityPostVie
   })
   const [composerOpen, setComposerOpen] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
+  const [highlightedQ, setHighlightedQ] = useState<string | null>(null)
+
+  // Deep link: arriving with ?q=<id> from a shared link scrolls to and briefly
+  // highlights that exact question instead of just the top of the feed.
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const targetId = new URLSearchParams(window.location.search).get("q")
+    if (!targetId) return
+    const t = setTimeout(() => {
+      const el = document.getElementById(`q-${targetId}`)
+      if (!el) return
+      el.scrollIntoView({ behavior: "smooth", block: "center" })
+      setHighlightedQ(targetId)
+      setTimeout(() => setHighlightedQ(null), 2400)
+    }, 300)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function handleCreated(post: CommunityPostView) {
     mutate("community-posts", (prev: CommunityPostView[] | undefined) => [post, ...(prev ?? [])], { revalidate: false })
@@ -634,7 +660,12 @@ export function CommunityHelp({ initialPosts }: { initialPosts: CommunityPostVie
         ) : (
           <div className="divide-y divide-border/60 pb-28">
             {posts.map((post) => (
-              <PostItem key={post.id} post={post} onDeleted={handleDeleted} />
+              <PostItem
+                key={post.id}
+                post={post}
+                onDeleted={handleDeleted}
+                highlighted={highlightedQ === String(post.id)}
+              />
             ))}
           </div>
         )}

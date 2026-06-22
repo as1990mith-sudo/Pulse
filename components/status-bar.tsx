@@ -612,26 +612,17 @@ export function StatusViewer({
 
   // Make the device/browser Back button (and back gesture) simply close the
   // status overlay and return the user to the exact page + scroll position they
-  // came from — instead of navigating away. We push one history entry on open;
-  // Back pops it (firing popstate -> onClose). If the viewer is closed another
-  // way (X, swipe down), we remove that entry on cleanup so history stays tidy.
+  // came from — instead of navigating to a different page. We push one history
+  // entry when the viewer opens; pressing Back pops it, which fires popstate and
+  // closes the overlay in place. (We intentionally don't touch history on
+  // cleanup — doing so is fragile under React's dev double-invoke of effects.)
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
   useEffect(() => {
     window.history.pushState({ statusViewer: true }, "")
-    let poppedByBack = false
-    const onPop = () => {
-      poppedByBack = true
-      onCloseRef.current()
-    }
+    const onPop = () => onCloseRef.current()
     window.addEventListener("popstate", onPop)
-    return () => {
-      window.removeEventListener("popstate", onPop)
-      if (!poppedByBack) {
-        // Closed programmatically — consume the history entry we added.
-        window.history.back()
-      }
-    }
+    return () => window.removeEventListener("popstate", onPop)
   }, [])
 
   const group = groups[groupIndex]
