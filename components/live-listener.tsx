@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import {
   Check,
   Loader2,
+  Lock,
   MessageSquare,
   Mic,
   MicOff,
@@ -113,6 +114,7 @@ export function LiveListener({
   const [myStatus, setMyStatus] = useState<CallRequestView["status"] | null>(null)
   const [myInvite, setMyInvite] = useState<CallRequestView | null>(null)
   const [declinedFlash, setDeclinedFlash] = useState(false)
+  const [locked, setLocked] = useState<boolean>(stream.locked ?? false)
   const prevStatus = useRef<CallRequestView["status"] | null>(null)
 
   async function join() {
@@ -161,6 +163,7 @@ export function LiveListener({
         return
       }
       setMyInvite(s.myInvite)
+      setLocked(s.locked)
       // Flash a "declined" toast when status transitions to declined.
       if (s.myStatus === "declined" && prevStatus.current && prevStatus.current !== "declined") {
         setDeclinedFlash(true)
@@ -316,7 +319,7 @@ export function LiveListener({
             activeSpeakers={state.activeSpeakers}
             hostColorById={colorById}
             isHost={false}
-            canRequestCall={canListen && !isOnStage && myStatus !== "pending"}
+            canRequestCall={canListen && !isOnStage && !locked && myStatus !== "pending"}
             callPending={myStatus === "pending"}
             onRequestCall={handleRequestCall}
           />
@@ -444,14 +447,20 @@ export function LiveListener({
               <DockButton label="Share room" onClick={() => setShareOpen(true)}>
                 <Share2 className="size-5" />
               </DockButton>
-              {!isOnStage && myStatus !== "pending" && (
-                <button
-                  onClick={handleRequestCall}
-                  className="flex items-center gap-1.5 rounded-full bg-call-accept/15 px-3 py-2 text-xs font-semibold text-call-accept transition-colors hover:bg-call-accept/25"
-                >
-                  <Mic className="size-4" /> Request to speak
-                </button>
-              )}
+              {!isOnStage &&
+                myStatus !== "pending" &&
+                (locked ? (
+                  <span className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-2 text-xs font-semibold text-white/60 ring-1 ring-inset ring-white/10">
+                    <Lock className="size-4" /> Stage locked
+                  </span>
+                ) : (
+                  <button
+                    onClick={handleRequestCall}
+                    className="flex items-center gap-1.5 rounded-full bg-call-accept/15 px-3 py-2 text-xs font-semibold text-call-accept transition-colors hover:bg-call-accept/25"
+                  >
+                    <Mic className="size-4" /> Request to speak
+                  </button>
+                ))}
             </div>
           </div>
         )}
