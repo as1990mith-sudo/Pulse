@@ -147,15 +147,19 @@ export function VideoStudioConsole({ currentUser }: { currentUser: CurrentUser }
   async function goLive() {
     setError(null)
     setStarting(true)
-    // Release the preview camera so LiveKit can claim the device.
-    previewStreamRef.current?.getTracks().forEach((t) => t.stop())
-    previewStreamRef.current = null
     try {
       const res = await startBroadcast({ title: title.trim() || `${currentUser.name} — live`, mode: "video" })
       if (!res.ok) {
+        // Keep the preview camera running so the host isn't left on a black
+        // screen — just show the error and let them retry.
         setError(res.error)
         return
       }
+      // Only release the preview camera once we know we're actually going live,
+      // so LiveKit can claim the device. (The pre-live effect cleanup also stops
+      // it when `live` flips true, but releasing here avoids any device race.)
+      previewStreamRef.current?.getTracks().forEach((t) => t.stop())
+      previewStreamRef.current = null
       setRoomName(res.roomName)
       setCreds({ token: res.token, serverUrl: res.serverUrl })
       startedAtRef.current = null
