@@ -57,6 +57,7 @@ export function LiveChat({
   roomName,
   bgUrl = null,
   bgEffect = "none",
+  immersive = false,
 }: {
   asHost?: boolean
   currentUser?: CurrentUser | null
@@ -64,6 +65,9 @@ export function LiveChat({
   // Host-controlled chat background (image URL + blur/dim treatment).
   bgUrl?: string | null
   bgEffect?: "none" | "blur" | "dim"
+  // When true, the chat renders transparent on a dark room (white text, glass
+  // bubbles) so it reads as one with the immersive stage rather than a card.
+  immersive?: boolean
 }) {
   const [draft, setDraft] = useState("")
   const [emojiOpen, setEmojiOpen] = useState(false)
@@ -157,13 +161,18 @@ export function LiveChat({
       )}
       {/* Host-pinned comment, surfaced at the top of the room for everyone. */}
       {pinnedMessage && (
-        <div className="relative flex items-start gap-2 border-b border-border/60 bg-primary/10 px-4 py-2.5">
+        <div
+          className={cn(
+            "relative flex items-start gap-2 border-b px-4 py-2.5",
+            immersive ? "border-white/10 bg-primary/15" : "border-border/60 bg-primary/10",
+          )}
+        >
           <Pin className="mt-0.5 size-3.5 shrink-0 text-primary" />
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">
               Pinned · {pinnedMessage.userName}
             </p>
-            <p className="truncate text-sm text-foreground/90">
+            <p className={cn("truncate text-sm", immersive ? "text-white/90" : "text-foreground/90")}>
               <MentionText body={pinnedMessage.body} />
             </p>
           </div>
@@ -183,7 +192,7 @@ export function LiveChat({
       <ScrollArea className="relative flex-1">
         <ul ref={scrollRef} className="flex flex-col gap-5 p-4">
           {messages.length === 0 && (
-            <li className="py-8 text-center text-sm text-muted-foreground">
+            <li className={cn("py-8 text-center text-sm", immersive ? "text-white/50" : "text-muted-foreground")}>
               No messages yet. Say hello to the room.
             </li>
           )}
@@ -197,7 +206,12 @@ export function LiveChat({
                 </Avatar>
                 <div className={cn("group flex max-w-[78%] flex-col gap-1", isMine && "items-end")}>
                   <div className={cn("flex items-center gap-2", isMine && "flex-row-reverse")}>
-                    <span className={cn("text-sm font-medium", m.isHost && "text-primary")}>
+                    <span
+                      className={cn(
+                        "text-sm font-medium",
+                        m.isHost ? "text-primary" : immersive && "text-white",
+                      )}
+                    >
                       {isMine ? "You" : m.userName}
                     </span>
                     {m.isHost && (
@@ -225,7 +239,9 @@ export function LiveChat({
                       "rounded-2xl px-3 py-2 text-sm leading-relaxed",
                       isMine
                         ? "rounded-tr-sm bg-primary text-primary-foreground"
-                        : "rounded-tl-sm bg-secondary text-foreground/90",
+                        : immersive
+                          ? "rounded-tl-sm bg-white/10 text-white/90 ring-1 ring-inset ring-white/5 backdrop-blur-md"
+                          : "rounded-tl-sm bg-secondary text-foreground/90",
                       pinnedChatId === m.id && "ring-1 ring-primary/40",
                     )}
                   >
@@ -239,16 +255,30 @@ export function LiveChat({
       </ScrollArea>
 
       {canSend ? (
-        <form onSubmit={send} className="relative border-t border-border/60 bg-card/80 p-3 backdrop-blur">
+        <form
+          onSubmit={send}
+          className={cn(
+            "relative border-t p-3",
+            immersive ? "border-white/10 bg-white/5 backdrop-blur-xl" : "border-border/60 bg-card/80 backdrop-blur",
+          )}
+        >
           {/* Inline emoji picker — taps insert the emoji into the message. */}
           {emojiOpen && (
-            <div className="mb-2 grid grid-cols-8 gap-1 rounded-xl border border-border/60 bg-popover p-2 shadow-lg">
+            <div
+              className={cn(
+                "mb-2 grid grid-cols-8 gap-1 rounded-xl border p-2 shadow-lg",
+                immersive ? "border-white/10 bg-zinc-900/95 backdrop-blur-xl" : "border-border/60 bg-popover",
+              )}
+            >
               {CHAT_EMOJIS.map((emoji) => (
                 <button
                   key={emoji}
                   type="button"
                   onClick={() => insertEmoji(emoji)}
-                  className="flex size-8 items-center justify-center rounded-lg text-lg transition-transform hover:scale-110 hover:bg-secondary active:scale-95"
+                  className={cn(
+                    "flex size-8 items-center justify-center rounded-lg text-lg transition-transform hover:scale-110 active:scale-95",
+                    immersive ? "hover:bg-white/10" : "hover:bg-secondary",
+                  )}
                   aria-label={`Insert ${emoji}`}
                 >
                   {emoji}
@@ -263,8 +293,11 @@ export function LiveChat({
               aria-label="Insert emoji"
               aria-pressed={emojiOpen}
               className={cn(
-                "flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground transition-colors hover:bg-secondary/80 hover:text-foreground",
-                emojiOpen && "bg-primary/15 text-primary",
+                "flex size-10 shrink-0 items-center justify-center rounded-full transition-colors",
+                immersive
+                  ? "bg-white/10 text-white/70 hover:bg-white/20 hover:text-white"
+                  : "bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
+                emojiOpen && (immersive ? "bg-primary/25 text-primary" : "bg-primary/15 text-primary"),
               )}
             >
               <Smile className="size-5" />
@@ -281,7 +314,11 @@ export function LiveChat({
               }}
               placeholder={asHost ? "Say something to the room…" : `Chat as ${currentUser?.name}…`}
               rows={1}
-              className="max-h-32 min-h-10 flex-1 resize-none py-2.5"
+              className={cn(
+                "max-h-32 min-h-10 flex-1 resize-none py-2.5",
+                immersive &&
+                  "border-white/15 bg-white/10 text-white placeholder:text-white/40 focus-visible:border-primary/60 focus-visible:ring-primary/30",
+              )}
               aria-label="Chat message"
             />
             <Button
@@ -296,7 +333,12 @@ export function LiveChat({
           </div>
         </form>
       ) : (
-        <div className="border-t border-border/60 p-3 text-center text-sm text-muted-foreground">
+        <div
+          className={cn(
+            "border-t p-3 text-center text-sm",
+            immersive ? "border-white/10 text-white/60" : "border-border/60 text-muted-foreground",
+          )}
+        >
           {roomName ? (
             <>
               <Link href="/sign-in" className="font-medium text-primary hover:underline">
