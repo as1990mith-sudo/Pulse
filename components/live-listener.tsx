@@ -369,7 +369,7 @@ export function LiveListener({
       </div>
 
       {/* ─────────────────────────── Guest dock ─────────────────────────── */}
-      <div className="relative border-t border-white/10 px-4 py-3 backdrop-blur-xl">
+      <div className="relative border-t border-white/10 px-4 py-3 pb-safe-2 pl-safe pr-safe backdrop-blur-xl">
         {!canListen ? (
           <p className="text-sm text-white/70">
             <Link href="/sign-in" className="font-medium text-primary hover:underline">

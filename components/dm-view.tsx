@@ -12,7 +12,7 @@ import { VoiceRecorder } from "@/components/voice-recorder"
 import { DmCall } from "@/components/dm-call"
 import { cn } from "@/lib/utils"
 import { linkify } from "@/lib/linkify"
-import { uploadMedia } from "@/lib/upload-media"
+import { compressImage, uploadMedia } from "@/lib/upload-media"
 import {
   deleteDirectMessage,
   editDirectMessage,
@@ -96,7 +96,17 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
     setUploadError(null)
     setUploading(true)
     try {
-      const data = await uploadMedia(file, "dm")
+      // Shrink large phone photos before upload for a much faster send.
+      let toUpload: File | Blob = file
+      let name = file.name
+      if (file.type.startsWith("image/")) {
+        const compressed = await compressImage(file)
+        if (compressed !== file) {
+          toUpload = compressed
+          name = file.name.replace(/\.(heic|heif|png|webp|jpe?g)$/i, "") + ".jpg"
+        }
+      }
+      const data = await uploadMedia(toUpload, "dm", name)
       setAttachment({ url: data.url, type: data.type, name: data.name })
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Upload failed")
@@ -315,7 +325,7 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
       </div>
 
       {/* Composer */}
-      <div className="border-t border-border/60 bg-background px-4 py-3 sm:px-6">
+      <div className="border-t border-border/60 bg-background px-4 py-3 pb-safe-2 pl-safe pr-safe sm:px-6">
         <div className="mx-auto w-full max-w-3xl space-y-3">
           {attachment && (
             <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card p-2.5">

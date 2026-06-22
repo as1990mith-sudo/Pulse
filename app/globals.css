@@ -356,6 +356,66 @@
     transition-duration: 150ms;
     transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
   }
+
+  /* --- Mobile (iOS + Android) hardening --- */
+  html {
+    /* Prevent iOS from auto-rotating/inflating text on orientation change. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  body {
+    /* Avoid horizontal jiggle from full-bleed sections on small screens. */
+    overflow-x: hidden;
+  }
+  /* Remove the grey tap flash on Android Chrome; we provide our own active states. */
+  a,
+  button,
+  [role="button"],
+  label,
+  summary {
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* iOS zooms the page when focusing an input whose font-size is < 16px.
+     Enforce a 16px minimum on form controls to stop that jarring zoom. */
+  input,
+  textarea,
+  select {
+    font-size: max(16px, 1em);
+  }
+  /* Make tappable controls comfortable on touch screens without affecting
+     pointer-precise (mouse) layouts. */
+  @media (pointer: coarse) {
+    button,
+    [role="button"],
+    a[role="button"],
+    summary {
+      touch-action: manipulation;
+    }
+  }
+}
+
+/* Safe-area helpers for notches / home indicators (iOS) and gesture nav (Android). */
+@layer utilities {
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .pl-safe {
+    padding-left: env(safe-area-inset-left);
+  }
+  .pr-safe {
+    padding-right: env(safe-area-inset-right);
+  }
+  /* Adds the safe-area inset on top of an existing bottom padding — handy for
+     fixed bottom bars / docks so they clear the home indicator. */
+  .pb-safe-2 {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
+  }
+  .pb-safe-4 {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 1rem);
+  }
 }
 
 /* Honour users who prefer less motion */

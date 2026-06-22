@@ -40,6 +40,13 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   colorScheme: 'dark',
   themeColor: '#0c0c0f',
+  width: 'device-width',
+  initialScale: 1,
+  // Let content extend into the iOS notch / home-indicator area; we then pad
+  // with safe-area insets so nothing important sits under the cutouts.
+  viewportFit: 'cover',
+  // Allow pinch-zoom for accessibility, but don't auto-zoom on input focus.
+  maximumScale: 5,
 }
 
 export default function RootLayout({
