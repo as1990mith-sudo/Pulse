@@ -137,20 +137,20 @@
    surfaces are tinted glass over an in-app indigo→blue→teal gradient. */
 .theme-mid {
   color-scheme: dark;
-  --background: oklch(0.26 0.03 265 / 55%);
+  --background: oklch(0.26 0.03 265 / 95%);
   --foreground: oklch(0.99 0.002 285);
-  --card: oklch(0.72 0.05 250 / 16%);
+  --card: oklch(0.32 0.04 262 / 95%);
   --card-foreground: oklch(0.99 0.002 285);
-  --popover: oklch(0.26 0.04 265 / 86%);
+  --popover: oklch(0.28 0.04 265 / 95%);
   --popover-foreground: oklch(0.99 0.002 285);
   --popover-solid: oklch(0.28 0.04 262);
   --primary: oklch(0.74 0.18 55);
   --primary-foreground: oklch(0.99 0.005 60);
-  --secondary: oklch(0.78 0.04 250 / 18%);
+  --secondary: oklch(0.36 0.035 258 / 95%);
   --secondary-foreground: oklch(0.99 0.002 285);
-  --muted: oklch(0.78 0.04 250 / 13%);
+  --muted: oklch(0.34 0.03 260 / 95%);
   --muted-foreground: oklch(0.9 0.01 270);
-  --accent: oklch(0.78 0.05 250 / 20%);
+  --accent: oklch(0.38 0.04 255 / 95%);
   --accent-foreground: oklch(0.99 0.002 285);
   --destructive: oklch(0.68 0.21 24);
   --border: oklch(1 0 0 / 18%);
@@ -159,9 +159,9 @@
   --live: oklch(0.68 0.21 24);
   --live-foreground: oklch(0.99 0.005 60);
   --chart-5: oklch(0.9 0.01 270);
-  --sidebar: oklch(0.26 0.03 265 / 55%);
+  --sidebar: oklch(0.26 0.03 265 / 95%);
   --sidebar-foreground: oklch(0.99 0.002 285);
-  --sidebar-accent: oklch(0.78 0.04 250 / 18%);
+  --sidebar-accent: oklch(0.36 0.035 258 / 95%);
   --sidebar-accent-foreground: oklch(0.99 0.002 285);
   --sidebar-border: oklch(1 0 0 / 18%);
   }
@@ -265,10 +265,11 @@
   background-attachment: fixed;
 }
 
-/* Frost the common surfaces so the panels read as tinted translucent glass */
+/* Panels are ~95% solid now, so only a light blur smooths the faint 5% of the
+   twilight gradient that shows through. */
 .theme-mid :is(.bg-card, .bg-popover, .bg-secondary, .bg-muted, .bg-accent) {
-  backdrop-filter: blur(16px) saturate(150%);
-  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  backdrop-filter: blur(6px) saturate(120%);
+  -webkit-backdrop-filter: blur(6px) saturate(120%);
 }
 
 @layer base {
