@@ -22,6 +22,9 @@ export async function createAccessToken(opts: {
   identity: string
   name: string
   canPublish: boolean
+  // Optional JSON carried on the participant (e.g. their profile image URL) so
+  // other clients can render real avatars on the stage.
+  metadata?: string
 }): Promise<string> {
   const apiKey = process.env.LIVEKIT_API_KEY
   const apiSecret = process.env.LIVEKIT_API_SECRET
@@ -32,6 +35,7 @@ export async function createAccessToken(opts: {
   const at = new AccessToken(apiKey, apiSecret, {
     identity: opts.identity,
     name: opts.name,
+    metadata: opts.metadata,
     // Tokens live long enough for a full broadcast session.
     ttl: "6h",
   })

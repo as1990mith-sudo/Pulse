@@ -336,7 +336,7 @@ export function StudioConsole({
             </div>
           </div>
           <LiveStage
-            host={{ id: currentUser.id, name: currentUser.name, color: currentUser.color }}
+            host={{ id: currentUser.id, name: currentUser.name, color: currentUser.color, image: currentUser.image }}
             speakers={speakers}
             activeSpeakers={state.activeSpeakers}
             hostQuality={state.connectionQuality}

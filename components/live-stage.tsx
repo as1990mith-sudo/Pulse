@@ -12,12 +12,14 @@ export type StageHost = {
   id: string
   name: string
   color: string
+  image?: string | null
 }
 
 type StageSlot = {
   identity: string
   name: string
   color: string
+  image: string | null
   isSpeaking: boolean
   isLocal: boolean
   muted: boolean
@@ -111,6 +113,7 @@ export function LiveStage({
           identity: host.id,
           name: host.name,
           color: host.color,
+          image: hostLive?.image ?? host.image ?? null,
           isSpeaking: active.has(host.id),
           isLocal: isHost,
           muted: false,
@@ -126,6 +129,7 @@ export function LiveStage({
             identity: g.identity,
             name: g.name,
             color: hostColorById[g.identity] ?? "bg-muted text-foreground",
+            image: g.image,
             isSpeaking: active.has(g.identity),
             isLocal: g.isLocal,
             muted: mutedIds.has(g.identity),
@@ -161,8 +165,8 @@ function StageTile({
   return (
     <div
       className={cn(
-        "flex flex-col items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-1 py-3 backdrop-blur-md transition-colors",
-        slot.isSpeaking && "border-call-accept/40 bg-call-accept/5",
+        "flex flex-col items-center gap-1.5 rounded-2xl border border-white/15 bg-zinc-900 px-1 py-3 shadow-lg shadow-black/30 transition-colors",
+        slot.isSpeaking && "border-call-accept/60 bg-call-accept/10",
         !isHost && "speaker-in",
       )}
     >
@@ -188,14 +192,19 @@ function StageTile({
 
         <span
           className={cn(
-            "relative z-10 flex size-12 items-center justify-center rounded-full text-sm font-semibold transition-all duration-300 sm:size-14 sm:text-base",
+            "relative z-10 flex size-12 items-center justify-center overflow-hidden rounded-full text-sm font-semibold transition-all duration-300 sm:size-14 sm:text-base",
             slot.color,
             slot.isSpeaking
               ? "ring-[3px] ring-call-accept ring-offset-2 ring-offset-zinc-950 shadow-lg shadow-call-accept/20"
-              : "ring-1 ring-white/10",
+              : "ring-2 ring-white/20",
           )}
         >
-          {getInitials(slot.name)}
+          {slot.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={slot.image || "/placeholder.svg"} alt={slot.name} className="size-full object-cover" />
+          ) : (
+            getInitials(slot.name)
+          )}
         </span>
 
         {/* Host crown badge */}
@@ -234,16 +243,20 @@ function StageTile({
         )}
       </div>
 
-      <div className="flex max-w-full items-center gap-0.5">
-        <span className="max-w-[4.5rem] truncate text-center text-xs font-medium text-white">
-          {slot.isLocal ? "You" : slot.name}
-        </span>
-        {slot.isSpeaking && <SpeakingEq />}
-      </div>
+      {/* The host's name is intentionally omitted (their crown + role badge
+          already identify them); guests keep their name for context. */}
+      {!isHost && (
+        <div className="flex max-w-full items-center gap-0.5">
+          <span className="max-w-[4.5rem] truncate text-center text-xs font-semibold text-white">
+            {slot.isLocal ? "You" : slot.name}
+          </span>
+          {slot.isSpeaking && <SpeakingEq />}
+        </div>
+      )}
       <span
         className={cn(
-          "rounded-full px-1.5 text-[9px] font-medium uppercase tracking-wide",
-          isHost ? "bg-primary/15 text-primary" : "text-white/50",
+          "rounded-full px-1.5 text-[9px] font-bold uppercase tracking-wide",
+          isHost ? "bg-primary/20 text-primary" : "text-white/55",
         )}
       >
         {role}
@@ -261,24 +274,26 @@ function EmptySlot({
   callPending: boolean
   onRequestCall?: () => void
 }) {
+  // Only show a label when the seat is actionable; a plain open seat stays
+  // compact with just the solid slot + dashed call-in circle.
+  const label = callPending ? "Requested" : canRequestCall ? "Call in" : null
   return (
-    <div className="flex flex-col items-center gap-1.5 rounded-xl border border-dashed border-white/10 px-1 py-3">
+    <div className="flex flex-col items-center justify-center gap-1.5 rounded-2xl border border-white/15 bg-zinc-900 px-1 py-3 shadow-lg shadow-black/30">
       <button
         type="button"
         disabled={!canRequestCall || callPending}
         onClick={onRequestCall}
         aria-label={canRequestCall ? "Request to join as a guest" : "Empty guest seat"}
         className={cn(
-          "flex size-12 items-center justify-center rounded-full border-2 border-dashed border-white/15 text-white/40 transition-colors sm:size-14",
-          canRequestCall && !callPending && "hover:border-call-accept hover:text-call-accept",
+          "flex size-12 items-center justify-center rounded-full border-2 border-dashed border-white/30 text-white/50 transition-colors sm:size-14",
+          canRequestCall && !callPending && "border-call-accept/70 text-call-accept hover:border-call-accept hover:bg-call-accept/10",
         )}
       >
-        {canRequestCall ? <Phone className="size-4" /> : <Plus className="size-4" />}
+        {canRequestCall ? <Phone className="size-5" strokeWidth={2.5} /> : <Plus className="size-5" strokeWidth={2.5} />}
       </button>
-      <span className="max-w-[4.5rem] truncate text-center text-xs font-medium text-white/50">
-        {callPending ? "Requested" : canRequestCall ? "Call in" : "Open"}
-      </span>
-      <span className="text-[9px] uppercase tracking-wide text-white/30">Guest</span>
+      {label && (
+        <span className="max-w-[4.5rem] truncate text-center text-xs font-semibold text-white/60">{label}</span>
+      )}
     </div>
   )
 }
