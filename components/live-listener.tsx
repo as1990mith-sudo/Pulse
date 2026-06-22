@@ -167,6 +167,18 @@ export function LiveListener({
     onMeta?.({ title: stream.title, cover: stream.cover ?? null, live: true, subtitle: `with ${stream.hostName}` })
   }, [stream.title, stream.cover, stream.hostName, onMeta])
 
+  // Guard against an accidental refresh / tab close while connected to the
+  // room — it would drop the listener out of the live session unexpectedly.
+  useEffect(() => {
+    if (!state.connected) return
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ""
+    }
+    window.addEventListener("beforeunload", onBeforeUnload)
+    return () => window.removeEventListener("beforeunload", onBeforeUnload)
+  }, [state.connected])
+
   // Poll call state so the listener sees their request status + any invite.
   useEffect(() => {
     if (!canListen) return
@@ -290,7 +302,7 @@ export function LiveListener({
       )}
 
       {/* ───────── Broadcast header: cover art + live + title + stats ───────── */}
-      <header className="relative z-30 flex items-center gap-3 border-b border-white/10 px-4 py-3 pt-safe backdrop-blur-xl">
+      <header className="relative z-30 flex items-center gap-3 border-b border-white/10 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+1rem)] backdrop-blur-xl">
         {/* Back control — opens Leave / Minimise while connected. */}
         <BackExitMenu
           showMenu={state.connected}
