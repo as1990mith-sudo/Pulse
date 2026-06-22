@@ -122,7 +122,7 @@ function StrongsWord({ word }: { word: InterWord }) {
         <span className="group-hover:underline group-hover:decoration-primary group-hover:decoration-dotted group-hover:underline-offset-4">
           {word.e}
         </span>
-        <span className="ml-0.5 align-super font-mono text-[10px] leading-none text-primary">G{word.s}</span>
+        <span className="ml-0.5 font-mono text-[1em] leading-none text-primary [vertical-align:0.35em]">G{word.s}</span>
       </button>
 
       {open && (

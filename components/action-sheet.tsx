@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
+import { createPortal } from "react-dom"
 import type { LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -35,6 +36,10 @@ export function ActionSheet({
   preview?: string
   actions: SheetAction[]
 }) {
+  // Only portal on the client (document is unavailable during SSR).
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+
   useEffect(() => {
     if (!open) return
     function onKey(e: KeyboardEvent) {
@@ -44,9 +49,9 @@ export function ActionSheet({
     return () => window.removeEventListener("keydown", onKey)
   }, [open, onClose])
 
-  if (!open) return null
+  if (!open || !mounted) return null
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
       {/* Backdrop */}
       <button
@@ -108,6 +113,7 @@ export function ActionSheet({
           })}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
