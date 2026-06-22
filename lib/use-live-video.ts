@@ -78,7 +78,12 @@ export function useLiveVideo({
     room
       .on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub: RemoteTrackPublication, _p: RemoteParticipant) => {
         if (track.kind === Track.Kind.Video && remoteVideoRef.current) {
-          track.attach(remoteVideoRef.current)
+          const el = remoteVideoRef.current
+          track.attach(el)
+          el.muted = true
+          el.setAttribute("playsinline", "true")
+          // Force playback so viewers on mobile don't get a black frame.
+          void el.play().catch(() => {})
           setRemoteVideoOn(true)
         }
         if (track.kind === Track.Kind.Audio && remoteAudioRef.current) {
@@ -136,8 +141,15 @@ export function useLiveVideo({
   function attachLocalVideo(room: Room) {
     const pub = room.localParticipant.getTrackPublication(Track.Source.Camera)
     const track = pub?.track
-    if (track instanceof LocalVideoTrack && localVideoRef.current) {
-      track.attach(localVideoRef.current)
+    const el = localVideoRef.current
+    if (track instanceof LocalVideoTrack && el) {
+      track.attach(el)
+      // On mobile (esp. Android Chrome) LiveKit's internal play() is frequently
+      // rejected, leaving the camera active but the <video> painted black.
+      // Force playback with the attributes that satisfy mobile autoplay policy.
+      el.muted = true
+      el.setAttribute("playsinline", "true")
+      void el.play().catch(() => {})
     }
   }
 

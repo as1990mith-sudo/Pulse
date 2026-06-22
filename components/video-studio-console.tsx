@@ -121,7 +121,14 @@ export function VideoStudioConsole({ currentUser }: { currentUser: CurrentUser }
           return
         }
         previewStreamRef.current = stream
-        if (previewVideoRef.current) previewVideoRef.current.srcObject = stream
+        const el = previewVideoRef.current
+        if (el) {
+          el.srcObject = stream
+          el.muted = true
+          el.setAttribute("playsinline", "true")
+          // Mobile browsers often won't start playback from the attribute alone.
+          void el.play().catch(() => {})
+        }
       } catch {
         setError("We need camera access to start a video live. Check your browser permissions.")
       }
@@ -182,7 +189,7 @@ export function VideoStudioConsole({ currentUser }: { currentUser: CurrentUser }
   const viewers = Math.max(0, participants - 1)
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-neutral-950 text-white">
+    <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-neutral-950 text-white [isolation:isolate]">
       {/* Host audio is published, not subscribed; element kept for parity. */}
       <audio ref={remoteAudioRef} autoPlay className="hidden" />
 
@@ -193,7 +200,7 @@ export function VideoStudioConsole({ currentUser }: { currentUser: CurrentUser }
         playsInline
         muted
         className={cn(
-          "absolute inset-0 h-full w-full -scale-x-100 object-cover transition-opacity duration-500",
+          "absolute inset-0 z-0 h-full w-full -scale-x-100 object-cover transition-opacity duration-500",
           live && camOn ? "opacity-100" : "opacity-0",
         )}
       />
@@ -204,7 +211,7 @@ export function VideoStudioConsole({ currentUser }: { currentUser: CurrentUser }
           autoPlay
           playsInline
           muted
-          className="absolute inset-0 h-full w-full -scale-x-100 object-cover"
+          className="absolute inset-0 z-0 h-full w-full -scale-x-100 object-cover"
         />
       )}
 
