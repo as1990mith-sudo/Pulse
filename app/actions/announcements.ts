@@ -6,12 +6,7 @@ import { db } from "@/lib/db"
 import { announcement, announcementInteraction, dmConversation, dmMessage } from "@/lib/db/schema"
 import { getCurrentUser } from "@/lib/session"
 import { getAdminUser, requireAdmin } from "@/lib/admin"
-import { AD_MAX_HOURS, AD_BLOCK_HOURS } from "@/lib/ads"
-
-export const FREQUENCY_TEAM_ID = "frequency-team"
-
-export type AdType = "event" | "product"
-export type AdAction = "interested" | "not_interested"
+import { AD_MAX_HOURS, AD_BLOCK_HOURS, FREQUENCY_TEAM_ID, type AdType, type AdAction } from "@/lib/ads"
 
 export type AnnouncementView = {
   id: number

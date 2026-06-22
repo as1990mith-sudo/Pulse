@@ -36,10 +36,9 @@ import {
   interactWithAnnouncement,
   setAnnouncementHidden,
   setOwnAnnouncementHidden,
-  type AdType,
   type AnnouncementView,
 } from "@/app/actions/announcements"
-import { AD_BLOCK_HOURS, AD_MAX_HOURS, priceForHours } from "@/lib/ads"
+import { AD_BLOCK_HOURS, AD_MAX_HOURS, priceForHours, type AdType } from "@/lib/ads"
 import { formatEventDate } from "@/lib/calendar"
 import type { CurrentUser } from "@/lib/session"
 import { cn } from "@/lib/utils"
