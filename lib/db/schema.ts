@@ -457,3 +457,31 @@ export const communityComment = pgTable("community_comment", {
   editedAt: timestamp("editedAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
+
+// --- Dream Interpretation (anonymous dreams, admin-only replies) -----------
+// A dream shared by a user. Like community posts, dreams are ANONYMOUS to other
+// members — but the author's id + name ARE kept so the admin (and only the
+// admin) can see who sent each dream and reply to it privately-as-publicly.
+export const dream = pgTable("dream", {
+  id: serial("id").primaryKey(),
+  userId: text("userId").notNull(), // hidden author — exposed ONLY to the admin
+  userName: text("userName").notNull(), // shown only to the admin in their inbox
+  body: text("body").notNull(),
+  deleted: boolean("deleted").notNull().default(false),
+  editedAt: timestamp("editedAt"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// The admin's interpretation of a dream. Surfaces to every member as a comment
+// under the dream. Members can only like or copy it — never reply or edit.
+export const dreamReply = pgTable("dream_reply", {
+  id: serial("id").primaryKey(),
+  dreamId: integer("dreamId").notNull(),
+  adminId: text("adminId").notNull(),
+  adminName: text("adminName").notNull(),
+  body: text("body").notNull(),
+  likes: integer("likes").notNull().default(0),
+  deleted: boolean("deleted").notNull().default(false),
+  editedAt: timestamp("editedAt"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
