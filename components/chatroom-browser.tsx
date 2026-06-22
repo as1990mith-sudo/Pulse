@@ -142,7 +142,7 @@ function MyRooms({ rooms }: { rooms: ChatroomSummary[] }) {
               </p>
             </div>
           </div>
-          <span className="shrink-0 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-foreground transition-opacity group-hover:opacity-90">
+          <span className="shrink-0 rounded-full bg-foreground px-4 py-2 text-sm font-semibold text-background transition-opacity group-hover:opacity-90">
             Open
           </span>
         </Link>
