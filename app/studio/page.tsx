@@ -2,6 +2,7 @@ import Link from "next/link"
 import { SiteHeader } from "@/components/site-header"
 import { StudioConsole } from "@/components/studio-console"
 import { VideoStudioConsole } from "@/components/video-studio-console"
+import { StudioErrorBoundary } from "@/components/studio-error-boundary"
 import { getCurrentUser } from "@/lib/session"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -20,7 +21,11 @@ export default async function StudioPage({
   if (currentUser) {
     // Video studio is a full-bleed, immersive surface (its own header chrome).
     if (isVideo) {
-      return <VideoStudioConsole currentUser={currentUser} />
+      return (
+        <StudioErrorBoundary>
+          <VideoStudioConsole currentUser={currentUser} />
+        </StudioErrorBoundary>
+      )
     }
     return (
       <div className="flex h-dvh flex-col overflow-hidden">
