@@ -5,8 +5,8 @@ import { cn } from "@/lib/utils"
 import { getInitials } from "@/lib/identity"
 import type { ConnQuality, LiveParticipant } from "@/lib/use-live-audio"
 
-// Host + up to 11 guests = 12 on stage.
-export const MAX_GUESTS = 11
+// Host + up to 7 guests = 8 tiles on stage, shown as a tidy 2-col × 4-row grid.
+export const MAX_GUESTS = 7
 
 export type StageHost = {
   id: string
@@ -32,7 +32,7 @@ function QualityBars({ quality }: { quality: ConnQuality }) {
     quality === "poor" ? "bg-live" : quality === "good" ? "bg-primary" : "bg-call-accept"
   return (
     <span
-      className="absolute -left-1 -top-1 flex items-end gap-px rounded-full border-2 border-card bg-card/90 p-1"
+      className="absolute -left-1 -top-1 flex items-end gap-px rounded-full border-2 border-zinc-950 bg-zinc-900/90 p-1"
       title={`Connection: ${quality}`}
       aria-label={`Connection quality: ${quality}`}
     >
@@ -63,9 +63,10 @@ function SpeakingEq() {
 }
 
 /**
- * The shared "stage" shown to both host and listeners: one host tile plus three
- * guest tiles. Live participants (with publish permission) fill the slots in
- * order; empty guest slots render a call-in affordance.
+ * The shared "stage" shown to both host and listeners as a tidy, uniform grid
+ * of 8 tiles — 2 columns × 4 rows. The first tile is always the host; the
+ * remaining 7 are guests, filled in order with empty seats rendering a call-in
+ * affordance (the first open seat for eligible listeners).
  */
 export function LiveStage({
   host,
@@ -94,18 +95,17 @@ export function LiveStage({
 }) {
   const active = new Set(activeSpeakers)
 
-  // The host occupies their own hero tile; everyone else with publish permission
-  // is a guest. De-dupe the host out of the guest list defensively.
+  // The host always occupies the first tile; everyone else with publish
+  // permission is a guest. De-dupe the host out of the guest list defensively.
   const guests = speakers.filter((s) => s.identity !== host.id).slice(0, MAX_GUESTS)
   const hostLive = speakers.find((s) => s.identity === host.id)
-  // Always show at least one open seat (until the stage is full) so the call-in
-  // affordance is visible; otherwise mirror remaining capacity, capped for tidiness.
-  const remaining = Math.max(0, MAX_GUESTS - guests.length)
-  const emptySlots = guests.length === 0 ? Math.min(remaining, 3) : Math.min(remaining, 1)
+  // Fill the remaining guest seats (up to 7) with open slots so the grid always
+  // reads as a neat 2 × 4 layout.
+  const emptySlots = Math.max(0, MAX_GUESTS - guests.length)
 
   return (
-    <div className="flex flex-col items-center gap-6">
-      {/* Host hero tile — large, centered, audio-reactive. */}
+    <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-x-3 gap-y-5 sm:gap-x-5">
+      {/* Host tile — first slot, audio-reactive, crowned. */}
       <StageTile
         slot={{
           identity: host.id,
@@ -117,39 +117,33 @@ export function LiveStage({
           quality: hostLive?.quality ?? hostQuality,
         }}
         role="Host"
-        hero
       />
 
-      {/* Guest grid — responsive, fills as people come on stage. */}
-      {(guests.length > 0 || emptySlots > 0) && (
-        <div className="grid w-full grid-cols-3 justify-items-center gap-x-2 gap-y-5 sm:grid-cols-4 sm:gap-x-4 md:grid-cols-6">
-          {guests.map((g) => (
-            <StageTile
-              key={g.identity}
-              slot={{
-                identity: g.identity,
-                name: g.name,
-                color: hostColorById[g.identity] ?? "bg-muted text-foreground",
-                isSpeaking: active.has(g.identity),
-                isLocal: g.isLocal,
-                muted: mutedIds.has(g.identity),
-                quality: g.quality,
-              }}
-              role="Guest"
-              onRemove={isHost && onRemoveGuest ? () => onRemoveGuest(g.identity) : undefined}
-            />
-          ))}
+      {guests.map((g) => (
+        <StageTile
+          key={g.identity}
+          slot={{
+            identity: g.identity,
+            name: g.name,
+            color: hostColorById[g.identity] ?? "bg-muted text-foreground",
+            isSpeaking: active.has(g.identity),
+            isLocal: g.isLocal,
+            muted: mutedIds.has(g.identity),
+            quality: g.quality,
+          }}
+          role="Guest"
+          onRemove={isHost && onRemoveGuest ? () => onRemoveGuest(g.identity) : undefined}
+        />
+      ))}
 
-          {Array.from({ length: emptySlots }).map((_, i) => (
-            <EmptySlot
-              key={`empty-${i}`}
-              canRequestCall={canRequestCall && i === 0}
-              callPending={callPending && i === 0}
-              onRequestCall={onRequestCall}
-            />
-          ))}
-        </div>
-      )}
+      {Array.from({ length: emptySlots }).map((_, i) => (
+        <EmptySlot
+          key={`empty-${i}`}
+          canRequestCall={canRequestCall && i === 0}
+          callPending={callPending && i === 0}
+          onRequestCall={onRequestCall}
+        />
+      ))}
     </div>
   )
 }
@@ -157,19 +151,23 @@ export function LiveStage({
 function StageTile({
   slot,
   role,
-  hero = false,
   onRemove,
 }: {
   slot: StageSlot
   role: "Host" | "Guest"
-  hero?: boolean
   onRemove?: () => void
 }) {
   const isHost = role === "Host"
   return (
-    <div className={cn("flex flex-col items-center gap-1.5", !isHost && "speaker-in")}>
+    <div
+      className={cn(
+        "flex flex-col items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-2 py-4 backdrop-blur-md transition-colors",
+        slot.isSpeaking && "border-call-accept/40 bg-call-accept/5",
+        !isHost && "speaker-in",
+      )}
+    >
       <div className="relative flex items-center justify-center">
-        {/* Soft breathing glow behind a speaking avatar (richer on the host hero). */}
+        {/* Soft breathing glow behind a speaking avatar. */}
         {slot.isSpeaking && (
           <span
             className="speaking-glow pointer-events-none absolute -inset-3 rounded-full bg-call-accept/30 blur-xl"
@@ -190,16 +188,11 @@ function StageTile({
 
         <span
           className={cn(
-            "relative z-10 flex items-center justify-center rounded-full font-semibold transition-all duration-300",
-            hero
-              ? "size-24 text-2xl sm:size-28 sm:text-3xl"
-              : isHost
-                ? "size-16 text-lg sm:size-20 sm:text-xl"
-                : "size-14 text-base sm:size-16",
+            "relative z-10 flex size-16 items-center justify-center rounded-full text-lg font-semibold transition-all duration-300 sm:size-[4.5rem]",
             slot.color,
             slot.isSpeaking
-              ? "ring-[3px] ring-call-accept ring-offset-2 ring-offset-card shadow-lg shadow-call-accept/20"
-              : "ring-1 ring-border/40",
+              ? "ring-[3px] ring-call-accept ring-offset-2 ring-offset-zinc-950 shadow-lg shadow-call-accept/20"
+              : "ring-1 ring-white/10",
           )}
         >
           {getInitials(slot.name)}
@@ -221,12 +214,12 @@ function StageTile({
         {/* Mic status pill (bottom-right). */}
         <span
           className={cn(
-            "absolute -bottom-0.5 -right-0.5 z-20 flex size-5 items-center justify-center rounded-full border-2 border-card sm:size-6",
+            "absolute -bottom-0.5 -right-0.5 z-20 flex size-6 items-center justify-center rounded-full border-2 border-zinc-950",
             slot.muted ? "bg-muted-foreground" : "bg-call-accept",
           )}
           aria-hidden="true"
         >
-          {slot.muted ? <MicOff className="size-2.5 text-background" /> : <Mic className="size-2.5 text-background sm:size-3" />}
+          {slot.muted ? <MicOff className="size-3 text-background" /> : <Mic className="size-3 text-background" />}
         </span>
 
         {onRemove && (
@@ -241,14 +234,8 @@ function StageTile({
         )}
       </div>
 
-      <div className="flex items-center gap-1">
-        <span
-          className={cn(
-            "max-w-[5rem] truncate text-center text-xs font-medium",
-            isHost && "sm:text-sm",
-            hero && "max-w-[9rem] text-sm font-semibold sm:text-base",
-          )}
-        >
+      <div className="flex max-w-full items-center gap-1">
+        <span className="max-w-[6rem] truncate text-center text-sm font-medium text-white">
           {slot.isLocal ? "You" : slot.name}
         </span>
         {slot.isSpeaking && <SpeakingEq />}
@@ -256,7 +243,7 @@ function StageTile({
       <span
         className={cn(
           "rounded-full px-1.5 text-[10px] font-medium uppercase tracking-wide",
-          isHost ? "bg-primary/15 text-primary" : "text-muted-foreground",
+          isHost ? "bg-primary/15 text-primary" : "text-white/50",
         )}
       >
         {role}
@@ -275,24 +262,23 @@ function EmptySlot({
   onRequestCall?: () => void
 }) {
   return (
-    <div className="flex flex-col items-center gap-1.5">
+    <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-white/10 px-2 py-4">
       <button
         type="button"
         disabled={!canRequestCall || callPending}
         onClick={onRequestCall}
         aria-label={canRequestCall ? "Request to join as a guest" : "Empty guest seat"}
         className={cn(
-          "flex size-14 items-center justify-center rounded-full border-2 border-dashed border-border/70 text-muted-foreground transition-colors sm:size-16",
+          "flex size-16 items-center justify-center rounded-full border-2 border-dashed border-white/15 text-white/40 transition-colors sm:size-[4.5rem]",
           canRequestCall && !callPending && "hover:border-call-accept hover:text-call-accept",
-          !canRequestCall && "opacity-50",
         )}
       >
         {canRequestCall ? <Phone className="size-5" /> : <Plus className="size-5" />}
       </button>
-      <span className="max-w-[5rem] truncate text-center text-xs font-medium text-muted-foreground">
+      <span className="max-w-[6rem] truncate text-center text-sm font-medium text-white/50">
         {callPending ? "Requested" : canRequestCall ? "Call in" : "Open"}
       </span>
-      <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">Guest</span>
+      <span className="text-[10px] uppercase tracking-wide text-white/30">Guest</span>
     </div>
   )
 }
