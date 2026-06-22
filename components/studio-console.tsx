@@ -174,13 +174,22 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-zinc-950 text-white">
+      {/* Deep vertical wash gives the immersive, full-bleed canvas its depth. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(180deg, color-mix(in oklch, var(--primary) 14%, #09090b) 0%, #09090b 42%, #050506 100%)",
+        }}
+      />
       {/* Drifting aurora backdrop — the same immersive skin as the listener view. */}
       <div
         aria-hidden="true"
-        className="stage-aurora pointer-events-none absolute inset-0 opacity-70"
+        className="stage-aurora pointer-events-none absolute inset-0 opacity-80"
         style={{
           background:
-            "radial-gradient(70% 55% at 20% 0%, color-mix(in oklch, var(--primary) 45%, transparent), transparent 60%), radial-gradient(60% 50% at 90% 20%, color-mix(in oklch, var(--call-accept) 30%, transparent), transparent 55%), radial-gradient(80% 60% at 50% 100%, color-mix(in oklch, var(--primary) 25%, transparent), transparent 60%)",
+            "radial-gradient(75% 55% at 18% -5%, color-mix(in oklch, var(--primary) 55%, transparent), transparent 60%), radial-gradient(65% 50% at 95% 18%, color-mix(in oklch, var(--call-accept) 32%, transparent), transparent 55%), radial-gradient(90% 60% at 50% 108%, color-mix(in oklch, var(--primary) 30%, transparent), transparent 62%)",
         }}
       />
       {cover && (
@@ -196,9 +205,9 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
         </>
       )}
 
-      <div className="relative mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col gap-3 px-3 py-3 sm:px-4">
+      <div className="relative flex min-h-0 w-full flex-1 flex-col">
         {/* Broadcast header: cover artwork + live indicator + title + stats */}
-        <header className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 backdrop-blur-xl">
+        <header className="flex items-center gap-3 border-b border-white/[0.07] px-4 py-4 pt-safe sm:px-6">
           <div className="relative size-16 shrink-0 overflow-hidden rounded-xl bg-white/10 ring-1 ring-white/15 sm:size-20">
             {cover ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -271,21 +280,21 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
         </header>
 
         {error && (
-          <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
+          <div className="mx-4 mt-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground sm:mx-6">
             {error}
           </div>
         )}
 
         {/* Pre-live: pick cover art */}
         {!live && (
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-3 backdrop-blur-xl">
+          <div className="border-b border-white/[0.07] px-4 py-4 sm:px-6">
             <CoverUpload value={cover} onChange={setCover} label="Cover artwork (optional)" />
           </div>
         )}
 
         {/* Speaker stage — unified 4-col × 2-row grid (host first, then guests) */}
-        <div className="relative shrink-0">
-          <div className="mb-2 flex items-center justify-between px-1">
+        <div className="relative shrink-0 border-b border-white/[0.07] px-4 py-4 sm:px-6">
+          <div className="mb-2 flex items-center justify-between">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-white/60">On stage</h2>
             <div className="flex items-center gap-1.5">
               {locked && (
@@ -312,8 +321,8 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
         </div>
 
         {/* Host control dock — compact essentials, sits right under the stage row */}
-        <div className="shrink-0 rounded-2xl border border-white/10 bg-white/5 p-2 shadow-lg backdrop-blur-xl">
-          <div className="flex items-center justify-center gap-2 sm:gap-3">
+        <div className="shrink-0 border-b border-white/[0.07] px-4 py-4 sm:px-6">
+          <div className="flex items-center justify-center gap-3 sm:gap-4">
             <DockButton
               icon={micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
               label={micOn ? "Mute mic" : "Unmute mic"}
@@ -349,7 +358,7 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
 
         {/* Live chat — flows as one with the room, filling all remaining space */}
         <section className="flex min-h-0 flex-1 flex-col overflow-hidden pb-safe">
-          <div className="mb-2 flex shrink-0 items-center justify-between px-1">
+          <div className="flex shrink-0 items-center justify-between px-4 pb-2 pt-4 sm:px-6">
             <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-white/60">
               <MessageSquare className="size-3.5 text-primary" /> Live chat
             </h2>
@@ -357,7 +366,7 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
               {guests.length}/{MAX_GUESTS} on stage
             </span>
           </div>
-          <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl">
+          <div className="min-h-0 flex-1 overflow-hidden">
             <LiveChat asHost immersive currentUser={currentUser} roomName={roomName ?? undefined} />
           </div>
         </section>
