@@ -27,8 +27,7 @@ const themes = [
 const SKIN_SWATCH: Record<string, string> = {
   orange: "linear-gradient(to top right, oklch(0.79 0.16 62), oklch(0.66 0.23 22), oklch(0.6 0.26 350))",
   green: "linear-gradient(to top right, oklch(0.7 0.15 158), oklch(0.596 0.145 163.225), oklch(0.6 0.13 185))",
-  blue: "linear-gradient(to top right, oklch(0.74 0.14 220), oklch(0.6 0.17 255), oklch(0.62 0.16 292))",
-  red: "linear-gradient(to top right, oklch(0.7 0.19 35), oklch(0.58 0.22 27), oklch(0.55 0.22 12))",
+  aurora: "linear-gradient(to top right, oklch(0.78 0.18 152), oklch(0.72 0.15 195), oklch(0.64 0.16 285))",
 }
 
 export function ThemeSwitcher() {

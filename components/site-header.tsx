@@ -111,7 +111,7 @@ export function SiteHeader() {
         hidden ? "-translate-y-full opacity-0" : "translate-y-0 opacity-100",
       )}
     >
-      <div className="relative mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 pl-safe pr-safe sm:px-6">
+      <div className="relative mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] sm:pl-[max(2rem,env(safe-area-inset-left))] sm:pr-[max(2rem,env(safe-area-inset-right))]">
         <Link href="/" className="flex items-center gap-2">
           <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Radio className="size-4" />
