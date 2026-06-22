@@ -2,9 +2,12 @@
 
 import { useEffect, useRef, useState } from "react"
 import useSWR from "swr"
-import { BookOpen, ChevronDown, ChevronLeft, ChevronRight, Highlighter, Loader2, X } from "lucide-react"
+import { BookOpen, ChevronDown, ChevronLeft, ChevronRight, Highlighter, Languages, Loader2, X } from "lucide-react"
 import { BIBLE_BOOKS, getBook } from "@/lib/bible-books"
+import { InterlinearPane } from "@/components/interlinear-pane"
 import { cn } from "@/lib/utils"
+
+type ReadMode = "kjv" | "interlinear"
 
 type Verse = { verse: number; text: string }
 type BookData = { book: string; chapters: Record<string, Verse[]> }
@@ -29,6 +32,7 @@ const STORAGE_KEY = "frequency-bible-highlights"
 export function BibleReader() {
   const [book, setBook] = useState("John")
   const [chapter, setChapter] = useState(1)
+  const [mode, setMode] = useState<ReadMode>("kjv")
   const [activeColor, setActiveColor] = useState<HighlightKey | null>(null)
   const [highlights, setHighlights] = useState<Record<string, HighlightKey>>({})
   const [loaded, setLoaded] = useState(false)
@@ -59,10 +63,12 @@ export function BibleReader() {
 
   // Bundled, offline KJV: each book ships as a static JSON file in /public/bible.
   const { data, error, isLoading } = useSWR(
-    bookIndex >= 0 ? `/bible/${bookIndex + 1}.json` : null,
+    mode === "kjv" && bookIndex >= 0 ? `/bible/${bookIndex + 1}.json` : null,
     fetcher,
     { revalidateOnFocus: false, revalidateIfStale: false },
   )
+
+  const isNewTestament = current?.testament === "new"
 
   const verses = data?.chapters[String(chapter)] ?? []
 
@@ -106,6 +112,42 @@ export function BibleReader() {
 
   return (
     <div className="space-y-5">
+      {/* Translation / interlinear toggle */}
+      <div className="flex justify-center">
+        <div
+          role="tablist"
+          aria-label="Reading mode"
+          className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-secondary/40 p-1"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "kjv"}
+            onClick={() => setMode("kjv")}
+            className={cn(
+              "flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200",
+              mode === "kjv" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <BookOpen className="size-4" /> King James
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "interlinear"}
+            onClick={() => setMode("interlinear")}
+            className={cn(
+              "flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200",
+              mode === "interlinear"
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <Languages className="size-4" /> Interlinear
+          </button>
+        </div>
+      </div>
+
       {/* Controls */}
       <div className="flex flex-wrap items-center gap-2">
         <BookPicker book={book} onSelect={(name) => { setBook(name); setChapter(1); scrollTop() }} />
@@ -137,7 +179,8 @@ export function BibleReader() {
         </div>
       </div>
 
-      {/* Highlighter toolbar */}
+      {/* Highlighter toolbar — KJV reading only */}
+      {mode === "kjv" && (
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-card px-3 py-2">
         <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
           <Highlighter className="size-3.5" /> Highlight
@@ -169,8 +212,20 @@ export function BibleReader() {
           {activeColor ? "Tap a verse to highlight it." : "Pick a colour, then tap verses."}
         </span>
       </div>
+      )}
 
-      {/* Reading pane — borderless and immersive */}
+      {/* Interlinear reading pane */}
+      {mode === "interlinear" && (
+        <InterlinearPane
+          book={book}
+          chapter={chapter}
+          bookIndex={bookIndex}
+          isNewTestament={!!isNewTestament}
+        />
+      )}
+
+      {/* KJV reading pane — borderless and immersive */}
+      {mode === "kjv" && (
       <div className="py-2">
         <div className="mb-7 flex flex-col gap-1 text-center">
           <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl">
@@ -216,6 +271,7 @@ export function BibleReader() {
           </ol>
         )}
       </div>
+      )}
 
       {/* Footer nav */}
       <div className="flex items-center justify-between">
