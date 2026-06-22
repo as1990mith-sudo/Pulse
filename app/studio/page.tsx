@@ -4,6 +4,7 @@ import { HostStudioLauncher } from "@/components/live-session"
 import { VideoStudioConsole } from "@/components/video-studio-console"
 import { StudioErrorBoundary } from "@/components/studio-error-boundary"
 import { getCurrentUser } from "@/lib/session"
+import { getMyActiveStream } from "@/app/actions/live"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 
@@ -29,8 +30,10 @@ export default async function StudioPage({
     }
     // The audio console is hosted at the app level (see LiveSessionProvider) so
     // the room can be minimised into a persistent mini-player while audio keeps
-    // playing. This route just mounts the session into that provider.
-    return <HostStudioLauncher currentUser={currentUser} />
+    // playing. If the host already has a stream live (e.g. reopened the studio
+    // after signing back in), resume it instead of showing the offline setup.
+    const activeStream = await getMyActiveStream()
+    return <HostStudioLauncher currentUser={currentUser} resumeStream={activeStream} />
   }
 
   return (
