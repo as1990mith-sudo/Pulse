@@ -141,7 +141,7 @@ export function SiteHeader() {
         </div>
       </div>
 
-      <nav className="border-t border-border/60 px-4 pl-safe pr-safe py-2 md:hidden">
+      <nav className="border-t border-border/60 py-2 pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] md:hidden">
         <NavTabs isActive={isActive} compact />
       </nav>
     </header>
