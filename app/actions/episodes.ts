@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { episode, episodeComment, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
+import { EDIT_WINDOW_MS, DELETE_WINDOW_MS } from "@/lib/interactions"
 import { notifyUser } from "@/app/actions/notifications"
 
 async function requireUser() {
@@ -17,6 +18,9 @@ async function requireUser() {
 
 export type EpisodeCommentView = {
   id: number
+  parentId: number | null
+  authorId: string
+  isSelf: boolean
   user: string
   handle: string
   initials: string
@@ -24,7 +28,9 @@ export type EpisodeCommentView = {
   authorImage: string | null
   text: string
   likes: number
+  edited: boolean
   postedAt: string
+  createdAtMs: number
 }
 
 function timeAgo(date: Date): string {
@@ -40,6 +46,9 @@ function timeAgo(date: Date): string {
 
 /** Comments for a published episode, oldest first. */
 export async function getEpisodeComments(episodeId: number): Promise<EpisodeCommentView[]> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  const viewerId = session?.user?.id ?? null
+
   const rows = await db
     .select()
     .from(episodeComment)
@@ -58,6 +67,9 @@ export async function getEpisodeComments(episodeId: number): Promise<EpisodeComm
 
   return rows.map((c) => ({
     id: c.id,
+    parentId: c.parentId ?? null,
+    authorId: c.userId,
+    isSelf: viewerId === c.userId,
     user: c.authorName,
     handle: c.authorHandle,
     initials: getInitials(c.authorName),
@@ -65,7 +77,9 @@ export async function getEpisodeComments(episodeId: number): Promise<EpisodeComm
     authorImage: imageMap.get(c.userId) ?? null,
     text: c.text,
     likes: c.likes,
+    edited: !!c.editedAt,
     postedAt: timeAgo(c.createdAt),
+    createdAtMs: c.createdAt.getTime(),
   }))
 }
 
@@ -94,13 +108,14 @@ export async function setEpisodeLike(input: { episodeId: number; liked: boolean 
 }
 
 /** Adds a comment to an episode and notifies the host. */
-export async function addEpisodeComment(input: { episodeId: number; text: string }) {
+export async function addEpisodeComment(input: { episodeId: number; text: string; parentId?: number | null }) {
   const user = await requireUser()
   const text = input.text.trim()
   if (!text) throw new Error("Comment cannot be empty.")
 
   await db.insert(episodeComment).values({
     episodeId: input.episodeId,
+    parentId: input.parentId ?? null,
     userId: user.id,
     authorName: user.name,
     authorHandle: getHandle(user.name),
@@ -135,4 +150,37 @@ export async function setEpisodeCommentLike(input: { commentId: number; liked: b
   if (!row) return
   const next = Math.max(0, row.likes + (input.liked ? 1 : -1))
   await db.update(episodeComment).set({ likes: next }).where(eq(episodeComment.id, input.commentId))
+}
+
+/** Edit one of the signed-in user's own episode comments, within the edit window. */
+export async function editEpisodeComment(input: { commentId: number; text: string }) {
+  const user = await requireUser()
+  const text = input.text.trim()
+  if (!text) throw new Error("Comment cannot be empty.")
+  const [row] = await db
+    .select({ userId: episodeComment.userId, createdAt: episodeComment.createdAt, episodeId: episodeComment.episodeId })
+    .from(episodeComment)
+    .where(eq(episodeComment.id, input.commentId))
+  if (!row) throw new Error("Comment not found.")
+  if (row.userId !== user.id) throw new Error("You can only edit your own comments.")
+  if (Date.now() - row.createdAt.getTime() > EDIT_WINDOW_MS) throw new Error("This comment can no longer be edited.")
+  await db.update(episodeComment).set({ text, editedAt: new Date() }).where(eq(episodeComment.id, input.commentId))
+  const [ep] = await db.select({ slug: episode.slug }).from(episode).where(eq(episode.id, row.episodeId))
+  if (ep) revalidatePath(`/live/${ep.slug}`)
+}
+
+/** Delete one of the signed-in user's own episode comments (and replies), within the delete window. */
+export async function deleteEpisodeComment(commentId: number) {
+  const user = await requireUser()
+  const [row] = await db
+    .select({ userId: episodeComment.userId, createdAt: episodeComment.createdAt, episodeId: episodeComment.episodeId })
+    .from(episodeComment)
+    .where(eq(episodeComment.id, commentId))
+  if (!row) return
+  if (row.userId !== user.id) throw new Error("You can only delete your own comments.")
+  if (Date.now() - row.createdAt.getTime() > DELETE_WINDOW_MS) throw new Error("This comment can no longer be deleted.")
+  await db.delete(episodeComment).where(eq(episodeComment.parentId, commentId))
+  await db.delete(episodeComment).where(eq(episodeComment.id, commentId))
+  const [ep] = await db.select({ slug: episode.slug }).from(episode).where(eq(episode.id, row.episodeId))
+  if (ep) revalidatePath(`/live/${ep.slug}`)
 }

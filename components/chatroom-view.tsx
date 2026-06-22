@@ -14,6 +14,7 @@ import {
   Mic,
   Music,
   Paperclip,
+  Pencil,
   Phone,
   Pin,
   PinOff,
@@ -33,9 +34,12 @@ import { VoiceRecorder } from "@/components/voice-recorder"
 import { ChatroomCall } from "@/components/chatroom-call"
 import { cn } from "@/lib/utils"
 import { uploadMedia } from "@/lib/upload-media"
+import { ActionSheet, type SheetAction } from "@/components/action-sheet"
+import { canEdit, canDelete } from "@/lib/interactions"
 import {
   approveJoinRequest,
   deleteChatMessage,
+  editChatMessage,
   getChatMessages,
   leaveChatroom,
   rejectJoinRequest,
@@ -147,6 +151,8 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
           isSelf: true,
           pinned: false,
           deleted: false,
+          edited: false,
+          createdAtMs: Date.now(),
         },
       ])
 
@@ -191,6 +197,8 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
         isSelf: true,
         pinned: false,
         deleted: false,
+        edited: false,
+        createdAtMs: Date.now(),
       },
     ])
 
@@ -230,6 +238,15 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
       { revalidate: false },
     )
     await togglePinMessage({ messageId, pinned })
+    await mutateMessages()
+  }
+
+  async function handleEditMessage(messageId: number, body: string) {
+    await mutateMessages(
+      (current) => (current ?? []).map((m) => (m.id === messageId ? { ...m, body, edited: true } : m)),
+      { revalidate: false },
+    )
+    await editChatMessage({ messageId, body })
     await mutateMessages()
   }
 
@@ -355,6 +372,7 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
               flashed={flashId === m.id}
               onDelete={handleDeleteMessage}
               onTogglePin={handleTogglePin}
+              onEdit={handleEditMessage}
             />
           ))}
           <div ref={scrollEndRef} />
@@ -480,24 +498,34 @@ function MessageBubble({
   flashed = false,
   onDelete,
   onTogglePin,
+  onEdit,
 }: {
   message: ChatMessageView
   isAdmin: boolean
   flashed?: boolean
   onDelete: (messageId: number) => void
   onTogglePin: (messageId: number, pinned: boolean) => void
+  onEdit: (messageId: number, body: string) => void
 }) {
   const [lightbox, setLightbox] = useState(false)
-  // Long-press (press-and-hold) opens a moderation menu with pin/delete.
+  // Long-press (press-and-hold) opens the modern action sheet.
   const [menuOpen, setMenuOpen] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [editDraft, setEditDraft] = useState(m.body ?? "")
+  const [copied, setCopied] = useState(false)
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Only the admin can pin; admin or the author can delete.
-  const canDelete = isAdmin || (m.isSelf && m.id > 0)
-  const canModerate = (isAdmin || m.isSelf) && m.id > 0
+  const persisted = m.id > 0
+  // Admin or author may delete (author only within the 30-min window).
+  const deletable = persisted && (isAdmin || (m.isSelf && canDelete(m.createdAtMs)))
+  // Author may edit text messages within the 15-min window.
+  const editable = persisted && m.isSelf && !!m.body && canEdit(m.createdAtMs)
+  // Anyone with menu access (copy is always available on text).
+  const hasText = !!m.body
+  const canOpenMenu = persisted && (deletable || editable || (m.isSelf && hasText) || isAdmin || hasText)
 
   function startPress() {
-    if (!canModerate) return
+    if (!canOpenMenu) return
     pressTimer.current = setTimeout(() => setMenuOpen(true), 450)
   }
   function cancelPress() {
@@ -506,6 +534,26 @@ function MessageBubble({
       pressTimer.current = null
     }
   }
+
+  function copyText() {
+    if (!m.body) return
+    navigator.clipboard?.writeText(m.body).then(() => {
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    })
+  }
+
+  const actions: SheetAction[] = []
+  if (hasText) actions.push({ label: "Copy", icon: Copy, onClick: copyText })
+  if (editable) actions.push({ label: "Edit", icon: Pencil, onClick: () => { setEditDraft(m.body ?? ""); setEditing(true) } })
+  if (isAdmin || m.isSelf) {
+    actions.push({
+      label: m.pinned ? "Unpin message" : "Pin message",
+      icon: m.pinned ? PinOff : Pin,
+      onClick: () => onTogglePin(m.id, !m.pinned),
+    })
+  }
+  if (deletable) actions.push({ label: "Delete message", icon: Trash2, destructive: true, onClick: () => onDelete(m.id) })
 
   // Soft-deleted messages render a tombstone with no moderation controls.
   if (m.deleted) {
@@ -548,12 +596,14 @@ function MessageBubble({
             {m.isSelf ? "You" : m.userName}
           </Link>
           <span className="text-[10px] text-muted-foreground">{m.postedAt}</span>
+          {m.edited && <span className="text-[10px] text-muted-foreground">· edited</span>}
+          {copied && <span className="text-[10px] text-primary">Copied</span>}
           {m.pinned && <Pin className="size-3 text-primary" />}
         </div>
         <div
           onContextMenu={(e) => {
-            // Right-click / long-press context menu also opens moderation.
-            if (canModerate) {
+            // Right-click / long-press context menu also opens the action sheet.
+            if (canOpenMenu) {
               e.preventDefault()
               setMenuOpen(true)
             }
@@ -565,7 +615,7 @@ function MessageBubble({
           className={cn(
             "relative inline-block overflow-hidden rounded-2xl text-sm leading-relaxed",
             m.attachmentType === "image" || m.attachmentType === "video" ? "p-1" : "px-3 py-2",
-            canModerate && "cursor-pointer select-none",
+            canOpenMenu && "cursor-pointer select-none",
             m.isSelf
               ? "rounded-tr-sm bg-primary text-primary-foreground"
               : "rounded-tl-sm bg-secondary text-foreground",
