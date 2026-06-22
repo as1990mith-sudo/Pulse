@@ -430,6 +430,42 @@
   animation: reaction-float 2.6s ease-out forwards;
 }
 
+/* TikTok-style live comment entrance — slides up + fades in from the bottom. */
+@keyframes live-comment-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.live-comment-in {
+  animation: live-comment-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Tap-to-heart burst — pops at the tap point on a video stream, then drifts up. */
+@keyframes tap-heart {
+  0% {
+    transform: translate(-50%, -50%) scale(0.4);
+    opacity: 0;
+  }
+  20% {
+    transform: translate(-50%, -50%) scale(1.25);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -180%) scale(1);
+    opacity: 0;
+  }
+}
+
+.tap-heart {
+  animation: tap-heart 1s ease-out forwards;
+}
+
 /* Soft equalizer bounce for the "now speaking" mini bars. */
 @keyframes eq-bounce {
   0%, 100% {
@@ -447,6 +483,8 @@
 @media (prefers-reduced-motion: reduce) {
   .audio-ring,
   .reaction-float,
+  .live-comment-in,
+  .tap-heart,
   .animate-eq-bounce {
     animation: none;
   }

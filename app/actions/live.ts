@@ -18,6 +18,8 @@ async function requireUser() {
   return session.user
 }
 
+export type LiveMode = "audio" | "video"
+
 export type LiveStreamView = {
   id: number
   roomName: string
@@ -27,6 +29,7 @@ export type LiveStreamView = {
   title: string
   category: string | null
   cover: string | null
+  mode: LiveMode
   chatBgUrl?: string | null
   chatBgEffect?: ChatBgEffect
   startedAt: string
@@ -45,11 +48,13 @@ export async function startBroadcast(input: {
   title: string
   category?: string
   cover?: string | null
+  mode?: LiveMode
 }): Promise<GoLiveResult> {
   const user = await requireUser()
   if (!isLiveKitConfigured()) {
-    return { ok: false, error: "Live audio is not configured yet. Add your LiveKit credentials to start broadcasting." }
+    return { ok: false, error: "Live is not configured yet. Add your LiveKit credentials to start broadcasting." }
   }
+  const mode: LiveMode = input.mode === "video" ? "video" : "audio"
 
   const title = input.title.trim() || `${user.name} — live`
   // Deterministic, unique room name per host session.
@@ -69,6 +74,7 @@ export async function startBroadcast(input: {
     title,
     category: input.category?.trim() || null,
     cover: input.cover ?? null,
+    mode,
     status: "live",
   })
 
@@ -144,6 +150,7 @@ export async function getLiveStreams(): Promise<LiveStreamView[]> {
     title: r.title,
     category: r.category,
     cover: r.cover,
+    mode: (r.mode as LiveMode) ?? "audio",
     startedAt: r.startedAt.toISOString(),
   }))
 }
@@ -271,6 +278,7 @@ export async function getLiveStream(roomName: string): Promise<LiveStreamView | 
     title: r.title,
     category: r.category,
     cover: r.cover,
+    mode: (r.mode as LiveMode) ?? "audio",
     chatBgUrl: r.chatBgUrl,
     chatBgEffect: (r.chatBgEffect as ChatBgEffect) ?? "none",
     startedAt: r.startedAt.toISOString(),

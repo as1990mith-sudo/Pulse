@@ -2,10 +2,12 @@ import { notFound } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, MessageSquare } from "lucide-react"
 import { getLiveStream } from "@/app/actions/live"
+import { getFollowingIds } from "@/app/actions/follow"
 import { resolveShow } from "@/lib/content"
 import { getCurrentUser } from "@/lib/session"
 import { SiteHeader } from "@/components/site-header"
 import { LiveListener } from "@/components/live-listener"
+import { LiveVideoViewer } from "@/components/live-video-viewer"
 import { LiveChat } from "@/components/live-chat"
 import { EpisodePage } from "@/components/episode-page"
 
@@ -21,6 +23,19 @@ export default async function LiveStreamPage({ params }: { params: Promise<{ id:
   }
 
   const currentUser = await getCurrentUser()
+
+  // Video streams use the immersive, full-screen TikTok-style viewer.
+  if (stream.mode === "video") {
+    const followingIds = currentUser ? await getFollowingIds() : []
+    return (
+      <LiveVideoViewer
+        stream={stream}
+        canWatch={Boolean(currentUser)}
+        currentUserId={currentUser?.id ?? null}
+        initialFollowing={followingIds.includes(stream.hostId)}
+      />
+    )
+  }
 
   return (
     // On mobile the whole experience is pinned to the viewport height so the

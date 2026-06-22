@@ -1,16 +1,27 @@
 import Link from "next/link"
 import { SiteHeader } from "@/components/site-header"
 import { StudioConsole } from "@/components/studio-console"
+import { VideoStudioConsole } from "@/components/video-studio-console"
 import { getCurrentUser } from "@/lib/session"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 
-export default async function StudioPage() {
+export default async function StudioPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ mode?: string }>
+}) {
   const currentUser = await getCurrentUser()
+  const { mode } = await searchParams
+  const isVideo = mode === "video"
 
   // When signed in, the console owns the full viewport below the header so the
   // studio is compact and only the chat scrolls.
   if (currentUser) {
+    // Video studio is a full-bleed, immersive surface (its own header chrome).
+    if (isVideo) {
+      return <VideoStudioConsole currentUser={currentUser} />
+    }
     return (
       <div className="flex h-dvh flex-col overflow-hidden">
         <SiteHeader />

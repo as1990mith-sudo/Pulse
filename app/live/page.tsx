@@ -1,9 +1,9 @@
-import Link from "next/link"
-import { ArrowRight, Headphones, Library, Radio } from "lucide-react"
+import { Library, Radio } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
 import { LiveStreamCard } from "@/components/live-stream-card"
 import { PodcastLibrary } from "@/components/podcast-library"
 import { LiveBadge } from "@/components/live-badge"
+import { GoLiveToggle } from "@/components/go-live-toggle"
 import { getPodcastHosts } from "@/lib/content"
 import { getLiveStreams } from "@/app/actions/live"
 
@@ -79,26 +79,8 @@ export default async function LivePage() {
             <PodcastLibrary hosts={hosts} />
           </section>
 
-          {/* Host CTA */}
-          <section className="overflow-hidden rounded-2xl border border-border/60 bg-card">
-            <div className="flex flex-col items-start gap-6 p-8 md:flex-row md:items-center md:justify-between md:p-12">
-              <div className="max-w-xl space-y-2">
-                <h2 className="text-2xl font-bold tracking-tight sm:text-3xl text-balance">
-                  Your audience is waiting. Go live.
-                </h2>
-                <p className="text-muted-foreground leading-relaxed">
-                  Open the studio, turn on your mic, add background music, and start broadcasting audio to listeners in
-                  seconds. Chat with your audience in real time, all in one place.
-                </p>
-              </div>
-              <Link
-                href="/studio"
-                className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-live px-6 py-3 font-medium text-live-foreground transition-opacity hover:opacity-90"
-              >
-                <Headphones className="size-4" /> Open the studio <ArrowRight className="size-4" />
-              </Link>
-            </div>
-          </section>
+          {/* Host CTA — pick audio or video, then open the studio in that mode */}
+          <GoLiveToggle />
         </div>
       </main>
 

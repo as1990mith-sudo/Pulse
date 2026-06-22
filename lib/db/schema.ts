@@ -298,6 +298,7 @@ export const liveStream = pgTable("live_stream", {
   title: text("title").notNull(),
   category: text("category"),
   cover: text("cover"),
+  mode: text("mode").notNull().default("audio"), // "audio" | "video"
   status: text("status").notNull().default("live"), // "live" | "ended"
   chatBgUrl: text("chatBgUrl"), // host-uploaded chat background image
   chatBgEffect: text("chatBgEffect").notNull().default("none"), // "none" | "blur" | "dim"
