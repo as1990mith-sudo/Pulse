@@ -136,8 +136,15 @@ export function useLiveVideo({
   function attachLocalVideo(room: Room) {
     const pub = room.localParticipant.getTrackPublication(Track.Source.Camera)
     const track = pub?.track
-    if (track instanceof LocalVideoTrack && localVideoRef.current) {
-      track.attach(localVideoRef.current)
+    const el = localVideoRef.current
+    if (track instanceof LocalVideoTrack && el) {
+      track.attach(el)
+      // On mobile (esp. Android Chrome) LiveKit's internal play() is frequently
+      // rejected, leaving the camera active but the <video> painted black.
+      // Force playback with the attributes that satisfy mobile autoplay policy.
+      el.muted = true
+      el.setAttribute("playsinline", "true")
+      void el.play().catch(() => {})
     }
   }
 
