@@ -103,8 +103,6 @@ export function LiveListener({
   const router = useRouter()
   const { state, speakers, connect, disconnect, toggleMic, setListenerMuted, startAudioPlayback } = useLiveAudio()
   const [muted, setMuted] = useState(false)
-  // Mobile chat sheet (desktop shows the chat in a side rail instead).
-  const [chatOpen, setChatOpen] = useState(false)
   // The audience/crowd view is hidden by default (frees space for the stage +
   // chat) and revealed by tapping the audience pill in the header.
   const [showAudience, setShowAudience] = useState(false)
@@ -338,7 +336,7 @@ export function LiveListener({
       </header>
 
       {/* ───────────────────────── Speaker stage ───────────────────────── */}
-      <div className="relative flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8 lg:flex-none lg:overflow-visible">
+      <div className="relative flex shrink-0 flex-col gap-4 px-4 py-5 sm:px-6 sm:py-6">
         {/* Floating reactions drift up over the stage. */}
         <ReactionLayer roomName={state.connected ? stream.roomName : undefined} />
 
@@ -398,8 +396,8 @@ export function LiveListener({
         {showAudience && <LiveAudience count={audience} glass className="relative" />}
       </div>
 
-      {/* ─────────────────────────── Guest dock ─────────────────────────── */}
-      <div className="relative border-t border-white/10 px-4 py-3 pb-safe-2 pl-safe pr-safe backdrop-blur-xl">
+      {/* ─────────────────────────── Guest dock ──────��──────────────────── */}
+      <div className="relative shrink-0 border-t border-white/10 px-4 py-3 pl-safe pr-safe backdrop-blur-xl">
         {!canListen ? (
           <p className="text-sm text-white/70">
             <Link href="/sign-in" className="font-medium text-primary hover:underline">
@@ -459,13 +457,6 @@ export function LiveListener({
             {/* Audio live uses emoji reactions only (no virtual gifts). */}
             <ReactionPicker roomName={stream.roomName} showGifts={false} />
 
-            {/* Open the live chat (mobile: slides up as a sheet). */}
-            <span className="lg:hidden">
-              <DockButton label="Open chat" onClick={() => setChatOpen(true)}>
-                <MessageSquare className="size-5" />
-              </DockButton>
-            </span>
-
             <DockButton label="Share room" onClick={() => setShareOpen(true)}>
               <Share2 className="size-5" />
             </DockButton>
@@ -493,42 +484,26 @@ export function LiveListener({
         {error && !ended && <p className="mt-2 text-xs text-destructive">{error}</p>}
       </div>
 
-      <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
-
-      {/* Mobile live-chat sheet — slides up over the immersive room. */}
-      {chatOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end lg:hidden" role="dialog" aria-modal="true">
-          <button
-            type="button"
-            aria-label="Close chat"
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => setChatOpen(false)}
-          />
-          <div className="relative flex h-[78dvh] flex-col overflow-hidden rounded-t-2xl border-t border-border/60 bg-card text-foreground shadow-2xl">
-            <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-4 py-3">
-              <h2 className="flex items-center gap-2 font-semibold">
-                <MessageSquare className="size-4 text-primary" /> Live chat
-              </h2>
-              <button
-                type="button"
-                onClick={() => setChatOpen(false)}
-                aria-label="Close chat"
-                className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-              >
-                <X className="size-4" />
-              </button>
-            </div>
-            <div className="min-h-0 flex-1">
-              <LiveChat
-                currentUser={currentUser}
-                roomName={stream.roomName}
-                bgUrl={stream.chatBgUrl ?? null}
-                bgEffect={stream.chatBgEffect ?? "none"}
-              />
-            </div>
-          </div>
+      {/* Live chat — always-on, inline below the dock so no extra tap is needed.
+          Desktop uses the page's side rail, so it's hidden here to avoid a dupe. */}
+      <section className="relative flex min-h-0 flex-1 flex-col overflow-hidden border-t border-white/10 pb-safe lg:hidden">
+        <div className="flex shrink-0 items-center justify-between px-4 pb-1 pt-2.5">
+          <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-white/60">
+            <MessageSquare className="size-3.5 text-primary" /> Live chat
+          </h2>
         </div>
-      )}
+        <div className="min-h-0 flex-1">
+          <LiveChat
+            immersive
+            currentUser={currentUser}
+            roomName={stream.roomName}
+            bgUrl={stream.chatBgUrl ?? null}
+            bgEffect={stream.chatBgEffect ?? "none"}
+          />
+        </div>
+      </section>
+
+      <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
     </div>
   )
 }

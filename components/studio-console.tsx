@@ -311,23 +311,8 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
           {live && roomName && <ReactionLayer roomName={roomName} />}
         </div>
 
-        {/* Live chat — begins where the stage ends; the only scrollable region */}
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border/60 bg-card text-foreground shadow-lg">
-          <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-4 py-2.5">
-            <h2 className="flex items-center gap-2 text-sm font-semibold">
-              <MessageSquare className="size-4 text-primary" /> Live chat
-            </h2>
-            <span className="text-xs text-muted-foreground">
-              {guests.length}/{MAX_GUESTS} on stage
-            </span>
-          </div>
-          <div className="min-h-0 flex-1">
-            <LiveChat asHost currentUser={currentUser} roomName={roomName ?? undefined} />
-          </div>
-        </div>
-
-        {/* Host control dock — compact essentials */}
-        <div className="shrink-0 rounded-2xl border border-white/10 bg-white/5 p-2 shadow-lg backdrop-blur-xl pb-safe-2 pl-safe pr-safe">
+        {/* Host control dock — compact essentials, sits right under the stage row */}
+        <div className="shrink-0 rounded-2xl border border-white/10 bg-white/5 p-2 shadow-lg backdrop-blur-xl">
           <div className="flex items-center justify-center gap-2 sm:gap-3">
             <DockButton
               icon={micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
@@ -361,6 +346,21 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
             {live && roomName && <ShareButton roomName={roomName} title={title} />}
           </div>
         </div>
+
+        {/* Live chat — flows as one with the room, filling all remaining space */}
+        <section className="flex min-h-0 flex-1 flex-col overflow-hidden pb-safe">
+          <div className="mb-2 flex shrink-0 items-center justify-between px-1">
+            <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-white/60">
+              <MessageSquare className="size-3.5 text-primary" /> Live chat
+            </h2>
+            <span className="text-[11px] text-white/40">
+              {guests.length}/{MAX_GUESTS} on stage
+            </span>
+          </div>
+          <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl">
+            <LiveChat asHost immersive currentUser={currentUser} roomName={roomName ?? undefined} />
+          </div>
+        </section>
       </div>
 
       {/* Slide-up panels */}

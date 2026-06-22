@@ -5,8 +5,8 @@ import { cn } from "@/lib/utils"
 import { getInitials } from "@/lib/identity"
 import type { ConnQuality, LiveParticipant } from "@/lib/use-live-audio"
 
-// Host + up to 7 guests = 8 tiles on stage, shown as a compact 4-col × 2-row grid.
-export const MAX_GUESTS = 7
+// Host + up to 3 guests = 4 tiles on stage, shown as a single compact row of 4.
+export const MAX_GUESTS = 3
 
 export type StageHost = {
   id: string
@@ -63,10 +63,10 @@ function SpeakingEq() {
 }
 
 /**
- * The shared "stage" shown to both host and listeners as a tidy, uniform grid
- * of 8 tiles — 2 columns × 4 rows. The first tile is always the host; the
- * remaining 7 are guests, filled in order with empty seats rendering a call-in
- * affordance (the first open seat for eligible listeners).
+ * The shared "stage" shown to both host and listeners as a tidy single row of
+ * 4 tiles. The first tile is always the host; the remaining 3 are guests,
+ * filled in order with empty seats rendering a call-in affordance (the first
+ * open seat for eligible listeners).
  */
 export function LiveStage({
   host,
@@ -99,12 +99,12 @@ export function LiveStage({
   // permission is a guest. De-dupe the host out of the guest list defensively.
   const guests = speakers.filter((s) => s.identity !== host.id).slice(0, MAX_GUESTS)
   const hostLive = speakers.find((s) => s.identity === host.id)
-  // Fill the remaining guest seats (up to 7) with open slots so the grid always
-  // reads as a neat 4 × 2 layout.
+  // Fill the remaining guest seats (up to 3) with open slots so the stage
+  // always reads as a neat single row of 4.
   const emptySlots = Math.max(0, MAX_GUESTS - guests.length)
 
   return (
-    <div className="mx-auto grid w-full max-w-lg grid-cols-4 gap-x-2 gap-y-3 sm:gap-x-3">
+    <div className="mx-auto grid w-full max-w-md grid-cols-4 gap-x-2 sm:gap-x-3">
       {/* Host tile — first slot, audio-reactive, crowned. */}
       <StageTile
         slot={{
