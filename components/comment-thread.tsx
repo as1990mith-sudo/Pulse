@@ -7,8 +7,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ActionSheet, type SheetAction } from "@/components/action-sheet"
-import { ShareSheet } from "@/components/share-sheet"
-import type { ShareTarget } from "@/lib/share-types"
 import { canEdit, canDelete } from "@/lib/interactions"
 import { cn } from "@/lib/utils"
 
@@ -41,14 +39,17 @@ export type CommentThreadProps = {
   onReply: (parentId: number, text: string) => Promise<void> | void
   onEdit: (commentId: number, text: string) => Promise<void> | void
   onDelete: (commentId: number) => Promise<void> | void
-  /** Builds a share target for an individual comment. */
-  shareTargetFor: (comment: ThreadComment) => ShareTarget
+  /**
+   * Whether the action menu offers a "Copy" option. Disabled for feed (post
+   * tab) comments per product rules; enabled everywhere else.
+   */
+  showCopy?: boolean
 }
 
 /**
  * Renders a flat list of top-level comments, each with one level of nested
- * replies. Every comment supports like, reply, share, and (for the author,
- * within the time windows) copy/edit/delete via a modern action sheet.
+ * replies. Every comment supports like and reply, plus (for the author, within
+ * the time windows) edit/delete — and optionally copy — via an action sheet.
  */
 export function CommentThread({
   comments,
@@ -57,7 +58,7 @@ export function CommentThread({
   onReply,
   onEdit,
   onDelete,
-  shareTargetFor,
+  showCopy = true,
 }: CommentThreadProps) {
   // Group replies under their parent. Unknown parents fall back to top level.
   const { roots, repliesByParent } = useMemo(() => {
@@ -89,7 +90,7 @@ export function CommentThread({
             onReply={onReply}
             onEdit={onEdit}
             onDelete={onDelete}
-            shareTargetFor={shareTargetFor}
+            showCopy={showCopy}
           />
           {(repliesByParent.get(comment.id) ?? []).length > 0 && (
             <ul className="mt-3 space-y-3 border-l border-border/50 pl-3.5">
@@ -102,7 +103,7 @@ export function CommentThread({
                     onReply={onReply}
                     onEdit={onEdit}
                     onDelete={onDelete}
-                    shareTargetFor={shareTargetFor}
+                    showCopy={showCopy}
                     isReply
                   />
                 </li>
@@ -122,7 +123,7 @@ function CommentItem({
   onReply,
   onEdit,
   onDelete,
-  shareTargetFor,
+  showCopy,
   isReply = false,
 }: {
   comment: ThreadComment
@@ -131,13 +132,12 @@ function CommentItem({
   onReply: (parentId: number, text: string) => Promise<void> | void
   onEdit: (commentId: number, text: string) => Promise<void> | void
   onDelete: (commentId: number) => Promise<void> | void
-  shareTargetFor: (comment: ThreadComment) => ShareTarget
+  showCopy: boolean
   isReply?: boolean
 }) {
   const [liked, setLiked] = useState(false)
   const [likes, setLikes] = useState(comment.likes)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [shareOpen, setShareOpen] = useState(false)
   const [replying, setReplying] = useState(false)
   const [replyDraft, setReplyDraft] = useState("")
   const [editing, setEditing] = useState(false)
@@ -166,7 +166,8 @@ function CommentItem({
     })
   }
 
-  const actions: SheetAction[] = [{ label: "Copy", icon: Copy, onClick: copyText }]
+  const actions: SheetAction[] = []
+  if (showCopy) actions.push({ label: "Copy", icon: Copy, onClick: copyText })
   if (editable) actions.push({ label: "Edit", icon: Pencil, onClick: () => { setEditDraft(text); setEditing(true) } })
   if (deletable)
     actions.push({
@@ -178,8 +179,10 @@ function CommentItem({
         setDeleted(true)
       },
     })
+  const hasMenu = actions.length > 0
 
   function startPress() {
+    if (!hasMenu) return
     pressTimer = setTimeout(() => setMenuOpen(true), 450)
   }
   function cancelPress() {
@@ -229,6 +232,7 @@ function CommentItem({
           onPointerLeave={cancelPress}
           onPointerCancel={cancelPress}
           onContextMenu={(e) => {
+            if (!hasMenu) return
             e.preventDefault()
             setMenuOpen(true)
           }}
@@ -291,22 +295,16 @@ function CommentItem({
               <MessageCircle className="size-4" /> Reply
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => setShareOpen(true)}
-            className="flex items-center gap-1 transition-colors hover:text-foreground"
-            aria-label="Share comment"
-          >
-            <Send className="size-4" /> Share
-          </button>
-          <button
-            type="button"
-            onClick={() => setMenuOpen(true)}
-            className="ml-auto flex items-center transition-colors hover:text-foreground"
-            aria-label="More options"
-          >
-            <MoreHorizontal className="size-4" />
-          </button>
+          {hasMenu && (
+            <button
+              type="button"
+              onClick={() => setMenuOpen(true)}
+              className="ml-auto flex items-center transition-colors hover:text-foreground"
+              aria-label="More options"
+            >
+              <MoreHorizontal className="size-4" />
+            </button>
+          )}
         </div>
 
         {replying && (
@@ -329,14 +327,15 @@ function CommentItem({
         )}
       </div>
 
-      <ActionSheet
-        open={menuOpen}
-        onClose={() => setMenuOpen(false)}
-        title={comment.isSelf ? "Your comment" : comment.name}
-        preview={text}
-        actions={actions}
-      />
-      <ShareSheet target={shareTargetFor(comment)} open={shareOpen} onClose={() => setShareOpen(false)} />
+      {hasMenu && (
+        <ActionSheet
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          title={comment.isSelf ? "Your comment" : comment.name}
+          preview={text}
+          actions={actions}
+        />
+      )}
     </div>
   )
 }

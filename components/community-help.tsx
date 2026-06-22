@@ -62,7 +62,7 @@ function toThreadComment(c: CommunityCommentView): ThreadComment {
 }
 
 const ANON_AVATAR = "/community-help-avatar.png"
-const ANON_NAME = "I Need Answers"
+const ANON_NAME = "Anonymous"
 
 /* -------------------------------------------------------------------------- */
 /*  Anonymous identity badge (green "?" avatar + fixed name)                  */
@@ -76,7 +76,7 @@ function AnonIdentity({ postedAt }: { postedAt: string }) {
         <AvatarFallback className="bg-emerald-600 font-bold text-white">?</AvatarFallback>
       </Avatar>
       <div className="min-w-0">
-        <p className="font-semibold tracking-tight text-emerald-600 dark:text-emerald-400">{ANON_NAME}</p>
+        <p className="font-semibold tracking-tight text-foreground">{ANON_NAME}</p>
         <p className="text-xs text-muted-foreground">{postedAt}</p>
       </div>
     </div>
@@ -99,7 +99,7 @@ function SelfIdentity({ post }: { post: CommunityPostView }) {
       <div className="min-w-0">
         <p className="truncate font-semibold tracking-tight">{post.authorName}</p>
         <p className="text-xs text-muted-foreground">
-          {post.postedAt} · <span className="text-emerald-600 dark:text-emerald-400">Only you see your name</span>
+          {post.postedAt} · <span className="font-medium text-foreground">You are anonymous in this room</span>
         </p>
       </div>
     </div>
@@ -164,16 +164,6 @@ function CommentSection({
             onCountChange(-1)
             await mutate((prev) => (prev ?? []).filter((c) => c.id !== commentId), { revalidate: false })
           }}
-          shareTargetFor={(c) => ({
-            type: "community",
-            key: `${postId}-c${c.id}`,
-            title: "A reply on Community Help",
-            subtitle: c.text.length > 120 ? `${c.text.slice(0, 120)}…` : c.text,
-            url: "/chatrooms/community",
-            image: null,
-            downloadUrl: null,
-            downloadKind: null,
-          })}
         />
       ) : (
         <p className="py-1 text-center text-sm text-muted-foreground">Be the first to help out.</p>
@@ -222,6 +212,7 @@ function PostItem({
   const [editing, setEditing] = useState(false)
   const [body, setBody] = useState(post.body)
   const [draft, setDraft] = useState(post.body)
+  const [edited, setEdited] = useState(post.edited)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -289,6 +280,7 @@ function PostItem({
       try {
         const updated = await editCommunityPost({ postId: post.id, body: text })
         setBody(updated)
+        setEdited(true)
         setEditing(false)
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not save your changes.")
@@ -389,6 +381,7 @@ function PostItem({
       ) : (
         <p className="mt-3 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-pretty">
           {linkify(body)}
+          {edited && <span className="ml-1.5 align-baseline text-xs text-muted-foreground">(edited)</span>}
         </p>
       )}
 
@@ -529,9 +522,9 @@ function InfoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
           <div className="flex gap-3">
             <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 font-bold text-white">?</span>
             <p>
-              <span className="font-semibold text-foreground">Post anonymously.</span> Everyone here appears as{" "}
-              <span className="font-medium text-emerald-600 dark:text-emerald-400">&ldquo;I Need Answers&rdquo;</span>. Ask
-              anything and get honest opinions without revealing who you are.
+          <span className="font-semibold text-foreground">Post anonymously.</span> Everyone here appears as{" "}
+          <span className="font-medium text-foreground">&ldquo;Anonymous&rdquo;</span>. Ask
+          anything and get honest opinions without revealing who you are.
             </p>
           </div>
           <div className="flex gap-3">

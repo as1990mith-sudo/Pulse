@@ -24,7 +24,7 @@ export function ProfilePostsGrid({
 
   return (
     <>
-      {/* Instagram-style grid: strict 3 columns, square tiles, minimal gap,
+      {/* Instagram-style grid: strict 3 columns, 3:4 portrait tiles, minimal gap,
           stretched edge-to-edge by breaking out of the page's horizontal
           padding (px-4 / sm:px-6 on the profile <main>). */}
       <ul className="-mx-4 grid grid-cols-3 gap-px sm:-mx-6">
@@ -53,7 +53,7 @@ function PostTile({ post, onOpen }: { post: FeedPostView; onOpen: () => void }) 
     <button
       type="button"
       onClick={onOpen}
-      className="group relative block aspect-square w-full overflow-hidden bg-muted text-left"
+      className="group relative block aspect-[3/4] w-full overflow-hidden bg-muted text-left"
     >
       {post.image ? (
         // eslint-disable-next-line @next/next/no-img-element

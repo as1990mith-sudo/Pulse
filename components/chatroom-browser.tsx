@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Check, Clock, ImageIcon, Loader2, Plus, Search, Users } from "lucide-react"
+import { Check, Clock, ImageIcon, Loader2, MoonStar, Plus, Search, Users } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -45,10 +45,35 @@ function CommunityHelpEntry() {
   )
 }
 
+function DreamInterpretationEntry() {
+  return (
+    <Link
+      href="/chatrooms/dreams"
+      className="group flex items-center gap-4 rounded-2xl border border-blue-500/30 bg-blue-500/5 px-4 py-4 transition-colors hover:bg-blue-500/10 sm:px-5"
+    >
+      <Avatar className="size-14 shrink-0 ring-2 ring-blue-500/40 transition-transform duration-200 group-hover:scale-105">
+        <AvatarFallback className="bg-blue-600 text-white">
+          <MoonStar className="size-6" />
+        </AvatarFallback>
+      </Avatar>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-lg font-semibold tracking-tight">Dream Interpretation</p>
+        <p className="truncate text-sm leading-relaxed text-muted-foreground">
+          Share your dreams anonymously — only the interpreter can reply.
+        </p>
+      </div>
+      <span className="shrink-0 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-foreground transition-opacity group-hover:opacity-90">
+        Open
+      </span>
+    </Link>
+  )
+}
+
 export function ChatroomBrowser({ rooms }: { rooms: ChatroomSummary[] }) {
   return (
     <Tabs defaultValue="my-rooms" className="space-y-6">
       <CommunityHelpEntry />
+      <DreamInterpretationEntry />
       <TabsList className="grid h-12 w-full grid-cols-3 rounded-full p-1">
         <TabsTrigger value="my-rooms" className="rounded-full text-[15px] font-medium">
           My rooms
@@ -117,7 +142,7 @@ function MyRooms({ rooms }: { rooms: ChatroomSummary[] }) {
               </p>
             </div>
           </div>
-          <span className="shrink-0 rounded-full bg-primary/10 px-4 py-2 text-sm font-semibold text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+          <span className="shrink-0 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-foreground transition-opacity group-hover:opacity-90">
             Open
           </span>
         </Link>

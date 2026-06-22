@@ -8,7 +8,7 @@ import {
   Heart,
   MessageCircle,
   Repeat2,
-  ImagePlus,
+  Plus,
   X,
   Send,
   UserPlus,
@@ -20,6 +20,8 @@ import {
   Camera,
   Video,
   ImageIcon,
+  Copy,
+  Check,
 } from "lucide-react"
 import {
   addPostComment,
@@ -225,11 +227,11 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
                     <button
                       type="button"
                       aria-label="Add a photo or video"
-                      className="inline-flex size-9 items-center justify-center rounded-md text-primary outline-none transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                      className="inline-flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary outline-none transition-all hover:bg-primary hover:text-primary-foreground focus-visible:ring-2 focus-visible:ring-ring active:scale-95 disabled:opacity-50"
                     />
                   }
                 >
-                  {uploading ? <Loader2 className="size-5 animate-spin" /> : <ImagePlus className="size-5" />}
+                  {uploading ? <Loader2 className="size-5 animate-spin" /> : <Plus className="size-5" />}
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
                   <DropdownMenuItem onClick={() => photoCaptureRef.current?.click()} className="gap-2">
@@ -370,6 +372,8 @@ export function PostCard({
   const [deleted, setDeleted] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editDraft, setEditDraft] = useState(post.text)
+  const [copied, setCopied] = useState(false)
+  const [edited, setEdited] = useState(post.edited)
   const [text, setText] = useState(post.text)
   const [isPending, startTransition] = useTransition()
 
@@ -387,6 +391,14 @@ export function PostCard({
     setIsEditing(true)
   }
 
+  function copyPost() {
+    if (!text) return
+    navigator.clipboard?.writeText(text).then(() => {
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    })
+  }
+
   function handleEditSave() {
     const next = editDraft.trim()
     // Require some text unless the post carries media.
@@ -394,6 +406,7 @@ export function PostCard({
     startTransition(async () => {
       await editPost({ postId: post.id, text: next })
       setText(next)
+      setEdited(true)
       setIsEditing(false)
       await globalMutate("feed")
       router.refresh()
@@ -466,19 +479,6 @@ export function PostCard({
     router.refresh()
   }
 
-  function commentShareTarget(comment: ThreadComment): ShareTarget {
-    return {
-      type: "post",
-      key: `${post.id}-c${comment.id}`,
-      title: `${comment.name} on Frequency`,
-      subtitle: comment.text ? comment.text.slice(0, 120) : null,
-      url: `/feed?post=${post.id}`,
-      image: null,
-      downloadUrl: null,
-      downloadKind: null,
-    }
-  }
-
   const hasMedia = !!post.image || !!post.video
 
   if (deleted) return null
@@ -510,6 +510,7 @@ export function PostCard({
             </Link>
             <span className={cn("truncate text-muted-foreground", feed ? "text-sm" : "text-xs")}>
               {post.handle} · {post.postedAt}
+              {edited && " · edited"}
             </span>
           </div>
         </div>
@@ -517,7 +518,7 @@ export function PostCard({
           {currentUser && !post.isSelf && (
             <FollowButton authorId={post.authorId} authorName={post.user} initialFollowing={post.isFollowing} />
           )}
-          {currentUser && post.isSelf && (
+          {(text || post.isSelf) && (
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
@@ -531,16 +532,26 @@ export function PostCard({
                 <MoreHorizontal className="size-5" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={startEditing} className="gap-2">
-                  <Pencil className="size-4" /> Edit post
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  variant="destructive"
-                  onClick={() => setConfirmDelete(true)}
-                  className="gap-2"
-                >
-                  <Trash2 className="size-4" /> Delete post
-                </DropdownMenuItem>
+                {text && (
+                  <DropdownMenuItem onClick={copyPost} className="gap-2">
+                    {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+                    {copied ? "Copied" : "Copy text"}
+                  </DropdownMenuItem>
+                )}
+                {currentUser && post.isSelf && (
+                  <>
+                    <DropdownMenuItem onClick={startEditing} className="gap-2">
+                      <Pencil className="size-4" /> Edit post
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onClick={() => setConfirmDelete(true)}
+                      className="gap-2"
+                    >
+                      <Trash2 className="size-4" /> Delete post
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           )}
@@ -729,11 +740,11 @@ export function PostCard({
           <CommentThread
             comments={post.comments.map(toThreadComment)}
             canInteract={!!currentUser}
+            showCopy={false}
             onLike={handleCommentLike}
             onReply={handleCommentReply}
             onEdit={handleCommentEdit}
             onDelete={handleCommentDelete}
-            shareTargetFor={commentShareTarget}
           />
         </div>
       )}
