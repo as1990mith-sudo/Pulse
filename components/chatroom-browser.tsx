@@ -62,7 +62,7 @@ function DreamInterpretationEntry() {
           Share your dreams anonymously — only the interpreter can reply.
         </p>
       </div>
-      <span className="shrink-0 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-foreground transition-opacity group-hover:opacity-90">
+      <span className="shrink-0 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-opacity group-hover:opacity-90">
         Open
       </span>
     </Link>
