@@ -11,6 +11,23 @@ import {
   type RemoteParticipant,
 } from "livekit-client"
 
+/** Reject a promise if it doesn't settle within `ms`, with a friendly message. */
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (err) => {
+        clearTimeout(timer)
+        reject(err)
+      },
+    )
+  })
+}
+
 /**
  * Shared LiveKit plumbing for video live streams, modeled on the proven 1:1 DM
  * call flow. Handles connecting to a room, publishing the host's camera + mic,
@@ -55,39 +72,64 @@ export function useLiveVideo({
 
   const connect = useCallback(async () => {
     if (roomRef.current || !token || !serverUrl) return
+    const room = new Room({ adaptiveStream: true, dynacast: true })
+    roomRef.current = room
+
+    room
+      .on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub: RemoteTrackPublication, _p: RemoteParticipant) => {
+        if (track.kind === Track.Kind.Video && remoteVideoRef.current) {
+          track.attach(remoteVideoRef.current)
+          setRemoteVideoOn(true)
+        }
+        if (track.kind === Track.Kind.Audio && remoteAudioRef.current) {
+          track.attach(remoteAudioRef.current)
+        }
+      })
+      .on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
+        track.detach()
+        if (track.kind === Track.Kind.Video) setRemoteVideoOn(false)
+      })
+      .on(RoomEvent.ParticipantConnected, () => syncParticipants(room))
+      .on(RoomEvent.ParticipantDisconnected, () => syncParticipants(room))
+      .on(RoomEvent.Disconnected, () => setConnected(false))
+
     try {
-      const room = new Room({ adaptiveStream: true, dynacast: true })
-      roomRef.current = room
-
-      room
-        .on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub: RemoteTrackPublication, _p: RemoteParticipant) => {
-          if (track.kind === Track.Kind.Video && remoteVideoRef.current) {
-            track.attach(remoteVideoRef.current)
-            setRemoteVideoOn(true)
-          }
-          if (track.kind === Track.Kind.Audio && remoteAudioRef.current) {
-            track.attach(remoteAudioRef.current)
-          }
-        })
-        .on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
-          track.detach()
-          if (track.kind === Track.Kind.Video) setRemoteVideoOn(false)
-        })
-        .on(RoomEvent.ParticipantConnected, () => syncParticipants(room))
-        .on(RoomEvent.ParticipantDisconnected, () => syncParticipants(room))
-        .on(RoomEvent.Disconnected, () => setConnected(false))
-
-      await room.connect(serverUrl, token)
-      syncParticipants(room)
-
-      // Only the host publishes camera + mic; viewers subscribe only.
-      if (isHost) {
-        await room.localParticipant.setMicrophoneEnabled(true)
-        await room.localParticipant.setCameraEnabled(true)
-      }
-      setConnected(true)
+      // Time-box the socket connection so a hung handshake can't strand the
+      // host on a permanent "Going live…" screen.
+      await withTimeout(
+        room.connect(serverUrl, token),
+        20000,
+        "Connecting to the live server timed out. Please try again.",
+      )
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not connect to the stream.")
+      // Tear down the half-open room so a retry can start cleanly.
+      room.disconnect()
+      roomRef.current = null
+      return
+    }
+
+    syncParticipants(room)
+    // The room is up — mark connected immediately so the UI leaves the loading
+    // state. Camera/mic publishing below is best-effort and must NOT block this.
+    setConnected(true)
+
+    // Only the host publishes camera + mic; viewers subscribe only.
+    if (isHost) {
+      try {
+        await room.localParticipant.setMicrophoneEnabled(true)
+      } catch {
+        setMicOn(false)
+      }
+      try {
+        await room.localParticipant.setCameraEnabled(true)
+        // The room flipped to "connected" before this resolved, so the self-view
+        // attach effect may have run before the track existed — attach now.
+        attachLocalVideo(room)
+      } catch {
+        setCamOn(false)
+        setError("We couldn't access your camera. Check your browser's camera permissions, then tap the camera button.")
+      }
     }
   }, [token, serverUrl, isHost])
 
