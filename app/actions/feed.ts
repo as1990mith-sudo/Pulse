@@ -7,7 +7,6 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { feedComment, feedPost, follow, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
-import { EDIT_WINDOW_MS, DELETE_WINDOW_MS } from "@/lib/interactions"
 import { notifyUser } from "@/app/actions/notifications"
 
 async function requireUser() {
@@ -389,7 +388,7 @@ export async function setCommentLike(input: { commentId: number; liked: boolean 
   revalidatePath("/feed")
 }
 
-/** Edit one of the signed-in user's own comments, within the edit window. */
+/** Edit one of the signed-in user's own post-tab comments (no time limit). */
 export async function editPostComment(input: { commentId: number; text: string }) {
   const user = await requireUser()
   const text = input.text.trim()
@@ -400,13 +399,12 @@ export async function editPostComment(input: { commentId: number; text: string }
     .where(eq(feedComment.id, input.commentId))
   if (!row) throw new Error("Comment not found.")
   if (row.userId !== user.id) throw new Error("You can only edit your own comments.")
-  if (Date.now() - row.createdAt.getTime() > EDIT_WINDOW_MS) throw new Error("This comment can no longer be edited.")
 
   await db.update(feedComment).set({ text, editedAt: new Date() }).where(eq(feedComment.id, input.commentId))
   revalidatePath("/feed")
 }
 
-/** Delete one of the signed-in user's own comments (and its replies), within the delete window. */
+/** Delete one of the signed-in user's own post-tab comments and its replies (no time limit). */
 export async function deletePostComment(commentId: number) {
   const user = await requireUser()
   const [row] = await db
@@ -415,7 +413,6 @@ export async function deletePostComment(commentId: number) {
     .where(eq(feedComment.id, commentId))
   if (!row) return
   if (row.userId !== user.id) throw new Error("You can only delete your own comments.")
-  if (Date.now() - row.createdAt.getTime() > DELETE_WINDOW_MS) throw new Error("This comment can no longer be deleted.")
 
   await db.delete(feedComment).where(eq(feedComment.parentId, commentId))
   await db.delete(feedComment).where(and(eq(feedComment.id, commentId), eq(feedComment.userId, user.id)))
