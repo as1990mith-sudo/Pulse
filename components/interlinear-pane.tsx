@@ -87,15 +87,18 @@ export function InterlinearPane({
       {isNewTestament && data && !isLoading && (
         <>
           <p className="mb-5 text-center text-xs text-muted-foreground">Tap any word to see its original Greek.</p>
-          <ol className="mx-auto max-w-2xl space-y-4">
+          <ol className="mx-auto max-w-prose space-y-1">
             {verses.map((v) => (
-              <li key={v.verse} className="leading-loose">
-                <span className="mr-1.5 select-none align-super text-xs font-semibold text-primary tabular-nums">
-                  {v.verse}
+              <li
+                key={v.verse}
+                className="flex gap-3 rounded-md px-2 py-0.5 text-lg leading-relaxed text-justify [text-justify:inter-word]"
+              >
+                <span className="select-none pt-1 text-xs font-semibold text-primary tabular-nums">{v.verse}</span>
+                <span className="flex-1">
+                  {v.words.map((w, i) => (
+                    <StrongsWord key={i} word={w} />
+                  ))}
                 </span>
-                {v.words.map((w, i) => (
-                  <StrongsWord key={i} word={w} />
-                ))}
               </li>
             ))}
           </ol>
@@ -109,14 +112,14 @@ function StrongsWord({ word }: { word: InterWord }) {
   const [open, setOpen] = useState(false)
 
   return (
-    <span className="relative mr-1.5 inline-block">
+    <span className="relative mr-1 inline-block">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="group rounded px-0.5 text-left align-baseline text-[15px] text-foreground transition-colors hover:bg-secondary/70 aria-expanded:bg-secondary"
+        className="group rounded px-0.5 text-left align-baseline text-foreground transition-colors hover:bg-secondary/70 aria-expanded:bg-secondary"
       >
-        <span className="underline decoration-primary/30 decoration-dotted underline-offset-4 group-hover:decoration-primary">
+        <span className="group-hover:underline group-hover:decoration-primary group-hover:decoration-dotted group-hover:underline-offset-4">
           {word.e}
         </span>
         <span className="ml-0.5 align-super font-mono text-[10px] leading-none text-primary">G{word.s}</span>

@@ -430,6 +430,42 @@
   animation: reaction-float 2.6s ease-out forwards;
 }
 
+/* TikTok-style live comment entrance — slides up + fades in from the bottom. */
+@keyframes live-comment-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.live-comment-in {
+  animation: live-comment-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Tap-to-heart burst — pops at the tap point on a video stream, then drifts up. */
+@keyframes tap-heart {
+  0% {
+    transform: translate(-50%, -50%) scale(0.4);
+    opacity: 0;
+  }
+  20% {
+    transform: translate(-50%, -50%) scale(1.25);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -180%) scale(1);
+    opacity: 0;
+  }
+}
+
+.tap-heart {
+  animation: tap-heart 1s ease-out forwards;
+}
+
 /* Soft equalizer bounce for the "now speaking" mini bars. */
 @keyframes eq-bounce {
   0%, 100% {
@@ -444,10 +480,80 @@
   animation: eq-bounce 0.7s ease-in-out infinite;
 }
 
+/* Slow drifting aurora gradient backdrop for the immersive audio room. */
+@keyframes stage-aurora {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.stage-aurora {
+  background-size: 200% 200%;
+  animation: stage-aurora 18s ease-in-out infinite;
+}
+
+/* Soft breathing glow behind the speaking host/guest avatar. */
+@keyframes speaking-glow {
+  0%, 100% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.08);
+  }
+}
+
+.speaking-glow {
+  animation: speaking-glow 1.8s ease-in-out infinite;
+}
+
+/* Bottom sheet slide-up for the mobile comments panel. */
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.sheet-up {
+  animation: sheet-up 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Gentle pop-in for newly-joined speaker tiles. */
+@keyframes speaker-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.speaker-in {
+  animation: speaker-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .audio-ring,
   .reaction-float,
-  .animate-eq-bounce {
+  .live-comment-in,
+  .tap-heart,
+  .animate-eq-bounce,
+  .stage-aurora,
+  .speaking-glow,
+  .sheet-up,
+  .speaker-in {
     animation: none;
   }
 }

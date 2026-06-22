@@ -10,6 +10,8 @@ import {
   Disc3,
   ImageIcon,
   Loader2,
+  Lock,
+  LockOpen,
   Mic,
   MicOff,
   Music,
@@ -37,13 +39,14 @@ import {
   respondToCallRequest,
   removeFromStage,
   setChatBackground,
+  setRoomLock,
   type CallRequestView,
   type ChatBgEffect,
 } from "@/app/actions/live"
 import { useLiveAudio, SOUND_EFFECTS, type SoundEffectName } from "@/lib/use-live-audio"
 import { uploadMedia } from "@/lib/upload-media"
 import { LiveChat } from "@/components/live-chat"
-import { LiveStage } from "@/components/live-stage"
+import { LiveStage, MAX_GUESTS } from "@/components/live-stage"
 import { LiveAudience } from "@/components/live-audience"
 import { ReactionLayer, ReactionPicker } from "@/components/live-reactions"
 import { CoverUpload } from "@/components/admin/cover-upload"
@@ -111,6 +114,16 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
   )
   const pending = callState?.pendingRequests ?? []
   const guests = callState?.guests ?? []
+  const locked = callState?.locked ?? false
+
+  async function toggleLock() {
+    if (!roomName) return
+    const next = !locked
+    // Optimistically reflect the new lock state, then confirm with the server.
+    void refreshCalls((cur) => (cur ? { ...cur, locked: next } : cur), { revalidate: false })
+    await setRoomLock({ roomName, locked: next }).catch(() => {})
+    refreshCalls()
+  }
 
   useEffect(() => {
     if (!live) return
@@ -262,11 +275,18 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
       <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-b from-secondary/50 to-card p-4">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">On stage</h2>
-          {pending.length > 0 && (
-            <span className="flex items-center gap-1 rounded-full bg-live/15 px-2 py-0.5 text-[11px] font-semibold text-live">
-              <Phone className="size-3" /> {pending.length} waiting
-            </span>
-          )}
+          <div className="flex items-center gap-1.5">
+            {locked && (
+              <span className="flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                <Lock className="size-3" /> Locked
+              </span>
+            )}
+            {pending.length > 0 && (
+              <span className="flex items-center gap-1 rounded-full bg-live/15 px-2 py-0.5 text-[11px] font-semibold text-live">
+                <Phone className="size-3" /> {pending.length} waiting
+              </span>
+            )}
+          </div>
         </div>
         <LiveStage
           host={{ id: currentUser.id, name: currentUser.name, color: currentUser.color }}
@@ -315,7 +335,9 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border/60 bg-card">
         <div className="flex items-center justify-between border-b border-border/60 px-4 py-2">
           <h2 className="text-sm font-semibold">Live chat</h2>
-          <span className="text-xs text-muted-foreground">{guests.length}/3 on stage</span>
+          <span className="text-xs text-muted-foreground">
+            {guests.length}/{MAX_GUESTS} on stage
+          </span>
         </div>
         <div className="min-h-0 flex-1">
           <LiveChat asHost currentUser={currentUser} roomName={roomName ?? undefined} />
@@ -332,7 +354,18 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
             disabled={!live}
             onClick={() => toggleMic()}
           />
-          <ReactionPicker roomName={live ? (roomName ?? undefined) : undefined} disabled={!live} />
+          <ReactionPicker
+            roomName={live ? (roomName ?? undefined) : undefined}
+            disabled={!live}
+            showGifts={false}
+          />
+          <DockButton
+            icon={locked ? <Lock className="size-5" /> : <LockOpen className="size-5" />}
+            label={locked ? "Unlock the stage" : "Lock the stage (no new requests)"}
+            active={locked}
+            disabled={!live}
+            onClick={toggleLock}
+          />
           <DockButton
             icon={<Sparkles className="size-5" />}
             label="Sound effects"

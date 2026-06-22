@@ -98,10 +98,13 @@ export function ReactionLayer({ roomName }: { roomName?: string }) {
 export function ReactionPicker({
   roomName,
   disabled = false,
+  showGifts = true,
   className,
 }: {
   roomName?: string
   disabled?: boolean
+  /** When false, only emoji reactions are offered (no virtual gifts). */
+  showGifts?: boolean
   className?: string
 }) {
   const [open, setOpen] = useState(false)
@@ -118,7 +121,7 @@ export function ReactionPicker({
         type="button"
         disabled={disabled || !roomName}
         onClick={() => setOpen(true)}
-        aria-label="Send a reaction or gift"
+        aria-label={showGifts ? "Send a reaction or gift" : "Send a reaction"}
         className={cn(
           "flex size-11 items-center justify-center rounded-full bg-secondary text-foreground transition-colors hover:bg-secondary/80 disabled:opacity-50",
           className,
@@ -132,28 +135,32 @@ export function ReactionPicker({
           <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
           <div className="relative z-10 w-full rounded-t-2xl border border-border/60 bg-card p-4 sm:max-w-sm sm:rounded-2xl">
             <div className="mb-3 flex items-center justify-between">
-              <div className="flex gap-1 rounded-full bg-secondary p-1">
-                <button
-                  type="button"
-                  onClick={() => setTab("reactions")}
-                  className={cn(
-                    "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
-                    tab === "reactions" ? "bg-primary text-primary-foreground" : "text-muted-foreground",
-                  )}
-                >
-                  Reactions
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTab("gifts")}
-                  className={cn(
-                    "flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold transition-colors",
-                    tab === "gifts" ? "bg-primary text-primary-foreground" : "text-muted-foreground",
-                  )}
-                >
-                  <Gift className="size-3.5" /> Gifts
-                </button>
-              </div>
+              {showGifts ? (
+                <div className="flex gap-1 rounded-full bg-secondary p-1">
+                  <button
+                    type="button"
+                    onClick={() => setTab("reactions")}
+                    className={cn(
+                      "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
+                      tab === "reactions" ? "bg-primary text-primary-foreground" : "text-muted-foreground",
+                    )}
+                  >
+                    Reactions
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTab("gifts")}
+                    className={cn(
+                      "flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold transition-colors",
+                      tab === "gifts" ? "bg-primary text-primary-foreground" : "text-muted-foreground",
+                    )}
+                  >
+                    <Gift className="size-3.5" /> Gifts
+                  </button>
+                </div>
+              ) : (
+                <span className="text-sm font-semibold text-foreground">Send a reaction</span>
+              )}
               <button
                 type="button"
                 onClick={() => setOpen(false)}
@@ -164,7 +171,7 @@ export function ReactionPicker({
               </button>
             </div>
 
-            {tab === "reactions" ? (
+            {!showGifts || tab === "reactions" ? (
               <div className="grid grid-cols-6 gap-2">
                 {QUICK_REACTIONS.map((emoji) => (
                   <button

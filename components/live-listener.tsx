@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import {
   Check,
   Loader2,
+  Lock,
   MessageSquare,
   Mic,
   MicOff,
@@ -70,14 +71,14 @@ function DockButton({
       aria-label={label}
       aria-pressed={active}
       className={cn(
-        "flex size-11 items-center justify-center rounded-full transition-colors disabled:opacity-50",
+        "flex size-11 items-center justify-center rounded-full ring-1 ring-inset ring-white/10 backdrop-blur-md transition-all hover:scale-105 active:scale-95 disabled:opacity-50",
         tone === "danger"
-          ? "bg-destructive/10 text-destructive hover:bg-destructive/20"
+          ? "bg-destructive/20 text-destructive-foreground ring-destructive/40 hover:bg-destructive/30"
           : active && tone === "live"
-            ? "bg-live/15 text-live"
+            ? "bg-live/20 text-live ring-live/40"
             : active
-              ? "bg-primary text-primary-foreground"
-              : "bg-secondary text-foreground hover:bg-secondary/80",
+              ? "bg-primary text-primary-foreground ring-transparent"
+              : "bg-white/10 text-white hover:bg-white/20",
       )}
     >
       {children}
@@ -113,6 +114,7 @@ export function LiveListener({
   const [myStatus, setMyStatus] = useState<CallRequestView["status"] | null>(null)
   const [myInvite, setMyInvite] = useState<CallRequestView | null>(null)
   const [declinedFlash, setDeclinedFlash] = useState(false)
+  const [locked, setLocked] = useState<boolean>(stream.locked ?? false)
   const prevStatus = useRef<CallRequestView["status"] | null>(null)
 
   async function join() {
@@ -161,6 +163,7 @@ export function LiveListener({
         return
       }
       setMyInvite(s.myInvite)
+      setLocked(s.locked)
       // Flash a "declined" toast when status transitions to declined.
       if (s.myStatus === "declined" && prevStatus.current && prevStatus.current !== "declined") {
         setDeclinedFlash(true)
@@ -244,28 +247,37 @@ export function LiveListener({
   }
 
   return (
-    <div className="relative flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-card">
-      {/* ───────── Broadcast header: cover art + live + title + stats ───────── */}
-      <header className="relative flex items-center gap-3 overflow-hidden border-b border-border/60 px-4 py-3">
-        {stream.cover && (
-          <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={stream.cover || "/placeholder.svg"}
-              alt=""
-              aria-hidden="true"
-              className="absolute inset-0 size-full object-cover opacity-15 blur-2xl"
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-card via-card/80 to-card" />
-          </>
-        )}
+    <div className="relative flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 text-white shadow-2xl">
+      {/* Drifting aurora backdrop tinted from the cover art for an immersive room. */}
+      <div
+        aria-hidden="true"
+        className="stage-aurora pointer-events-none absolute inset-0 opacity-70"
+        style={{
+          background:
+            "radial-gradient(70% 55% at 20% 0%, color-mix(in oklch, var(--primary) 45%, transparent), transparent 60%), radial-gradient(60% 50% at 90% 20%, color-mix(in oklch, var(--call-accept) 30%, transparent), transparent 55%), radial-gradient(80% 60% at 50% 100%, color-mix(in oklch, var(--primary) 25%, transparent), transparent 60%)",
+        }}
+      />
+      {stream.cover && (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={stream.cover || "/placeholder.svg"}
+            alt=""
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 size-full object-cover opacity-15 blur-3xl"
+          />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-zinc-950/60 via-zinc-950/40 to-zinc-950/85" />
+        </>
+      )}
 
-        <span className="relative size-12 shrink-0 overflow-hidden rounded-xl bg-secondary ring-1 ring-border/50">
+      {/* ───────── Broadcast header: cover art + live + title + stats ───────── */}
+      <header className="relative flex items-center gap-3 overflow-hidden border-b border-white/10 px-4 py-3 backdrop-blur-xl">
+        <span className="relative size-12 shrink-0 overflow-hidden rounded-xl bg-white/10 ring-1 ring-white/15">
           {stream.cover ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={stream.cover || "/placeholder.svg"} alt="Cover art" className="size-full object-cover" />
           ) : (
-            <span className="flex size-full items-center justify-center text-muted-foreground">
+            <span className="flex size-full items-center justify-center text-white/60">
               <Radio className="size-5" />
             </span>
           )}
@@ -275,42 +287,29 @@ export function LiveListener({
           <div className="flex items-center gap-2">
             <LiveBadge />
             {state.connected && (
-              <span className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+              <span className="flex items-center gap-1 text-[11px] font-medium text-white/60">
                 <QualityIcon quality={state.connectionQuality} />
                 <span className="capitalize">{state.connectionQuality !== "unknown" ? state.connectionQuality : ""}</span>
               </span>
             )}
           </div>
-          <h1 className="mt-0.5 truncate text-sm font-semibold leading-tight">{stream.title}</h1>
-          <p className="truncate text-xs text-muted-foreground">with {stream.hostName}</p>
+          <h1 className="mt-0.5 truncate text-sm font-semibold leading-tight text-white">{stream.title}</h1>
+          <p className="truncate text-xs text-white/60">with {stream.hostName}</p>
         </div>
 
         <div className="relative flex shrink-0 flex-col items-end gap-1">
-          <span className="flex items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-muted-foreground">
+          <span className="flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-xs font-medium text-white/80 ring-1 ring-inset ring-white/10">
             <Users className="size-3" /> {audience.toLocaleString()}
           </span>
           {state.connected && (
-            <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{formatElapsed(elapsed)}</span>
+            <span className="font-mono text-[11px] tabular-nums text-white/50">{formatElapsed(elapsed)}</span>
           )}
         </div>
       </header>
 
       {/* ───────────────────────── Speaker stage ───────────────────────── */}
-      <div className="relative flex flex-col gap-4 px-4 py-5 sm:px-6">
-        {stream.cover && (
-          <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={stream.cover || "/placeholder.svg"}
-              alt=""
-              aria-hidden="true"
-              className="absolute inset-0 size-full object-cover opacity-10 blur-3xl"
-            />
-            <div className="absolute inset-0 bg-gradient-to-b from-background/30 to-card" />
-          </>
-        )}
-
-        {/* Floating reactions + gifts drift up over the stage. */}
+      <div className="relative flex flex-col gap-4 px-4 py-6 sm:px-6 sm:py-8">
+        {/* Floating reactions drift up over the stage. */}
         <ReactionLayer roomName={state.connected ? stream.roomName : undefined} />
 
         <div className="relative">
@@ -320,7 +319,7 @@ export function LiveListener({
             activeSpeakers={state.activeSpeakers}
             hostColorById={colorById}
             isHost={false}
-            canRequestCall={canListen && !isOnStage && myStatus !== "pending"}
+            canRequestCall={canListen && !isOnStage && !locked && myStatus !== "pending"}
             callPending={myStatus === "pending"}
             onRequestCall={handleRequestCall}
           />
@@ -339,8 +338,8 @@ export function LiveListener({
 
         {/* Invite from the host to come on stage. */}
         {myInvite && !isOnStage && (
-          <div className="relative flex w-full items-center justify-between gap-3 rounded-xl border border-live/40 bg-live/5 px-3 py-2.5">
-            <p className="text-sm font-medium text-pretty">The host invited you to join as a guest.</p>
+          <div className="relative flex w-full items-center justify-between gap-3 rounded-xl border border-live/40 bg-live/10 px-3 py-2.5 backdrop-blur-md">
+            <p className="text-sm font-medium text-pretty text-white">The host invited you to join as a guest.</p>
             <div className="flex shrink-0 items-center gap-2">
               <button
                 onClick={acceptInvite}
@@ -350,7 +349,7 @@ export function LiveListener({
               </button>
               <button
                 onClick={declineInvite}
-                className="flex size-7 items-center justify-center rounded-full bg-secondary text-muted-foreground"
+                className="flex size-7 items-center justify-center rounded-full bg-white/10 text-white/70 ring-1 ring-inset ring-white/10"
                 aria-label="Decline invite"
               >
                 <X className="size-3.5" />
@@ -360,28 +359,28 @@ export function LiveListener({
         )}
 
         {declinedFlash && (
-          <p className="relative mx-auto rounded-full bg-secondary px-3 py-1.5 text-xs text-muted-foreground">
+          <p className="relative mx-auto rounded-full bg-white/10 px-3 py-1.5 text-xs text-white/70 ring-1 ring-inset ring-white/10 backdrop-blur-md">
             The host declined your request to join.
           </p>
         )}
 
         {/* Audience section */}
-        <LiveAudience count={audience} className="relative" />
+        <LiveAudience count={audience} glass className="relative" />
       </div>
 
       {/* ─────────────────────────── Guest dock ─────────────────────────── */}
-      <div className="border-t border-border/60 bg-card px-4 py-3">
+      <div className="relative border-t border-white/10 px-4 py-3 backdrop-blur-xl">
         {!canListen ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-white/70">
             <Link href="/sign-in" className="font-medium text-primary hover:underline">
               Sign in
             </Link>{" "}
             to listen to this live stream.
           </p>
         ) : ended ? (
-          <p className="text-sm text-muted-foreground">{error ?? "This stream has ended."}</p>
+          <p className="text-sm text-white/70">{error ?? "This stream has ended."}</p>
         ) : state.connecting || joining ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 text-sm text-white/70">
             <Loader2 className="size-4 animate-spin" /> Connecting to the live audio…
           </div>
         ) : !state.connected ? (
@@ -426,19 +425,19 @@ export function LiveListener({
                     {muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
                   </DockButton>
                   {myStatus === "pending" ? (
-                    <span className="ml-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span className="ml-1 flex items-center gap-1.5 text-xs text-white/70">
                       <Mic className="size-3.5 animate-pulse" /> Waiting for host…
                     </span>
                   ) : (
-                    <span className="ml-1 hidden text-xs text-muted-foreground sm:inline">Listening live</span>
+                    <span className="ml-1 hidden text-xs text-white/60 sm:inline">Listening live</span>
                   )}
                 </>
               )}
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Send reactions + virtual gifts to the whole room. */}
-              <ReactionPicker roomName={stream.roomName} />
+              {/* Audio live uses emoji reactions only (no virtual gifts). */}
+              <ReactionPicker roomName={stream.roomName} showGifts={false} />
               {/* Jump to chat (mobile: chat lives below the fold). */}
               <a href="#live-chat" className="sm:hidden">
                 <DockButton label="Open chat">
@@ -448,14 +447,20 @@ export function LiveListener({
               <DockButton label="Share room" onClick={() => setShareOpen(true)}>
                 <Share2 className="size-5" />
               </DockButton>
-              {!isOnStage && myStatus !== "pending" && (
-                <button
-                  onClick={handleRequestCall}
-                  className="flex items-center gap-1.5 rounded-full bg-call-accept/15 px-3 py-2 text-xs font-semibold text-call-accept transition-colors hover:bg-call-accept/25"
-                >
-                  <Mic className="size-4" /> Request to speak
-                </button>
-              )}
+              {!isOnStage &&
+                myStatus !== "pending" &&
+                (locked ? (
+                  <span className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-2 text-xs font-semibold text-white/60 ring-1 ring-inset ring-white/10">
+                    <Lock className="size-4" /> Stage locked
+                  </span>
+                ) : (
+                  <button
+                    onClick={handleRequestCall}
+                    className="flex items-center gap-1.5 rounded-full bg-call-accept/15 px-3 py-2 text-xs font-semibold text-call-accept transition-colors hover:bg-call-accept/25"
+                  >
+                    <Mic className="size-4" /> Request to speak
+                  </button>
+                ))}
             </div>
           </div>
         )}

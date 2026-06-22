@@ -10,13 +10,16 @@ import { getHandle, getAvatarColor, getInitials } from "@/lib/identity"
 import { createAccessToken, isLiveKitConfigured, LIVEKIT_URL, setParticipantPublish } from "@/lib/livekit"
 import { notifyFollowers } from "@/app/actions/notifications"
 
-const MAX_GUESTS = 3
+// Host + up to 11 guests = 12 on stage.
+const MAX_GUESTS = 11
 
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) throw new Error("You must be signed in to do that.")
   return session.user
 }
+
+export type LiveMode = "audio" | "video"
 
 export type LiveStreamView = {
   id: number
@@ -27,6 +30,9 @@ export type LiveStreamView = {
   title: string
   category: string | null
   cover: string | null
+  mode: LiveMode
+  locked?: boolean
+  pinnedChatId?: number | null
   chatBgUrl?: string | null
   chatBgEffect?: ChatBgEffect
   startedAt: string
@@ -45,11 +51,13 @@ export async function startBroadcast(input: {
   title: string
   category?: string
   cover?: string | null
+  mode?: LiveMode
 }): Promise<GoLiveResult> {
   const user = await requireUser()
   if (!isLiveKitConfigured()) {
-    return { ok: false, error: "Live audio is not configured yet. Add your LiveKit credentials to start broadcasting." }
+    return { ok: false, error: "Live is not configured yet. Add your LiveKit credentials to start broadcasting." }
   }
+  const mode: LiveMode = input.mode === "video" ? "video" : "audio"
 
   const title = input.title.trim() || `${user.name} — live`
   // Deterministic, unique room name per host session.
@@ -69,6 +77,7 @@ export async function startBroadcast(input: {
     title,
     category: input.category?.trim() || null,
     cover: input.cover ?? null,
+    mode,
     status: "live",
   })
 
@@ -144,6 +153,7 @@ export async function getLiveStreams(): Promise<LiveStreamView[]> {
     title: r.title,
     category: r.category,
     cover: r.cover,
+    mode: (r.mode as LiveMode) ?? "audio",
     startedAt: r.startedAt.toISOString(),
   }))
 }
@@ -271,6 +281,9 @@ export async function getLiveStream(roomName: string): Promise<LiveStreamView | 
     title: r.title,
     category: r.category,
     cover: r.cover,
+    mode: (r.mode as LiveMode) ?? "audio",
+    locked: r.locked ?? false,
+    pinnedChatId: r.pinnedChatId ?? null,
     chatBgUrl: r.chatBgUrl,
     chatBgEffect: (r.chatBgEffect as ChatBgEffect) ?? "none",
     startedAt: r.startedAt.toISOString(),
@@ -318,6 +331,12 @@ async function acceptedGuestCount(roomName: string): Promise<number> {
 /** Listener asks to come on as a guest. */
 export async function requestToJoin(input: { roomName: string }): Promise<{ ok: boolean; error?: string }> {
   const user = await requireUser()
+  // Honor a host-locked stage: no new requests to speak.
+  const [s] = await db
+    .select({ locked: liveStream.locked })
+    .from(liveStream)
+    .where(eq(liveStream.roomName, input.roomName))
+  if (s?.locked) return { ok: false, error: "The host has locked the stage." }
   // Clear any prior resolved row for this user so they can re-request.
   await db
     .delete(liveCallRequest)
@@ -377,7 +396,7 @@ export async function respondToCallRequest(input: {
 
   if (input.accept) {
     if ((await acceptedGuestCount(req.roomName)) >= MAX_GUESTS) {
-      return { ok: false, error: "All 3 guest spots are full." }
+      return { ok: false, error: `All ${MAX_GUESTS} guest spots are full.` }
     }
     await setParticipantPublish({ roomName: req.roomName, identity: req.userId, canPublish: true })
     await db
@@ -423,6 +442,8 @@ export async function getCallState(input: { roomName: string }): Promise<{
   myStatus: CallRequestView["status"] | null
   chatBgUrl: string | null
   chatBgEffect: ChatBgEffect
+  locked: boolean
+  pinnedChatId: number | null
   // True once the host has ended the broadcast — lets listeners auto-close.
   ended: boolean
 }> {
@@ -430,7 +451,13 @@ export async function getCallState(input: { roomName: string }): Promise<{
   const me = session?.user?.id ?? null
 
   const [stream] = await db
-    .select({ chatBgUrl: liveStream.chatBgUrl, chatBgEffect: liveStream.chatBgEffect, status: liveStream.status })
+    .select({
+      chatBgUrl: liveStream.chatBgUrl,
+      chatBgEffect: liveStream.chatBgEffect,
+      status: liveStream.status,
+      locked: liveStream.locked,
+      pinnedChatId: liveStream.pinnedChatId,
+    })
     .from(liveStream)
     .where(eq(liveStream.roomName, input.roomName))
 
@@ -453,6 +480,8 @@ export async function getCallState(input: { roomName: string }): Promise<{
     myStatus: mine ? (mine.status as CallRequestView["status"]) : null,
     chatBgUrl: stream?.chatBgUrl ?? null,
     chatBgEffect: (stream?.chatBgEffect as ChatBgEffect) ?? "none",
+    locked: stream?.locked ?? false,
+    pinnedChatId: stream?.pinnedChatId ?? null,
     // No row, or row flipped to "ended", both mean the session is over.
     ended: !stream || stream.status !== "live",
   }
@@ -473,4 +502,22 @@ export async function setChatBackground(input: {
   if (input.url !== undefined) patch.chatBgUrl = input.url
   if (input.effect !== undefined) patch.chatBgEffect = input.effect
   await db.update(liveStream).set(patch).where(eq(liveStream.roomName, input.roomName))
+}
+
+// --- Host stage controls: lock & pinned comment ----------------------------
+
+/** Host locks/unlocks the stage. While locked, no new requests to speak are accepted. */
+export async function setRoomLock(input: { roomName: string; locked: boolean }): Promise<{ ok: boolean }> {
+  const user = await requireUser()
+  if ((await getHostId(input.roomName)) !== user.id) throw new Error("Only the host can lock the stage.")
+  await db.update(liveStream).set({ locked: input.locked }).where(eq(liveStream.roomName, input.roomName))
+  return { ok: true }
+}
+
+/** Host pins (or unpins, with chatId=null) a chat message to the top of the room. */
+export async function pinLiveChat(input: { roomName: string; chatId: number | null }): Promise<{ ok: boolean }> {
+  const user = await requireUser()
+  if ((await getHostId(input.roomName)) !== user.id) throw new Error("Only the host can pin a comment.")
+  await db.update(liveStream).set({ pinnedChatId: input.chatId }).where(eq(liveStream.roomName, input.roomName))
+  return { ok: true }
 }
