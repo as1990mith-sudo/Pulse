@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils"
 import { getInitials } from "@/lib/identity"
 import type { ConnQuality, LiveParticipant } from "@/lib/use-live-audio"
 
-// Host + up to 7 guests = 8 tiles on stage, shown as a tidy 2-col × 4-row grid.
+// Host + up to 7 guests = 8 tiles on stage, shown as a compact 4-col × 2-row grid.
 export const MAX_GUESTS = 7
 
 export type StageHost = {
@@ -100,11 +100,11 @@ export function LiveStage({
   const guests = speakers.filter((s) => s.identity !== host.id).slice(0, MAX_GUESTS)
   const hostLive = speakers.find((s) => s.identity === host.id)
   // Fill the remaining guest seats (up to 7) with open slots so the grid always
-  // reads as a neat 2 × 4 layout.
+  // reads as a neat 4 × 2 layout.
   const emptySlots = Math.max(0, MAX_GUESTS - guests.length)
 
   return (
-    <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-x-3 gap-y-5 sm:gap-x-5">
+    <div className="mx-auto grid w-full max-w-lg grid-cols-4 gap-x-2 gap-y-3 sm:gap-x-3">
       {/* Host tile — first slot, audio-reactive, crowned. */}
       <StageTile
         slot={{
@@ -161,7 +161,7 @@ function StageTile({
   return (
     <div
       className={cn(
-        "flex flex-col items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-2 py-4 backdrop-blur-md transition-colors",
+        "flex flex-col items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-1 py-3 backdrop-blur-md transition-colors",
         slot.isSpeaking && "border-call-accept/40 bg-call-accept/5",
         !isHost && "speaker-in",
       )}
@@ -188,7 +188,7 @@ function StageTile({
 
         <span
           className={cn(
-            "relative z-10 flex size-16 items-center justify-center rounded-full text-lg font-semibold transition-all duration-300 sm:size-[4.5rem]",
+            "relative z-10 flex size-12 items-center justify-center rounded-full text-sm font-semibold transition-all duration-300 sm:size-14 sm:text-base",
             slot.color,
             slot.isSpeaking
               ? "ring-[3px] ring-call-accept ring-offset-2 ring-offset-zinc-950 shadow-lg shadow-call-accept/20"
@@ -214,12 +214,12 @@ function StageTile({
         {/* Mic status pill (bottom-right). */}
         <span
           className={cn(
-            "absolute -bottom-0.5 -right-0.5 z-20 flex size-6 items-center justify-center rounded-full border-2 border-zinc-950",
+            "absolute -bottom-0.5 -right-0.5 z-20 flex size-5 items-center justify-center rounded-full border-2 border-zinc-950",
             slot.muted ? "bg-muted-foreground" : "bg-call-accept",
           )}
           aria-hidden="true"
         >
-          {slot.muted ? <MicOff className="size-3 text-background" /> : <Mic className="size-3 text-background" />}
+          {slot.muted ? <MicOff className="size-2.5 text-background" /> : <Mic className="size-2.5 text-background" />}
         </span>
 
         {onRemove && (
@@ -234,15 +234,15 @@ function StageTile({
         )}
       </div>
 
-      <div className="flex max-w-full items-center gap-1">
-        <span className="max-w-[6rem] truncate text-center text-sm font-medium text-white">
+      <div className="flex max-w-full items-center gap-0.5">
+        <span className="max-w-[4.5rem] truncate text-center text-xs font-medium text-white">
           {slot.isLocal ? "You" : slot.name}
         </span>
         {slot.isSpeaking && <SpeakingEq />}
       </div>
       <span
         className={cn(
-          "rounded-full px-1.5 text-[10px] font-medium uppercase tracking-wide",
+          "rounded-full px-1.5 text-[9px] font-medium uppercase tracking-wide",
           isHost ? "bg-primary/15 text-primary" : "text-white/50",
         )}
       >
@@ -262,23 +262,23 @@ function EmptySlot({
   onRequestCall?: () => void
 }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-white/10 px-2 py-4">
+    <div className="flex flex-col items-center gap-1.5 rounded-xl border border-dashed border-white/10 px-1 py-3">
       <button
         type="button"
         disabled={!canRequestCall || callPending}
         onClick={onRequestCall}
         aria-label={canRequestCall ? "Request to join as a guest" : "Empty guest seat"}
         className={cn(
-          "flex size-16 items-center justify-center rounded-full border-2 border-dashed border-white/15 text-white/40 transition-colors sm:size-[4.5rem]",
+          "flex size-12 items-center justify-center rounded-full border-2 border-dashed border-white/15 text-white/40 transition-colors sm:size-14",
           canRequestCall && !callPending && "hover:border-call-accept hover:text-call-accept",
         )}
       >
-        {canRequestCall ? <Phone className="size-5" /> : <Plus className="size-5" />}
+        {canRequestCall ? <Phone className="size-4" /> : <Plus className="size-4" />}
       </button>
-      <span className="max-w-[6rem] truncate text-center text-sm font-medium text-white/50">
+      <span className="max-w-[4.5rem] truncate text-center text-xs font-medium text-white/50">
         {callPending ? "Requested" : canRequestCall ? "Call in" : "Open"}
       </span>
-      <span className="text-[10px] uppercase tracking-wide text-white/30">Guest</span>
+      <span className="text-[9px] uppercase tracking-wide text-white/30">Guest</span>
     </div>
   )
 }
