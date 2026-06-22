@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, useTransition } from "react"
+import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 import useSWR, { mutate as globalMutate } from "swr"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -60,6 +60,30 @@ import { cn } from "@/lib/utils"
 
 type DraftMedia = { url: string; type: "image" | "video" }
 
+// Tiny seeded PRNG (mulberry32) so a given seed always yields the same order.
+// This keeps the "For you" shuffle stable across SWR polls within a session
+// while producing a brand-new order each time the app is loaded or reopened.
+function mulberry32(seed: number): () => number {
+  return () => {
+    seed |= 0
+    seed = (seed + 0x6d2b79f5) | 0
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+/** Returns a new array shuffled deterministically from `seed` (Fisher–Yates). */
+function seededShuffle<T>(arr: T[], seed: number): T[] {
+  const out = [...arr]
+  const rand = mulberry32(seed)
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1))
+    ;[out[i], out[j]] = [out[j], out[i]]
+  }
+  return out
+}
+
 // Maps a feed comment into the shared CommentThread shape.
 function toThreadComment(c: FeedCommentView): ThreadComment {
   return {
@@ -105,8 +129,20 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
   })
   const allPosts = livePosts ?? posts
 
-  const followingCount = allPosts.filter((p) => p.isFollowing).length
-  const visiblePosts = tab === "following" ? allPosts.filter((p) => p.isFollowing) : allPosts
+  // A fresh shuffle seed is created once per mount, so the "For you" order is
+  // randomized every time the app is refreshed or closed and reopened, yet
+  // stays stable while the user keeps scrolling (the 5s SWR polls reuse it).
+  const [shuffleSeed] = useState(() => (Math.random() * 0x7fffffff) | 0)
+
+  // "For you" → shuffled per session. "Following" → strict newest-first.
+  const forYouPosts = useMemo(() => seededShuffle(allPosts, shuffleSeed), [allPosts, shuffleSeed])
+  const followingPosts = useMemo(
+    () => allPosts.filter((p) => p.isFollowing).sort((a, b) => b.createdAtMs - a.createdAtMs),
+    [allPosts],
+  )
+
+  const followingCount = followingPosts.length
+  const visiblePosts = tab === "following" ? followingPosts : forYouPosts
 
   // Deep link support: when arriving with ?post=<id> (e.g. from a shared link),
   // make sure that post is in view, scroll to it, and briefly highlight it so
