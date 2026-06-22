@@ -150,16 +150,23 @@ export function VideoStudioConsole({ currentUser }: { currentUser: CurrentUser }
     // Release the preview camera so LiveKit can claim the device.
     previewStreamRef.current?.getTracks().forEach((t) => t.stop())
     previewStreamRef.current = null
-    const res = await startBroadcast({ title: title.trim() || `${currentUser.name} — live`, mode: "video" })
-    setStarting(false)
-    if (!res.ok) {
-      setError(res.error)
-      return
+    try {
+      const res = await startBroadcast({ title: title.trim() || `${currentUser.name} — live`, mode: "video" })
+      if (!res.ok) {
+        setError(res.error)
+        return
+      }
+      setRoomName(res.roomName)
+      setCreds({ token: res.token, serverUrl: res.serverUrl })
+      startedAtRef.current = null
+      setElapsed(0)
+    } catch {
+      // A thrown server action (auth/network) must not strand the button on
+      // a permanent "Starting…" spinner.
+      setError("Something went wrong starting your live. Please try again.")
+    } finally {
+      setStarting(false)
     }
-    setRoomName(res.roomName)
-    setCreds({ token: res.token, serverUrl: res.serverUrl })
-    startedAtRef.current = null
-    setElapsed(0)
   }
 
   async function endLive() {
@@ -199,16 +206,39 @@ export function VideoStudioConsole({ currentUser }: { currentUser: CurrentUser }
 
       {/* Camera-off / connecting wash */}
       {live && (!camOn || !connected) && (
-        <div className="absolute inset-0 flex items-center justify-center bg-neutral-950">
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-neutral-950 px-6">
           {!connected ? (
-            <div className="flex flex-col items-center gap-3 text-white/70">
-              <Loader2 className="size-7 animate-spin" />
-              <p className="text-sm font-medium">Going live…</p>
-            </div>
+            rtcError ? (
+              // Connection failed/timed out — never leave the host on a black spinner.
+              <div className="flex max-w-sm flex-col items-center gap-3 text-center text-white/80">
+                <VideoOff className="size-8 text-destructive" />
+                <p className="text-sm font-medium text-pretty">{rtcError}</p>
+                <button
+                  type="button"
+                  onClick={endLive}
+                  className="mt-1 rounded-full bg-white/10 px-5 py-2 text-sm font-semibold text-white ring-1 ring-inset ring-white/15 transition-colors hover:bg-white/20"
+                >
+                  Go back
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-3 text-white/70">
+                <Loader2 className="size-7 animate-spin" />
+                <p className="text-sm font-medium">Going live…</p>
+                <button
+                  type="button"
+                  onClick={endLive}
+                  className="mt-1 text-xs font-medium text-white/50 underline-offset-4 transition-colors hover:text-white/80 hover:underline"
+                >
+                  Cancel
+                </button>
+              </div>
+            )
           ) : (
             <div className="flex flex-col items-center gap-2 text-white/60">
               <VideoOff className="size-8" />
               <p className="text-sm font-medium">Camera off</p>
+              {rtcError && <p className="max-w-xs text-center text-xs text-white/45 text-pretty">{rtcError}</p>}
             </div>
           )}
         </div>
