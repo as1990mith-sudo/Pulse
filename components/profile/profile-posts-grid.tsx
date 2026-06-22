@@ -116,10 +116,11 @@ function PostsViewer({
   onClose: () => void
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
-  const itemRefs = useRef<(HTMLDivElement | null)[]>([])
+  const itemRefs = useRef<(HTMLLIElement | null)[]>([])
   const [active, setActive] = useState(startIndex)
 
-  // Lock background scroll and jump to the chosen post on open.
+  // Lock background scroll and jump straight to the tapped post on open (no
+  // smooth animation so it lands instantly, just like opening the feed there).
   useEffect(() => {
     document.body.style.overflow = "hidden"
     const target = itemRefs.current[startIndex]
@@ -130,23 +131,28 @@ function PostsViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Track which post is centered for the header counter.
+  // Track the topmost post in view for the header counter. A continuous feed
+  // (rather than rigid one-post-per-screen paging) means several posts can be
+  // partially visible, so we pick whichever sits closest to the top edge.
   useEffect(() => {
     const root = scrollRef.current
     if (!root) return
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            const idx = itemRefs.current.findIndex((el) => el === entry.target)
-            if (idx >= 0) setActive(idx)
-          }
+    const onScroll = () => {
+      const top = root.getBoundingClientRect().top
+      let best = 0
+      let bestDist = Number.POSITIVE_INFINITY
+      itemRefs.current.forEach((el, i) => {
+        if (!el) return
+        const dist = Math.abs(el.getBoundingClientRect().top - top)
+        if (dist < bestDist) {
+          bestDist = dist
+          best = i
         }
-      },
-      { root, threshold: 0.6 },
-    )
-    for (const el of itemRefs.current) if (el) observer.observe(el)
-    return () => observer.disconnect()
+      })
+      setActive(best)
+    }
+    root.addEventListener("scroll", onScroll, { passive: true })
+    return () => root.removeEventListener("scroll", onScroll)
   }, [])
 
   // Close on Escape.
@@ -161,7 +167,7 @@ function PostsViewer({
   if (typeof document === "undefined") return null
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex flex-col bg-background/95 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex flex-col bg-background">
       <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
         <p className="text-sm font-medium text-muted-foreground tabular-nums">
           {active + 1} / {posts.length}
@@ -176,25 +182,21 @@ function PostsViewer({
         </button>
       </div>
 
-      <div
-        ref={scrollRef}
-        className="flex-1 snap-y snap-mandatory overflow-y-auto overscroll-contain"
-      >
-        {posts.map((post, i) => (
-          <div
-            key={post.id}
-            ref={(el) => {
-              itemRefs.current[i] = el
-            }}
-            className={cn(
-              "flex min-h-full snap-start items-start justify-center px-4 py-6",
-            )}
-          >
-            <div className="w-full max-w-xl">
-              <PostCard post={post} currentUser={currentUser} />
-            </div>
-          </div>
-        ))}
+      {/* Continuous, edge-to-edge feed — identical presentation to the main
+          post tab, so scrolling flows naturally from one post to the next. */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain">
+        <ul className="mx-auto w-full max-w-xl divide-y divide-border/60">
+          {posts.map((post, i) => (
+            <li
+              key={post.id}
+              ref={(el) => {
+                itemRefs.current[i] = el
+              }}
+            >
+              <PostCard post={post} currentUser={currentUser} variant="feed" />
+            </li>
+          ))}
+        </ul>
       </div>
     </div>,
     document.body,

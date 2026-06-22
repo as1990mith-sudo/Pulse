@@ -933,9 +933,9 @@ export function StatusViewer({
           )}
         </div>
 
-        {/* Caption for media items */}
+        {/* Caption for media items — sits just above the reply bar */}
         {!isText && item.caption && (
-          <div className="pointer-events-none absolute bottom-24 left-0 right-0 z-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-6 pb-10 pt-12">
+          <div className="pointer-events-none absolute bottom-16 left-0 right-0 z-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-6 pb-3 pt-12">
             <p className="text-balance text-center text-lg font-medium leading-relaxed tracking-tight text-white drop-shadow-md sm:text-xl">
               {item.caption}
             </p>
