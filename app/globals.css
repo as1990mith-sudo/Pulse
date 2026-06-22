@@ -132,36 +132,38 @@
   --sidebar-border: oklch(0.2 0.01 285 / 12%);
 }
 
-/* Mid mode — a muted slate between light and dark */
+/* Mid mode — translucent panels floating over a soft twilight gradient.
+   Distinct from Transparent (which frosts over a photo backdrop): here the
+   surfaces are tinted glass over an in-app indigo→blue→teal gradient. */
 .theme-mid {
   color-scheme: dark;
-  --background: oklch(0.3 0.01 285);
-  --foreground: oklch(0.98 0.002 285);
-  --card: oklch(0.34 0.012 285);
-  --card-foreground: oklch(0.98 0.002 285);
-  --popover: oklch(0.34 0.012 285);
-  --popover-foreground: oklch(0.98 0.002 285);
-  --popover-solid: oklch(0.3 0.022 255);
+  --background: oklch(0.26 0.03 265 / 55%);
+  --foreground: oklch(0.99 0.002 285);
+  --card: oklch(0.72 0.05 250 / 16%);
+  --card-foreground: oklch(0.99 0.002 285);
+  --popover: oklch(0.26 0.04 265 / 86%);
+  --popover-foreground: oklch(0.99 0.002 285);
+  --popover-solid: oklch(0.28 0.04 262);
   --primary: oklch(0.74 0.18 55);
   --primary-foreground: oklch(0.99 0.005 60);
-  --secondary: oklch(0.39 0.013 285);
-  --secondary-foreground: oklch(0.98 0.002 285);
-  --muted: oklch(0.39 0.013 285);
-  --muted-foreground: oklch(0.82 0.006 285);
-  --accent: oklch(0.39 0.013 285);
-  --accent-foreground: oklch(0.98 0.002 285);
+  --secondary: oklch(0.78 0.04 250 / 18%);
+  --secondary-foreground: oklch(0.99 0.002 285);
+  --muted: oklch(0.78 0.04 250 / 13%);
+  --muted-foreground: oklch(0.9 0.01 270);
+  --accent: oklch(0.78 0.05 250 / 20%);
+  --accent-foreground: oklch(0.99 0.002 285);
   --destructive: oklch(0.68 0.21 24);
-  --border: oklch(1 0 0 / 16%);
-  --input: oklch(1 0 0 / 20%);
+  --border: oklch(1 0 0 / 18%);
+  --input: oklch(1 0 0 / 22%);
   --ring: oklch(0.74 0.18 55);
   --live: oklch(0.68 0.21 24);
   --live-foreground: oklch(0.99 0.005 60);
-  --chart-5: oklch(0.82 0.006 285);
-  --sidebar: oklch(0.32 0.011 285);
-  --sidebar-foreground: oklch(0.98 0.002 285);
-  --sidebar-accent: oklch(0.39 0.013 285);
-  --sidebar-accent-foreground: oklch(0.98 0.002 285);
-  --sidebar-border: oklch(1 0 0 / 16%);
+  --chart-5: oklch(0.9 0.01 270);
+  --sidebar: oklch(0.26 0.03 265 / 55%);
+  --sidebar-foreground: oklch(0.99 0.002 285);
+  --sidebar-accent: oklch(0.78 0.04 250 / 18%);
+  --sidebar-accent-foreground: oklch(0.99 0.002 285);
+  --sidebar-border: oklch(1 0 0 / 18%);
   }
 
 /* Transparent mode — frosted glass over an ambient backdrop */
@@ -223,25 +225,15 @@
   --skin-ring: linear-gradient(to top right, oklch(0.7 0.15 158), oklch(0.596 0.145 163.225), oklch(0.6 0.13 185));
 }
 
-[data-skin="blue"] {
-  --primary: oklch(0.62 0.16 250);
-  --primary-foreground: oklch(0.99 0.01 250);
-  --ring: oklch(0.62 0.16 250);
-  --sidebar-primary: oklch(0.62 0.16 250);
-  --sidebar-ring: oklch(0.62 0.16 250);
-  --chart-1: oklch(0.62 0.16 250);
-  --skin-ring: linear-gradient(to top right, oklch(0.74 0.14 220), oklch(0.6 0.17 255), oklch(0.62 0.16 292));
-}
-
-/* "Red" — bold red accent for buttons/links, with a warm red status ring. */
-[data-skin="red"] {
-  --primary: oklch(0.58 0.22 27);
-  --primary-foreground: oklch(0.99 0.01 25);
-  --ring: oklch(0.58 0.22 27);
-  --sidebar-primary: oklch(0.58 0.22 27);
-  --sidebar-ring: oklch(0.58 0.22 27);
-  --chart-1: oklch(0.58 0.22 27);
-  --skin-ring: linear-gradient(to top right, oklch(0.7 0.19 35), oklch(0.58 0.22 27), oklch(0.55 0.22 12));
+/* "Aurora" — a luminous northern-lights accent: green→teal→indigo. */
+[data-skin="aurora"] {
+  --primary: oklch(0.72 0.15 178);
+  --primary-foreground: oklch(0.99 0.01 180);
+  --ring: oklch(0.72 0.15 178);
+  --sidebar-primary: oklch(0.72 0.15 178);
+  --sidebar-ring: oklch(0.72 0.15 178);
+  --chart-1: oklch(0.72 0.15 178);
+  --skin-ring: linear-gradient(to top right, oklch(0.78 0.18 152), oklch(0.72 0.15 195), oklch(0.64 0.16 285));
 }
 
 .theme-transparent body {
@@ -260,62 +252,23 @@
   -webkit-backdrop-filter: blur(16px) saturate(150%);
 }
 
-/* Mid mode — cool wintry canvas with animated falling snow effect */
+/* Mid mode — a soft twilight gradient canvas (indigo → blue → teal) that the
+   translucent panels float over. */
 .theme-mid body {
-  background-color: oklch(0.3 0.02 255);
-  background-image: linear-gradient(180deg, oklch(0.36 0.028 245), oklch(0.25 0.022 262));
+  background-color: oklch(0.22 0.03 265);
+  background-image: linear-gradient(
+    155deg,
+    oklch(0.4 0.09 285),
+    oklch(0.33 0.08 250) 50%,
+    oklch(0.32 0.07 200)
+  );
   background-attachment: fixed;
 }
 
-/* Two layers of snowflakes at different sizes and speeds */
-.theme-mid body::before,
-.theme-mid body::after {
-  content: "";
-  position: fixed;
-  top: -120px;
-  left: 0;
-  width: 100%;
-  height: calc(100% + 120px);
-  pointer-events: none;
-  z-index: 60;
-}
-
-.theme-mid body::before {
-  background-image:
-    radial-gradient(2px 2px at 20px 30px, oklch(1 0 0 / 85%), transparent),
-    radial-gradient(2px 2px at 110px 80px, oklch(1 0 0 / 70%), transparent),
-    radial-gradient(1.5px 1.5px at 160px 140px, oklch(1 0 0 / 80%), transparent),
-    radial-gradient(2px 2px at 70px 190px, oklch(1 0 0 / 65%), transparent);
-  background-size: 200px 200px;
-  animation: snow-fall-near 9s linear infinite;
-}
-
-.theme-mid body::after {
-  background-image:
-    radial-gradient(3px 3px at 60px 50px, oklch(1 0 0 / 60%), transparent),
-    radial-gradient(3.5px 3.5px at 240px 160px, oklch(1 0 0 / 50%), transparent),
-    radial-gradient(2.5px 2.5px at 320px 280px, oklch(1 0 0 / 55%), transparent);
-  background-size: 380px 380px;
-  animation: snow-fall-far 17s linear infinite;
-}
-
-@keyframes snow-fall-near {
-  to {
-    background-position-y: 200px;
-  }
-}
-
-@keyframes snow-fall-far {
-  to {
-    background-position-y: 380px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .theme-mid body::before,
-  .theme-mid body::after {
-    animation: none;
-  }
+/* Frost the common surfaces so the panels read as tinted translucent glass */
+.theme-mid :is(.bg-card, .bg-popover, .bg-secondary, .bg-muted, .bg-accent) {
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
 }
 
 @layer base {
