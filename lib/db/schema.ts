@@ -213,18 +213,37 @@ export const announcement = pgTable("announcement", {
   id: serial("id").primaryKey(),
   userId: text("userId").notNull(),
   creatorName: text("creatorName").notNull(),
+  // What is being advertised. Events require date/time/venue; products require
+  // a price. This is chosen (mandatorily) by the creator at creation time.
+  adType: text("adType").notNull().default("event"), // "event" | "product"
   title: text("title").notNull(),
   description: text("description"),
   flyer: text("flyer"),
-  location: text("location"),
-  eventDate: text("eventDate").notNull(), // YYYY-MM-DD
-  eventTime: text("eventTime"), // HH:MM (24h), optional
+  location: text("location"), // venue (events) — required for events
+  eventDate: text("eventDate"), // YYYY-MM-DD (events only)
+  eventTime: text("eventTime"), // HH:MM (24h) (events only)
+  price: text("price"), // raw amount string, shown with a $ prefix (products only)
   durationHours: integer("durationHours").notNull().default(12), // 12..72
   status: text("status").notNull().default("pending"), // "pending" | "approved" | "declined"
   declineReason: text("declineReason"),
   publishedAt: timestamp("publishedAt"),
   expiresAt: timestamp("expiresAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// Per-user interaction + visibility state for an advert. A viewer who taps
+// "Want to know more" or "Not interested" gets a row (action set) and the ad is
+// hidden for them; they can then toggle `hidden` to peek/re-hide it. The
+// creator can also get a row (action null) purely to hide/show their own ad
+// from their interface. Rows are scoped to one advert + one user.
+export const announcementInteraction = pgTable("announcement_interaction", {
+  id: serial("id").primaryKey(),
+  announcementId: integer("announcementId").notNull(),
+  userId: text("userId").notNull(),
+  action: text("action"), // "interested" | "not_interested" | null (creator-only hide)
+  hidden: boolean("hidden").notNull().default(false),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 })
 
 // --- Status updates --------------------------------------------------------
@@ -328,6 +347,9 @@ export const dmConversation = pgTable("dm_conversation", {
   lastMessageAt: timestamp("lastMessageAt").notNull().defaultNow(),
   userALastReadAt: timestamp("userALastReadAt").notNull().defaultNow(),
   userBLastReadAt: timestamp("userBLastReadAt").notNull().defaultNow(),
+  // Official "Frequency Team" messages are flagged priority: they stay pinned
+  // to the top of the recipient's inbox until the recipient opens the thread.
+  priority: boolean("priority").notNull().default(false),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
