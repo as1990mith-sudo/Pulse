@@ -39,8 +39,8 @@ export function PodcastLibrary({ hosts }: { hosts: PodcastHost[] }) {
               className={cn(
                 "rounded-full border px-4 py-1.5 text-sm font-medium transition-colors",
                 active === cat
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-foreground",
+                  ? "border-live bg-live text-live-foreground"
+                  : "border-border bg-card text-muted-foreground hover:border-live/50 hover:text-foreground",
               )}
             >
               {cat}
@@ -52,7 +52,7 @@ export function PodcastLibrary({ hosts }: { hosts: PodcastHost[] }) {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {filtered.map((host) => (
           <Link key={host.id} href={`/u/${host.id}`} className="group">
-            <Card className="flex h-full flex-row items-center gap-4 p-4 transition-colors group-hover:border-primary/50">
+            <Card className="flex h-full flex-row items-center gap-4 p-4 transition-colors group-hover:border-live/50">
               <Avatar className="size-14 shrink-0">
                 <AvatarImage src={host.image ?? undefined} alt={host.name} />
                 <AvatarFallback className={cn("text-base", host.color)}>{host.initials}</AvatarFallback>
@@ -62,7 +62,7 @@ export function PodcastLibrary({ hosts }: { hosts: PodcastHost[] }) {
                 <p className="truncate text-xs text-muted-foreground">{host.handle}</p>
                 <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1 font-medium text-foreground">
-                    <Mic className="size-3 text-primary" />
+                    <Mic className="size-3 text-live" />
                     {host.episodeCount} {host.episodeCount === 1 ? "episode" : "episodes"}
                   </span>
                   {host.categories[0] && (
