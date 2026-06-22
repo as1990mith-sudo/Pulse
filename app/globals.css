@@ -212,14 +212,15 @@
   --skin-ring: linear-gradient(to top right, oklch(0.79 0.16 62), oklch(0.66 0.23 22), oklch(0.6 0.26 350));
 }
 
+/* "Green" — matches the Community Help chatroom accent (Tailwind emerald-600). */
 [data-skin="green"] {
-  --primary: oklch(0.64 0.15 150);
-  --primary-foreground: oklch(0.99 0.01 150);
-  --ring: oklch(0.64 0.15 150);
-  --sidebar-primary: oklch(0.64 0.15 150);
-  --sidebar-ring: oklch(0.64 0.15 150);
-  --chart-1: oklch(0.64 0.15 150);
-  --skin-ring: linear-gradient(to top right, oklch(0.8 0.16 145), oklch(0.62 0.16 158), oklch(0.7 0.13 195));
+  --primary: oklch(0.596 0.145 163.225);
+  --primary-foreground: oklch(0.99 0.01 160);
+  --ring: oklch(0.596 0.145 163.225);
+  --sidebar-primary: oklch(0.596 0.145 163.225);
+  --sidebar-ring: oklch(0.596 0.145 163.225);
+  --chart-1: oklch(0.596 0.145 163.225);
+  --skin-ring: linear-gradient(to top right, oklch(0.7 0.15 158), oklch(0.596 0.145 163.225), oklch(0.6 0.13 185));
 }
 
 [data-skin="blue"] {
@@ -232,16 +233,15 @@
   --skin-ring: linear-gradient(to top right, oklch(0.74 0.14 220), oklch(0.6 0.17 255), oklch(0.62 0.16 292));
 }
 
-/* "Aurora" — v0's gradient skin. Solid teal-cyan accent for buttons/links, with
-   a cool multi-hue gradient on the status ring. */
-[data-skin="gradient"] {
-  --primary: oklch(0.66 0.14 205);
-  --primary-foreground: oklch(0.99 0.01 205);
-  --ring: oklch(0.66 0.14 205);
-  --sidebar-primary: oklch(0.66 0.14 205);
-  --sidebar-ring: oklch(0.66 0.14 205);
-  --chart-1: oklch(0.66 0.14 205);
-  --skin-ring: linear-gradient(to top right, oklch(0.78 0.15 190), oklch(0.62 0.18 250), oklch(0.62 0.2 322));
+/* "Red" — bold red accent for buttons/links, with a warm red status ring. */
+[data-skin="red"] {
+  --primary: oklch(0.58 0.22 27);
+  --primary-foreground: oklch(0.99 0.01 25);
+  --ring: oklch(0.58 0.22 27);
+  --sidebar-primary: oklch(0.58 0.22 27);
+  --sidebar-ring: oklch(0.58 0.22 27);
+  --chart-1: oklch(0.58 0.22 27);
+  --skin-ring: linear-gradient(to top right, oklch(0.7 0.19 35), oklch(0.58 0.22 27), oklch(0.55 0.22 12));
 }
 
 .theme-transparent body {
