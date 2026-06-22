@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react"
 import { createPortal } from "react-dom"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Plus, X, Trash2, Loader2, Send, Camera, Video, ImageIcon, Type, Eye } from "lucide-react"
+import { Plus, X, Trash2, Loader2, Send, Camera, Video, ImageIcon, Type, Eye, ChevronUp } from "lucide-react"
 import {
   createStatus,
   deleteStatus,
@@ -581,15 +581,20 @@ export function StatusViewer({
   const [progress, setProgress] = useState(0)
   const [paused, setPaused] = useState(false)
   const [reaction, setReaction] = useState<string | null>(null)
-  const [replyText, setReplyText] = useState("")
   const [replySent, setReplySent] = useState(false)
+  const [replyOpen, setReplyOpen] = useState(false)
   const [showViewers, setShowViewers] = useState(false)
   const [showShare, setShowShare] = useState(false)
+  // Brief left/right slide animation played when swiping between users.
+  const [slide, setSlide] = useState<"left" | "right" | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const pausedRef = useRef(false)
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const wasHold = useRef(false)
   const inputFocused = useRef(false)
+  // Pointer start coords so pointer-up can classify tap vs swipe (and direction).
+  const startX = useRef(0)
+  const startY = useRef(0)
 
   useEffect(() => {
     pausedRef.current = paused
@@ -621,11 +626,42 @@ export function StatusViewer({
     }
   }
 
+  // Jump straight to the next/previous user's status (horizontal swipe). A
+  // right swipe advances to the following user; a left swipe goes back one.
+  function goNextGroup() {
+    if (groupIndex < groups.length - 1) {
+      setSlide("left")
+      setGroupIndex((g) => g + 1)
+      setItemIndex(0)
+    } else {
+      onClose()
+    }
+  }
+
+  function goPrevGroup() {
+    if (groupIndex > 0) {
+      setSlide("right")
+      setGroupIndex((g) => g - 1)
+      setItemIndex(0)
+    }
+  }
+
+  // Swipe up opens the reply composer (others) or the viewers list (own status).
+  function handleSwipeUp() {
+    if (group?.isSelf) {
+      setPaused(true)
+      setShowViewers(true)
+    } else if (currentUser) {
+      setPaused(true)
+      setReplyOpen(true)
+    }
+  }
+
   // Mark the active item as viewed + reset per-item UI state.
   useEffect(() => {
     setReaction(null)
-    setReplyText("")
     setReplySent(false)
+    setReplyOpen(false)
     setShowViewers(false)
     if (item && !group.isSelf) {
       onItemViewed?.(group.userId, item.id)
@@ -633,6 +669,13 @@ export function StatusViewer({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupIndex, itemIndex])
+
+  // Clear the brief slide-in animation shortly after switching users.
+  useEffect(() => {
+    if (!slide) return
+    const t = setTimeout(() => setSlide(null), 320)
+    return () => clearTimeout(t)
+  }, [slide])
 
   // Drive the progress bar for image/text items (video uses timeupdate).
   useEffect(() => {
@@ -682,7 +725,9 @@ export function StatusViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupIndex, itemIndex])
 
-  function handlePointerDown() {
+  function handlePointerDown(e: React.PointerEvent) {
+    startX.current = e.clientX
+    startY.current = e.clientY
     wasHold.current = false
     holdTimer.current = setTimeout(() => {
       wasHold.current = true
@@ -700,6 +745,28 @@ export function StatusViewer({
       setPaused(false)
       return
     }
+
+    const dx = e.clientX - startX.current
+    const dy = e.clientY - startY.current
+    const absX = Math.abs(dx)
+    const absY = Math.abs(dy)
+    const SWIPE = 48
+
+    // Vertical swipe: up = reply / viewers, down = dismiss.
+    if (absY > SWIPE && absY > absX) {
+      if (dy < 0) handleSwipeUp()
+      else onClose()
+      return
+    }
+
+    // Horizontal swipe: jump between users. Right swipe -> next user.
+    if (absX > SWIPE && absX > absY) {
+      if (dx > 0) goNextGroup()
+      else goPrevGroup()
+      return
+    }
+
+    // Otherwise a tap: left third goes back an item, the rest advances.
     const rect = e.currentTarget.getBoundingClientRect()
     const x = e.clientX - rect.left
     if (x < rect.width / 3) goPrev()
@@ -727,12 +794,13 @@ export function StatusViewer({
     }
   }
 
-  async function handleReply() {
-    if (!item || !replyText.trim()) return
+  async function submitReply(text: string) {
+    if (!item || !text.trim()) return
     try {
-      await replyToStatus(item.id, replyText)
-      setReplyText("")
+      await replyToStatus(item.id, text)
       setReplySent(true)
+      setReplyOpen(false)
+      setPaused(false)
       setTimeout(() => setReplySent(false), 2500)
     } catch {
       /* ignore */
@@ -753,7 +821,15 @@ export function StatusViewer({
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95">
-      <div className={cn("relative flex h-full w-full max-w-md flex-col", bgClass)}>
+      <div
+        key={group.userId}
+        className={cn(
+          "relative flex h-full w-full max-w-md flex-col",
+          bgClass,
+          slide === "left" && "duration-300 animate-in slide-in-from-right-8 fade-in",
+          slide === "right" && "duration-300 animate-in slide-in-from-left-8 fade-in",
+        )}
+      >
         {/* Progress bars */}
         <div className="absolute left-0 right-0 top-0 z-30 flex gap-1 p-3">
           {group.items.map((it, i) => (
@@ -834,7 +910,9 @@ export function StatusViewer({
               onEnded={goNext}
             />
           ) : item.mediaType === "text" ? (
-            <p className="px-8 text-center text-2xl font-semibold leading-relaxed text-white">{item.caption}</p>
+            <p className="text-balance px-8 text-center text-3xl font-bold leading-snug tracking-tight text-white drop-shadow-lg sm:text-4xl">
+              {item.caption}
+            </p>
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={item.mediaUrl || "/placeholder.svg"} alt="Status" className="max-h-full max-w-full object-contain" />
@@ -843,8 +921,10 @@ export function StatusViewer({
 
         {/* Caption for media items */}
         {!isText && item.caption && (
-          <div className="pointer-events-none absolute bottom-20 left-0 right-0 z-20 bg-gradient-to-t from-black/70 to-transparent p-6 pb-8">
-            <p className="text-center text-sm text-white">{item.caption}</p>
+          <div className="pointer-events-none absolute bottom-24 left-0 right-0 z-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-6 pb-10 pt-12">
+            <p className="text-balance text-center text-lg font-medium leading-relaxed tracking-tight text-white drop-shadow-md sm:text-xl">
+              {item.caption}
+            </p>
           </div>
         )}
 
@@ -874,26 +954,18 @@ export function StatusViewer({
             </button>
           ) : currentUser ? (
             <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                onFocus={() => {
-                  inputFocused.current = true
+              <button
+                type="button"
+                onClick={() => {
                   setPaused(true)
+                  setReplyOpen(true)
                 }}
-                onBlur={() => {
-                  inputFocused.current = false
-                  setPaused(false)
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleReply()
-                }}
-                placeholder={replySent ? "Reply sent!" : `Reply to ${group.authorName.split(" ")[0]}…`}
-                maxLength={300}
-                className="h-11 flex-1 rounded-full border border-white/30 bg-white/10 px-4 text-sm text-white placeholder:text-white/60 focus:border-white/60 focus:outline-none"
-                aria-label="Reply to status"
-              />
+                className="flex h-11 flex-1 items-center justify-center gap-1.5 rounded-full border border-white/25 bg-white/10 px-4 text-sm font-medium text-white/90 backdrop-blur transition-colors hover:bg-white/20"
+                aria-label={`Reply to ${group.authorName.split(" ")[0]}`}
+              >
+                <ChevronUp className="size-4 animate-bounce" />
+                {replySent ? "Reply sent!" : "Swipe up to reply"}
+              </button>
               {REACTIONS.slice(0, 3).map((emoji) => (
                 <button
                   key={emoji}
@@ -954,6 +1026,20 @@ export function StatusViewer({
             statusId={item.id}
             onClose={() => {
               setShowViewers(false)
+              setPaused(false)
+            }}
+          />
+        )}
+
+        {replyOpen && !group.isSelf && (
+          <ReplySheet
+            authorName={group.authorName}
+            activeReaction={reaction}
+            onReact={handleReact}
+            onSubmit={submitReply}
+            onFocusChange={(f) => (inputFocused.current = f)}
+            onClose={() => {
+              setReplyOpen(false)
               setPaused(false)
             }}
           />
@@ -1032,6 +1118,96 @@ function ViewersSheet({ statusId, onClose }: { statusId: number; onClose: () => 
             ))}
           </ul>
         )}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Slide-up reply composer surfaced by swiping up on a status. Manages its own
+ * draft text, autofocuses, and offers the same quick reactions as the inline
+ * bar. Tapping the backdrop or sending closes it.
+ */
+function ReplySheet({
+  authorName,
+  activeReaction,
+  onReact,
+  onSubmit,
+  onClose,
+  onFocusChange,
+}: {
+  authorName: string
+  activeReaction: string | null
+  onReact: (emoji: string) => void
+  onSubmit: (text: string) => void
+  onClose: () => void
+  onFocusChange: (focused: boolean) => void
+}) {
+  const [text, setText] = useState("")
+  const firstName = authorName.split(" ")[0]
+
+  useEffect(() => {
+    onFocusChange(true)
+    return () => onFocusChange(false)
+  }, [onFocusChange])
+
+  return (
+    <div className="absolute inset-0 z-40 flex items-end bg-black/40" onClick={onClose}>
+      <div
+        className="w-full rounded-t-3xl border-t border-white/10 bg-card p-4 pb-6 duration-300 animate-in slide-in-from-bottom-8"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-border" />
+        <p className="mb-3 text-sm font-semibold text-foreground">Reply to {firstName}</p>
+
+        {/* Quick reactions */}
+        <div className="mb-3 flex items-center justify-between">
+          {REACTIONS.map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              onClick={() => {
+                onReact(emoji)
+                onClose()
+              }}
+              className={cn(
+                "flex size-11 items-center justify-center rounded-full text-2xl transition-transform hover:scale-110 active:scale-95",
+                activeReaction === emoji && "scale-125",
+              )}
+              aria-label={`React ${emoji}`}
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-end gap-2">
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault()
+                onSubmit(text)
+              }
+            }}
+            placeholder={`Send ${firstName} a private reply…`}
+            maxLength={300}
+            rows={1}
+            autoFocus
+            className="max-h-32 min-h-11 flex-1 resize-none rounded-2xl border border-border bg-secondary/60 px-4 py-2.5 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+            aria-label="Reply message"
+          />
+          <button
+            type="button"
+            onClick={() => onSubmit(text)}
+            disabled={!text.trim()}
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+            aria-label="Send reply"
+          >
+            <Send className="size-5" />
+          </button>
+        </div>
       </div>
     </div>
   )

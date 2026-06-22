@@ -3,19 +3,70 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BookOpen, Radio } from "lucide-react"
+import { BookOpen, Radio, Sparkles, SquarePen, Podcast, MessagesSquare, type LucideIcon } from "lucide-react"
 import { ThemeSwitcher } from "@/components/theme-switcher"
 import { UserMenu } from "@/components/user-menu"
 import { UserSearch } from "@/components/user-search"
 import { MessagesBell } from "@/components/messages-bell"
 import { cn } from "@/lib/utils"
 
-const navItems = [
-  { href: "/", label: "Devotional" },
-  { href: "/feed", label: "Post" },
-  { href: "/live", label: "Live" },
-  { href: "/chatrooms", label: "Chatroom" },
+type NavItem = { href: string; label: string; icon: LucideIcon }
+
+const navItems: NavItem[] = [
+  { href: "/", label: "Devotional", icon: Sparkles },
+  { href: "/feed", label: "Post", icon: SquarePen },
+  { href: "/live", label: "Live", icon: Podcast },
+  { href: "/chatrooms", label: "Chatroom", icon: MessagesSquare },
 ]
+
+/**
+ * Modern segmented nav. On desktop every tab shows its icon + label; on mobile
+ * (compact) inactive tabs collapse to an icon and the active tab expands to
+ * reveal its label, giving an immersive "pill that slides" feel. The active
+ * pill is filled with the current skin's primary color.
+ */
+function NavTabs({
+  isActive,
+  compact = false,
+}: {
+  isActive: (href: string) => boolean
+  compact?: boolean
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-1 rounded-full border border-border/60 bg-secondary/40 p-1 backdrop-blur-sm",
+        compact && "w-full justify-between",
+      )}
+    >
+      {navItems.map((item) => {
+        const active = isActive(item.href)
+        const Icon = item.icon
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "group relative flex items-center justify-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-all duration-300 ease-out active:scale-95",
+              active ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {active && (
+              <span
+                className="nav-pill-active absolute inset-0 -z-10 rounded-full bg-primary shadow-lg shadow-primary/30"
+                aria-hidden="true"
+              />
+            )}
+            <Icon className="size-4 shrink-0" />
+            {/* On mobile, only the active tab shows its label (expanding pill). */}
+            <span className={cn(compact && !active && "sr-only")}>{item.label}</span>
+          </Link>
+        )
+      })}
+    </div>
+  )
+}
 
 export function SiteHeader() {
   const pathname = usePathname()
@@ -68,22 +119,8 @@ export function SiteHeader() {
           <span className="text-lg font-semibold tracking-tight">Frequency</span>
         </Link>
 
-        <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-1 md:flex">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "relative rounded-md px-3 py-1.5 text-sm font-medium transition-[color,transform] duration-200 active:scale-95",
-                isActive(item.href) ? "text-foreground" : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {isActive(item.href) && (
-                <span className="nav-pill-active absolute inset-0 -z-10 rounded-md bg-secondary" aria-hidden="true" />
-              )}
-              {item.label}
-            </Link>
-          ))}
+        <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center md:flex">
+          <NavTabs isActive={isActive} />
         </nav>
 
         <div className="flex items-center gap-2">
@@ -104,22 +141,8 @@ export function SiteHeader() {
         </div>
       </div>
 
-      <nav className="flex items-center justify-center gap-1 border-t border-border/60 px-4 py-2 md:hidden">
-        {navItems.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              "relative rounded-md px-3 py-1.5 text-sm font-medium transition-[color,transform] duration-200 active:scale-95",
-              isActive(item.href) ? "text-foreground" : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {isActive(item.href) && (
-              <span className="nav-pill-active absolute inset-0 -z-10 rounded-md bg-secondary" aria-hidden="true" />
-            )}
-            {item.label}
-          </Link>
-        ))}
+      <nav className="border-t border-border/60 px-4 py-2 md:hidden">
+        <NavTabs isActive={isActive} compact />
       </nav>
     </header>
   )
