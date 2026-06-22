@@ -4,15 +4,41 @@ import { useState, useTransition } from "react"
 import useSWR from "swr"
 import Link from "next/link"
 import { Heart, Share2, MessageCircle, Send } from "lucide-react"
-import { addDevotionalComment, getDevotionalComments, type DevotionalCommentView } from "@/app/actions/devotional"
+import {
+  addDevotionalComment,
+  getDevotionalComments,
+  setDevotionalCommentLike,
+  editDevotionalComment,
+  deleteDevotionalComment,
+  type DevotionalCommentView,
+} from "@/app/actions/devotional"
 import { ShareSheet } from "@/components/share-sheet"
 import type { ShareTarget } from "@/lib/share-types"
 import type { CurrentUser } from "@/lib/session"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
+import { CommentThread, type ThreadComment } from "@/components/comment-thread"
 import { cn } from "@/lib/utils"
+
+function toThreadComment(c: DevotionalCommentView): ThreadComment {
+  return {
+    id: c.id,
+    parentId: c.parentId,
+    authorId: c.authorId,
+    isSelf: c.isSelf,
+    name: c.user,
+    handle: c.handle,
+    initials: c.initials,
+    color: c.color,
+    image: null,
+    text: c.text,
+    likes: c.likes,
+    edited: c.edited,
+    postedAt: c.postedAt,
+    createdAtMs: c.createdAtMs,
+  }
+}
 
 export function DevotionalInteractions({
   title,
@@ -122,22 +148,33 @@ export function DevotionalInteractions({
           </div>
         )}
 
-        <ul className="space-y-5">
-          {comments.map((comment) => (
-            <li key={comment.id} className="flex gap-3">
-              <Avatar className="size-9 shrink-0">
-                <AvatarFallback className={comment.color}>{comment.initials}</AvatarFallback>
-              </Avatar>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">{comment.user}</span>
-                  <span className="text-xs text-muted-foreground">{comment.postedAt}</span>
-                </div>
-                <p className="text-sm leading-relaxed text-foreground/90">{comment.text}</p>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <CommentThread
+          comments={comments.map(toThreadComment)}
+          canInteract={Boolean(currentUser)}
+          onLike={(commentId, liked) => void setDevotionalCommentLike({ commentId, liked })}
+          onReply={async (parentId, value) => {
+            await addDevotionalComment({ devotionalDate, text: value, parentId })
+            await mutateComments()
+          }}
+          onEdit={async (commentId, value) => {
+            await editDevotionalComment({ commentId, text: value })
+            await mutateComments()
+          }}
+          onDelete={async (commentId) => {
+            await deleteDevotionalComment(commentId)
+            await mutateComments()
+          }}
+          shareTargetFor={(c) => ({
+            type: "devotional",
+            key: `${devotionalDate}-c${c.id}`,
+            title: `${c.name} on Frequency`,
+            subtitle: c.text.slice(0, 120),
+            url: shareTarget.url,
+            image: null,
+            downloadUrl: null,
+            downloadKind: null,
+          })}
+        />
       </div>
 
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />

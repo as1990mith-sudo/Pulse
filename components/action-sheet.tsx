@@ -25,11 +25,14 @@ export function ActionSheet({
   open,
   onClose,
   title,
+  preview,
   actions,
 }: {
   open: boolean
   onClose: () => void
   title?: string
+  /** Optional snippet of the target content shown under the title. */
+  preview?: string
   actions: SheetAction[]
 }) {
   useEffect(() => {
@@ -59,10 +62,13 @@ export function ActionSheet({
           "animate-in slide-in-from-bottom-4 fade-in zoom-in-95 duration-200",
         )}
       >
-        {title && (
-          <p className="px-4 pb-1 pt-3 text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {title}
-          </p>
+        {(title || preview) && (
+          <div className="px-4 pb-1.5 pt-3 text-center">
+            {title && (
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</p>
+            )}
+            {preview && <p className="mt-0.5 line-clamp-2 text-sm text-foreground/70">{preview}</p>}
+          </div>
         )}
         <div className="space-y-0.5 p-1">
           {actions.map((action) => {

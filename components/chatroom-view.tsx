@@ -661,52 +661,44 @@ function MessageBubble({
               <span className="truncate">{m.attachmentName ?? "Document"}</span>
             </a>
           )}
-          {m.body && <p className={cn(m.attachmentUrl && "px-2 pb-1 pt-1.5")}>{m.body}</p>}
+          {m.body && !editing && <p className={cn(m.attachmentUrl && "px-2 pb-1 pt-1.5")}>{m.body}</p>}
+          {m.body && editing && (
+            <form
+              className="flex flex-col gap-2 p-1"
+              onSubmit={(e) => {
+                e.preventDefault()
+                const next = editDraft.trim()
+                if (next && next !== m.body) onEdit(m.id, next)
+                setEditing(false)
+              }}
+            >
+              <textarea
+                autoFocus
+                value={editDraft}
+                onChange={(e) => setEditDraft(e.target.value)}
+                rows={2}
+                className="w-full resize-none rounded-lg bg-background/60 px-2 py-1 text-foreground outline-none ring-1 ring-border focus:ring-2 focus:ring-ring"
+              />
+              <div className="flex justify-end gap-2 text-xs">
+                <button type="button" onClick={() => setEditing(false)} className="rounded-md px-2 py-1 hover:bg-background/40">
+                  Cancel
+                </button>
+                <button type="submit" className="rounded-md bg-background/70 px-2 py-1 font-medium text-foreground hover:bg-background">
+                  Save
+                </button>
+              </div>
+            </form>
+          )}
         </div>
 
-        {/* Press-and-hold moderation menu */}
-        {menuOpen && (
-          <>
-            <button
-              type="button"
-              className="fixed inset-0 z-40 cursor-default"
-              aria-hidden="true"
-              onClick={() => setMenuOpen(false)}
-            />
-            <div
-              className={cn(
-                "absolute z-50 mt-1 w-40 overflow-hidden rounded-xl border border-border bg-popover p-1 shadow-lg",
-                m.isSelf ? "right-0" : "left-0",
-              )}
-            >
-              {isAdmin && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onTogglePin(m.id, !m.pinned)
-                    setMenuOpen(false)
-                  }}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary"
-                >
-                  {m.pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
-                  {m.pinned ? "Unpin message" : "Pin message"}
-                </button>
-              )}
-              {canDelete && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onDelete(m.id)
-                    setMenuOpen(false)
-                  }}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10"
-                >
-                  <Trash2 className="size-4" /> Delete message
-                </button>
-              )}
-            </div>
-          </>
-        )}
+        {/* Press-and-hold action sheet */}
+        <ActionSheet
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          title={m.isSelf ? "Your message" : m.userName}
+          preview={m.body ?? m.attachmentName ?? undefined}
+          actions={actions}
+        />
       </div>
     </div>
   )

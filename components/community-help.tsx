@@ -32,12 +32,34 @@ import {
   createCommunityPost,
   deleteCommunityComment,
   deleteCommunityPost,
+  editCommunityComment,
   editCommunityPost,
   getCommunityComments,
   getCommunityPosts,
+  setCommunityCommentLike,
   type CommunityCommentView,
   type CommunityPostView,
 } from "@/app/actions/community"
+import { CommentThread, type ThreadComment } from "@/components/comment-thread"
+
+function toThreadComment(c: CommunityCommentView): ThreadComment {
+  return {
+    id: c.id,
+    parentId: c.parentId,
+    authorId: c.userId,
+    isSelf: c.isSelf,
+    name: c.userName,
+    handle: c.handle,
+    initials: c.initials,
+    color: c.color,
+    image: c.image,
+    text: c.body,
+    likes: c.likes,
+    edited: c.edited,
+    postedAt: c.postedAt,
+    createdAtMs: c.createdAtMs,
+  }
+}
 
 const ANON_AVATAR = "/community-help-avatar.png"
 const ANON_NAME = "I Need Answers"
@@ -117,18 +139,6 @@ function CommentSection({
     })
   }
 
-  function handleDelete(comment: CommunityCommentView) {
-    startTransition(async () => {
-      try {
-        await deleteCommunityComment(comment.id)
-        onCountChange(-1)
-        await mutate((prev) => (prev ?? []).filter((c) => c.id !== comment.id), { revalidate: false })
-      } catch {
-        /* ignore */
-      }
-    })
-  }
-
   return (
     <div className="mt-3 border-t border-border/60 pt-3">
       {isLoading ? (
@@ -136,42 +146,35 @@ function CommentSection({
           <Loader2 className="size-4 animate-spin text-muted-foreground" />
         </div>
       ) : data && data.length > 0 ? (
-        <ul className="flex flex-col gap-3">
-          {data.map((c) => (
-            <li key={c.id} className="flex items-start gap-2.5">
-              <Link href={`/u/${c.userId}`} className="shrink-0">
-                <Avatar className="size-8 ring-1 ring-border/60 transition-transform hover:scale-105">
-                  {c.image && <AvatarImage src={c.image || "/placeholder.svg"} alt={c.userName} />}
-                  <AvatarFallback className="text-xs font-semibold text-white" style={{ backgroundColor: c.color }}>
-                    {c.initials}
-                  </AvatarFallback>
-                </Avatar>
-              </Link>
-              <div className="min-w-0 flex-1 rounded-2xl rounded-tl-sm bg-secondary/60 px-3 py-2">
-                <div className="flex items-center gap-2">
-                  <Link href={`/u/${c.userId}`} className="truncate text-sm font-semibold hover:underline">
-                    {c.userName}
-                  </Link>
-                  <span className="text-xs text-muted-foreground">{c.handle}</span>
-                  <span className="text-xs text-muted-foreground">· {c.postedAt}</span>
-                  {c.isSelf && (
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(c)}
-                      className="ml-auto text-muted-foreground transition-colors hover:text-destructive"
-                      aria-label="Delete your reply"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  )}
-                </div>
-                <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed">
-                  {linkify(c.body)}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <CommentThread
+          comments={data.map(toThreadComment)}
+          canInteract
+          onLike={(commentId, liked) => void setCommunityCommentLike({ commentId, liked })}
+          onReply={async (parentId, value) => {
+            const created = await addCommunityComment({ postId, body: value, parentId })
+            onCountChange(1)
+            await mutate((prev) => [...(prev ?? []), created], { revalidate: false })
+          }}
+          onEdit={async (commentId, value) => {
+            await editCommunityComment({ commentId, body: value })
+            await mutate()
+          }}
+          onDelete={async (commentId) => {
+            await deleteCommunityComment(commentId)
+            onCountChange(-1)
+            await mutate((prev) => (prev ?? []).filter((c) => c.id !== commentId), { revalidate: false })
+          }}
+          shareTargetFor={(c) => ({
+            type: "community",
+            key: `${postId}-c${c.id}`,
+            title: "A reply on Community Help",
+            subtitle: c.text.length > 120 ? `${c.text.slice(0, 120)}…` : c.text,
+            url: "/chatrooms/community",
+            image: null,
+            downloadUrl: null,
+            downloadKind: null,
+          })}
+        />
       ) : (
         <p className="py-1 text-center text-sm text-muted-foreground">Be the first to help out.</p>
       )}
