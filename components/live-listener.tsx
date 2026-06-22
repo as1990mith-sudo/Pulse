@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react"
 import { ShareSheet } from "@/components/share-sheet"
+import { BackExitMenu } from "@/components/live-back-menu"
 import { LiveChat } from "@/components/live-chat"
 import type { CurrentUser } from "@/lib/session"
 import type { ShareTarget } from "@/lib/share-types"
@@ -94,11 +95,17 @@ export function LiveListener({
   canListen,
   currentUser = null,
   currentUserId = null,
+  onMinimize,
+  onExit,
+  onMeta,
 }: {
   stream: LiveStreamView
   canListen: boolean
   currentUser?: CurrentUser | null
   currentUserId?: string | null
+  onMinimize?: () => void
+  onExit?: () => void
+  onMeta?: (m: { title: string; cover: string | null; live: boolean; subtitle?: string }) => void
 }) {
   const router = useRouter()
   const { state, speakers, connect, disconnect, toggleMic, setListenerMuted, startAudioPlayback } = useLiveAudio()
@@ -156,6 +163,11 @@ export function LiveListener({
     return () => clearInterval(iv)
   }, [state.connected])
 
+  // Keep the app-level mini-player's "now playing" info in sync.
+  useEffect(() => {
+    onMeta?.({ title: stream.title, cover: stream.cover ?? null, live: true, subtitle: `with ${stream.hostName}` })
+  }, [stream.title, stream.cover, stream.hostName, onMeta])
+
   // Poll call state so the listener sees their request status + any invite.
   useEffect(() => {
     if (!canListen) return
@@ -167,7 +179,7 @@ export function LiveListener({
       if (s.ended) {
         setHostEnded(true)
         void disconnect()
-        setTimeout(() => router.push("/live"), 2600)
+        setTimeout(() => (onExit ? onExit() : router.push("/live")), 2600)
         return
       }
       setMyInvite(s.myInvite)
@@ -280,15 +292,17 @@ export function LiveListener({
 
       {/* ───────── Broadcast header: cover art + live + title + stats ───────── */}
       <header className="relative flex items-center gap-3 overflow-hidden border-b border-white/10 px-4 py-3 pt-safe backdrop-blur-xl">
-        {/* Mobile-only back control (desktop has the page's "Back to shows"). */}
-        <button
-          type="button"
-          onClick={() => router.push("/live")}
-          aria-label="Back to all shows"
-          className="relative flex size-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-inset ring-white/10 transition-colors hover:bg-white/20 lg:hidden"
-        >
-          <ArrowLeft className="size-5" />
-        </button>
+        {/* Back control — opens Leave / Minimise while connected. */}
+        <BackExitMenu
+          showMenu={state.connected}
+          exitLabel="Leave"
+          onExit={() => {
+            void disconnect()
+            if (onExit) onExit()
+            else router.push("/live")
+          }}
+          onMinimize={onMinimize ?? (() => {})}
+        />
         <span className="relative size-12 shrink-0 overflow-hidden rounded-xl bg-white/10 ring-1 ring-white/15">
           {stream.cover ? (
             // eslint-disable-next-line @next/next/no-img-element

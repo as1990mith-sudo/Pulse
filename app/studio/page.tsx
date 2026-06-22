@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { SiteHeader } from "@/components/site-header"
-import { StudioConsole } from "@/components/studio-console"
+import { HostStudioLauncher } from "@/components/live-session"
 import { VideoStudioConsole } from "@/components/video-studio-console"
 import { StudioErrorBoundary } from "@/components/studio-error-boundary"
 import { getCurrentUser } from "@/lib/session"
@@ -27,15 +27,10 @@ export default async function StudioPage({
         </StudioErrorBoundary>
       )
     }
-    // The audio console is a full-bleed, immersive surface (its own header
-    // chrome), mirroring the listener experience — no global SiteHeader.
-    return (
-      <StudioErrorBoundary>
-        <div className="flex h-dvh flex-col overflow-hidden">
-          <StudioConsole currentUser={currentUser} />
-        </div>
-      </StudioErrorBoundary>
-    )
+    // The audio console is hosted at the app level (see LiveSessionProvider) so
+    // the room can be minimised into a persistent mini-player while audio keeps
+    // playing. This route just mounts the session into that provider.
+    return <HostStudioLauncher currentUser={currentUser} />
   }
 
   return (

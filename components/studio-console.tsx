@@ -43,6 +43,7 @@ import { uploadMedia } from "@/lib/upload-media"
 import { LiveChat } from "@/components/live-chat"
 import { LiveStage, MAX_GUESTS } from "@/components/live-stage"
 import { ReactionLayer } from "@/components/live-reactions"
+import { BackExitMenu } from "@/components/live-back-menu"
 import { CoverUpload } from "@/components/admin/cover-upload"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -66,7 +67,17 @@ function formatDuration(s: number) {
 type EndedSession = { title: string; duration: string; audioBlob: Blob | null } | null
 type Track = { url: string; name: string }
 
-export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
+export function StudioConsole({
+  currentUser,
+  onMinimize,
+  onExit,
+  onMeta,
+}: {
+  currentUser: CurrentUser
+  onMinimize?: () => void
+  onExit?: () => void
+  onMeta?: (m: { title: string; cover: string | null; live: boolean; subtitle?: string }) => void
+}) {
   const {
     state,
     speakers,
@@ -114,6 +125,11 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
     const t = setInterval(() => setElapsed((e) => e + 1), 1000)
     return () => clearInterval(t)
   }, [live])
+
+  // Keep the app-level mini-player's "now playing" info in sync.
+  useEffect(() => {
+    onMeta?.({ title, cover, live, subtitle: live ? "You're live" : "Setting up" })
+  }, [title, cover, live, onMeta])
 
   async function toggleLive() {
     setError(null)
@@ -208,6 +224,12 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
       <div className="relative flex min-h-0 w-full flex-1 flex-col">
         {/* Broadcast header: cover artwork + live indicator + title + stats */}
         <header className="flex items-center gap-3 border-b border-white/[0.07] px-4 py-4 pt-safe sm:px-6">
+          <BackExitMenu
+            showMenu={live}
+            exitLabel="End"
+            onExit={live ? toggleLive : (onExit ?? (() => {}))}
+            onMinimize={onMinimize ?? (() => {})}
+          />
           <div className="relative size-16 shrink-0 overflow-hidden rounded-xl bg-white/10 ring-1 ring-white/15 sm:size-20">
             {cover ? (
               // eslint-disable-next-line @next/next/no-img-element
