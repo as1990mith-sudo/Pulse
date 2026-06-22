@@ -10,7 +10,8 @@ import { getHandle, getAvatarColor, getInitials } from "@/lib/identity"
 import { createAccessToken, isLiveKitConfigured, LIVEKIT_URL, setParticipantPublish } from "@/lib/livekit"
 import { notifyFollowers } from "@/app/actions/notifications"
 
-const MAX_GUESTS = 3
+// Host + up to 11 guests = 12 on stage.
+const MAX_GUESTS = 11
 
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -385,7 +386,7 @@ export async function respondToCallRequest(input: {
 
   if (input.accept) {
     if ((await acceptedGuestCount(req.roomName)) >= MAX_GUESTS) {
-      return { ok: false, error: "All 3 guest spots are full." }
+      return { ok: false, error: `All ${MAX_GUESTS} guest spots are full.` }
     }
     await setParticipantPublish({ roomName: req.roomName, identity: req.userId, canPublish: true })
     await db
