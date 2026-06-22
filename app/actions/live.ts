@@ -1,6 +1,6 @@
 "use server"
 
-import { and, asc, desc, eq, gt } from "drizzle-orm"
+import { and, asc, desc, eq, gt, lt } from "drizzle-orm"
 import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
@@ -13,10 +13,42 @@ import { notifyFollowers } from "@/app/actions/notifications"
 // Host + up to 11 guests = 12 on stage.
 const MAX_GUESTS = 11
 
+// A live stream whose host hasn't sent a heartbeat in this long is considered
+// abandoned (closed tab, lost connection, killed app) and is auto-ended. The
+// host pings every ~20s, so this tolerates a couple of missed beats + reconnect.
+const STALE_AFTER_MS = 60_000
+
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) throw new Error("You must be signed in to do that.")
   return session.user
+}
+
+/**
+ * Marks any "live" streams with a stale heartbeat as ended. Cheap single UPDATE
+ * run at the top of every read path so abandoned streams never linger as live
+ * (which is what previously stranded a dropped host and orphaned the row).
+ */
+async function endStaleStreams(): Promise<void> {
+  await db
+    .update(liveStream)
+    .set({ status: "ended", endedAt: new Date() })
+    .where(and(eq(liveStream.status, "live"), lt(liveStream.lastSeenAt, new Date(Date.now() - STALE_AFTER_MS))))
+}
+
+/**
+ * Host heartbeat — keeps the host's live stream marked active. Returns
+ * `ended:true` if the stream is no longer live (e.g. it was already cleaned up
+ * or ended elsewhere), which tells the client to stop and finalize.
+ */
+export async function heartbeatBroadcast(input: { roomName: string }): Promise<{ ok: boolean; ended: boolean }> {
+  const user = await requireUser()
+  const rows = await db
+    .update(liveStream)
+    .set({ lastSeenAt: new Date() })
+    .where(and(eq(liveStream.roomName, input.roomName), eq(liveStream.hostId, user.id), eq(liveStream.status, "live")))
+    .returning({ id: liveStream.id })
+  return { ok: true, ended: rows.length === 0 }
 }
 
 export type LiveMode = "audio" | "video"
@@ -119,6 +151,9 @@ export async function joinBroadcast(input: { roomName: string }): Promise<JoinRe
     return { ok: false, error: "Live audio is not configured yet." }
   }
 
+  // Clean up abandoned streams before deciding whether this room is still live.
+  await endStaleStreams()
+
   const [stream] = await db
     .select()
     .from(liveStream)
@@ -127,6 +162,14 @@ export async function joinBroadcast(input: { roomName: string }): Promise<JoinRe
   if (!stream) return { ok: false, error: "This stream has ended." }
 
   const isHost = stream.hostId === user.id
+  // A host rejoining (e.g. recovering from a dropped connection) refreshes the
+  // heartbeat right away so the in-flight reconnect isn't swept as stale.
+  if (isHost) {
+    await db
+      .update(liveStream)
+      .set({ lastSeenAt: new Date() })
+      .where(eq(liveStream.roomName, input.roomName))
+  }
   const token = await createAccessToken({
     roomName: input.roomName,
     identity: user.id,
@@ -140,6 +183,7 @@ export async function joinBroadcast(input: { roomName: string }): Promise<JoinRe
 
 /** All currently-live streams, newest first. */
 export async function getLiveStreams(): Promise<LiveStreamView[]> {
+  await endStaleStreams()
   const rows = await db
     .select()
     .from(liveStream)
@@ -269,6 +313,7 @@ export async function getLiveReactions(input: {
 
 /** A single live stream by room name. */
 export async function getLiveStream(roomName: string): Promise<LiveStreamView | null> {
+  await endStaleStreams()
   const [r] = await db
     .select()
     .from(liveStream)
@@ -449,6 +494,8 @@ export async function getCallState(input: { roomName: string }): Promise<{
   // True once the host has ended the broadcast — lets listeners auto-close.
   ended: boolean
 }> {
+  // Auto-end abandoned streams first so listeners of a vanished host close out.
+  await endStaleStreams()
   const session = await auth.api.getSession({ headers: await headers() })
   const me = session?.user?.id ?? null
 

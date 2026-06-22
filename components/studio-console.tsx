@@ -33,6 +33,8 @@ import { publishShow } from "@/app/actions/shows"
 import {
   startBroadcast,
   endBroadcast,
+  joinBroadcast,
+  heartbeatBroadcast,
   getCallState,
   respondToCallRequest,
   removeFromStage,
@@ -93,8 +95,19 @@ export function StudioConsole({
     startRecording,
     stopRecording,
   } = useLiveAudio()
-  const live = state.connected
+  // "On air" is an intent that persists across a dropped/recovering connection,
+  // so a transient network blip never flips the host back to the offline setup
+  // screen (which is what made it feel like the app "signed you out" of a live).
+  // The actual transport status lives in state.connected / state.reconnecting.
+  const [onAir, setOnAir] = useState(false)
+  const live = onAir
+  // True while we have the intent to broadcast but the transport isn't fully up.
+  const reconnecting = onAir && (state.reconnecting || !state.connected)
   const micOn = state.micEnabled
+  // Mirrors of values the disconnect-recovery callback needs without going stale.
+  const onAirRef = useRef(false)
+  const roomNameRef = useRef<string | null>(null)
+  const recoverRef = useRef<() => void>(() => {})
   const [elapsed, setElapsed] = useState(0)
   const [title, setTitle] = useState(`${currentUser.name} — live session`)
   const [cover, setCover] = useState<string | null>(null)
@@ -202,9 +215,65 @@ export function StudioConsole({
     return () => window.removeEventListener("beforeunload", onBeforeUnload)
   }, [live])
 
+  // Keep the refs the recovery callback reads in sync with render state.
+  useEffect(() => {
+    onAirRef.current = onAir
+  }, [onAir])
+  useEffect(() => {
+    roomNameRef.current = roomName
+  }, [roomName])
+
+  // Auto-recover from an unexpected hard disconnect: re-mint a token for the
+  // same room and reconnect, so the host is never silently dropped from a live
+  // they intended to keep running. If the stream has already ended server-side
+  // (e.g. it was cleaned up after being abandoned), finalize gracefully.
+  recoverRef.current = async () => {
+    const rn = roomNameRef.current
+    if (!onAirRef.current || !rn) return
+    const res = await joinBroadcast({ roomName: rn }).catch(() => null)
+    if (!res || !res.ok) {
+      onAirRef.current = false
+      setOnAir(false)
+      setRoomName(null)
+      setError("Your live session ended because the connection was lost.")
+      return
+    }
+    await connect({
+      serverUrl: res.serverUrl,
+      token: res.token,
+      publish: true,
+      onDisconnected: () => recoverRef.current(),
+    }).catch(() => {})
+  }
+
+  // Heartbeat: while on air, ping the server so the stream stays marked live.
+  // If the server reports it already ended, stop locally to stay in sync.
+  useEffect(() => {
+    if (!live || !roomName) return
+    let cancelled = false
+    const ping = async () => {
+      const res = await heartbeatBroadcast({ roomName }).catch(() => null)
+      if (!cancelled && res?.ended) {
+        onAirRef.current = false
+        setOnAir(false)
+        await disconnect().catch(() => {})
+      }
+    }
+    void ping()
+    const t = setInterval(ping, 20000)
+    return () => {
+      cancelled = true
+      clearInterval(t)
+    }
+  }, [live, roomName, disconnect])
+
   async function toggleLive() {
     setError(null)
     if (live) {
+      // Clear the on-air intent first so the disconnect isn't treated as a drop
+      // that should auto-recover.
+      onAirRef.current = false
+      setOnAir(false)
       const duration = formatDuration(elapsed)
       const audioBlob = recording ? await stopRecording().catch(() => null) : recordedBlobRef.current
       if (roomName) await endBroadcast({ roomName }).catch(() => {})
@@ -223,10 +292,18 @@ export function StudioConsole({
         setError(res.error)
         return
       }
+      onAirRef.current = true
+      roomNameRef.current = res.roomName
+      setOnAir(true)
       setRoomName(res.roomName)
       setEndedSession(null)
       setElapsed(0)
-      await connect({ serverUrl: res.serverUrl, token: res.token, publish: true })
+      await connect({
+        serverUrl: res.serverUrl,
+        token: res.token,
+        publish: true,
+        onDisconnected: () => recoverRef.current(),
+      })
       startRecording()
       setRecording(true)
     }
@@ -306,12 +383,19 @@ export function StudioConsole({
               {live ? (
                 <>
                   <LiveBadge />
-                  <span className="flex items-center gap-1 text-[11px] font-medium text-white/60">
-                    <QualityIcon quality={state.connectionQuality} />
-                    <span className="capitalize">
-                      {state.connectionQuality !== "unknown" ? state.connectionQuality : ""}
+                  {reconnecting ? (
+                    <span className="flex items-center gap-1 text-[11px] font-medium text-amber-300">
+                      <Loader2 className="size-3 animate-spin" />
+                      Reconnecting…
                     </span>
-                  </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-[11px] font-medium text-white/60">
+                      <QualityIcon quality={state.connectionQuality} />
+                      <span className="capitalize">
+                        {state.connectionQuality !== "unknown" ? state.connectionQuality : ""}
+                      </span>
+                    </span>
+                  )}
                 </>
               ) : (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-white/60">
@@ -411,7 +495,7 @@ export function StudioConsole({
           {live && roomName && <ReactionLayer roomName={roomName} />}
         </div>
 
-        {/* Host control dock — compact essentials, sits right under the stage row */}
+        {/* Host control dock ��� compact essentials, sits right under the stage row */}
         <div className="shrink-0 border-b border-white/[0.07] px-4 py-4 sm:px-6">
           <div className="flex items-center justify-center gap-3 sm:gap-4">
             <DockButton

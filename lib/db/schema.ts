@@ -305,6 +305,10 @@ export const liveStream = pgTable("live_stream", {
   chatBgUrl: text("chatBgUrl"), // host-uploaded chat background image
   chatBgEffect: text("chatBgEffect").notNull().default("none"), // "none" | "blur" | "dim"
   startedAt: timestamp("startedAt").notNull().defaultNow(),
+  // Host heartbeat. While live, the host pings this every ~20s. A stream whose
+  // lastSeenAt has gone stale is treated as ended and auto-cleaned, so an
+  // abandoned tab / dropped host never leaves a stream stuck "live" forever.
+  lastSeenAt: timestamp("lastSeenAt").notNull().defaultNow(),
   endedAt: timestamp("endedAt"),
 })
 
