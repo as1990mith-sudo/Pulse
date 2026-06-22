@@ -6,8 +6,8 @@ import { usePathname } from "next/navigation"
 import { BookOpen, Radio, Sparkles, SquarePen, Podcast, MessagesSquare, type LucideIcon } from "lucide-react"
 import { ThemeSwitcher } from "@/components/theme-switcher"
 import { UserMenu } from "@/components/user-menu"
-import { UserSearch } from "@/components/user-search"
 import { MessagesBell } from "@/components/messages-bell"
+import { NotificationBell } from "@/components/notification-bell"
 import { cn } from "@/lib/utils"
 
 type NavItem = { href: string; label: string; icon: LucideIcon }
@@ -135,7 +135,7 @@ export function SiteHeader() {
             <BookOpen className="size-[18px]" />
           </Link>
           <MessagesBell />
-          <UserSearch />
+          <NotificationBell />
           <ThemeSwitcher />
           <UserMenu />
         </div>
