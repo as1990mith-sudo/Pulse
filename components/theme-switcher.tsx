@@ -17,8 +17,8 @@ import { SKINS, useSkin } from "@/components/skin-provider"
 import { cn } from "@/lib/utils"
 
 const themes = [
-  { value: "dark", label: "Dark", icon: Moon },
   { value: "mid", label: "Mid", icon: Contrast },
+  { value: "dark", label: "Dark", icon: Moon },
   { value: "light", label: "Light", icon: Sun },
 ] as const
 
@@ -44,7 +44,7 @@ export function ThemeSwitcher() {
       <DropdownMenuTrigger
         render={
           <Button variant="ghost" size="icon" aria-label="Switch theme and skin">
-            {mounted ? <ActiveIcon className="size-4" /> : <Moon className="size-4" />}
+            {mounted ? <ActiveIcon className="size-4" /> : <Contrast className="size-4" />}
           </Button>
         }
       />
