@@ -43,6 +43,8 @@ export type LiveParticipant = {
 export type LiveAudioState = {
   connected: boolean
   connecting: boolean
+  // True while LiveKit is transparently re-establishing a dropped connection.
+  reconnecting: boolean
   micEnabled: boolean
   listeners: number
   speaking: boolean
@@ -204,9 +206,14 @@ export function useLiveAudio() {
   const fxCtxRef = useRef<AudioContext | null>(null)
   const fxGainRef = useRef<GainNode | null>(null)
   const fxTrackRef = useRef<LocalAudioTrack | null>(null)
+  // Distinguishes a user-initiated disconnect (End / leave) from an unexpected
+  // drop, and a callback fired only on the latter so the host can auto-recover.
+  const intentionalDisconnectRef = useRef(false)
+  const onDisconnectedRef = useRef<(() => void) | null>(null)
   const [state, setState] = useState<LiveAudioState>({
     connected: false,
     connecting: false,
+    reconnecting: false,
     micEnabled: false,
     listeners: 0,
     speaking: false,
@@ -262,10 +269,48 @@ export function useLiveAudio() {
     setSpeakers(out)
   }, [])
 
+  // Tears down all room-bound media (subscribed audio elements + locally
+  // published music/effects tracks) so the graph can be cleanly rebuilt on a
+  // fresh connection. Leaves the persistent music element/context intact.
+  const cleanupRoomMedia = useCallback(() => {
+    if (musicTrackRef.current) {
+      try {
+        musicTrackRef.current.stop()
+      } catch {
+        // already stopped
+      }
+      musicTrackRef.current = null
+    }
+    if (musicElRef.current) musicElRef.current.pause()
+    musicStreamRef.current = null
+    if (fxTrackRef.current) {
+      try {
+        fxTrackRef.current.stop()
+      } catch {
+        // already stopped
+      }
+      fxTrackRef.current = null
+    }
+    fxGainRef.current = null
+    void fxCtxRef.current?.close().catch(() => {})
+    fxCtxRef.current = null
+    audioElsRef.current.forEach((el) => el.remove())
+    audioElsRef.current.clear()
+  }, [])
+
   const connect = useCallback(
-    async (opts: { serverUrl: string; token: string; publish: boolean; muted?: boolean }) => {
+    async (opts: {
+      serverUrl: string
+      token: string
+      publish: boolean
+      muted?: boolean
+      // Fired when the connection drops unexpectedly (not via disconnect()).
+      onDisconnected?: () => void
+    }) => {
       if (roomRef.current) return
-      update({ connecting: true, error: null })
+      onDisconnectedRef.current = opts.onDisconnected ?? null
+      intentionalDisconnectRef.current = false
+      update({ connecting: true, error: null, reconnecting: false })
       try {
         const room = new Room({ adaptiveStream: true, dynacast: true })
         roomRef.current = room
@@ -327,8 +372,23 @@ export function useLiveAudio() {
             }
             refreshSpeakers(room)
           })
+          // Transient network drops: LiveKit re-establishes automatically.
+          .on(RoomEvent.Reconnecting, () => update({ reconnecting: true }))
+          .on(RoomEvent.Reconnected, () => {
+            update({ reconnecting: false, connected: true })
+            refreshCounts(room)
+            refreshSpeakers(room)
+          })
+          // Hard disconnect (gave up reconnecting, server/token issue, etc.).
+          // Fully tear the room down so a fresh connect() can succeed, and — if
+          // the drop wasn't user-initiated — signal the host to auto-recover.
           .on(RoomEvent.Disconnected, () => {
-            update({ connected: false, micEnabled: false })
+            const intentional = intentionalDisconnectRef.current
+            intentionalDisconnectRef.current = false
+            cleanupRoomMedia()
+            roomRef.current = null
+            update({ connected: false, reconnecting: false, micEnabled: false, listeners: 0, speaking: false })
+            if (!intentional) onDisconnectedRef.current?.()
           })
           .on(RoomEvent.AudioPlaybackStatusChanged, () => {
             // Reflect whether the browser is currently allowing audio playback.
@@ -630,29 +690,20 @@ export function useLiveAudio() {
   const disconnect = useCallback(async () => {
     const room = roomRef.current
     if (!room) return
-    if (musicTrackRef.current) {
-      musicTrackRef.current.stop()
-      musicTrackRef.current = null
-    }
-    if (musicElRef.current) musicElRef.current.pause()
-    musicStreamRef.current = null
-    if (fxTrackRef.current) {
-      fxTrackRef.current.stop()
-      fxTrackRef.current = null
-    }
-    await fxCtxRef.current?.close().catch(() => {})
-    fxCtxRef.current = null
-    fxGainRef.current = null
+    // Mark intentional so the Disconnected handler doesn't trigger recovery.
+    intentionalDisconnectRef.current = true
+    onDisconnectedRef.current = null
+    cleanupRoomMedia()
     await room.disconnect()
-    audioElsRef.current.forEach((el) => el.remove())
-    audioElsRef.current.clear()
     roomRef.current = null
-    update({ connected: false, connecting: false, micEnabled: false, listeners: 0, speaking: false })
-  }, [update])
+    update({ connected: false, connecting: false, reconnecting: false, micEnabled: false, listeners: 0, speaking: false })
+  }, [cleanupRoomMedia, update])
 
   // Clean up on unmount.
   useEffect(() => {
     return () => {
+      intentionalDisconnectRef.current = true
+      onDisconnectedRef.current = null
       const room = roomRef.current
       if (room) void room.disconnect()
       audioElsRef.current.forEach((el) => el.remove())
