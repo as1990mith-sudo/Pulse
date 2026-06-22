@@ -7,7 +7,7 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { dmConversation, dmMessage, statusUpdate, statusView, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
-import { DM_DELETE_WINDOW_MS } from "@/lib/dm-constants"
+import { DM_DELETE_WINDOW_MS, DM_EDIT_WINDOW_MS } from "@/lib/dm-constants"
 
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -31,6 +31,7 @@ export type DmMessageView = {
   createdAtMs: number
   pinned: boolean
   deleted: boolean
+  edited: boolean
   // Set when this message is a reply/reaction to a status. statusActive is true
   // while the status is still live (clickable); statusThumb is a preview image.
   statusId: number | null
@@ -107,6 +108,7 @@ type RawDmMessage = {
   statusId: number | null
   pinned: boolean
   deleted: boolean
+  editedAt: Date | null
   createdAt: Date
 }
 
@@ -147,6 +149,7 @@ function toMessageView(
     createdAtMs: m.createdAt.getTime(),
     pinned: m.pinned,
     deleted: m.deleted,
+    edited: m.deleted ? false : !!m.editedAt,
     statusId: m.deleted ? null : m.statusId ?? null,
     statusActive: m.deleted ? false : ref?.active ?? false,
     statusThumb: m.deleted ? null : ref?.thumb ?? null,
@@ -424,4 +427,23 @@ export async function togglePinDirectMessage(input: { messageId: number; pinned:
 
   await db.update(dmMessage).set({ pinned: input.pinned }).where(eq(dmMessage.id, input.messageId))
   revalidatePath(`/messages/${msg.conversationId}`)
+}
+
+/** Edits the body of the user's own text message, within the edit window. */
+export async function editDirectMessage(input: { messageId: number; body: string }) {
+  const user = await requireUser()
+  const body = input.body.trim()
+  if (!body) throw new Error("Message cannot be empty.")
+  const [msg] = await db.select().from(dmMessage).where(eq(dmMessage.id, input.messageId)).limit(1)
+  if (!msg) throw new Error("Message not found.")
+  await loadConversationForUser(msg.conversationId, user.id)
+  if (msg.senderId !== user.id) throw new Error("You can only edit your own messages.")
+  if (msg.deleted) throw new Error("You can't edit a deleted message.")
+  if (Date.now() - msg.createdAt.getTime() > DM_EDIT_WINDOW_MS) {
+    throw new Error("This message can no longer be edited.")
+  }
+
+  await db.update(dmMessage).set({ body, editedAt: new Date() }).where(eq(dmMessage.id, input.messageId))
+  revalidatePath(`/messages/${msg.conversationId}`)
+  revalidatePath("/messages")
 }

@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { communityComment, communityPost, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
+import { EDIT_WINDOW_MS } from "@/lib/interactions"
 
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -30,6 +31,8 @@ export type CommunityPostView = {
   id: number
   body: string
   postedAt: string
+  createdAtMs: number
+  edited: boolean
   commentCount: number
   // True when the signed-in user authored this post. Used to allow self-delete
   // and to reveal the author's own identity to themselves only.
@@ -45,6 +48,7 @@ export type CommunityPostView = {
 
 export type CommunityCommentView = {
   id: number
+  parentId: number | null
   userId: string
   userName: string
   handle: string
@@ -52,7 +56,10 @@ export type CommunityCommentView = {
   color: string
   image: string | null
   body: string
+  likes: number
+  edited: boolean
   postedAt: string
+  createdAtMs: number
   isSelf: boolean
 }
 
@@ -95,6 +102,8 @@ export async function getCommunityPosts(): Promise<CommunityPostView[]> {
       id: p.id,
       body: p.body,
       postedAt: timeAgo(p.createdAt),
+      createdAtMs: p.createdAt.getTime(),
+      edited: !!p.editedAt,
       commentCount: countMap.get(p.id) ?? 0,
       isSelf,
       authorName: isSelf && viewer ? viewer.name : null,
@@ -123,6 +132,8 @@ export async function createCommunityPost(body: string): Promise<CommunityPostVi
     id: row.id,
     body: row.body,
     postedAt: "now",
+    createdAtMs: row.createdAt.getTime(),
+    edited: false,
     commentCount: 0,
     isSelf: true,
     authorName: user.name,
@@ -156,6 +167,7 @@ export async function getCommunityComments(postId: number): Promise<CommunityCom
 
   return rows.map((r) => ({
     id: r.id,
+    parentId: r.parentId ?? null,
     userId: r.userId,
     userName: r.userName,
     handle: getHandle(r.userName),
@@ -163,7 +175,10 @@ export async function getCommunityComments(postId: number): Promise<CommunityCom
     color: getAvatarColor(r.userId),
     image: imageMap.get(r.userId) ?? null,
     body: r.body,
+    likes: r.likes,
+    edited: !!r.editedAt,
     postedAt: timeAgo(r.createdAt),
+    createdAtMs: r.createdAt.getTime(),
     isSelf: viewerId === r.userId,
   }))
 }
@@ -172,6 +187,7 @@ export async function getCommunityComments(postId: number): Promise<CommunityCom
 export async function addCommunityComment(input: {
   postId: number
   body: string
+  parentId?: number | null
 }): Promise<CommunityCommentView> {
   const user = await requireUser()
   const text = input.body.trim()
@@ -183,7 +199,7 @@ export async function addCommunityComment(input: {
 
   const [row] = await db
     .insert(communityComment)
-    .values({ postId: input.postId, userId: user.id, userName: user.name, body: text })
+    .values({ postId: input.postId, parentId: input.parentId ?? null, userId: user.id, userName: user.name, body: text })
     .returning()
 
   const [profile] = await db
@@ -194,6 +210,7 @@ export async function addCommunityComment(input: {
   revalidatePath("/chatrooms/community")
   return {
     id: row.id,
+    parentId: row.parentId ?? null,
     userId: user.id,
     userName: user.name,
     handle: getHandle(user.name),
@@ -201,7 +218,10 @@ export async function addCommunityComment(input: {
     color: getAvatarColor(user.id),
     image: profile?.image ?? null,
     body: row.body,
+    likes: 0,
+    edited: false,
     postedAt: "now",
+    createdAtMs: row.createdAt.getTime(),
     isSelf: true,
   }
 }
@@ -217,9 +237,42 @@ export async function editCommunityPost(input: { postId: number; body: string })
   if (!post || post.deleted) throw new Error("This post no longer exists.")
   if (post.userId !== user.id) throw new Error("You can only edit your own post.")
 
-  await db.update(communityPost).set({ body: text }).where(eq(communityPost.id, input.postId))
+  await db.update(communityPost).set({ body: text, editedAt: new Date() }).where(eq(communityPost.id, input.postId))
   revalidatePath("/chatrooms/community")
   return text
+}
+
+/** Author-only edit of their own comment, within the edit window. */
+export async function editCommunityComment(input: { commentId: number; body: string }): Promise<string> {
+  const user = await requireUser()
+  const text = input.body.trim()
+  if (!text) throw new Error("Your reply can't be empty.")
+  if (text.length > 1000) throw new Error("Please keep it under 1000 characters.")
+
+  const [comment] = await db.select().from(communityComment).where(eq(communityComment.id, input.commentId))
+  if (!comment || comment.deleted) throw new Error("This reply no longer exists.")
+  if (comment.userId !== user.id) throw new Error("You can only edit your own reply.")
+  if (Date.now() - comment.createdAt.getTime() > EDIT_WINDOW_MS) throw new Error("This reply can no longer be edited.")
+
+  await db
+    .update(communityComment)
+    .set({ body: text, editedAt: new Date() })
+    .where(eq(communityComment.id, input.commentId))
+  revalidatePath("/chatrooms/community")
+  return text
+}
+
+/** Toggle a like on a community comment. */
+export async function setCommunityCommentLike(input: { commentId: number; liked: boolean }) {
+  await requireUser()
+  const [row] = await db
+    .select({ likes: communityComment.likes })
+    .from(communityComment)
+    .where(eq(communityComment.id, input.commentId))
+  if (!row) return
+  const next = Math.max(0, row.likes + (input.liked ? 1 : -1))
+  await db.update(communityComment).set({ likes: next }).where(eq(communityComment.id, input.commentId))
+  revalidatePath("/chatrooms/community")
 }
 
 /** Author-only soft delete of their own anonymous post. */

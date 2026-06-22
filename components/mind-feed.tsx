@@ -21,7 +21,20 @@ import {
   Video,
   ImageIcon,
 } from "lucide-react"
-import { addPostComment, createPost, deletePost, editPost, getFeed, setPostLike, type FeedPostView } from "@/app/actions/feed"
+import {
+  addPostComment,
+  createPost,
+  deletePost,
+  deletePostComment,
+  editPost,
+  editPostComment,
+  getFeed,
+  setCommentLike,
+  setPostLike,
+  type FeedCommentView,
+  type FeedPostView,
+} from "@/app/actions/feed"
+import { CommentThread, type ThreadComment } from "@/components/comment-thread"
 import { toggleFollow } from "@/app/actions/follow"
 import type { CurrentUser } from "@/lib/session"
 import { uploadMedia } from "@/lib/upload-media"
@@ -44,6 +57,26 @@ import type { ShareTarget } from "@/lib/share-types"
 import { cn } from "@/lib/utils"
 
 type DraftMedia = { url: string; type: "image" | "video" }
+
+// Maps a feed comment into the shared CommentThread shape.
+function toThreadComment(c: FeedCommentView): ThreadComment {
+  return {
+    id: c.id,
+    parentId: c.parentId,
+    authorId: c.authorId,
+    isSelf: c.isSelf,
+    name: c.user,
+    handle: c.handle,
+    initials: c.initials,
+    color: c.color,
+    image: c.authorImage,
+    text: c.text,
+    likes: c.likes,
+    edited: c.edited,
+    postedAt: c.postedAt,
+    createdAtMs: c.createdAtMs,
+  }
+}
 
 export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; currentUser: CurrentUser | null }) {
   const router = useRouter()
@@ -411,6 +444,41 @@ export function PostCard({
     })
   }
 
+  function handleCommentLike(commentId: number, liked: boolean) {
+    void setCommentLike({ commentId, liked })
+  }
+
+  async function handleCommentReply(parentId: number, value: string) {
+    await addPostComment({ postId: post.id, text: value, parentId })
+    await globalMutate("feed")
+    router.refresh()
+  }
+
+  async function handleCommentEdit(commentId: number, value: string) {
+    await editPostComment({ commentId, text: value })
+    await globalMutate("feed")
+    router.refresh()
+  }
+
+  async function handleCommentDelete(commentId: number) {
+    await deletePostComment(commentId)
+    await globalMutate("feed")
+    router.refresh()
+  }
+
+  function commentShareTarget(comment: ThreadComment): ShareTarget {
+    return {
+      type: "post",
+      key: `${post.id}-c${comment.id}`,
+      title: `${comment.name} on Frequency`,
+      subtitle: comment.text ? comment.text.slice(0, 120) : null,
+      url: `/feed?post=${post.id}`,
+      image: null,
+      downloadUrl: null,
+      downloadKind: null,
+    }
+  }
+
   const hasMedia = !!post.image || !!post.video
 
   if (deleted) return null
@@ -658,28 +726,15 @@ export function PostCard({
             </p>
           )}
 
-          {post.comments.length > 0 && (
-            <ul className="space-y-4">
-              {post.comments.map((comment) => (
-                <li key={comment.id} className="flex gap-2.5">
-                  <Avatar className="size-8 shrink-0">
-                    {comment.authorImage && (
-                      <AvatarImage src={comment.authorImage || "/placeholder.svg"} alt={comment.user} />
-                    )}
-                    <AvatarFallback className={cn("text-xs", comment.color)}>{comment.initials}</AvatarFallback>
-                  </Avatar>
-                  <div className="space-y-0.5">
-                    <div className="flex flex-wrap items-center gap-x-2 text-sm">
-                      <span className="font-medium">{comment.user}</span>
-                      <span className="text-xs text-muted-foreground">{comment.handle}</span>
-                      <span className="text-xs text-muted-foreground">· {comment.postedAt}</span>
-                    </div>
-                    <p className="text-sm leading-relaxed text-foreground/90">{comment.text}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+          <CommentThread
+            comments={post.comments.map(toThreadComment)}
+            canInteract={!!currentUser}
+            onLike={handleCommentLike}
+            onReply={handleCommentReply}
+            onEdit={handleCommentEdit}
+            onDelete={handleCommentDelete}
+            shareTargetFor={commentShareTarget}
+          />
         </div>
       )}
 

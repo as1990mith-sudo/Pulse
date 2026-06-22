@@ -12,10 +12,32 @@ import {
   addEpisodeComment,
   setEpisodeLike,
   setEpisodeCommentLike,
+  editEpisodeComment,
+  deleteEpisodeComment,
   getEpisodeComments,
 } from "@/app/actions/episodes"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { CommentThread, type ThreadComment } from "@/components/comment-thread"
 import { cn } from "@/lib/utils"
+
+function toThreadComment(c: EpisodeCommentView): ThreadComment {
+  return {
+    id: c.id,
+    parentId: c.parentId,
+    authorId: c.authorId,
+    isSelf: c.isSelf,
+    name: c.user,
+    handle: c.handle,
+    initials: c.initials,
+    color: c.color,
+    image: c.authorImage,
+    text: c.text,
+    likes: c.likes,
+    edited: c.edited,
+    postedAt: c.postedAt,
+    createdAtMs: c.createdAtMs,
+  }
+}
 
 export function EpisodeInteractions({
   show,
@@ -135,65 +157,37 @@ export function EpisodeInteractions({
       )}
 
       {/* Comments */}
-      {comments.length > 0 && (
-        <ul className="space-y-3 pt-1">
-          {comments.map((c) => (
-            <EpisodeCommentRow key={c.id} comment={c} canLike={Boolean(currentUser)} />
-          ))}
-        </ul>
-      )}
+      <div className="pt-1">
+        <CommentThread
+          comments={comments.map(toThreadComment)}
+          canInteract={Boolean(currentUser)}
+          onLike={(commentId, liked) => void setEpisodeCommentLike({ commentId, liked })}
+          onReply={async (parentId, value) => {
+            await addEpisodeComment({ episodeId: episodeId!, text: value, parentId })
+            setComments(await getEpisodeComments(episodeId!))
+          }}
+          onEdit={async (commentId, value) => {
+            await editEpisodeComment({ commentId, text: value })
+            setComments(await getEpisodeComments(episodeId!))
+          }}
+          onDelete={async (commentId) => {
+            await deleteEpisodeComment(commentId)
+            setComments(await getEpisodeComments(episodeId!))
+          }}
+          shareTargetFor={(c) => ({
+            type: "episode",
+            key: `${episodeId}-c${c.id}`,
+            title: `${c.name} on Frequency`,
+            subtitle: c.text.slice(0, 120),
+            url: shareTarget.url,
+            image: null,
+            downloadUrl: null,
+            downloadKind: null,
+          })}
+        />
+      </div>
 
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
     </div>
-  )
-}
-
-function EpisodeCommentRow({ comment, canLike }: { comment: EpisodeCommentView; canLike: boolean }) {
-  const [liked, setLiked] = useState(false)
-  const [likes, setLikes] = useState(comment.likes)
-  const [, startTransition] = useTransition()
-
-  function toggle() {
-    if (!canLike) return
-    const next = !liked
-    setLiked(next)
-    setLikes((n) => Math.max(0, n + (next ? 1 : -1)))
-    startTransition(async () => {
-      await setEpisodeCommentLike({ commentId: comment.id, liked: next })
-    })
-  }
-
-  return (
-    <li className="flex gap-2.5">
-      <Avatar className="size-8 shrink-0">
-        <AvatarImage src={comment.authorImage || undefined} alt="" />
-        <AvatarFallback style={{ backgroundColor: comment.color }} className="text-xs text-white">
-          {comment.initials}
-        </AvatarFallback>
-      </Avatar>
-      <div className="min-w-0 flex-1">
-        <div className="rounded-2xl rounded-tl-sm bg-secondary px-3 py-2">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-semibold">{comment.user}</span>
-            <span className="text-xs text-muted-foreground">{comment.postedAt}</span>
-          </div>
-          <p className="text-sm leading-relaxed text-foreground/90">{comment.text}</p>
-        </div>
-        <button
-          onClick={toggle}
-          disabled={!canLike}
-          className={cn(
-            "mt-1 flex items-center gap-1 px-3 text-xs font-medium transition-colors disabled:opacity-50",
-            liked ? "text-live" : "text-muted-foreground hover:text-foreground",
-          )}
-          aria-pressed={liked}
-          aria-label="Like comment"
-        >
-          <Heart className={cn("size-3.5", liked && "fill-current")} />
-          {likes > 0 && <span className="tabular-nums">{likes}</span>}
-          {likes === 0 && "Like"}
-        </button>
-      </div>
-    </li>
   )
 }

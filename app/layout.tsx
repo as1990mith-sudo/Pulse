@@ -2,6 +2,7 @@ import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono, Sora } from 'next/font/google'
 import { ThemeProvider } from '@/components/theme-provider'
+import { SkinProvider, SKIN_INIT_SCRIPT } from '@/components/skin-provider'
 import './globals.css'
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
@@ -53,6 +54,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="font-sans antialiased">
+        <script dangerouslySetInnerHTML={{ __html: SKIN_INIT_SCRIPT }} />
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
@@ -66,8 +68,10 @@ export default function RootLayout({
           enableSystem={false}
           disableTransitionOnChange
         >
-          {children}
-          {process.env.NODE_ENV === 'production' && <Analytics />}
+          <SkinProvider>
+            {children}
+            {process.env.NODE_ENV === 'production' && <Analytics />}
+          </SkinProvider>
         </ThemeProvider>
       </body>
     </html>

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import useSWR from "swr"
 import Link from "next/link"
-import { ArrowLeft, CornerUpLeft, FileText, Mic, Music, Paperclip, Phone, Pin, PinOff, Send, Smile, Trash2, Video, X } from "lucide-react"
+import { ArrowLeft, Copy, CornerUpLeft, FileText, Mic, Music, Paperclip, Pencil, Phone, Pin, PinOff, Send, Smile, Trash2, Video, X } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -15,6 +15,7 @@ import { linkify } from "@/lib/linkify"
 import { uploadMedia } from "@/lib/upload-media"
 import {
   deleteDirectMessage,
+  editDirectMessage,
   getDmMessages,
   sendDirectMessage,
   togglePinDirectMessage,
@@ -22,7 +23,8 @@ import {
   type DmConversationDetail,
   type DmMessageView,
 } from "@/app/actions/dm"
-import { DM_DELETE_WINDOW_MS } from "@/lib/dm-constants"
+import { DM_DELETE_WINDOW_MS, DM_EDIT_WINDOW_MS } from "@/lib/dm-constants"
+import { ActionSheet, type SheetAction } from "@/components/action-sheet"
 import { getActiveCall, startCall, type CallMode, type DmCallView } from "@/app/actions/dm-call"
 
 const EMOJIS = [
@@ -127,6 +129,7 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
           createdAtMs: Date.now(),
           pinned: false,
           deleted: false,
+          edited: false,
           statusId: null,
           statusActive: false,
           statusThumb: null,
@@ -170,6 +173,7 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
         createdAtMs: Date.now(),
         pinned: false,
         deleted: false,
+        edited: false,
         statusId: null,
         statusActive: false,
         statusThumb: null,
@@ -207,6 +211,18 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
     })
     try {
       await togglePinDirectMessage({ messageId: id, pinned })
+    } finally {
+      await mutateMessages()
+    }
+  }
+
+  async function handleEditMessage(id: number, body: string) {
+    await mutateMessages(
+      (curr) => (curr ?? []).map((m) => (m.id === id ? { ...m, body, edited: true } : m)),
+      { revalidate: false },
+    )
+    try {
+      await editDirectMessage({ messageId: id, body })
     } finally {
       await mutateMessages()
     }
@@ -291,6 +307,7 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
               name={m.isSelf ? "You" : detail.otherUserName}
               onDelete={handleDeleteMessage}
               onTogglePin={handleTogglePin}
+              onEdit={handleEditMessage}
             />
           ))}
           <div ref={scrollEndRef} />
@@ -419,6 +436,7 @@ function DmBubble({
   name,
   onDelete,
   onTogglePin,
+  onEdit,
 }: {
   message: DmMessageView
   color: string
@@ -427,15 +445,19 @@ function DmBubble({
   name: string
   onDelete: (id: number) => void
   onTogglePin: (id: number, pinned: boolean) => void
+  onEdit: (id: number, body: string) => void
 }) {
   const [lightbox, setLightbox] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [editDraft, setEditDraft] = useState(m.body ?? "")
+  const [copied, setCopied] = useState(false)
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Only persisted (positive id), non-deleted messages can be acted on. The
-  // delete option only exists within the 15-minute window after sending.
+  // Only persisted (positive id), non-deleted messages can be acted on.
   const actionable = m.id > 0 && !m.deleted
-  const canDelete = actionable && m.isSelf && Date.now() - m.createdAtMs < DM_DELETE_WINDOW_MS
+  const canDeleteMsg = actionable && m.isSelf && Date.now() - m.createdAtMs < DM_DELETE_WINDOW_MS
+  const canEditMsg = actionable && m.isSelf && !!m.body && Date.now() - m.createdAtMs < DM_EDIT_WINDOW_MS
 
   function startPress() {
     if (!actionable) return
@@ -447,6 +469,20 @@ function DmBubble({
       longPressRef.current = null
     }
   }
+
+  function copyText() {
+    if (!m.body) return
+    navigator.clipboard?.writeText(m.body).then(() => {
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    })
+  }
+
+  const actions: SheetAction[] = []
+  if (m.body) actions.push({ label: "Copy", icon: Copy, onClick: copyText })
+  if (canEditMsg) actions.push({ label: "Edit", icon: Pencil, onClick: () => { setEditDraft(m.body ?? ""); setEditing(true) } })
+  actions.push({ label: m.pinned ? "Unpin" : "Pin", icon: m.pinned ? PinOff : Pin, onClick: () => onTogglePin(m.id, !m.pinned) })
+  if (canDeleteMsg) actions.push({ label: "Delete", icon: Trash2, destructive: true, onClick: () => onDelete(m.id) })
 
   // Deleted messages keep their slot but show a tombstone instead of content.
   if (m.deleted) {
@@ -481,6 +517,8 @@ function DmBubble({
         <span className={cn("flex items-center gap-1 text-[10px] text-muted-foreground", m.isSelf && "justify-end")}>
           {m.pinned && <Pin className="size-3 fill-current" aria-label="Pinned" />}
           {m.postedAt}
+          {m.edited && <span>· edited</span>}
+          {copied && <span className="text-primary">Copied</span>}
         </span>
         <div
           onPointerDown={startPress}
@@ -581,54 +619,47 @@ function DmBubble({
               <span className="truncate">{m.attachmentName ?? "Document"}</span>
             </a>
           )}
-          {m.body && (
+          {m.body && !editing && (
             <p className={cn("whitespace-pre-wrap [overflow-wrap:anywhere]", m.attachmentUrl && "px-2 pb-1 pt-1.5")}>
               {linkify(m.body, "font-medium underline underline-offset-2 [overflow-wrap:anywhere] hover:opacity-80")}
             </p>
           )}
+          {m.body && editing && (
+            <form
+              className="flex flex-col gap-2 p-1"
+              onSubmit={(e) => {
+                e.preventDefault()
+                const next = editDraft.trim()
+                if (next && next !== m.body) onEdit(m.id, next)
+                setEditing(false)
+              }}
+            >
+              <textarea
+                autoFocus
+                value={editDraft}
+                onChange={(e) => setEditDraft(e.target.value)}
+                rows={2}
+                className="w-full resize-none rounded-lg bg-background/60 px-2 py-1 text-foreground outline-none ring-1 ring-border focus:ring-2 focus:ring-ring"
+              />
+              <div className="flex justify-end gap-2 text-xs">
+                <button type="button" onClick={() => setEditing(false)} className="rounded-md px-2 py-1 hover:bg-background/40">
+                  Cancel
+                </button>
+                <button type="submit" className="rounded-md bg-background/70 px-2 py-1 font-medium text-foreground hover:bg-background">
+                  Save
+                </button>
+              </div>
+            </form>
+          )}
         </div>
 
-        {menuOpen && (
-          <>
-            {/* Backdrop closes the menu when tapping elsewhere. */}
-            <button
-              type="button"
-              aria-label="Close menu"
-              className="fixed inset-0 z-40 cursor-default"
-              onClick={() => setMenuOpen(false)}
-            />
-            <div
-              className={cn(
-                "absolute z-50 mt-1 min-w-36 overflow-hidden rounded-xl border border-border/60 bg-popover p-1 text-popover-foreground shadow-lg",
-                m.isSelf ? "right-0" : "left-0",
-              )}
-            >
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuOpen(false)
-                  onTogglePin(m.id, !m.pinned)
-                }}
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
-              >
-                {m.pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
-                {m.pinned ? "Unpin" : "Pin"}
-              </button>
-              {canDelete && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false)
-                    onDelete(m.id)
-                  }}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-destructive transition-colors hover:bg-destructive/10"
-                >
-                  <Trash2 className="size-4" /> Delete
-                </button>
-              )}
-            </div>
-          </>
-        )}
+        <ActionSheet
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          title={m.isSelf ? "Your message" : name}
+          preview={m.body ?? m.attachmentName ?? undefined}
+          actions={actions}
+        />
       </div>
     </div>
   )

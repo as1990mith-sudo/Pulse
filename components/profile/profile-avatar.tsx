@@ -95,10 +95,9 @@ export function ProfileAvatar({
               aria-label={`View ${name}'s status`}
               className={cn(
                 "flex items-center justify-center rounded-full p-[3px] transition-transform hover:scale-[1.03]",
-                ringActive
-                  ? "bg-gradient-to-tr from-amber-500 via-rose-500 to-fuchsia-600"
-                  : "bg-border",
+                !ringActive && "bg-border",
               )}
+              style={ringActive ? { backgroundImage: "var(--skin-ring)" } : undefined}
             >
               <span className="flex items-center justify-center rounded-full border-2 border-background bg-card p-[2px]">
                 {inner}

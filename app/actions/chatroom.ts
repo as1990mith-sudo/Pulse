@@ -13,6 +13,7 @@ import {
   user as userTable,
 } from "@/lib/db/schema"
 import { getAvatarColor, getInitials } from "@/lib/identity"
+import { EDIT_WINDOW_MS, DELETE_WINDOW_MS } from "@/lib/interactions"
 
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -64,7 +65,9 @@ export type ChatMessageView = {
   isSelf: boolean
   pinned: boolean
   deleted: boolean
+  edited: boolean
   postedAt: string
+  createdAtMs: number
 }
 
 export type JoinRequestView = {
@@ -115,6 +118,7 @@ type ChatMessageRow = {
   attachmentName: string | null
   pinned: boolean
   deleted: boolean
+  editedAt: Date | null
   createdAt: Date
 }
 
@@ -154,7 +158,9 @@ function toMessageView(
     isSelf: m.userId === viewerId,
     pinned: m.pinned,
     deleted: m.deleted,
+    edited: m.deleted ? false : !!m.editedAt,
     postedAt: timeAgo(m.createdAt),
+    createdAtMs: m.createdAt.getTime(),
   }
 }
 
@@ -400,30 +406,55 @@ export async function getChatMessages(chatroomId: number): Promise<ChatMessageVi
   return messages.map((m) => toMessageView(m, user.id, imageMap))
 }
 
-/** Admin deletes a message (soft delete — content is cleared but order kept). */
+/** Deletes a message (soft delete — content is cleared but order kept). */
 export async function deleteChatMessage(messageId: number) {
   const user = await requireUser()
   const [msg] = await db.select().from(chatroomMessage).where(eq(chatroomMessage.id, messageId))
   if (!msg) throw new Error("Message not found.")
   const [room] = await db.select().from(chatroom).where(eq(chatroom.id, msg.chatroomId))
-  // The admin can remove anyone's message; a member can remove their own.
-  const canDelete = room && (room.ownerId === user.id || msg.userId === user.id)
-  if (!canDelete) throw new Error("You can't delete this message.")
+  if (!room) throw new Error("Chatroom not found.")
+  const isAdmin = room.ownerId === user.id
+  const isAuthor = msg.userId === user.id
+  if (!isAdmin && !isAuthor) throw new Error("You can't delete this message.")
+  // Authors may only delete within the window; admins can remove anytime.
+  if (!isAdmin && isAuthor && Date.now() - msg.createdAt.getTime() > DELETE_WINDOW_MS) {
+    throw new Error("This message can no longer be deleted.")
+  }
 
   await db.update(chatroomMessage).set({ deleted: true, pinned: false }).where(eq(chatroomMessage.id, messageId))
   revalidatePath(`/chatrooms/${msg.chatroomId}`)
 }
 
-/** Admin pins or unpins a message so it surfaces at the top of the room. */
+/** Pins or unpins a message. The room admin may pin any message; a member may pin their own. */
 export async function togglePinMessage(input: { messageId: number; pinned: boolean }) {
   const user = await requireUser()
   const [msg] = await db.select().from(chatroomMessage).where(eq(chatroomMessage.id, input.messageId))
   if (!msg) throw new Error("Message not found.")
   const [room] = await db.select().from(chatroom).where(eq(chatroom.id, msg.chatroomId))
-  if (!room || room.ownerId !== user.id) throw new Error("Only the chatroom admin can pin messages.")
+  if (!room) throw new Error("Chatroom not found.")
+  if (room.ownerId !== user.id && msg.userId !== user.id) {
+    throw new Error("You can only pin your own messages.")
+  }
   if (msg.deleted) throw new Error("You can't pin a deleted message.")
 
   await db.update(chatroomMessage).set({ pinned: input.pinned }).where(eq(chatroomMessage.id, input.messageId))
+  revalidatePath(`/chatrooms/${msg.chatroomId}`)
+}
+
+/** Edits the author's own message body, within the edit window. */
+export async function editChatMessage(input: { messageId: number; body: string }) {
+  const user = await requireUser()
+  const body = input.body.trim()
+  if (!body) throw new Error("Message cannot be empty.")
+  const [msg] = await db.select().from(chatroomMessage).where(eq(chatroomMessage.id, input.messageId))
+  if (!msg) throw new Error("Message not found.")
+  if (msg.userId !== user.id) throw new Error("You can only edit your own messages.")
+  if (msg.deleted) throw new Error("You can't edit a deleted message.")
+  if (Date.now() - msg.createdAt.getTime() > EDIT_WINDOW_MS) {
+    throw new Error("This message can no longer be edited.")
+  }
+
+  await db.update(chatroomMessage).set({ body, editedAt: new Date() }).where(eq(chatroomMessage.id, input.messageId))
   revalidatePath(`/chatrooms/${msg.chatroomId}`)
 }
 

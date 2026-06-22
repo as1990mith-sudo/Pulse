@@ -67,6 +67,8 @@ export const feedPost = pgTable("feed_post", {
   video: text("video"),
   likes: integer("likes").notNull().default(0),
   reposts: integer("reposts").notNull().default(0),
+  // Set the first time the author edits the post; drives the "· edited" label.
+  editedAt: timestamp("editedAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
@@ -81,20 +83,26 @@ export const follow = pgTable("follow", {
 export const feedComment = pgTable("feed_comment", {
   id: serial("id").primaryKey(),
   postId: integer("postId").notNull(),
+  // When set, this comment is a reply to another comment (threaded replies).
+  parentId: integer("parentId"),
   userId: text("userId").notNull(),
   authorName: text("authorName").notNull(),
   authorHandle: text("authorHandle").notNull(),
   text: text("text").notNull(),
   likes: integer("likes").notNull().default(0),
+  editedAt: timestamp("editedAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
 export const devotionalComment = pgTable("devotional_comment", {
   id: serial("id").primaryKey(),
   devotionalDate: text("devotionalDate").notNull(),
+  parentId: integer("parentId"),
   userId: text("userId").notNull(),
   authorName: text("authorName").notNull(),
   text: text("text").notNull(),
+  likes: integer("likes").notNull().default(0),
+  editedAt: timestamp("editedAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
@@ -145,11 +153,13 @@ export const episode = pgTable("episode", {
 export const episodeComment = pgTable("episode_comment", {
   id: serial("id").primaryKey(),
   episodeId: integer("episodeId").notNull(),
+  parentId: integer("parentId"),
   userId: text("userId").notNull(),
   authorName: text("authorName").notNull(),
   authorHandle: text("authorHandle").notNull(),
   text: text("text").notNull(),
   likes: integer("likes").notNull().default(0),
+  editedAt: timestamp("editedAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
@@ -191,6 +201,8 @@ export const chatroomMessage = pgTable("chatroom_message", {
   // soft-deleted (kept for ordering) and shown as "message removed".
   pinned: boolean("pinned").notNull().default(false),
   deleted: boolean("deleted").notNull().default(false),
+  // Set when the author edits the message (allowed within 15 minutes).
+  editedAt: timestamp("editedAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
@@ -368,6 +380,8 @@ export const dmMessage = pgTable("dm_message", {
   // deleted (content cleared) so message ordering is preserved.
   pinned: boolean("pinned").notNull().default(false),
   deleted: boolean("deleted").notNull().default(false),
+  // Set when the sender edits the message (allowed within 15 minutes).
+  editedAt: timestamp("editedAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
@@ -425,6 +439,7 @@ export const communityPost = pgTable("community_post", {
   userId: text("userId").notNull(), // hidden author — never exposed to clients
   body: text("body").notNull(),
   deleted: boolean("deleted").notNull().default(false),
+  editedAt: timestamp("editedAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
@@ -433,9 +448,12 @@ export const communityPost = pgTable("community_post", {
 export const communityComment = pgTable("community_comment", {
   id: serial("id").primaryKey(),
   postId: integer("postId").notNull(),
+  parentId: integer("parentId"),
   userId: text("userId").notNull(),
   userName: text("userName").notNull(),
   body: text("body").notNull(),
+  likes: integer("likes").notNull().default(0),
   deleted: boolean("deleted").notNull().default(false),
+  editedAt: timestamp("editedAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })

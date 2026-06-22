@@ -76,10 +76,9 @@ export function DmInbox({
                   aria-label={`View ${c.otherUserName}'s status`}
                   className={cn(
                     "flex shrink-0 items-center justify-center rounded-full p-[2px] transition-transform hover:scale-[1.04]",
-                    c.statusAllViewed
-                      ? "bg-border"
-                      : "bg-gradient-to-tr from-amber-500 via-rose-500 to-fuchsia-600",
+                    c.statusAllViewed && "bg-border",
                   )}
+                  style={c.statusAllViewed ? undefined : { backgroundImage: "var(--skin-ring)" }}
                 >
                   <span className="rounded-full border-2 border-card p-[1px]">
                     <Avatar className="size-10">
