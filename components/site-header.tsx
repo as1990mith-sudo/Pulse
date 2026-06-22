@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { BookOpen, Radio } from "lucide-react"
@@ -18,6 +19,34 @@ const navItems = [
 
 export function SiteHeader() {
   const pathname = usePathname()
+  // Hide the header when scrolling down, reveal it when scrolling back up.
+  const [hidden, setHidden] = useState(false)
+  const lastY = useRef(0)
+
+  useEffect(() => {
+    lastY.current = window.scrollY
+    let frame = 0
+    function onScroll() {
+      if (frame) return
+      frame = requestAnimationFrame(() => {
+        frame = 0
+        const y = window.scrollY
+        const delta = y - lastY.current
+        // Ignore tiny jitters; always show near the very top.
+        if (Math.abs(delta) > 6) {
+          setHidden(delta > 0 && y > 72)
+          lastY.current = y
+        } else if (y <= 72) {
+          setHidden(false)
+        }
+      })
+    }
+    window.addEventListener("scroll", onScroll, { passive: true })
+    return () => {
+      window.removeEventListener("scroll", onScroll)
+      if (frame) cancelAnimationFrame(frame)
+    }
+  }, [])
 
   function isActive(href: string) {
     if (href === "/") return pathname === "/"
@@ -25,7 +54,12 @@ export function SiteHeader() {
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl">
+    <header
+      className={cn(
+        "sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl transition-[transform,opacity] duration-300 ease-out",
+        hidden ? "-translate-y-full opacity-0" : "translate-y-0 opacity-100",
+      )}
+    >
       <div className="relative mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
         <Link href="/" className="flex items-center gap-2">
           <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">

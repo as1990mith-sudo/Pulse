@@ -81,6 +81,9 @@
   /* Phone-call accept green — consistent across all themes. */
   --call-accept: oklch(0.65 0.18 145);
   --call-accept-foreground: oklch(0.99 0.005 145);
+  /* Story/status ring gradient — overridden per skin (see [data-skin] blocks).
+     Default matches the "Orange" skin (amber → rose → fuchsia). */
+  --skin-ring: linear-gradient(to top right, oklch(0.79 0.16 62), oklch(0.66 0.23 22), oklch(0.6 0.26 350));
   --chart-1: oklch(0.72 0.18 55);
   --chart-2: oklch(0.72 0.13 195);
   --chart-3: oklch(0.78 0.15 75);
@@ -191,6 +194,54 @@
   --sidebar-accent: oklch(0.8 0.02 285 / 16%);
   --sidebar-accent-foreground: oklch(0.99 0.002 285);
   --sidebar-border: oklch(1 0 0 / 22%);
+}
+
+/* ── Skins ───────────────────────────────────────────────────────────────
+   A second theming axis, independent of the light/dark/mid/transparent
+   appearance. A skin only re-tints the accent (primary/ring/charts) and the
+   status-ring gradient — it deliberately leaves backgrounds, the live (red)
+   accent, and the Community Help (emerald) palette untouched. These blocks
+   come after every appearance block so they win the cascade on <html>. */
+[data-skin="orange"] {
+  --primary: oklch(0.72 0.18 55);
+  --primary-foreground: oklch(0.99 0.005 60);
+  --ring: oklch(0.72 0.18 55);
+  --sidebar-primary: oklch(0.72 0.18 55);
+  --sidebar-ring: oklch(0.72 0.18 55);
+  --chart-1: oklch(0.72 0.18 55);
+  --skin-ring: linear-gradient(to top right, oklch(0.79 0.16 62), oklch(0.66 0.23 22), oklch(0.6 0.26 350));
+}
+
+[data-skin="green"] {
+  --primary: oklch(0.64 0.15 150);
+  --primary-foreground: oklch(0.99 0.01 150);
+  --ring: oklch(0.64 0.15 150);
+  --sidebar-primary: oklch(0.64 0.15 150);
+  --sidebar-ring: oklch(0.64 0.15 150);
+  --chart-1: oklch(0.64 0.15 150);
+  --skin-ring: linear-gradient(to top right, oklch(0.8 0.16 145), oklch(0.62 0.16 158), oklch(0.7 0.13 195));
+}
+
+[data-skin="blue"] {
+  --primary: oklch(0.62 0.16 250);
+  --primary-foreground: oklch(0.99 0.01 250);
+  --ring: oklch(0.62 0.16 250);
+  --sidebar-primary: oklch(0.62 0.16 250);
+  --sidebar-ring: oklch(0.62 0.16 250);
+  --chart-1: oklch(0.62 0.16 250);
+  --skin-ring: linear-gradient(to top right, oklch(0.74 0.14 220), oklch(0.6 0.17 255), oklch(0.62 0.16 292));
+}
+
+/* "Aurora" — v0's gradient skin. Solid teal-cyan accent for buttons/links, with
+   a cool multi-hue gradient on the status ring. */
+[data-skin="gradient"] {
+  --primary: oklch(0.66 0.14 205);
+  --primary-foreground: oklch(0.99 0.01 205);
+  --ring: oklch(0.66 0.14 205);
+  --sidebar-primary: oklch(0.66 0.14 205);
+  --sidebar-ring: oklch(0.66 0.14 205);
+  --chart-1: oklch(0.66 0.14 205);
+  --skin-ring: linear-gradient(to top right, oklch(0.78 0.15 190), oklch(0.62 0.18 250), oklch(0.62 0.2 322));
 }
 
 .theme-transparent body {

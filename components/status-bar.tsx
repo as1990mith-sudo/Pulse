@@ -328,12 +328,10 @@ function StoryRing({
     <span
       className={cn(
         "flex size-16 items-center justify-center rounded-full p-[2.5px]",
-        gradient
-          ? "bg-gradient-to-tr from-amber-500 via-rose-500 to-fuchsia-600"
-          : viewed
-            ? "bg-border"
-            : "bg-secondary",
+        !gradient && (viewed ? "bg-border" : "bg-secondary"),
       )}
+      // Unseen rings use the active skin's gradient (see --skin-ring in globals.css).
+      style={gradient ? { backgroundImage: "var(--skin-ring)" } : undefined}
     >
       <span className="flex size-full items-center justify-center rounded-full border-2 border-background bg-card">
         <span className="size-full overflow-hidden rounded-full">{children}</span>
