@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
-  ArrowLeft,
   Check,
   Loader2,
   Lock,
@@ -75,14 +74,14 @@ function DockButton({
       aria-label={label}
       aria-pressed={active}
       className={cn(
-        "flex size-11 items-center justify-center rounded-full ring-1 ring-inset ring-white/10 backdrop-blur-md transition-all hover:scale-105 active:scale-95 disabled:opacity-50",
+        "flex size-14 items-center justify-center rounded-full shadow-xl ring-1 ring-inset transition-all hover:scale-105 active:scale-95 disabled:opacity-50 [&>svg]:size-[26px] [&>svg]:stroke-[2.5]",
         tone === "danger"
-          ? "bg-destructive/20 text-destructive-foreground ring-destructive/40 hover:bg-destructive/30"
+          ? "bg-destructive text-white shadow-destructive/40 ring-white/25 hover:bg-destructive/90"
           : active && tone === "live"
-            ? "bg-live/20 text-live ring-live/40"
+            ? "bg-live text-live-foreground shadow-live/40 ring-white/25"
             : active
-              ? "bg-primary text-primary-foreground ring-transparent"
-              : "bg-white/10 text-white hover:bg-white/20",
+              ? "bg-primary text-primary-foreground shadow-primary/40 ring-white/25"
+              : "bg-white/25 text-white ring-white/25 hover:bg-white/35",
       )}
     >
       {children}
@@ -255,19 +254,19 @@ export function LiveListener({
 
   if (hostEnded) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-border/60 bg-card px-6 py-14 text-center">
-        <span className="flex size-12 items-center justify-center rounded-full bg-secondary text-muted-foreground">
-          <Radio className="size-6" />
+      <div className="flex h-full flex-col items-center justify-center gap-3 bg-zinc-950 px-6 py-14 text-center text-white">
+        <span className="flex size-14 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-inset ring-white/15">
+          <Radio className="size-7" strokeWidth={2.5} />
         </span>
-        <p className="text-lg font-semibold">Session Ended</p>
-        <p className="text-sm text-muted-foreground">The host has ended this live session. Taking you back to Live…</p>
-        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        <p className="text-lg font-bold">Session Ended</p>
+        <p className="text-sm text-white/60">The host has ended this live session. Taking you back to Live…</p>
+        <Loader2 className="size-4 animate-spin text-white/60" />
       </div>
     )
   }
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden bg-zinc-950 text-white lg:h-auto lg:rounded-2xl lg:border lg:border-white/10 lg:shadow-2xl">
+    <div className="relative flex h-full flex-col overflow-hidden bg-zinc-950 text-white">
       {/* Drifting aurora backdrop tinted from the cover art for an immersive room. */}
       <div
         aria-hidden="true"
@@ -303,13 +302,13 @@ export function LiveListener({
           }}
           onMinimize={onMinimize ?? (() => {})}
         />
-        <span className="relative size-12 shrink-0 overflow-hidden rounded-xl bg-white/10 ring-1 ring-white/15">
+        <span className="relative size-12 shrink-0 overflow-hidden rounded-xl bg-white/10 shadow-xl ring-2 ring-white/30">
           {stream.cover ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={stream.cover || "/placeholder.svg"} alt="Cover art" className="size-full object-cover" />
           ) : (
-            <span className="flex size-full items-center justify-center text-white/60">
-              <Radio className="size-5" />
+            <span className="flex size-full items-center justify-center text-white/80">
+              <Radio className="size-5" strokeWidth={2.75} />
             </span>
           )}
         </span>
@@ -324,8 +323,8 @@ export function LiveListener({
               </span>
             )}
           </div>
-          <h1 className="mt-0.5 truncate text-sm font-semibold leading-tight text-white">{stream.title}</h1>
-          <p className="truncate text-xs text-white/60">with {stream.hostName}</p>
+          <h1 className="mt-0.5 truncate text-base font-bold leading-tight tracking-tight text-white">{stream.title}</h1>
+          <p className="truncate text-xs font-medium text-white/70">with {stream.hostName}</p>
         </div>
 
         <div className="relative flex shrink-0 flex-col items-end gap-1">
@@ -429,9 +428,9 @@ export function LiveListener({
           <div className="flex items-center justify-between gap-2">
             <button
               onClick={() => void join()}
-              className="flex items-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+              className="flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/30 transition-all hover:opacity-95 active:scale-[0.98]"
             >
-              <Play className="size-4 translate-x-0.5" /> Join the room
+              <Play className="size-4 translate-x-0.5" strokeWidth={2.75} /> Join the room
             </button>
             <DockButton label="Share room" onClick={() => setShareOpen(true)}>
               <Share2 className="size-5" />
@@ -488,9 +487,9 @@ export function LiveListener({
               ) : (
                 <button
                   onClick={handleRequestCall}
-                  className="flex items-center gap-1.5 rounded-full bg-call-accept/15 px-3 py-2 text-xs font-semibold text-call-accept transition-colors hover:bg-call-accept/25"
+                  className="flex items-center gap-1.5 rounded-full bg-call-accept px-4 py-2.5 text-xs font-bold text-call-accept-foreground shadow-lg shadow-call-accept/30 transition-all hover:opacity-95 active:scale-95"
                 >
-                  <Mic className="size-4" /> Speak
+                  <Mic className="size-4" strokeWidth={2.75} /> Speak
                 </button>
               ))}
           </div>
@@ -498,12 +497,11 @@ export function LiveListener({
         {error && !ended && <p className="mt-2 text-xs text-destructive">{error}</p>}
       </div>
 
-      {/* Live chat — always-on, inline below the dock so no extra tap is needed.
-          Desktop uses the page's side rail, so it's hidden here to avoid a dupe. */}
-      <section className="relative flex min-h-0 flex-1 flex-col overflow-hidden border-t border-white/10 pb-safe lg:hidden">
+      {/* Live chat — always-on, inline below the dock so no extra tap is needed. */}
+      <section className="relative flex min-h-0 flex-1 flex-col overflow-hidden border-t border-white/10 pb-safe">
         <div className="flex shrink-0 items-center justify-between px-4 pb-1 pt-2.5">
-          <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-white/60">
-            <MessageSquare className="size-3.5 text-primary" /> Live chat
+          <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-white/70">
+            <MessageSquare className="size-3.5 text-primary" strokeWidth={2.5} /> Live chat
           </h2>
         </div>
         <div className="min-h-0 flex-1">

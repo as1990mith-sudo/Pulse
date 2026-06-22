@@ -230,13 +230,13 @@ export function StudioConsole({
             onExit={live ? toggleLive : (onExit ?? (() => {}))}
             onMinimize={onMinimize ?? (() => {})}
           />
-          <div className="relative size-16 shrink-0 overflow-hidden rounded-xl bg-white/10 ring-1 ring-white/15 sm:size-20">
+          <div className="relative size-16 shrink-0 overflow-hidden rounded-xl bg-white/10 shadow-xl ring-2 ring-white/30 sm:size-20">
             {cover ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={cover || "/placeholder.svg"} alt="Session cover art" className="size-full object-cover" />
             ) : (
-              <span className="flex size-full items-center justify-center text-white/60">
-                <Radio className="size-6" />
+              <span className="flex size-full items-center justify-center text-white/80">
+                <Radio className="size-7" strokeWidth={2.75} />
               </span>
             )}
           </div>
@@ -263,7 +263,7 @@ export function StudioConsole({
             </div>
 
             {live ? (
-              <p className="truncate text-sm font-semibold leading-tight text-white sm:text-base">{title || "Untitled session"}</p>
+              <p className="truncate text-base font-bold leading-tight tracking-tight text-white sm:text-lg">{title || "Untitled session"}</p>
             ) : (
               <input
                 value={title}
@@ -293,10 +293,14 @@ export function StudioConsole({
             onClick={toggleLive}
             size="sm"
             variant={live ? "secondary" : "default"}
-            className="shrink-0 gap-1.5"
+            className="shrink-0 gap-1.5 rounded-full px-4 font-bold shadow-lg"
             disabled={starting || state.connecting}
           >
-            {starting || state.connecting ? <Loader2 className="size-4 animate-spin" /> : <Radio className="size-4" />}
+            {starting || state.connecting ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Radio className="size-4" strokeWidth={2.75} />
+            )}
             {live ? "End" : starting || state.connecting ? "…" : "Go live"}
           </Button>
         </header>
@@ -317,7 +321,7 @@ export function StudioConsole({
         {/* Speaker stage — unified 4-col × 2-row grid (host first, then guests) */}
         <div className="relative shrink-0 border-b border-white/[0.07] px-4 py-4 sm:px-6">
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-white/60">On stage</h2>
+            <h2 className="text-xs font-bold uppercase tracking-wider text-white/70">On stage</h2>
             <div className="flex items-center gap-1.5">
               {locked && (
                 <span className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-white/60">
@@ -453,19 +457,19 @@ function DockButton({
       aria-pressed={active}
       title={label}
       className={cn(
-        "relative flex size-11 shrink-0 items-center justify-center rounded-full ring-1 ring-inset ring-white/10 backdrop-blur-md transition-all hover:scale-105 active:scale-95 disabled:opacity-40",
+        "relative flex size-14 shrink-0 items-center justify-center rounded-full shadow-xl ring-1 ring-inset transition-all hover:scale-105 active:scale-95 disabled:opacity-40 [&>svg]:size-[26px] [&>svg]:[stroke-width:2.75]",
         recording
-          ? "bg-live text-live-foreground ring-transparent"
+          ? "bg-live text-live-foreground shadow-live/40 ring-white/25"
           : primary
-            ? "bg-call-accept text-call-accept-foreground ring-transparent"
+            ? "bg-call-accept text-call-accept-foreground shadow-call-accept/40 ring-white/25"
             : active
-              ? "bg-primary text-primary-foreground ring-transparent"
-              : "bg-white/10 text-white hover:bg-white/20",
+              ? "bg-primary text-primary-foreground shadow-primary/40 ring-white/25"
+              : "bg-white/25 text-white ring-white/25 hover:bg-white/35",
       )}
     >
       {icon}
       {badge > 0 && (
-        <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-live text-[10px] font-bold text-live-foreground">
+        <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-live text-[10px] font-bold text-live-foreground ring-2 ring-zinc-950">
           {badge}
         </span>
       )}
@@ -514,9 +518,9 @@ function ShareButton({ roomName, title }: { roomName: string; title?: string }) 
       onClick={share}
       aria-label="Invite people / share room link"
       title="Invite people"
-      className="flex size-11 shrink-0 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-inset ring-white/10 backdrop-blur-md transition-all hover:scale-105 hover:bg-white/20 active:scale-95"
+      className="flex size-14 shrink-0 items-center justify-center rounded-full bg-white/25 text-white shadow-xl ring-1 ring-inset ring-white/25 backdrop-blur-md transition-all hover:scale-105 hover:bg-white/35 active:scale-95 [&>svg]:size-[26px] [&>svg]:stroke-[2.75]"
     >
-      {copied ? <Check className="size-5" /> : <UserPlus className="size-5" />}
+      {copied ? <Check /> : <UserPlus />}
     </button>
   )
 }
