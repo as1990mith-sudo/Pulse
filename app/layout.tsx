@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono, Sora } from 'next/font/google'
 import { ThemeProvider } from '@/components/theme-provider'
 import { SkinProvider, SKIN_INIT_SCRIPT } from '@/components/skin-provider'
+import { LiveSessionProvider } from '@/components/live-session'
 import './globals.css'
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
@@ -75,8 +76,10 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <SkinProvider>
-            {children}
-            {process.env.NODE_ENV === 'production' && <Analytics />}
+            <LiveSessionProvider>
+              {children}
+              {process.env.NODE_ENV === 'production' && <Analytics />}
+            </LiveSessionProvider>
           </SkinProvider>
         </ThemeProvider>
       </body>
