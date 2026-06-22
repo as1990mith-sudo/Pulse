@@ -78,6 +78,33 @@ export function LiveSessionProvider({ children }: { children: React.ReactNode })
   const expand = useCallback(() => setMinimized(false), [])
   const setMeta = useCallback((m: LiveMeta) => setMetaState(m), [])
 
+  // While the immersive room is open (and not minimised), lock the document so
+  // touch/scroll gestures can't move the page behind the fixed overlay. Locking
+  // <html> overflow + overscroll-behavior prevents both the scroll and the
+  // rubber-band/chaining that was leaking through to the underlying page.
+  const roomOpen = Boolean(session) && !minimized
+  useEffect(() => {
+    if (!roomOpen) return
+    const html = document.documentElement
+    const body = document.body
+    const prev = {
+      htmlOverflow: html.style.overflow,
+      bodyOverflow: body.style.overflow,
+      htmlOverscroll: html.style.overscrollBehavior,
+      bodyOverscroll: body.style.overscrollBehavior,
+    }
+    html.style.overflow = "hidden"
+    body.style.overflow = "hidden"
+    html.style.overscrollBehavior = "none"
+    body.style.overscrollBehavior = "none"
+    return () => {
+      html.style.overflow = prev.htmlOverflow
+      body.style.overflow = prev.bodyOverflow
+      html.style.overscrollBehavior = prev.htmlOverscroll
+      body.style.overscrollBehavior = prev.bodyOverscroll
+    }
+  }, [roomOpen])
+
   return (
     <LiveSessionContext.Provider
       value={{ open, close, minimize, expand, setMeta, activeKey: session?.key ?? null }}
@@ -88,7 +115,7 @@ export function LiveSessionProvider({ children }: { children: React.ReactNode })
           when minimised so the audio connection — and playback — survive. */}
       {session && (
         <div
-          className="fixed inset-0 z-[60]"
+          className="fixed inset-0 z-[60] overscroll-contain"
           style={minimized ? { display: "none" } : undefined}
           aria-hidden={minimized}
         >
