@@ -121,7 +121,7 @@ export function ReactionPicker({
         type="button"
         disabled={disabled || !roomName}
         onClick={() => setOpen(true)}
-        aria-label="Send a reaction or gift"
+        aria-label={showGifts ? "Send a reaction or gift" : "Send a reaction"}
         className={cn(
           "flex size-11 items-center justify-center rounded-full bg-secondary text-foreground transition-colors hover:bg-secondary/80 disabled:opacity-50",
           className,
