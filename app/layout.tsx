@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 const sora = Sora({ variable: '--font-sora', subsets: ['latin'], weight: ['600', '700'] })
 
 export const metadata: Metadata = {
-  title: 'Frequency — Live Podcast Streaming',
+  title: 'Frequency',
   description:
     'Go live, build your audience, and stream audio + video podcasts in real time. Listen in, chat, and call in to the conversation.',
   generator: 'v0.app',
@@ -40,6 +40,13 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   colorScheme: 'dark',
   themeColor: '#0c0c0f',
+  width: 'device-width',
+  initialScale: 1,
+  // Let content extend into the iOS notch / home-indicator area; we then pad
+  // with safe-area insets so nothing important sits under the cutouts.
+  viewportFit: 'cover',
+  // Allow pinch-zoom for accessibility, but don't auto-zoom on input focus.
+  maximumScale: 5,
 }
 
 export default function RootLayout({

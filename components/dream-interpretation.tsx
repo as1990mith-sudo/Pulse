@@ -195,7 +195,9 @@ function DreamReplyItem({
               </div>
             </div>
           ) : (
-            <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed">{linkify(reply.body)}</p>
+            <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-justify hyphens-auto [text-justify:inter-word]">
+              {linkify(reply.body)}
+            </p>
           )}
         </div>
 
@@ -495,7 +497,7 @@ function DreamItem({
           </div>
         </div>
       ) : (
-        <p className="mt-3 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-pretty">
+        <p className="mt-3 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-justify hyphens-auto [text-justify:inter-word]">
           {linkify(body)}
         </p>
       )}

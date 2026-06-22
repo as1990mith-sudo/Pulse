@@ -4,23 +4,23 @@ import { useEffect, useRef, useState, useTransition } from "react"
 import { createPortal } from "react-dom"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Plus, X, Trash2, Loader2, Send, Camera, Video, ImageIcon, Type, Eye, ChevronUp } from "lucide-react"
+import { Plus, X, Trash2, Loader2, Send, Camera, Video, ImageIcon, Type, Eye, MoreVertical } from "lucide-react"
 import {
   createStatus,
   deleteStatus,
   markStatusViewed,
   getStatusViewers,
-  reactToStatus,
   replyToStatus,
   type StatusGroup,
   type StatusItem,
   type StatusViewer as StatusViewerRow,
 } from "@/app/actions/status"
 import type { CurrentUser } from "@/lib/session"
-import { uploadMedia } from "@/lib/upload-media"
+import { compressImage, uploadMedia } from "@/lib/upload-media"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { VideoTrimmer } from "@/components/video-trimmer"
 import { ShareSheet } from "@/components/share-sheet"
+import { ActionSheet } from "@/components/action-sheet"
 import type { ShareTarget } from "@/lib/share-types"
 import { cn } from "@/lib/utils"
 
@@ -37,7 +37,6 @@ const TEXT_BACKGROUNDS: Record<string, string> = {
   candy: "bg-gradient-to-br from-pink-500 via-rose-500 to-red-500",
 }
 const TEXT_BG_KEYS = Object.keys(TEXT_BACKGROUNDS)
-const REACTIONS = ["❤️", "🔥", "😂", "😮", "😢", "👏"]
 
 /** Reads a video file's duration so we can enforce the 1-minute limit. */
 function getVideoDuration(file: File): Promise<number> {
@@ -148,7 +147,18 @@ export function StatusBar({
     setUploading(true)
     setError(null)
     try {
-      const data = await uploadMedia(compose.file, "status")
+      // Compress photos in-browser before upload so large phone images
+      // (often 4–12 MB) don't make posting slow. Videos upload as-is.
+      let fileToUpload: File | Blob = compose.file
+      let uploadName = compose.file.name
+      if (compose.type === "image") {
+        const compressed = await compressImage(compose.file)
+        if (compressed !== compose.file) {
+          fileToUpload = compressed
+          uploadName = compose.file.name.replace(/\.(heic|heif|png|webp|jpe?g)$/i, "") + ".jpg"
+        }
+      }
+      const data = await uploadMedia(fileToUpload, "status", uploadName)
       await createStatus({ mediaUrl: data.url, mediaType: compose.type, caption })
       closeComposer()
       router.refresh()
@@ -580,11 +590,11 @@ export function StatusViewer({
   const [itemIndex, setItemIndex] = useState(startItemIndex)
   const [progress, setProgress] = useState(0)
   const [paused, setPaused] = useState(false)
-  const [reaction, setReaction] = useState<string | null>(null)
   const [replySent, setReplySent] = useState(false)
   const [replyOpen, setReplyOpen] = useState(false)
   const [showViewers, setShowViewers] = useState(false)
   const [showShare, setShowShare] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   // Brief left/right slide animation played when swiping between users.
   const [slide, setSlide] = useState<"left" | "right" | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -599,6 +609,21 @@ export function StatusViewer({
   useEffect(() => {
     pausedRef.current = paused
   }, [paused])
+
+  // Make the device/browser Back button (and back gesture) simply close the
+  // status overlay and return the user to the exact page + scroll position they
+  // came from — instead of navigating to a different page. We push one history
+  // entry when the viewer opens; pressing Back pops it, which fires popstate and
+  // closes the overlay in place. (We intentionally don't touch history on
+  // cleanup — doing so is fragile under React's dev double-invoke of effects.)
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+  useEffect(() => {
+    window.history.pushState({ statusViewer: true }, "")
+    const onPop = () => onCloseRef.current()
+    window.addEventListener("popstate", onPop)
+    return () => window.removeEventListener("popstate", onPop)
+  }, [])
 
   const group = groups[groupIndex]
   const item: StatusItem | undefined = group?.items[itemIndex]
@@ -659,7 +684,6 @@ export function StatusViewer({
 
   // Mark the active item as viewed + reset per-item UI state.
   useEffect(() => {
-    setReaction(null)
     setReplySent(false)
     setReplyOpen(false)
     setShowViewers(false)
@@ -784,16 +808,6 @@ export function StatusViewer({
     }
   }
 
-  async function handleReact(emoji: string) {
-    if (!item) return
-    setReaction(emoji)
-    try {
-      await reactToStatus(item.id, emoji)
-    } catch {
-      /* ignore */
-    }
-  }
-
   async function submitReply(text: string) {
     if (!item || !text.trim()) return
     try {
@@ -872,13 +886,13 @@ export function StatusViewer({
               <button
                 type="button"
                 onClick={() => {
-                  onDelete(item.id)
-                  goNext()
+                  setPaused(true)
+                  setMenuOpen(true)
                 }}
                 className="flex size-9 items-center justify-center rounded-full text-white/90 transition-colors hover:bg-white/15"
-                aria-label="Delete this status"
+                aria-label="Status options"
               >
-                <Trash2 className="size-5" />
+                <MoreVertical className="size-5" />
               </button>
             )}
             <button
@@ -960,26 +974,11 @@ export function StatusViewer({
                   setPaused(true)
                   setReplyOpen(true)
                 }}
-                className="flex h-11 flex-1 items-center justify-center gap-1.5 rounded-full border border-white/25 bg-white/10 px-4 text-sm font-medium text-white/90 backdrop-blur transition-colors hover:bg-white/20"
+                className="flex h-11 flex-1 items-center rounded-full border border-white/25 bg-white/10 px-4 text-left text-sm font-medium text-white/70 backdrop-blur transition-colors hover:bg-white/20"
                 aria-label={`Reply to ${group.authorName.split(" ")[0]}`}
               >
-                <ChevronUp className="size-4 animate-bounce" />
-                {replySent ? "Reply sent!" : "Swipe up to reply"}
+                {replySent ? "Reply sent!" : `Reply to ${group.authorName.split(" ")[0]}…`}
               </button>
-              {REACTIONS.slice(0, 3).map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onClick={() => handleReact(emoji)}
-                  className={cn(
-                    "flex size-9 items-center justify-center rounded-full text-lg transition-transform hover:scale-110",
-                    reaction === emoji && "scale-125",
-                  )}
-                  aria-label={`React ${emoji}`}
-                >
-                  {emoji}
-                </button>
-              ))}
               <button
                 type="button"
                 onClick={handleShare}
@@ -998,13 +997,6 @@ export function StatusViewer({
             </p>
           )}
         </div>
-
-        {/* Reaction confirmation pop */}
-        {reaction && (
-          <div className="pointer-events-none absolute bottom-20 left-0 right-0 z-20 flex justify-center">
-            <span className="animate-bounce text-4xl">{reaction}</span>
-          </div>
-        )}
 
         {/* Paused indicator */}
         {paused && !inputFocused.current && (
@@ -1034,8 +1026,6 @@ export function StatusViewer({
         {replyOpen && !group.isSelf && (
           <ReplySheet
             authorName={group.authorName}
-            activeReaction={reaction}
-            onReact={handleReact}
             onSubmit={submitReply}
             onFocusChange={(f) => (inputFocused.current = f)}
             onClose={() => {
@@ -1052,7 +1042,7 @@ export function StatusViewer({
               key: String(item.id),
               title: `${group.authorName}'s status on Frequency`,
               subtitle: item.caption ?? null,
-              url: `/u/${group.userId}`,
+              url: `/status/${item.id}`,
               image: item.mediaType === "text" ? null : item.mediaUrl ?? null,
               downloadUrl: item.mediaType === "text" ? null : item.mediaUrl ?? null,
               downloadKind: item.mediaType === "video" ? "video" : item.mediaType === "image" ? "image" : null,
@@ -1062,6 +1052,28 @@ export function StatusViewer({
               setShowShare(false)
               setPaused(false)
             }}
+          />
+        )}
+
+        {group.isSelf && item && (
+          <ActionSheet
+            open={menuOpen}
+            onClose={() => {
+              setMenuOpen(false)
+              setPaused(false)
+            }}
+            title="Status"
+            actions={[
+              {
+                label: "Delete status",
+                icon: Trash2,
+                destructive: true,
+                onClick: () => {
+                  onDelete(item.id)
+                  goNext()
+                },
+              },
+            ]}
           />
         )}
       </div>
@@ -1124,21 +1136,17 @@ function ViewersSheet({ statusId, onClose }: { statusId: number; onClose: () => 
 }
 
 /**
- * Slide-up reply composer surfaced by swiping up on a status. Manages its own
- * draft text, autofocuses, and offers the same quick reactions as the inline
- * bar. Tapping the backdrop or sending closes it.
+ * Slide-up reply composer surfaced by tapping the reply box on a status.
+ * Manages its own draft text and autofocuses. Tapping the backdrop or sending
+ * closes it.
  */
 function ReplySheet({
   authorName,
-  activeReaction,
-  onReact,
   onSubmit,
   onClose,
   onFocusChange,
 }: {
   authorName: string
-  activeReaction: string | null
-  onReact: (emoji: string) => void
   onSubmit: (text: string) => void
   onClose: () => void
   onFocusChange: (focused: boolean) => void
@@ -1159,27 +1167,6 @@ function ReplySheet({
       >
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-border" />
         <p className="mb-3 text-sm font-semibold text-foreground">Reply to {firstName}</p>
-
-        {/* Quick reactions */}
-        <div className="mb-3 flex items-center justify-between">
-          {REACTIONS.map((emoji) => (
-            <button
-              key={emoji}
-              type="button"
-              onClick={() => {
-                onReact(emoji)
-                onClose()
-              }}
-              className={cn(
-                "flex size-11 items-center justify-center rounded-full text-2xl transition-transform hover:scale-110 active:scale-95",
-                activeReaction === emoji && "scale-125",
-              )}
-              aria-label={`React ${emoji}`}
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
 
         <div className="flex items-end gap-2">
           <textarea

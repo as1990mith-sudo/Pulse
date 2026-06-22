@@ -33,7 +33,7 @@ import { ImageCropper } from "@/components/image-cropper"
 import { VoiceRecorder } from "@/components/voice-recorder"
 import { ChatroomCall } from "@/components/chatroom-call"
 import { cn } from "@/lib/utils"
-import { uploadMedia } from "@/lib/upload-media"
+import { compressImage, uploadMedia } from "@/lib/upload-media"
 import { ActionSheet, type SheetAction } from "@/components/action-sheet"
 import { canEdit, canDelete } from "@/lib/interactions"
 import {
@@ -115,7 +115,17 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
     setUploadError(null)
     setUploading(true)
     try {
-      const data = await uploadMedia(file, "chat")
+      // Shrink large phone photos before upload for a much faster send.
+      let toUpload: File | Blob = file
+      let name = file.name
+      if (file.type.startsWith("image/")) {
+        const compressed = await compressImage(file)
+        if (compressed !== file) {
+          toUpload = compressed
+          name = file.name.replace(/\.(heic|heif|png|webp|jpe?g)$/i, "") + ".jpg"
+        }
+      }
+      const data = await uploadMedia(toUpload, "chat", name)
       setAttachment({ url: data.url, type: data.type, name: data.name })
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Upload failed")
@@ -380,7 +390,7 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
       </div>
 
       {/* Composer area pinned to the bottom */}
-      <div className="border-t border-border/60 bg-background px-4 py-3 sm:px-6">
+      <div className="border-t border-border/60 bg-background px-4 py-3 pb-safe-2 pl-safe pr-safe sm:px-6">
         <div className="mx-auto w-full max-w-3xl space-y-3">
       {/* Attachment preview */}
       {attachment && (

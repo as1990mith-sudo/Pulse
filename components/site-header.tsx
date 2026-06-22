@@ -107,11 +107,11 @@ export function SiteHeader() {
   return (
     <header
       className={cn(
-        "sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl transition-[transform,opacity] duration-300 ease-out",
+        "sticky top-0 z-40 border-b border-border/60 bg-background/80 pt-safe backdrop-blur-xl transition-[transform,opacity] duration-300 ease-out",
         hidden ? "-translate-y-full opacity-0" : "translate-y-0 opacity-100",
       )}
     >
-      <div className="relative mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
+      <div className="relative mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 pl-safe pr-safe sm:px-6">
         <Link href="/" className="flex items-center gap-2">
           <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Radio className="size-4" />
@@ -141,7 +141,7 @@ export function SiteHeader() {
         </div>
       </div>
 
-      <nav className="border-t border-border/60 px-4 py-2 md:hidden">
+      <nav className="border-t border-border/60 px-4 pl-safe pr-safe py-2 md:hidden">
         <NavTabs isActive={isActive} compact />
       </nav>
     </header>

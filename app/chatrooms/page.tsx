@@ -37,13 +37,6 @@ export default async function ChatroomsPage() {
           <ChatroomBrowser rooms={rooms} />
         </div>
       </main>
-
-      <footer className="border-t border-border/60">
-        <div className="mx-auto flex w-full max-w-3xl flex-col items-center justify-between gap-2 px-4 py-8 text-sm text-muted-foreground sm:flex-row sm:px-6">
-          <p>Frequency — live podcast streaming.</p>
-          <p>Chatrooms are private to their members.</p>
-        </div>
-      </footer>
     </div>
   )
 }
