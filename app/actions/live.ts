@@ -31,6 +31,8 @@ export type LiveStreamView = {
   category: string | null
   cover: string | null
   mode: LiveMode
+  locked?: boolean
+  pinnedChatId?: number | null
   chatBgUrl?: string | null
   chatBgEffect?: ChatBgEffect
   startedAt: string
@@ -280,6 +282,8 @@ export async function getLiveStream(roomName: string): Promise<LiveStreamView | 
     category: r.category,
     cover: r.cover,
     mode: (r.mode as LiveMode) ?? "audio",
+    locked: r.locked ?? false,
+    pinnedChatId: r.pinnedChatId ?? null,
     chatBgUrl: r.chatBgUrl,
     chatBgEffect: (r.chatBgEffect as ChatBgEffect) ?? "none",
     startedAt: r.startedAt.toISOString(),
@@ -327,6 +331,12 @@ async function acceptedGuestCount(roomName: string): Promise<number> {
 /** Listener asks to come on as a guest. */
 export async function requestToJoin(input: { roomName: string }): Promise<{ ok: boolean; error?: string }> {
   const user = await requireUser()
+  // Honor a host-locked stage: no new requests to speak.
+  const [s] = await db
+    .select({ locked: liveStream.locked })
+    .from(liveStream)
+    .where(eq(liveStream.roomName, input.roomName))
+  if (s?.locked) return { ok: false, error: "The host has locked the stage." }
   // Clear any prior resolved row for this user so they can re-request.
   await db
     .delete(liveCallRequest)
@@ -432,6 +442,8 @@ export async function getCallState(input: { roomName: string }): Promise<{
   myStatus: CallRequestView["status"] | null
   chatBgUrl: string | null
   chatBgEffect: ChatBgEffect
+  locked: boolean
+  pinnedChatId: number | null
   // True once the host has ended the broadcast — lets listeners auto-close.
   ended: boolean
 }> {
@@ -439,7 +451,13 @@ export async function getCallState(input: { roomName: string }): Promise<{
   const me = session?.user?.id ?? null
 
   const [stream] = await db
-    .select({ chatBgUrl: liveStream.chatBgUrl, chatBgEffect: liveStream.chatBgEffect, status: liveStream.status })
+    .select({
+      chatBgUrl: liveStream.chatBgUrl,
+      chatBgEffect: liveStream.chatBgEffect,
+      status: liveStream.status,
+      locked: liveStream.locked,
+      pinnedChatId: liveStream.pinnedChatId,
+    })
     .from(liveStream)
     .where(eq(liveStream.roomName, input.roomName))
 
