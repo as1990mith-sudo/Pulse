@@ -8,10 +8,9 @@ import {
   CheckCircle2,
   Circle,
   Disc3,
-  ImageIcon,
   Loader2,
   Lock,
-  LockOpen,
+  MessageSquare,
   Mic,
   MicOff,
   Music,
@@ -23,7 +22,6 @@ import {
   Share2,
   SkipBack,
   SkipForward,
-  Sparkles,
   Trash2,
   Upload,
   UserPlus,
@@ -38,17 +36,14 @@ import {
   getCallState,
   respondToCallRequest,
   removeFromStage,
-  setChatBackground,
-  setRoomLock,
   type CallRequestView,
-  type ChatBgEffect,
 } from "@/app/actions/live"
-import { useLiveAudio, SOUND_EFFECTS, type SoundEffectName } from "@/lib/use-live-audio"
+import { useLiveAudio } from "@/lib/use-live-audio"
 import { uploadMedia } from "@/lib/upload-media"
 import { LiveChat } from "@/components/live-chat"
 import { LiveStage, MAX_GUESTS } from "@/components/live-stage"
 import { LiveAudience } from "@/components/live-audience"
-import { ReactionLayer, ReactionPicker } from "@/components/live-reactions"
+import { ReactionLayer } from "@/components/live-reactions"
 import { CoverUpload } from "@/components/admin/cover-upload"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -84,7 +79,6 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
     setMusicPlaying,
     seekMusic,
     stopMusic,
-    playEffect,
     startRecording,
     stopRecording,
   } = useLiveAudio()
@@ -102,7 +96,7 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
   // mid-session so it can still be published when they go off air.
   const recordedBlobRef = useRef<Blob | null>(null)
   // Which slide-up panel is open. Only one at a time keeps the studio compact.
-  const [panel, setPanel] = useState<null | "music" | "people" | "background" | "soundboard">(null)
+  const [panel, setPanel] = useState<null | "music" | "people" | "chat">(null)
 
   const viewers = Math.max(0, state.listeners - 1 - speakers.filter((s) => !s.isLocal).length)
 
@@ -115,15 +109,6 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
   const pending = callState?.pendingRequests ?? []
   const guests = callState?.guests ?? []
   const locked = callState?.locked ?? false
-
-  async function toggleLock() {
-    if (!roomName) return
-    const next = !locked
-    // Optimistically reflect the new lock state, then confirm with the server.
-    void refreshCalls((cur) => (cur ? { ...cur, locked: next } : cur), { revalidate: false })
-    await setRoomLock({ roomName, locked: next }).catch(() => {})
-    refreshCalls()
-  }
 
   useEffect(() => {
     if (!live) return
@@ -189,220 +174,212 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
   }
 
   return (
-    <div className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col gap-3 px-3 py-3 sm:px-4">
-      {/* Broadcast header: cover artwork + live indicator + title + stats */}
-      <header className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card p-3 shadow-sm">
-        <div className="relative size-16 shrink-0 overflow-hidden rounded-xl bg-secondary sm:size-20">
-          {cover ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={cover || "/placeholder.svg"} alt="Session cover art" className="size-full object-cover" />
-          ) : (
-            <span className="flex size-full items-center justify-center text-muted-foreground">
-              <Radio className="size-6" />
-            </span>
-          )}
-        </div>
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-zinc-950 text-white">
+      {/* Drifting aurora backdrop — the same immersive skin as the listener view. */}
+      <div
+        aria-hidden="true"
+        className="stage-aurora pointer-events-none absolute inset-0 opacity-70"
+        style={{
+          background:
+            "radial-gradient(70% 55% at 20% 0%, color-mix(in oklch, var(--primary) 45%, transparent), transparent 60%), radial-gradient(60% 50% at 90% 20%, color-mix(in oklch, var(--call-accept) 30%, transparent), transparent 55%), radial-gradient(80% 60% at 50% 100%, color-mix(in oklch, var(--primary) 25%, transparent), transparent 60%)",
+        }}
+      />
+      {cover && (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={cover || "/placeholder.svg"}
+            alt=""
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 size-full object-cover opacity-15 blur-3xl"
+          />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-zinc-950/60 via-zinc-950/40 to-zinc-950/85" />
+        </>
+      )}
 
-        <div className="min-w-0 flex-1">
-          <div className="mb-1 flex items-center gap-2">
-            <span
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide",
-                live ? "bg-live text-live-foreground" : "bg-secondary text-muted-foreground",
-              )}
-            >
+      <div className="relative mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col gap-3 px-3 py-3 sm:px-4">
+        {/* Broadcast header: cover artwork + live indicator + title + stats */}
+        <header className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 backdrop-blur-xl">
+          <div className="relative size-16 shrink-0 overflow-hidden rounded-xl bg-white/10 ring-1 ring-white/15 sm:size-20">
+            {cover ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={cover || "/placeholder.svg"} alt="Session cover art" className="size-full object-cover" />
+            ) : (
+              <span className="flex size-full items-center justify-center text-white/60">
+                <Radio className="size-6" />
+              </span>
+            )}
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="mb-1 flex items-center gap-2">
               <span
                 className={cn(
-                  "size-1.5 rounded-full",
-                  live ? "bg-live-foreground animate-live-pulse" : "bg-muted-foreground",
+                  "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide",
+                  live ? "bg-live text-live-foreground" : "bg-white/10 text-white/60",
                 )}
+              >
+                <span
+                  className={cn(
+                    "size-1.5 rounded-full",
+                    live ? "bg-live-foreground animate-live-pulse" : "bg-white/40",
+                  )}
+                />
+                {live ? "Live" : "Offline"}
+              </span>
+              {live && (
+                <span className="font-mono text-xs tabular-nums text-white/50">{formatTime(elapsed)}</span>
+              )}
+            </div>
+
+            {live ? (
+              <p className="truncate text-sm font-semibold leading-tight text-white sm:text-base">{title || "Untitled session"}</p>
+            ) : (
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Name your session…"
+                aria-label="Session title"
+                maxLength={80}
+                className="w-full truncate rounded-md border border-transparent bg-transparent text-sm font-semibold leading-tight text-white outline-none transition-colors placeholder:text-white/40 hover:border-white/20 focus:border-primary focus:bg-white/10 focus:px-2 focus:py-1 sm:text-base"
               />
-              {live ? "Live" : "Offline"}
-            </span>
-            {live && (
-              <span className="font-mono text-xs tabular-nums text-muted-foreground">{formatTime(elapsed)}</span>
             )}
+            <p className="mt-0.5 flex items-center gap-2 text-xs text-white/60">
+              <span className="truncate">{currentUser.name}</span>
+              {live && (
+                <span className="flex shrink-0 items-center gap-1">
+                  <Users className="size-3" /> {viewers.toLocaleString()}
+                </span>
+              )}
+            </p>
           </div>
 
-          {live ? (
-            <p className="truncate text-sm font-semibold leading-tight sm:text-base">{title || "Untitled session"}</p>
-          ) : (
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Name your session…"
-              aria-label="Session title"
-              maxLength={80}
-              className="w-full truncate rounded-md border border-transparent bg-transparent text-sm font-semibold leading-tight outline-none transition-colors placeholder:text-muted-foreground hover:border-border/60 focus:border-primary focus:bg-background focus:px-2 focus:py-1 sm:text-base"
+          <Button
+            onClick={toggleLive}
+            size="sm"
+            variant={live ? "secondary" : "default"}
+            className="shrink-0 gap-1.5"
+            disabled={starting || state.connecting}
+          >
+            {starting || state.connecting ? <Loader2 className="size-4 animate-spin" /> : <Radio className="size-4" />}
+            {live ? "End" : starting || state.connecting ? "…" : "Go live"}
+          </Button>
+        </header>
+
+        {error && (
+          <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
+            {error}
+          </div>
+        )}
+
+        {/* Pre-live: pick cover art */}
+        {!live && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-3 backdrop-blur-xl">
+            <CoverUpload value={cover} onChange={setCover} label="Cover artwork (optional)" />
+          </div>
+        )}
+
+        {/* Speaker stage with floating reactions */}
+        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl lg:flex-none">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-white/60">On stage</h2>
+            <div className="flex items-center gap-1.5">
+              {locked && (
+                <span className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-white/60">
+                  <Lock className="size-3" /> Locked
+                </span>
+              )}
+              {pending.length > 0 && (
+                <span className="flex items-center gap-1 rounded-full bg-live/20 px-2 py-0.5 text-[11px] font-semibold text-live">
+                  <Phone className="size-3" /> {pending.length} waiting
+                </span>
+              )}
+            </div>
+          </div>
+          <LiveStage
+            host={{ id: currentUser.id, name: currentUser.name, color: currentUser.color }}
+            speakers={speakers}
+            activeSpeakers={state.activeSpeakers}
+            hostQuality={state.connectionQuality}
+            isHost
+            onRemoveGuest={dropGuest}
+          />
+          {live && roomName && <ReactionLayer roomName={roomName} />}
+        </div>
+
+        {/* Call-in queue (only when someone is waiting) */}
+        {live && pending.length > 0 && (
+          <div className="rounded-2xl border border-live/30 bg-live/10 p-3 backdrop-blur-xl">
+            <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-live">
+              <Phone className="size-3.5" /> Call-in queue
+            </h2>
+            <ul className="flex flex-col gap-2">
+              {pending.map((r) => (
+                <li key={r.id} className="flex items-center justify-between gap-2 rounded-xl bg-white/5 p-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className={cn("flex size-8 items-center justify-center rounded-full text-xs font-semibold", r.color)}>
+                      {r.initials}
+                    </span>
+                    <span className="truncate text-sm font-medium text-white">{r.userName}</span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <Button size="sm" className="h-8 gap-1 bg-call-accept text-call-accept-foreground hover:bg-call-accept/90" onClick={() => acceptCall(r.id)}>
+                      <Phone className="size-3.5" /> Accept
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-8 text-white hover:bg-white/10" onClick={() => declineCall(r.id)} aria-label="Decline">
+                      <PhoneOff className="size-4" />
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Audience strip */}
+        {live && <LiveAudience count={viewers} glass />}
+
+        {/* Host control dock */}
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-2 shadow-lg backdrop-blur-xl pb-safe-2 pl-safe pr-safe">
+          <div className="flex items-center justify-center gap-1.5 overflow-x-auto sm:gap-2">
+            <DockButton
+              icon={micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
+              label={micOn ? "Mute mic" : "Unmute mic"}
+              primary={micOn}
+              disabled={!live}
+              onClick={() => toggleMic()}
             />
-          )}
-          <p className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="truncate">{currentUser.name}</span>
-            {live && (
-              <span className="flex shrink-0 items-center gap-1">
-                <Users className="size-3" /> {viewers.toLocaleString()}
-              </span>
-            )}
-          </p>
-        </div>
-
-        <Button
-          onClick={toggleLive}
-          size="sm"
-          variant={live ? "secondary" : "default"}
-          className="shrink-0 gap-1.5"
-          disabled={starting || state.connecting}
-        >
-          {starting || state.connecting ? <Loader2 className="size-4 animate-spin" /> : <Radio className="size-4" />}
-          {live ? "End" : starting || state.connecting ? "…" : "Go live"}
-        </Button>
-      </header>
-
-      {error && (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {error}
-        </div>
-      )}
-
-      {/* Pre-live: pick cover art */}
-      {!live && (
-        <div className="rounded-2xl border border-border/60 bg-card p-3">
-          <CoverUpload value={cover} onChange={setCover} label="Cover artwork (optional)" />
-        </div>
-      )}
-
-      {/* Speaker stage with floating reactions */}
-      <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-b from-secondary/50 to-card p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">On stage</h2>
-          <div className="flex items-center gap-1.5">
-            {locked && (
-              <span className="flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
-                <Lock className="size-3" /> Locked
-              </span>
-            )}
-            {pending.length > 0 && (
-              <span className="flex items-center gap-1 rounded-full bg-live/15 px-2 py-0.5 text-[11px] font-semibold text-live">
-                <Phone className="size-3" /> {pending.length} waiting
-              </span>
-            )}
+            <DockButton
+              icon={<Music className="size-5" />}
+              label="Background music"
+              active={panel === "music"}
+              disabled={!live}
+              onClick={() => setPanel((p) => (p === "music" ? null : "music"))}
+            />
+            <DockButton
+              icon={<MessageSquare className="size-5" />}
+              label="Live chat"
+              active={panel === "chat"}
+              disabled={!live}
+              onClick={() => setPanel((p) => (p === "chat" ? null : "chat"))}
+            />
+            <DockButton
+              icon={<Users className="size-5" />}
+              label="Manage speakers & audience"
+              badge={pending.length}
+              active={panel === "people"}
+              disabled={!live}
+              onClick={() => setPanel((p) => (p === "people" ? null : "people"))}
+            />
+            <DockButton
+              icon={recording ? <Disc3 className="size-5 animate-spin [animation-duration:3s]" /> : <Circle className="size-5" />}
+              label={recording ? "Stop recording" : "Start recording"}
+              recording={recording}
+              disabled={!live}
+              onClick={toggleRecording}
+            />
+            {live && roomName && <ShareButton roomName={roomName} title={title} />}
           </div>
-        </div>
-        <LiveStage
-          host={{ id: currentUser.id, name: currentUser.name, color: currentUser.color }}
-          speakers={speakers}
-          activeSpeakers={state.activeSpeakers}
-          hostQuality={state.connectionQuality}
-          isHost
-          onRemoveGuest={dropGuest}
-        />
-        {live && roomName && <ReactionLayer roomName={roomName} />}
-      </div>
-
-      {/* Call-in queue (only when someone is waiting) */}
-      {live && pending.length > 0 && (
-        <div className="rounded-2xl border border-live/30 bg-live/5 p-3">
-          <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-live">
-            <Phone className="size-3.5" /> Call-in queue
-          </h2>
-          <ul className="flex flex-col gap-2">
-            {pending.map((r) => (
-              <li key={r.id} className="flex items-center justify-between gap-2 rounded-xl bg-card/80 p-2">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className={cn("flex size-8 items-center justify-center rounded-full text-xs font-semibold", r.color)}>
-                    {r.initials}
-                  </span>
-                  <span className="truncate text-sm font-medium">{r.userName}</span>
-                </div>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <Button size="sm" className="h-8 gap-1 bg-call-accept text-call-accept-foreground hover:bg-call-accept/90" onClick={() => acceptCall(r.id)}>
-                    <Phone className="size-3.5" /> Accept
-                  </Button>
-                  <Button size="sm" variant="ghost" className="h-8" onClick={() => declineCall(r.id)} aria-label="Decline">
-                    <PhoneOff className="size-4" />
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Audience strip */}
-      {live && <LiveAudience count={viewers} />}
-
-      {/* Chat: the ONLY scrollable region */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border/60 bg-card">
-        <div className="flex items-center justify-between border-b border-border/60 px-4 py-2">
-          <h2 className="text-sm font-semibold">Live chat</h2>
-          <span className="text-xs text-muted-foreground">
-            {guests.length}/{MAX_GUESTS} on stage
-          </span>
-        </div>
-        <div className="min-h-0 flex-1">
-          <LiveChat asHost currentUser={currentUser} roomName={roomName ?? undefined} />
-        </div>
-      </div>
-
-      {/* Host control dock */}
-      <div className="rounded-2xl border border-border/60 bg-card/90 p-2 shadow-lg backdrop-blur">
-        <div className="flex items-center justify-center gap-1.5 overflow-x-auto sm:gap-2">
-          <DockButton
-            icon={micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
-            label={micOn ? "Mute mic" : "Unmute mic"}
-            primary={micOn}
-            disabled={!live}
-            onClick={() => toggleMic()}
-          />
-          <ReactionPicker
-            roomName={live ? (roomName ?? undefined) : undefined}
-            disabled={!live}
-            showGifts={false}
-          />
-          <DockButton
-            icon={locked ? <Lock className="size-5" /> : <LockOpen className="size-5" />}
-            label={locked ? "Unlock the stage" : "Lock the stage (no new requests)"}
-            active={locked}
-            disabled={!live}
-            onClick={toggleLock}
-          />
-          <DockButton
-            icon={<Sparkles className="size-5" />}
-            label="Sound effects"
-            active={panel === "soundboard"}
-            disabled={!live}
-            onClick={() => setPanel((p) => (p === "soundboard" ? null : "soundboard"))}
-          />
-          <DockButton
-            icon={<Music className="size-5" />}
-            label="Background music"
-            active={panel === "music"}
-            disabled={!live}
-            onClick={() => setPanel((p) => (p === "music" ? null : "music"))}
-          />
-          <DockButton
-            icon={<Users className="size-5" />}
-            label="Manage speakers & audience"
-            badge={pending.length}
-            active={panel === "people"}
-            disabled={!live}
-            onClick={() => setPanel((p) => (p === "people" ? null : "people"))}
-          />
-          <DockButton
-            icon={<ImageIcon className="size-5" />}
-            label="Chat background"
-            active={panel === "background"}
-            disabled={!live}
-            onClick={() => setPanel((p) => (p === "background" ? null : "background"))}
-          />
-          <DockButton
-            icon={recording ? <Disc3 className="size-5 animate-spin [animation-duration:3s]" /> : <Circle className="size-5" />}
-            label={recording ? "Stop recording" : "Start recording"}
-            recording={recording}
-            disabled={!live}
-            onClick={toggleRecording}
-          />
-          {live && roomName && <ShareButton roomName={roomName} title={title} />}
         </div>
       </div>
 
@@ -419,7 +396,14 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
           onClose={() => setPanel(null)}
         />
       )}
-      {panel === "soundboard" && <SoundboardPanel onPlay={playEffect} onClose={() => setPanel(null)} />}
+      {panel === "chat" && (
+        <ChatPanel
+          currentUser={currentUser}
+          roomName={roomName}
+          guestCount={guests.length}
+          onClose={() => setPanel(null)}
+        />
+      )}
       {panel === "music" && (
         <MusicPanel
           live={live}
@@ -432,9 +416,6 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
           onStop={stopMusic}
           onClose={() => setPanel(null)}
         />
-      )}
-      {panel === "background" && roomName && (
-        <BackgroundPanel roomName={roomName} onClose={() => setPanel(null)} />
       )}
 
       {endedSession && <PublishOverlay session={endedSession} onClose={() => setEndedSession(null)} />}
@@ -469,14 +450,14 @@ function DockButton({
       aria-pressed={active}
       title={label}
       className={cn(
-        "relative flex size-11 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-40",
+        "relative flex size-11 shrink-0 items-center justify-center rounded-full ring-1 ring-inset ring-white/10 backdrop-blur-md transition-all hover:scale-105 active:scale-95 disabled:opacity-40",
         recording
-          ? "bg-live text-live-foreground"
+          ? "bg-live text-live-foreground ring-transparent"
           : primary
-            ? "bg-call-accept text-call-accept-foreground"
+            ? "bg-call-accept text-call-accept-foreground ring-transparent"
             : active
-              ? "bg-primary text-primary-foreground"
-              : "bg-secondary text-foreground hover:bg-secondary/80",
+              ? "bg-primary text-primary-foreground ring-transparent"
+              : "bg-white/10 text-white hover:bg-white/20",
       )}
     >
       {icon}
@@ -530,40 +511,50 @@ function ShareButton({ roomName, title }: { roomName: string; title?: string }) 
       onClick={share}
       aria-label="Invite people / share room link"
       title="Invite people"
-      className="flex size-11 shrink-0 items-center justify-center rounded-full bg-secondary text-foreground transition-colors hover:bg-secondary/80"
+      className="flex size-11 shrink-0 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-inset ring-white/10 backdrop-blur-md transition-all hover:scale-105 hover:bg-white/20 active:scale-95"
     >
       {copied ? <Check className="size-5" /> : <UserPlus className="size-5" />}
     </button>
   )
 }
 
-/** Soundboard: tap a synthesized chime that mixes into the broadcast. */
-function SoundboardPanel({
-  onPlay,
+/**
+ * Live chat panel for the host — slides up so the host can read what listeners
+ * are saying and reply to the room without leaving the console.
+ */
+function ChatPanel({
+  currentUser,
+  roomName,
+  guestCount,
   onClose,
 }: {
-  onPlay: (name: SoundEffectName) => Promise<void>
+  currentUser: CurrentUser
+  roomName: string | null
+  guestCount: number
   onClose: () => void
 }) {
   return (
-    <Sheet title="Sound effects" onClose={onClose}>
-      <p className="mb-3 text-sm text-muted-foreground">Tap to play a sound effect into your broadcast.</p>
-      <div className="grid grid-cols-3 gap-2">
-        {SOUND_EFFECTS.map((fx) => (
-          <button
-            key={fx.name}
-            type="button"
-            onClick={() => void onPlay(fx.name)}
-            className="flex flex-col items-center gap-1.5 rounded-xl border border-border/60 bg-secondary/50 py-4 transition-transform hover:scale-105 active:scale-95"
-          >
-            <span className="text-2xl" aria-hidden="true">
-              {fx.emoji}
+    <div className="fixed inset-0 z-50 flex flex-col justify-end sm:items-center sm:justify-center" role="dialog" aria-modal="true">
+      <button type="button" aria-label="Close chat" className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-10 flex h-[78dvh] w-full flex-col overflow-hidden rounded-t-2xl border-t border-border/60 bg-card text-foreground shadow-2xl sm:h-[70dvh] sm:max-w-md sm:rounded-2xl sm:border">
+        <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-4 py-3">
+          <h2 className="flex items-center gap-2 font-semibold">
+            <MessageSquare className="size-4 text-primary" /> Live chat
+          </h2>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-muted-foreground">
+              {guestCount}/{MAX_GUESTS} on stage
             </span>
-            <span className="text-xs font-medium">{fx.label}</span>
-          </button>
-        ))}
+            <Button type="button" size="icon" variant="ghost" className="size-8" onClick={onClose} aria-label="Close">
+              <X className="size-4" />
+            </Button>
+          </div>
+        </div>
+        <div className="min-h-0 flex-1">
+          <LiveChat asHost currentUser={currentUser} roomName={roomName ?? undefined} />
+        </div>
       </div>
-    </Sheet>
+    </div>
   )
 }
 
@@ -832,53 +823,6 @@ function MusicPanel({
         </Button>
         {!live && <p className="text-xs text-muted-foreground">Go live to mix music into your broadcast.</p>}
         {error && <p className="text-sm text-destructive">{error}</p>}
-      </div>
-    </Sheet>
-  )
-}
-
-/** Host-controlled chat background: upload an image and choose blur/dim. */
-function BackgroundPanel({ roomName, onClose }: { roomName: string; onClose: () => void }) {
-  const [url, setUrl] = useState<string | null>(null)
-  const [effect, setEffect] = useState<ChatBgEffect>("none")
-  const [saving, startSave] = useTransition()
-
-  function apply(nextUrl: string | null, nextEffect: ChatBgEffect) {
-    setUrl(nextUrl)
-    setEffect(nextEffect)
-    startSave(async () => {
-      await setChatBackground({ roomName, url: nextUrl, effect: nextEffect })
-    })
-  }
-
-  return (
-    <Sheet title="Chat background" onClose={onClose}>
-      <div className="space-y-3">
-        <p className="text-sm text-muted-foreground">
-          Upload an image to sit behind the chat for everyone in the room. Blur or dim it so messages stay readable.
-        </p>
-        <CoverUpload value={url} onChange={(v) => apply(v, effect)} label="Background image" />
-        <div className="grid grid-cols-3 gap-2">
-          {(["none", "blur", "dim"] as ChatBgEffect[]).map((opt) => (
-            <button
-              key={opt}
-              type="button"
-              onClick={() => apply(url, opt)}
-              className={cn(
-                "rounded-lg border px-3 py-2 text-sm capitalize transition-colors",
-                effect === opt ? "border-primary bg-primary/10 text-primary" : "border-border/60 hover:bg-secondary",
-              )}
-            >
-              {opt}
-            </button>
-          ))}
-        </div>
-        {url && (
-          <Button type="button" variant="ghost" className="w-full gap-2 text-destructive" onClick={() => apply(null, "none")}>
-            <Trash2 className="size-4" /> Remove background
-          </Button>
-        )}
-        {saving && <p className="text-xs text-muted-foreground">Saving…</p>}
       </div>
     </Sheet>
   )

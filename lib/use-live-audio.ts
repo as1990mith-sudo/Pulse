@@ -176,6 +176,10 @@ function synthesizeEffect(ctx: AudioContext, out: GainNode, name: SoundEffectNam
 export function useLiveAudio() {
   const roomRef = useRef<Room | null>(null)
   const audioElsRef = useRef<Map<string, HTMLAudioElement>>(new Map())
+  // Listener's mute preference. Kept in a ref so it survives re-subscriptions:
+  // any audio element attached *after* the listener mutes must start muted too,
+  // otherwise newly-joined speakers/music would suddenly become audible.
+  const listenerMutedRef = useRef(false)
   // Background-music mixing graph (host side).
   const musicCtxRef = useRef<AudioContext | null>(null)
   const musicGainRef = useRef<GainNode | null>(null)
@@ -260,6 +264,8 @@ export function useLiveAudio() {
             if (track.kind === Track.Kind.Audio) {
               const el = track.attach()
               el.autoplay = true
+              // Honour the listener's current mute preference for late joiners.
+              el.muted = listenerMutedRef.current
               audioElsRef.current.set(participant.identity, el)
               document.body.appendChild(el)
             }
@@ -364,6 +370,7 @@ export function useLiveAudio() {
   }, [update])
 
   const setListenerMuted = useCallback((muted: boolean) => {
+    listenerMutedRef.current = muted
     audioElsRef.current.forEach((el) => {
       el.muted = muted
     })
@@ -383,7 +390,8 @@ export function useLiveAudio() {
       // ignore
     }
     audioElsRef.current.forEach((el) => {
-      el.muted = false
+      // Unblocking playback must not override an explicit listener mute.
+      el.muted = listenerMutedRef.current
       void el.play().catch(() => {})
     })
     update({ audioBlocked: !room.canPlaybackAudio })
