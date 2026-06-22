@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useTheme } from "next-themes"
-import { Check, Contrast, Layers, Moon, Palette, Sun } from "lucide-react"
+import { Check, Contrast, Moon, Palette, Sun } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -20,14 +20,13 @@ const themes = [
   { value: "light", label: "Light", icon: Sun },
   { value: "dark", label: "Dark", icon: Moon },
   { value: "mid", label: "Mid", icon: Contrast },
-  { value: "transparent", label: "Transparent", icon: Layers },
 ] as const
 
 // Preview swatch per skin — each shows its accent ring gradient.
 const SKIN_SWATCH: Record<string, string> = {
   orange: "linear-gradient(to top right, oklch(0.79 0.16 62), oklch(0.66 0.23 22), oklch(0.6 0.26 350))",
-  green: "linear-gradient(to top right, oklch(0.7 0.15 158), oklch(0.596 0.145 163.225), oklch(0.6 0.13 185))",
-  aurora: "linear-gradient(to top right, oklch(0.78 0.18 152), oklch(0.72 0.15 195), oklch(0.64 0.16 285))",
+  white: "linear-gradient(to top right, oklch(1 0 0), oklch(0.9 0.002 285), oklch(0.78 0.004 285))",
+  black: "linear-gradient(to top right, oklch(0.34 0.006 285), oklch(0.22 0.006 285), oklch(0.14 0.006 285))",
 }
 
 export function ThemeSwitcher() {

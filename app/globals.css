@@ -2,7 +2,7 @@
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 
-@custom-variant dark (&:is(.dark *, .theme-mid *, .theme-transparent *));
+@custom-variant dark (&:is(.dark *, .theme-mid *));
 
 @theme inline {
   --font-heading: var(--font-sans);
@@ -57,20 +57,20 @@
 :root,
 .dark {
   color-scheme: dark;
-  --background: oklch(0.16 0.006 285);
+  --background: oklch(0.16 0.006 285 / 95%);
   --foreground: oklch(0.97 0.002 285);
-  --card: oklch(0.205 0.007 285);
+  --card: oklch(0.22 0.008 285 / 95%);
   --card-foreground: oklch(0.97 0.002 285);
-  --popover: oklch(0.205 0.007 285);
+  --popover: oklch(0.22 0.008 285 / 95%);
   --popover-foreground: oklch(0.97 0.002 285);
   --popover-solid: oklch(0.205 0.007 285);
   --primary: oklch(0.72 0.18 55);
   --primary-foreground: oklch(0.99 0.005 60);
-  --secondary: oklch(0.27 0.008 285);
+  --secondary: oklch(0.27 0.008 285 / 95%);
   --secondary-foreground: oklch(0.97 0.002 285);
-  --muted: oklch(0.27 0.008 285);
+  --muted: oklch(0.27 0.008 285 / 95%);
   --muted-foreground: oklch(0.7 0.006 285);
-  --accent: oklch(0.27 0.008 285);
+  --accent: oklch(0.27 0.008 285 / 95%);
   --accent-foreground: oklch(0.97 0.002 285);
   --destructive: oklch(0.66 0.21 24);
   --border: oklch(1 0 0 / 10%);
@@ -90,11 +90,11 @@
   --chart-4: oklch(0.6 0.16 40);
   --chart-5: oklch(0.7 0.006 285);
   --radius: 0.75rem;
-  --sidebar: oklch(0.18 0.006 285);
+  --sidebar: oklch(0.18 0.006 285 / 95%);
   --sidebar-foreground: oklch(0.97 0.002 285);
   --sidebar-primary: oklch(0.72 0.18 55);
   --sidebar-primary-foreground: oklch(0.99 0.005 60);
-  --sidebar-accent: oklch(0.27 0.008 285);
+  --sidebar-accent: oklch(0.27 0.008 285 / 95%);
   --sidebar-accent-foreground: oklch(0.97 0.002 285);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.72 0.18 55);
@@ -166,44 +166,12 @@
   --sidebar-border: oklch(1 0 0 / 18%);
   }
 
-/* Transparent mode — frosted glass over an ambient backdrop */
-.theme-transparent {
-  color-scheme: dark;
-  --background: oklch(0.16 0.006 285 / 40%);
-  --foreground: oklch(0.99 0.002 285);
-  --card: oklch(0.7 0.02 285 / 14%);
-  --card-foreground: oklch(0.99 0.002 285);
-  --popover: oklch(0.2 0.01 285 / 78%);
-  --popover-foreground: oklch(0.99 0.002 285);
-  --popover-solid: oklch(0.19 0.012 285);
-  --primary: oklch(0.74 0.18 55);
-  --primary-foreground: oklch(0.99 0.005 60);
-  --secondary: oklch(0.8 0.02 285 / 16%);
-  --secondary-foreground: oklch(0.99 0.002 285);
-  --muted: oklch(0.8 0.02 285 / 12%);
-  --muted-foreground: oklch(0.92 0.006 285);
-  --accent: oklch(0.8 0.02 285 / 18%);
-  --accent-foreground: oklch(0.99 0.002 285);
-  --destructive: oklch(0.68 0.21 24);
-  --border: oklch(1 0 0 / 22%);
-  --input: oklch(1 0 0 / 26%);
-  --ring: oklch(0.74 0.18 55);
-  --live: oklch(0.68 0.21 24);
-  --live-foreground: oklch(0.99 0.005 60);
-  --chart-5: oklch(0.92 0.006 285);
-  --sidebar: oklch(0.16 0.006 285 / 40%);
-  --sidebar-foreground: oklch(0.99 0.002 285);
-  --sidebar-accent: oklch(0.8 0.02 285 / 16%);
-  --sidebar-accent-foreground: oklch(0.99 0.002 285);
-  --sidebar-border: oklch(1 0 0 / 22%);
-}
-
 /* ── Skins ───────────────────────────────────────────────────────────────
-   A second theming axis, independent of the light/dark/mid/transparent
-   appearance. A skin only re-tints the accent (primary/ring/charts) and the
-   status-ring gradient — it deliberately leaves backgrounds, the live (red)
-   accent, and the Community Help (emerald) palette untouched. These blocks
-   come after every appearance block so they win the cascade on <html>. */
+   A second theming axis, independent of the light/dark/mid appearance. A skin
+   only re-tints the accent (primary/ring/charts) and the status-ring gradient
+   — it deliberately leaves backgrounds, the live (red) accent, and the
+   Community Help (emerald) palette untouched. These blocks come after every
+   appearance block so they win the cascade on <html>. */
 [data-skin="orange"] {
   --primary: oklch(0.72 0.18 55);
   --primary-foreground: oklch(0.99 0.005 60);
@@ -214,42 +182,46 @@
   --skin-ring: linear-gradient(to top right, oklch(0.79 0.16 62), oklch(0.66 0.23 22), oklch(0.6 0.26 350));
 }
 
-/* "Green" — matches the Community Help chatroom accent (Tailwind emerald-600). */
-[data-skin="green"] {
-  --primary: oklch(0.596 0.145 163.225);
-  --primary-foreground: oklch(0.99 0.01 160);
-  --ring: oklch(0.596 0.145 163.225);
-  --sidebar-primary: oklch(0.596 0.145 163.225);
-  --sidebar-ring: oklch(0.596 0.145 163.225);
-  --chart-1: oklch(0.596 0.145 163.225);
-  --skin-ring: linear-gradient(to top right, oklch(0.7 0.15 158), oklch(0.596 0.145 163.225), oklch(0.6 0.13 185));
+/* "White" — a clean monochrome accent: near-white fills with dark text. */
+[data-skin="white"] {
+  --primary: oklch(0.97 0.002 285);
+  --primary-foreground: oklch(0.2 0.006 285);
+  --ring: oklch(0.97 0.002 285);
+  --sidebar-primary: oklch(0.97 0.002 285);
+  --sidebar-ring: oklch(0.97 0.002 285);
+  --chart-1: oklch(0.97 0.002 285);
+  --skin-ring: linear-gradient(to top right, oklch(1 0 0), oklch(0.9 0.002 285), oklch(0.78 0.004 285));
 }
 
-/* "Aurora" — a luminous northern-lights accent: green→teal→indigo. */
-[data-skin="aurora"] {
-  --primary: oklch(0.72 0.15 178);
-  --primary-foreground: oklch(0.99 0.01 180);
-  --ring: oklch(0.72 0.15 178);
-  --sidebar-primary: oklch(0.72 0.15 178);
-  --sidebar-ring: oklch(0.72 0.15 178);
-  --chart-1: oklch(0.72 0.15 178);
-  --skin-ring: linear-gradient(to top right, oklch(0.78 0.18 152), oklch(0.72 0.15 195), oklch(0.64 0.16 285));
+/* "Black" — a deep monochrome accent: near-black fills with light text. */
+[data-skin="black"] {
+  --primary: oklch(0.24 0.006 285);
+  --primary-foreground: oklch(0.97 0.002 285);
+  --ring: oklch(0.24 0.006 285);
+  --sidebar-primary: oklch(0.24 0.006 285);
+  --sidebar-ring: oklch(0.24 0.006 285);
+  --chart-1: oklch(0.24 0.006 285);
+  --skin-ring: linear-gradient(to top right, oklch(0.34 0.006 285), oklch(0.22 0.006 285), oklch(0.14 0.006 285));
 }
 
-.theme-transparent body {
-  background-color: oklch(0.12 0.01 285);
-  background-image: linear-gradient(180deg, oklch(0.13 0.015 285 / 80%), oklch(0.1 0.015 55 / 84%)),
-    url("/themes/ambient.png");
-  background-size: cover;
-  background-position: center;
+/* Dark mode — translucent ~95%-solid panels floating over a soft dark zinc
+   gradient, mirroring the Mid treatment but keeping dark's neutral palette. */
+.dark body {
+  background-color: oklch(0.16 0.006 285);
+  background-image: linear-gradient(
+    155deg,
+    oklch(0.22 0.008 285),
+    oklch(0.16 0.006 285) 50%,
+    oklch(0.13 0.006 285)
+  );
   background-attachment: fixed;
-  background-repeat: no-repeat;
 }
 
-/* Frost the common surfaces so the glass effect reads */
-.theme-transparent :is(.bg-card, .bg-popover, .bg-secondary, .bg-muted, .bg-accent) {
-  backdrop-filter: blur(16px) saturate(150%);
-  -webkit-backdrop-filter: blur(16px) saturate(150%);
+/* Panels are ~95% solid, so only a light blur smooths the faint 5% of the
+   gradient that shows through. */
+.dark :is(.bg-card, .bg-popover, .bg-secondary, .bg-muted, .bg-accent) {
+  backdrop-filter: blur(6px) saturate(120%);
+  -webkit-backdrop-filter: blur(6px) saturate(120%);
 }
 
 /* Mid mode — a soft twilight gradient canvas (indigo → blue → teal) that the
