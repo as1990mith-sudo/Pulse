@@ -48,6 +48,11 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
   // Allow pinch-zoom for accessibility, but don't auto-zoom on input focus.
   maximumScale: 5,
+  // When the on-screen keyboard opens, shrink the layout viewport (and `dvh`)
+  // instead of just the visual viewport. This keeps fixed full-height surfaces
+  // — like the immersive live room and its chat composer — pinned above the
+  // keyboard so the input stays static instead of being shoved up the screen.
+  interactiveWidget: 'resizes-content',
 }
 
 export default function RootLayout({

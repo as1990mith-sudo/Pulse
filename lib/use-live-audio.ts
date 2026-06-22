@@ -187,6 +187,8 @@ export function useLiveAudio() {
   // Background-music mixing graph (host side).
   const musicCtxRef = useRef<AudioContext | null>(null)
   const musicGainRef = useRef<GainNode | null>(null)
+  // Low-shelf EQ that lifts the low end so the broadcast music has more bass.
+  const musicBassRef = useRef<BiquadFilterNode | null>(null)
   const musicElRef = useRef<HTMLAudioElement | null>(null)
   const musicTrackRef = useRef<LocalAudioTrack | null>(null)
   // The single MediaElementSourceNode for the music element. A media element can
@@ -497,12 +499,21 @@ export function useLiveAudio() {
       const source = ctx.createMediaElementSource(el)
       const gain = ctx.createGain()
       gain.gain.value = 0.4
+      // Low-shelf filter boosts everything below ~220Hz for a warmer, bassier
+      // sound. Sits after the volume gain so the whole chain (monitor + the
+      // published/recorded stream) is fed the same bass-enhanced signal.
+      const bass = ctx.createBiquadFilter()
+      bass.type = "lowshelf"
+      bass.frequency.value = 220
+      bass.gain.value = 7
       source.connect(gain)
+      gain.connect(bass)
       // Route the music to the host's own speakers so they can monitor it (and
       // hear volume changes) exactly as it's broadcast/recorded.
-      gain.connect(ctx.destination)
+      bass.connect(ctx.destination)
       musicSourceRef.current = source
       musicGainRef.current = gain
+      musicBassRef.current = bass
     }
 
     // Swap to the requested track and (re)start playback.
@@ -515,9 +526,9 @@ export function useLiveAudio() {
     // Publish the music to LiveKit once. Later track swaps keep flowing through
     // this same published stream, so listeners hear the change seamlessly.
     if (!musicTrackRef.current) {
-      const gain = musicGainRef.current!
+      const bass = musicBassRef.current!
       const dest = ctx.createMediaStreamDestination()
-      gain.connect(dest)
+      bass.connect(dest)
       const [mediaTrack] = dest.stream.getAudioTracks()
       const localTrack = new LocalAudioTrack(mediaTrack)
       await room.localParticipant.publishTrack(localTrack, { name: "background-music" })

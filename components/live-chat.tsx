@@ -190,7 +190,7 @@ export function LiveChat({
       )}
 
       <ScrollArea className="relative flex-1">
-        <ul ref={scrollRef} className="flex flex-col gap-5 p-4">
+        <ul ref={scrollRef} className="flex flex-col gap-2 p-4">
           {messages.length === 0 && (
             <li className={cn("py-8 text-center text-sm", immersive ? "text-white/50" : "text-muted-foreground")}>
               No messages yet. Say hello to the room.
@@ -200,11 +200,11 @@ export function LiveChat({
             // The viewer's own messages sit on the right; everyone else's on the left.
             const isMine = currentUser ? m.userId === currentUser.id : false
             return (
-              <li key={m.id} className={cn("flex gap-3", isMine && "flex-row-reverse")}>
-                <Avatar className="size-9 shrink-0">
+              <li key={m.id} className={cn("flex gap-2.5", isMine && "flex-row-reverse")}>
+                <Avatar className="size-8 shrink-0">
                   <AvatarFallback className={getAvatarColor(m.userName)}>{getInitials(m.userName)}</AvatarFallback>
                 </Avatar>
-                <div className={cn("group flex max-w-[78%] flex-col gap-1", isMine && "items-end")}>
+                <div className={cn("group flex max-w-[80%] flex-col gap-0.5", isMine && "items-end")}>
                   <div className={cn("flex items-center gap-2", isMine && "flex-row-reverse")}>
                     <span
                       className={cn(
@@ -236,7 +236,7 @@ export function LiveChat({
                   </div>
                   <p
                     className={cn(
-                      "rounded-2xl px-3 py-2 text-sm leading-relaxed",
+                      "rounded-2xl px-3 py-1.5 text-sm leading-snug",
                       isMine
                         ? "rounded-tr-sm bg-primary text-primary-foreground"
                         : immersive
