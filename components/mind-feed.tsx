@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import useSWR, { mutate as globalMutate } from "swr"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -108,6 +108,31 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
   const followingCount = allPosts.filter((p) => p.isFollowing).length
   const visiblePosts = tab === "following" ? allPosts.filter((p) => p.isFollowing) : allPosts
 
+  // Deep link support: when arriving with ?post=<id> (e.g. from a shared link),
+  // make sure that post is in view, scroll to it, and briefly highlight it so
+  // the link lands on the exact post that was shared — not just the feed top.
+  const [highlightedPost, setHighlightedPost] = useState<string | null>(null)
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const targetId = new URLSearchParams(window.location.search).get("post")
+    if (!targetId) return
+    // Make sure we're on a tab that can show the post.
+    if (!allPosts.some((p) => String(p.id) === targetId)) return
+    if (tab === "following" && !allPosts.find((p) => String(p.id) === targetId)?.isFollowing) {
+      setTab("for-you")
+    }
+    const t = setTimeout(() => {
+      const el = document.getElementById(`post-${targetId}`)
+      if (!el) return
+      el.scrollIntoView({ behavior: "smooth", block: "center" })
+      setHighlightedPost(targetId)
+      setTimeout(() => setHighlightedPost(null), 2400)
+    }, 250)
+    return () => clearTimeout(t)
+    // Run once on mount; allPosts is seeded from SSR so the target is present.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   async function handleMediaPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -176,7 +201,12 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
         <ul className="mt-5 divide-y divide-border/60 border-y border-border/60">
           {allPosts.map((post) => (
             <li key={post.id}>
-              <PostCard post={post} currentUser={currentUser} variant="feed" />
+              <PostCard
+                post={post}
+                currentUser={currentUser}
+                variant="feed"
+                highlighted={highlightedPost === String(post.id)}
+              />
             </li>
           ))}
         </ul>
@@ -351,12 +381,15 @@ export function PostCard({
   post,
   currentUser,
   variant = "card",
+  highlighted = false,
 }: {
   post: FeedPostView
   currentUser: CurrentUser | null
   // "feed" blends edge-to-edge into the immersive scroll; "card" keeps the
   // boxed look used on profile pages.
   variant?: "card" | "feed"
+  // Briefly ring the card when it's the deep-linked target of a shared link.
+  highlighted?: boolean
 }) {
   const feed = variant === "feed"
   const router = useRouter()
@@ -485,11 +518,13 @@ export function PostCard({
 
   return (
     <article
+      id={`post-${post.id}`}
       className={cn(
-        "overflow-hidden",
+        "overflow-hidden scroll-mt-24 transition-shadow",
         feed
           ? "bg-background"
           : "rounded-xl border border-border bg-card text-card-foreground",
+        highlighted && "ring-2 ring-primary ring-offset-2 ring-offset-background",
       )}
     >
       {/* Header */}

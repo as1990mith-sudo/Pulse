@@ -1051,7 +1051,7 @@ export function StatusViewer({
               key: String(item.id),
               title: `${group.authorName}'s status on Frequency`,
               subtitle: item.caption ?? null,
-              url: `/u/${group.userId}`,
+              url: `/status/${item.id}`,
               image: item.mediaType === "text" ? null : item.mediaUrl ?? null,
               downloadUrl: item.mediaType === "text" ? null : item.mediaUrl ?? null,
               downloadKind: item.mediaType === "video" ? "video" : item.mediaType === "image" ? "image" : null,
