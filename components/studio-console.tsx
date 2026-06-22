@@ -24,6 +24,8 @@ import {
   Upload,
   UserPlus,
   Users,
+  Volume2,
+  VolumeX,
   X,
 } from "lucide-react"
 import type { CurrentUser } from "@/lib/session"
@@ -39,7 +41,8 @@ import {
 import { useLiveAudio } from "@/lib/use-live-audio"
 import { uploadMedia } from "@/lib/upload-media"
 import { LiveChat } from "@/components/live-chat"
-import { LiveStage, MAX_GUESTS } from "@/components/live-stage"
+import { LiveStage, MAX_GUESTS, QualityIcon } from "@/components/live-stage"
+import { LiveBadge } from "@/components/live-badge"
 import { ReactionLayer } from "@/components/live-reactions"
 import { BackExitMenu } from "@/components/live-back-menu"
 import { CoverUpload } from "@/components/admin/cover-upload"
@@ -105,6 +108,64 @@ export function StudioConsole({
   const recordedBlobRef = useRef<Blob | null>(null)
   // Which slide-up panel is open. Only one at a time keeps the studio compact.
   const [panel, setPanel] = useState<null | "music" | "people">(null)
+
+  // ── Background-music playlist (lifted here so it survives closing the music
+  // panel and minimising the whole console — the audio engine itself lives in
+  // the persistent useLiveAudio hook, so playback never stops on its own). ──
+  const [musicTracks, setMusicTracks] = useState<Track[]>([])
+  const [musicActiveIndex, setMusicActiveIndex] = useState<number | null>(null)
+  const [musicPlaying, setMusicPlayingState] = useState(false)
+  const [musicVolume, setMusicVolumeState] = useState(0.4)
+  const [musicMixing, setMusicMixing] = useState(false)
+  const [musicError, setMusicError] = useState<string | null>(null)
+
+  // Mix a playlist track into the broadcast and mark it now-playing.
+  async function playMusicTrack(index: number) {
+    const track = musicTracks[index]
+    if (!track) return
+    setMusicError(null)
+    setMusicMixing(true)
+    try {
+      await publishMusic(track.url)
+      setMusicVolume(musicVolume)
+      setMusicActiveIndex(index)
+      setMusicPlayingState(true)
+    } catch (err) {
+      setMusicError(err instanceof Error ? err.message : "Could not mix the track in.")
+    } finally {
+      setMusicMixing(false)
+    }
+  }
+
+  function toggleMusicPlay() {
+    if (musicActiveIndex === null) return
+    const next = !musicPlaying
+    setMusicPlaying(next)
+    setMusicPlayingState(next)
+  }
+
+  function changeMusicVolume(value: number) {
+    setMusicVolumeState(value)
+    setMusicVolume(value)
+  }
+
+  function removeMusicTrack(index: number) {
+    setMusicTracks((arr) => arr.filter((_, i) => i !== index))
+    setMusicActiveIndex((cur) => {
+      if (cur === null) return cur
+      if (index === cur) return null
+      return index < cur ? cur - 1 : cur
+    })
+  }
+
+  // If the host goes off air while music is mixed in, tear it down cleanly.
+  useEffect(() => {
+    if (!live && musicActiveIndex !== null) {
+      setMusicActiveIndex(null)
+      setMusicPlayingState(false)
+      void stopMusic()
+    }
+  }, [live, musicActiveIndex, stopMusic])
 
   const viewers = Math.max(0, state.listeners - 1 - speakers.filter((s) => !s.isLocal).length)
 
@@ -228,40 +289,42 @@ export function StudioConsole({
             onExit={live ? toggleLive : (onExit ?? (() => {}))}
             onMinimize={onMinimize ?? (() => {})}
           />
-          <div className="relative size-16 shrink-0 overflow-hidden rounded-xl bg-white/10 shadow-xl ring-2 ring-white/30 sm:size-20">
+          {/* Compact cover thumbnail — same footprint as the listener header. */}
+          <span className="relative size-12 shrink-0 overflow-hidden rounded-xl bg-white/10 shadow-xl ring-2 ring-white/30">
             {cover ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={cover || "/placeholder.svg"} alt="Session cover art" className="size-full object-cover" />
             ) : (
               <span className="flex size-full items-center justify-center text-white/80">
-                <Radio className="size-7" strokeWidth={2.75} />
+                <Radio className="size-5" strokeWidth={2.75} />
               </span>
             )}
-          </div>
+          </span>
 
-          <div className="min-w-0 flex-1">
-            <div className="mb-1 flex items-center gap-2">
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide",
-                  live ? "bg-live text-live-foreground" : "bg-white/10 text-white/60",
-                )}
-              >
-                <span
-                  className={cn(
-                    "size-1.5 rounded-full",
-                    live ? "bg-live-foreground animate-live-pulse" : "bg-white/40",
-                  )}
-                />
-                {live ? "Live" : "Offline"}
-              </span>
-              {live && (
-                <span className="font-mono text-xs tabular-nums text-white/50">{formatTime(elapsed)}</span>
+          <div className="relative min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              {live ? (
+                <>
+                  <LiveBadge />
+                  <span className="flex items-center gap-1 text-[11px] font-medium text-white/60">
+                    <QualityIcon quality={state.connectionQuality} />
+                    <span className="capitalize">
+                      {state.connectionQuality !== "unknown" ? state.connectionQuality : ""}
+                    </span>
+                  </span>
+                </>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-white/60">
+                  <span className="size-1.5 rounded-full bg-white/40" />
+                  Offline
+                </span>
               )}
             </div>
 
             {live ? (
-              <p className="truncate text-base font-bold leading-tight tracking-tight text-white sm:text-lg">{title || "Untitled session"}</p>
+              <h1 className="mt-0.5 truncate text-base font-bold leading-tight tracking-tight text-white">
+                {title || "Untitled session"}
+              </h1>
             ) : (
               <input
                 value={title}
@@ -269,27 +332,27 @@ export function StudioConsole({
                 placeholder="Name your session…"
                 aria-label="Session title"
                 maxLength={80}
-                className="w-full truncate rounded-md border border-transparent bg-transparent text-sm font-semibold leading-tight text-white outline-none transition-colors placeholder:text-white/40 hover:border-white/20 focus:border-primary focus:bg-white/10 focus:px-2 focus:py-1 sm:text-base"
+                className="mt-0.5 w-full truncate rounded-md border border-transparent bg-transparent text-base font-bold leading-tight tracking-tight text-white outline-none transition-colors placeholder:text-white/40 hover:border-white/20 focus:border-primary focus:bg-white/10 focus:px-2 focus:py-1"
               />
             )}
-            <div className="mt-0.5 flex items-center gap-2 text-xs text-white/60">
-              <span className="truncate">{currentUser.name}</span>
-              {live && (
-                <button
-                  type="button"
-                  onClick={() => setPanel("people")}
-                  aria-label="See listeners and manage the stage"
-                  className="flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 transition-colors hover:bg-white/10 hover:text-white"
-                >
-                  <Users className="size-3" /> {viewers.toLocaleString()}
-                </button>
-              )}
-            </div>
+            <p className="truncate text-xs font-medium text-white/70">{currentUser.name}</p>
           </div>
 
-          {/* While offline the host needs a way to go live; once live, the
-              back arrow's menu handles ending the stream, so no End button. */}
-          {!live && (
+          {/* While live: a compact listener pill + timer (mirrors the listener
+              header). While offline: the Go live action. */}
+          {live ? (
+            <div className="relative flex shrink-0 flex-col items-end gap-1">
+              <button
+                type="button"
+                onClick={() => setPanel("people")}
+                aria-label="See listeners and manage the stage"
+                className="flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-xs font-medium text-white/80 ring-1 ring-inset ring-white/10 transition-colors hover:bg-white/20"
+              >
+                <Users className="size-3" /> {viewers.toLocaleString()}
+              </button>
+              <span className="font-mono text-[11px] tabular-nums text-white/50">{formatTime(elapsed)}</span>
+            </div>
+          ) : (
             <Button
               onClick={toggleLive}
               size="sm"
@@ -360,8 +423,8 @@ export function StudioConsole({
             />
             <DockButton
               icon={<Music className="size-5" />}
-              label="Background music"
-              active={panel === "music"}
+              label={musicPlaying ? "Background music (playing)" : "Background music"}
+              active={panel === "music" || musicPlaying}
               disabled={!live}
               onClick={() => setPanel((p) => (p === "music" ? null : "music"))}
             />
@@ -411,11 +474,19 @@ export function StudioConsole({
           live={live}
           position={state.musicPosition}
           duration={state.musicDuration}
-          onPublish={publishMusic}
-          onVolume={setMusicVolume}
-          onPlayingChange={setMusicPlaying}
+          tracks={musicTracks}
+          activeIndex={musicActiveIndex}
+          playing={musicPlaying}
+          volume={musicVolume}
+          mixing={musicMixing}
+          error={musicError}
+          onAddTracks={(added) => setMusicTracks((t) => [...t, ...added])}
+          onPlayTrack={playMusicTrack}
+          onTogglePlay={toggleMusicPlay}
+          onVolume={changeMusicVolume}
           onSeek={seekMusic}
-          onStop={stopMusic}
+          onRemoveTrack={removeMusicTrack}
+          onError={setMusicError}
           onClose={() => setPanel(null)}
         />
       )}
@@ -608,187 +679,280 @@ function PeoplePanel({
   )
 }
 
-/** Background music: multi-track playlist with volume + scrub controls. */
+/** How many backing tracks the host can keep queued at once. */
+const MAX_MUSIC_TRACKS = 4
+
+/**
+ * Background music: a premium multi-track playlist with a now-playing card
+ * (scrubber + volume) and a queue. All playback state is owned by the parent
+ * console (so it survives closing this panel / minimising the studio); this
+ * component is fully controlled and only owns the transient upload spinner.
+ */
 function MusicPanel({
   live,
   position,
   duration,
-  onPublish,
+  tracks,
+  activeIndex,
+  playing,
+  volume,
+  mixing,
+  error,
+  onAddTracks,
+  onPlayTrack,
+  onTogglePlay,
   onVolume,
-  onPlayingChange,
   onSeek,
-  onStop,
+  onRemoveTrack,
+  onError,
   onClose,
 }: {
   live: boolean
   position: number
   duration: number
-  onPublish: (url: string) => Promise<void>
+  tracks: Track[]
+  activeIndex: number | null
+  playing: boolean
+  volume: number
+  mixing: boolean
+  error: string | null
+  onAddTracks: (tracks: Track[]) => void
+  onPlayTrack: (index: number) => void
+  onTogglePlay: () => void
   onVolume: (value: number) => void
-  onPlayingChange: (playing: boolean) => void
   onSeek: (seconds: number) => void
-  onStop: () => Promise<void>
+  onRemoveTrack: (index: number) => void
+  onError: (message: string | null) => void
   onClose: () => void
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [tracks, setTracks] = useState<Track[]>([])
-  const [activeIndex, setActiveIndex] = useState<number | null>(null)
-  const [playing, setPlaying] = useState(false)
-  const [volume, setVolume] = useState(0.4)
   const [uploading, setUploading] = useState(false)
-  const [mixing, setMixing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    onVolume(volume)
-  }, [volume, onVolume])
-
-  useEffect(() => {
-    if (!live && playing) {
-      setPlaying(false)
-      void onStop()
-    }
-  }, [live, playing, onStop])
+  const activeTrack = activeIndex !== null ? tracks[activeIndex] : null
+  const progress = duration > 0 ? Math.min(100, (position / duration) * 100) : 0
+  const canAdd = tracks.length < MAX_MUSIC_TRACKS
 
   async function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
     if (files.length === 0) return
-    setError(null)
+    onError(null)
     setUploading(true)
     try {
-      for (const file of files) {
+      const room = MAX_MUSIC_TRACKS - tracks.length
+      const added: Track[] = []
+      for (const file of files.slice(0, room)) {
         if (!file.type.startsWith("audio/")) continue
         const data = await uploadMedia(file, "live-music")
-        setTracks((t) => [...t, { url: data.url, name: data.name ?? file.name }])
+        added.push({ url: data.url, name: data.name ?? file.name })
       }
+      if (added.length) onAddTracks(added)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed")
+      onError(err instanceof Error ? err.message : "Upload failed")
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ""
     }
   }
 
-  async function playTrack(index: number) {
-    setError(null)
-    setMixing(true)
-    try {
-      await onPublish(tracks[index].url)
-      onVolume(volume)
-      setActiveIndex(index)
-      setPlaying(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not mix the track in.")
-    } finally {
-      setMixing(false)
-    }
-  }
-
-  function togglePlay() {
-    if (activeIndex === null) return
-    if (playing) {
-      onPlayingChange(false)
-      setPlaying(false)
-    } else {
-      onPlayingChange(true)
-      setPlaying(true)
-    }
-  }
-
   return (
     <Sheet title="Background music" onClose={onClose}>
-      <div className="space-y-3">
+      <div className="space-y-4">
         <input ref={fileInputRef} type="file" accept="audio/*" multiple className="hidden" onChange={handlePick} />
 
-        {activeIndex !== null && (
-          <div className="space-y-2 rounded-lg border border-border/60 bg-background p-3">
+        {/* ── Now playing: premium control surface ── */}
+        {activeTrack && (
+          <div className="overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-b from-secondary/60 to-card p-4 shadow-lg">
             <div className="flex items-center gap-3">
+              <span
+                className={cn(
+                  "relative flex size-14 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary ring-1 ring-inset ring-primary/20",
+                  playing && "animate-pulse",
+                )}
+              >
+                <Music className="size-6" strokeWidth={2.5} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-primary">Now playing</p>
+                <p className="truncate text-sm font-semibold text-foreground">{activeTrack.name}</p>
+              </div>
               <button
                 type="button"
-                onClick={togglePlay}
+                onClick={onTogglePlay}
                 disabled={!live || mixing}
-                className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-50"
+                className="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-95 disabled:opacity-50"
                 aria-label={playing ? "Pause" : "Play"}
               >
-                {mixing ? <Loader2 className="size-4 animate-spin" /> : playing ? <Pause className="size-4" /> : <Play className="size-4 translate-x-0.5" />}
+                {mixing ? (
+                  <Loader2 className="size-5 animate-spin" />
+                ) : playing ? (
+                  <Pause className="size-5" strokeWidth={2.5} />
+                ) : (
+                  <Play className="size-5 translate-x-0.5" strokeWidth={2.5} />
+                )}
               </button>
-              <p className="min-w-0 flex-1 truncate text-sm font-medium">{tracks[activeIndex]?.name}</p>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => onSeek(Math.max(0, position - 15))} aria-label="Back 15s">
-                <SkipBack className="size-4 text-muted-foreground" />
+            {/* Scrubber */}
+            <div className="mt-4 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onSeek(Math.max(0, position - 15))}
+                aria-label="Back 15 seconds"
+                className="text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <SkipBack className="size-4" strokeWidth={2.5} />
               </button>
-              <input
-                type="range"
-                min={0}
-                max={duration || 0}
-                step={1}
-                value={Math.min(position, duration || 0)}
-                onChange={(e) => onSeek(Number(e.target.value))}
-                className="h-1.5 flex-1 cursor-pointer accent-primary"
-                aria-label="Seek background music"
-              />
-              <button type="button" onClick={() => onSeek(position + 15)} aria-label="Forward 15s">
-                <SkipForward className="size-4 text-muted-foreground" />
+              <div className="relative h-2 flex-1">
+                <div className="absolute inset-0 rounded-full bg-muted" />
+                <div
+                  className="absolute inset-y-0 left-0 rounded-full bg-primary"
+                  style={{ width: `${progress}%` }}
+                />
+                <span
+                  className="pointer-events-none absolute top-1/2 size-3.5 -translate-y-1/2 rounded-full bg-primary shadow ring-2 ring-card"
+                  style={{ left: `calc(${progress}% - 7px)` }}
+                />
+                <input
+                  type="range"
+                  min={0}
+                  max={duration || 0}
+                  step={1}
+                  value={Math.min(position, duration || 0)}
+                  onChange={(e) => onSeek(Number(e.target.value))}
+                  className="absolute inset-0 size-full cursor-pointer opacity-0"
+                  aria-label="Seek background music"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => onSeek(position + 15)}
+                aria-label="Forward 15 seconds"
+                className="text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <SkipForward className="size-4" strokeWidth={2.5} />
               </button>
             </div>
-            <div className="flex justify-between font-mono text-[11px] tabular-nums text-muted-foreground">
+            <div className="mt-1.5 flex justify-between font-mono text-[11px] tabular-nums text-muted-foreground">
               <span>{formatTime(position)}</span>
               <span>{formatTime(duration || 0)}</span>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Vol</span>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={volume}
-                onChange={(e) => setVolume(Number(e.target.value))}
-                className="h-1.5 flex-1 cursor-pointer accent-primary"
-                aria-label="Music volume"
-              />
-              <span className="w-8 text-right text-xs tabular-nums text-muted-foreground">{Math.round(volume * 100)}%</span>
+            {/* Volume */}
+            <div className="mt-3 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => onVolume(volume === 0 ? 0.4 : 0)}
+                aria-label={volume === 0 ? "Unmute music" : "Mute music"}
+                className="text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {volume === 0 ? <VolumeX className="size-4" strokeWidth={2.5} /> : <Volume2 className="size-4" strokeWidth={2.5} />}
+              </button>
+              <div className="relative h-2 flex-1">
+                <div className="absolute inset-0 rounded-full bg-muted" />
+                <div
+                  className="absolute inset-y-0 left-0 rounded-full bg-primary/70"
+                  style={{ width: `${volume * 100}%` }}
+                />
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={volume}
+                  onChange={(e) => onVolume(Number(e.target.value))}
+                  className="absolute inset-0 size-full cursor-pointer opacity-0"
+                  aria-label="Music volume"
+                />
+              </div>
+              <span className="w-9 text-right text-xs font-medium tabular-nums text-muted-foreground">
+                {Math.round(volume * 100)}%
+              </span>
             </div>
           </div>
         )}
 
-        <ul className="space-y-1.5">
-          {tracks.map((t, i) => (
-            <li key={t.url} className="flex items-center justify-between gap-2 rounded-lg border border-border/60 p-2">
-              <button
-                type="button"
-                onClick={() => playTrack(i)}
-                disabled={!live || mixing}
-                className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:opacity-50"
-              >
-                <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full", activeIndex === i ? "bg-primary text-primary-foreground" : "bg-secondary")}>
-                  <Play className="size-3.5 translate-x-px" />
-                </span>
-                <span className="truncate text-sm">{t.name}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setTracks((arr) => arr.filter((_, idx) => idx !== i))}
-                aria-label={`Remove ${t.name}`}
-                className="text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 className="size-4" />
-              </button>
-            </li>
-          ))}
-        </ul>
+        {/* ── Queue ── */}
+        <div>
+          <div className="mb-2 flex items-center justify-between px-0.5">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Playlist</h3>
+            <span className="text-[11px] tabular-nums text-muted-foreground">
+              {tracks.length}/{MAX_MUSIC_TRACKS}
+            </span>
+          </div>
+          {tracks.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-border/60 px-3 py-6 text-center text-sm text-muted-foreground">
+              Add up to {MAX_MUSIC_TRACKS} tracks to mix into your broadcast.
+            </p>
+          ) : (
+            <ul className="space-y-1.5">
+              {tracks.map((t, i) => {
+                const isActive = activeIndex === i
+                return (
+                  <li
+                    key={t.url}
+                    className={cn(
+                      "flex items-center justify-between gap-2 rounded-xl border p-2 transition-colors",
+                      isActive ? "border-primary/40 bg-primary/5" : "border-border/60",
+                    )}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onPlayTrack(i)}
+                      disabled={!live || mixing}
+                      className="flex min-w-0 flex-1 items-center gap-2.5 text-left disabled:opacity-50"
+                    >
+                      <span
+                        className={cn(
+                          "flex size-8 shrink-0 items-center justify-center rounded-full",
+                          isActive ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground",
+                        )}
+                      >
+                        {isActive && playing ? <EqBars /> : <Play className="size-3.5 translate-x-px" strokeWidth={2.5} />}
+                      </span>
+                      <span className={cn("truncate text-sm", isActive ? "font-semibold text-foreground" : "text-foreground/90")}>
+                        {t.name}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRemoveTrack(i)}
+                      aria-label={`Remove ${t.name}`}
+                      className="shrink-0 p-1 text-muted-foreground transition-colors hover:text-destructive"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
 
-        <Button type="button" variant="secondary" className="w-full gap-2" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+        <Button
+          type="button"
+          variant="secondary"
+          className="w-full gap-2"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading || !canAdd}
+        >
           {uploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-          {uploading ? "Uploading…" : "Add tracks"}
+          {uploading ? "Uploading…" : canAdd ? "Add tracks" : "Playlist full"}
         </Button>
         {!live && <p className="text-xs text-muted-foreground">Go live to mix music into your broadcast.</p>}
         {error && <p className="text-sm text-destructive">{error}</p>}
       </div>
     </Sheet>
+  )
+}
+
+/** Tiny three-bar equalizer shown on the currently playing queue item. */
+function EqBars() {
+  return (
+    <span className="flex h-3.5 items-end gap-0.5" aria-hidden>
+      <span className="h-full w-0.5 origin-bottom animate-eq-bounce rounded-full bg-current [animation-delay:-0.2s]" />
+      <span className="h-full w-0.5 origin-bottom animate-eq-bounce rounded-full bg-current" />
+      <span className="h-full w-0.5 origin-bottom animate-eq-bounce rounded-full bg-current [animation-delay:-0.4s]" />
+    </span>
   )
 }
 
