@@ -36,7 +36,7 @@ import { useLiveAudio } from "@/lib/use-live-audio"
 import { LiveBadge } from "@/components/live-badge"
 import { LiveStage, QualityIcon } from "@/components/live-stage"
 import { LiveAudience } from "@/components/live-audience"
-import { ReactionLayer, ReactionPicker } from "@/components/live-reactions"
+import { ReactionLayer } from "@/components/live-reactions"
 import { getAvatarColor } from "@/lib/identity"
 import { cn } from "@/lib/utils"
 
@@ -466,9 +466,6 @@ export function LiveListener({
                 </DockButton>
               </>
             )}
-
-            {/* Audio live uses emoji reactions only (no virtual gifts). */}
-            <ReactionPicker roomName={stream.roomName} showGifts={false} />
 
             <DockButton label="Share room" onClick={() => setShareOpen(true)}>
               <Share2 className="size-5" />
