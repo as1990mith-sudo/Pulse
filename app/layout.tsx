@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 const sora = Sora({ variable: '--font-sora', subsets: ['latin'], weight: ['600', '700'] })
 
 export const metadata: Metadata = {
-  title: 'Frequency — Live Podcast Streaming',
+  title: 'Frequency',
   description:
     'Go live, build your audience, and stream audio + video podcasts in real time. Listen in, chat, and call in to the conversation.',
   generator: 'v0.app',

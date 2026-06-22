@@ -38,12 +38,6 @@ export default async function FeedPage() {
           <MindFeed posts={posts} currentUser={currentUser} />
         </div>
       </main>
-
-      <footer className="border-t border-border/60">
-        <div className="mx-auto flex w-full max-w-2xl flex-col items-center justify-between gap-2 px-4 py-8 text-sm text-muted-foreground sm:flex-row">
-          <p>Frequency — live podcast streaming.</p>
-        </div>
-      </footer>
     </div>
   )
 }

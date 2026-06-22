@@ -17,7 +17,7 @@ import {
   type StatusViewer as StatusViewerRow,
 } from "@/app/actions/status"
 import type { CurrentUser } from "@/lib/session"
-import { uploadMedia } from "@/lib/upload-media"
+import { compressImage, uploadMedia } from "@/lib/upload-media"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { VideoTrimmer } from "@/components/video-trimmer"
 import { ShareSheet } from "@/components/share-sheet"
@@ -148,7 +148,18 @@ export function StatusBar({
     setUploading(true)
     setError(null)
     try {
-      const data = await uploadMedia(compose.file, "status")
+      // Compress photos in-browser before upload so large phone images
+      // (often 4–12 MB) don't make posting slow. Videos upload as-is.
+      let fileToUpload: File | Blob = compose.file
+      let uploadName = compose.file.name
+      if (compose.type === "image") {
+        const compressed = await compressImage(compose.file)
+        if (compressed !== compose.file) {
+          fileToUpload = compressed
+          uploadName = compose.file.name.replace(/\.(heic|heif|png|webp|jpe?g)$/i, "") + ".jpg"
+        }
+      }
+      const data = await uploadMedia(fileToUpload, "status", uploadName)
       await createStatus({ mediaUrl: data.url, mediaType: compose.type, caption })
       closeComposer()
       router.refresh()
