@@ -293,7 +293,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
                     <button
                       type="button"
                       aria-label="Add a photo or video"
-                      className="inline-flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary outline-none transition-all hover:bg-primary hover:text-primary-foreground focus-visible:ring-2 focus-visible:ring-ring active:scale-95 disabled:opacity-50"
+                      className="inline-flex size-9 items-center justify-center rounded-full bg-foreground/10 text-foreground outline-none transition-all hover:bg-foreground hover:text-background focus-visible:ring-2 focus-visible:ring-ring active:scale-95 disabled:opacity-50"
                     />
                   }
                 >
@@ -341,7 +341,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
                 type="submit"
                 size="lg"
                 disabled={isPending || uploading || (!draft.trim() && !media)}
-                className="gap-2 rounded-full px-6 font-semibold"
+                className="gap-2 rounded-full bg-foreground px-6 font-semibold text-background hover:bg-foreground/90"
               >
                 <Send className="size-4" /> {isPending ? "Posting…" : "Post"}
               </Button>

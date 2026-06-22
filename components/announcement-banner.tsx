@@ -69,7 +69,7 @@ export function AnnouncementBanner({
     <section aria-label="Announcements" className="space-y-3">
       <div className="flex items-center justify-between gap-3 px-4 sm:px-0">
         <div className="flex items-center gap-2">
-          <span className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary">
+          <span className="flex size-7 items-center justify-center rounded-md bg-foreground/10 text-foreground">
             <Megaphone className="size-4" />
           </span>
           <div className="leading-tight">
