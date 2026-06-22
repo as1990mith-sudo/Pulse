@@ -645,15 +645,22 @@ export function PostCard({
         </div>
       ) : (
         text && (
-          <p
+          <div
             className={cn(
-              "whitespace-pre-wrap leading-relaxed text-foreground/90",
+              "text-foreground/90",
               feed ? "px-[0.825rem] text-lg" : "px-3 text-[15px]",
               hasMedia ? "pb-3" : "pb-1",
             )}
           >
-            {text}
-          </p>
+            {/* Split on author blank lines and use a tighter margin between
+                paragraphs (~half the height of a full empty line) instead of
+                rendering each blank line at full line-height. */}
+            {text.split(/\n{2,}/).map((para, i) => (
+              <p key={i} className={cn("whitespace-pre-wrap leading-relaxed", i > 0 && "mt-3")}>
+                {para}
+              </p>
+            ))}
+          </div>
         )
       )}
 
