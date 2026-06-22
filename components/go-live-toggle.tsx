@@ -22,7 +22,7 @@ export function GoLiveToggle() {
       {/* Ambient accent glow */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -right-24 -top-24 size-64 rounded-full bg-primary/20 blur-3xl"
+        className="pointer-events-none absolute -right-24 -top-24 size-64 rounded-full bg-live/20 blur-3xl"
       />
       <div className="relative flex flex-col gap-8 p-8 md:p-12">
         <div className="max-w-xl space-y-2">
@@ -47,7 +47,7 @@ export function GoLiveToggle() {
             <span
               aria-hidden="true"
               className={cn(
-                "absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-xl bg-primary shadow-lg shadow-primary/30 transition-transform duration-300 ease-out",
+                "absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-xl bg-live shadow-lg shadow-live/30 transition-transform duration-300 ease-out",
                 mode === "video" ? "translate-x-0" : "translate-x-[calc(100%+0.25rem)]",
               )}
             />
@@ -58,7 +58,7 @@ export function GoLiveToggle() {
               onClick={() => setMode("video")}
               className={cn(
                 "relative z-10 flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors duration-200",
-                mode === "video" ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                mode === "video" ? "text-live-foreground" : "text-muted-foreground hover:text-foreground",
               )}
             >
               <Video className="size-4" /> Video Live
@@ -70,7 +70,7 @@ export function GoLiveToggle() {
               onClick={() => setMode("audio")}
               className={cn(
                 "relative z-10 flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors duration-200",
-                mode === "audio" ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                mode === "audio" ? "text-live-foreground" : "text-muted-foreground hover:text-foreground",
               )}
             >
               <Mic className="size-4" /> Audio Live
