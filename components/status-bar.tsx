@@ -228,7 +228,7 @@ export function StatusBar({
                 type="button"
                 onClick={() => setMenuOpen(true)}
                 disabled={uploading}
-                className="absolute -bottom-0.5 -right-0.5 flex size-[22px] items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground transition-opacity hover:opacity-90"
+                className="absolute -bottom-0.5 -right-0.5 flex size-[22px] items-center justify-center rounded-full border-2 border-background bg-foreground text-background transition-opacity hover:opacity-90"
                 aria-label="Create a new status"
               >
                 {uploading ? <Loader2 className="size-3 animate-spin" /> : <Plus className="size-3.5" />}
