@@ -290,7 +290,7 @@ export function LiveListener({
       )}
 
       {/* ───────── Broadcast header: cover art + live + title + stats ───────── */}
-      <header className="relative flex items-center gap-3 overflow-hidden border-b border-white/10 px-4 py-3 pt-safe backdrop-blur-xl">
+      <header className="relative z-30 flex items-center gap-3 border-b border-white/10 px-4 py-3 pt-safe backdrop-blur-xl">
         {/* Back control — opens Leave / Minimise while connected. */}
         <BackExitMenu
           showMenu={state.connected}

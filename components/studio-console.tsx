@@ -223,7 +223,7 @@ export function StudioConsole({
 
       <div className="relative flex min-h-0 w-full flex-1 flex-col">
         {/* Broadcast header: cover artwork + live indicator + title + stats */}
-        <header className="flex items-center gap-3 border-b border-white/[0.07] px-4 py-4 pt-safe sm:px-6">
+        <header className="relative z-30 flex items-center gap-3 border-b border-white/[0.07] px-4 py-4 pt-safe sm:px-6">
           <BackExitMenu
             showMenu={live}
             exitLabel="End"
