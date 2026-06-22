@@ -7,12 +7,17 @@ import {
   CalendarPlus,
   Check,
   Clock,
+  Eye,
+  EyeOff,
   ImageIcon,
   Loader2,
   MapPin,
   Megaphone,
+  MessageSquare,
+  MoreVertical,
   Plus,
   Sparkles,
+  Tag,
   Trash2,
   X,
 } from "lucide-react"
@@ -25,12 +30,17 @@ import { ImageLightbox } from "@/components/image-lightbox"
 import { ImageCropper } from "@/components/image-cropper"
 import {
   adminDeleteAnnouncement,
+  adminMessageCreator,
   createAnnouncement,
   deleteAnnouncement,
+  interactWithAnnouncement,
+  setAnnouncementHidden,
+  setOwnAnnouncementHidden,
+  type AdType,
   type AnnouncementView,
 } from "@/app/actions/announcements"
 import { AD_BLOCK_HOURS, AD_MAX_HOURS, priceForHours } from "@/lib/ads"
-import { downloadIcs, formatEventDate, googleCalendarUrl } from "@/lib/calendar"
+import { formatEventDate } from "@/lib/calendar"
 import type { CurrentUser } from "@/lib/session"
 import { cn } from "@/lib/utils"
 import { uploadMedia } from "@/lib/upload-media"
@@ -65,7 +75,7 @@ export function AnnouncementBanner({
           </span>
           <div className="leading-tight">
             <h2 className="text-sm font-semibold">Announcements</h2>
-            <p className="text-xs text-muted-foreground">Promoted events from creators</p>
+            <p className="text-xs text-muted-foreground">Promoted events &amp; products from creators</p>
           </div>
         </div>
         {currentUser && !slotTaken && (
@@ -92,9 +102,9 @@ export function AnnouncementBanner({
         <Card className="mx-4 flex flex-col items-center gap-3 border-dashed bg-card/50 p-6 text-center sm:mx-0">
           <Sparkles className="size-6 text-primary" />
           <div className="space-y-1">
-            <p className="text-sm font-medium text-balance">Promote your event to the whole community</p>
+            <p className="text-sm font-medium text-balance">Promote your event or product to the whole community</p>
             <p className="text-xs text-muted-foreground text-pretty">
-              Feature your flyer here. Listeners can add it to their calendar and get a reminder.
+              Feature your flyer here. Interested listeners can reach out to you directly.
             </p>
           </div>
           {currentUser ? (
@@ -102,7 +112,7 @@ export function AnnouncementBanner({
               <Megaphone className="size-4" /> Advertise here
             </Button>
           ) : (
-            <p className="text-xs text-muted-foreground">Sign in to advertise your event.</p>
+            <p className="text-xs text-muted-foreground">Sign in to advertise.</p>
           )}
         </Card>
       )}
@@ -140,6 +150,32 @@ function StatusBadge({ status }: { status: AnnouncementView["status"] }) {
   )
 }
 
+/** A short, type-aware summary line (date/venue for events, price for products). */
+function AdMeta({ a }: { a: AnnouncementView }) {
+  if (a.adType === "product") {
+    return (
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1.5 font-semibold text-foreground">
+          <Tag className="size-3.5 text-primary" />${a.price}
+        </span>
+      </div>
+    )
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 text-xs text-muted-foreground">
+      <span className="flex items-center gap-1.5 font-medium text-foreground">
+        <CalendarPlus className="size-3.5 text-primary" />
+        {formatEventDate(a.eventDate ?? "", a.eventTime)}
+      </span>
+      {a.location && (
+        <span className="flex items-center gap-1.5">
+          <MapPin className="size-3.5" /> {a.location}
+        </span>
+      )}
+    </div>
+  )
+}
+
 function RequestStatusRow({ request: r }: { request: AnnouncementView }) {
   const [isPending, startTransition] = useTransition()
   return (
@@ -165,12 +201,14 @@ function RequestStatusRow({ request: r }: { request: AnnouncementView }) {
           <p className="truncate text-sm font-medium">{r.title}</p>
           <StatusBadge status={r.status} />
         </div>
-        <p className="text-xs text-muted-foreground">{formatEventDate(r.eventDate, r.eventTime)}</p>
+        <p className="text-xs text-muted-foreground">
+          {r.adType === "product" ? `$${r.price}` : formatEventDate(r.eventDate ?? "", r.eventTime)}
+        </p>
         {r.status === "declined" && r.declineReason && (
           <p className="mt-0.5 text-xs text-destructive">{r.declineReason}</p>
         )}
         {r.status === "pending" && (
-          <p className="mt-0.5 text-xs text-muted-foreground">Awaiting approval — you&apos;ll be published if your date is free.</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Awaiting approval.</p>
         )}
       </div>
       <Button
@@ -189,27 +227,61 @@ function RequestStatusRow({ request: r }: { request: AnnouncementView }) {
 
 function AnnouncementCard({ announcement: a, isAdmin = false }: { announcement: AnnouncementView; isAdmin?: boolean }) {
   const [lightbox, setLightbox] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
-  const [isDeleting, startDelete] = useTransition()
+  const [isPending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
 
-  function handleAdminDelete() {
-    startDelete(async () => {
-      await adminDeleteAnnouncement(a.id)
+  // Hidden state: collapsed bar with a control to bring the advert back. The
+  // creator can always toggle their own; a viewer can toggle only after they've
+  // interacted with one of the buttons.
+  if (a.hiddenByMe) {
+    return (
+      <div className="flex items-center justify-between gap-3 border-y border-border/60 bg-card/50 px-4 py-2.5">
+        <span className="flex items-center gap-2 text-xs text-muted-foreground">
+          <EyeOff className="size-3.5" /> Advert hidden
+        </span>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="gap-1.5"
+          disabled={isPending}
+          onClick={() =>
+            startTransition(async () => {
+              if (a.isOwner) await setOwnAnnouncementHidden({ id: a.id, hidden: false })
+              else await setAnnouncementHidden({ id: a.id, hidden: false })
+            })
+          }
+        >
+          {isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Eye className="size-3.5" />} Show advert
+        </Button>
+      </div>
+    )
+  }
+
+  function handleInteract(action: "interested" | "not_interested") {
+    setError(null)
+    startTransition(async () => {
+      try {
+        await interactWithAnnouncement({ id: a.id, action })
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Something went wrong.")
+      }
     })
   }
 
-  const calEvent = {
-    title: a.title,
-    description: a.description,
-    location: a.location,
-    date: a.eventDate,
-    time: a.eventTime,
+  function handleHide() {
+    startTransition(async () => {
+      if (a.isOwner) await setOwnAnnouncementHidden({ id: a.id, hidden: true })
+      else await setAnnouncementHidden({ id: a.id, hidden: true })
+    })
   }
 
+  // The creator never sees the interest buttons. Viewers see them only until
+  // they've interacted; after that (or for the creator) we show a hide toggle.
+  const showInterestButtons = !a.isOwner && a.myAction === null
+
   return (
-    <div className="flex w-full flex-col overflow-hidden border-y border-border/60 bg-card sm:flex-row sm:items-stretch sm:rounded-none">
-      {/* Flyer — fixed-width thumbnail on the left at larger sizes */}
+    <div className="relative flex w-full flex-col overflow-hidden border-y border-border/60 bg-card sm:flex-row sm:items-stretch">
+      {/* Flyer */}
       {a.flyer ? (
         <button
           type="button"
@@ -226,104 +298,61 @@ function AnnouncementCard({ announcement: a, isAdmin = false }: { announcement: 
             sizes="256px"
           />
           <Badge className="absolute left-2 top-2 gap-1 bg-background/70 text-foreground backdrop-blur">
-            <Megaphone className="size-3" /> Promoted
+            <Megaphone className="size-3" /> {a.adType === "product" ? "Product" : "Event"}
           </Badge>
         </button>
       ) : (
         <div className="flex aspect-[16/9] w-full shrink-0 items-center justify-center bg-secondary sm:aspect-auto sm:w-56 md:w-64">
           <Badge className="gap-1">
-            <Megaphone className="size-3" /> Promoted
+            <Megaphone className="size-3" /> {a.adType === "product" ? "Product" : "Event"}
           </Badge>
         </div>
       )}
 
-      {/* Info + action laid out horizontally across the remaining width */}
+      {/* Info + actions */}
       <div className="flex flex-1 flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
         <div className="min-w-0 flex-1 space-y-1">
-          <h3 className="font-semibold leading-tight text-balance">{a.title}</h3>
+          {/* Reserve room so the admin menu never overlaps the title */}
+          <h3 className="font-semibold leading-tight text-balance sm:pr-0 pr-8">{a.title}</h3>
           {a.description && (
             <p className="line-clamp-2 text-sm text-muted-foreground leading-relaxed">{a.description}</p>
           )}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5 font-medium text-foreground">
-              <CalendarPlus className="size-3.5 text-primary" />
-              {formatEventDate(a.eventDate, a.eventTime)}
-            </span>
-            {a.location && (
-              <span className="flex items-center gap-1.5">
-                <MapPin className="size-3.5" /> {a.location}
-              </span>
-            )}
-            <span>by {a.creatorName}</span>
-          </div>
+          <AdMeta a={a} />
         </div>
 
-        <div className="relative shrink-0 sm:w-44">
-          <Button size="sm" className="w-full gap-1.5" onClick={() => setMenuOpen((o) => !o)}>
-            <CalendarPlus className="size-4" /> Add to calendar
-          </Button>
-          {menuOpen && (
-            <>
-              <button
-                type="button"
-                className="fixed inset-0 z-10 cursor-default"
-                aria-hidden="true"
-                onClick={() => setMenuOpen(false)}
-              />
-              <div className="absolute bottom-full left-0 z-20 mb-1 w-full overflow-hidden rounded-lg border border-border bg-popover p-1 shadow-md">
-                <a
-                  href={googleCalendarUrl(calEvent)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => setMenuOpen(false)}
-                  className="block rounded-md px-3 py-2 text-sm hover:bg-secondary"
-                >
-                  Google Calendar
-                </a>
-                <button
-                  type="button"
-                  onClick={() => {
-                    downloadIcs(calEvent)
-                    setMenuOpen(false)
-                  }}
-                  className="block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-secondary"
-                >
-                  Apple / Outlook (.ics)
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* Platform-admin override: remove any live advert, freeing the slot. */}
-          {isAdmin &&
-            (confirmingDelete ? (
-              <div className="mt-2 flex items-center gap-1.5">
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  className="flex-1 gap-1.5"
-                  onClick={handleAdminDelete}
-                  disabled={isDeleting}
-                >
-                  {isDeleting ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
-                  Confirm
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setConfirmingDelete(false)} disabled={isDeleting}>
-                  Cancel
-                </Button>
-              </div>
-            ) : (
+        <div className="shrink-0 sm:w-56">
+          {showInterestButtons ? (
+            <div className="flex items-center gap-2">
               <Button
                 size="sm"
-                variant="ghost"
-                className="mt-2 w-full gap-1.5 text-destructive hover:text-destructive"
-                onClick={() => setConfirmingDelete(true)}
+                variant="outline"
+                className="flex-1 gap-1.5"
+                disabled={isPending}
+                onClick={() => handleInteract("not_interested")}
               >
-                <Trash2 className="size-3.5" /> Remove advert
+                <X className="size-4" /> Not interested
               </Button>
-            ))}
+              <Button
+                size="sm"
+                className="flex-1 gap-1.5"
+                disabled={isPending}
+                onClick={() => handleInteract("interested")}
+              >
+                {isPending ? <Loader2 className="size-4 animate-spin" /> : <MessageSquare className="size-4" />}
+                Want to know more
+              </Button>
+            </div>
+          ) : (
+            <Button size="sm" variant="secondary" className="w-full gap-1.5" disabled={isPending} onClick={handleHide}>
+              {isPending ? <Loader2 className="size-4 animate-spin" /> : <EyeOff className="size-4" />} Hide advert
+            </Button>
+          )}
+          {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
         </div>
       </div>
+
+      {/* Platform-admin three-dot menu (delete / message creator) */}
+      {isAdmin && <AdminMenu announcement={a} />}
 
       {lightbox && a.flyer && (
         <ImageLightbox src={a.flyer} alt={`${a.title} flyer`} onClose={() => setLightbox(false)} />
@@ -332,14 +361,158 @@ function AnnouncementCard({ announcement: a, isAdmin = false }: { announcement: 
   )
 }
 
+/** Admin-only top-right menu: delete the advert, or DM the creator as Frequency Team. */
+function AdminMenu({ announcement: a }: { announcement: AnnouncementView }) {
+  const [open, setOpen] = useState(false)
+  const [composing, setComposing] = useState(false)
+  const [isPending, startTransition] = useTransition()
+
+  return (
+    <div className="absolute right-2 top-2 z-20">
+      <Button
+        size="icon"
+        variant="ghost"
+        className="size-8 bg-background/70 backdrop-blur hover:bg-background"
+        aria-label="Advert options"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <MoreVertical className="size-4" />
+      </Button>
+      {open && (
+        <>
+          <button
+            type="button"
+            className="fixed inset-0 z-10 cursor-default"
+            aria-hidden="true"
+            onClick={() => setOpen(false)}
+          />
+          <div
+            role="menu"
+            className="absolute right-0 top-full z-20 mt-1 w-44 overflow-hidden rounded-xl border border-border bg-popover p-1 shadow-lg"
+          >
+            <button
+              type="button"
+              role="menuitem"
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium hover:bg-secondary"
+              onClick={() => {
+                setOpen(false)
+                setComposing(true)
+              }}
+            >
+              <MessageSquare className="size-4" /> Message
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:opacity-60"
+              disabled={isPending}
+              onClick={() => startTransition(() => adminDeleteAnnouncement(a.id))}
+            >
+              {isPending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />} Delete
+            </button>
+          </div>
+        </>
+      )}
+      {composing && <AdminMessageDialog announcement={a} onClose={() => setComposing(false)} />}
+    </div>
+  )
+}
+
+function AdminMessageDialog({ announcement: a, onClose }: { announcement: AnnouncementView; onClose: () => void }) {
+  const [body, setBody] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const [sent, setSent] = useState(false)
+  const [isPending, startTransition] = useTransition()
+
+  if (typeof document === "undefined") return null
+
+  function handleSend() {
+    setError(null)
+    startTransition(async () => {
+      try {
+        await adminMessageCreator({ announcementId: a.id, body })
+        setSent(true)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not send the message.")
+      }
+    })
+  }
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Message the advert creator"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-background/90 p-4 backdrop-blur-sm"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <Card className="w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="flex size-8 items-center justify-center rounded-md bg-primary/10 text-primary">
+              <MessageSquare className="size-4" />
+            </span>
+            <div className="leading-tight">
+              <h2 className="font-semibold">Message {a.creatorName}</h2>
+              <p className="text-xs text-muted-foreground">Sent as Frequency Team · priority in their inbox</p>
+            </div>
+          </div>
+          <Button size="icon" variant="ghost" className="shrink-0" aria-label="Close" onClick={onClose}>
+            <X className="size-4" />
+          </Button>
+        </div>
+
+        {sent ? (
+          <div className="flex flex-col items-center gap-4 py-4 text-center">
+            <span className="flex size-12 items-center justify-center rounded-full bg-live/10 text-live">
+              <Check className="size-6" />
+            </span>
+            <p className="text-sm text-muted-foreground">
+              Your message was delivered to {a.creatorName} as Frequency Team.
+            </p>
+            <Button onClick={onClose}>Done</Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <Textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder={`Re: "${a.title}" — your message to the creator…`}
+              rows={4}
+              maxLength={1000}
+              autoFocus
+            />
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <div className="flex items-center justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={onClose} disabled={isPending}>
+                Cancel
+              </Button>
+              <Button className="gap-1.5" disabled={isPending || !body.trim()} onClick={handleSend}>
+                {isPending ? <Loader2 className="size-4 animate-spin" /> : <MessageSquare className="size-4" />} Send
+              </Button>
+            </div>
+          </div>
+        )}
+      </Card>
+    </div>,
+    document.body,
+  )
+}
+
 const DURATION_OPTIONS = Array.from({ length: AD_MAX_HOURS / AD_BLOCK_HOURS }, (_, i) => (i + 1) * AD_BLOCK_HOURS)
 
 function AdvertiseForm({ onClose }: { onClose: () => void }) {
+  const [adType, setAdType] = useState<AdType>("event")
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [location, setLocation] = useState("")
   const [eventDate, setEventDate] = useState("")
   const [eventTime, setEventTime] = useState("")
+  const [price, setPrice] = useState("")
   const [durationHours, setDurationHours] = useState(AD_BLOCK_HOURS)
   const [flyer, setFlyer] = useState<string | null>(null)
   const [cropSrc, setCropSrc] = useState<string | null>(null)
@@ -350,7 +523,8 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const today = new Date().toISOString().slice(0, 10)
-  const price = priceForHours(durationHours)
+  const totalPrice = priceForHours(durationHours)
+  const isEvent = adType === "event"
 
   async function handleCropped(blob: Blob) {
     setError(null)
@@ -371,23 +545,28 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
     e.preventDefault()
     setError(null)
     if (!title.trim()) {
-      setError("Please add an event title.")
+      setError(isEvent ? "Please add an event title." : "Please add a product name.")
       return
     }
-    if (!eventDate) {
-      setError("Please pick an event date.")
-      return
+    if (isEvent) {
+      if (!eventDate) return setError("Please pick an event date.")
+      if (!eventTime) return setError("Please pick an event time.")
+      if (!location.trim()) return setError("Please add the event venue.")
+    } else if (!price.trim()) {
+      return setError("Please add the product price.")
     }
     startTransition(async () => {
       try {
         const res = await createAnnouncement({
+          adType,
           title,
           description,
-          location,
-          eventDate,
-          eventTime: eventTime || null,
-          durationHours,
           flyer,
+          location: isEvent ? location : null,
+          eventDate: isEvent ? eventDate : null,
+          eventTime: isEvent ? eventTime : null,
+          price: isEvent ? null : price,
+          durationHours,
         })
         setResult(res)
       } catch (err) {
@@ -402,12 +581,9 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Advertise your event"
+      aria-label="Advertise"
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-background/90 p-4 backdrop-blur-sm sm:items-center"
       onClick={(e) => {
-        // Only close on a genuine backdrop click. Without this guard, clicks
-        // inside the image cropper (a React child rendered via its own portal)
-        // bubble through React's tree to here and close the form mid-crop.
         if (e.target === e.currentTarget) onClose()
       }}
     >
@@ -418,7 +594,7 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
               <Megaphone className="size-4" />
             </span>
             <div className="leading-tight">
-              <h2 className="font-semibold">Advertise your event</h2>
+              <h2 className="font-semibold">Create an advert</h2>
               <p className="text-xs text-muted-foreground">Featured at the top of the feed for everyone</p>
             </div>
           </div>
@@ -431,7 +607,40 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
           <ResultPanel result={result} onClose={onClose} />
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Flyer — rectangular 16:9 to match the published banner */}
+            {/* Mandatory advert-type choice */}
+            <div className="space-y-2">
+              <span className="text-sm font-medium">What are you advertising?</span>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAdType("event")}
+                  aria-pressed={isEvent}
+                  className={cn(
+                    "flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors",
+                    isEvent
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:bg-secondary",
+                  )}
+                >
+                  <CalendarPlus className="size-4" /> Event
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAdType("product")}
+                  aria-pressed={!isEvent}
+                  className={cn(
+                    "flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors",
+                    !isEvent
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:bg-secondary",
+                  )}
+                >
+                  <Tag className="size-4" /> Product
+                </button>
+              </div>
+            </div>
+
+            {/* Flyer */}
             <div className="flex items-center gap-4">
               <div className="relative aspect-[16/9] w-32 shrink-0 overflow-hidden rounded-lg border border-border bg-secondary">
                 {flyer ? (
@@ -444,7 +653,7 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
                 )}
               </div>
               <div className="space-y-1.5">
-                <p className="text-sm font-medium">Event flyer</p>
+                <p className="text-sm font-medium">{isEvent ? "Event flyer" : "Product image"}</p>
                 <p className="text-xs text-muted-foreground">You can adjust the crop to fit the box.</p>
                 <input
                   ref={fileInputRef}
@@ -466,20 +675,20 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
                   disabled={uploading}
                 >
                   {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <ImageIcon className="size-3.5" />}
-                  {flyer ? "Change flyer" : "Upload flyer"}
+                  {flyer ? "Change image" : "Upload image"}
                 </Button>
               </div>
             </div>
 
             <div className="space-y-2">
               <label htmlFor="ann-title" className="text-sm font-medium">
-                Event title
+                {isEvent ? "Event title" : "Product name"}
               </label>
               <Input
                 id="ann-title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Summer Worship Night"
+                placeholder={isEvent ? "e.g. Summer Worship Night" : "e.g. Hand-bound Study Journal"}
                 maxLength={80}
               />
             </div>
@@ -492,44 +701,73 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
                 id="ann-desc"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Tell people what to expect, who's hosting, ticket info…"
+                placeholder={
+                  isEvent
+                    ? "Tell people what to expect, who's hosting, ticket info…"
+                    : "Describe your product, what's included, how to buy…"
+                }
                 rows={3}
                 maxLength={400}
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            {/* Event-only: date, time, venue (all required) */}
+            {isEvent ? (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <label htmlFor="ann-date" className="text-sm font-medium">
+                      Date
+                    </label>
+                    <Input
+                      id="ann-date"
+                      type="date"
+                      min={today}
+                      value={eventDate}
+                      onChange={(e) => setEventDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="ann-time" className="text-sm font-medium">
+                      Time
+                    </label>
+                    <Input id="ann-time" type="time" value={eventTime} onChange={(e) => setEventTime(e.target.value)} />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="ann-loc" className="text-sm font-medium">
+                    Venue
+                  </label>
+                  <Input
+                    id="ann-loc"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="e.g. Online, or 123 Main St"
+                  />
+                </div>
+              </>
+            ) : (
+              /* Product-only: price (required) */
               <div className="space-y-2">
-                <label htmlFor="ann-date" className="text-sm font-medium">
-                  Date
+                <label htmlFor="ann-price" className="text-sm font-medium">
+                  Price
                 </label>
-                <Input
-                  id="ann-date"
-                  type="date"
-                  min={today}
-                  value={eventDate}
-                  onChange={(e) => setEventDate(e.target.value)}
-                />
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">
+                    $
+                  </span>
+                  <Input
+                    id="ann-price"
+                    inputMode="decimal"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    placeholder="49.99"
+                    className="pl-7"
+                    maxLength={20}
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <label htmlFor="ann-time" className="text-sm font-medium">
-                  Time <span className="text-muted-foreground">(optional)</span>
-                </label>
-                <Input id="ann-time" type="time" value={eventTime} onChange={(e) => setEventTime(e.target.value)} />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="ann-loc" className="text-sm font-medium">
-                Location <span className="text-muted-foreground">(optional)</span>
-              </label>
-              <Input
-                id="ann-loc"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="e.g. Online, or 123 Main St"
-              />
-            </div>
+            )}
 
             {/* Duration */}
             <div className="space-y-2">
@@ -549,8 +787,7 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
                 ))}
               </select>
               <p className="text-xs text-muted-foreground">
-                $5 per {AD_BLOCK_HOURS} hours, up to {AD_MAX_HOURS} hours. Your advert auto-expires when the time is
-                up.
+                $5 per {AD_BLOCK_HOURS} hours, up to {AD_MAX_HOURS} hours. Your advert auto-expires when the time is up.
               </p>
             </div>
 
@@ -558,14 +795,14 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
             <div className="rounded-lg border border-border bg-secondary/50 p-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Total due</span>
-                <span className="text-sm font-semibold">${price}</span>
+                <span className="text-sm font-semibold">${totalPrice}</span>
               </div>
               <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
                 <li className="flex items-center gap-1.5">
-                  <Check className="size-3 text-primary" /> Reviewed and approved on a first-come, first-served basis
+                  <Check className="size-3 text-primary" /> Reviewed on a first-come, first-served basis
                 </li>
                 <li className="flex items-center gap-1.5">
-                  <Check className="size-3 text-primary" /> One-tap calendar reminders for every listener
+                  <Check className="size-3 text-primary" /> Interested listeners message you directly
                 </li>
               </ul>
             </div>
@@ -578,12 +815,10 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
               </Button>
               <Button type="submit" className="gap-1.5" disabled={isPending || uploading}>
                 {isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-                {isPending ? "Submitting…" : `Pay $${price} & submit`}
+                {isPending ? "Submitting…" : `Pay $${totalPrice} & submit`}
               </Button>
             </div>
-            <p className="text-center text-[11px] text-muted-foreground">
-              Demo checkout — no real payment is processed.
-            </p>
+            <p className="text-center text-[11px] text-muted-foreground">Demo checkout — no real payment is processed.</p>
           </form>
         )}
       </Card>
@@ -592,7 +827,7 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
         <ImageCropper
           src={cropSrc}
           aspect={16 / 9}
-          title="Adjust your flyer"
+          title={isEvent ? "Adjust your flyer" : "Adjust your product image"}
           onCancel={() => setCropSrc(null)}
           onCropped={handleCropped}
         />
@@ -625,7 +860,7 @@ function ResultPanel({
         <p className="text-sm text-muted-foreground text-pretty">
           {approved
             ? "It's now live at the top of the feed and will disappear automatically when your run time is up."
-            : result.declineReason || "Declined due to high demand for the selected date."}
+            : result.declineReason || "Declined due to high demand for the selected slot."}
         </p>
       </div>
       <Button onClick={onClose}>Done</Button>

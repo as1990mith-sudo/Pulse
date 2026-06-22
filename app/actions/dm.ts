@@ -53,6 +53,8 @@ export type DmConversationSummary = {
   // has the current user already seen all of it?
   hasActiveStatus: boolean
   statusAllViewed: boolean
+  // Official "Frequency Team" priority thread, still unopened — pinned to top.
+  priority: boolean
 }
 
 export type DmConversationDetail = {
@@ -255,12 +257,22 @@ export async function getConversations(): Promise<DmConversationSummary[]> {
         unread,
         hasActiveStatus,
         statusAllViewed,
+        // Priority pinning only applies while the recipient hasn't opened it.
+        priority: conv.priority && unread,
+        lastMessageAtMs: conv.lastMessageAt.getTime(),
       }
     }),
   )
 
-  // Hide brand-new conversations that have no messages yet from the inbox.
-  return summaries.filter((s) => s.lastMessage !== null)
+  // Hide brand-new conversations that have no messages yet from the inbox, then
+  // pin still-unopened priority (Frequency Team) threads to the very top.
+  return summaries
+    .filter((s) => s.lastMessage !== null)
+    .sort((a, b) => {
+      if (a.priority !== b.priority) return a.priority ? -1 : 1
+      return b.lastMessageAtMs - a.lastMessageAtMs
+    })
+    .map(({ lastMessageAtMs: _omit, ...s }) => s)
 }
 
 /** Number of conversations with unread messages — drives the nav badge. */
@@ -292,10 +304,15 @@ export async function getConversationDetail(conversationId: number): Promise<DmC
     .where(eq(dmMessage.conversationId, conversationId))
     .orderBy(asc(dmMessage.createdAt))
 
-  // Mark read up to now for whichever side the current user is on.
+  // Mark read up to now for whichever side the current user is on. Opening the
+  // thread also clears any priority pin (the recipient has now seen it).
   await db
     .update(dmConversation)
-    .set(conv.userAId === user.id ? { userALastReadAt: new Date() } : { userBLastReadAt: new Date() })
+    .set(
+      conv.userAId === user.id
+        ? { userALastReadAt: new Date(), priority: false }
+        : { userBLastReadAt: new Date(), priority: false },
+    )
     .where(eq(dmConversation.id, conversationId))
 
   const statusMap = await resolveStatusRefs(messages)
@@ -329,7 +346,11 @@ export async function getDmMessages(conversationId: number): Promise<DmMessageVi
 
   await db
     .update(dmConversation)
-    .set(conv.userAId === user.id ? { userALastReadAt: new Date() } : { userBLastReadAt: new Date() })
+    .set(
+      conv.userAId === user.id
+        ? { userALastReadAt: new Date(), priority: false }
+        : { userBLastReadAt: new Date(), priority: false },
+    )
     .where(eq(dmConversation.id, conversationId))
 
   const statusMap = await resolveStatusRefs(messages)

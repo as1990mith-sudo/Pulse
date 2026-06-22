@@ -4,7 +4,7 @@ import { useState } from "react"
 import useSWR from "swr"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { MessageSquare } from "lucide-react"
+import { MessageSquare, Pin } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 import { getConversations, type DmConversationSummary } from "@/app/actions/dm"
@@ -58,7 +58,10 @@ export function DmInbox({
           <li key={c.id}>
             <Link
               href={`/messages/${c.id}`}
-              className="flex items-center gap-3 px-4 py-4 transition-colors hover:bg-secondary/40 sm:px-5"
+              className={cn(
+                "flex items-center gap-3 px-4 py-4 transition-colors hover:bg-secondary/40 sm:px-5",
+                c.priority && "bg-primary/5 hover:bg-primary/10",
+              )}
             >
               {c.hasActiveStatus ? (
                 // Tappable story ring (Instagram/WhatsApp style). Tapping opens
@@ -93,7 +96,12 @@ export function DmInbox({
               )}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
-                  <span className={cn("truncate font-medium", c.unread && "font-semibold")}>{c.otherUserName}</span>
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    {c.priority && (
+                      <Pin className="size-3.5 shrink-0 -rotate-45 fill-primary text-primary" aria-label="Priority" />
+                    )}
+                    <span className={cn("truncate font-medium", c.unread && "font-semibold")}>{c.otherUserName}</span>
+                  </span>
                   <span className="shrink-0 text-xs text-muted-foreground">{c.lastMessageAt}</span>
                 </div>
                 <p className={cn("truncate text-sm text-muted-foreground", c.unread && "font-medium text-foreground")}>
