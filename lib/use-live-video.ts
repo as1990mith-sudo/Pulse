@@ -78,7 +78,12 @@ export function useLiveVideo({
     room
       .on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub: RemoteTrackPublication, _p: RemoteParticipant) => {
         if (track.kind === Track.Kind.Video && remoteVideoRef.current) {
-          track.attach(remoteVideoRef.current)
+          const el = remoteVideoRef.current
+          track.attach(el)
+          el.muted = true
+          el.setAttribute("playsinline", "true")
+          // Force playback so viewers on mobile don't get a black frame.
+          void el.play().catch(() => {})
           setRemoteVideoOn(true)
         }
         if (track.kind === Track.Kind.Audio && remoteAudioRef.current) {
