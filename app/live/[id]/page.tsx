@@ -3,7 +3,7 @@ import { getLiveStream } from "@/app/actions/live"
 import { getFollowingIds } from "@/app/actions/follow"
 import { resolveShow } from "@/lib/content"
 import { getCurrentUser } from "@/lib/session"
-import { ListenerLauncher } from "@/components/live-session"
+import { ListenerLauncher, HostStudioLauncher } from "@/components/live-session"
 import { LiveVideoViewer } from "@/components/live-video-viewer"
 import { EpisodePage } from "@/components/episode-page"
 
@@ -31,6 +31,12 @@ export default async function LiveStreamPage({ params }: { params: Promise<{ id:
         initialFollowing={followingIds.includes(stream.hostId)}
       />
     )
+  }
+
+  // The host returning to their own live room (e.g. after signing back in)
+  // resumes the host studio as a publisher — never gets demoted to a listener.
+  if (currentUser && currentUser.id === stream.hostId) {
+    return <HostStudioLauncher currentUser={currentUser} resumeStream={stream} />
   }
 
   // Audio rooms are hosted at the app level (see LiveSessionProvider) as an

@@ -39,6 +39,7 @@ import {
   respondToCallRequest,
   removeFromStage,
   type CallRequestView,
+  type LiveStreamView,
 } from "@/app/actions/live"
 import { useLiveAudio } from "@/lib/use-live-audio"
 import { uploadMedia } from "@/lib/upload-media"
@@ -72,11 +73,16 @@ type Track = { url: string; name: string }
 
 export function StudioConsole({
   currentUser,
+  resumeStream,
   onMinimize,
   onExit,
   onMeta,
 }: {
   currentUser: CurrentUser
+  // When provided, the host is rejoining an already-live stream of theirs (e.g.
+  // after signing back in or reopening their own live URL) instead of starting
+  // a new one. The console mounts straight into the on-air state and reconnects.
+  resumeStream?: LiveStreamView | null
   onMinimize?: () => void
   onExit?: () => void
   onMeta?: (m: { title: string; cover: string | null; live: boolean; subtitle?: string }) => void
@@ -109,8 +115,8 @@ export function StudioConsole({
   const roomNameRef = useRef<string | null>(null)
   const recoverRef = useRef<() => void>(() => {})
   const [elapsed, setElapsed] = useState(0)
-  const [title, setTitle] = useState(`${currentUser.name} — live session`)
-  const [cover, setCover] = useState<string | null>(null)
+  const [title, setTitle] = useState(resumeStream?.title ?? `${currentUser.name} — live session`)
+  const [cover, setCover] = useState<string | null>(resumeStream?.cover ?? null)
   const [endedSession, setEndedSession] = useState<EndedSession>(null)
   const [roomName, setRoomName] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
@@ -266,6 +272,40 @@ export function StudioConsole({
       clearInterval(t)
     }
   }, [live, roomName, disconnect])
+
+  // Resume an existing live stream the host owns: reconnect as host (publisher)
+  // rather than dropping them into the listener view or a fresh setup screen.
+  const resumedRef = useRef(false)
+  useEffect(() => {
+    if (!resumeStream || resumedRef.current) return
+    resumedRef.current = true
+    const rn = resumeStream.roomName
+    void (async () => {
+      onAirRef.current = true
+      roomNameRef.current = rn
+      setOnAir(true)
+      setRoomName(rn)
+      setEndedSession(null)
+      // Approximate the elapsed timer from when the stream actually started.
+      const startedMs = new Date(resumeStream.startedAt).getTime()
+      setElapsed(Math.max(0, Math.floor((Date.now() - startedMs) / 1000)))
+      const res = await joinBroadcast({ roomName: rn }).catch(() => null)
+      if (!res || !res.ok) {
+        onAirRef.current = false
+        setOnAir(false)
+        setRoomName(null)
+        setError("This live session has already ended.")
+        return
+      }
+      await connect({
+        serverUrl: res.serverUrl,
+        token: res.token,
+        publish: true,
+        onDisconnected: () => recoverRef.current(),
+      }).catch(() => {})
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeStream])
 
   async function toggleLive() {
     setError(null)

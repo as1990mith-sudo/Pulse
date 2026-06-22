@@ -16,7 +16,13 @@ import { cn } from "@/lib/utils"
  * tabs. LiveKit attaches its <audio> elements to document.body, so simply
  * keeping the room component mounted (just visually hidden) preserves playback.
  */
-type HostSession = { kind: "host"; key: string; currentUser: CurrentUser }
+type HostSession = {
+  kind: "host"
+  key: string
+  currentUser: CurrentUser
+  // Set when the host is rejoining an already-live stream of theirs.
+  resumeStream?: LiveStreamView | null
+}
 type ListenerSession = {
   kind: "listener"
   key: string
@@ -91,6 +97,7 @@ export function LiveSessionProvider({ children }: { children: React.ReactNode })
               <div className="flex h-dvh flex-col overflow-hidden">
                 <StudioConsole
                   currentUser={session.currentUser}
+                  resumeStream={session.resumeStream}
                   onMinimize={minimize}
                   onExit={close}
                   onMeta={setMeta}
@@ -158,12 +165,21 @@ function MiniPlayer({ meta, onExpand }: { meta: LiveMeta; onExpand: () => void }
 }
 
 /** Mounts a host studio session into the app-level provider. */
-export function HostStudioLauncher({ currentUser }: { currentUser: CurrentUser }) {
+export function HostStudioLauncher({
+  currentUser,
+  resumeStream,
+}: {
+  currentUser: CurrentUser
+  resumeStream?: LiveStreamView | null
+}) {
   const { open } = useLiveSession()
   useEffect(() => {
-    open({ kind: "host", key: "host", currentUser })
+    // A resume session is keyed to its room so it's distinct from a fresh host
+    // session (and won't be deduped against an already-open studio).
+    const key = resumeStream ? `host:${resumeStream.roomName}` : "host"
+    open({ kind: "host", key, currentUser, resumeStream })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [resumeStream?.roomName])
   return null
 }
 
