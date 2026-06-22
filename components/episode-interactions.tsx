@@ -174,16 +174,6 @@ export function EpisodeInteractions({
             await deleteEpisodeComment(commentId)
             setComments(await getEpisodeComments(episodeId!))
           }}
-          shareTargetFor={(c) => ({
-            type: "episode",
-            key: `${episodeId}-c${c.id}`,
-            title: `${c.name} on Frequency`,
-            subtitle: c.text.slice(0, 120),
-            url: shareTarget.url,
-            image: null,
-            downloadUrl: null,
-            downloadKind: null,
-          })}
         />
       </div>
 

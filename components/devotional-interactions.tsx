@@ -164,16 +164,6 @@ export function DevotionalInteractions({
             await deleteDevotionalComment(commentId)
             await mutateComments()
           }}
-          shareTargetFor={(c) => ({
-            type: "devotional",
-            key: `${devotionalDate}-c${c.id}`,
-            title: `${c.name} on Frequency`,
-            subtitle: c.text.slice(0, 120),
-            url: shareTarget.url,
-            image: null,
-            downloadUrl: null,
-            downloadKind: null,
-          })}
         />
       </div>
 
