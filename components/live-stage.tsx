@@ -5,7 +5,8 @@ import { cn } from "@/lib/utils"
 import { getInitials } from "@/lib/identity"
 import type { ConnQuality, LiveParticipant } from "@/lib/use-live-audio"
 
-export const MAX_GUESTS = 3
+// Host + up to 11 guests = 12 on stage.
+export const MAX_GUESTS = 11
 
 export type StageHost = {
   id: string
@@ -93,15 +94,18 @@ export function LiveStage({
 }) {
   const active = new Set(activeSpeakers)
 
-  // The host occupies their own tile; everyone else with publish permission is
-  // a guest. De-dupe the host out of the guest list defensively.
+  // The host occupies their own hero tile; everyone else with publish permission
+  // is a guest. De-dupe the host out of the guest list defensively.
   const guests = speakers.filter((s) => s.identity !== host.id).slice(0, MAX_GUESTS)
   const hostLive = speakers.find((s) => s.identity === host.id)
-  const emptySlots = Math.max(0, MAX_GUESTS - guests.length)
+  // Always show at least one open seat (until the stage is full) so the call-in
+  // affordance is visible; otherwise mirror remaining capacity, capped for tidiness.
+  const remaining = Math.max(0, MAX_GUESTS - guests.length)
+  const emptySlots = guests.length === 0 ? Math.min(remaining, 3) : Math.min(remaining, 1)
 
   return (
-    <div className="grid grid-cols-4 gap-2 sm:gap-4">
-      {/* Host tile */}
+    <div className="flex flex-col items-center gap-6">
+      {/* Host hero tile — large, centered, audio-reactive. */}
       <StageTile
         slot={{
           identity: host.id,
@@ -113,35 +117,39 @@ export function LiveStage({
           quality: hostLive?.quality ?? hostQuality,
         }}
         role="Host"
+        hero
       />
 
-      {/* Filled guest tiles */}
-      {guests.map((g) => (
-        <StageTile
-          key={g.identity}
-          slot={{
-            identity: g.identity,
-            name: g.name,
-            color: hostColorById[g.identity] ?? "bg-muted text-foreground",
-            isSpeaking: active.has(g.identity),
-            isLocal: g.isLocal,
-            muted: mutedIds.has(g.identity),
-            quality: g.quality,
-          }}
-          role="Guest"
-          onRemove={isHost && onRemoveGuest ? () => onRemoveGuest(g.identity) : undefined}
-        />
-      ))}
+      {/* Guest grid — responsive, fills as people come on stage. */}
+      {(guests.length > 0 || emptySlots > 0) && (
+        <div className="grid w-full grid-cols-3 justify-items-center gap-x-2 gap-y-5 sm:grid-cols-4 sm:gap-x-4 md:grid-cols-6">
+          {guests.map((g) => (
+            <StageTile
+              key={g.identity}
+              slot={{
+                identity: g.identity,
+                name: g.name,
+                color: hostColorById[g.identity] ?? "bg-muted text-foreground",
+                isSpeaking: active.has(g.identity),
+                isLocal: g.isLocal,
+                muted: mutedIds.has(g.identity),
+                quality: g.quality,
+              }}
+              role="Guest"
+              onRemove={isHost && onRemoveGuest ? () => onRemoveGuest(g.identity) : undefined}
+            />
+          ))}
 
-      {/* Empty guest slots */}
-      {Array.from({ length: emptySlots }).map((_, i) => (
-        <EmptySlot
-          key={`empty-${i}`}
-          canRequestCall={canRequestCall && i === 0}
-          callPending={callPending && i === 0}
-          onRequestCall={onRequestCall}
-        />
-      ))}
+          {Array.from({ length: emptySlots }).map((_, i) => (
+            <EmptySlot
+              key={`empty-${i}`}
+              canRequestCall={canRequestCall && i === 0}
+              callPending={callPending && i === 0}
+              onRequestCall={onRequestCall}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -149,16 +157,25 @@ export function LiveStage({
 function StageTile({
   slot,
   role,
+  hero = false,
   onRemove,
 }: {
   slot: StageSlot
   role: "Host" | "Guest"
+  hero?: boolean
   onRemove?: () => void
 }) {
   const isHost = role === "Host"
   return (
-    <div className="flex flex-col items-center gap-1.5">
+    <div className={cn("flex flex-col items-center gap-1.5", !isHost && "speaker-in")}>
       <div className="relative flex items-center justify-center">
+        {/* Soft breathing glow behind a speaking avatar (richer on the host hero). */}
+        {slot.isSpeaking && (
+          <span
+            className="speaking-glow pointer-events-none absolute -inset-3 rounded-full bg-call-accept/30 blur-xl"
+            aria-hidden="true"
+          />
+        )}
         {/* Talking ripple rings (only while speaking). */}
         {slot.isSpeaking && (
           <>
@@ -174,7 +191,11 @@ function StageTile({
         <span
           className={cn(
             "relative z-10 flex items-center justify-center rounded-full font-semibold transition-all duration-300",
-            isHost ? "size-16 text-lg sm:size-20 sm:text-xl" : "size-14 text-base sm:size-16",
+            hero
+              ? "size-24 text-2xl sm:size-28 sm:text-3xl"
+              : isHost
+                ? "size-16 text-lg sm:size-20 sm:text-xl"
+                : "size-14 text-base sm:size-16",
             slot.color,
             slot.isSpeaking
               ? "ring-[3px] ring-call-accept ring-offset-2 ring-offset-card shadow-lg shadow-call-accept/20"
@@ -221,7 +242,13 @@ function StageTile({
       </div>
 
       <div className="flex items-center gap-1">
-        <span className={cn("max-w-[5rem] truncate text-center text-xs font-medium", isHost && "sm:text-sm")}>
+        <span
+          className={cn(
+            "max-w-[5rem] truncate text-center text-xs font-medium",
+            isHost && "sm:text-sm",
+            hero && "max-w-[9rem] text-sm font-semibold sm:text-base",
+          )}
+        >
           {slot.isLocal ? "You" : slot.name}
         </span>
         {slot.isSpeaking && <SpeakingEq />}

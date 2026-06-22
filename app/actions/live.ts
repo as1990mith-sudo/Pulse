@@ -480,6 +480,8 @@ export async function getCallState(input: { roomName: string }): Promise<{
     myStatus: mine ? (mine.status as CallRequestView["status"]) : null,
     chatBgUrl: stream?.chatBgUrl ?? null,
     chatBgEffect: (stream?.chatBgEffect as ChatBgEffect) ?? "none",
+    locked: stream?.locked ?? false,
+    pinnedChatId: stream?.pinnedChatId ?? null,
     // No row, or row flipped to "ended", both mean the session is over.
     ended: !stream || stream.status !== "live",
   }
@@ -500,4 +502,22 @@ export async function setChatBackground(input: {
   if (input.url !== undefined) patch.chatBgUrl = input.url
   if (input.effect !== undefined) patch.chatBgEffect = input.effect
   await db.update(liveStream).set(patch).where(eq(liveStream.roomName, input.roomName))
+}
+
+// --- Host stage controls: lock & pinned comment ----------------------------
+
+/** Host locks/unlocks the stage. While locked, no new requests to speak are accepted. */
+export async function setRoomLock(input: { roomName: string; locked: boolean }): Promise<{ ok: boolean }> {
+  const user = await requireUser()
+  if ((await getHostId(input.roomName)) !== user.id) throw new Error("Only the host can lock the stage.")
+  await db.update(liveStream).set({ locked: input.locked }).where(eq(liveStream.roomName, input.roomName))
+  return { ok: true }
+}
+
+/** Host pins (or unpins, with chatId=null) a chat message to the top of the room. */
+export async function pinLiveChat(input: { roomName: string; chatId: number | null }): Promise<{ ok: boolean }> {
+  const user = await requireUser()
+  if ((await getHostId(input.roomName)) !== user.id) throw new Error("Only the host can pin a comment.")
+  await db.update(liveStream).set({ pinnedChatId: input.chatId }).where(eq(liveStream.roomName, input.roomName))
+  return { ok: true }
 }

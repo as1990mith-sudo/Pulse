@@ -10,6 +10,8 @@ import {
   Disc3,
   ImageIcon,
   Loader2,
+  Lock,
+  LockOpen,
   Mic,
   MicOff,
   Music,
@@ -37,13 +39,14 @@ import {
   respondToCallRequest,
   removeFromStage,
   setChatBackground,
+  setRoomLock,
   type CallRequestView,
   type ChatBgEffect,
 } from "@/app/actions/live"
 import { useLiveAudio, SOUND_EFFECTS, type SoundEffectName } from "@/lib/use-live-audio"
 import { uploadMedia } from "@/lib/upload-media"
 import { LiveChat } from "@/components/live-chat"
-import { LiveStage } from "@/components/live-stage"
+import { LiveStage, MAX_GUESTS } from "@/components/live-stage"
 import { LiveAudience } from "@/components/live-audience"
 import { ReactionLayer, ReactionPicker } from "@/components/live-reactions"
 import { CoverUpload } from "@/components/admin/cover-upload"
