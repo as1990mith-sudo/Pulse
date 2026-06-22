@@ -7,8 +7,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 // globals.css); it is stored on <html data-skin> and persisted to localStorage.
 export const SKINS = [
   { value: "orange", label: "Orange" },
-  { value: "green", label: "Green" },
-  { value: "aurora", label: "Aurora" },
+  { value: "white", label: "White" },
+  { value: "black", label: "Black" },
 ] as const
 
 export type Skin = (typeof SKINS)[number]["value"]
@@ -17,7 +17,7 @@ export const SKIN_STORAGE_KEY = "frequency-skin"
 
 // Inline script injected before paint so the chosen skin is applied without a
 // flash of the default accent. Kept in sync with SKIN_STORAGE_KEY above.
-export const SKIN_INIT_SCRIPT = `try{var s=localStorage.getItem('${SKIN_STORAGE_KEY}');if(!s||['orange','green','aurora'].indexOf(s)<0)s='orange';document.documentElement.dataset.skin=s;}catch(e){document.documentElement.dataset.skin='orange';}`
+export const SKIN_INIT_SCRIPT = `try{var s=localStorage.getItem('${SKIN_STORAGE_KEY}');if(!s||['orange','white','black'].indexOf(s)<0)s='orange';document.documentElement.dataset.skin=s;}catch(e){document.documentElement.dataset.skin='orange';}`
 
 type SkinContextValue = { skin: Skin; setSkin: (skin: Skin) => void; mounted: boolean }
 const SkinContext = createContext<SkinContextValue | null>(null)
