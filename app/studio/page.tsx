@@ -27,11 +27,14 @@ export default async function StudioPage({
         </StudioErrorBoundary>
       )
     }
+    // The audio console is a full-bleed, immersive surface (its own header
+    // chrome), mirroring the listener experience — no global SiteHeader.
     return (
-      <div className="flex h-dvh flex-col overflow-hidden">
-        <SiteHeader />
-        <StudioConsole currentUser={currentUser} />
-      </div>
+      <StudioErrorBoundary>
+        <div className="flex h-dvh flex-col overflow-hidden">
+          <StudioConsole currentUser={currentUser} />
+        </div>
+      </StudioErrorBoundary>
     )
   }
 

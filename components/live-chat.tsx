@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import useSWR from "swr"
-import { Pin, PinOff, Send } from "lucide-react"
+import { Pin, PinOff, Send, Smile } from "lucide-react"
 import type { CurrentUser } from "@/lib/session"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import {
@@ -11,15 +11,20 @@ import {
   getCallState,
   pinLiveChat,
   sendLiveChat,
-  sendLiveReaction,
   type LiveChatMessageView,
 } from "@/app/actions/live"
-import { QUICK_REACTIONS } from "@/components/live-reactions"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
+
+// A compact, curated set of emojis for the inline chat picker.
+const CHAT_EMOJIS = [
+  "😀", "😂", "🥰", "😍", "😎", "🤔", "😮", "😢",
+  "👍", "👏", "🙌", "🙏", "🔥", "💯", "❤️", "✨",
+  "🎉", "🕊️", "✝️", "📖", "🎶", "💪", "😇", "🤝",
+] as const
 
 /** Renders message text with @mentions highlighted in the accent color. */
 function MentionText({ body, accent = false }: { body: string; accent?: boolean }) {
@@ -61,8 +66,16 @@ export function LiveChat({
   bgEffect?: "none" | "blur" | "dim"
 }) {
   const [draft, setDraft] = useState("")
+  const [emojiOpen, setEmojiOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const scrollRef = useRef<HTMLUListElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Insert an emoji into the message at the end and keep the composer focused.
+  function insertEmoji(emoji: string) {
+    setDraft((d) => d + emoji)
+    requestAnimationFrame(() => textareaRef.current?.focus())
+  }
 
   const { data: messages = [], mutate } = useSWR<LiveChatMessageView[]>(
     roomName ? ["live-chat", roomName] : null,
@@ -226,37 +239,59 @@ export function LiveChat({
       </ScrollArea>
 
       {canSend ? (
-        <form onSubmit={send} className="relative space-y-3 border-t border-border/60 bg-card/80 p-3 backdrop-blur">
-          {/* Quick reactions — broadcast an emoji that floats over the stage. */}
-          <div className="flex items-center gap-1.5">
-            {QUICK_REACTIONS.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => roomName && void sendLiveReaction({ roomName, emoji, kind: "reaction" }).catch(() => {})}
-                className="flex size-8 items-center justify-center rounded-full bg-secondary text-base transition-transform hover:scale-110 active:scale-95"
-                aria-label={`Send ${emoji} reaction`}
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
-          <Textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault()
-                send(e)
-              }
-            }}
-            placeholder={asHost ? "Say something to the room…" : `Chat as ${currentUser?.name}…`}
-            className="min-h-16 resize-none"
-            aria-label="Chat message"
-          />
-          <div className="flex justify-end">
-            <Button type="submit" className="gap-2" disabled={!draft.trim() || isPending}>
-              <Send className="size-4" /> Send
+        <form onSubmit={send} className="relative border-t border-border/60 bg-card/80 p-3 backdrop-blur">
+          {/* Inline emoji picker — taps insert the emoji into the message. */}
+          {emojiOpen && (
+            <div className="mb-2 grid grid-cols-8 gap-1 rounded-xl border border-border/60 bg-popover p-2 shadow-lg">
+              {CHAT_EMOJIS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => insertEmoji(emoji)}
+                  className="flex size-8 items-center justify-center rounded-lg text-lg transition-transform hover:scale-110 hover:bg-secondary active:scale-95"
+                  aria-label={`Insert ${emoji}`}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="flex items-end gap-2">
+            <button
+              type="button"
+              onClick={() => setEmojiOpen((o) => !o)}
+              aria-label="Insert emoji"
+              aria-pressed={emojiOpen}
+              className={cn(
+                "flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground transition-colors hover:bg-secondary/80 hover:text-foreground",
+                emojiOpen && "bg-primary/15 text-primary",
+              )}
+            >
+              <Smile className="size-5" />
+            </button>
+            <Textarea
+              ref={textareaRef}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault()
+                  send(e)
+                }
+              }}
+              placeholder={asHost ? "Say something to the room…" : `Chat as ${currentUser?.name}…`}
+              rows={1}
+              className="max-h-32 min-h-10 flex-1 resize-none py-2.5"
+              aria-label="Chat message"
+            />
+            <Button
+              type="submit"
+              size="icon"
+              className="size-10 shrink-0 rounded-full"
+              disabled={!draft.trim() || isPending}
+              aria-label="Send message"
+            >
+              <Send className="size-4" />
             </Button>
           </div>
         </form>

@@ -42,7 +42,6 @@ import { useLiveAudio } from "@/lib/use-live-audio"
 import { uploadMedia } from "@/lib/upload-media"
 import { LiveChat } from "@/components/live-chat"
 import { LiveStage, MAX_GUESTS } from "@/components/live-stage"
-import { LiveAudience } from "@/components/live-audience"
 import { ReactionLayer } from "@/components/live-reactions"
 import { CoverUpload } from "@/components/admin/cover-upload"
 import { Button } from "@/components/ui/button"
@@ -96,7 +95,7 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
   // mid-session so it can still be published when they go off air.
   const recordedBlobRef = useRef<Blob | null>(null)
   // Which slide-up panel is open. Only one at a time keeps the studio compact.
-  const [panel, setPanel] = useState<null | "music" | "people" | "chat">(null)
+  const [panel, setPanel] = useState<null | "music" | "people">(null)
 
   const viewers = Math.max(0, state.listeners - 1 - speakers.filter((s) => !s.isLocal).length)
 
@@ -279,9 +278,9 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
           </div>
         )}
 
-        {/* Speaker stage with floating reactions */}
-        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl lg:flex-none">
-          <div className="mb-3 flex items-center justify-between">
+        {/* Speaker stage — unified 2-col × 4-row grid (host first, then guests) */}
+        <div className="relative shrink-0">
+          <div className="mb-2 flex items-center justify-between px-1">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-white/60">On stage</h2>
             <div className="flex items-center gap-1.5">
               {locked && (
@@ -307,41 +306,24 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
           {live && roomName && <ReactionLayer roomName={roomName} />}
         </div>
 
-        {/* Call-in queue (only when someone is waiting) */}
-        {live && pending.length > 0 && (
-          <div className="rounded-2xl border border-live/30 bg-live/10 p-3 backdrop-blur-xl">
-            <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-live">
-              <Phone className="size-3.5" /> Call-in queue
+        {/* Live chat — begins where the stage ends; the only scrollable region */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border/60 bg-card text-foreground shadow-lg">
+          <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-4 py-2.5">
+            <h2 className="flex items-center gap-2 text-sm font-semibold">
+              <MessageSquare className="size-4 text-primary" /> Live chat
             </h2>
-            <ul className="flex flex-col gap-2">
-              {pending.map((r) => (
-                <li key={r.id} className="flex items-center justify-between gap-2 rounded-xl bg-white/5 p-2">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className={cn("flex size-8 items-center justify-center rounded-full text-xs font-semibold", r.color)}>
-                      {r.initials}
-                    </span>
-                    <span className="truncate text-sm font-medium text-white">{r.userName}</span>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1.5">
-                    <Button size="sm" className="h-8 gap-1 bg-call-accept text-call-accept-foreground hover:bg-call-accept/90" onClick={() => acceptCall(r.id)}>
-                      <Phone className="size-3.5" /> Accept
-                    </Button>
-                    <Button size="sm" variant="ghost" className="h-8 text-white hover:bg-white/10" onClick={() => declineCall(r.id)} aria-label="Decline">
-                      <PhoneOff className="size-4" />
-                    </Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <span className="text-xs text-muted-foreground">
+              {guests.length}/{MAX_GUESTS} on stage
+            </span>
           </div>
-        )}
+          <div className="min-h-0 flex-1">
+            <LiveChat asHost currentUser={currentUser} roomName={roomName ?? undefined} />
+          </div>
+        </div>
 
-        {/* Audience strip */}
-        {live && <LiveAudience count={viewers} glass />}
-
-        {/* Host control dock */}
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-2 shadow-lg backdrop-blur-xl pb-safe-2 pl-safe pr-safe">
-          <div className="flex items-center justify-center gap-1.5 overflow-x-auto sm:gap-2">
+        {/* Host control dock — compact essentials */}
+        <div className="shrink-0 rounded-2xl border border-white/10 bg-white/5 p-2 shadow-lg backdrop-blur-xl pb-safe-2 pl-safe pr-safe">
+          <div className="flex items-center justify-center gap-2 sm:gap-3">
             <DockButton
               icon={micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
               label={micOn ? "Mute mic" : "Unmute mic"}
@@ -355,13 +337,6 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
               active={panel === "music"}
               disabled={!live}
               onClick={() => setPanel((p) => (p === "music" ? null : "music"))}
-            />
-            <DockButton
-              icon={<MessageSquare className="size-5" />}
-              label="Live chat"
-              active={panel === "chat"}
-              disabled={!live}
-              onClick={() => setPanel((p) => (p === "chat" ? null : "chat"))}
             />
             <DockButton
               icon={<Users className="size-5" />}
@@ -393,14 +368,6 @@ export function StudioConsole({ currentUser }: { currentUser: CurrentUser }) {
           onAccept={acceptCall}
           onDecline={declineCall}
           onRemove={dropGuest}
-          onClose={() => setPanel(null)}
-        />
-      )}
-      {panel === "chat" && (
-        <ChatPanel
-          currentUser={currentUser}
-          roomName={roomName}
-          guestCount={guests.length}
           onClose={() => setPanel(null)}
         />
       )}
@@ -518,45 +485,7 @@ function ShareButton({ roomName, title }: { roomName: string; title?: string }) 
   )
 }
 
-/**
- * Live chat panel for the host — slides up so the host can read what listeners
- * are saying and reply to the room without leaving the console.
- */
-function ChatPanel({
-  currentUser,
-  roomName,
-  guestCount,
-  onClose,
-}: {
-  currentUser: CurrentUser
-  roomName: string | null
-  guestCount: number
-  onClose: () => void
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end sm:items-center sm:justify-center" role="dialog" aria-modal="true">
-      <button type="button" aria-label="Close chat" className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 flex h-[78dvh] w-full flex-col overflow-hidden rounded-t-2xl border-t border-border/60 bg-card text-foreground shadow-2xl sm:h-[70dvh] sm:max-w-md sm:rounded-2xl sm:border">
-        <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-4 py-3">
-          <h2 className="flex items-center gap-2 font-semibold">
-            <MessageSquare className="size-4 text-primary" /> Live chat
-          </h2>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground">
-              {guestCount}/{MAX_GUESTS} on stage
-            </span>
-            <Button type="button" size="icon" variant="ghost" className="size-8" onClick={onClose} aria-label="Close">
-              <X className="size-4" />
-            </Button>
-          </div>
-        </div>
-        <div className="min-h-0 flex-1">
-          <LiveChat asHost currentUser={currentUser} roomName={roomName ?? undefined} />
-        </div>
-      </div>
-    </div>
-  )
-}
+
 
 /** People panel: pending call-in requests, current guests, listener invites. */
 function PeoplePanel({
