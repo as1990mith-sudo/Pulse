@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
+  ArrowLeft,
   Check,
   Loader2,
   Lock,
@@ -20,6 +21,8 @@ import {
   X,
 } from "lucide-react"
 import { ShareSheet } from "@/components/share-sheet"
+import { LiveChat } from "@/components/live-chat"
+import type { CurrentUser } from "@/lib/session"
 import type { ShareTarget } from "@/lib/share-types"
 import type { CallRequestView, LiveStreamView } from "@/app/actions/live"
 import {
@@ -89,15 +92,19 @@ function DockButton({
 export function LiveListener({
   stream,
   canListen,
+  currentUser = null,
   currentUserId = null,
 }: {
   stream: LiveStreamView
   canListen: boolean
+  currentUser?: CurrentUser | null
   currentUserId?: string | null
 }) {
   const router = useRouter()
   const { state, speakers, connect, disconnect, toggleMic, setListenerMuted, startAudioPlayback } = useLiveAudio()
   const [muted, setMuted] = useState(false)
+  // Mobile chat sheet (desktop shows the chat in a side rail instead).
+  const [chatOpen, setChatOpen] = useState(false)
   const [joining, setJoining] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [ended, setEnded] = useState(false)
@@ -247,7 +254,7 @@ export function LiveListener({
   }
 
   return (
-    <div className="relative flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 text-white shadow-2xl">
+    <div className="relative flex h-full flex-col overflow-hidden bg-zinc-950 text-white lg:h-auto lg:rounded-2xl lg:border lg:border-white/10 lg:shadow-2xl">
       {/* Drifting aurora backdrop tinted from the cover art for an immersive room. */}
       <div
         aria-hidden="true"
@@ -271,7 +278,16 @@ export function LiveListener({
       )}
 
       {/* ───────── Broadcast header: cover art + live + title + stats ───────── */}
-      <header className="relative flex items-center gap-3 overflow-hidden border-b border-white/10 px-4 py-3 backdrop-blur-xl">
+      <header className="relative flex items-center gap-3 overflow-hidden border-b border-white/10 px-4 py-3 pt-safe backdrop-blur-xl">
+        {/* Mobile-only back control (desktop has the page's "Back to shows"). */}
+        <button
+          type="button"
+          onClick={() => router.push("/live")}
+          aria-label="Back to all shows"
+          className="relative flex size-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-inset ring-white/10 transition-colors hover:bg-white/20 lg:hidden"
+        >
+          <ArrowLeft className="size-5" />
+        </button>
         <span className="relative size-12 shrink-0 overflow-hidden rounded-xl bg-white/10 ring-1 ring-white/15">
           {stream.cover ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -308,7 +324,7 @@ export function LiveListener({
       </header>
 
       {/* ───────────────────────── Speaker stage ───────────────────────── */}
-      <div className="relative flex flex-col gap-4 px-4 py-6 sm:px-6 sm:py-8">
+      <div className="relative flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8 lg:flex-none lg:overflow-visible">
         {/* Floating reactions drift up over the stage. */}
         <ReactionLayer roomName={state.connected ? stream.roomName : undefined} />
 
@@ -438,12 +454,12 @@ export function LiveListener({
             <div className="flex items-center gap-2">
               {/* Audio live uses emoji reactions only (no virtual gifts). */}
               <ReactionPicker roomName={stream.roomName} showGifts={false} />
-              {/* Jump to chat (mobile: chat lives below the fold). */}
-              <a href="#live-chat" className="sm:hidden">
-                <DockButton label="Open chat">
+              {/* Open the live chat (mobile: slides up as a sheet). */}
+              <span className="lg:hidden">
+                <DockButton label="Open chat" onClick={() => setChatOpen(true)}>
                   <MessageSquare className="size-5" />
                 </DockButton>
-              </a>
+              </span>
               <DockButton label="Share room" onClick={() => setShareOpen(true)}>
                 <Share2 className="size-5" />
               </DockButton>
@@ -468,6 +484,41 @@ export function LiveListener({
       </div>
 
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
+
+      {/* Mobile live-chat sheet — slides up over the immersive room. */}
+      {chatOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end lg:hidden" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            aria-label="Close chat"
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setChatOpen(false)}
+          />
+          <div className="relative flex h-[78dvh] flex-col overflow-hidden rounded-t-2xl border-t border-border/60 bg-card text-foreground shadow-2xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-4 py-3">
+              <h2 className="flex items-center gap-2 font-semibold">
+                <MessageSquare className="size-4 text-primary" /> Live chat
+              </h2>
+              <button
+                type="button"
+                onClick={() => setChatOpen(false)}
+                aria-label="Close chat"
+                className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1">
+              <LiveChat
+                currentUser={currentUser}
+                roomName={stream.roomName}
+                bgUrl={stream.chatBgUrl ?? null}
+                bgEffect={stream.chatBgEffect ?? "none"}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

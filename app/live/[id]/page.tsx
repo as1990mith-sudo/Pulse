@@ -38,31 +38,38 @@ export default async function LiveStreamPage({ params }: { params: Promise<{ id:
   }
 
   return (
-    // On mobile the whole experience is pinned to the viewport height so the
-    // listener controls + chat fit without scrolling the page (only the chat
-    // message list scrolls). On desktop it reverts to the normal scroll layout.
-    <div className="flex h-[100dvh] flex-col lg:block lg:h-auto lg:min-h-screen">
-      <SiteHeader />
-      <main className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col px-4 py-3 sm:px-6 lg:block lg:flex-none lg:py-4">
+    // Mobile: a fully immersive, edge-to-edge audio room (no page chrome or
+    // card borders) with the chat opening as a slide-up sheet from inside the
+    // player. Desktop: the familiar two-column layout with a sticky chat rail.
+    <div className="h-[100dvh] lg:flex lg:h-auto lg:min-h-screen lg:flex-col">
+      <div className="hidden lg:block">
+        <SiteHeader />
+      </div>
+      <main className="mx-auto h-full w-full max-w-6xl lg:flex-1 lg:px-6 lg:py-4">
         <Link
           href="/live"
-          className="mb-2 inline-flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground lg:mb-3"
+          className="mb-3 hidden items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground lg:inline-flex"
         >
           <ArrowLeft className="size-4" /> Back to all shows
         </Link>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-3 lg:grid lg:flex-none lg:gap-4 lg:grid-cols-[1fr_360px]">
-          {/* Main column */}
-          <div className="shrink-0 lg:shrink">
-            <LiveListener stream={stream} canListen={Boolean(currentUser)} currentUserId={currentUser?.id ?? null} />
+        <div className="h-full lg:grid lg:gap-4 lg:grid-cols-[1fr_360px]">
+          {/* Main column — fills the whole screen on mobile */}
+          <div className="h-full lg:h-auto">
+            <LiveListener
+              stream={stream}
+              canListen={Boolean(currentUser)}
+              currentUser={currentUser}
+              currentUserId={currentUser?.id ?? null}
+            />
           </div>
 
-          {/* Chat sidebar — fills the remaining space on mobile, sticky on desktop */}
+          {/* Chat sidebar — desktop only; mobile uses the in-player chat sheet */}
           <aside
             id="live-chat"
-            className="flex min-h-0 flex-1 scroll-mt-20 flex-col lg:block lg:flex-none lg:sticky lg:top-20 lg:h-[calc(100vh-6rem)]"
+            className="hidden lg:sticky lg:top-20 lg:flex lg:h-[calc(100vh-6rem)] lg:flex-col"
           >
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border/60 bg-card lg:h-full lg:flex-none">
+            <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-border/60 bg-card">
               <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-4 py-3">
                 <MessageSquare className="size-4 text-primary" />
                 <h2 className="font-semibold">Live chat</h2>
