@@ -156,6 +156,9 @@ export const episode = pgTable("episode", {
   hostUserId: text("hostUserId"),
   hostHandle: text("hostHandle"),
   likes: integer("likes").notNull().default(0),
+  // When true the episode is hidden from everyone except its host (the owner).
+  // Hosts toggle this from the episode menu on their own catalogue.
+  isPrivate: boolean("isPrivate").notNull().default(false),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 

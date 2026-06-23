@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm"
+import { and, desc, eq } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { devotional, episode, user as userTable } from "@/lib/db/schema"
 import type { Devotional, Show, Host, PodcastHost } from "@/lib/data"
@@ -58,16 +58,25 @@ function episodeToShow(row: typeof episode.$inferSelect): Show {
     audioUrl: row.audioUrl || undefined,
     episodeId: row.id,
     likes: row.likes,
+    isPrivate: row.isPrivate,
   }
 }
 
-/** Episodes a specific host has published, newest first. */
-export async function getEpisodesByUser(userId: string): Promise<Show[]> {
+/**
+ * Episodes a specific host has published, newest first. Private episodes are
+ * only included when the viewer is the host themselves (`includePrivate`).
+ */
+export async function getEpisodesByUser(userId: string, includePrivate = false): Promise<Show[]> {
   const rows = await db
     .select()
     .from(episode)
-    .where(eq(episode.hostUserId, userId))
+    .where(
+      includePrivate
+        ? eq(episode.hostUserId, userId)
+        : and(eq(episode.hostUserId, userId), eq(episode.isPrivate, false)),
+    )
     .orderBy(desc(episode.createdAt))
+
   return rows.map(episodeToShow)
 }
 
@@ -92,9 +101,13 @@ export async function getLatestDevotional(): Promise<Devotional | null> {
   }
 }
 
-/** Catalogue episodes: real published episodes, newest first. */
+/** Catalogue episodes: real published, non-private episodes, newest first. */
 export async function getCatalogEpisodes(): Promise<Show[]> {
-  const rows = await db.select().from(episode).orderBy(desc(episode.createdAt))
+  const rows = await db
+    .select()
+    .from(episode)
+    .where(eq(episode.isPrivate, false))
+    .orderBy(desc(episode.createdAt))
   return rows.map(episodeToShow)
 }
 
@@ -116,6 +129,7 @@ export async function getPodcastHosts(): Promise<PodcastHost[]> {
     })
     .from(episode)
     .innerJoin(userTable, eq(episode.hostUserId, userTable.id))
+    .where(eq(episode.isPrivate, false))
     .orderBy(desc(episode.createdAt))
 
   const byHost = new Map<string, PodcastHost>()

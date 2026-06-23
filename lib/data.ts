@@ -37,6 +37,7 @@ export type Show = {
   audioUrl?: string // recorded audio for on-demand episodes
   episodeId?: number // numeric DB id for published episodes (likes/comments)
   likes?: number // like count for published episodes
+  isPrivate?: boolean // hidden from everyone except the host (owner) when true
 }
 
 export type DevotionalComment = {

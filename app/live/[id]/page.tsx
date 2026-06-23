@@ -15,6 +15,11 @@ export default async function LiveStreamPage({ params }: { params: Promise<{ id:
   if (!stream) {
     const show = await resolveShow(id)
     if (!show) notFound()
+    // Private episodes are visible only to their host (the owner).
+    if (show.isPrivate) {
+      const viewer = await getCurrentUser()
+      if (!viewer || viewer.id !== show.host.id) notFound()
+    }
     return <EpisodePage show={show} />
   }
 

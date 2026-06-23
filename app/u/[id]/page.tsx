@@ -19,7 +19,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
   if (!profile) notFound()
 
   const [episodes, posts, reposts, currentUser, statusGroup] = await Promise.all([
-    getEpisodesByUser(id),
+    getEpisodesByUser(id, profile.isSelf),
     getPostsByUser(id),
     getRepostsByUser(id),
     getCurrentUser(),
