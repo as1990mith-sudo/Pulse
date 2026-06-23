@@ -43,3 +43,13 @@ export function linkify(text: string, linkClassName?: string): ReactNode[] {
   if (lastIndex < text.length) nodes.push(text.slice(lastIndex))
   return nodes
 }
+
+/**
+ * Returns the first URL found in `text` (normalized to include a protocol), or
+ * null if there are none. Used to surface a rich link preview for a post.
+ */
+export function extractFirstUrl(text: string): string | null {
+  URL_REGEX.lastIndex = 0
+  const match = URL_REGEX.exec(text)
+  return match ? normalizeHref(match[0]) : null
+}
