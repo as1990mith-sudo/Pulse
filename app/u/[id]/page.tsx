@@ -35,22 +35,18 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
       <SiteHeader />
       {/* Full-bleed, immersive header — stretches edge to edge with no card chrome. */}
       <header className="border-b border-border/60 bg-card/40 backdrop-blur">
-        {/* Cover banner with a soft brand-tinted gradient + subtle glow. */}
-        <div className="relative h-28 bg-gradient-to-br from-primary/30 via-primary/10 to-transparent sm:h-36">
-          <div
-            aria-hidden
-            className="absolute inset-0"
-            style={{
-              backgroundImage:
-                "radial-gradient(120% 100% at 85% 0%, color-mix(in oklab, var(--primary) 22%, transparent) 0%, transparent 60%)",
-            }}
-          />
-        </div>
+        {/* Cover banner — a soft gradient derived from the user's avatar colors. */}
+        <div
+          className="h-28 sm:h-36"
+          style={{
+            backgroundImage: `linear-gradient(135deg, color-mix(in oklab, var(${profile.gradient.from}) 50%, transparent) 0%, color-mix(in oklab, var(${profile.gradient.to}) 32%, transparent) 55%, transparent 100%)`,
+          }}
+        />
 
         {/* Inner content stays aligned to the same max width as the tabs below. */}
         <div className="mx-auto w-full max-w-4xl px-4 pb-6 sm:px-6">
-          {/* Avatar overlaps the banner; actions align to its baseline. */}
-          <div className="-mt-12 flex items-end justify-between gap-4 sm:-mt-16">
+          {/* Avatar overlaps the banner; actions sit just to its right. */}
+          <div className="-mt-12 flex items-end gap-4 sm:-mt-16">
             <div className="w-fit rounded-full bg-background p-1 shadow-lg">
               <ProfileAvatar
                 initials={profile.initials}

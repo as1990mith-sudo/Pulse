@@ -3,7 +3,7 @@ import { headers } from "next/headers"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { follow, user as userTable } from "@/lib/db/schema"
-import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
+import { getAvatarColor, getAvatarGradient, getHandle, getInitials } from "@/lib/identity"
 
 export type Profile = {
   id: string
@@ -11,6 +11,7 @@ export type Profile = {
   handle: string
   initials: string
   color: string
+  gradient: { from: string; to: string }
   image: string | null
   bio: string | null
   followers: number
@@ -48,6 +49,7 @@ export async function getProfile(userId: string): Promise<Profile | null> {
     handle: getHandle(row.name),
     initials: getInitials(row.name),
     color: getAvatarColor(row.id),
+    gradient: getAvatarGradient(row.id),
     image: row.image,
     bio: row.bio ?? null,
     followers: followersRow?.value ?? 0,
