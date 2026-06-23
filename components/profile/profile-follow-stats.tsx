@@ -23,22 +23,25 @@ export function ProfileFollowStats({
   const [mode, setMode] = useState<Mode | null>(null)
 
   return (
-    <div className="flex items-center gap-2.5 text-sm">
+    <div className="flex items-stretch justify-center">
       <button
         type="button"
         onClick={() => setMode("followers")}
-        className="group flex items-baseline gap-1.5 rounded-full border border-border/60 bg-secondary/40 px-3.5 py-1.5 transition-colors hover:border-border hover:bg-secondary"
+        className="group flex min-w-24 flex-col items-center gap-0.5 rounded-xl px-6 py-1 transition-colors hover:bg-foreground/5"
       >
-        <span className="font-bold tabular-nums text-foreground">{followers}</span>
-        <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground">Followers</span>
+        <span className="text-xl font-bold tabular-nums text-foreground">{followers}</span>
+        <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground">Followers</span>
       </button>
+
+      <div className="h-10 w-px self-center bg-border/70" aria-hidden />
+
       <button
         type="button"
         onClick={() => setMode("following")}
-        className="group flex items-baseline gap-1.5 rounded-full border border-border/60 bg-secondary/40 px-3.5 py-1.5 transition-colors hover:border-border hover:bg-secondary"
+        className="group flex min-w-24 flex-col items-center gap-0.5 rounded-xl px-6 py-1 transition-colors hover:bg-foreground/5"
       >
-        <span className="font-bold tabular-nums text-foreground">{following}</span>
-        <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground">Following</span>
+        <span className="text-xl font-bold tabular-nums text-foreground">{following}</span>
+        <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground">Following</span>
       </button>
 
       {mode && <FollowListDialog userId={userId} mode={mode} onClose={() => setMode(null)} />}

@@ -33,58 +33,71 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
   return (
     <div className="min-h-screen">
       <SiteHeader />
-      {/* Full-bleed, immersive header — stretches edge to edge with no card chrome. */}
-      <header className="border-b border-border/60 bg-card/40 backdrop-blur">
-        {/* Cover banner — a soft gradient derived from the user's avatar colors. */}
+      {/* Full-bleed, immersive header — a centered profile composition on top of
+          a soft gradient glow derived from the user's avatar colors. */}
+      <header className="relative overflow-hidden border-b border-border/60">
+        {/* Ambient gradient glow that fades into the page background. */}
         <div
-          className="h-28 sm:h-36"
+          className="pointer-events-none absolute inset-x-0 top-0 h-64"
           style={{
-            backgroundImage: `linear-gradient(135deg, color-mix(in oklab, var(${profile.gradient.from}) 50%, transparent) 0%, color-mix(in oklab, var(${profile.gradient.to}) 32%, transparent) 55%, transparent 100%)`,
+            backgroundImage: `radial-gradient(120% 80% at 50% 0%, color-mix(in oklab, var(${profile.gradient.from}) 45%, transparent) 0%, color-mix(in oklab, var(${profile.gradient.to}) 22%, transparent) 45%, transparent 75%)`,
           }}
+          aria-hidden
         />
 
-        {/* Inner content stays aligned to the same max width as the tabs below. */}
-        <div className="mx-auto w-full max-w-4xl px-4 pb-6 sm:px-6">
-          {/* Avatar overlaps the banner; actions sit just to its right. */}
-          <div className="-mt-12 flex items-end gap-4 sm:-mt-16">
-            <div className="w-fit rounded-full bg-background p-1 shadow-lg">
-              <ProfileAvatar
-                initials={profile.initials}
-                color={profile.color}
-                image={profile.image}
-                name={profile.name}
-                editable={profile.isSelf}
-                statusGroup={statusGroup}
-                currentUser={currentUser}
-              />
-            </div>
-
-            {!profile.isSelf && (
-              <div className="flex items-center gap-2 pb-1">
-                <ProfileFollowButton
-                  targetUserId={profile.id}
-                  targetName={profile.name}
-                  initialFollowing={profile.isFollowing}
-                />
-                {currentUser && <ProfileMessageButton targetUserId={profile.id} targetName={profile.name} />}
-              </div>
-            )}
+        <div className="relative mx-auto flex w-full max-w-md flex-col items-center px-4 pb-8 pt-10 text-center sm:px-6">
+          {/* Ringed avatar, centered. */}
+          <div className="rounded-full bg-background p-1.5 shadow-xl ring-1 ring-border/50">
+            <ProfileAvatar
+              initials={profile.initials}
+              color={profile.color}
+              image={profile.image}
+              name={profile.name}
+              editable={profile.isSelf}
+              statusGroup={statusGroup}
+              currentUser={currentUser}
+            />
           </div>
 
-          <div className="mt-4 space-y-3">
-            <div className="space-y-0.5">
-              <ProfileName name={profile.name} editable={profile.isSelf} />
-              <p className="text-sm text-muted-foreground">{profile.handle}</p>
-            </div>
+          {/* Name + handle, centered. */}
+          <div className="mt-4 flex flex-col items-center gap-1">
+            <ProfileName name={profile.name} editable={profile.isSelf} />
+            <p className="text-base text-muted-foreground">{profile.handle}</p>
+          </div>
 
+          {/* Bio, centered. */}
+          <div className="mt-3 flex flex-col items-center text-center">
             <ProfileBio bio={profile.bio} editable={profile.isSelf} />
+          </div>
 
+          {/* Stats with a vertical divider. */}
+          <div className="mt-5">
             <ProfileFollowStats
               userId={profile.id}
               followers={profile.followers}
               following={profile.following}
             />
           </div>
+
+          {/* Full-width stacked actions for other people's profiles. */}
+          {!profile.isSelf && (
+            <div className="mt-6 flex w-full flex-col gap-3">
+              <ProfileFollowButton
+                targetUserId={profile.id}
+                targetName={profile.name}
+                initialFollowing={profile.isFollowing}
+                className="h-12 w-full rounded-full text-base font-semibold"
+              />
+              {currentUser && (
+                <ProfileMessageButton
+                  targetUserId={profile.id}
+                  targetName={profile.name}
+                  variant="outline"
+                  className="h-12 w-full rounded-full text-base font-semibold"
+                />
+              )}
+            </div>
+          )}
         </div>
       </header>
 
