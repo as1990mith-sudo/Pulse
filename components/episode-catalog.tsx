@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import { Search } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { EpisodeRow } from "@/components/profile/episode-row"
+import { isPlayable } from "@/components/episode-player-provider"
 
 /**
  * The episode list shown on a profile. All episodes show by default; a search
@@ -24,6 +25,11 @@ export function EpisodeCatalog({
     if (!q) return episodes
     return episodes.filter((e) => e.title.toLowerCase().includes(q))
   }, [episodes, query])
+
+  // The ordered queue handed to the player: every on-demand episode currently
+  // shown, in list order. The player derives "up next" as the items after the
+  // one that's playing.
+  const queue = useMemo(() => filtered.filter(isPlayable), [filtered])
 
   if (episodes.length === 0) {
     return (
@@ -58,7 +64,7 @@ export function EpisodeCatalog({
         // full-bleed divided rows instead of a boxed card.
         <div className="-mx-4 divide-y divide-border/60 border-y border-border/60 sm:-mx-6">
           {filtered.map((show) => (
-            <EpisodeRow key={show.id} show={show} owned={owned} />
+            <EpisodeRow key={show.id} show={show} owned={owned} queue={queue} />
           ))}
         </div>
       )}

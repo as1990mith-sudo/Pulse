@@ -74,9 +74,10 @@ export function ChatroomBrowser({ rooms }: { rooms: ChatroomSummary[] }) {
     <Tabs defaultValue="my-rooms" className="space-y-6">
       <CommunityHelpEntry />
       <DreamInterpretationEntry />
-      {/* Immersive, full-bleed segmented control: large tactile tiles with an
-          icon + label per tab and a bold primary-tinted active state. */}
-      <TabsList className="-mx-4 grid h-auto w-[calc(100%+2rem)] grid-cols-3 gap-2 rounded-none border-y border-border/60 bg-gradient-to-b from-secondary/30 to-transparent p-3 sm:-mx-6 sm:w-[calc(100%+3rem)] sm:px-6">
+      {/* Immersive, full-bleed segmented bar: one edge-to-edge strip split into
+          three equal segments. Every segment shares the exact same box, so only
+          the color changes on the active tab — no size-shifting borders. */}
+      <TabsList className="-mx-4 grid h-14 w-[calc(100%+2rem)] grid-cols-3 gap-0 divide-x divide-border/50 rounded-none border-y border-border/60 bg-card/50 p-0 backdrop-blur sm:-mx-6 sm:w-[calc(100%+3rem)]">
         {[
           { value: "my-rooms", label: "My rooms", icon: Users },
           { value: "discover", label: "Discover", icon: Compass },
@@ -85,9 +86,9 @@ export function ChatroomBrowser({ rooms }: { rooms: ChatroomSummary[] }) {
           <TabsTrigger
             key={value}
             value={value}
-            className="group flex h-auto flex-col items-center gap-2 rounded-2xl border border-transparent bg-transparent px-2 py-3.5 text-[13px] font-semibold text-muted-foreground transition-all hover:bg-secondary/40 hover:text-foreground data-[state=active]:border-primary/40 data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm sm:text-sm"
+            className="relative flex h-full items-center justify-center gap-2 rounded-none border-0 bg-transparent text-sm font-semibold text-muted-foreground shadow-none transition-colors hover:bg-secondary/40 hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
           >
-            <Icon className="size-5 transition-transform duration-200 group-data-[state=active]:scale-110" />
+            <Icon className="size-[18px]" />
             {label}
           </TabsTrigger>
         ))}

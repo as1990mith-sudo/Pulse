@@ -4,6 +4,7 @@ import { Geist, Geist_Mono, Sora } from 'next/font/google'
 import { ThemeProvider } from '@/components/theme-provider'
 import { SkinProvider, SKIN_INIT_SCRIPT } from '@/components/skin-provider'
 import { LiveSessionProvider } from '@/components/live-session'
+import { EpisodePlayerProvider } from '@/components/episode-player-provider'
 import './globals.css'
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
@@ -82,8 +83,10 @@ export default function RootLayout({
         >
           <SkinProvider>
             <LiveSessionProvider>
-              {children}
-              {process.env.NODE_ENV === 'production' && <Analytics />}
+              <EpisodePlayerProvider>
+                {children}
+                {process.env.NODE_ENV === 'production' && <Analytics />}
+              </EpisodePlayerProvider>
             </LiveSessionProvider>
           </SkinProvider>
         </ThemeProvider>
