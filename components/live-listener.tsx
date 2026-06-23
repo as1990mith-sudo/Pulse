@@ -13,7 +13,7 @@ import {
   PhoneOff,
   Play,
   Radio,
-  Share2,
+  Send,
   Users,
   Volume2,
   VolumeX,
@@ -22,6 +22,7 @@ import {
 import { ShareSheet } from "@/components/share-sheet"
 import { BackExitMenu } from "@/components/live-back-menu"
 import { LiveChat } from "@/components/live-chat"
+import { CoverArt } from "@/components/cover-art"
 import type { CurrentUser } from "@/lib/session"
 import type { ShareTarget } from "@/lib/share-types"
 import type { CallRequestView, LiveStreamView } from "@/app/actions/live"
@@ -32,6 +33,7 @@ import {
   respondToCallRequest,
   removeFromStage,
 } from "@/app/actions/live"
+import { toggleFollow, getFollowingIds } from "@/app/actions/follow"
 import { useLiveAudio } from "@/lib/use-live-audio"
 import { LiveBadge } from "@/components/live-badge"
 import { LiveStage, QualityIcon } from "@/components/live-stage"
@@ -74,7 +76,7 @@ function DockButton({
       aria-label={label}
       aria-pressed={active}
       className={cn(
-        "flex size-14 items-center justify-center rounded-full shadow-xl ring-1 ring-inset transition-all hover:scale-105 active:scale-95 disabled:opacity-50 [&>svg]:size-[26px] [&>svg]:stroke-[2.5]",
+        "flex size-12 items-center justify-center rounded-full shadow-xl ring-1 ring-inset transition-all hover:scale-105 active:scale-95 disabled:opacity-50 [&>svg]:size-[22px] [&>svg]:stroke-[2.5]",
         tone === "danger"
           ? "bg-destructive text-white shadow-destructive/40 ring-white/25 hover:bg-destructive/90"
           : active && tone === "live"
@@ -119,6 +121,36 @@ export function LiveListener({
   // Set when the host ends the broadcast — shows a "Session ended" splash then
   // bounces the listener back to the Live tab.
   const [hostEnded, setHostEnded] = useState(false)
+
+  // Whether the current listener follows the host (drives the follow chip on
+  // the host's stage tile). The host can't follow themselves.
+  const isSelfHost = currentUserId === stream.hostId
+  const [following, setFollowing] = useState(false)
+  const [followPending, setFollowPending] = useState(false)
+  useEffect(() => {
+    if (!currentUser || isSelfHost) return
+    let cancelled = false
+    getFollowingIds()
+      .then((ids) => !cancelled && setFollowing(ids.includes(stream.hostId)))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [currentUser, isSelfHost, stream.hostId])
+
+  async function handleToggleFollow() {
+    if (!currentUser || isSelfHost || followPending) return
+    const next = !following
+    setFollowing(next)
+    setFollowPending(true)
+    try {
+      await toggleFollow({ targetUserId: stream.hostId, follow: next })
+    } catch {
+      setFollowing(!next)
+    } finally {
+      setFollowPending(false)
+    }
+  }
 
   // Live duration clock, ticking from when this viewer connected.
   const [elapsed, setElapsed] = useState(0)
@@ -314,16 +346,7 @@ export function LiveListener({
           }}
           onMinimize={onMinimize ?? (() => {})}
         />
-        <span className="relative size-12 shrink-0 overflow-hidden rounded-xl bg-white/10 shadow-xl ring-2 ring-white/30">
-          {stream.cover ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={stream.cover || "/placeholder.svg"} alt="Cover art" className="size-full object-cover" />
-          ) : (
-            <span className="flex size-full items-center justify-center text-white/80">
-              <Radio className="size-5" strokeWidth={2.75} />
-            </span>
-          )}
-        </span>
+        <CoverArt src={stream.cover ?? null} alt={`${stream.title} cover art`} />
 
         <div className="relative min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -361,7 +384,7 @@ export function LiveListener({
       </header>
 
       {/* ───────────────────────── Speaker stage ───────────────────────── */}
-      <div className="relative flex shrink-0 flex-col gap-4 px-4 py-5 sm:px-6 sm:py-6">
+      <div className="relative flex shrink-0 flex-col gap-3 px-4 py-3 sm:px-6 sm:py-3.5">
         {/* Floating reactions drift up over the stage. */}
         <ReactionLayer roomName={state.connected ? stream.roomName : undefined} />
 
@@ -374,6 +397,12 @@ export function LiveListener({
             isHost={false}
             canRequestCall={canListen && !isOnStage && !locked && myStatus !== "pending"}
             callPending={myStatus === "pending"}
+            hostFollow={{
+              isFollowing: following,
+              canFollow: Boolean(currentUser) && !isSelfHost,
+              pending: followPending,
+              onToggle: () => void handleToggleFollow(),
+            }}
             onRequestCall={handleRequestCall}
           />
         </div>
@@ -422,7 +451,7 @@ export function LiveListener({
       </div>
 
       {/* ─────────────────────────── Guest dock ──────��──────────────────── */}
-      <div className="relative shrink-0 border-t border-white/10 px-4 py-3 pl-safe pr-safe backdrop-blur-xl">
+      <div className="relative shrink-0 border-t border-white/10 px-4 py-2 pl-safe pr-safe backdrop-blur-xl">
         {!canListen ? (
           <p className="text-sm text-white/70">
             <Link href="/sign-in" className="font-medium text-primary hover:underline">
@@ -445,7 +474,7 @@ export function LiveListener({
               <Play className="size-4 translate-x-0.5" strokeWidth={2.75} /> Join the room
             </button>
             <DockButton label="Share room" onClick={() => setShareOpen(true)}>
-              <Share2 className="size-5" />
+              <Send className="size-5" />
             </DockButton>
           </div>
         ) : (
@@ -480,7 +509,7 @@ export function LiveListener({
             )}
 
             <DockButton label="Share room" onClick={() => setShareOpen(true)}>
-              <Share2 className="size-5" />
+              <Send className="size-5" />
             </DockButton>
 
             {/* Request-to-speak affordance for listeners. */}

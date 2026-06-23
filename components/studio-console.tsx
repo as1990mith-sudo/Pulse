@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import {
-  Check,
   CheckCircle2,
   Loader2,
   Lock,
@@ -17,12 +16,11 @@ import {
   PhoneOff,
   Play,
   Radio,
-  Share2,
+  Send,
   SkipBack,
   SkipForward,
   Trash2,
   Upload,
-  UserPlus,
   Users,
   Volume2,
   VolumeX,
@@ -44,6 +42,9 @@ import {
 import { useLiveAudio } from "@/lib/use-live-audio"
 import { uploadMedia } from "@/lib/upload-media"
 import { LiveChat } from "@/components/live-chat"
+import { CoverArt } from "@/components/cover-art"
+import { ShareSheet } from "@/components/share-sheet"
+import type { ShareTarget } from "@/lib/share-types"
 import { LiveStage, MAX_GUESTS, QualityIcon } from "@/components/live-stage"
 import { LiveBadge } from "@/components/live-badge"
 import { ReactionLayer } from "@/components/live-reactions"
@@ -406,17 +407,8 @@ export function StudioConsole({
             onExit={live ? toggleLive : (onExit ?? (() => {}))}
             onMinimize={onMinimize ?? (() => {})}
           />
-          {/* Compact cover thumbnail — same footprint as the listener header. */}
-          <span className="relative size-12 shrink-0 overflow-hidden rounded-xl bg-white/10 shadow-xl ring-2 ring-white/30">
-            {cover ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={cover || "/placeholder.svg"} alt="Session cover art" className="size-full object-cover" />
-            ) : (
-              <span className="flex size-full items-center justify-center text-white/80">
-                <Radio className="size-5" strokeWidth={2.75} />
-              </span>
-            )}
-          </span>
+          {/* Compact round cover thumbnail — same footprint as the listener header. */}
+          <CoverArt src={cover ?? null} alt={`${title || "Session"} cover art`} />
 
           <div className="relative min-w-0 flex-1">
             <div className="flex items-center gap-2">
@@ -508,8 +500,8 @@ export function StudioConsole({
         )}
 
         {/* Speaker stage — unified 4-col × 2-row grid (host first, then guests) */}
-        <div className="relative shrink-0 border-b border-white/[0.07] px-4 py-4 sm:px-6">
-          <div className="mb-2 flex items-center justify-between">
+        <div className="relative shrink-0 border-b border-white/[0.07] px-4 py-3 sm:px-6">
+          <div className="mb-1.5 flex items-center justify-between">
             <h2 className="text-xs font-bold uppercase tracking-wider text-white/70">On stage</h2>
             <div className="flex items-center gap-1.5">
               {locked && (
@@ -536,7 +528,7 @@ export function StudioConsole({
         </div>
 
         {/* Host control dock ��� compact essentials, sits right under the stage row */}
-        <div className="shrink-0 border-b border-white/[0.07] px-4 py-4 sm:px-6">
+        <div className="shrink-0 border-b border-white/[0.07] px-4 py-2.5 sm:px-6">
           <div className="flex items-center justify-center gap-3 sm:gap-4">
             <DockButton
               icon={micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
@@ -560,7 +552,7 @@ export function StudioConsole({
               disabled={!live}
               onClick={() => setPanel((p) => (p === "people" ? null : "people"))}
             />
-            {live && roomName && <ShareButton roomName={roomName} title={title} />}
+            {live && roomName && <ShareButton roomName={roomName} title={title} cover={cover} />}
           </div>
         </div>
 
@@ -647,7 +639,7 @@ function DockButton({
       aria-pressed={active}
       title={label}
       className={cn(
-        "relative flex size-14 shrink-0 items-center justify-center rounded-full shadow-xl ring-1 ring-inset transition-all hover:scale-105 active:scale-95 disabled:opacity-40 [&>svg]:size-[26px] [&>svg]:[stroke-width:2.75]",
+        "relative flex size-12 shrink-0 items-center justify-center rounded-full shadow-xl ring-1 ring-inset transition-all hover:scale-105 active:scale-95 disabled:opacity-40 [&>svg]:size-[22px] [&>svg]:[stroke-width:2.75]",
         recording
           ? "bg-live text-live-foreground shadow-live/40 ring-white/25"
           : primary
@@ -685,33 +677,31 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
   )
 }
 
-function ShareButton({ roomName, title }: { roomName: string; title?: string }) {
-  const [copied, setCopied] = useState(false)
-  const url = typeof window !== "undefined" ? `${window.location.origin}/live/${roomName}` : `/live/${roomName}`
-  async function share() {
-    try {
-      if (typeof navigator !== "undefined" && navigator.share) {
-        await navigator.share({ title: title || "Live on Frequency", text: "Join my live session on Frequency", url })
-        return
-      }
-      if (typeof navigator !== "undefined" && navigator.clipboard) {
-        await navigator.clipboard.writeText(url)
-        setCopied(true)
-        setTimeout(() => setCopied(false), 2000)
-      }
-    } catch {
-      // user dismissed the share sheet — ignore
-    }
+function ShareButton({ roomName, title, cover }: { roomName: string; title?: string; cover?: string | null }) {
+  // Uses the same kite/Send icon and ShareSheet flow as sharing a post.
+  const [open, setOpen] = useState(false)
+  const shareTarget: ShareTarget = {
+    type: "live",
+    key: roomName,
+    title: title || "Live on Frequency",
+    subtitle: "Join my live session on Frequency",
+    url: `/live/${roomName}`,
+    image: cover ?? null,
+    downloadUrl: null,
+    downloadKind: null,
   }
   return (
-    <button
-      onClick={share}
-      aria-label="Invite people / share room link"
-      title="Invite people"
-      className="flex size-14 shrink-0 items-center justify-center rounded-full bg-white/25 text-white shadow-xl ring-1 ring-inset ring-white/25 backdrop-blur-md transition-all hover:scale-105 hover:bg-white/35 active:scale-95 [&>svg]:size-[26px] [&>svg]:stroke-[2.75]"
-    >
-      {copied ? <Check /> : <UserPlus />}
-    </button>
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        aria-label="Share room"
+        title="Share room"
+        className="flex size-12 shrink-0 items-center justify-center rounded-full bg-white/25 text-white shadow-xl ring-1 ring-inset ring-white/25 backdrop-blur-md transition-all hover:scale-105 hover:bg-white/35 active:scale-95 [&>svg]:size-[22px] [&>svg]:stroke-[2.75]"
+      >
+        <Send />
+      </button>
+      <ShareSheet target={shareTarget} open={open} onClose={() => setOpen(false)} />
+    </>
   )
 }
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { Crown, Mic, MicOff, Phone, Plus, Signal, X } from "lucide-react"
+import { Check, Mic, MicOff, Phone, Plus, Signal, UserPlus, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getInitials } from "@/lib/identity"
 import type { ConnQuality, LiveParticipant } from "@/lib/use-live-audio"
@@ -13,6 +13,14 @@ export type StageHost = {
   name: string
   color: string
   image?: string | null
+}
+
+/** Follow affordance shown on the host tile (listener view only). */
+export type HostFollow = {
+  isFollowing: boolean
+  canFollow: boolean
+  pending?: boolean
+  onToggle: () => void
 }
 
 type StageSlot = {
@@ -80,6 +88,7 @@ export function LiveStage({
   canRequestCall = false,
   callPending = false,
   mutedIds = new Set<string>(),
+  hostFollow = null,
   onRequestCall,
   onRemoveGuest,
 }: {
@@ -92,6 +101,7 @@ export function LiveStage({
   canRequestCall?: boolean
   callPending?: boolean
   mutedIds?: Set<string>
+  hostFollow?: HostFollow | null
   onRequestCall?: () => void
   onRemoveGuest?: (identity: string) => void
 }) {
@@ -107,7 +117,7 @@ export function LiveStage({
 
   return (
     <div className="mx-auto grid w-full max-w-md grid-cols-4 gap-x-2 sm:gap-x-3">
-      {/* Host tile — first slot, audio-reactive, crowned. */}
+      {/* Host tile — first slot, audio-reactive. */}
       <StageTile
         slot={{
           identity: host.id,
@@ -120,6 +130,7 @@ export function LiveStage({
           quality: hostLive?.quality ?? hostQuality,
         }}
         role="Host"
+        hostFollow={hostFollow}
       />
 
       {guests.map((g) => (
@@ -156,10 +167,12 @@ function StageTile({
   slot,
   role,
   onRemove,
+  hostFollow = null,
 }: {
   slot: StageSlot
   role: "Host" | "Guest"
   onRemove?: () => void
+  hostFollow?: HostFollow | null
 }) {
   const isHost = role === "Host"
   return (
@@ -207,18 +220,27 @@ function StageTile({
           )}
         </span>
 
-        {/* Host crown badge */}
-        {isHost && (
-          <span
-            className="absolute -top-1.5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-0.5 rounded-full bg-primary px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-primary-foreground shadow"
-            aria-hidden="true"
-          >
-            <Crown className="size-2.5" /> Host
-          </span>
-        )}
-
         {/* Connection quality (top-left). */}
         <QualityBars quality={slot.quality} />
+
+        {/* Follow affordance on the host tile (listeners only). */}
+        {isHost && hostFollow && hostFollow.canFollow && (
+          <button
+            type="button"
+            onClick={hostFollow.onToggle}
+            disabled={hostFollow.pending}
+            aria-label={hostFollow.isFollowing ? `Following ${slot.name}` : `Follow ${slot.name}`}
+            aria-pressed={hostFollow.isFollowing}
+            className={cn(
+              "absolute -right-1 -top-1 z-30 flex size-5 items-center justify-center rounded-full border-2 border-zinc-950 shadow transition-transform hover:scale-110 active:scale-95 disabled:opacity-60",
+              hostFollow.isFollowing
+                ? "bg-call-accept text-call-accept-foreground"
+                : "bg-primary text-primary-foreground",
+            )}
+          >
+            {hostFollow.isFollowing ? <Check className="size-3" strokeWidth={3} /> : <UserPlus className="size-2.5" strokeWidth={3} />}
+          </button>
+        )}
 
         {/* Mic status pill (bottom-right). */}
         <span
@@ -236,27 +258,24 @@ function StageTile({
             type="button"
             onClick={onRemove}
             aria-label={`Remove ${slot.name} from stage`}
-            className="absolute -right-1 -top-1 z-20 flex size-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow transition-transform hover:scale-110"
+            className="absolute -left-1 -top-1 z-20 flex size-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow transition-transform hover:scale-110"
           >
             <X className="size-3" />
           </button>
         )}
       </div>
 
-      {/* The host's name is intentionally omitted (their crown + role badge
-          already identify them); guests keep their name for context. */}
-      {!isHost && (
-        <div className="flex max-w-full items-center gap-0.5">
-          <span className="max-w-[4.5rem] truncate text-center text-xs font-semibold text-white">
-            {slot.isLocal ? "You" : slot.name}
-          </span>
-          {slot.isSpeaking && <SpeakingEq />}
-        </div>
-      )}
+      {/* Name sits between the avatar and the role pill for both host & guests. */}
+      <div className="flex max-w-full items-center gap-0.5">
+        <span className="max-w-[4.5rem] truncate text-center text-xs font-semibold text-white">
+          {slot.isLocal && !isHost ? "You" : slot.name}
+        </span>
+        {slot.isSpeaking && <SpeakingEq />}
+      </div>
       <span
         className={cn(
-          "rounded-full px-1.5 text-[9px] font-bold uppercase tracking-wide",
-          isHost ? "bg-primary/20 text-primary" : "text-white/55",
+          "rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide",
+          isHost ? "bg-primary/20 text-primary" : "bg-white/15 text-white/70",
         )}
       >
         {role}
