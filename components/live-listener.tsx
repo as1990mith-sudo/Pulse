@@ -14,7 +14,6 @@ import {
   Play,
   Radio,
   Send,
-  Users,
   Volume2,
   VolumeX,
   X,
@@ -35,9 +34,10 @@ import {
 } from "@/app/actions/live"
 import { toggleFollow, getFollowingIds } from "@/app/actions/follow"
 import { useLiveAudio } from "@/lib/use-live-audio"
+import { useLivePresence } from "@/lib/use-live-presence"
 import { LiveBadge } from "@/components/live-badge"
 import { LiveStage, QualityIcon } from "@/components/live-stage"
-import { LiveAudience } from "@/components/live-audience"
+import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { ReactionLayer } from "@/components/live-reactions"
 import { getAvatarColor } from "@/lib/identity"
 import { cn } from "@/lib/utils"
@@ -113,7 +113,6 @@ export function LiveListener({
   const [muted, setMuted] = useState(false)
   // The audience/crowd view is hidden by default (frees space for the stage +
   // chat) and revealed by tapping the audience pill in the header.
-  const [showAudience, setShowAudience] = useState(false)
   const [joining, setJoining] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [ended, setEnded] = useState(false)
@@ -292,6 +291,12 @@ export function LiveListener({
   const onStage = 1 + speakers.filter((s) => s.identity !== stream.hostId).length
   const audience = Math.max(0, state.listeners - onStage)
 
+  // Presence-backed audience (real names + avatars), active once connected.
+  const { count: presenceCount, members: presenceMembers } = useLivePresence(
+    stream.roomName,
+    state.connected,
+  )
+
   const isOnStage = state.canPublish && state.connected
   const colorById: Record<string, string> = {}
   for (const s of speakers) colorById[s.identity] = getAvatarColor(s.identity)
@@ -363,20 +368,7 @@ export function LiveListener({
         </div>
 
         <div className="relative flex shrink-0 flex-col items-end gap-1">
-          <button
-            type="button"
-            onClick={() => setShowAudience((s) => !s)}
-            aria-label="See who's listening"
-            aria-pressed={showAudience}
-            className={cn(
-              "flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset transition-colors",
-              showAudience
-                ? "bg-primary/20 text-primary ring-primary/30"
-                : "bg-white/10 text-white/80 ring-white/10 hover:bg-white/20",
-            )}
-          >
-            <Users className="size-3" /> {audience.toLocaleString()}
-          </button>
+          <LiveAudienceSheet count={presenceCount || audience} members={presenceMembers} immersive />
           {state.connected && (
             <span className="font-mono text-[11px] tabular-nums text-white/50">{formatElapsed(elapsed)}</span>
           )}
@@ -446,8 +438,6 @@ export function LiveListener({
           </p>
         )}
 
-        {/* Audience section — revealed via the header pill (see who's listening). */}
-        {showAudience && <LiveAudience count={audience} glass className="relative" />}
       </div>
 
       {/* ─────────────────────────── Guest dock ──────��──────────────────── */}

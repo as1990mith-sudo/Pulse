@@ -46,6 +46,8 @@ import { CoverArt } from "@/components/cover-art"
 import { ShareSheet } from "@/components/share-sheet"
 import type { ShareTarget } from "@/lib/share-types"
 import { LiveStage, MAX_GUESTS, QualityIcon } from "@/components/live-stage"
+import { LiveAudienceSheet } from "@/components/live-audience-sheet"
+import { useLivePresence } from "@/lib/use-live-presence"
 import { LiveBadge } from "@/components/live-badge"
 import { ReactionLayer } from "@/components/live-reactions"
 import { BackExitMenu } from "@/components/live-back-menu"
@@ -188,6 +190,10 @@ export function StudioConsole({
   }, [live, musicActiveIndex, stopMusic])
 
   const viewers = Math.max(0, state.listeners - 1 - speakers.filter((s) => !s.isLocal).length)
+
+  // Presence-backed audience: gives us the actual listener names (not just a
+  // count) so the host can see exactly who is in the room.
+  const { count: audienceCount, members: audienceMembers } = useLivePresence(roomName, live)
 
   // Host polls the call state to surface pending guest requests.
   const { data: callState, mutate: refreshCalls } = useSWR(
@@ -458,14 +464,7 @@ export function StudioConsole({
               header). While offline: the Go live action. */}
           {live ? (
             <div className="relative flex shrink-0 flex-col items-end gap-1">
-              <button
-                type="button"
-                onClick={() => setPanel("people")}
-                aria-label="See listeners and manage the stage"
-                className="flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-xs font-medium text-white/80 ring-1 ring-inset ring-white/10 transition-colors hover:bg-white/20"
-              >
-                <Users className="size-3" /> {viewers.toLocaleString()}
-              </button>
+              <LiveAudienceSheet count={audienceCount} members={audienceMembers} immersive />
               <span className="font-mono text-[11px] tabular-nums text-white/50">{formatTime(elapsed)}</span>
             </div>
           ) : (

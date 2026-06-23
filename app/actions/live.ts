@@ -5,7 +5,7 @@ import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { liveStream, liveChatMessage, liveCallRequest, liveReaction } from "@/lib/db/schema"
+import { liveStream, liveChatMessage, liveCallRequest, liveReaction, livePresence } from "@/lib/db/schema"
 import { getHandle, getAvatarColor, getInitials } from "@/lib/identity"
 import { createAccessToken, isLiveKitConfigured, LIVEKIT_URL, setParticipantPublish } from "@/lib/livekit"
 import { notifyFollowers } from "@/app/actions/notifications"
@@ -67,6 +67,7 @@ export type LiveStreamView = {
   pinnedChatId?: number | null
   chatBgUrl?: string | null
   chatBgEffect?: ChatBgEffect
+  theme?: string
   startedAt: string
 }
 
@@ -208,7 +209,9 @@ export type LiveChatMessageView = {
   id: number
   userId: string
   userName: string
+  userImage: string | null
   isHost: boolean
+  kind: "message" | "system"
   body: string
 }
 
@@ -227,7 +230,9 @@ export async function sendLiveChat(input: { roomName: string; body: string }): P
     roomName: input.roomName,
     userId: user.id,
     userName: user.name,
+    userImage: user.image ?? null,
     isHost: stream?.hostId === user.id,
+    kind: "message",
     body,
   })
 }
@@ -249,9 +254,119 @@ export async function getLiveChat(input: { roomName: string; afterId?: number })
     id: r.id,
     userId: r.userId,
     userName: r.userName,
+    userImage: r.userImage ?? null,
     isHost: r.isHost,
+    kind: (r.kind as "message" | "system") ?? "message",
     body: r.body,
   }))
+}
+
+// --- Live presence (audience count + names, "entered the room" notices) -----
+
+export type LiveAudienceMember = {
+  userId: string
+  userName: string
+  userImage: string | null
+  isHost: boolean
+}
+
+// Presence rows older than this are treated as "left the room".
+const PRESENCE_STALE_MS = 30_000
+
+/**
+ * Heartbeat for anyone in a live room (host + listeners). Upserts the caller's
+ * presence row; the very first time a listener appears it also posts a
+ * "<name> entered the room" system message (nothing is posted when they leave).
+ * Returns the current fresh audience so the caller can render count + names.
+ */
+export async function heartbeatPresence(input: {
+  roomName: string
+}): Promise<{ count: number; members: LiveAudienceMember[] }> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  const u = session?.user
+  if (!u) return { count: 0, members: [] }
+
+  const [stream] = await db
+    .select({ hostId: liveStream.hostId })
+    .from(liveStream)
+    .where(eq(liveStream.roomName, input.roomName))
+  const isHost = stream?.hostId === u.id
+
+  // Has this user been (recently) present already? Decides whether to announce.
+  const [existing] = await db
+    .select({ id: livePresence.id, lastSeenAt: livePresence.lastSeenAt })
+    .from(livePresence)
+    .where(and(eq(livePresence.roomName, input.roomName), eq(livePresence.userId, u.id)))
+
+  const now = new Date()
+  const isNewArrival =
+    !existing || now.getTime() - new Date(existing.lastSeenAt).getTime() > PRESENCE_STALE_MS
+
+  if (existing) {
+    await db
+      .update(livePresence)
+      .set({ lastSeenAt: now, userName: u.name, userImage: u.image ?? null, isHost })
+      .where(eq(livePresence.id, existing.id))
+  } else {
+    await db.insert(livePresence).values({
+      roomName: input.roomName,
+      userId: u.id,
+      userName: u.name,
+      userImage: u.image ?? null,
+      isHost,
+    })
+  }
+
+  // Announce arrivals for listeners only (the host's presence isn't announced).
+  if (isNewArrival && !isHost) {
+    await db.insert(liveChatMessage).values({
+      roomName: input.roomName,
+      userId: u.id,
+      userName: u.name,
+      userImage: u.image ?? null,
+      isHost: false,
+      kind: "system",
+      body: `${u.name} entered the room`,
+    })
+  }
+
+  return getAudience({ roomName: input.roomName })
+}
+
+/** Current fresh audience for a room (everyone whose heartbeat is recent). */
+export async function getAudience(input: {
+  roomName: string
+}): Promise<{ count: number; members: LiveAudienceMember[] }> {
+  const rows = await db
+    .select()
+    .from(livePresence)
+    .where(
+      and(
+        eq(livePresence.roomName, input.roomName),
+        gt(livePresence.lastSeenAt, new Date(Date.now() - PRESENCE_STALE_MS)),
+      ),
+    )
+    .orderBy(desc(livePresence.isHost), asc(livePresence.createdAt))
+
+  const members: LiveAudienceMember[] = rows.map((r) => ({
+    userId: r.userId,
+    userName: r.userName,
+    userImage: r.userImage ?? null,
+    isHost: r.isHost,
+  }))
+  // Audience count excludes the host (it's the listener count).
+  const count = members.filter((m) => !m.isHost).length
+  return { count, members }
+}
+
+/** Removes the caller's presence row when they intentionally leave a room. */
+export async function leavePresence(input: { roomName: string }): Promise<void> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  const u = session?.user
+  if (!u) return
+  await db
+    .delete(livePresence)
+    .where(and(eq(livePresence.roomName, input.roomName), eq(livePresence.userId, u.id)))
 }
 
 // --- Reactions & virtual gifts ---------------------------------------------
@@ -340,6 +455,7 @@ export async function getMyActiveStream(): Promise<LiveStreamView | null> {
     pinnedChatId: r.pinnedChatId ?? null,
     chatBgUrl: r.chatBgUrl,
     chatBgEffect: (r.chatBgEffect as ChatBgEffect) ?? "none",
+    theme: r.theme ?? "default",
     startedAt: r.startedAt.toISOString(),
   }
 }
@@ -366,6 +482,7 @@ export async function getLiveStream(roomName: string): Promise<LiveStreamView | 
     pinnedChatId: r.pinnedChatId ?? null,
     chatBgUrl: r.chatBgUrl,
     chatBgEffect: (r.chatBgEffect as ChatBgEffect) ?? "none",
+    theme: r.theme ?? "default",
     startedAt: r.startedAt.toISOString(),
   }
 }

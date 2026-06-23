@@ -5,7 +5,7 @@ import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { searchUsers, type ProfileSummary } from "@/lib/profile"
+import { getProfile, searchUsers, type Profile, type ProfileSummary } from "@/lib/profile"
 import { getHandle } from "@/lib/identity"
 import {
   announcement,
@@ -31,6 +31,14 @@ import {
 /** Server action: search users by name for the header search box. */
 export async function searchUsersAction(query: string): Promise<ProfileSummary[]> {
   return searchUsers(query)
+}
+
+/**
+ * Server action: load a compact public profile for the hover/tap preview
+ * popover (live chat, etc.). Returns null if the user no longer exists.
+ */
+export async function getProfilePreview(userId: string): Promise<Profile | null> {
+  return getProfile(userId)
 }
 
 /**
