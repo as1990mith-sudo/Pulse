@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Check, Clock, ImageIcon, Loader2, MoonStar, Plus, Search, Users } from "lucide-react"
+import { Check, Clock, Compass, ImageIcon, Loader2, MoonStar, Plus, PlusCircle, Search, Users } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -74,16 +74,23 @@ export function ChatroomBrowser({ rooms }: { rooms: ChatroomSummary[] }) {
     <Tabs defaultValue="my-rooms" className="space-y-6">
       <CommunityHelpEntry />
       <DreamInterpretationEntry />
-      <TabsList className="grid h-12 w-full grid-cols-3 rounded-full p-1">
-        <TabsTrigger value="my-rooms" className="rounded-full text-[15px] font-medium">
-          My rooms
-        </TabsTrigger>
-        <TabsTrigger value="discover" className="rounded-full text-[15px] font-medium">
-          Discover
-        </TabsTrigger>
-        <TabsTrigger value="create" className="rounded-full text-[15px] font-medium">
-          Create
-        </TabsTrigger>
+      {/* Immersive, full-bleed segmented control: large tactile tiles with an
+          icon + label per tab and a bold primary-tinted active state. */}
+      <TabsList className="-mx-4 grid h-auto w-[calc(100%+2rem)] grid-cols-3 gap-2 rounded-none border-y border-border/60 bg-gradient-to-b from-secondary/30 to-transparent p-3 sm:-mx-6 sm:w-[calc(100%+3rem)] sm:px-6">
+        {[
+          { value: "my-rooms", label: "My rooms", icon: Users },
+          { value: "discover", label: "Discover", icon: Compass },
+          { value: "create", label: "Create", icon: PlusCircle },
+        ].map(({ value, label, icon: Icon }) => (
+          <TabsTrigger
+            key={value}
+            value={value}
+            className="group flex h-auto flex-col items-center gap-2 rounded-2xl border border-transparent bg-transparent px-2 py-3.5 text-[13px] font-semibold text-muted-foreground transition-all hover:bg-secondary/40 hover:text-foreground data-[state=active]:border-primary/40 data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm sm:text-sm"
+          >
+            <Icon className="size-5 transition-transform duration-200 group-data-[state=active]:scale-110" />
+            {label}
+          </TabsTrigger>
+        ))}
       </TabsList>
 
       <TabsContent value="my-rooms">
