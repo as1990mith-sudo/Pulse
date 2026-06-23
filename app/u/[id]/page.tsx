@@ -45,7 +45,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
           aria-hidden
         />
 
-        <div className="relative mx-auto flex w-full max-w-md flex-col items-center px-4 pb-8 pt-10 text-center sm:px-6">
+        <div className="relative mx-auto flex w-full max-w-md flex-col items-center px-4 pb-8 pt-4 text-center sm:px-6">
           {/* Ringed avatar, centered. */}
           <div className="rounded-full bg-background p-1.5 shadow-xl ring-1 ring-border/50">
             <ProfileAvatar
