@@ -555,11 +555,12 @@ export function StudioConsole({
           </div>
         )}
 
-        {/* Speaker stage — unified 4-col × 2-row grid (host first, then guests) */}
-        <div className="relative shrink-0 border-b border-white/[0.07] px-4 py-3 sm:px-6">
-          <div className="mb-1.5 flex items-center justify-between">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-white/70">On stage</h2>
-            <div className="flex items-center gap-1.5">
+        {/* Speaker stage — unified 4-col grid (host first, then guests) */}
+        <div className="relative shrink-0 border-b border-white/[0.07] px-4 py-2.5 sm:px-6">
+          {/* Status row only appears when there's something to flag, so an idle
+              room gives all its vertical space to the call-in slots & chat. */}
+          {(locked || pending.length > 0) && (
+            <div className="mb-1.5 flex items-center justify-end gap-1.5">
               {locked && (
                 <span className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-white/60">
                   <Lock className="size-3" /> Locked
@@ -571,7 +572,7 @@ export function StudioConsole({
                 </span>
               )}
             </div>
-          </div>
+          )}
           <LiveStage
             host={{ id: currentUser.id, name: currentUser.name, color: currentUser.color, image: currentUser.image }}
             speakers={speakers}
