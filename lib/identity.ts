@@ -29,3 +29,21 @@ export function getAvatarColor(seed: string): string {
   }
   return avatarColors[hash % avatarColors.length]
 }
+
+// The raw color tokens behind each avatar color, plus a complementary hue, so a
+// profile banner can render a two-tone gradient that matches the user's avatar.
+const avatarGradientTokens: { from: string; to: string }[] = [
+  { from: "--primary", to: "--chart-2" },
+  { from: "--chart-2", to: "--chart-3" },
+  { from: "--chart-3", to: "--chart-4" },
+  { from: "--chart-4", to: "--primary" },
+]
+
+/** Returns the gradient color tokens for a user's profile banner, derived from their id. */
+export function getAvatarGradient(seed: string): { from: string; to: string } {
+  let hash = 0
+  for (let i = 0; i < seed.length; i++) {
+    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0
+  }
+  return avatarGradientTokens[hash % avatarGradientTokens.length]
+}
