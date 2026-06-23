@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import {
-  Check,
   CheckCircle2,
   Loader2,
   Lock,
@@ -12,24 +11,24 @@ import {
   Mic,
   MicOff,
   Music,
+  Palette,
   Pause,
   Phone,
   PhoneOff,
   Play,
   Radio,
-  Share2,
+  Send,
   SkipBack,
   SkipForward,
   Trash2,
   Upload,
-  UserPlus,
   Users,
   Volume2,
   VolumeX,
   X,
 } from "lucide-react"
 import type { CurrentUser } from "@/lib/session"
-import { publishShow } from "@/app/actions/shows"
+import { publishShow, updateEpisode } from "@/app/actions/shows"
 import {
   startBroadcast,
   endBroadcast,
@@ -38,13 +37,20 @@ import {
   getCallState,
   respondToCallRequest,
   removeFromStage,
+  setLiveTheme,
   type CallRequestView,
   type LiveStreamView,
 } from "@/app/actions/live"
 import { useLiveAudio } from "@/lib/use-live-audio"
 import { uploadMedia } from "@/lib/upload-media"
 import { LiveChat } from "@/components/live-chat"
+import { CoverArt } from "@/components/cover-art"
+import { ShareSheet } from "@/components/share-sheet"
+import type { ShareTarget } from "@/lib/share-types"
 import { LiveStage, MAX_GUESTS, QualityIcon } from "@/components/live-stage"
+import { LiveAudienceSheet } from "@/components/live-audience-sheet"
+import { useLivePresence } from "@/lib/use-live-presence"
+import { LIVE_THEMES, liveThemeStyle } from "@/lib/live-themes"
 import { LiveBadge } from "@/components/live-badge"
 import { ReactionLayer } from "@/components/live-reactions"
 import { BackExitMenu } from "@/components/live-back-menu"
@@ -126,7 +132,9 @@ export function StudioConsole({
   // mid-session so it can still be published when they go off air.
   const recordedBlobRef = useRef<Blob | null>(null)
   // Which slide-up panel is open. Only one at a time keeps the studio compact.
-  const [panel, setPanel] = useState<null | "music" | "people">(null)
+  const [panel, setPanel] = useState<null | "music" | "people" | "theme">(null)
+  // Immersive studio theme (persisted server-side, applied live to listeners).
+  const [theme, setTheme] = useState(resumeStream?.theme ?? "default")
 
   // ── Background-music playlist (lifted here so it survives closing the music
   // panel and minimising the whole console — the audio engine itself lives in
@@ -168,6 +176,13 @@ export function StudioConsole({
     setMusicVolume(value)
   }
 
+  // Apply a studio theme: update locally at once (snappy), then persist so the
+  // change propagates to every listener via their call-state poll.
+  function changeTheme(id: string) {
+    setTheme(id)
+    if (roomName) void setLiveTheme({ roomName, theme: id }).catch(() => {})
+  }
+
   function removeMusicTrack(index: number) {
     setMusicTracks((arr) => arr.filter((_, i) => i !== index))
     setMusicActiveIndex((cur) => {
@@ -187,6 +202,10 @@ export function StudioConsole({
   }, [live, musicActiveIndex, stopMusic])
 
   const viewers = Math.max(0, state.listeners - 1 - speakers.filter((s) => !s.isLocal).length)
+
+  // Presence-backed audience: gives us the actual listener names (not just a
+  // count) so the host can see exactly who is in the room.
+  const { count: audienceCount, members: audienceMembers } = useLivePresence(roomName, live)
 
   // Host polls the call state to surface pending guest requests.
   const { data: callState, mutate: refreshCalls } = useSWR(
@@ -365,14 +384,17 @@ export function StudioConsole({
   }
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-zinc-950 text-white">
+    <div
+      className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-zinc-950 text-white transition-[background] duration-700"
+      style={{ ...liveThemeStyle(theme), ["--call-accept" as string]: "var(--live-accent)" }}
+    >
       {/* Deep vertical wash gives the immersive, full-bleed canvas its depth. */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "linear-gradient(180deg, color-mix(in oklch, var(--primary) 14%, #09090b) 0%, #09090b 42%, #050506 100%)",
+            "linear-gradient(180deg, color-mix(in oklch, var(--primary) 16%, transparent) 0%, transparent 46%)",
         }}
       />
       {/* Drifting aurora backdrop — the same immersive skin as the listener view. */}
@@ -381,7 +403,7 @@ export function StudioConsole({
         className="stage-aurora pointer-events-none absolute inset-0 opacity-80"
         style={{
           background:
-            "radial-gradient(75% 55% at 18% -5%, color-mix(in oklch, var(--primary) 55%, transparent), transparent 60%), radial-gradient(65% 50% at 95% 18%, color-mix(in oklch, var(--call-accept) 32%, transparent), transparent 55%), radial-gradient(90% 60% at 50% 108%, color-mix(in oklch, var(--primary) 30%, transparent), transparent 62%)",
+            "radial-gradient(75% 55% at 18% -5%, color-mix(in oklch, var(--primary) 55%, transparent), transparent 60%), radial-gradient(65% 50% at 95% 18%, color-mix(in oklch, var(--live-accent) 32%, transparent), transparent 55%), radial-gradient(90% 60% at 50% 108%, color-mix(in oklch, var(--primary) 30%, transparent), transparent 62%)",
         }}
       />
       {cover && (
@@ -406,17 +428,8 @@ export function StudioConsole({
             onExit={live ? toggleLive : (onExit ?? (() => {}))}
             onMinimize={onMinimize ?? (() => {})}
           />
-          {/* Compact cover thumbnail — same footprint as the listener header. */}
-          <span className="relative size-12 shrink-0 overflow-hidden rounded-xl bg-white/10 shadow-xl ring-2 ring-white/30">
-            {cover ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={cover || "/placeholder.svg"} alt="Session cover art" className="size-full object-cover" />
-            ) : (
-              <span className="flex size-full items-center justify-center text-white/80">
-                <Radio className="size-5" strokeWidth={2.75} />
-              </span>
-            )}
-          </span>
+          {/* Compact round cover thumbnail — same footprint as the listener header. */}
+          <CoverArt src={cover ?? null} alt={`${title || "Session"} cover art`} />
 
           <div className="relative min-w-0 flex-1">
             <div className="flex items-center gap-2">
@@ -466,14 +479,7 @@ export function StudioConsole({
               header). While offline: the Go live action. */}
           {live ? (
             <div className="relative flex shrink-0 flex-col items-end gap-1">
-              <button
-                type="button"
-                onClick={() => setPanel("people")}
-                aria-label="See listeners and manage the stage"
-                className="flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-xs font-medium text-white/80 ring-1 ring-inset ring-white/10 transition-colors hover:bg-white/20"
-              >
-                <Users className="size-3" /> {viewers.toLocaleString()}
-              </button>
+              <LiveAudienceSheet count={audienceCount} members={audienceMembers} immersive />
               <span className="font-mono text-[11px] tabular-nums text-white/50">{formatTime(elapsed)}</span>
             </div>
           ) : (
@@ -508,8 +514,8 @@ export function StudioConsole({
         )}
 
         {/* Speaker stage — unified 4-col × 2-row grid (host first, then guests) */}
-        <div className="relative shrink-0 border-b border-white/[0.07] px-4 py-4 sm:px-6">
-          <div className="mb-2 flex items-center justify-between">
+        <div className="relative shrink-0 border-b border-white/[0.07] px-4 py-3 sm:px-6">
+          <div className="mb-1.5 flex items-center justify-between">
             <h2 className="text-xs font-bold uppercase tracking-wider text-white/70">On stage</h2>
             <div className="flex items-center gap-1.5">
               {locked && (
@@ -536,7 +542,7 @@ export function StudioConsole({
         </div>
 
         {/* Host control dock ��� compact essentials, sits right under the stage row */}
-        <div className="shrink-0 border-b border-white/[0.07] px-4 py-4 sm:px-6">
+        <div className="shrink-0 border-b border-white/[0.07] px-4 py-2.5 sm:px-6">
           <div className="flex items-center justify-center gap-3 sm:gap-4">
             <DockButton
               icon={micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
@@ -560,7 +566,14 @@ export function StudioConsole({
               disabled={!live}
               onClick={() => setPanel((p) => (p === "people" ? null : "people"))}
             />
-            {live && roomName && <ShareButton roomName={roomName} title={title} />}
+            <DockButton
+              icon={<Palette className="size-5" />}
+              label="Studio theme"
+              active={panel === "theme"}
+              disabled={!live}
+              onClick={() => setPanel((p) => (p === "theme" ? null : "theme"))}
+            />
+            {live && roomName && <ShareButton roomName={roomName} title={title} cover={cover} />}
           </div>
         </div>
 
@@ -592,6 +605,9 @@ export function StudioConsole({
           onRemove={dropGuest}
           onClose={() => setPanel(null)}
         />
+      )}
+      {panel === "theme" && (
+        <ThemePanel current={theme} onSelect={changeTheme} onClose={() => setPanel(null)} />
       )}
       {panel === "music" && (
         <MusicPanel
@@ -647,7 +663,7 @@ function DockButton({
       aria-pressed={active}
       title={label}
       className={cn(
-        "relative flex size-14 shrink-0 items-center justify-center rounded-full shadow-xl ring-1 ring-inset transition-all hover:scale-105 active:scale-95 disabled:opacity-40 [&>svg]:size-[26px] [&>svg]:[stroke-width:2.75]",
+        "relative flex size-12 shrink-0 items-center justify-center rounded-full shadow-xl ring-1 ring-inset transition-all hover:scale-105 active:scale-95 disabled:opacity-40 [&>svg]:size-[22px] [&>svg]:[stroke-width:2.75]",
         recording
           ? "bg-live text-live-foreground shadow-live/40 ring-white/25"
           : primary
@@ -685,37 +701,89 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
   )
 }
 
-function ShareButton({ roomName, title }: { roomName: string; title?: string }) {
-  const [copied, setCopied] = useState(false)
-  const url = typeof window !== "undefined" ? `${window.location.origin}/live/${roomName}` : `/live/${roomName}`
-  async function share() {
-    try {
-      if (typeof navigator !== "undefined" && navigator.share) {
-        await navigator.share({ title: title || "Live on Frequency", text: "Join my live session on Frequency", url })
-        return
-      }
-      if (typeof navigator !== "undefined" && navigator.clipboard) {
-        await navigator.clipboard.writeText(url)
-        setCopied(true)
-        setTimeout(() => setCopied(false), 2000)
-      }
-    } catch {
-      // user dismissed the share sheet — ignore
-    }
+function ShareButton({ roomName, title, cover }: { roomName: string; title?: string; cover?: string | null }) {
+  // Uses the same kite/Send icon and ShareSheet flow as sharing a post.
+  const [open, setOpen] = useState(false)
+  const shareTarget: ShareTarget = {
+    type: "live",
+    key: roomName,
+    title: title || "Live on Frequency",
+    subtitle: "Join my live session on Frequency",
+    url: `/live/${roomName}`,
+    image: cover ?? null,
+    downloadUrl: null,
+    downloadKind: null,
   }
   return (
-    <button
-      onClick={share}
-      aria-label="Invite people / share room link"
-      title="Invite people"
-      className="flex size-14 shrink-0 items-center justify-center rounded-full bg-white/25 text-white shadow-xl ring-1 ring-inset ring-white/25 backdrop-blur-md transition-all hover:scale-105 hover:bg-white/35 active:scale-95 [&>svg]:size-[26px] [&>svg]:stroke-[2.75]"
-    >
-      {copied ? <Check /> : <UserPlus />}
-    </button>
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        aria-label="Share room"
+        title="Share room"
+        className="flex size-12 shrink-0 items-center justify-center rounded-full bg-white/25 text-white shadow-xl ring-1 ring-inset ring-white/25 backdrop-blur-md transition-all hover:scale-105 hover:bg-white/35 active:scale-95 [&>svg]:size-[22px] [&>svg]:stroke-[2.75]"
+      >
+        <Send />
+      </button>
+      <ShareSheet target={shareTarget} open={open} onClose={() => setOpen(false)} />
+    </>
   )
 }
 
-
+/** Theme panel: a gallery of immersive studio themes applied live to everyone. */
+function ThemePanel({
+  current,
+  onSelect,
+  onClose,
+}: {
+  current: string
+  onSelect: (id: string) => void
+  onClose: () => void
+}) {
+  return (
+    <Sheet title="Studio theme" onClose={onClose}>
+      <p className="mb-3 text-sm text-muted-foreground">
+        Set the mood of your room. Themes apply instantly to you and everyone listening.
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        {LIVE_THEMES.map((t) => {
+          const active = t.id === current
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => onSelect(t.id)}
+              aria-pressed={active}
+              className={cn(
+                "group relative overflow-hidden rounded-2xl p-3 text-left ring-1 ring-inset transition-all",
+                active ? "ring-2 ring-primary" : "ring-border hover:ring-foreground/30",
+              )}
+              style={liveThemeStyle(t.id)}
+            >
+              {/* Preview swatch using the theme's own background + accent. */}
+              <div className="mb-8 flex items-center gap-1.5">
+                <span
+                  className="size-6 rounded-full ring-1 ring-white/20"
+                  style={{ background: t.primary }}
+                />
+                <span
+                  className="size-6 rounded-full ring-1 ring-white/20"
+                  style={{ background: t.accent }}
+                />
+                {active && (
+                  <span className="ml-auto flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                    <CheckCircle2 className="size-4" />
+                  </span>
+                )}
+              </div>
+              <p className="text-sm font-semibold text-white drop-shadow">{t.name}</p>
+              <p className="mt-0.5 text-[11px] leading-snug text-white/70 drop-shadow">{t.description}</p>
+            </button>
+          )
+        })}
+      </div>
+    </Sheet>
+  )
+}
 
 /** People panel: pending call-in requests, current guests, listener invites. */
 function PeoplePanel({
@@ -1080,21 +1148,31 @@ function EqBars() {
   )
 }
 
-/** Full-screen overlay to publish the recorded session after going off air. */
+/**
+ * Post-session overlay. Sessions AUTO-PUBLISH to the host's catalogue the moment
+ * they go off air: on mount we upload any captured audio and create the episode
+ * with its live title. The host can then optionally refine the title,
+ * description, and cover (saved back to the same episode) or just close.
+ */
 function PublishOverlay({ session, onClose }: { session: { title: string; duration: string; audioBlob: Blob | null }; onClose: () => void }) {
   const router = useRouter()
-  const [isPending, startTransition] = useTransition()
+  const [isSaving, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
-  const [published, setPublished] = useState(false)
+  // Publishing lifecycle: "publishing" → "published" (or "failed").
+  const [phase, setPhase] = useState<"publishing" | "published" | "failed">("publishing")
+  const [slug, setSlug] = useState<string | null>(null)
+  const [savedNote, setSavedNote] = useState(false)
 
   const [title, setTitle] = useState(session.title)
   const [description, setDescription] = useState("")
   const [cover, setCover] = useState<string | null>(null)
 
-  function submit(e: React.FormEvent) {
-    e.preventDefault()
-    setError(null)
-    startTransition(async () => {
+  // Auto-publish exactly once when the overlay mounts.
+  const startedRef = useRef(false)
+  useEffect(() => {
+    if (startedRef.current) return
+    startedRef.current = true
+    ;(async () => {
       let audioUrl: string | null = null
       if (session.audioBlob) {
         try {
@@ -1106,9 +1184,37 @@ function PublishOverlay({ session, onClose }: { session: { title: string; durati
           // publish without audio rather than failing
         }
       }
-      const res = await publishShow({ title, tagline: "", category: "", duration: session.duration, description, cover, audioUrl })
+      const res = await publishShow({
+        title: session.title,
+        tagline: "",
+        category: "",
+        duration: session.duration,
+        description: "",
+        cover: null,
+        audioUrl,
+      })
       if (res.ok) {
-        setPublished(true)
+        setSlug(res.slug)
+        setPhase("published")
+        router.refresh()
+      } else {
+        setError(res.error)
+        setPhase("failed")
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Persist optional refinements back onto the auto-published episode.
+  function saveDetails(e: React.FormEvent) {
+    e.preventDefault()
+    if (!slug) return
+    setError(null)
+    setSavedNote(false)
+    startTransition(async () => {
+      const res = await updateEpisode({ slug, title, description, cover })
+      if (res.ok) {
+        setSavedNote(true)
         router.refresh()
       } else {
         setError(res.error)
@@ -1117,33 +1223,44 @@ function PublishOverlay({ session, onClose }: { session: { title: string; durati
   }
 
   return (
-    <Sheet title={published ? "Published" : "Publish this session"} onClose={onClose}>
-      {published ? (
+    <Sheet
+      title={phase === "publishing" ? "Publishing…" : phase === "failed" ? "Couldn't publish" : "Published to your catalogue"}
+      onClose={onClose}
+    >
+      {phase === "publishing" ? (
+        <div className="space-y-3 py-8 text-center">
+          <Loader2 className="mx-auto size-8 animate-spin text-primary" />
+          <p className="font-semibold">Adding this session to your catalogue…</p>
+          <p className="text-sm text-muted-foreground">
+            {session.audioBlob ? "Uploading audio for on-demand playback." : "Saving your show page."}
+          </p>
+        </div>
+      ) : phase === "failed" ? (
         <div className="space-y-3 py-4 text-center">
-          <CheckCircle2 className="mx-auto size-8 text-primary" />
-          <p className="font-semibold">Session published to your catalogue</p>
-          <p className="text-sm text-muted-foreground">Anyone visiting your profile can listen now.</p>
+          <p className="font-semibold">We couldn&apos;t publish this session.</p>
+          {error && <p className="text-sm text-destructive">{error}</p>}
           <Button variant="secondary" onClick={onClose}>
-            Done
+            Close
           </Button>
         </div>
       ) : (
-        <form onSubmit={submit} className="space-y-3">
-          <p className="text-xs text-muted-foreground">
-            Recorded {session.duration}.{" "}
-            {session.audioBlob ? "Audio attached for on-demand playback." : "No audio captured — publishes as a show page."}
-          </p>
+        <form onSubmit={saveDetails} className="space-y-3">
+          <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-3 py-2 text-sm text-primary">
+            <CheckCircle2 className="size-4 shrink-0" />
+            <span>Live on your profile. Recorded {session.duration}. Add details below (optional).</span>
+          </div>
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Episode title" aria-label="Episode title" />
           <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What was this session about?" className="min-h-20" aria-label="Description" />
           <CoverUpload value={cover} onChange={setCover} label="Cover art" />
           {error && <p className="text-sm text-destructive">{error}</p>}
+          {savedNote && <p className="text-sm text-primary">Details saved.</p>}
           <div className="flex items-center gap-2">
-            <Button type="submit" disabled={isPending} className="gap-2">
-              {isPending ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-              Publish
+            <Button type="submit" disabled={isSaving} className="gap-2">
+              {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+              Save details
             </Button>
             <Button type="button" variant="ghost" onClick={onClose}>
-              Not now
+              Done
             </Button>
           </div>
         </form>

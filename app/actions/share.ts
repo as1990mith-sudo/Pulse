@@ -169,6 +169,39 @@ export async function shareToUsers(input: { recipientIds: string[]; target: Shar
   return { sent: recipients.length }
 }
 
+export type SavedItemView = {
+  id: number
+  type: string
+  key: string
+  title: string | null
+  subtitle: string | null
+  url: string
+  image: string | null
+}
+
+/**
+ * Returns the current user's saved items (bookmarks), newest first. Powers the
+ * private "Saved" tab on the user's own profile. Signed-out users get [].
+ */
+export async function getSavedItems(): Promise<SavedItemView[]> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) return []
+  const rows = await db
+    .select()
+    .from(savedItem)
+    .where(eq(savedItem.userId, session.user.id))
+    .orderBy(desc(savedItem.createdAt))
+  return rows.map((r) => ({
+    id: r.id,
+    type: r.itemType,
+    key: r.itemKey,
+    title: r.title,
+    subtitle: r.subtitle,
+    url: r.url,
+    image: r.image,
+  }))
+}
+
 /** Returns whether the current user has saved the given item. */
 export async function isItemSaved(itemType: string, itemKey: string): Promise<boolean> {
   const session = await auth.api.getSession({ headers: await headers() })

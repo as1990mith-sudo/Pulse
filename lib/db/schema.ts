@@ -72,6 +72,16 @@ export const feedPost = pgTable("feed_post", {
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
+// Reposts: one row per (user, post) the user has reposted. Drives the profile
+// "Reposts" tab and keeps feed_post.reposts (a denormalized counter) in sync.
+// Unique index on (userId, postId) enforced in the DB.
+export const repost = pgTable("repost", {
+  id: serial("id").primaryKey(),
+  userId: text("userId").notNull(),
+  postId: integer("postId").notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
 // Follower / following relationships. followerId follows followingId.
 export const follow = pgTable("follow", {
   id: serial("id").primaryKey(),
@@ -304,6 +314,9 @@ export const liveStream = pgTable("live_stream", {
   pinnedChatId: integer("pinnedChatId"), // a host-pinned chat message id
   chatBgUrl: text("chatBgUrl"), // host-uploaded chat background image
   chatBgEffect: text("chatBgEffect").notNull().default("none"), // "none" | "blur" | "dim"
+  // Host-chosen immersive studio theme (id from lib/live-themes). Applied live
+  // to both the host console and every listener's room.
+  theme: text("theme").notNull().default("default"),
   startedAt: timestamp("startedAt").notNull().defaultNow(),
   // Host heartbeat. While live, the host pings this every ~20s. A stream whose
   // lastSeenAt has gone stale is treated as ended and auto-cleaned, so an
@@ -333,8 +346,28 @@ export const liveChatMessage = pgTable("live_chat_message", {
   roomName: text("roomName").notNull(),
   userId: text("userId").notNull(),
   userName: text("userName").notNull(),
+  // Author's avatar URL so the chat shows real profile pictures, not initials.
+  userImage: text("userImage"),
   isHost: boolean("isHost").notNull().default(false),
+  // "message" = a real chat line; "system" = a room event such as
+  // "<name> entered the room" (rendered as a centered notice, no bubble).
+  kind: text("kind").notNull().default("message"),
   body: text("body").notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// Tracks who is currently present in a live room. Every participant (host +
+// listeners) upserts their row via a heartbeat every few seconds; rows whose
+// lastSeenAt has gone stale are treated as "left". Drives the live audience
+// count + names list, and the first insert posts an "entered the room" notice.
+export const livePresence = pgTable("live_presence", {
+  id: serial("id").primaryKey(),
+  roomName: text("roomName").notNull(),
+  userId: text("userId").notNull(),
+  userName: text("userName").notNull(),
+  userImage: text("userImage"),
+  isHost: boolean("isHost").notNull().default(false),
+  lastSeenAt: timestamp("lastSeenAt").notNull().defaultNow(),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 

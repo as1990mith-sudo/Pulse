@@ -1,13 +1,40 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import useSWR from "swr"
-import { BookOpen, ChevronDown, ChevronLeft, ChevronRight, Highlighter, Languages, Loader2, X } from "lucide-react"
+import {
+  BookOpen,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  Highlighter,
+  Languages,
+  Loader2,
+  Share2,
+  X,
+} from "lucide-react"
 import { BIBLE_BOOKS, getBook } from "@/lib/bible-books"
 import { InterlinearPane } from "@/components/interlinear-pane"
+import { getApiPassage, type ApiTranslation } from "@/app/actions/bible"
 import { cn } from "@/lib/utils"
 
-type ReadMode = "kjv" | "interlinear"
+// Reading translations share one verse-rendering pane; "interlinear" (Strong's)
+// is a separate study view.
+type ReadMode = "kjv" | "nlt" | "msg" | "interlinear"
+
+const TRANSLATION_LABEL: Record<"kjv" | "nlt" | "msg", string> = {
+  kjv: "King James Version",
+  nlt: "New Living Translation",
+  msg: "The Message",
+}
+const TRANSLATION_SHORT: Record<"kjv" | "nlt" | "msg", string> = {
+  kjv: "KJV",
+  nlt: "NLT",
+  msg: "MSG",
+}
 
 type Verse = { verse: number; text: string }
 type BookData = { book: string; chapters: Record<string, Verse[]> }
@@ -68,9 +95,41 @@ export function BibleReader() {
     { revalidateOnFocus: false, revalidateIfStale: false },
   )
 
+  // Copyrighted translations (NLT/MSG) are fetched live from the licensed
+  // provider via a server action — never bundled. SWR caches per chapter.
+  const isApiMode = mode === "nlt" || mode === "msg"
+  const {
+    data: apiData,
+    error: apiError,
+    isLoading: apiLoading,
+  } = useSWR(
+    isApiMode && bookIndex >= 0 ? ["api-passage", mode, bookIndex, chapter] : null,
+    async ([, translation, bIndex, ch]) => {
+      const result = await getApiPassage({
+        translation: translation as ApiTranslation,
+        bookIndex: bIndex as number,
+        chapter: ch as number,
+      })
+      if (!result.ok) {
+        const err = new Error(result.message) as Error & { reason?: string }
+        err.reason = result.reason
+        throw err
+      }
+      return result.verses
+    },
+    { revalidateOnFocus: false, revalidateIfStale: false, shouldRetryOnError: false },
+  )
+
   const isNewTestament = current?.testament === "new"
 
-  const verses = data?.chapters[String(chapter)] ?? []
+  // Unified verse list + loading/error for whichever reading translation is on.
+  const verses: Verse[] = isApiMode ? apiData ?? [] : data?.chapters[String(chapter)] ?? []
+  const readingLoading = isApiMode ? apiLoading : isLoading
+  const readingError = isApiMode ? apiError : error
+  const translationKey = (mode === "interlinear" ? "kjv" : mode) as "kjv" | "nlt" | "msg"
+
+  // Verse tapped for the Copy / Share / Highlight action sheet.
+  const [selectedVerse, setSelectedVerse] = useState<number | null>(null)
 
   function scrollTop() {
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" })
@@ -107,6 +166,24 @@ export function BibleReader() {
     })
   }
 
+  // Direct highlight setter used by the per-verse action sheet (null clears it).
+  function setVerseHighlight(verse: number, key: HighlightKey | null) {
+    const id = `${bookIndex}:${chapter}:${verse}`
+    setHighlights((prev) => {
+      const next = { ...prev }
+      if (key === null) delete next[id]
+      else next[id] = key
+      return next
+    })
+  }
+
+  // Tapping a verse highlights it when a colour is armed, otherwise opens the
+  // Copy / Share / Highlight action sheet.
+  function onVerseTap(verse: number) {
+    if (activeColor) toggleHighlight(verse)
+    else setSelectedVerse(verse)
+  }
+
   const isFirst = bookIndex === 0 && chapter === 1
   const isLast = bookIndex === BIBLE_BOOKS.length - 1 && current ? chapter >= current.chapters : false
 
@@ -117,34 +194,33 @@ export function BibleReader() {
         <div
           role="tablist"
           aria-label="Reading mode"
-          className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-secondary/40 p-1"
+          className="inline-flex flex-wrap items-center justify-center gap-1 rounded-full border border-border/60 bg-secondary/40 p-1"
         >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "kjv"}
-            onClick={() => setMode("kjv")}
-            className={cn(
-              "flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200",
-              mode === "kjv" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <BookOpen className="size-4" /> King James
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "interlinear"}
-            onClick={() => setMode("interlinear")}
-            className={cn(
-              "flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200",
-              mode === "interlinear"
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <Languages className="size-4" /> Strong&apos;s
-          </button>
+          {([
+            { key: "kjv", label: "King James", icon: <BookOpen className="size-4" /> },
+            { key: "nlt", label: "NLT", icon: <BookOpen className="size-4" /> },
+            { key: "msg", label: "Message", icon: <BookOpen className="size-4" /> },
+            { key: "interlinear", label: "Strong's", icon: <Languages className="size-4" /> },
+          ] as const).map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={mode === t.key}
+              onClick={() => {
+                setMode(t.key)
+                setSelectedVerse(null)
+              }}
+              className={cn(
+                "flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-all duration-200 sm:px-4",
+                mode === t.key
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {t.icon} {t.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -179,8 +255,8 @@ export function BibleReader() {
         </div>
       </div>
 
-      {/* Highlighter toolbar — KJV reading only */}
-      {mode === "kjv" && (
+      {/* Highlighter toolbar — reading translations only (not Strong's) */}
+      {mode !== "interlinear" && (
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-card px-3 py-2">
         <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
           <Highlighter className="size-3.5" /> Highlight
@@ -224,30 +300,39 @@ export function BibleReader() {
         />
       )}
 
-      {/* KJV reading pane — borderless and immersive */}
-      {mode === "kjv" && (
+      {/* Reading pane — borderless and immersive (KJV / NLT / MSG) */}
+      {mode !== "interlinear" && (
       <div className="py-2">
         <div className="mb-7 flex flex-col gap-1 text-center">
           <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl">
             {book} {chapter}
           </h2>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">King James Version</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">
+            {TRANSLATION_LABEL[translationKey]}
+          </p>
         </div>
 
-        {isLoading && (
+        {readingLoading && (
           <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
             <Loader2 className="size-5 animate-spin" />
             <span className="text-sm">Loading passage…</span>
           </div>
         )}
 
-        {error && (
-          <div className="py-16 text-center">
-            <p className="text-sm text-muted-foreground">We couldn&apos;t load this passage. Please try again.</p>
+        {readingError && !readingLoading && (
+          <div className="mx-auto max-w-prose py-16 text-center">
+            <p className="text-sm text-muted-foreground">
+              {(readingError as Error)?.message ?? "We couldn't load this passage. Please try again."}
+            </p>
+            {(readingError as Error & { reason?: string })?.reason === "unconfigured" && (
+              <p className="mt-1 text-xs text-muted-foreground/80">
+                King James and Strong&apos;s are available offline in the meantime.
+              </p>
+            )}
           </div>
         )}
 
-        {data && !isLoading && (
+        {!readingLoading && !readingError && verses.length > 0 && (
           <ol className="mx-auto max-w-prose space-y-1">
             {verses.map((v) => {
               const id = `${bookIndex}:${chapter}:${v.verse}`
@@ -256,10 +341,9 @@ export function BibleReader() {
               return (
                 <li
                   key={v.verse}
-                  onClick={() => toggleHighlight(v.verse)}
+                  onClick={() => onVerseTap(v.verse)}
                   className={cn(
-                    "flex gap-3 rounded-md px-2 py-0.5 text-lg leading-relaxed text-justify [text-justify:inter-word]",
-                    activeColor ? "cursor-pointer hover:bg-secondary/60" : "cursor-default",
+                    "flex cursor-pointer gap-3 rounded-md px-2 py-0.5 text-lg leading-relaxed text-justify [text-justify:inter-word] transition-colors hover:bg-secondary/60",
                   )}
                   style={color ? { backgroundColor: color.bg } : undefined}
                 >
@@ -272,6 +356,23 @@ export function BibleReader() {
         )}
       </div>
       )}
+
+      {/* Per-verse Copy / Share / Highlight sheet */}
+      {selectedVerse !== null && (() => {
+        const v = verses.find((x) => x.verse === selectedVerse)
+        if (!v) return null
+        const id = `${bookIndex}:${chapter}:${selectedVerse}`
+        return (
+          <VerseActionSheet
+            reference={`${book} ${chapter}:${selectedVerse}`}
+            translationShort={TRANSLATION_SHORT[translationKey]}
+            text={v.text}
+            activeHighlight={highlights[id] ?? null}
+            onHighlight={(key) => setVerseHighlight(selectedVerse, key)}
+            onClose={() => setSelectedVerse(null)}
+          />
+        )
+      })()}
 
       {/* Footer nav */}
       <div className="flex items-center justify-between">
@@ -421,5 +522,132 @@ function ChapterPicker({
         </div>
       )}
     </Picker>
+  )
+}
+
+/**
+ * Slide-up sheet shown when a verse is tapped: copy the text, share it via the
+ * native share sheet (with a clipboard fallback), or highlight it in a colour.
+ */
+function VerseActionSheet({
+  reference,
+  translationShort,
+  text,
+  activeHighlight,
+  onHighlight,
+  onClose,
+}: {
+  reference: string
+  translationShort: string
+  text: string
+  activeHighlight: HighlightKey | null
+  onHighlight: (key: HighlightKey | null) => void
+  onClose: () => void
+}) {
+  const [copied, setCopied] = useState(false)
+  const formatted = `"${text}" — ${reference} (${translationShort})`
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(formatted)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1600)
+    } catch {
+      // Clipboard may be blocked; the share action remains available.
+    }
+  }
+
+  async function share() {
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({ title: reference, text: formatted })
+        return
+      } catch {
+        // User cancelled or share failed — fall back to copying.
+      }
+    }
+    void copy()
+  }
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose()
+    }
+    document.addEventListener("keydown", onKey)
+    return () => document.removeEventListener("keydown", onKey)
+  }, [onClose])
+
+  if (typeof document === "undefined") return null
+
+  return createPortal(
+    <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
+      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <div className="relative w-full max-w-lg rounded-t-2xl border border-border bg-popover-solid p-4 text-popover-foreground shadow-2xl sm:rounded-2xl">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-bold">{reference}</p>
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">{translationShort}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="-mr-1 -mt-1 inline-flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary"
+            aria-label="Close"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+
+        <p className="mb-4 max-h-32 overflow-y-auto text-pretty text-sm leading-relaxed text-muted-foreground">{text}</p>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void copy()}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-secondary px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-secondary/80"
+          >
+            {copied ? <Check className="size-4 text-primary" /> : <Copy className="size-4" />}
+            {copied ? "Copied" : "Copy"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void share()}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-95"
+          >
+            <Share2 className="size-4" /> Share
+          </button>
+        </div>
+
+        <div className="mt-4 flex items-center gap-2">
+          <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <Highlighter className="size-3.5" /> Highlight
+          </span>
+          {HIGHLIGHTS.map((h) => (
+            <button
+              key={h.key}
+              type="button"
+              onClick={() => onHighlight(activeHighlight === h.key ? null : h.key)}
+              className={cn(
+                "size-7 rounded-full ring-2 ring-offset-2 ring-offset-popover-solid transition-all",
+                activeHighlight === h.key ? "ring-foreground" : "ring-transparent hover:ring-border",
+              )}
+              style={{ backgroundColor: h.swatch }}
+              aria-label={`${h.label} highlight`}
+              aria-pressed={activeHighlight === h.key}
+            />
+          ))}
+          {activeHighlight && (
+            <button
+              type="button"
+              onClick={() => onHighlight(null)}
+              className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary"
+            >
+              <X className="size-3.5" /> Clear
+            </button>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body,
   )
 }

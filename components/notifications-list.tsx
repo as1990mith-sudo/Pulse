@@ -3,7 +3,7 @@
 import { useEffect } from "react"
 import Link from "next/link"
 import useSWR, { useSWRConfig } from "swr"
-import { Bell, Heart, MessageCircle, Radio, UserPlus, Megaphone } from "lucide-react"
+import { Bell, Heart, MessageCircle, Radio, UserPlus, Megaphone, Repeat2 } from "lucide-react"
 import {
   getNotifications,
   markNotificationsRead,
@@ -18,6 +18,7 @@ const ICONS: Record<NotificationType, typeof Bell> = {
   live: Radio,
   post: Megaphone,
   follow: UserPlus,
+  repost: Repeat2,
 }
 
 function verb(type: NotificationType) {
@@ -32,6 +33,8 @@ function verb(type: NotificationType) {
       return "posted"
     case "follow":
       return "followed you"
+    case "repost":
+      return "reposted your post"
   }
 }
 

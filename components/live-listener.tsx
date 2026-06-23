@@ -7,14 +7,14 @@ import {
   Check,
   Loader2,
   Lock,
+  Mail,
   MessageSquare,
   Mic,
   MicOff,
   PhoneOff,
   Play,
   Radio,
-  Share2,
-  Users,
+  Send,
   Volume2,
   VolumeX,
   X,
@@ -22,6 +22,7 @@ import {
 import { ShareSheet } from "@/components/share-sheet"
 import { BackExitMenu } from "@/components/live-back-menu"
 import { LiveChat } from "@/components/live-chat"
+import { CoverArt } from "@/components/cover-art"
 import type { CurrentUser } from "@/lib/session"
 import type { ShareTarget } from "@/lib/share-types"
 import type { CallRequestView, LiveStreamView } from "@/app/actions/live"
@@ -32,10 +33,14 @@ import {
   respondToCallRequest,
   removeFromStage,
 } from "@/app/actions/live"
+import { toggleFollow, getFollowingIds } from "@/app/actions/follow"
+import { getOrCreateConversation } from "@/app/actions/dm"
 import { useLiveAudio } from "@/lib/use-live-audio"
+import { useLivePresence } from "@/lib/use-live-presence"
 import { LiveBadge } from "@/components/live-badge"
 import { LiveStage, QualityIcon } from "@/components/live-stage"
-import { LiveAudience } from "@/components/live-audience"
+import { LiveAudienceSheet } from "@/components/live-audience-sheet"
+import { liveThemeStyle } from "@/lib/live-themes"
 import { ReactionLayer } from "@/components/live-reactions"
 import { getAvatarColor } from "@/lib/identity"
 import { cn } from "@/lib/utils"
@@ -74,7 +79,7 @@ function DockButton({
       aria-label={label}
       aria-pressed={active}
       className={cn(
-        "flex size-14 items-center justify-center rounded-full shadow-xl ring-1 ring-inset transition-all hover:scale-105 active:scale-95 disabled:opacity-50 [&>svg]:size-[26px] [&>svg]:stroke-[2.5]",
+        "flex size-12 items-center justify-center rounded-full shadow-xl ring-1 ring-inset transition-all hover:scale-105 active:scale-95 disabled:opacity-50 [&>svg]:size-[22px] [&>svg]:stroke-[2.5]",
         tone === "danger"
           ? "bg-destructive text-white shadow-destructive/40 ring-white/25 hover:bg-destructive/90"
           : active && tone === "live"
@@ -111,7 +116,6 @@ export function LiveListener({
   const [muted, setMuted] = useState(false)
   // The audience/crowd view is hidden by default (frees space for the stage +
   // chat) and revealed by tapping the audience pill in the header.
-  const [showAudience, setShowAudience] = useState(false)
   const [joining, setJoining] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [ended, setEnded] = useState(false)
@@ -119,6 +123,51 @@ export function LiveListener({
   // Set when the host ends the broadcast — shows a "Session ended" splash then
   // bounces the listener back to the Live tab.
   const [hostEnded, setHostEnded] = useState(false)
+
+  // Whether the current listener follows the host (drives the follow chip on
+  // the host's stage tile). The host can't follow themselves.
+  const isSelfHost = currentUserId === stream.hostId
+  const [following, setFollowing] = useState(false)
+  const [followPending, setFollowPending] = useState(false)
+  useEffect(() => {
+    if (!currentUser || isSelfHost) return
+    let cancelled = false
+    getFollowingIds()
+      .then((ids) => !cancelled && setFollowing(ids.includes(stream.hostId)))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [currentUser, isSelfHost, stream.hostId])
+
+  // Opens a 1:1 DM thread with the host. We minimise the room first so the
+  // audio keeps playing while the listener reads/writes on the messages page.
+  const [messaging, setMessaging] = useState(false)
+  async function handleMessageHost() {
+    if (!currentUser || isSelfHost || messaging) return
+    setMessaging(true)
+    try {
+      const conversationId = await getOrCreateConversation(stream.hostId)
+      onMinimize?.()
+      router.push(`/messages/${conversationId}`)
+    } catch {
+      setMessaging(false)
+    }
+  }
+
+  async function handleToggleFollow() {
+    if (!currentUser || isSelfHost || followPending) return
+    const next = !following
+    setFollowing(next)
+    setFollowPending(true)
+    try {
+      await toggleFollow({ targetUserId: stream.hostId, follow: next })
+    } catch {
+      setFollowing(!next)
+    } finally {
+      setFollowPending(false)
+    }
+  }
 
   // Live duration clock, ticking from when this viewer connected.
   const [elapsed, setElapsed] = useState(0)
@@ -195,6 +244,7 @@ export function LiveListener({
       }
       setMyInvite(s.myInvite)
       setLocked(s.locked)
+      setTheme(s.theme)
       // Flash a "declined" toast when status transitions to declined.
       if (s.myStatus === "declined" && prevStatus.current && prevStatus.current !== "declined") {
         setDeclinedFlash(true)
@@ -260,6 +310,16 @@ export function LiveListener({
   const onStage = 1 + speakers.filter((s) => s.identity !== stream.hostId).length
   const audience = Math.max(0, state.listeners - onStage)
 
+  // Presence-backed audience (real names + avatars), active once connected.
+  const { count: presenceCount, members: presenceMembers } = useLivePresence(
+    stream.roomName,
+    state.connected,
+  )
+
+  // Immersive theme, seeded from the stream and kept fresh by the call-state
+  // poll so the host can restyle the room live for everyone.
+  const [theme, setTheme] = useState(stream.theme ?? "default")
+
   const isOnStage = state.canPublish && state.connected
   const colorById: Record<string, string> = {}
   for (const s of speakers) colorById[s.identity] = getAvatarColor(s.identity)
@@ -278,14 +338,17 @@ export function LiveListener({
   }
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden bg-zinc-950 text-white">
-      {/* Drifting aurora backdrop tinted from the cover art for an immersive room. */}
+    <div
+      className="relative flex h-full flex-col overflow-hidden bg-zinc-950 text-white transition-[background] duration-700"
+      style={{ ...liveThemeStyle(theme), ["--call-accept" as string]: "var(--live-accent)" }}
+    >
+      {/* Drifting aurora backdrop, retinted by the active studio theme. */}
       <div
         aria-hidden="true"
         className="stage-aurora pointer-events-none absolute inset-0 opacity-70"
         style={{
           background:
-            "radial-gradient(70% 55% at 20% 0%, color-mix(in oklch, var(--primary) 45%, transparent), transparent 60%), radial-gradient(60% 50% at 90% 20%, color-mix(in oklch, var(--call-accept) 30%, transparent), transparent 55%), radial-gradient(80% 60% at 50% 100%, color-mix(in oklch, var(--primary) 25%, transparent), transparent 60%)",
+            "radial-gradient(70% 55% at 20% 0%, color-mix(in oklch, var(--primary) 45%, transparent), transparent 60%), radial-gradient(60% 50% at 90% 20%, color-mix(in oklch, var(--live-accent) 30%, transparent), transparent 55%), radial-gradient(80% 60% at 50% 100%, color-mix(in oklch, var(--primary) 25%, transparent), transparent 60%)",
         }}
       />
       {stream.cover && (
@@ -314,16 +377,7 @@ export function LiveListener({
           }}
           onMinimize={onMinimize ?? (() => {})}
         />
-        <span className="relative size-12 shrink-0 overflow-hidden rounded-xl bg-white/10 shadow-xl ring-2 ring-white/30">
-          {stream.cover ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={stream.cover || "/placeholder.svg"} alt="Cover art" className="size-full object-cover" />
-          ) : (
-            <span className="flex size-full items-center justify-center text-white/80">
-              <Radio className="size-5" strokeWidth={2.75} />
-            </span>
-          )}
-        </span>
+        <CoverArt src={stream.cover ?? null} alt={`${stream.title} cover art`} />
 
         <div className="relative min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -340,20 +394,7 @@ export function LiveListener({
         </div>
 
         <div className="relative flex shrink-0 flex-col items-end gap-1">
-          <button
-            type="button"
-            onClick={() => setShowAudience((s) => !s)}
-            aria-label="See who's listening"
-            aria-pressed={showAudience}
-            className={cn(
-              "flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset transition-colors",
-              showAudience
-                ? "bg-primary/20 text-primary ring-primary/30"
-                : "bg-white/10 text-white/80 ring-white/10 hover:bg-white/20",
-            )}
-          >
-            <Users className="size-3" /> {audience.toLocaleString()}
-          </button>
+          <LiveAudienceSheet count={presenceCount || audience} members={presenceMembers} immersive />
           {state.connected && (
             <span className="font-mono text-[11px] tabular-nums text-white/50">{formatElapsed(elapsed)}</span>
           )}
@@ -361,7 +402,7 @@ export function LiveListener({
       </header>
 
       {/* ───────────────────────── Speaker stage ───────────────────────── */}
-      <div className="relative flex shrink-0 flex-col gap-4 px-4 py-5 sm:px-6 sm:py-6">
+      <div className="relative flex shrink-0 flex-col gap-3 px-4 py-3 sm:px-6 sm:py-3.5">
         {/* Floating reactions drift up over the stage. */}
         <ReactionLayer roomName={state.connected ? stream.roomName : undefined} />
 
@@ -374,6 +415,12 @@ export function LiveListener({
             isHost={false}
             canRequestCall={canListen && !isOnStage && !locked && myStatus !== "pending"}
             callPending={myStatus === "pending"}
+            hostFollow={{
+              isFollowing: following,
+              canFollow: Boolean(currentUser) && !isSelfHost,
+              pending: followPending,
+              onToggle: () => void handleToggleFollow(),
+            }}
             onRequestCall={handleRequestCall}
           />
         </div>
@@ -417,12 +464,10 @@ export function LiveListener({
           </p>
         )}
 
-        {/* Audience section — revealed via the header pill (see who's listening). */}
-        {showAudience && <LiveAudience count={audience} glass className="relative" />}
       </div>
 
       {/* ─────────────────────────── Guest dock ──────��──────────────────── */}
-      <div className="relative shrink-0 border-t border-white/10 px-4 py-3 pl-safe pr-safe backdrop-blur-xl">
+      <div className="relative shrink-0 border-t border-white/10 px-4 py-2 pl-safe pr-safe backdrop-blur-xl">
         {!canListen ? (
           <p className="text-sm text-white/70">
             <Link href="/sign-in" className="font-medium text-primary hover:underline">
@@ -445,8 +490,13 @@ export function LiveListener({
               <Play className="size-4 translate-x-0.5" strokeWidth={2.75} /> Join the room
             </button>
             <DockButton label="Share room" onClick={() => setShareOpen(true)}>
-              <Share2 className="size-5" />
+              <Send className="size-5" />
             </DockButton>
+            {currentUser && !isSelfHost && (
+              <DockButton label="Message the host" onClick={() => void handleMessageHost()} disabled={messaging}>
+                {messaging ? <Loader2 className="size-5 animate-spin" /> : <Mail className="size-5" />}
+              </DockButton>
+            )}
           </div>
         ) : (
           // One compact, centered control row (no edge-pinned buttons).
@@ -480,8 +530,15 @@ export function LiveListener({
             )}
 
             <DockButton label="Share room" onClick={() => setShareOpen(true)}>
-              <Share2 className="size-5" />
+              <Send className="size-5" />
             </DockButton>
+
+            {/* Privately message the host (keeps audio playing, minimises room). */}
+            {currentUser && !isSelfHost && (
+              <DockButton label="Message the host" onClick={() => void handleMessageHost()} disabled={messaging}>
+                {messaging ? <Loader2 className="size-5 animate-spin" /> : <Mail className="size-5" />}
+              </DockButton>
+            )}
 
             {/* Request-to-speak affordance for listeners. */}
             {!isOnStage &&

@@ -5,7 +5,7 @@ import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { feedComment, feedPost, follow, user as userTable } from "@/lib/db/schema"
+import { feedComment, feedPost, follow, repost, savedItem, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { notifyUser } from "@/app/actions/notifications"
 
@@ -47,10 +47,29 @@ export type FeedPostView = {
   video: string | null
   likes: number
   reposts: number
+  reposted: boolean
+  saved: boolean
   edited: boolean
   isFollowing: boolean
   isSelf: boolean
   comments: FeedCommentView[]
+}
+
+/** Returns the set of postIds the given user has reposted (empty if signed out). */
+async function getRepostedSet(userId: string | null): Promise<Set<number>> {
+  if (!userId) return new Set()
+  const rows = await db.select({ postId: repost.postId }).from(repost).where(eq(repost.userId, userId))
+  return new Set(rows.map((r) => r.postId))
+}
+
+/** Returns the set of post itemKeys the given user has bookmarked (saved). */
+async function getSavedPostSet(userId: string | null): Promise<Set<string>> {
+  if (!userId) return new Set()
+  const rows = await db
+    .select({ key: savedItem.itemKey })
+    .from(savedItem)
+    .where(and(eq(savedItem.userId, userId), eq(savedItem.itemType, "post")))
+  return new Set(rows.map((r) => r.key))
 }
 
 // Maps a feed_comment row to the client view. `currentUserId` decides `isSelf`.
@@ -122,6 +141,8 @@ export async function getFeed(): Promise<FeedPostView[]> {
 
   const posts = await db.select().from(feedPost).orderBy(desc(feedPost.createdAt))
   const comments = await db.select().from(feedComment).orderBy(asc(feedComment.createdAt))
+  const repostedSet = await getRepostedSet(currentUserId)
+  const savedSet = await getSavedPostSet(currentUserId)
 
   const infoMap = await getUserInfoMap([
     ...posts.map((p) => p.userId),
@@ -149,6 +170,8 @@ export async function getFeed(): Promise<FeedPostView[]> {
     video: p.video,
     likes: p.likes,
     reposts: p.reposts,
+    reposted: repostedSet.has(p.id),
+    saved: savedSet.has(String(p.id)),
     edited: !!p.editedAt,
     isFollowing: followingIds.has(p.userId),
     isSelf: currentUserId === p.userId,
@@ -177,6 +200,8 @@ export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
     .where(eq(feedPost.userId, userId))
     .orderBy(desc(feedPost.createdAt))
   const comments = await db.select().from(feedComment).orderBy(asc(feedComment.createdAt))
+  const repostedSet = await getRepostedSet(currentUserId)
+  const savedSet = await getSavedPostSet(currentUserId)
 
   const infoMap = await getUserInfoMap([
     ...posts.map((p) => p.userId),
@@ -198,11 +223,126 @@ export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
     video: p.video,
     likes: p.likes,
     reposts: p.reposts,
+    reposted: repostedSet.has(p.id),
+    saved: savedSet.has(String(p.id)),
     edited: !!p.editedAt,
     isFollowing: followingIds.has(p.userId),
     isSelf: currentUserId === p.userId,
     comments: comments.filter((c) => c.postId === p.id).map((c) => toCommentView(c, infoMap, currentUserId)),
   }))
+}
+
+/**
+ * Posts the given user has reposted, newest-repost-first. Powers the profile
+ * "Reposts" tab. Each returned post carries its original author identity.
+ */
+export async function getRepostsByUser(userId: string): Promise<FeedPostView[]> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  const currentUserId = session?.user?.id ?? null
+
+  const repostRows = await db
+    .select({ postId: repost.postId, createdAt: repost.createdAt })
+    .from(repost)
+    .where(eq(repost.userId, userId))
+    .orderBy(desc(repost.createdAt))
+  if (repostRows.length === 0) return []
+
+  const orderById = new Map(repostRows.map((r, i) => [r.postId, i]))
+  const postIds = repostRows.map((r) => r.postId)
+
+  const posts = await db.select().from(feedPost).where(inArray(feedPost.id, postIds))
+  const comments = await db.select().from(feedComment).orderBy(asc(feedComment.createdAt))
+  const repostedSet = await getRepostedSet(currentUserId)
+  const savedSet = await getSavedPostSet(currentUserId)
+
+  const followingIds = currentUserId
+    ? new Set(
+        (
+          await db
+            .select({ followingId: follow.followingId })
+            .from(follow)
+            .where(eq(follow.followerId, currentUserId))
+        ).map((r) => r.followingId),
+      )
+    : new Set<string>()
+
+  const infoMap = await getUserInfoMap([
+    ...posts.map((p) => p.userId),
+    ...comments.map((c) => c.userId),
+  ])
+
+  // Preserve repost recency order (the query above doesn't guarantee it).
+  const ordered = [...posts].sort((a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0))
+
+  return ordered.map((p) => ({
+    id: p.id,
+    authorId: p.userId,
+    user: infoMap.get(p.userId)?.name ?? p.authorName,
+    handle: getHandle(infoMap.get(p.userId)?.name ?? p.authorName),
+    initials: getInitials(infoMap.get(p.userId)?.name ?? p.authorName),
+    color: getAvatarColor(p.userId),
+    authorImage: infoMap.get(p.userId)?.image ?? null,
+    postedAt: timeAgo(p.createdAt),
+    createdAtMs: p.createdAt.getTime(),
+    text: p.text,
+    image: p.image,
+    video: p.video,
+    likes: p.likes,
+    reposts: p.reposts,
+    reposted: repostedSet.has(p.id),
+    saved: savedSet.has(String(p.id)),
+    edited: !!p.editedAt,
+    isFollowing: followingIds.has(p.userId),
+    isSelf: currentUserId === p.userId,
+    comments: comments.filter((c) => c.postId === p.id).map((c) => toCommentView(c, infoMap, currentUserId)),
+  }))
+}
+
+/**
+ * Toggles a repost of a post by the signed-in user. Persists a repost row and
+ * keeps the denormalized feed_post.reposts counter in sync. Returns new state.
+ */
+export async function toggleRepost(postId: number): Promise<{ reposted: boolean; reposts: number }> {
+  const user = await requireUser()
+  const [post] = await db
+    .select({ reposts: feedPost.reposts, userId: feedPost.userId })
+    .from(feedPost)
+    .where(eq(feedPost.id, postId))
+  if (!post) throw new Error("Post not found.")
+
+  const existing = await db
+    .select({ id: repost.id })
+    .from(repost)
+    .where(and(eq(repost.userId, user.id), eq(repost.postId, postId)))
+    .limit(1)
+
+  let reposted: boolean
+  let nextCount: number
+  if (existing.length > 0) {
+    await db.delete(repost).where(eq(repost.id, existing[0].id))
+    nextCount = Math.max(0, post.reposts - 1)
+    reposted = false
+  } else {
+    await db.insert(repost).values({ userId: user.id, postId })
+    nextCount = post.reposts + 1
+    reposted = true
+    // Notify the author when someone reposts their post (not on un-repost).
+    if (post.userId !== user.id) {
+      await notifyUser({
+        userId: post.userId,
+        actorId: user.id,
+        actorName: user.name,
+        type: "repost",
+        message: `${user.name} reposted your post`,
+        link: "/feed",
+      })
+    }
+  }
+  await db.update(feedPost).set({ reposts: nextCount }).where(eq(feedPost.id, postId))
+
+  revalidatePath("/feed")
+  revalidatePath(`/u/${user.id}`)
+  return { reposted, reposts: nextCount }
 }
 
 export async function createPost(input: { text: string; image?: string | null; video?: string | null }) {

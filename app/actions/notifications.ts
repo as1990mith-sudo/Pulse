@@ -7,7 +7,7 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { follow, notification } from "@/lib/db/schema"
 
-export type NotificationType = "post" | "live" | "like" | "comment" | "follow"
+export type NotificationType = "post" | "live" | "like" | "comment" | "follow" | "repost"
 
 export type NotificationView = {
   id: number
