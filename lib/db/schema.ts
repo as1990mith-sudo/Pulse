@@ -72,6 +72,16 @@ export const feedPost = pgTable("feed_post", {
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
+// Reposts: one row per (user, post) the user has reposted. Drives the profile
+// "Reposts" tab and keeps feed_post.reposts (a denormalized counter) in sync.
+// Unique index on (userId, postId) enforced in the DB.
+export const repost = pgTable("repost", {
+  id: serial("id").primaryKey(),
+  userId: text("userId").notNull(),
+  postId: integer("postId").notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
 // Follower / following relationships. followerId follows followingId.
 export const follow = pgTable("follow", {
   id: serial("id").primaryKey(),

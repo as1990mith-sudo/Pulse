@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import useSWR from "swr"
 import {
   BookOpen,
@@ -576,7 +577,9 @@ function VerseActionSheet({
     return () => document.removeEventListener("keydown", onKey)
   }, [onClose])
 
-  return (
+  if (typeof document === "undefined") return null
+
+  return createPortal(
     <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
       <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <div className="relative w-full max-w-lg rounded-t-2xl border border-border bg-popover-solid p-4 text-popover-foreground shadow-2xl sm:rounded-2xl">
@@ -644,6 +647,7 @@ function VerseActionSheet({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
