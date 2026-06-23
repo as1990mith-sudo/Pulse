@@ -187,8 +187,10 @@ function TabButton({
       )}
     >
       {icon}
-      {/* Only the active tab reveals its label (+ count); the rest stay icon-only. */}
-      <span className={cn(!active && "sr-only")}>
+      {/* Only the active tab reveals its label (+ count); the rest stay icon-only.
+          Keep the label on a single line so the icon stays vertically aligned
+          with the icon-only tabs instead of centering against wrapped text. */}
+      <span className={cn("whitespace-nowrap", !active && "sr-only")}>
         {label}
         {count > 0 ? ` ${count}` : ""}
       </span>
