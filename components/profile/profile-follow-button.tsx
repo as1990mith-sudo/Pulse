@@ -5,15 +5,18 @@ import { useRouter } from "next/navigation"
 import { UserCheck, UserPlus } from "lucide-react"
 import { toggleFollow } from "@/app/actions/follow"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
 export function ProfileFollowButton({
   targetUserId,
   targetName,
   initialFollowing,
+  className,
 }: {
   targetUserId: string
   targetName: string
   initialFollowing: boolean
+  className?: string
 }) {
   const router = useRouter()
   const [following, setFollowing] = useState(initialFollowing)
@@ -41,7 +44,7 @@ export function ProfileFollowButton({
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
       disabled={isPending}
-      className="gap-1.5"
+      className={cn("gap-1.5", className)}
       aria-label={following ? `Unfollow ${targetName}` : `Follow ${targetName}`}
     >
       {following ? (

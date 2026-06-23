@@ -352,15 +352,15 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                     <h3 className="text-sm font-semibold">Up next</h3>
                     <span className="text-xs text-muted-foreground">· {upNext.length}</span>
                   </div>
-                  <ul className="overflow-hidden rounded-2xl border border-border/60 bg-card/50 divide-y divide-border/60">
+                  <ul className="flex flex-col">
                     {upNext.map((show) => (
                       <li key={show.id}>
                         <button
                           type="button"
                           onClick={() => play(show, queue)}
-                          className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-secondary/50 active:bg-secondary"
+                          className="group flex w-full items-center gap-3 rounded-xl px-1 py-2.5 text-left transition-colors hover:bg-foreground/5 active:bg-foreground/10"
                         >
-                          <span className="relative size-11 shrink-0 overflow-hidden rounded-lg bg-secondary">
+                          <span className="relative size-12 shrink-0 overflow-hidden rounded-xl bg-secondary">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                               src={show.cover || "/placeholder.svg"}
@@ -375,8 +375,8 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                               {show.host.name}
                             </span>
                           </span>
-                          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-foreground">
-                            <Play className="size-3.5 translate-x-px" />
+                          <span className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors group-hover:bg-foreground/10 group-hover:text-foreground">
+                            <Play className="size-4 translate-x-px" />
                           </span>
                         </button>
                       </li>
