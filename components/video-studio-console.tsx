@@ -95,6 +95,7 @@ export function VideoStudioConsole({ currentUser }: { currentUser: CurrentUser }
     connected,
     micOn,
     camOn,
+    localVideoReady,
     participants,
     error: rtcError,
     toggleMic,
@@ -201,7 +202,7 @@ export function VideoStudioConsole({ currentUser }: { currentUser: CurrentUser }
         muted
         className={cn(
           "absolute inset-0 z-0 h-full w-full -scale-x-100 object-cover transition-opacity duration-500",
-          live && camOn ? "opacity-100" : "opacity-0",
+          live && camOn && localVideoReady ? "opacity-100" : "opacity-0",
         )}
       />
       {/* Pre-live preview camera */}
@@ -215,8 +216,10 @@ export function VideoStudioConsole({ currentUser }: { currentUser: CurrentUser }
         />
       )}
 
-      {/* Camera-off / connecting wash */}
-      {live && (!camOn || !connected) && (
+      {/* Camera-off / connecting / starting-camera wash — never reveal a bare
+          black <video>: keep an explicit state visible until the self-view is
+          actually painting. */}
+      {live && (!camOn || !connected || !localVideoReady) && (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-neutral-950 px-6">
           {!connected ? (
             rtcError ? (
@@ -245,10 +248,18 @@ export function VideoStudioConsole({ currentUser }: { currentUser: CurrentUser }
                 </button>
               </div>
             )
-          ) : (
+          ) : !camOn ? (
             <div className="flex flex-col items-center gap-2 text-white/60">
               <VideoOff className="size-8" />
               <p className="text-sm font-medium">Camera off</p>
+              {rtcError && <p className="max-w-xs text-center text-xs text-white/45 text-pretty">{rtcError}</p>}
+            </div>
+          ) : (
+            // Connected with the camera on, but the track isn't painting yet —
+            // show progress instead of a black frame while the device spins up.
+            <div className="flex flex-col items-center gap-3 text-white/70">
+              <Loader2 className="size-7 animate-spin" />
+              <p className="text-sm font-medium">Starting camera…</p>
               {rtcError && <p className="max-w-xs text-center text-xs text-white/45 text-pretty">{rtcError}</p>}
             </div>
           )}

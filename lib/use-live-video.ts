@@ -6,6 +6,7 @@ import {
   Room,
   RoomEvent,
   Track,
+  type LocalTrackPublication,
   type RemoteTrack,
   type RemoteTrackPublication,
   type RemoteParticipant,
@@ -52,6 +53,9 @@ export function useLiveVideo({
   const [connected, setConnected] = useState(false)
   const [micOn, setMicOn] = useState(true)
   const [camOn, setCamOn] = useState(true)
+  // True once the host's own camera track is attached + painting to the
+  // self-view, so the UI can show a "starting camera" state instead of black.
+  const [localVideoReady, setLocalVideoReady] = useState(false)
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user")
   const [remoteVideoOn, setRemoteVideoOn] = useState(false)
   const [participants, setParticipants] = useState(0)
@@ -94,6 +98,21 @@ export function useLiveVideo({
         track.detach()
         if (track.kind === Track.Kind.Video) setRemoteVideoOn(false)
       })
+      // Attach the host's own camera the instant LiveKit confirms it's published.
+      // This is the reliable signal that the local video track exists — relying
+      // only on the post-`setCameraEnabled` attach can race and leave the
+      // self-view painted black if the publish resolves on a later tick.
+      .on(RoomEvent.LocalTrackPublished, (pub: LocalTrackPublication) => {
+        if (pub.track instanceof LocalVideoTrack && localVideoRef.current) {
+          const el = localVideoRef.current
+          pub.track.attach(el)
+          el.muted = true
+          el.setAttribute("playsinline", "true")
+          void el.play().catch(() => {})
+          setCamOn(true)
+          setLocalVideoReady(true)
+        }
+      })
       .on(RoomEvent.ParticipantConnected, () => syncParticipants(room))
       .on(RoomEvent.ParticipantDisconnected, () => syncParticipants(room))
       .on(RoomEvent.Disconnected, () => setConnected(false))
@@ -126,12 +145,32 @@ export function useLiveVideo({
       } catch {
         setMicOn(false)
       }
-      try {
-        await room.localParticipant.setCameraEnabled(true)
+
+      // Enable the camera with one retry. Going live happens right after the
+      // local preview's getUserMedia tracks are stopped, and on mobile the
+      // camera hardware can still be releasing — the first acquire then fails
+      // (NotReadableError) or hangs, which is what left the host on a black
+      // screen. A short backoff lets the device free up before we retry.
+      let cameraOk = false
+      for (let attempt = 0; attempt < 2 && !cameraOk; attempt++) {
+        try {
+          await withTimeout(
+            room.localParticipant.setCameraEnabled(true),
+            12000,
+            "Camera start timed out.",
+          )
+          cameraOk = true
+        } catch {
+          if (attempt === 0) await new Promise((r) => setTimeout(r, 600))
+        }
+      }
+
+      if (cameraOk) {
         // The room flipped to "connected" before this resolved, so the self-view
         // attach effect may have run before the track existed — attach now.
+        // (The LocalTrackPublished handler also covers this.)
         attachLocalVideo(room)
-      } catch {
+      } else {
         setCamOn(false)
         setError("We couldn't access your camera. Check your browser's camera permissions, then tap the camera button.")
       }
@@ -150,6 +189,7 @@ export function useLiveVideo({
       el.muted = true
       el.setAttribute("playsinline", "true")
       void el.play().catch(() => {})
+      setLocalVideoReady(true)
     }
   }
 
@@ -178,6 +218,7 @@ export function useLiveVideo({
     const room = roomRef.current
     if (!room) return
     const next = !camOn
+    if (!next) setLocalVideoReady(false)
     await room.localParticipant.setCameraEnabled(next)
     setCamOn(next)
   }, [camOn])
@@ -204,6 +245,7 @@ export function useLiveVideo({
     micOn,
     camOn,
     facingMode,
+    localVideoReady,
     remoteVideoOn,
     participants,
     error,
