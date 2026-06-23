@@ -60,6 +60,8 @@ import { ShareSheet } from "@/components/share-sheet"
 import { FindProfiles } from "@/components/find-profiles"
 import type { ShareTarget } from "@/lib/share-types"
 import { cn } from "@/lib/utils"
+import { linkify, extractFirstUrl } from "@/lib/linkify"
+import { LinkPreview } from "@/components/link-preview"
 
 type DraftMedia = { url: string; type: "image" | "video" }
 
@@ -637,6 +639,13 @@ export function PostCard({
   const isLong = text.length > COLLAPSE_LIMIT
   const displayText = !isLong || expanded ? text : `${text.slice(0, COLLAPSE_LIMIT).replace(/\s+\S*$/, "")}…`
 
+  // The first link in the post (if any) gets a rich preview card rendered below
+  // the text, with the bare link beneath it.
+  const previewUrl = text ? extractFirstUrl(text) : null
+  // When the post body is just the link itself, we hide the raw text and let the
+  // preview card carry it (it renders the link beneath the card).
+  const textIsOnlyLink = !!previewUrl && text.trim().split(/\s+/).length === 1
+
   if (deleted) return null
 
   return (
@@ -762,7 +771,7 @@ export function PostCard({
           </div>
         </div>
       ) : (
-        text && (
+        (text || previewUrl) && (
           <div
             className={cn(
               "text-foreground/90",
@@ -770,24 +779,32 @@ export function PostCard({
               hasMedia ? "pb-3" : "pb-1",
             )}
           >
-            {/* Split on author blank lines and use a tighter margin between
-                paragraphs (~half the height of a full empty line) instead of
-                rendering each blank line at full line-height. */}
-            {displayText.split(/\n{2,}/).map((para, i) => (
-              <p key={i} className={cn("whitespace-pre-wrap leading-snug", i > 0 && "mt-1.5")}>
-                {para}
-              </p>
-            ))}
-            {isLong && (
-              <button
-                type="button"
-                onClick={() => setExpanded((v) => !v)}
-                className="mt-0.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
-                aria-expanded={expanded}
-              >
-                {expanded ? "Show less" : "Read more"}
-              </button>
+            {/* When the post is nothing but a link, skip the raw text and let the
+                preview card (which shows the link below it) stand on its own. */}
+            {text && !textIsOnlyLink && (
+              <>
+                {/* Split on author blank lines and use a tighter margin between
+                    paragraphs (~half the height of a full empty line) instead of
+                    rendering each blank line at full line-height. */}
+                {displayText.split(/\n{2,}/).map((para, i) => (
+                  <p key={i} className={cn("whitespace-pre-wrap leading-snug", i > 0 && "mt-1.5")}>
+                    {linkify(para, "font-medium text-primary underline-offset-2 [overflow-wrap:anywhere] hover:underline")}
+                  </p>
+                ))}
+                {isLong && (
+                  <button
+                    type="button"
+                    onClick={() => setExpanded((v) => !v)}
+                    className="mt-0.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
+                    aria-expanded={expanded}
+                  >
+                    {expanded ? "Show less" : "Read more"}
+                  </button>
+                )}
+              </>
             )}
+
+            {previewUrl && <LinkPreview url={previewUrl} className={cn(text && !textIsOnlyLink && "mt-2.5")} />}
           </div>
         )
       )}
