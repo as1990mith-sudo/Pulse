@@ -1,10 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import Link from "next/link"
-import { Loader2, UserPlus, UserCheck } from "lucide-react"
+import { useEffect, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
+import { Loader2, MessageCircle, UserPlus, UserCheck } from "lucide-react"
 import { getProfilePreview } from "@/app/actions/users"
 import { toggleFollow } from "@/app/actions/follow"
+import { getOrCreateConversation } from "@/app/actions/dm"
 import type { Profile } from "@/lib/profile"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { getAvatarColor, getInitials } from "@/lib/identity"
@@ -13,9 +14,8 @@ import { cn } from "@/lib/utils"
 /**
  * A tappable trigger (a chat author's name/avatar) that opens a glanceable
  * profile preview: avatar, name, handle, follower/following counts, a follow
- * toggle, and a link through to the full profile. Used inside the live chat so
- * listeners can quickly check who someone is and follow them without leaving
- * the room.
+ * toggle, and a shortcut to message them. Used inside the live chat so
+ * listeners can quickly check who someone is without leaving the room.
  */
 export function ProfilePreview({
   userId,
@@ -45,10 +45,12 @@ export function ProfilePreview({
 }
 
 function ProfilePreviewCard({ userId, onClose }: { userId: string; onClose: () => void }) {
+  const router = useRouter()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
   const [following, setFollowing] = useState(false)
   const [pending, setPending] = useState(false)
+  const [messaging, startMessaging] = useTransition()
 
   useEffect(() => {
     let cancelled = false
@@ -85,6 +87,14 @@ function ProfilePreviewCard({ userId, onClose }: { userId: string; onClose: () =
     }
   }
 
+  function handleMessage() {
+    if (!profile) return
+    startMessaging(async () => {
+      const conversationId = await getOrCreateConversation(profile.id)
+      router.push(`/messages/${conversationId}`)
+    })
+  }
+
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center p-6"
@@ -109,63 +119,84 @@ function ProfilePreviewCard({ userId, onClose }: { userId: string; onClose: () =
             This user is no longer available.
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-3 p-6">
-            <Avatar className="size-20 ring-2 ring-primary/20">
-              {profile.image ? <AvatarImage src={profile.image} alt={profile.name} /> : null}
-              <AvatarFallback className={cn("text-xl", getAvatarColor(profile.id))}>
-                {getInitials(profile.name)}
-              </AvatarFallback>
-            </Avatar>
-            <div className="text-center">
-              <p className="text-lg font-semibold leading-tight text-balance">{profile.name}</p>
-              <p className="text-sm text-muted-foreground">{profile.handle}</p>
-            </div>
-            <div className="flex items-center gap-6 text-center">
-              <div>
-                <p className="text-base font-semibold">{profile.followers.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground">Followers</p>
+          <>
+            {/* Immersive banner — a soft gradient pulled from the user's avatar
+                colors, with the avatar overlapping its lower edge. */}
+            <div
+              className="h-24"
+              style={{
+                backgroundImage: `linear-gradient(135deg, color-mix(in oklab, var(${profile.gradient.from}) 75%, transparent) 0%, color-mix(in oklab, var(${profile.gradient.to}) 55%, transparent) 100%)`,
+              }}
+            />
+
+            <div className="flex flex-col items-center gap-3 px-6 pb-6">
+              <Avatar className="-mt-12 size-24 ring-4 ring-card">
+                {profile.image ? <AvatarImage src={profile.image} alt={profile.name} /> : null}
+                <AvatarFallback className={cn("text-2xl", getAvatarColor(profile.id))}>
+                  {getInitials(profile.name)}
+                </AvatarFallback>
+              </Avatar>
+
+              <div className="text-center">
+                <p className="text-xl font-bold leading-tight text-balance">{profile.name}</p>
+                <p className="text-sm text-muted-foreground">{profile.handle}</p>
               </div>
-              <div className="h-8 w-px bg-border" />
-              <div>
-                <p className="text-base font-semibold">{profile.following.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground">Following</p>
+
+              <div className="flex items-center gap-6 text-center">
+                <div>
+                  <p className="text-lg font-bold">{profile.followers.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Followers</p>
+                </div>
+                <div className="h-9 w-px bg-border" />
+                <div>
+                  <p className="text-lg font-bold">{profile.following.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Following</p>
+                </div>
               </div>
-            </div>
-            <div className="mt-1 flex w-full flex-col gap-2">
-              {!profile.isSelf && (
+
+              <div className="mt-2 flex w-full flex-col gap-2">
+                {!profile.isSelf && (
+                  <button
+                    type="button"
+                    onClick={() => void handleFollow()}
+                    disabled={pending}
+                    className={cn(
+                      "flex h-12 items-center justify-center gap-2 rounded-full text-[15px] font-bold transition-colors disabled:opacity-60",
+                      following
+                        ? "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                        : "bg-primary text-primary-foreground hover:bg-primary/90",
+                    )}
+                  >
+                    {pending ? (
+                      <Loader2 className="size-5 animate-spin" />
+                    ) : following ? (
+                      <>
+                        <UserCheck className="size-5" /> Following
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="size-5" /> Follow
+                      </>
+                    )}
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => void handleFollow()}
-                  disabled={pending}
-                  className={cn(
-                    "flex h-10 items-center justify-center gap-2 rounded-full text-sm font-semibold transition-colors disabled:opacity-60",
-                    following
-                      ? "bg-secondary text-secondary-foreground hover:bg-secondary/80"
-                      : "bg-primary text-primary-foreground hover:bg-primary/90",
-                  )}
+                  onClick={handleMessage}
+                  disabled={messaging}
+                  className="flex h-12 items-center justify-center gap-2 rounded-full border border-border text-[15px] font-bold transition-colors hover:bg-secondary disabled:opacity-60"
                 >
-                  {pending ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : following ? (
-                    <>
-                      <UserCheck className="size-4" /> Following
-                    </>
+                  {messaging ? (
+                    <Loader2 className="size-5 animate-spin" />
                   ) : (
                     <>
-                      <UserPlus className="size-4" /> Follow
+                      <MessageCircle className="size-5" /> Message
                     </>
                   )}
                 </button>
-              )}
-              <Link
-                href={`/u/${profile.id}`}
-                onClick={onClose}
-                className="flex h-10 items-center justify-center rounded-full border border-border text-sm font-semibold transition-colors hover:bg-secondary"
-              >
-                View profile
-              </Link>
+              </div>
             </div>
-          </div>
+          </>
         )}
       </div>
     </div>
