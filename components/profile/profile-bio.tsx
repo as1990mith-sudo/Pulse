@@ -3,8 +3,11 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Check, Loader2, Pencil, Plus, X } from "lucide-react"
-import { BIO_MAX_WORDS, updateBio } from "@/app/actions/users"
+import { updateBio } from "@/app/actions/users"
 import { cn } from "@/lib/utils"
+
+/** Max number of words allowed in a profile bio (mirrors the server action). */
+const BIO_MAX_WORDS = 25
 
 /**
  * Profile bio block. Shows the user's short bio (up to 25 words). On the
