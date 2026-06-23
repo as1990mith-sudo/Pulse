@@ -78,6 +78,20 @@ export function LiveSessionProvider({ children }: { children: React.ReactNode })
   const expand = useCallback(() => setMinimized(false), [])
   const setMeta = useCallback((m: LiveMeta) => setMetaState(m), [])
 
+  // While a session is minimised, the MiniPlayer is pinned to the bottom of the
+  // viewport. Reserve its height as bottom padding on <body> so page content
+  // never scrolls behind it — the bar acts as a hard floor for the layout.
+  const miniPlayerShown = Boolean(session) && minimized && Boolean(meta)
+  useEffect(() => {
+    if (!miniPlayerShown) return
+    const body = document.body
+    const prev = body.style.paddingBottom
+    body.style.paddingBottom = "calc(5.25rem + env(safe-area-inset-bottom))"
+    return () => {
+      body.style.paddingBottom = prev
+    }
+  }, [miniPlayerShown])
+
   // While the immersive room is open (and not minimised), lock the document so
   // touch/scroll gestures can't move the page behind the fixed overlay. Locking
   // <html> overflow + overscroll-behavior prevents both the scroll and the

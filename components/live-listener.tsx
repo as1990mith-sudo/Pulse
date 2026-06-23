@@ -7,6 +7,7 @@ import {
   Check,
   Loader2,
   Lock,
+  Mail,
   MessageSquare,
   Mic,
   MicOff,
@@ -33,6 +34,7 @@ import {
   removeFromStage,
 } from "@/app/actions/live"
 import { toggleFollow, getFollowingIds } from "@/app/actions/follow"
+import { getOrCreateConversation } from "@/app/actions/dm"
 import { useLiveAudio } from "@/lib/use-live-audio"
 import { useLivePresence } from "@/lib/use-live-presence"
 import { LiveBadge } from "@/components/live-badge"
@@ -137,6 +139,21 @@ export function LiveListener({
       cancelled = true
     }
   }, [currentUser, isSelfHost, stream.hostId])
+
+  // Opens a 1:1 DM thread with the host. We minimise the room first so the
+  // audio keeps playing while the listener reads/writes on the messages page.
+  const [messaging, setMessaging] = useState(false)
+  async function handleMessageHost() {
+    if (!currentUser || isSelfHost || messaging) return
+    setMessaging(true)
+    try {
+      const conversationId = await getOrCreateConversation(stream.hostId)
+      onMinimize?.()
+      router.push(`/messages/${conversationId}`)
+    } catch {
+      setMessaging(false)
+    }
+  }
 
   async function handleToggleFollow() {
     if (!currentUser || isSelfHost || followPending) return
@@ -475,6 +492,11 @@ export function LiveListener({
             <DockButton label="Share room" onClick={() => setShareOpen(true)}>
               <Send className="size-5" />
             </DockButton>
+            {currentUser && !isSelfHost && (
+              <DockButton label="Message the host" onClick={() => void handleMessageHost()} disabled={messaging}>
+                {messaging ? <Loader2 className="size-5 animate-spin" /> : <Mail className="size-5" />}
+              </DockButton>
+            )}
           </div>
         ) : (
           // One compact, centered control row (no edge-pinned buttons).
@@ -510,6 +532,13 @@ export function LiveListener({
             <DockButton label="Share room" onClick={() => setShareOpen(true)}>
               <Send className="size-5" />
             </DockButton>
+
+            {/* Privately message the host (keeps audio playing, minimises room). */}
+            {currentUser && !isSelfHost && (
+              <DockButton label="Message the host" onClick={() => void handleMessageHost()} disabled={messaging}>
+                {messaging ? <Loader2 className="size-5 animate-spin" /> : <Mail className="size-5" />}
+              </DockButton>
+            )}
 
             {/* Request-to-speak affordance for listeners. */}
             {!isOnStage &&
