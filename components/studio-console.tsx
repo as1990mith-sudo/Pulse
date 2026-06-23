@@ -11,6 +11,7 @@ import {
   Mic,
   MicOff,
   Music,
+  Palette,
   Pause,
   Phone,
   PhoneOff,
@@ -36,6 +37,7 @@ import {
   getCallState,
   respondToCallRequest,
   removeFromStage,
+  setLiveTheme,
   type CallRequestView,
   type LiveStreamView,
 } from "@/app/actions/live"
@@ -48,6 +50,7 @@ import type { ShareTarget } from "@/lib/share-types"
 import { LiveStage, MAX_GUESTS, QualityIcon } from "@/components/live-stage"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { useLivePresence } from "@/lib/use-live-presence"
+import { LIVE_THEMES, liveThemeStyle } from "@/lib/live-themes"
 import { LiveBadge } from "@/components/live-badge"
 import { ReactionLayer } from "@/components/live-reactions"
 import { BackExitMenu } from "@/components/live-back-menu"
@@ -129,7 +132,9 @@ export function StudioConsole({
   // mid-session so it can still be published when they go off air.
   const recordedBlobRef = useRef<Blob | null>(null)
   // Which slide-up panel is open. Only one at a time keeps the studio compact.
-  const [panel, setPanel] = useState<null | "music" | "people">(null)
+  const [panel, setPanel] = useState<null | "music" | "people" | "theme">(null)
+  // Immersive studio theme (persisted server-side, applied live to listeners).
+  const [theme, setTheme] = useState(resumeStream?.theme ?? "default")
 
   // ── Background-music playlist (lifted here so it survives closing the music
   // panel and minimising the whole console — the audio engine itself lives in
@@ -169,6 +174,13 @@ export function StudioConsole({
   function changeMusicVolume(value: number) {
     setMusicVolumeState(value)
     setMusicVolume(value)
+  }
+
+  // Apply a studio theme: update locally at once (snappy), then persist so the
+  // change propagates to every listener via their call-state poll.
+  function changeTheme(id: string) {
+    setTheme(id)
+    if (roomName) void setLiveTheme({ roomName, theme: id }).catch(() => {})
   }
 
   function removeMusicTrack(index: number) {
@@ -372,14 +384,17 @@ export function StudioConsole({
   }
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-zinc-950 text-white">
+    <div
+      className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-zinc-950 text-white transition-[background] duration-700"
+      style={{ ...liveThemeStyle(theme), ["--call-accept" as string]: "var(--live-accent)" }}
+    >
       {/* Deep vertical wash gives the immersive, full-bleed canvas its depth. */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "linear-gradient(180deg, color-mix(in oklch, var(--primary) 14%, #09090b) 0%, #09090b 42%, #050506 100%)",
+            "linear-gradient(180deg, color-mix(in oklch, var(--primary) 16%, transparent) 0%, transparent 46%)",
         }}
       />
       {/* Drifting aurora backdrop — the same immersive skin as the listener view. */}
@@ -388,7 +403,7 @@ export function StudioConsole({
         className="stage-aurora pointer-events-none absolute inset-0 opacity-80"
         style={{
           background:
-            "radial-gradient(75% 55% at 18% -5%, color-mix(in oklch, var(--primary) 55%, transparent), transparent 60%), radial-gradient(65% 50% at 95% 18%, color-mix(in oklch, var(--call-accept) 32%, transparent), transparent 55%), radial-gradient(90% 60% at 50% 108%, color-mix(in oklch, var(--primary) 30%, transparent), transparent 62%)",
+            "radial-gradient(75% 55% at 18% -5%, color-mix(in oklch, var(--primary) 55%, transparent), transparent 60%), radial-gradient(65% 50% at 95% 18%, color-mix(in oklch, var(--live-accent) 32%, transparent), transparent 55%), radial-gradient(90% 60% at 50% 108%, color-mix(in oklch, var(--primary) 30%, transparent), transparent 62%)",
         }}
       />
       {cover && (
@@ -551,6 +566,13 @@ export function StudioConsole({
               disabled={!live}
               onClick={() => setPanel((p) => (p === "people" ? null : "people"))}
             />
+            <DockButton
+              icon={<Palette className="size-5" />}
+              label="Studio theme"
+              active={panel === "theme"}
+              disabled={!live}
+              onClick={() => setPanel((p) => (p === "theme" ? null : "theme"))}
+            />
             {live && roomName && <ShareButton roomName={roomName} title={title} cover={cover} />}
           </div>
         </div>
@@ -583,6 +605,9 @@ export function StudioConsole({
           onRemove={dropGuest}
           onClose={() => setPanel(null)}
         />
+      )}
+      {panel === "theme" && (
+        <ThemePanel current={theme} onSelect={changeTheme} onClose={() => setPanel(null)} />
       )}
       {panel === "music" && (
         <MusicPanel
@@ -704,7 +729,61 @@ function ShareButton({ roomName, title, cover }: { roomName: string; title?: str
   )
 }
 
-
+/** Theme panel: a gallery of immersive studio themes applied live to everyone. */
+function ThemePanel({
+  current,
+  onSelect,
+  onClose,
+}: {
+  current: string
+  onSelect: (id: string) => void
+  onClose: () => void
+}) {
+  return (
+    <Sheet title="Studio theme" onClose={onClose}>
+      <p className="mb-3 text-sm text-muted-foreground">
+        Set the mood of your room. Themes apply instantly to you and everyone listening.
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        {LIVE_THEMES.map((t) => {
+          const active = t.id === current
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => onSelect(t.id)}
+              aria-pressed={active}
+              className={cn(
+                "group relative overflow-hidden rounded-2xl p-3 text-left ring-1 ring-inset transition-all",
+                active ? "ring-2 ring-primary" : "ring-border hover:ring-foreground/30",
+              )}
+              style={liveThemeStyle(t.id)}
+            >
+              {/* Preview swatch using the theme's own background + accent. */}
+              <div className="mb-8 flex items-center gap-1.5">
+                <span
+                  className="size-6 rounded-full ring-1 ring-white/20"
+                  style={{ background: t.primary }}
+                />
+                <span
+                  className="size-6 rounded-full ring-1 ring-white/20"
+                  style={{ background: t.accent }}
+                />
+                {active && (
+                  <span className="ml-auto flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                    <CheckCircle2 className="size-4" />
+                  </span>
+                )}
+              </div>
+              <p className="text-sm font-semibold text-white drop-shadow">{t.name}</p>
+              <p className="mt-0.5 text-[11px] leading-snug text-white/70 drop-shadow">{t.description}</p>
+            </button>
+          )
+        })}
+      </div>
+    </Sheet>
+  )
+}
 
 /** People panel: pending call-in requests, current guests, listener invites. */
 function PeoplePanel({

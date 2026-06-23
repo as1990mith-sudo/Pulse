@@ -641,6 +641,8 @@ export async function getCallState(input: { roomName: string }): Promise<{
   chatBgEffect: ChatBgEffect
   locked: boolean
   pinnedChatId: number | null
+  // Host-chosen studio theme id, polled so listeners restyle live.
+  theme: string
   // True once the host has ended the broadcast — lets listeners auto-close.
   ended: boolean
 }> {
@@ -656,6 +658,7 @@ export async function getCallState(input: { roomName: string }): Promise<{
       status: liveStream.status,
       locked: liveStream.locked,
       pinnedChatId: liveStream.pinnedChatId,
+      theme: liveStream.theme,
     })
     .from(liveStream)
     .where(eq(liveStream.roomName, input.roomName))
@@ -681,6 +684,7 @@ export async function getCallState(input: { roomName: string }): Promise<{
     chatBgEffect: (stream?.chatBgEffect as ChatBgEffect) ?? "none",
     locked: stream?.locked ?? false,
     pinnedChatId: stream?.pinnedChatId ?? null,
+    theme: stream?.theme ?? "default",
     // No row, or row flipped to "ended", both mean the session is over.
     ended: !stream || stream.status !== "live",
   }
@@ -710,6 +714,14 @@ export async function setRoomLock(input: { roomName: string; locked: boolean }):
   const user = await requireUser()
   if ((await getHostId(input.roomName)) !== user.id) throw new Error("Only the host can lock the stage.")
   await db.update(liveStream).set({ locked: input.locked }).where(eq(liveStream.roomName, input.roomName))
+  return { ok: true }
+}
+
+/** Host switches the immersive studio theme. Applies live to all listeners. */
+export async function setLiveTheme(input: { roomName: string; theme: string }): Promise<{ ok: boolean }> {
+  const user = await requireUser()
+  if ((await getHostId(input.roomName)) !== user.id) throw new Error("Only the host can change the theme.")
+  await db.update(liveStream).set({ theme: input.theme }).where(eq(liveStream.roomName, input.roomName))
   return { ok: true }
 }
 

@@ -38,6 +38,7 @@ import { useLivePresence } from "@/lib/use-live-presence"
 import { LiveBadge } from "@/components/live-badge"
 import { LiveStage, QualityIcon } from "@/components/live-stage"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
+import { liveThemeStyle } from "@/lib/live-themes"
 import { ReactionLayer } from "@/components/live-reactions"
 import { getAvatarColor } from "@/lib/identity"
 import { cn } from "@/lib/utils"
@@ -226,6 +227,7 @@ export function LiveListener({
       }
       setMyInvite(s.myInvite)
       setLocked(s.locked)
+      setTheme(s.theme)
       // Flash a "declined" toast when status transitions to declined.
       if (s.myStatus === "declined" && prevStatus.current && prevStatus.current !== "declined") {
         setDeclinedFlash(true)
@@ -297,6 +299,10 @@ export function LiveListener({
     state.connected,
   )
 
+  // Immersive theme, seeded from the stream and kept fresh by the call-state
+  // poll so the host can restyle the room live for everyone.
+  const [theme, setTheme] = useState(stream.theme ?? "default")
+
   const isOnStage = state.canPublish && state.connected
   const colorById: Record<string, string> = {}
   for (const s of speakers) colorById[s.identity] = getAvatarColor(s.identity)
@@ -315,14 +321,17 @@ export function LiveListener({
   }
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden bg-zinc-950 text-white">
-      {/* Drifting aurora backdrop tinted from the cover art for an immersive room. */}
+    <div
+      className="relative flex h-full flex-col overflow-hidden bg-zinc-950 text-white transition-[background] duration-700"
+      style={{ ...liveThemeStyle(theme), ["--call-accept" as string]: "var(--live-accent)" }}
+    >
+      {/* Drifting aurora backdrop, retinted by the active studio theme. */}
       <div
         aria-hidden="true"
         className="stage-aurora pointer-events-none absolute inset-0 opacity-70"
         style={{
           background:
-            "radial-gradient(70% 55% at 20% 0%, color-mix(in oklch, var(--primary) 45%, transparent), transparent 60%), radial-gradient(60% 50% at 90% 20%, color-mix(in oklch, var(--call-accept) 30%, transparent), transparent 55%), radial-gradient(80% 60% at 50% 100%, color-mix(in oklch, var(--primary) 25%, transparent), transparent 60%)",
+            "radial-gradient(70% 55% at 20% 0%, color-mix(in oklch, var(--primary) 45%, transparent), transparent 60%), radial-gradient(60% 50% at 90% 20%, color-mix(in oklch, var(--live-accent) 30%, transparent), transparent 55%), radial-gradient(80% 60% at 50% 100%, color-mix(in oklch, var(--primary) 25%, transparent), transparent 60%)",
         }}
       />
       {stream.cover && (
