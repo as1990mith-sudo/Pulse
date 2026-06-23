@@ -5,7 +5,7 @@ import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { feedComment, feedPost, follow, repost, user as userTable } from "@/lib/db/schema"
+import { feedComment, feedPost, follow, repost, savedItem, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { notifyUser } from "@/app/actions/notifications"
 
@@ -48,6 +48,7 @@ export type FeedPostView = {
   likes: number
   reposts: number
   reposted: boolean
+  saved: boolean
   edited: boolean
   isFollowing: boolean
   isSelf: boolean
@@ -59,6 +60,16 @@ async function getRepostedSet(userId: string | null): Promise<Set<number>> {
   if (!userId) return new Set()
   const rows = await db.select({ postId: repost.postId }).from(repost).where(eq(repost.userId, userId))
   return new Set(rows.map((r) => r.postId))
+}
+
+/** Returns the set of post itemKeys the given user has bookmarked (saved). */
+async function getSavedPostSet(userId: string | null): Promise<Set<string>> {
+  if (!userId) return new Set()
+  const rows = await db
+    .select({ key: savedItem.itemKey })
+    .from(savedItem)
+    .where(and(eq(savedItem.userId, userId), eq(savedItem.itemType, "post")))
+  return new Set(rows.map((r) => r.key))
 }
 
 // Maps a feed_comment row to the client view. `currentUserId` decides `isSelf`.
@@ -131,6 +142,7 @@ export async function getFeed(): Promise<FeedPostView[]> {
   const posts = await db.select().from(feedPost).orderBy(desc(feedPost.createdAt))
   const comments = await db.select().from(feedComment).orderBy(asc(feedComment.createdAt))
   const repostedSet = await getRepostedSet(currentUserId)
+  const savedSet = await getSavedPostSet(currentUserId)
 
   const infoMap = await getUserInfoMap([
     ...posts.map((p) => p.userId),
@@ -159,6 +171,7 @@ export async function getFeed(): Promise<FeedPostView[]> {
     likes: p.likes,
     reposts: p.reposts,
     reposted: repostedSet.has(p.id),
+    saved: savedSet.has(String(p.id)),
     edited: !!p.editedAt,
     isFollowing: followingIds.has(p.userId),
     isSelf: currentUserId === p.userId,
@@ -188,6 +201,7 @@ export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
     .orderBy(desc(feedPost.createdAt))
   const comments = await db.select().from(feedComment).orderBy(asc(feedComment.createdAt))
   const repostedSet = await getRepostedSet(currentUserId)
+  const savedSet = await getSavedPostSet(currentUserId)
 
   const infoMap = await getUserInfoMap([
     ...posts.map((p) => p.userId),
@@ -210,6 +224,7 @@ export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
     likes: p.likes,
     reposts: p.reposts,
     reposted: repostedSet.has(p.id),
+    saved: savedSet.has(String(p.id)),
     edited: !!p.editedAt,
     isFollowing: followingIds.has(p.userId),
     isSelf: currentUserId === p.userId,
@@ -238,6 +253,7 @@ export async function getRepostsByUser(userId: string): Promise<FeedPostView[]> 
   const posts = await db.select().from(feedPost).where(inArray(feedPost.id, postIds))
   const comments = await db.select().from(feedComment).orderBy(asc(feedComment.createdAt))
   const repostedSet = await getRepostedSet(currentUserId)
+  const savedSet = await getSavedPostSet(currentUserId)
 
   const followingIds = currentUserId
     ? new Set(
@@ -274,6 +290,7 @@ export async function getRepostsByUser(userId: string): Promise<FeedPostView[]> 
     likes: p.likes,
     reposts: p.reposts,
     reposted: repostedSet.has(p.id),
+    saved: savedSet.has(String(p.id)),
     edited: !!p.editedAt,
     isFollowing: followingIds.has(p.userId),
     isSelf: currentUserId === p.userId,

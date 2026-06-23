@@ -28,7 +28,7 @@ import {
   X,
 } from "lucide-react"
 import type { CurrentUser } from "@/lib/session"
-import { publishShow } from "@/app/actions/shows"
+import { publishShow, updateEpisode } from "@/app/actions/shows"
 import {
   startBroadcast,
   endBroadcast,
@@ -1148,21 +1148,31 @@ function EqBars() {
   )
 }
 
-/** Full-screen overlay to publish the recorded session after going off air. */
+/**
+ * Post-session overlay. Sessions AUTO-PUBLISH to the host's catalogue the moment
+ * they go off air: on mount we upload any captured audio and create the episode
+ * with its live title. The host can then optionally refine the title,
+ * description, and cover (saved back to the same episode) or just close.
+ */
 function PublishOverlay({ session, onClose }: { session: { title: string; duration: string; audioBlob: Blob | null }; onClose: () => void }) {
   const router = useRouter()
-  const [isPending, startTransition] = useTransition()
+  const [isSaving, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
-  const [published, setPublished] = useState(false)
+  // Publishing lifecycle: "publishing" → "published" (or "failed").
+  const [phase, setPhase] = useState<"publishing" | "published" | "failed">("publishing")
+  const [slug, setSlug] = useState<string | null>(null)
+  const [savedNote, setSavedNote] = useState(false)
 
   const [title, setTitle] = useState(session.title)
   const [description, setDescription] = useState("")
   const [cover, setCover] = useState<string | null>(null)
 
-  function submit(e: React.FormEvent) {
-    e.preventDefault()
-    setError(null)
-    startTransition(async () => {
+  // Auto-publish exactly once when the overlay mounts.
+  const startedRef = useRef(false)
+  useEffect(() => {
+    if (startedRef.current) return
+    startedRef.current = true
+    ;(async () => {
       let audioUrl: string | null = null
       if (session.audioBlob) {
         try {
@@ -1174,9 +1184,37 @@ function PublishOverlay({ session, onClose }: { session: { title: string; durati
           // publish without audio rather than failing
         }
       }
-      const res = await publishShow({ title, tagline: "", category: "", duration: session.duration, description, cover, audioUrl })
+      const res = await publishShow({
+        title: session.title,
+        tagline: "",
+        category: "",
+        duration: session.duration,
+        description: "",
+        cover: null,
+        audioUrl,
+      })
       if (res.ok) {
-        setPublished(true)
+        setSlug(res.slug)
+        setPhase("published")
+        router.refresh()
+      } else {
+        setError(res.error)
+        setPhase("failed")
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Persist optional refinements back onto the auto-published episode.
+  function saveDetails(e: React.FormEvent) {
+    e.preventDefault()
+    if (!slug) return
+    setError(null)
+    setSavedNote(false)
+    startTransition(async () => {
+      const res = await updateEpisode({ slug, title, description, cover })
+      if (res.ok) {
+        setSavedNote(true)
         router.refresh()
       } else {
         setError(res.error)
@@ -1185,33 +1223,44 @@ function PublishOverlay({ session, onClose }: { session: { title: string; durati
   }
 
   return (
-    <Sheet title={published ? "Published" : "Publish this session"} onClose={onClose}>
-      {published ? (
+    <Sheet
+      title={phase === "publishing" ? "Publishing…" : phase === "failed" ? "Couldn't publish" : "Published to your catalogue"}
+      onClose={onClose}
+    >
+      {phase === "publishing" ? (
+        <div className="space-y-3 py-8 text-center">
+          <Loader2 className="mx-auto size-8 animate-spin text-primary" />
+          <p className="font-semibold">Adding this session to your catalogue…</p>
+          <p className="text-sm text-muted-foreground">
+            {session.audioBlob ? "Uploading audio for on-demand playback." : "Saving your show page."}
+          </p>
+        </div>
+      ) : phase === "failed" ? (
         <div className="space-y-3 py-4 text-center">
-          <CheckCircle2 className="mx-auto size-8 text-primary" />
-          <p className="font-semibold">Session published to your catalogue</p>
-          <p className="text-sm text-muted-foreground">Anyone visiting your profile can listen now.</p>
+          <p className="font-semibold">We couldn&apos;t publish this session.</p>
+          {error && <p className="text-sm text-destructive">{error}</p>}
           <Button variant="secondary" onClick={onClose}>
-            Done
+            Close
           </Button>
         </div>
       ) : (
-        <form onSubmit={submit} className="space-y-3">
-          <p className="text-xs text-muted-foreground">
-            Recorded {session.duration}.{" "}
-            {session.audioBlob ? "Audio attached for on-demand playback." : "No audio captured — publishes as a show page."}
-          </p>
+        <form onSubmit={saveDetails} className="space-y-3">
+          <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-3 py-2 text-sm text-primary">
+            <CheckCircle2 className="size-4 shrink-0" />
+            <span>Live on your profile. Recorded {session.duration}. Add details below (optional).</span>
+          </div>
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Episode title" aria-label="Episode title" />
           <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What was this session about?" className="min-h-20" aria-label="Description" />
           <CoverUpload value={cover} onChange={setCover} label="Cover art" />
           {error && <p className="text-sm text-destructive">{error}</p>}
+          {savedNote && <p className="text-sm text-primary">Details saved.</p>}
           <div className="flex items-center gap-2">
-            <Button type="submit" disabled={isPending} className="gap-2">
-              {isPending ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-              Publish
+            <Button type="submit" disabled={isSaving} className="gap-2">
+              {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+              Save details
             </Button>
             <Button type="button" variant="ghost" onClick={onClose}>
-              Not now
+              Done
             </Button>
           </div>
         </form>

@@ -22,6 +22,7 @@ import {
   ImageIcon,
   Copy,
   Check,
+  Bookmark,
 } from "lucide-react"
 import {
   addPostComment,
@@ -33,9 +34,11 @@ import {
   getFeed,
   setCommentLike,
   setPostLike,
+  toggleRepost as toggleRepostAction,
   type FeedCommentView,
   type FeedPostView,
 } from "@/app/actions/feed"
+import { toggleSaveItem } from "@/app/actions/share"
 import { CommentThread, type ThreadComment } from "@/components/comment-thread"
 import { toggleFollow } from "@/app/actions/follow"
 import type { CurrentUser } from "@/lib/session"
@@ -59,6 +62,31 @@ import type { ShareTarget } from "@/lib/share-types"
 import { cn } from "@/lib/utils"
 
 type DraftMedia = { url: string; type: "image" | "video" }
+
+// Hard cap for uploaded clips: 15 minutes.
+const MAX_VIDEO_SECONDS = 15 * 60
+
+/**
+ * Reads a local video file's duration (in seconds) without uploading it, by
+ * loading its metadata into a throwaway <video> element. Used to enforce the
+ * 15-minute cap before the upload starts.
+ */
+function getVideoDuration(file: File): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const v = document.createElement("video")
+    v.preload = "metadata"
+    v.onloadedmetadata = () => {
+      URL.revokeObjectURL(url)
+      resolve(v.duration)
+    }
+    v.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error("Could not read video."))
+    }
+    v.src = url
+  })
+}
 
 // Tiny seeded PRNG (mulberry32) so a given seed always yields the same order.
 // This keeps the "For you" shuffle stable across SWR polls within a session
@@ -177,7 +205,19 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
     const isImage = file.type.startsWith("image/")
     if (!isVideo && !isImage) {
       setError("Please choose a photo or video.")
+      e.target.value = ""
       return
+    }
+    // Enforce the 15-minute video cap before uploading anything.
+    if (isVideo) {
+      const duration = await getVideoDuration(file).catch(() => 0)
+      if (duration > MAX_VIDEO_SECONDS + 1) {
+        const mins = Math.floor(duration / 60)
+        const secs = Math.round(duration % 60)
+        setError(`Videos can be up to 15 minutes. This clip is ${mins}m ${secs}s — please trim it and try again.`)
+        e.target.value = ""
+        return
+      }
     }
     setUploading(true)
     try {
@@ -436,8 +476,11 @@ export function PostCard({
   const router = useRouter()
   const [liked, setLiked] = useState(false)
   const [likes, setLikes] = useState(post.likes)
-  const [reposted, setReposted] = useState(false)
+  const [likeBurst, setLikeBurst] = useState(false)
+  const [reposted, setReposted] = useState(post.reposted)
   const [reposts, setReposts] = useState(post.reposts)
+  const [saved, setSaved] = useState(post.saved)
+  const [expanded, setExpanded] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [showComments, setShowComments] = useState(false)
   const [commentDraft, setCommentDraft] = useState("")
@@ -492,6 +535,12 @@ export function PostCard({
     const next = !liked
     setLiked(next)
     setLikes((n) => (next ? n + 1 : n - 1))
+    // Trigger the springy pop only when liking (not when un-liking).
+    if (next) {
+      setLikeBurst(false)
+      // Re-arm on the next frame so the animation replays on rapid taps.
+      requestAnimationFrame(() => setLikeBurst(true))
+    }
     startTransition(async () => {
       await setPostLike({ postId: post.id, liked: next })
     })
@@ -499,9 +548,36 @@ export function PostCard({
 
   function toggleRepost() {
     if (!currentUser) return
-    setReposted((prev) => {
-      setReposts((n) => (prev ? n - 1 : n + 1))
-      return !prev
+    const next = !reposted
+    // Optimistic update, reconciled with the server's authoritative count.
+    setReposted(next)
+    setReposts((n) => (next ? n + 1 : n - 1))
+    startTransition(async () => {
+      try {
+        const res = await toggleRepostAction(post.id)
+        setReposted(res.reposted)
+        setReposts(res.reposts)
+        await globalMutate("feed")
+      } catch {
+        // Roll back on failure.
+        setReposted(!next)
+        setReposts((n) => (next ? n - 1 : n + 1))
+      }
+    })
+  }
+
+  function toggleSave() {
+    if (!currentUser) return
+    const next = !saved
+    setSaved(next) // optimistic
+    startTransition(async () => {
+      try {
+        const res = await toggleSaveItem(shareTarget)
+        setSaved(res.saved)
+        router.refresh()
+      } catch {
+        setSaved(!next)
+      }
     })
   }
 
@@ -554,6 +630,12 @@ export function PostCard({
   }
 
   const hasMedia = !!post.image || !!post.video
+
+  // Long captions collapse to a preview with a "Read more" toggle. We cut on a
+  // word boundary so the preview never ends mid-word.
+  const COLLAPSE_LIMIT = 280
+  const isLong = text.length > COLLAPSE_LIMIT
+  const displayText = !isLong || expanded ? text : `${text.slice(0, COLLAPSE_LIMIT).replace(/\s+\S*$/, "")}…`
 
   if (deleted) return null
 
@@ -691,11 +773,21 @@ export function PostCard({
             {/* Split on author blank lines and use a tighter margin between
                 paragraphs (~half the height of a full empty line) instead of
                 rendering each blank line at full line-height. */}
-            {text.split(/\n{2,}/).map((para, i) => (
+            {displayText.split(/\n{2,}/).map((para, i) => (
               <p key={i} className={cn("whitespace-pre-wrap leading-snug", i > 0 && "mt-1.5")}>
                 {para}
               </p>
             ))}
+            {isLong && (
+              <button
+                type="button"
+                onClick={() => setExpanded((v) => !v)}
+                className="mt-0.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
+                aria-expanded={expanded}
+              >
+                {expanded ? "Show less" : "Read more"}
+              </button>
+            )}
           </div>
         )
       )}
@@ -703,7 +795,12 @@ export function PostCard({
       {/* Media — large, edge-to-edge Instagram-style */}
       {post.video ? (
         <div className="bg-black">
-          <FeedVideo src={post.video} className="max-h-[640px] w-full" />
+          {/* Contain (not cover) so landscape clips aren't cropped, while tall
+              portrait clips stay within a 9:16-style viewport-height frame. */}
+          <FeedVideo
+            src={post.video}
+            className={cn("mx-auto object-contain", feed ? "max-h-[85svh] w-full" : "max-h-[640px] w-full")}
+          />
         </div>
       ) : post.image ? (
         <>
@@ -717,7 +814,9 @@ export function PostCard({
             <img
               src={post.image || "/placeholder.svg"}
               alt="Post attachment"
-              className="max-h-[640px] w-full object-cover"
+              // Cap tall portrait media to a 9:16-style frame so a single image
+              // never exceeds the viewport; shorter/landscape media shows fully.
+              className={cn("mx-auto w-full object-cover", feed ? "max-h-[85svh]" : "max-h-[640px]")}
             />
           </button>
           {lightboxOpen && (
@@ -748,7 +847,10 @@ export function PostCard({
           aria-pressed={liked}
           aria-label="Like"
         >
-          <Heart className={cn(feed ? "size-7" : "size-6", liked && "fill-current")} />
+          <Heart
+            onAnimationEnd={() => setLikeBurst(false)}
+            className={cn(feed ? "size-7" : "size-6", liked && "fill-current", likeBurst && "animate-like-pop")}
+          />
           {likes > 0 && <span>{likes}</span>}
         </button>
 
@@ -780,9 +882,22 @@ export function PostCard({
         </button>
 
         <button
+          onClick={toggleSave}
+          className={cn(
+            "ml-auto flex items-center transition-colors hover:text-primary",
+            saved && "text-primary",
+            !currentUser && "cursor-not-allowed opacity-60",
+          )}
+          aria-pressed={saved}
+          aria-label={saved ? "Remove bookmark" : "Save post"}
+        >
+          <Bookmark className={cn(feed ? "size-7" : "size-6", saved && "fill-current")} />
+        </button>
+
+        <button
           onClick={() => setShareOpen(true)}
           className={cn(
-            "ml-auto flex items-center gap-1.5 tabular-nums transition-colors hover:text-muted-foreground",
+            "flex items-center gap-1.5 tabular-nums transition-colors hover:text-muted-foreground",
             feed ? "text-[15px]" : "text-sm",
           )}
           aria-label="Share"

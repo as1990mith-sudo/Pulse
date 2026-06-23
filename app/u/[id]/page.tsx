@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation"
 import { getProfile } from "@/lib/profile"
 import { getEpisodesByUser } from "@/lib/content"
-import { getPostsByUser } from "@/app/actions/feed"
+import { getPostsByUser, getRepostsByUser } from "@/app/actions/feed"
+import { getSavedItems, type SavedItemView } from "@/app/actions/share"
 import { getActiveStatusForUser } from "@/app/actions/status"
 import { getCurrentUser } from "@/lib/session"
 import { SiteHeader } from "@/components/site-header"
@@ -17,12 +18,16 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
   const profile = await getProfile(id)
   if (!profile) notFound()
 
-  const [episodes, posts, currentUser, statusGroup] = await Promise.all([
+  const [episodes, posts, reposts, currentUser, statusGroup] = await Promise.all([
     getEpisodesByUser(id),
     getPostsByUser(id),
+    getRepostsByUser(id),
     getCurrentUser(),
     getActiveStatusForUser(id),
   ])
+
+  // Saved bookmarks are private — only fetch them when viewing your own profile.
+  const saved: SavedItemView[] = profile.isSelf ? await getSavedItems() : []
 
   return (
     <div className="min-h-screen">
@@ -40,7 +45,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
               currentUser={currentUser}
             />
             <div className="min-w-0 space-y-1.5">
-              <ProfileName name={profile.name} handle={profile.handle} editable={profile.isSelf} />
+              <ProfileName name={profile.name} editable={profile.isSelf} />
               <ProfileFollowStats
                 userId={profile.id}
                 followers={profile.followers}
@@ -68,6 +73,8 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
           isSelf={profile.isSelf}
           episodes={episodes}
           posts={posts}
+          reposts={reposts}
+          saved={saved}
           currentUser={currentUser}
         />
       </main>

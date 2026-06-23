@@ -12,11 +12,9 @@ import { syncUserDisplayName } from "@/app/actions/users"
  */
 export function ProfileName({
   name,
-  handle,
   editable,
 }: {
   name: string
-  handle: string
   editable: boolean
 }) {
   const router = useRouter()
@@ -91,7 +89,6 @@ export function ProfileName({
           </button>
         </div>
         {error && <p className="text-xs text-destructive">{error}</p>}
-        <p className="text-muted-foreground">{handle}</p>
       </div>
     )
   }
@@ -110,7 +107,6 @@ export function ProfileName({
           </button>
         )}
       </div>
-      <p className="text-muted-foreground">{handle}</p>
     </div>
   )
 }
