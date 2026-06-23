@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import {
   CheckCircle2,
+  Globe,
   Loader2,
   Lock,
   MessageSquare,
@@ -123,6 +124,9 @@ export function StudioConsole({
   const [elapsed, setElapsed] = useState(0)
   const [title, setTitle] = useState(resumeStream?.title ?? `${currentUser.name} — live session`)
   const [cover, setCover] = useState<string | null>(resumeStream?.cover ?? null)
+  // Host-chosen room privacy (only settable before going live). Public rooms are
+  // listed in discovery; private rooms are unlisted and link-only.
+  const [visibility, setVisibility] = useState<"public" | "private">(resumeStream?.visibility ?? "public")
   const [endedSession, setEndedSession] = useState<EndedSession>(null)
   const [roomName, setRoomName] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
@@ -345,7 +349,7 @@ export function StudioConsole({
       setElapsed(0)
     } else {
       setStarting(true)
-      const res = await startBroadcast({ title, cover })
+      const res = await startBroadcast({ title, cover, visibility })
       setStarting(false)
       if (!res.ok) {
         setError(res.error)
@@ -506,10 +510,48 @@ export function StudioConsole({
           </div>
         )}
 
-        {/* Pre-live: pick cover art */}
+        {/* Pre-live: pick cover art + room privacy */}
         {!live && (
-          <div className="border-b border-white/[0.07] px-4 py-4 sm:px-6">
+          <div className="space-y-4 border-b border-white/[0.07] px-4 py-4 sm:px-6">
             <CoverUpload value={cover} onChange={setCover} label="Cover artwork (optional)" />
+
+            {/* Public / Private toggle — segmented control. */}
+            <div className="space-y-2">
+              <span className="text-sm font-medium text-white">Who can find this session</span>
+              <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-white/[0.04] p-1">
+                <button
+                  type="button"
+                  onClick={() => setVisibility("public")}
+                  aria-pressed={visibility === "public"}
+                  className={cn(
+                    "flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors",
+                    visibility === "public"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-white/60 hover:text-white",
+                  )}
+                >
+                  <Globe className="size-4" /> Public
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVisibility("private")}
+                  aria-pressed={visibility === "private"}
+                  className={cn(
+                    "flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors",
+                    visibility === "private"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-white/60 hover:text-white",
+                  )}
+                >
+                  <Lock className="size-4" /> Private
+                </button>
+              </div>
+              <p className="text-xs text-white/50">
+                {visibility === "public"
+                  ? "Listed in Live for everyone to discover and join."
+                  : "Unlisted — only people with the link can join."}
+              </p>
+            </div>
           </div>
         )}
 

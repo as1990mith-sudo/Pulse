@@ -36,7 +36,7 @@ export function CoverUpload({
       <span className="text-sm font-medium">{label}</span>
 
       {value ? (
-        <div className="relative w-full max-w-xs overflow-hidden rounded-xl border border-border/60">
+        <div className="relative w-full overflow-hidden rounded-xl border border-border/60">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={value || "/placeholder.svg"} alt="Selected cover" className="aspect-video w-full object-cover" />
           <Button
@@ -55,7 +55,7 @@ export function CoverUpload({
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          className="flex aspect-video w-full max-w-xs flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-muted/40 text-sm text-muted-foreground transition-colors hover:bg-muted disabled:opacity-60"
+          className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-muted/40 text-sm text-muted-foreground transition-colors hover:bg-muted disabled:opacity-60"
         >
           {uploading ? (
             <>

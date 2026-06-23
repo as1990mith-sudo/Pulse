@@ -310,6 +310,9 @@ export const liveStream = pgTable("live_stream", {
   cover: text("cover"),
   mode: text("mode").notNull().default("audio"), // "audio" | "video"
   status: text("status").notNull().default("live"), // "live" | "ended"
+  // "public" streams appear in the live discovery list; "private" streams are
+  // unlisted and reachable only by direct link (host-controlled before going live).
+  visibility: text("visibility").notNull().default("public"), // "public" | "private"
   locked: boolean("locked").notNull().default(false), // host locked the stage (no new requests)
   pinnedChatId: integer("pinnedChatId"), // a host-pinned chat message id
   chatBgUrl: text("chatBgUrl"), // host-uploaded chat background image

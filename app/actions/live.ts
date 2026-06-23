@@ -52,6 +52,7 @@ export async function heartbeatBroadcast(input: { roomName: string }): Promise<{
 }
 
 export type LiveMode = "audio" | "video"
+export type LiveVisibility = "public" | "private"
 
 export type LiveStreamView = {
   id: number
@@ -63,6 +64,7 @@ export type LiveStreamView = {
   category: string | null
   cover: string | null
   mode: LiveMode
+  visibility: LiveVisibility
   locked?: boolean
   pinnedChatId?: number | null
   chatBgUrl?: string | null
@@ -85,12 +87,14 @@ export async function startBroadcast(input: {
   category?: string
   cover?: string | null
   mode?: LiveMode
+  visibility?: LiveVisibility
 }): Promise<GoLiveResult> {
   const user = await requireUser()
   if (!isLiveKitConfigured()) {
     return { ok: false, error: "Live is not configured yet. Add your LiveKit credentials to start broadcasting." }
   }
   const mode: LiveMode = input.mode === "video" ? "video" : "audio"
+  const visibility: LiveVisibility = input.visibility === "private" ? "private" : "public"
 
   const title = input.title.trim() || `${user.name} — live`
   // Deterministic, unique room name per host session.
@@ -111,6 +115,7 @@ export async function startBroadcast(input: {
     category: input.category?.trim() || null,
     cover: input.cover ?? null,
     mode,
+    visibility,
     status: "live",
   })
 
@@ -188,7 +193,8 @@ export async function getLiveStreams(): Promise<LiveStreamView[]> {
   const rows = await db
     .select()
     .from(liveStream)
-    .where(eq(liveStream.status, "live"))
+    // Only public streams are listed in discovery; private streams stay unlisted.
+    .where(and(eq(liveStream.status, "live"), eq(liveStream.visibility, "public")))
     .orderBy(desc(liveStream.startedAt))
 
   return rows.map((r) => ({
@@ -201,6 +207,7 @@ export async function getLiveStreams(): Promise<LiveStreamView[]> {
     category: r.category,
     cover: r.cover,
     mode: (r.mode as LiveMode) ?? "audio",
+    visibility: (r.visibility as LiveVisibility) ?? "public",
     startedAt: r.startedAt.toISOString(),
   }))
 }
@@ -451,6 +458,7 @@ export async function getMyActiveStream(): Promise<LiveStreamView | null> {
     category: r.category,
     cover: r.cover,
     mode: (r.mode as LiveMode) ?? "audio",
+    visibility: (r.visibility as LiveVisibility) ?? "public",
     locked: r.locked ?? false,
     pinnedChatId: r.pinnedChatId ?? null,
     chatBgUrl: r.chatBgUrl,
@@ -478,6 +486,7 @@ export async function getLiveStream(roomName: string): Promise<LiveStreamView | 
     category: r.category,
     cover: r.cover,
     mode: (r.mode as LiveMode) ?? "audio",
+    visibility: (r.visibility as LiveVisibility) ?? "public",
     locked: r.locked ?? false,
     pinnedChatId: r.pinnedChatId ?? null,
     chatBgUrl: r.chatBgUrl,
