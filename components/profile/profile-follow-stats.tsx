@@ -15,43 +15,31 @@ export function ProfileFollowStats({
   userId,
   followers,
   following,
-  episodes,
-  posts,
 }: {
   userId: string
   followers: number
   following: number
-  episodes: number
-  posts: number
 }) {
   const [mode, setMode] = useState<Mode | null>(null)
 
   return (
-    <div className="flex items-center gap-4 pt-1 text-sm">
+    <div className="flex items-center gap-2.5 text-sm">
       <button
         type="button"
         onClick={() => setMode("followers")}
-        className="transition-colors hover:text-foreground"
+        className="group flex items-baseline gap-1.5 rounded-full border border-border/60 bg-secondary/40 px-3.5 py-1.5 transition-colors hover:border-border hover:bg-secondary"
       >
-        <span className="font-semibold text-foreground">{followers}</span>{" "}
-        <span className="text-muted-foreground">followers</span>
+        <span className="font-bold tabular-nums text-foreground">{followers}</span>
+        <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground">Followers</span>
       </button>
       <button
         type="button"
         onClick={() => setMode("following")}
-        className="transition-colors hover:text-foreground"
+        className="group flex items-baseline gap-1.5 rounded-full border border-border/60 bg-secondary/40 px-3.5 py-1.5 transition-colors hover:border-border hover:bg-secondary"
       >
-        <span className="font-semibold text-foreground">{following}</span>{" "}
-        <span className="text-muted-foreground">following</span>
+        <span className="font-bold tabular-nums text-foreground">{following}</span>
+        <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground">Following</span>
       </button>
-      <span>
-        <span className="font-semibold text-foreground">{episodes}</span>{" "}
-        <span className="text-muted-foreground">episodes</span>
-      </span>
-      <span>
-        <span className="font-semibold text-foreground">{posts}</span>{" "}
-        <span className="text-muted-foreground">posts</span>
-      </span>
 
       {mode && <FollowListDialog userId={userId} mode={mode} onClose={() => setMode(null)} />}
     </div>

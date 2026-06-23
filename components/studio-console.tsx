@@ -75,7 +75,7 @@ function formatDuration(s: number) {
   return `${h}h ${(m % 60).toString().padStart(2, "0")}m`
 }
 
-type EndedSession = { title: string; duration: string; audioBlob: Blob | null } | null
+type EndedSession = { title: string; duration: string; audioBlob: Blob | null; cover: string | null } | null
 type Track = { url: string; name: string }
 
 export function StudioConsole({
@@ -345,7 +345,9 @@ export function StudioConsole({
       setPanel(null)
       setRecording(false)
       recordedBlobRef.current = null
-      setEndedSession({ title, duration, audioBlob })
+      // Carry the live session's cover art into the auto-published episode so the
+      // media player shows the same artwork that was used on air.
+      setEndedSession({ title, duration, audioBlob, cover })
       setElapsed(0)
     } else {
       setStarting(true)
@@ -1199,7 +1201,7 @@ function EqBars() {
  * with its live title. The host can then optionally refine the title,
  * description, and cover (saved back to the same episode) or just close.
  */
-function PublishOverlay({ session, onClose }: { session: { title: string; duration: string; audioBlob: Blob | null }; onClose: () => void }) {
+function PublishOverlay({ session, onClose }: { session: { title: string; duration: string; audioBlob: Blob | null; cover: string | null }; onClose: () => void }) {
   const router = useRouter()
   const [isSaving, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -1210,7 +1212,9 @@ function PublishOverlay({ session, onClose }: { session: { title: string; durati
 
   const [title, setTitle] = useState(session.title)
   const [description, setDescription] = useState("")
-  const [cover, setCover] = useState<string | null>(null)
+  // Default to the live session's cover so the published episode keeps the same
+  // artwork; the host can still swap it during the recap.
+  const [cover, setCover] = useState<string | null>(session.cover)
 
   // Auto-publish exactly once when the overlay mounts.
   const startedRef = useRef(false)
@@ -1235,7 +1239,8 @@ function PublishOverlay({ session, onClose }: { session: { title: string; durati
         category: "",
         duration: session.duration,
         description: "",
-        cover: null,
+        // Reuse the live session's cover art for the auto-published episode.
+        cover: session.cover,
         audioUrl,
       })
       if (res.ok) {

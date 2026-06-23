@@ -12,6 +12,7 @@ import { ProfileFollowStats } from "@/components/profile/profile-follow-stats"
 import { ProfileTabs } from "@/components/profile/profile-tabs"
 import { ProfileAvatar } from "@/components/profile/profile-avatar"
 import { ProfileName } from "@/components/profile/profile-name"
+import { ProfileBio } from "@/components/profile/profile-bio"
 
 export default async function ProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -33,39 +34,62 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
     <div className="min-h-screen">
       <SiteHeader />
       <main className="mx-auto w-full max-w-4xl px-4 py-5 sm:px-6">
-        <header className="flex flex-col gap-4 pb-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4 sm:gap-6">
-            <ProfileAvatar
-              initials={profile.initials}
-              color={profile.color}
-              image={profile.image}
-              name={profile.name}
-              editable={profile.isSelf}
-              statusGroup={statusGroup}
-              currentUser={currentUser}
+        <header className="mb-6 overflow-hidden rounded-3xl border border-border/60 bg-card/40 shadow-sm backdrop-blur">
+          {/* Cover banner with a soft brand-tinted gradient + subtle glow. */}
+          <div className="relative h-24 bg-gradient-to-br from-primary/30 via-primary/10 to-transparent sm:h-32">
+            <div
+              aria-hidden
+              className="absolute inset-0"
+              style={{
+                backgroundImage:
+                  "radial-gradient(120% 100% at 85% 0%, color-mix(in oklab, var(--primary) 22%, transparent) 0%, transparent 60%)",
+              }}
             />
-            <div className="min-w-0 space-y-1.5">
-              <ProfileName name={profile.name} editable={profile.isSelf} />
+            <div className="absolute inset-x-0 bottom-0 h-px bg-border/60" />
+          </div>
+
+          <div className="px-5 pb-6 sm:px-8">
+            {/* Avatar overlaps the banner; actions align to its baseline. */}
+            <div className="-mt-12 flex items-end justify-between gap-4 sm:-mt-14">
+              <div className="w-fit rounded-full bg-background p-1 shadow-lg">
+                <ProfileAvatar
+                  initials={profile.initials}
+                  color={profile.color}
+                  image={profile.image}
+                  name={profile.name}
+                  editable={profile.isSelf}
+                  statusGroup={statusGroup}
+                  currentUser={currentUser}
+                />
+              </div>
+
+              {!profile.isSelf && (
+                <div className="flex items-center gap-2 pb-1">
+                  <ProfileFollowButton
+                    targetUserId={profile.id}
+                    targetName={profile.name}
+                    initialFollowing={profile.isFollowing}
+                  />
+                  {currentUser && <ProfileMessageButton targetUserId={profile.id} targetName={profile.name} />}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <div className="space-y-0.5">
+                <ProfileName name={profile.name} editable={profile.isSelf} />
+                <p className="text-sm text-muted-foreground">{profile.handle}</p>
+              </div>
+
+              <ProfileBio bio={profile.bio} editable={profile.isSelf} />
+
               <ProfileFollowStats
                 userId={profile.id}
                 followers={profile.followers}
                 following={profile.following}
-                episodes={episodes.length}
-                posts={posts.length}
               />
             </div>
           </div>
-
-          {!profile.isSelf && (
-            <div className="flex items-center gap-2">
-              <ProfileFollowButton
-                targetUserId={profile.id}
-                targetName={profile.name}
-                initialFollowing={profile.isFollowing}
-              />
-              {currentUser && <ProfileMessageButton targetUserId={profile.id} targetName={profile.name} />}
-            </div>
-          )}
         </header>
 
         <ProfileTabs

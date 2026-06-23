@@ -33,6 +33,41 @@ export async function searchUsersAction(query: string): Promise<ProfileSummary[]
   return searchUsers(query)
 }
 
+/** Max number of words allowed in a profile bio. */
+const BIO_MAX_WORDS = 25
+
+/** Counts whitespace-delimited words in a string. */
+function countWords(text: string): number {
+  const trimmed = text.trim()
+  if (!trimmed) return 0
+  return trimmed.split(/\s+/).length
+}
+
+/**
+ * Server action: save the signed-in user's profile bio. Bios are limited to
+ * BIO_MAX_WORDS words; passing an empty string clears the bio. Returns the
+ * normalized (trimmed) bio so the client can sync its local state.
+ */
+export async function updateBio(
+  bio: string,
+): Promise<{ ok: true; bio: string } | { ok: false; error: string }> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) return { ok: false, error: "You must be signed in to do that." }
+
+  const trimmed = bio.trim()
+  if (countWords(trimmed) > BIO_MAX_WORDS) {
+    return { ok: false, error: `Your bio can be at most ${BIO_MAX_WORDS} words.` }
+  }
+
+  await db
+    .update(userTable)
+    .set({ bio: trimmed.length > 0 ? trimmed : null })
+    .where(eq(userTable.id, session.user.id))
+
+  revalidatePath(`/u/${session.user.id}`)
+  return { ok: true, bio: trimmed }
+}
+
 /**
  * Server action: load a compact public profile for the hover/tap preview
  * popover (live chat, etc.). Returns null if the user no longer exists.
