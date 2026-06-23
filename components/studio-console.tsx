@@ -705,19 +705,21 @@ function DockButton({
       aria-pressed={active}
       title={label}
       className={cn(
-        "relative flex size-12 shrink-0 items-center justify-center rounded-full shadow-xl ring-1 ring-inset transition-all hover:scale-105 active:scale-95 disabled:opacity-40 [&>svg]:size-[22px] [&>svg]:[stroke-width:2.75]",
+        "group relative flex size-12 shrink-0 items-center justify-center rounded-full ring-1 ring-inset backdrop-blur-xl transition-all duration-300 ease-out hover:-translate-y-0.5 active:scale-95 active:translate-y-0 disabled:pointer-events-none disabled:opacity-40 [&>svg]:relative [&>svg]:z-10 [&>svg]:size-[21px] [&>svg]:[stroke-width:2]",
+        // Inner top highlight + soft ambient depth shadow on every state.
+        "shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_6px_20px_-6px_rgba(0,0,0,0.7)]",
         recording
-          ? "bg-live text-live-foreground shadow-live/40 ring-white/25"
+          ? "bg-gradient-to-b from-live to-live/85 text-live-foreground ring-white/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_8px_28px_-6px_var(--live)]"
           : primary
-            ? "bg-call-accept text-call-accept-foreground shadow-call-accept/40 ring-white/25"
+            ? "bg-gradient-to-b from-call-accept to-call-accept/85 text-call-accept-foreground ring-white/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_8px_28px_-6px_var(--call-accept)]"
             : active
-              ? "bg-primary text-primary-foreground shadow-primary/40 ring-white/25"
-              : "bg-white/25 text-white ring-white/25 hover:bg-white/35",
+              ? "bg-gradient-to-b from-primary to-primary/85 text-primary-foreground ring-white/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_8px_28px_-6px_var(--primary)]"
+              : "bg-gradient-to-b from-white/[0.14] to-white/[0.04] text-white/90 ring-white/15 hover:from-white/20 hover:to-white/[0.08] hover:text-white hover:ring-white/25",
       )}
     >
       {icon}
       {badge > 0 && (
-        <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-live text-[10px] font-bold text-live-foreground ring-2 ring-zinc-950">
+        <span className="absolute -right-0.5 -top-0.5 z-20 flex size-[18px] items-center justify-center rounded-full bg-gradient-to-b from-live to-live/80 text-[10px] font-bold text-live-foreground shadow-[0_2px_6px_-1px_var(--live)] ring-2 ring-zinc-950">
           {badge}
         </span>
       )}
@@ -762,7 +764,7 @@ function ShareButton({ roomName, title, cover }: { roomName: string; title?: str
         onClick={() => setOpen(true)}
         aria-label="Share room"
         title="Share room"
-        className="flex size-12 shrink-0 items-center justify-center rounded-full bg-white/25 text-white shadow-xl ring-1 ring-inset ring-white/25 backdrop-blur-md transition-all hover:scale-105 hover:bg-white/35 active:scale-95 [&>svg]:size-[22px] [&>svg]:stroke-[2.75]"
+        className="group relative flex size-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-b from-white/[0.14] to-white/[0.04] text-white/90 ring-1 ring-inset ring-white/15 backdrop-blur-xl transition-all duration-300 ease-out hover:-translate-y-0.5 hover:from-white/20 hover:to-white/[0.08] hover:text-white hover:ring-white/25 active:translate-y-0 active:scale-95 shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_6px_20px_-6px_rgba(0,0,0,0.7)] [&>svg]:relative [&>svg]:z-10 [&>svg]:size-[21px] [&>svg]:stroke-[2]"
       >
         <Send />
       </button>
