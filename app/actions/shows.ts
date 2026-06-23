@@ -116,6 +116,30 @@ export async function updateEpisode(input: {
 }
 
 /**
+ * Toggles whether one of the signed-in user's own episodes is private. Private
+ * episodes are hidden from everyone except the host (the owner). Scoped to
+ * hostUserId so a user can only change the privacy of their own episodes.
+ */
+export async function setEpisodePrivacy(slug: string, isPrivate: boolean): Promise<ActionResult> {
+  const user = await requireUser()
+
+  const [row] = await db.select().from(episode).where(eq(episode.slug, slug)).limit(1)
+  if (!row) return { ok: false, error: "Episode not found." }
+  if (row.hostUserId !== user.id) {
+    return { ok: false, error: "You can only change your own episodes." }
+  }
+
+  await db
+    .update(episode)
+    .set({ isPrivate })
+    .where(and(eq(episode.slug, slug), eq(episode.hostUserId, user.id)))
+
+  revalidatePath("/live")
+  revalidatePath(`/u/${user.id}`)
+  return { ok: true }
+}
+
+/**
  * Deletes one of the signed-in user's own published episodes (identified by its
  * slug). Scoped to hostUserId so a user can only remove their own episodes.
  */

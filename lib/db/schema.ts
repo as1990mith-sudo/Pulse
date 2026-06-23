@@ -9,6 +9,8 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("emailVerified").notNull().default(false),
   image: text("image"),
+  // Short user-written profile bio (max 25 words, enforced in the action).
+  bio: text("bio"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 })
@@ -156,6 +158,9 @@ export const episode = pgTable("episode", {
   hostUserId: text("hostUserId"),
   hostHandle: text("hostHandle"),
   likes: integer("likes").notNull().default(0),
+  // When true the episode is hidden from everyone except its host (the owner).
+  // Hosts toggle this from the episode menu on their own catalogue.
+  isPrivate: boolean("isPrivate").notNull().default(false),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
@@ -310,6 +315,9 @@ export const liveStream = pgTable("live_stream", {
   cover: text("cover"),
   mode: text("mode").notNull().default("audio"), // "audio" | "video"
   status: text("status").notNull().default("live"), // "live" | "ended"
+  // "public" streams appear in the live discovery list; "private" streams are
+  // unlisted and reachable only by direct link (host-controlled before going live).
+  visibility: text("visibility").notNull().default("public"), // "public" | "private"
   locked: boolean("locked").notNull().default(false), // host locked the stage (no new requests)
   pinnedChatId: integer("pinnedChatId"), // a host-pinned chat message id
   chatBgUrl: text("chatBgUrl"), // host-uploaded chat background image

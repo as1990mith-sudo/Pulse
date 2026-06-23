@@ -180,13 +180,15 @@ function TabButton({
     <button
       onClick={onClick}
       aria-pressed={active}
+      title={label}
       className={cn(
         "flex items-center justify-center gap-2 py-3 text-xs font-semibold uppercase tracking-wider transition-colors",
         active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
       )}
     >
       {icon}
-      <span>
+      {/* Only the active tab reveals its label (+ count); the rest stay icon-only. */}
+      <span className={cn(!active && "sr-only")}>
         {label}
         {count > 0 ? ` ${count}` : ""}
       </span>

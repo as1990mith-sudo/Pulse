@@ -3,9 +3,9 @@
 import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Clock, Download, Loader2, MoreVertical, Play, Trash2 } from "lucide-react"
+import { Clock, Download, Globe, Loader2, Lock, MoreVertical, Play, Trash2 } from "lucide-react"
 import type { Show } from "@/lib/data"
-import { deleteEpisode } from "@/app/actions/shows"
+import { deleteEpisode, setEpisodePrivacy } from "@/app/actions/shows"
 import { Badge } from "@/components/ui/badge"
 import { LiveBadge, ListenerCount } from "@/components/live-badge"
 import { MarqueeTitle } from "@/components/marquee-title"
@@ -28,6 +28,23 @@ export function EpisodeRow({ show, owned = false }: { show: Show; owned?: boolea
   const [confirming, setConfirming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  // Optimistic privacy state so the menu label flips instantly on toggle.
+  const [isPrivate, setIsPrivate] = useState(Boolean(show.isPrivate))
+
+  function handleTogglePrivacy() {
+    setError(null)
+    const next = !isPrivate
+    setIsPrivate(next)
+    startTransition(async () => {
+      const res = await setEpisodePrivacy(show.id, next)
+      if (res.ok) {
+        router.refresh()
+      } else {
+        setIsPrivate(!next)
+        setError(res.error)
+      }
+    })
+  }
 
   const href = show.status === "upcoming" ? "/#upcoming" : `/live/${show.id}`
 
@@ -69,6 +86,11 @@ export function EpisodeRow({ show, owned = false }: { show: Show; owned?: boolea
             <Badge variant="outline" className="border-border/60 text-[10px] text-muted-foreground">
               {show.category}
             </Badge>
+            {owned && isPrivate && (
+              <Badge variant="outline" className="gap-1 border-border/60 text-[10px] text-muted-foreground">
+                <Lock className="size-2.5" /> Private
+              </Badge>
+            )}
             {show.status === "live" && <ListenerCount count={show.listeners} />}
           </div>
           <MarqueeTitle
@@ -125,6 +147,17 @@ export function EpisodeRow({ show, owned = false }: { show: Show; owned?: boolea
 
             {owned && (
               <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem closeOnClick={false} onClick={handleTogglePrivacy} disabled={isPending}>
+                  {isPending ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : isPrivate ? (
+                    <Globe className="size-4" />
+                  ) : (
+                    <Lock className="size-4" />
+                  )}
+                  {isPrivate ? "Make public" : "Make private"}
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 {confirming ? (
                   <DropdownMenuItem

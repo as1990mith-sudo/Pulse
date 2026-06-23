@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import {
   CheckCircle2,
+  Globe,
   Loader2,
   Lock,
   MessageSquare,
@@ -74,7 +75,7 @@ function formatDuration(s: number) {
   return `${h}h ${(m % 60).toString().padStart(2, "0")}m`
 }
 
-type EndedSession = { title: string; duration: string; audioBlob: Blob | null } | null
+type EndedSession = { title: string; duration: string; audioBlob: Blob | null; cover: string | null } | null
 type Track = { url: string; name: string }
 
 export function StudioConsole({
@@ -123,6 +124,9 @@ export function StudioConsole({
   const [elapsed, setElapsed] = useState(0)
   const [title, setTitle] = useState(resumeStream?.title ?? `${currentUser.name} — live session`)
   const [cover, setCover] = useState<string | null>(resumeStream?.cover ?? null)
+  // Host-chosen room privacy (only settable before going live). Public rooms are
+  // listed in discovery; private rooms are unlisted and link-only.
+  const [visibility, setVisibility] = useState<"public" | "private">(resumeStream?.visibility ?? "public")
   const [endedSession, setEndedSession] = useState<EndedSession>(null)
   const [roomName, setRoomName] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
@@ -341,11 +345,13 @@ export function StudioConsole({
       setPanel(null)
       setRecording(false)
       recordedBlobRef.current = null
-      setEndedSession({ title, duration, audioBlob })
+      // Carry the live session's cover art into the auto-published episode so the
+      // media player shows the same artwork that was used on air.
+      setEndedSession({ title, duration, audioBlob, cover })
       setElapsed(0)
     } else {
       setStarting(true)
-      const res = await startBroadcast({ title, cover })
+      const res = await startBroadcast({ title, cover, visibility })
       setStarting(false)
       if (!res.ok) {
         setError(res.error)
@@ -506,18 +512,57 @@ export function StudioConsole({
           </div>
         )}
 
-        {/* Pre-live: pick cover art */}
+        {/* Pre-live: pick cover art + room privacy */}
         {!live && (
-          <div className="border-b border-white/[0.07] px-4 py-4 sm:px-6">
+          <div className="space-y-4 border-b border-white/[0.07] px-4 py-4 sm:px-6">
             <CoverUpload value={cover} onChange={setCover} label="Cover artwork (optional)" />
+
+            {/* Public / Private toggle — segmented control. */}
+            <div className="space-y-2">
+              <span className="text-sm font-medium text-white">Who can find this session</span>
+              <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-white/[0.04] p-1">
+                <button
+                  type="button"
+                  onClick={() => setVisibility("public")}
+                  aria-pressed={visibility === "public"}
+                  className={cn(
+                    "flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors",
+                    visibility === "public"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-white/60 hover:text-white",
+                  )}
+                >
+                  <Globe className="size-4" /> Public
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVisibility("private")}
+                  aria-pressed={visibility === "private"}
+                  className={cn(
+                    "flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors",
+                    visibility === "private"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-white/60 hover:text-white",
+                  )}
+                >
+                  <Lock className="size-4" /> Private
+                </button>
+              </div>
+              <p className="text-xs text-white/50">
+                {visibility === "public"
+                  ? "Listed in Live for everyone to discover and join."
+                  : "Unlisted — only people with the link can join."}
+              </p>
+            </div>
           </div>
         )}
 
-        {/* Speaker stage — unified 4-col × 2-row grid (host first, then guests) */}
-        <div className="relative shrink-0 border-b border-white/[0.07] px-4 py-3 sm:px-6">
-          <div className="mb-1.5 flex items-center justify-between">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-white/70">On stage</h2>
-            <div className="flex items-center gap-1.5">
+        {/* Speaker stage — unified 4-col grid (host first, then guests) */}
+        <div className="relative shrink-0 border-b border-white/[0.07] px-4 py-2.5 sm:px-6">
+          {/* Status row only appears when there's something to flag, so an idle
+              room gives all its vertical space to the call-in slots & chat. */}
+          {(locked || pending.length > 0) && (
+            <div className="mb-1.5 flex items-center justify-end gap-1.5">
               {locked && (
                 <span className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-white/60">
                   <Lock className="size-3" /> Locked
@@ -529,7 +574,7 @@ export function StudioConsole({
                 </span>
               )}
             </div>
-          </div>
+          )}
           <LiveStage
             host={{ id: currentUser.id, name: currentUser.name, color: currentUser.color, image: currentUser.image }}
             speakers={speakers}
@@ -663,19 +708,21 @@ function DockButton({
       aria-pressed={active}
       title={label}
       className={cn(
-        "relative flex size-12 shrink-0 items-center justify-center rounded-full shadow-xl ring-1 ring-inset transition-all hover:scale-105 active:scale-95 disabled:opacity-40 [&>svg]:size-[22px] [&>svg]:[stroke-width:2.75]",
+        "group relative flex size-12 shrink-0 items-center justify-center rounded-full ring-1 ring-inset backdrop-blur-xl transition-all duration-300 ease-out hover:-translate-y-0.5 active:scale-95 active:translate-y-0 disabled:pointer-events-none disabled:opacity-40 [&>svg]:relative [&>svg]:z-10 [&>svg]:size-[21px] [&>svg]:[stroke-width:2]",
+        // Inner top highlight + soft ambient depth shadow on every state.
+        "shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_6px_20px_-6px_rgba(0,0,0,0.7)]",
         recording
-          ? "bg-live text-live-foreground shadow-live/40 ring-white/25"
+          ? "bg-gradient-to-b from-live to-live/85 text-live-foreground ring-white/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_8px_28px_-6px_var(--live)]"
           : primary
-            ? "bg-call-accept text-call-accept-foreground shadow-call-accept/40 ring-white/25"
+            ? "bg-gradient-to-b from-call-accept to-call-accept/85 text-call-accept-foreground ring-white/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_8px_28px_-6px_var(--call-accept)]"
             : active
-              ? "bg-primary text-primary-foreground shadow-primary/40 ring-white/25"
-              : "bg-white/25 text-white ring-white/25 hover:bg-white/35",
+              ? "bg-gradient-to-b from-primary to-primary/85 text-primary-foreground ring-white/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_8px_28px_-6px_var(--primary)]"
+              : "bg-gradient-to-b from-white/[0.14] to-white/[0.04] text-white/90 ring-white/15 hover:from-white/20 hover:to-white/[0.08] hover:text-white hover:ring-white/25",
       )}
     >
       {icon}
       {badge > 0 && (
-        <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-live text-[10px] font-bold text-live-foreground ring-2 ring-zinc-950">
+        <span className="absolute -right-0.5 -top-0.5 z-20 flex size-[18px] items-center justify-center rounded-full bg-gradient-to-b from-live to-live/80 text-[10px] font-bold text-live-foreground shadow-[0_2px_6px_-1px_var(--live)] ring-2 ring-zinc-950">
           {badge}
         </span>
       )}
@@ -720,7 +767,7 @@ function ShareButton({ roomName, title, cover }: { roomName: string; title?: str
         onClick={() => setOpen(true)}
         aria-label="Share room"
         title="Share room"
-        className="flex size-12 shrink-0 items-center justify-center rounded-full bg-white/25 text-white shadow-xl ring-1 ring-inset ring-white/25 backdrop-blur-md transition-all hover:scale-105 hover:bg-white/35 active:scale-95 [&>svg]:size-[22px] [&>svg]:stroke-[2.75]"
+        className="group relative flex size-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-b from-white/[0.14] to-white/[0.04] text-white/90 ring-1 ring-inset ring-white/15 backdrop-blur-xl transition-all duration-300 ease-out hover:-translate-y-0.5 hover:from-white/20 hover:to-white/[0.08] hover:text-white hover:ring-white/25 active:translate-y-0 active:scale-95 shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_6px_20px_-6px_rgba(0,0,0,0.7)] [&>svg]:relative [&>svg]:z-10 [&>svg]:size-[21px] [&>svg]:stroke-[2]"
       >
         <Send />
       </button>
@@ -1154,7 +1201,7 @@ function EqBars() {
  * with its live title. The host can then optionally refine the title,
  * description, and cover (saved back to the same episode) or just close.
  */
-function PublishOverlay({ session, onClose }: { session: { title: string; duration: string; audioBlob: Blob | null }; onClose: () => void }) {
+function PublishOverlay({ session, onClose }: { session: { title: string; duration: string; audioBlob: Blob | null; cover: string | null }; onClose: () => void }) {
   const router = useRouter()
   const [isSaving, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -1165,7 +1212,9 @@ function PublishOverlay({ session, onClose }: { session: { title: string; durati
 
   const [title, setTitle] = useState(session.title)
   const [description, setDescription] = useState("")
-  const [cover, setCover] = useState<string | null>(null)
+  // Default to the live session's cover so the published episode keeps the same
+  // artwork; the host can still swap it during the recap.
+  const [cover, setCover] = useState<string | null>(session.cover)
 
   // Auto-publish exactly once when the overlay mounts.
   const startedRef = useRef(false)
@@ -1190,7 +1239,8 @@ function PublishOverlay({ session, onClose }: { session: { title: string; durati
         category: "",
         duration: session.duration,
         description: "",
-        cover: null,
+        // Reuse the live session's cover art for the auto-published episode.
+        cover: session.cover,
         audioUrl,
       })
       if (res.ok) {

@@ -12,6 +12,7 @@ export type Profile = {
   initials: string
   color: string
   image: string | null
+  bio: string | null
   followers: number
   following: number
   isSelf: boolean
@@ -48,6 +49,7 @@ export async function getProfile(userId: string): Promise<Profile | null> {
     initials: getInitials(row.name),
     color: getAvatarColor(row.id),
     image: row.image,
+    bio: row.bio ?? null,
     followers: followersRow?.value ?? 0,
     following: followingRow?.value ?? 0,
     isSelf: viewerId === userId,
