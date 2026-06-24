@@ -548,9 +548,11 @@ export function VideoStudioConsole({
           </div>
         )}
 
-        {/* Control dock — overlaid at the bottom of the camera region */}
+        {/* Control dock — overlaid at the bottom of the camera region. Sits
+            above the camera-off / connecting wash (z-30) so the camera and mic
+            controls stay tappable even when the camera is turned off. */}
         {live && (
-          <div className="absolute inset-x-0 bottom-0 z-20 flex items-center justify-center gap-3 p-3">
+          <div className="absolute inset-x-0 bottom-0 z-40 flex items-center justify-center gap-3 p-3">
             <GlassButton label="Flip camera" onClick={() => void flipCamera()} disabled={!connected || !camOn}>
               <RefreshCw className="size-5" />
             </GlassButton>
