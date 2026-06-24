@@ -26,6 +26,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Images,
+  GripVertical,
 } from "lucide-react"
 import {
   addPostComment,
@@ -362,8 +363,12 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
 
             {media.length > 1 && (
               <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">
-                  Drag to reorder — the first item shows first in your post. ({media.length}/{MAX_MEDIA})
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <GripVertical className="size-3.5" />
+                  <span>
+                    Drag to reorder — the <span className="font-medium text-foreground">first item</span> leads your post.
+                  </span>
+                  <span className="ml-auto tabular-nums">{media.length}/{MAX_MEDIA}</span>
                 </p>
                 <ul className="flex flex-wrap gap-2">
                   {media.map((item, index) => (
@@ -378,8 +383,10 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
                       }}
                       onDragEnd={() => setDragIndex(null)}
                       className={cn(
-                        "group relative size-20 cursor-grab overflow-hidden rounded-lg border border-border/60 bg-muted active:cursor-grabbing",
-                        dragIndex === index && "opacity-50 ring-2 ring-primary",
+                        "group relative size-20 cursor-grab overflow-hidden rounded-xl border bg-muted shadow-sm transition-all active:cursor-grabbing",
+                        dragIndex === index
+                          ? "scale-95 border-primary opacity-60 ring-2 ring-primary"
+                          : "border-border/60 hover:border-primary/50",
                       )}
                     >
                       {item.type === "video" ? (
@@ -388,25 +395,45 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={item.url || "/placeholder.svg"} alt={`Upload ${index + 1}`} className="size-full object-cover" />
                       )}
-                      {/* Order badge */}
-                      <span className="absolute left-1 top-1 flex size-5 items-center justify-center rounded-full bg-black/70 text-[10px] font-bold text-white">
+                      {/* Order badge — leading item highlighted in brand color. */}
+                      <span
+                        className={cn(
+                          "absolute left-1.5 top-1.5 flex size-5 items-center justify-center rounded-full text-[10px] font-bold shadow-sm",
+                          index === 0 ? "bg-primary text-primary-foreground" : "bg-black/70 text-white",
+                        )}
+                      >
                         {index + 1}
                       </span>
                       {item.type === "video" && (
-                        <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 py-0.5 text-[9px] font-semibold uppercase text-white">
+                        <span className="absolute bottom-1.5 right-1.5 rounded bg-black/70 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
                           Video
                         </span>
                       )}
                       <button
                         type="button"
                         onClick={() => removeMediaAt(index)}
-                        className="absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-background/80 text-foreground opacity-0 backdrop-blur transition-opacity hover:bg-background group-hover:opacity-100"
+                        className="absolute right-1.5 top-1.5 flex size-5 items-center justify-center rounded-full bg-background/80 text-foreground opacity-0 backdrop-blur transition-opacity hover:bg-background group-hover:opacity-100"
                         aria-label={`Remove item ${index + 1}`}
                       >
                         <X className="size-3" />
                       </button>
                     </li>
                   ))}
+                  {/* Add-more tile */}
+                  {media.length < MAX_MEDIA && (
+                    <li>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                        className="flex size-20 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border/70 bg-background text-muted-foreground transition-colors hover:border-primary/70 hover:text-foreground disabled:opacity-50"
+                        aria-label="Add more media"
+                      >
+                        {uploading ? <Loader2 className="size-5 animate-spin" /> : <Plus className="size-5" />}
+                        <span className="text-[10px] font-medium">Add</span>
+                      </button>
+                    </li>
+                  )}
                 </ul>
               </div>
             )}
@@ -618,8 +645,12 @@ function PostMediaCarousel({
 
       {multiple && (
         <>
+          {/* Soft scrims keep the counter and dots legible over bright media. */}
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/35 to-transparent" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/35 to-transparent" />
+
           {/* Counter + multi-media badge (top-right), like Instagram. */}
-          <div className="pointer-events-none absolute right-3 top-3 flex items-center gap-1 rounded-full bg-black/60 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur">
+          <div className="pointer-events-none absolute right-3 top-3 flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-xs font-semibold tabular-nums text-white shadow-sm backdrop-blur-sm">
             <Images className="size-3.5" />
             {active + 1}/{items.length}
           </div>
@@ -630,8 +661,8 @@ function PostMediaCarousel({
               <span
                 key={i}
                 className={cn(
-                  "size-1.5 rounded-full transition-all",
-                  i === active ? "w-3 bg-white" : "bg-white/50",
+                  "h-1.5 rounded-full shadow-sm transition-all duration-300",
+                  i === active ? "w-4 bg-white" : "w-1.5 bg-white/55",
                 )}
               />
             ))}
