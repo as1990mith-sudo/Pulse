@@ -128,7 +128,11 @@ function DreamReplyItem({
     return () => document.removeEventListener("pointerdown", onDown)
   }, [menuOpen])
 
-  const canEdit = isAdmin && Date.now() - reply.createdAtMs < EDIT_WINDOW_MS
+  const canEdit = reply.isSelf && Date.now() - reply.createdAtMs < EDIT_WINDOW_MS
+  // The author can edit/delete their own reply; the admin can also delete any
+  // reply for moderation.
+  const canModerate = reply.isSelf || isAdmin
+  const interpreter = reply.isInterpreter
 
   function toggleLike() {
     const next = !liked
@@ -161,18 +165,24 @@ function DreamReplyItem({
 
   return (
     <div className="flex gap-2.5">
-      <Avatar className="size-8 shrink-0 ring-1 ring-blue-500/40">
+      <Avatar className={cn("size-8 shrink-0 ring-1", interpreter ? "ring-blue-500/40" : "ring-border")}>
         {reply.adminImage && <AvatarImage src={reply.adminImage || "/placeholder.svg"} alt={reply.adminName} />}
         <AvatarFallback className={cn("text-xs font-semibold text-white", reply.adminColor)}>
           {reply.adminInitials}
         </AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1">
-        <div className="rounded-2xl rounded-tl-sm bg-blue-500/10 px-3 py-2">
+        <div className={cn("rounded-2xl rounded-tl-sm px-3 py-2", interpreter ? "bg-blue-500/10" : "bg-secondary")}>
           <div className="flex items-center gap-1.5">
             <span className="truncate text-sm font-semibold">{reply.adminName}</span>
-            <Sparkles className="size-3 shrink-0 text-blue-600 dark:text-blue-400" />
-            <span className="text-xs text-muted-foreground">Interpreter</span>
+            {interpreter ? (
+              <>
+                <Sparkles className="size-3 shrink-0 text-blue-600 dark:text-blue-400" />
+                <span className="text-xs text-muted-foreground">Interpreter</span>
+              </>
+            ) : (
+              reply.isSelf && <span className="text-xs text-muted-foreground">You</span>
+            )}
             <span className="text-xs text-muted-foreground">· {reply.postedAt}</span>
             {reply.edited && <span className="text-xs text-muted-foreground">· edited</span>}
           </div>
@@ -225,13 +235,13 @@ function DreamReplyItem({
               {copied ? <Check className="size-3.5 text-blue-600 dark:text-blue-400" /> : <Copy className="size-3.5" />}
               {copied ? "Copied" : "Copy"}
             </button>
-            {isAdmin && (
+            {canModerate && (
               <div ref={menuRef} className="relative ml-auto">
                 <button
                   type="button"
                   onClick={() => setMenuOpen((o) => !o)}
                   className="flex items-center rounded-full p-1 transition-colors hover:bg-secondary hover:text-foreground"
-                  aria-label="Interpretation options"
+                  aria-label="Reply options"
                   aria-haspopup="menu"
                   aria-expanded={menuOpen}
                 >
@@ -288,15 +298,19 @@ function DreamReplyItem({
 function DreamReplies({
   dreamId,
   isAdmin,
+  isOwner = false,
   onCountChange,
 }: {
   dreamId: number
   isAdmin: boolean
+  isOwner?: boolean
   onCountChange: (delta: number) => void
 }) {
   const { data, isLoading, mutate } = useSWR(`dream-replies-${dreamId}`, () => getDreamReplies(dreamId))
   const [draft, setDraft] = useState("")
   const [isPending, startTransition] = useTransition()
+  // The interpreter and the dream's own author can both post comments.
+  const canReply = isAdmin || isOwner
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -328,19 +342,19 @@ function DreamReplies({
         </p>
       )}
 
-      {isAdmin && (
+      {canReply && (
         <form onSubmit={submit} className="flex flex-col gap-2">
           <Textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="Share your interpretation…"
+            placeholder={isAdmin ? "Share your interpretation…" : "Add a comment or reply…"}
             rows={2}
             maxLength={2000}
             className="resize-none rounded-2xl text-sm"
           />
           <Button type="submit" size="sm" className="gap-1.5 self-end rounded-full" disabled={isPending || !draft.trim()}>
             {isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
-            Interpret
+            {isAdmin ? "Interpret" : "Reply"}
           </Button>
         </form>
       )}
@@ -524,8 +538,10 @@ function DreamItem({
               ? `Show ${count} ${count === 1 ? "interpretation" : "interpretations"}`
               : "Interpret this dream"
           : count > 0
-            ? `${count} ${count === 1 ? "interpretation" : "interpretations"}`
-            : "View interpretation"}
+            ? `${count} ${count === 1 ? "reply" : "replies"}`
+            : dream.isSelf
+              ? "Comment on your dream"
+              : "View interpretation"}
         <ChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} />
       </button>
 
@@ -533,6 +549,7 @@ function DreamItem({
         <DreamReplies
           dreamId={dream.id}
           isAdmin={isAdmin}
+          isOwner={dream.isSelf}
           onCountChange={(d) => {
             setCount((c) => Math.max(0, c + d))
             onReplyCountChange?.(dream.id, d)
