@@ -71,10 +71,17 @@ export async function compressImage(file: File, maxEdge = 1600, quality = 0.82):
  * prefixes in the token route (chat, status, covers, avatars, live-music,
  * episodes, dm).
  */
+// Files at or above this size upload in parallel chunks (multipart). This is
+// the single biggest win for video upload speed: instead of one long serial
+// stream, the file is split and several parts upload concurrently, and a failed
+// part retries on its own rather than restarting the whole upload.
+const MULTIPART_THRESHOLD = 5 * 1024 * 1024 // 5 MB
+
 export async function uploadMedia(
   file: File | Blob,
   folder: "chat" | "status" | "covers" | "avatars" | "live-music" | "episodes" | "dm",
   fileName?: string,
+  onProgress?: (percentage: number) => void,
 ): Promise<UploadedMedia> {
   const name = fileName ?? (file instanceof File ? file.name : "upload")
   const pathname = `${folder}/${Date.now()}-${name}`
@@ -83,6 +90,9 @@ export async function uploadMedia(
     access: "public",
     handleUploadUrl: "/api/blob-upload",
     contentType: file.type || undefined,
+    // Parallelize large (video) uploads; small images stay single-shot.
+    multipart: file.size >= MULTIPART_THRESHOLD,
+    onUploadProgress: onProgress ? (e) => onProgress(Math.round(e.percentage)) : undefined,
   })
 
   return {

@@ -147,6 +147,8 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
   const [draft, setDraft] = useState("")
   const [media, setMedia] = useState<DraftMedia[]>([])
   const [uploading, setUploading] = useState(false)
+  // Upload progress (0–100) for the file currently transferring; null when idle.
+  const [uploadPct, setUploadPct] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   // Index currently being dragged in the reorder strip (null when not dragging).
   const [dragIndex, setDragIndex] = useState<number | null>(null)
@@ -243,7 +245,8 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
             continue
           }
         }
-        const data = await uploadMedia(file, "chat")
+        setUploadPct(0)
+        const data = await uploadMedia(file, "chat", undefined, setUploadPct)
         uploaded.push({ url: data.url, type: isVideo ? "video" : "image" })
       }
       if (uploaded.length > 0) setMedia((prev) => [...prev, ...uploaded].slice(0, MAX_MEDIA))
@@ -252,6 +255,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
       setError(err instanceof Error ? err.message : "Upload failed.")
     } finally {
       setUploading(false)
+      setUploadPct(null)
       // Reset the originating input so picking the same file again re-fires.
       e.target.value = ""
     }
@@ -429,8 +433,10 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
                         className="flex size-20 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border/70 bg-background text-muted-foreground transition-colors hover:border-primary/70 hover:text-foreground disabled:opacity-50"
                         aria-label="Add more media"
                       >
-                        {uploading ? <Loader2 className="size-5 animate-spin" /> : <Plus className="size-5" />}
-                        <span className="text-[10px] font-medium">Add</span>
+            {uploading ? <Loader2 className="size-5 animate-spin" /> : <Plus className="size-5" />}
+            <span className="text-[10px] font-medium">
+              {uploading ? (uploadPct !== null ? `${uploadPct}%` : "…") : "Add"}
+            </span>
                       </button>
                     </li>
                   )}
@@ -450,7 +456,15 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
                     />
                   }
                 >
-                  {uploading ? <Loader2 className="size-5 animate-spin" /> : <Plus className="size-5" />}
+                  {uploading ? (
+                    uploadPct !== null ? (
+                      <span className="text-[10px] font-semibold tabular-nums">{uploadPct}%</span>
+                    ) : (
+                      <Loader2 className="size-5 animate-spin" />
+                    )
+                  ) : (
+                    <Plus className="size-5" />
+                  )}
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
                   <DropdownMenuItem onClick={() => photoCaptureRef.current?.click()} className="gap-2">
