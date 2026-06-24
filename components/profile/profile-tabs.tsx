@@ -8,6 +8,7 @@ import type { FeedPostView } from "@/app/actions/feed"
 import type { SavedItemView } from "@/app/actions/share"
 import type { CurrentUser } from "@/lib/session"
 import { EpisodeCatalog } from "@/components/episode-catalog"
+import { UploadEpisode } from "@/components/upload-episode"
 import { ProfilePostsGrid } from "@/components/profile/profile-posts-grid"
 import { cn } from "@/lib/utils"
 
@@ -76,19 +77,23 @@ export function ProfileTabs({
       {/* Content with a smooth fade/slide transition between tabs. */}
       <div key={tab} className="animate-in fade-in slide-in-from-bottom-1 duration-300 pt-4">
         {tab === "catalogue" ? (
-          episodes.length === 0 ? (
-            <EmptyState
-              icon={<Mic className="size-6" />}
-              title="No published episodes yet"
-              message={
-                isSelf
-                  ? "When you finish a live session in the studio it's published here automatically for your followers to browse."
-                  : `${name} hasn't published any episodes yet. Follow them to know when they go live.`
-              }
-            />
-          ) : (
-            <EpisodeCatalog episodes={episodes} owned={isSelf} />
-          )
+          <div className="space-y-4">
+            {/* Owners can upload their own audio/video episodes here. */}
+            {isSelf && <UploadEpisode />}
+            {episodes.length === 0 ? (
+              <EmptyState
+                icon={<Mic className="size-6" />}
+                title="No published episodes yet"
+                message={
+                  isSelf
+                    ? "Upload an audio or video episode above, or finish a live session in the studio to publish one automatically."
+                    : `${name} hasn't published any episodes yet. Follow them to know when they go live.`
+                }
+              />
+            ) : (
+              <EpisodeCatalog episodes={episodes} owned={isSelf} />
+            )}
+          </div>
         ) : tab === "reposts" ? (
           reposts.length === 0 ? (
             <EmptyState
