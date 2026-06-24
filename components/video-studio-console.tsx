@@ -28,6 +28,7 @@ import {
   getCallState,
   respondToCallRequest,
   removeFromStage,
+  heartbeatBroadcast,
   type LiveStreamView,
 } from "@/app/actions/live"
 import { useLiveVideo } from "@/lib/use-live-video"
@@ -272,6 +273,28 @@ export function VideoStudioConsole({
     }, 1000)
     return () => clearInterval(iv)
   }, [connected])
+
+  // Heartbeat: while the video room exists, ping the server every 20s so the
+  // stream's lastSeenAt stays fresh and the stale-stream sweep (60s) never
+  // auto-ends a session the host didn't end himself. Because the video session
+  // is mounted at the app level, this keeps running even while minimised — the
+  // host can only lose the session by explicitly ending it. We intentionally do
+  // NOT force-disconnect the host on a transient `ended` response; the heartbeat
+  // re-marks the stream live, so the host is never silently signed out.
+  useEffect(() => {
+    if (!live || !roomName) return
+    let cancelled = false
+    const ping = () => {
+      if (cancelled) return
+      void heartbeatBroadcast({ roomName }).catch(() => null)
+    }
+    ping()
+    const t = setInterval(ping, 20000)
+    return () => {
+      cancelled = true
+      clearInterval(t)
+    }
+  }, [live, roomName])
 
   // Keep the app-level mini-player's "now playing" info in sync.
   useEffect(() => {
