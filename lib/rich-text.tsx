@@ -44,14 +44,17 @@ function renderLeaf(text: string, keyBase: string, opts: RichTextOptions): React
 }
 
 /**
- * Recursively renders WhatsApp-style `**bold**` and `__italic__` formatting.
+ * Recursively renders WhatsApp-style `*bold*` and `_italic_` formatting.
  * A fresh RegExp is created per call so nested/recursive matching never trips
  * over a shared stateful `lastIndex`.
  */
 function renderFormatted(text: string, keyBase: string, opts: RichTextOptions): ReactNode[] {
-  // Matches **bold** or __italic__ (lazy, dotAll so it can span line breaks).
-  // The backreference guarantees the closing marker matches the opening one.
-  const re = /(\*\*|__)(.+?)\1/gs
+  // Matches `*bold*` or `_italic_` like WhatsApp: a single `*` or `_` marker
+  // whose content starts and ends with a non-space character (so `2 * 3` or a
+  // stray underscore isn't treated as formatting). The backreference makes the
+  // closing marker match the opener, and `[\s\S]` lets it span line breaks
+  // without needing the `s` (dotAll) flag.
+  const re = /([*_])(?=\S)([\s\S]*?\S)\1/g
   const nodes: ReactNode[] = []
   let last = 0
   let i = 0
@@ -64,7 +67,7 @@ function renderFormatted(text: string, keyBase: string, opts: RichTextOptions): 
     }
     const innerNodes = renderFormatted(inner, `${keyBase}-f${i}`, opts)
     nodes.push(
-      marker === "**" ? (
+      marker === "*" ? (
         <strong key={`${keyBase}-b${i}`} className="font-semibold">
           {innerNodes}
         </strong>
@@ -81,7 +84,7 @@ function renderFormatted(text: string, keyBase: string, opts: RichTextOptions): 
 }
 
 /**
- * WhatsApp-style inline message formatting: `**bold**` and `__italic__`, with
+ * WhatsApp-style inline message formatting: `*bold*` and `_italic_`, with
  * optional clickable links and highlighted `@mentions`. Returns React nodes
  * ready to drop inside a paragraph.
  */

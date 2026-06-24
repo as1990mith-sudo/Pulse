@@ -395,7 +395,10 @@ export async function createPost(input: {
 
   // Note: new posts intentionally do NOT notify followers. Notifications are
   // reserved for when a followed user goes live (see app/actions/live.ts).
+  // Revalidate the author's profile too so the new post shows up immediately —
+  // and, since posts are ordered newest-first, as the first tile on the Posts tab.
   revalidatePath("/feed")
+  revalidatePath(`/u/${user.id}`)
 }
 
 /** Edits the text of one of the signed-in user's own posts (media is unchanged). */

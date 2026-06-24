@@ -52,6 +52,40 @@ function isInAppWebView(): boolean {
   return /; wv\)|Median|GoNative|Capacitor|Cordova/i.test(ua)
 }
 
+/** True when running inside the Median (GoNative) app shell. */
+export function isMedianApp(): boolean {
+  if (typeof window === "undefined") return false
+  const w = window as unknown as { median?: unknown; gonative?: unknown }
+  if (w.median || w.gonative) return true
+  return /Median|GoNative/i.test(navigator.userAgent || "")
+}
+
+/**
+ * Open the native app settings page so the user can re-grant a camera/mic
+ * permission they previously denied. Uses the Median JS bridge when present,
+ * with a fallback to the documented deep-link URL. Returns true if a settings
+ * screen could be triggered.
+ */
+export function openNativeAppSettings(): boolean {
+  if (typeof window === "undefined") return false
+  const w = window as unknown as {
+    median?: { open?: { appSettings?: () => void } }
+    gonative?: { open?: { appSettings?: () => void } }
+  }
+  const bridge = w.median ?? w.gonative
+  if (bridge?.open?.appSettings) {
+    bridge.open.appSettings()
+    return true
+  }
+  // Documented Median command-style fallback.
+  try {
+    window.location.href = "median://run/median/open/app-settings"
+    return true
+  } catch {
+    return false
+  }
+}
+
 /**
  * Turn a getUserMedia / LiveKit device error into a precise, human message.
  * Distinguishing the cases avoids showing a misleading "check your permissions"
@@ -64,7 +98,7 @@ function describeMediaError(err: unknown): string {
 
   if (name === "NotAllowedError" || name === "SecurityError" || /permission|denied/i.test(message)) {
     if (isInAppWebView()) {
-      return "Camera/microphone access is blocked by the app. The app needs camera and microphone permission enabled — open this stream in your phone's browser, or update the app to allow camera access."
+      return "Camera and microphone are blocked. Tap Allow when prompted — or, if you denied it before, enable Camera and Microphone for this app in your phone's Settings, then tap the camera button to try again."
     }
     return "Camera access was blocked. Allow camera and microphone for this site in your browser settings, then tap the camera button to try again."
   }

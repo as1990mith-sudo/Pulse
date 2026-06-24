@@ -63,9 +63,11 @@ import { ImageLightbox } from "@/components/image-lightbox"
 import { FeedVideo } from "@/components/feed-video"
 import { ShareSheet } from "@/components/share-sheet"
 import { FindProfiles } from "@/components/find-profiles"
+import { PullToRefresh } from "@/components/pull-to-refresh"
 import type { ShareTarget } from "@/lib/share-types"
 import { cn } from "@/lib/utils"
 import { linkify, extractFirstUrl } from "@/lib/linkify"
+import { renderMessageBody } from "@/lib/rich-text"
 import { LinkPreview } from "@/components/link-preview"
 
 type DraftMedia = { url: string; type: "image" | "video" }
@@ -170,6 +172,16 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
     revalidateOnFocus: true,
   })
   const allPosts = livePosts ?? posts
+
+  // Pull-to-refresh: revalidate whichever tab the user is on. The feed key backs
+  // "For you"/"Following"; the "discover" keys back the Find tab's results.
+  async function refreshFeed() {
+    await globalMutate(
+      (key) => key === "feed" || (Array.isArray(key) && key[0] === "discover"),
+      undefined,
+      { revalidate: true },
+    )
+  }
 
   // A fresh shuffle seed is created once per mount, so the "For you" order is
   // randomized every time the app is refreshed or closed and reopened, yet
@@ -331,7 +343,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
   }
 
   return (
-    <div>
+    <PullToRefresh onRefresh={refreshFeed}>
       <div className="border-y border-border/60 bg-gradient-to-b from-card/60 to-background px-4 py-5 sm:px-5">
         <form onSubmit={publish} className="flex gap-4">
           <Avatar className="size-12 shrink-0 ring-2 ring-border/60">
@@ -534,7 +546,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
         <button
           onClick={() => setTab("following")}
           className={cn(
-            "relative flex-1 px-3 py-4 text-[15px] font-semibold transition-colors",
+            "relative flex-1 whitespace-nowrap px-3 py-4 text-[15px] font-semibold transition-colors",
             tab === "following" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
           )}
           aria-pressed={tab === "following"}
@@ -582,7 +594,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
           </p>
         </Card>
       )}
-    </div>
+    </PullToRefresh>
   )
 }
 
@@ -605,7 +617,12 @@ function PostMediaCarousel({
   const [active, setActive] = useState(0)
   const [lightbox, setLightbox] = useState<string | null>(null)
   const multiple = items.length > 1
-  const heightClass = feed ? "max-h-[85svh]" : "max-h-[640px]"
+  // Cap every media frame at a 1080×1920 (9:16 portrait) ratio: `177.778cqw`
+  // equals the slide width × 1920/1080, so anything taller than 9:16 is clamped
+  // and cropped (via object-cover) into the frame, while landscape/square media
+  // — which is shorter than the cap — displays uncropped. The svh/px cap still
+  // applies so media never exceeds the viewport.
+  const heightClass = feed ? "max-h-[min(85svh,177.778cqw)]" : "max-h-[min(640px,177.778cqw)]"
 
   // Track which slide is centered as the user swipes, so the dots/counter stay
   // in sync. We derive the index from scrollLeft rather than IntersectionObserver
@@ -631,13 +648,16 @@ function PostMediaCarousel({
         onScroll={onScroll}
         className={cn(
           "flex w-full snap-x snap-mandatory overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-          multiple && "touch-pan-x",
+          // Allow BOTH axes: horizontal swipes move the carousel, while vertical
+          // swipes pass through to scroll the feed. (`pan-x` alone would suppress
+          // vertical gestures that start over the carousel, trapping the scroll.)
+          multiple && "[touch-action:pan-x_pan-y]",
         )}
       >
         {items.map((item, i) => (
-          <div key={i} className="w-full shrink-0 snap-center snap-always">
+          <div key={i} className="@container w-full shrink-0 snap-center snap-always">
             {item.type === "video" ? (
-              <FeedVideo src={item.url} className={cn("mx-auto w-full object-contain", heightClass)} />
+              <FeedVideo src={item.url} className={cn("mx-auto w-full object-cover", heightClass)} />
             ) : (
               <button
                 type="button"
@@ -960,7 +980,9 @@ export function PostCard({
             </Link>
             <span className={cn("truncate text-muted-foreground", feed ? "text-sm" : "text-xs")}>
               {post.handle} · {post.postedAt}
-              {edited && " · edited"}
+              {/* For media-/link-only posts there's no body text to trail, so the
+                  edited note stays here; text posts show "(edited)" inline below. */}
+              {edited && !(text && !textIsOnlyLink) && " · edited"}
             </span>
           </div>
         </div>
@@ -1083,11 +1105,24 @@ export function PostCard({
                       : undefined
                   }
                 >
-                  {text.split(/\n{2,}/).map((para, i) => (
-                    <p key={i} className={cn("whitespace-pre-wrap leading-tight", i > 0 && "mt-1.5")}>
-                      {linkify(para, "font-medium text-primary underline-offset-2 [overflow-wrap:anywhere] hover:underline")}
-                    </p>
-                  ))}
+                  {(() => {
+                    const paras = text.split(/\n{2,}/)
+                    return paras.map((para, i) => (
+                      <p key={i} className={cn("whitespace-pre-wrap leading-tight", i > 0 && "mt-1.5")}>
+                        {renderMessageBody(para, {
+                          link: true,
+                          linkClassName:
+                            "font-medium text-primary underline-offset-2 [overflow-wrap:anywhere] hover:underline",
+                        })}
+                        {/* The "(edited)" indicator trails the very last word of the post. */}
+                        {edited && i === paras.length - 1 && (
+                          <span className="ml-1 align-baseline text-xs font-normal text-muted-foreground">
+                            (edited)
+                          </span>
+                        )}
+                      </p>
+                    ))
+                  })()}
                   {isClamped && (
                     // Sits on the last visible line; the text fades directly
                     // into the "Read more" link via the horizontal gradient.
