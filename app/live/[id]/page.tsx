@@ -3,8 +3,12 @@ import { getLiveStream } from "@/app/actions/live"
 import { getFollowingIds } from "@/app/actions/follow"
 import { resolveShow } from "@/lib/content"
 import { getCurrentUser } from "@/lib/session"
-import { ListenerLauncher, HostStudioLauncher } from "@/components/live-session"
-import { LiveVideoViewer } from "@/components/live-video-viewer"
+import {
+  ListenerLauncher,
+  HostStudioLauncher,
+  HostVideoStudioLauncher,
+  VideoViewerLauncher,
+} from "@/components/live-session"
 import { EpisodePage } from "@/components/episode-page"
 
 export default async function LiveStreamPage({ params }: { params: Promise<{ id: string }> }) {
@@ -25,13 +29,19 @@ export default async function LiveStreamPage({ params }: { params: Promise<{ id:
 
   const currentUser = await getCurrentUser()
 
-  // Video streams use the immersive, full-screen TikTok-style viewer.
+  // Video streams: the host resumes the studio as publisher; everyone else
+  // joins the redesigned multi-guest video viewer. Both are mounted at the app
+  // level so the room can be minimised into a persistent mini-player.
   if (stream.mode === "video") {
+    if (currentUser && currentUser.id === stream.hostId) {
+      return <HostVideoStudioLauncher currentUser={currentUser} resumeStream={stream} />
+    }
     const followingIds = currentUser ? await getFollowingIds() : []
     return (
-      <LiveVideoViewer
+      <VideoViewerLauncher
         stream={stream}
         canWatch={Boolean(currentUser)}
+        currentUser={currentUser}
         currentUserId={currentUser?.id ?? null}
         initialFollowing={followingIds.includes(stream.hostId)}
       />
