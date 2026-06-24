@@ -606,7 +606,12 @@ function PostMediaCarousel({
   const [active, setActive] = useState(0)
   const [lightbox, setLightbox] = useState<string | null>(null)
   const multiple = items.length > 1
-  const heightClass = feed ? "max-h-[85svh]" : "max-h-[640px]"
+  // Cap every media frame at a 1080×1920 (9:16 portrait) ratio: `177.778cqw`
+  // equals the slide width × 1920/1080, so anything taller than 9:16 is clamped
+  // and cropped (via object-cover) into the frame, while landscape/square media
+  // — which is shorter than the cap — displays uncropped. The svh/px cap still
+  // applies so media never exceeds the viewport.
+  const heightClass = feed ? "max-h-[min(85svh,177.778cqw)]" : "max-h-[min(640px,177.778cqw)]"
 
   // Track which slide is centered as the user swipes, so the dots/counter stay
   // in sync. We derive the index from scrollLeft rather than IntersectionObserver
@@ -639,9 +644,9 @@ function PostMediaCarousel({
         )}
       >
         {items.map((item, i) => (
-          <div key={i} className="w-full shrink-0 snap-center snap-always">
+          <div key={i} className="@container w-full shrink-0 snap-center snap-always">
             {item.type === "video" ? (
-              <FeedVideo src={item.url} className={cn("mx-auto w-full object-contain", heightClass)} />
+              <FeedVideo src={item.url} className={cn("mx-auto w-full object-cover", heightClass)} />
             ) : (
               <button
                 type="button"
