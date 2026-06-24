@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
-  LocalVideoTrack,
   Room,
   RoomEvent,
   Track,
@@ -102,15 +101,15 @@ export function useLiveVideo({
       // This is the reliable signal that the local video track exists — relying
       // only on the post-`setCameraEnabled` attach can race and leave the
       // self-view painted black if the publish resolves on a later tick.
+      // NOTE: we key off the publication *source/kind* rather than
+      // `instanceof LocalVideoTrack`. The instanceof guard silently fails when
+      // more than one copy of livekit-client is loaded (the track is a real
+      // video track but a different class identity), which previously left the
+      // host stuck on the "Starting camera…" wash — a black screen.
       .on(RoomEvent.LocalTrackPublished, (pub: LocalTrackPublication) => {
-        if (pub.track instanceof LocalVideoTrack && localVideoRef.current) {
-          const el = localVideoRef.current
-          pub.track.attach(el)
-          el.muted = true
-          el.setAttribute("playsinline", "true")
-          void el.play().catch(() => {})
+        if (pub.source === Track.Source.Camera) {
           setCamOn(true)
-          setLocalVideoReady(true)
+          attachLocalVideo(room)
         }
       })
       .on(RoomEvent.ParticipantConnected, () => syncParticipants(room))
@@ -137,6 +136,10 @@ export function useLiveVideo({
     // The room is up — mark connected immediately so the UI leaves the loading
     // state. Camera/mic publishing below is best-effort and must NOT block this.
     setConnected(true)
+
+    // Viewers: attach any host track that was already published before we
+    // connected. New tracks still arrive via TrackSubscribed above.
+    if (!isHost) attachRemoteTracks(room)
 
     // Only the host publishes camera + mic; viewers subscribe only.
     if (isHost) {
@@ -177,11 +180,38 @@ export function useLiveVideo({
     }
   }, [token, serverUrl, isHost])
 
-  function attachLocalVideo(room: Room) {
+  // Attaches the host's remote video/audio to the viewer's elements. Used both
+  // from the TrackSubscribed event and as a sweep over already-published tracks
+  // (in case a track was live before our handler ran), so a viewer never gets
+  // stranded on the "Connecting to the live…" wash with a black frame.
+  function attachRemoteTracks(room: Room): boolean {
+    let attachedVideo = false
+    room.remoteParticipants.forEach((p) => {
+      p.trackPublications.forEach((pub) => {
+        const track = pub.track
+        if (!track) return
+        if (pub.kind === Track.Kind.Video && remoteVideoRef.current) {
+          const el = remoteVideoRef.current
+          track.attach(el)
+          el.muted = true
+          el.setAttribute("playsinline", "true")
+          void el.play().catch(() => {})
+          setRemoteVideoOn(true)
+          attachedVideo = true
+        }
+        if (pub.kind === Track.Kind.Audio && remoteAudioRef.current) {
+          track.attach(remoteAudioRef.current)
+        }
+      })
+    })
+    return attachedVideo
+  }
+
+  function attachLocalVideo(room: Room): boolean {
     const pub = room.localParticipant.getTrackPublication(Track.Source.Camera)
     const track = pub?.track
     const el = localVideoRef.current
-    if (track instanceof LocalVideoTrack && el) {
+    if (track && el) {
       track.attach(el)
       // On mobile (esp. Android Chrome) LiveKit's internal play() is frequently
       // rejected, leaving the camera active but the <video> painted black.
@@ -190,7 +220,9 @@ export function useLiveVideo({
       el.setAttribute("playsinline", "true")
       void el.play().catch(() => {})
       setLocalVideoReady(true)
+      return true
     }
+    return false
   }
 
   // Connect on mount once we have credentials; tear down on unmount.
@@ -205,6 +237,39 @@ export function useLiveVideo({
     const room = roomRef.current
     if (room) attachLocalVideo(room)
   }, [isHost, camOn, connected])
+
+  // Safety net: while the host is connected with the camera on but the self-view
+  // hasn't started painting yet, keep retrying the attach for a few seconds. The
+  // camera track can publish a tick after `connected`/`camOn` flip (or the
+  // <video> ref can mount a frame late), and without this poll the host would be
+  // stranded on the dark "Starting camera…" wash — i.e. a black screen.
+  useEffect(() => {
+    if (!isHost || !connected || !camOn || localVideoReady) return
+    const room = roomRef.current
+    if (!room) return
+    let tries = 0
+    const id = setInterval(() => {
+      tries += 1
+      if (attachLocalVideo(room) || tries >= 24) clearInterval(id)
+    }, 250)
+    return () => clearInterval(id)
+  }, [isHost, connected, camOn, localVideoReady])
+
+  // Viewer safety net: while connected but the host's video hasn't painted yet,
+  // keep sweeping for an available remote track. Covers the case where the
+  // TrackSubscribed event fired before the <video> ref was ready, which would
+  // otherwise leave the viewer on a black "Connecting…" frame.
+  useEffect(() => {
+    if (isHost || !connected || remoteVideoOn) return
+    const room = roomRef.current
+    if (!room) return
+    let tries = 0
+    const id = setInterval(() => {
+      tries += 1
+      if (attachRemoteTracks(room) || tries >= 24) clearInterval(id)
+    }, 250)
+    return () => clearInterval(id)
+  }, [isHost, connected, remoteVideoOn])
 
   const toggleMic = useCallback(async () => {
     const room = roomRef.current
