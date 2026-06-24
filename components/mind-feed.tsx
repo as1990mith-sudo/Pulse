@@ -1237,7 +1237,6 @@ function FollowButton({
 }) {
   const router = useRouter()
   const [following, setFollowing] = useState(initialFollowing)
-  const [hovering, setHovering] = useState(false)
   const [isPending, startTransition] = useTransition()
 
   function onClick() {
@@ -1256,26 +1255,15 @@ function FollowButton({
   return (
     <Button
       type="button"
-      size="sm"
+      size="icon"
       variant={following ? "secondary" : "default"}
       onClick={onClick}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
       disabled={isPending}
-      className="h-8 shrink-0 gap-1.5"
+      className="size-8 shrink-0 rounded-full"
       aria-label={following ? `Unfollow ${authorName}` : `Follow ${authorName}`}
+      title={following ? "Following" : "Follow"}
     >
-      {following ? (
-        <>
-          <UserCheck className="size-4" />
-          {hovering ? "Unfollow" : "Following"}
-        </>
-      ) : (
-        <>
-          <UserPlus className="size-4" />
-          Follow
-        </>
-      )}
+      {following ? <UserCheck className="size-4" /> : <UserPlus className="size-4" />}
     </Button>
   )
 }
