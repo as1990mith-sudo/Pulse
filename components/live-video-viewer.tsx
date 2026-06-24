@@ -293,8 +293,8 @@ export function LiveVideoViewer({
 
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-neutral-950 text-white [isolation:isolate]">
-      {/* ── Top half: host camera ─────────────────────────────────────────── */}
-      <div className="relative flex-[2] min-h-0 overflow-hidden">
+      {/* ── Host camera (1.75/4 of the screen) ────────────────────────────── */}
+      <div className="relative flex-[1.75] min-h-0 overflow-hidden">
         <div className="absolute inset-0" onClick={handleTapHeart}>
           {hostPeer ? (
             <video
@@ -506,8 +506,8 @@ export function LiveVideoViewer({
         )}
       </div>
 
-      {/* ── Quarter: two call-in slots ────────────────────────────────────── */}
-      <div className="flex flex-1 min-h-0 gap-2 border-t border-white/10 bg-neutral-950 p-2">
+      {/* ── Two call-in slots (0.75/4 of the screen) ───────────────────────── */}
+      <div className="flex flex-[0.75] min-h-0 gap-2 border-t border-white/10 bg-neutral-950 p-2">
         {[0, 1].map((i) => {
           const slot = slots[i]
           if (slot?.self) {
@@ -541,8 +541,8 @@ export function LiveVideoViewer({
         })}
       </div>
 
-      {/* ── Quarter: live chatroom ────────────────────────────────────────── */}
-      <div className="flex-1 min-h-0 border-t border-white/10 bg-neutral-950">
+      {/* ── Live chatroom (remaining 1.5/4 of the screen) ──────────────────── */}
+      <div className="flex-[1.5] min-h-0 border-t border-white/10 bg-neutral-950">
         {canWatch ? (
           <LiveChat currentUser={currentUser} roomName={stream.roomName} immersive />
         ) : (
