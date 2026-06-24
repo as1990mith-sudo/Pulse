@@ -393,8 +393,8 @@ export function VideoStudioConsole({
 
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-neutral-950 text-white [isolation:isolate]">
-      {/* ── Top half: host camera ─────────────────────────────────────────── */}
-      <div className="relative flex-[2] min-h-0 overflow-hidden">
+      {/* ── Host camera (1.75/4 of the screen) ────────────────────────────── */}
+      <div className="relative flex-[1.75] min-h-0 overflow-hidden">
         {/* Full-bleed camera — live publisher feed (mirrored self-view) */}
         <video
           ref={localVideoRef}
@@ -685,14 +685,14 @@ export function VideoStudioConsole({
         )}
       </div>
 
-      {/* ── Quarter: two guest call-in slots ──────────────────────────────── */}
-      <div className="flex flex-1 min-h-0 gap-2 border-t border-white/10 bg-neutral-950 p-2">
+      {/* ── Two guest call-in slots (0.75/4 of the screen) ─────────────────── */}
+      <div className="flex flex-[0.75] min-h-0 gap-2 border-t border-white/10 bg-neutral-950 p-2">
         <GuestSlot peer={guests[0]} registerEl={registerPeerVideoEl} onRemove={live ? dropGuest : undefined} />
         <GuestSlot peer={guests[1]} registerEl={registerPeerVideoEl} onRemove={live ? dropGuest : undefined} />
       </div>
 
-      {/* ── Quarter: live chatroom ────────────────────────────────────────── */}
-      <div className="flex-1 min-h-0 border-t border-white/10 bg-neutral-950">
+      {/* ── Live chatroom (remaining 1.5/4 of the screen) ──────────────────── */}
+      <div className="flex-[1.5] min-h-0 border-t border-white/10 bg-neutral-950">
         <LiveChat asHost currentUser={currentUser} roomName={live ? roomName! : undefined} immersive />
       </div>
 

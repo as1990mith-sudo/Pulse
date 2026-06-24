@@ -343,7 +343,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder="Share a thought…"
-              className="min-h-24 resize-none border-0 bg-transparent px-3 text-lg leading-relaxed shadow-none placeholder:text-muted-foreground/70 focus-visible:ring-0"
+              className="min-h-24 resize-none rounded-xl border border-border bg-background px-3.5 py-3 text-lg leading-relaxed shadow-sm placeholder:text-muted-foreground/70 focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-ring/40"
               aria-label="Write a post"
             />
             {media.length === 1 && (
