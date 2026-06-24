@@ -296,14 +296,14 @@ function AnnouncementCard({ announcement: a, isAdmin = false }: { announcement: 
   // interacted with one of the buttons.
   if (a.hiddenByMe) {
     return (
-      <div className="flex items-center justify-between gap-3 border-y border-border/60 bg-card/50 px-4 py-2.5">
-        <span className="flex items-center gap-2 text-xs text-muted-foreground">
-          <EyeOff className="size-3.5" /> Advert hidden
+      <div className="mx-4 flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-card/40 px-5 py-4 sm:mx-0">
+        <span className="flex items-center gap-3 text-base text-muted-foreground">
+          <Megaphone className="size-5" /> Announcements hidden
         </span>
         <Button
           size="sm"
           variant="ghost"
-          className="gap-1.5"
+          className="gap-2 text-base font-semibold text-foreground hover:bg-transparent"
           disabled={isPending}
           onClick={() =>
             startTransition(async () => {
@@ -312,7 +312,7 @@ function AnnouncementCard({ announcement: a, isAdmin = false }: { announcement: 
             })
           }
         >
-          {isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Eye className="size-3.5" />} Show advert
+          {isPending ? <Loader2 className="size-5 animate-spin" /> : <Eye className="size-5" />} Show
         </Button>
       </div>
     )
