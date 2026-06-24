@@ -66,6 +66,7 @@ import { FindProfiles } from "@/components/find-profiles"
 import type { ShareTarget } from "@/lib/share-types"
 import { cn } from "@/lib/utils"
 import { linkify, extractFirstUrl } from "@/lib/linkify"
+import { renderMessageBody } from "@/lib/rich-text"
 import { LinkPreview } from "@/components/link-preview"
 
 type DraftMedia = { url: string; type: "image" | "video" }
@@ -1085,7 +1086,11 @@ export function PostCard({
                 >
                   {text.split(/\n{2,}/).map((para, i) => (
                     <p key={i} className={cn("whitespace-pre-wrap leading-tight", i > 0 && "mt-1.5")}>
-                      {linkify(para, "font-medium text-primary underline-offset-2 [overflow-wrap:anywhere] hover:underline")}
+                      {renderMessageBody(para, {
+                        link: true,
+                        linkClassName:
+                          "font-medium text-primary underline-offset-2 [overflow-wrap:anywhere] hover:underline",
+                      })}
                     </p>
                   ))}
                   {isClamped && (
