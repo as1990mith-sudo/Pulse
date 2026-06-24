@@ -843,20 +843,27 @@ export function PostCard({
                       </p>
                     ))}
                     {isClamped && (
-                      <span
-                        aria-hidden
-                        className="pointer-events-none absolute inset-x-0 bottom-0 h-5 bg-gradient-to-t from-card to-transparent"
-                      />
+                      // Sits on the last visible line; the text fades directly
+                      // into the "Read more" link via the horizontal gradient.
+                      <button
+                        type="button"
+                        onClick={() => setExpanded(true)}
+                        className="absolute bottom-0 right-0 flex items-baseline pl-12 text-xs font-semibold leading-tight text-muted-foreground transition-colors hover:text-foreground bg-gradient-to-l from-card from-60% to-transparent"
+                        aria-expanded={false}
+                      >
+                        <span aria-hidden className="text-foreground/90">…&nbsp;</span>
+                        Read more
+                      </button>
                     )}
                   </div>
-                  {clampable && (
+                  {clampable && expanded && (
                     <button
                       type="button"
-                      onClick={() => setExpanded((v) => !v)}
+                      onClick={() => setExpanded(false)}
                       className="mt-0.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
-                      aria-expanded={expanded}
+                      aria-expanded
                     >
-                      {expanded ? "Show less" : "Read more"}
+                      Show less
                     </button>
                   )}
                 </>
