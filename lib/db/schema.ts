@@ -153,6 +153,9 @@ export const episode = pgTable("episode", {
   // Recorded audio of the session (mic + background music), uploaded to Blob
   // when the host publishes. Null for episodes added without a recording.
   audioUrl: text("audioUrl"),
+  // Recorded/uploaded video for video episodes, uploaded to Blob. When set, the
+  // episode is treated as a video episode in the catalogue; otherwise audio.
+  videoUrl: text("videoUrl"),
   // Set when a host publishes their own streamed session. Null for episodes
   // added by an admin from the content dashboard.
   hostUserId: text("hostUserId"),
