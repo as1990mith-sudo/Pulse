@@ -483,6 +483,10 @@ export function PostCard({
   const [reposts, setReposts] = useState(post.reposts)
   const [saved, setSaved] = useState(post.saved)
   const [expanded, setExpanded] = useState(false)
+  // Post tab only: measures whether the caption overflows its line clamp so we
+  // know when to fade it into a "Read more" toggle.
+  const textWrapRef = useRef<HTMLDivElement>(null)
+  const [clampable, setClampable] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [showComments, setShowComments] = useState(false)
   const [commentDraft, setCommentDraft] = useState("")
@@ -633,11 +637,33 @@ export function PostCard({
 
   const hasMedia = !!post.image || !!post.video
 
-  // Long captions collapse to a preview with a "Read more" toggle. We cut on a
-  // word boundary so the preview never ends mid-word.
+  // Home feed: long captions collapse to a preview with a "Read more" toggle.
+  // We cut on a word boundary so the preview never ends mid-word.
   const COLLAPSE_LIMIT = 280
   const isLong = text.length > COLLAPSE_LIMIT
   const displayText = !isLong || expanded ? text : `${text.slice(0, COLLAPSE_LIMIT).replace(/\s+\S*$/, "")}…`
+
+  // Post tab: captions fade into a "Read more" toggle based on line count —
+  // after the first line when the post carries media, or after 11 lines for a
+  // text-only post. Line height here is 1.25 (leading-tight).
+  const POST_LINE_HEIGHT = 1.25
+  const clampLines = hasMedia ? 1 : 11
+  const collapsedMaxEm = clampLines * POST_LINE_HEIGHT
+  // A clamped, un-expanded caption that actually overflows shows the fade.
+  const isClamped = clampable && !expanded
+
+  // Measure the caption against its collapsed height so we only show "Read more"
+  // (and the fade) when the text is genuinely longer than the clamp.
+  useEffect(() => {
+    if (feed) return
+    const el = textWrapRef.current
+    if (!el) {
+      setClampable(false)
+      return
+    }
+    const lineHeightPx = collapsedMaxEm * Number.parseFloat(getComputedStyle(el).fontSize || "13")
+    setClampable(el.scrollHeight > lineHeightPx + 2)
+  }, [feed, text, collapsedMaxEm, expanded])
 
   // The first link in the post (if any) gets a rich preview card rendered below
   // the text, with the bare link beneath it.
@@ -775,33 +801,73 @@ export function PostCard({
           <div
             className={cn(
               "text-foreground/90",
-              feed ? "px-[0.825rem] text-lg" : "px-3 text-[15px]",
+              feed ? "px-[0.825rem] text-lg" : "px-3 text-[13px]",
               hasMedia ? "pb-3" : "pb-1",
             )}
           >
             {/* When the post is nothing but a link, skip the raw text and let the
                 preview card (which shows the link below it) stand on its own. */}
             {text && !textIsOnlyLink && (
-              <>
-                {/* Split on author blank lines and use a tighter margin between
-                    paragraphs (~half the height of a full empty line) instead of
-                    rendering each blank line at full line-height. */}
-                {displayText.split(/\n{2,}/).map((para, i) => (
-                  <p key={i} className={cn("whitespace-pre-wrap leading-snug", i > 0 && "mt-1.5")}>
-                    {linkify(para, "font-medium text-primary underline-offset-2 [overflow-wrap:anywhere] hover:underline")}
-                  </p>
-                ))}
-                {isLong && (
-                  <button
-                    type="button"
-                    onClick={() => setExpanded((v) => !v)}
-                    className="mt-0.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
-                    aria-expanded={expanded}
+              feed ? (
+                <>
+                  {/* Home feed: word-boundary character truncation. Split on
+                      author blank lines with a tighter inter-paragraph margin. */}
+                  {displayText.split(/\n{2,}/).map((para, i) => (
+                    <p key={i} className={cn("whitespace-pre-wrap leading-snug", i > 0 && "mt-1.5")}>
+                      {linkify(para, "font-medium text-primary underline-offset-2 [overflow-wrap:anywhere] hover:underline")}
+                    </p>
+                  ))}
+                  {isLong && (
+                    <button
+                      type="button"
+                      onClick={() => setExpanded((v) => !v)}
+                      className="mt-0.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
+                      aria-expanded={expanded}
+                    >
+                      {expanded ? "Show less" : "Read more"}
+                    </button>
+                  )}
+                </>
+              ) : (
+                <>
+                  {/* Post tab: clamp by line count and fade into "Read more" —
+                      1 line with media, 11 lines for text-only posts. */}
+                  <div
+                    ref={textWrapRef}
+                    className={cn("relative", isClamped && "overflow-hidden")}
+                    style={isClamped ? { maxHeight: `${collapsedMaxEm}em` } : undefined}
                   >
-                    {expanded ? "Show less" : "Read more"}
-                  </button>
-                )}
-              </>
+                    {text.split(/\n{2,}/).map((para, i) => (
+                      <p key={i} className={cn("whitespace-pre-wrap leading-tight", i > 0 && "mt-1.5")}>
+                        {linkify(para, "font-medium text-primary underline-offset-2 [overflow-wrap:anywhere] hover:underline")}
+                      </p>
+                    ))}
+                    {isClamped && (
+                      // Sits on the last visible line; the text fades directly
+                      // into the "Read more" link via the horizontal gradient.
+                      <button
+                        type="button"
+                        onClick={() => setExpanded(true)}
+                        className="absolute bottom-0 right-0 flex items-baseline pl-12 text-xs font-semibold leading-tight text-muted-foreground transition-colors hover:text-foreground bg-gradient-to-l from-card from-60% to-transparent"
+                        aria-expanded={false}
+                      >
+                        <span aria-hidden className="text-foreground/90">…&nbsp;</span>
+                        Read more
+                      </button>
+                    )}
+                  </div>
+                  {clampable && expanded && (
+                    <button
+                      type="button"
+                      onClick={() => setExpanded(false)}
+                      className="mt-0.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+                      aria-expanded
+                    >
+                      Show less
+                    </button>
+                  )}
+                </>
+              )
             )}
 
             {previewUrl && <LinkPreview url={previewUrl} className={cn(text && !textIsOnlyLink && "mt-2.5")} />}
