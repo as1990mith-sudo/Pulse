@@ -188,8 +188,21 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
   // stays stable while the user keeps scrolling (the 5s SWR polls reuse it).
   const [shuffleSeed] = useState(() => (Math.random() * 0x7fffffff) | 0)
 
-  // "For you" → shuffled per session. "Following" → strict newest-first.
-  const forYouPosts = useMemo(() => seededShuffle(allPosts, shuffleSeed), [allPosts, shuffleSeed])
+  // IDs of posts the user just created this session. They're pinned to the very
+  // top of "For you" (newest first) so a new post is always seen first, then the
+  // shuffled feed follows beneath.
+  const [pinnedIds, setPinnedIds] = useState<string[]>([])
+
+  // "For you" → freshly posted items first, then shuffled. "Following" → newest-first.
+  const forYouPosts = useMemo(() => {
+    const shuffled = seededShuffle(allPosts, shuffleSeed)
+    if (pinnedIds.length === 0) return shuffled
+    const pinned = pinnedIds
+      .map((id) => allPosts.find((p) => String(p.id) === id))
+      .filter((p): p is (typeof allPosts)[number] => Boolean(p))
+    const pinnedSet = new Set(pinnedIds)
+    return [...pinned, ...shuffled.filter((p) => !pinnedSet.has(String(p.id)))]
+  }, [allPosts, shuffleSeed, pinnedIds])
   const followingPosts = useMemo(
     () => allPosts.filter((p) => p.isFollowing).sort((a, b) => b.createdAtMs - a.createdAtMs),
     [allPosts],
@@ -300,10 +313,20 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
     const text = draft.trim()
     if (!text && media.length === 0) return
     startTransition(async () => {
-      await createPost({ text, media })
+      const created = await createPost({ text, media })
       setDraft("")
       clearMedia()
+      // Pin the new post to the top of "For you" and make sure we're on a tab
+      // that shows it, so the user sees their post appear first immediately.
+      if (created?.id != null) {
+        const newId = String(created.id)
+        setPinnedIds((prev) => [newId, ...prev.filter((id) => id !== newId)])
+      }
+      setTab("for-you")
       await mutateFeed()
+      if (typeof window !== "undefined") {
+        window.scrollTo({ top: 0, behavior: "smooth" })
+      }
     })
   }
 

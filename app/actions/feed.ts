@@ -383,15 +383,18 @@ export async function createPost(input: {
   // Mirror the first item into the legacy columns so older readers still work.
   const first = media[0] ?? null
 
-  await db.insert(feedPost).values({
-    userId: user.id,
-    authorName: user.name,
-    authorHandle: getHandle(user.name),
-    text,
-    image: first?.type === "image" ? first.url : null,
-    video: first?.type === "video" ? first.url : null,
-    media: media.length > 0 ? media : null,
-  })
+  const [inserted] = await db
+    .insert(feedPost)
+    .values({
+      userId: user.id,
+      authorName: user.name,
+      authorHandle: getHandle(user.name),
+      text,
+      image: first?.type === "image" ? first.url : null,
+      video: first?.type === "video" ? first.url : null,
+      media: media.length > 0 ? media : null,
+    })
+    .returning({ id: feedPost.id })
 
   // Note: new posts intentionally do NOT notify followers. Notifications are
   // reserved for when a followed user goes live (see app/actions/live.ts).
@@ -399,6 +402,9 @@ export async function createPost(input: {
   // and, since posts are ordered newest-first, as the first tile on the Posts tab.
   revalidatePath("/feed")
   revalidatePath(`/u/${user.id}`)
+
+  // Return the new id so the client can float this post to the top of the feed.
+  return { id: inserted?.id ?? null }
 }
 
 /** Edits the text of one of the signed-in user's own posts (media is unchanged). */
