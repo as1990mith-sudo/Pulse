@@ -19,6 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { ProfilePreview } from "@/components/profile-preview"
 import { cn } from "@/lib/utils"
+import { renderMessageBody } from "@/lib/rich-text"
 
 // A compact, curated set of emojis for the inline chat picker.
 const CHAT_EMOJIS = [
@@ -29,21 +30,13 @@ const CHAT_EMOJIS = [
 
 /** Renders message text with @mentions highlighted in the accent color. */
 function MentionText({ body, accent = false }: { body: string; accent?: boolean }) {
-  const parts = body.split(/(@[a-zA-Z0-9_.]+)/g)
+  // Highlights @mentions and supports WhatsApp-style **bold** / __italic__.
   return (
     <>
-      {parts.map((part, i) =>
-        part.startsWith("@") && part.length > 1 ? (
-          <span
-            key={i}
-            className={cn("font-semibold", accent ? "text-primary-foreground underline" : "text-primary")}
-          >
-            {part}
-          </span>
-        ) : (
-          <span key={i}>{part}</span>
-        ),
-      )}
+      {renderMessageBody(body, {
+        mention: true,
+        mentionClassName: cn("font-semibold", accent ? "text-primary-foreground underline" : "text-primary"),
+      })}
     </>
   )
 }
@@ -287,12 +280,12 @@ export function LiveChat({
                   </div>
                   <p
                     className={cn(
-                      "rounded-2xl px-3 py-1.5 text-sm leading-snug",
+                      "rounded-2xl px-3 py-1.5 text-sm leading-snug shadow-sm [overflow-wrap:anywhere]",
                       isMine
-                        ? "rounded-tr-sm bg-primary text-primary-foreground"
+                        ? "rounded-br-md bg-primary text-primary-foreground"
                         : immersive
-                          ? "rounded-tl-sm bg-white/10 text-white/90 ring-1 ring-inset ring-white/5 backdrop-blur-md"
-                          : "rounded-tl-sm bg-secondary text-foreground/90",
+                          ? "rounded-bl-md bg-white/10 text-white/90 ring-1 ring-inset ring-white/10 backdrop-blur-md"
+                          : "rounded-bl-md bg-secondary text-foreground/90 ring-1 ring-inset ring-border/50",
                       pinnedChatId === m.id && "ring-1 ring-primary/40",
                     )}
                   >
