@@ -153,11 +153,6 @@ export function AnnouncementBanner({
               <AnnouncementCard key={a.id} announcement={a} isAdmin={isAdmin} />
             ))}
           </div>
-          {currentUser && (
-            <p className="px-4 text-xs text-muted-foreground sm:px-0">
-              Only one advert can run at a time. You can post a new advert once the current one expires.
-            </p>
-          )}
         </>
       ) : (
         <Card className="mx-4 flex flex-col items-center gap-3 border-dashed bg-card/50 p-6 text-center sm:mx-0">
