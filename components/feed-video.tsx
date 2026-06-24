@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState, useCallback } from "react"
-import { Play, Pause, Volume2, VolumeX } from "lucide-react"
+import { Play, Pause, Volume2, VolumeX, RotateCcw, RotateCw } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 /**
@@ -15,6 +15,16 @@ import { cn } from "@/lib/utils"
  *   the browser rejects it, fall back to muted playback. The user's mute choice
  *   is shared across all feed videos so once they unmute (or the browser allows
  *   sound) it sticks while scrolling.
+ *
+ * Appearance:
+ * - Until the clip first starts playing we paint our own premium poster overlay
+ *   on top of the element. This hides the browser's blurry default play-glyph
+ *   (rendered in the <video> shadow DOM on some mobile browsers) entirely, so
+ *   the user only ever sees our branded play button.
+ *
+ * Controls:
+ * - Tap the frame to play/pause, skip ±10s, and scrub by tapping OR dragging the
+ *   time track (pointer + keyboard).
  */
 
 // Shared, cross-instance mute preference. Starts unmuted ("sound on by
@@ -33,18 +43,22 @@ function formatTime(seconds: number) {
   return `${m}:${s.toString().padStart(2, "0")}`
 }
 
+const SKIP_SECONDS = 10
+
 export function FeedVideo({ src, className }: { src: string; className?: string }) {
   const ref = useRef<HTMLVideoElement>(null)
+  const seekRef = useRef<HTMLDivElement>(null)
   const userPausedRef = useRef(false)
   const programmaticPauseRef = useRef(false)
+  const draggingRef = useRef(false)
 
   const [muted, setMuted] = useState(sharedMuted)
   const [playing, setPlaying] = useState(false)
   const [current, setCurrent] = useState(0)
   const [duration, setDuration] = useState(0)
-  // Stays false until the first frame is actually decoded. Until then we paint
-  // a solid cover so the browser's blurry default play-glyph never flashes.
-  const [ready, setReady] = useState(false)
+  // Stays false until the clip has begun playing at least once. While false we
+  // show a full-bleed premium poster that hides the native play-glyph flash.
+  const [started, setStarted] = useState(false)
 
   // Keep this instance in sync with the shared mute preference.
   useEffect(() => {
@@ -115,19 +129,66 @@ export function FeedVideo({ src, className }: { src: string; className?: string 
     }
   }
 
-  function seek(e: React.MouseEvent<HTMLDivElement>) {
+  function skip(delta: number) {
     const el = ref.current
-    if (!el || !duration) return
-    const rect = e.currentTarget.getBoundingClientRect()
-    const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
-    el.currentTime = ratio * duration
-    setCurrent(el.currentTime)
+    if (!el) return
+    const total = duration || el.duration || 0
+    const next = Math.min(total, Math.max(0, el.currentTime + delta))
+    el.currentTime = next
+    setCurrent(next)
+  }
+
+  // Translate a pointer x-position over the track into a seek time.
+  const seekToClientX = useCallback(
+    (clientX: number) => {
+      const el = ref.current
+      const bar = seekRef.current
+      if (!el || !bar) return
+      const total = duration || el.duration || 0
+      if (!total) return
+      const rect = bar.getBoundingClientRect()
+      const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
+      const t = ratio * total
+      el.currentTime = t
+      setCurrent(t)
+    },
+    [duration],
+  )
+
+  function onSeekPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    draggingRef.current = true
+    e.currentTarget.setPointerCapture(e.pointerId)
+    seekToClientX(e.clientX)
+  }
+
+  function onSeekPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!draggingRef.current) return
+    seekToClientX(e.clientX)
+  }
+
+  function onSeekPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    draggingRef.current = false
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    } catch {
+      /* pointer already released */
+    }
+  }
+
+  function onSeekKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "ArrowRight") {
+      e.preventDefault()
+      skip(SKIP_SECONDS)
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault()
+      skip(-SKIP_SECONDS)
+    }
   }
 
   const progress = duration > 0 ? (current / duration) * 100 : 0
 
   return (
-    <div className="group relative">
+    <div className="group relative overflow-hidden bg-black">
       <video
         ref={ref}
         src={src}
@@ -139,6 +200,7 @@ export function FeedVideo({ src, className }: { src: string; className?: string 
         onClick={togglePlay}
         onPlay={() => {
           setPlaying(true)
+          setStarted(true)
           userPausedRef.current = false
         }}
         onPause={() => {
@@ -150,31 +212,49 @@ export function FeedVideo({ src, className }: { src: string; className?: string 
           userPausedRef.current = true
         }}
         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-        onLoadedData={() => setReady(true)}
-        onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
+        onTimeUpdate={(e) => {
+          // While actively dragging, the thumb is driven by the pointer.
+          if (!draggingRef.current) setCurrent(e.currentTarget.currentTime)
+        }}
       />
 
-      {/* Solid cover painted over the video until its first frame is decoded,
-          hiding the browser's blurry default play-glyph flash. */}
-      {!ready && <div className="absolute inset-0 bg-muted" aria-hidden="true" />}
+      {/* Premium poster overlay — fully covers the frame (and the browser's
+          native play-glyph) until the clip first starts playing. */}
+      {!started && (
+        <button
+          type="button"
+          onClick={togglePlay}
+          aria-label="Play video"
+          className="absolute inset-0 flex items-center justify-center bg-gradient-to-t from-black/70 via-black/45 to-black/35"
+        >
+          <span className="flex size-16 items-center justify-center rounded-full bg-white/15 text-white shadow-lg ring-1 ring-white/25 backdrop-blur-md transition-transform duration-200 group-hover:scale-105">
+            <Play className="size-7 translate-x-0.5 fill-current" />
+          </span>
+        </button>
+      )}
 
-      {/* Center play affordance — shown only while paused */}
-      {!playing && (
+      {/* Center play affordance — shown only while paused after first play. */}
+      {started && !playing && (
         <button
           type="button"
           onClick={togglePlay}
           aria-label="Play video"
           className="absolute inset-0 flex items-center justify-center"
         >
-          <span className="flex size-16 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition-transform duration-200 hover:scale-105">
+          <span className="flex size-16 items-center justify-center rounded-full bg-black/45 text-white ring-1 ring-white/20 backdrop-blur-md transition-transform duration-200 hover:scale-105">
             <Play className="size-7 translate-x-0.5 fill-current" />
           </span>
         </button>
       )}
 
       {/* Bottom control bar */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-3 pb-2.5 pt-8 opacity-0 transition-opacity duration-200 group-hover:opacity-100 [@media(hover:none)]:opacity-100">
-        <div className="pointer-events-auto flex items-center gap-3">
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2.5 pt-10 transition-opacity duration-200",
+          started ? "opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100" : "opacity-0",
+        )}
+      >
+        <div className="pointer-events-auto flex items-center gap-2.5">
           <button
             type="button"
             onClick={togglePlay}
@@ -184,26 +264,50 @@ export function FeedVideo({ src, className }: { src: string; className?: string 
             {playing ? <Pause className="size-5 fill-current" /> : <Play className="size-5 fill-current" />}
           </button>
 
+          <button
+            type="button"
+            onClick={() => skip(-SKIP_SECONDS)}
+            aria-label="Back 10 seconds"
+            className="relative text-white transition-transform hover:scale-110"
+          >
+            <RotateCcw className="size-5" />
+            <span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold">10</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => skip(SKIP_SECONDS)}
+            aria-label="Forward 10 seconds"
+            className="relative text-white transition-transform hover:scale-110"
+          >
+            <RotateCw className="size-5" />
+            <span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold">10</span>
+          </button>
+
           <span className="select-none text-xs font-medium tabular-nums text-white/90">
             {formatTime(current)} / {formatTime(duration)}
           </span>
 
-          {/* Seek bar */}
+          {/* Draggable seek bar */}
           <div
-            onClick={seek}
+            ref={seekRef}
+            onPointerDown={onSeekPointerDown}
+            onPointerMove={onSeekPointerMove}
+            onPointerUp={onSeekPointerUp}
+            onKeyDown={onSeekKeyDown}
             role="slider"
             aria-label="Seek"
             aria-valuemin={0}
             aria-valuemax={Math.round(duration)}
             aria-valuenow={Math.round(current)}
             tabIndex={0}
-            className="group/seek relative flex h-4 flex-1 cursor-pointer items-center"
+            className="relative flex h-5 flex-1 cursor-pointer touch-none items-center"
           >
-            <span className="h-1 w-full rounded-full bg-white/30">
+            <span className="h-1.5 w-full overflow-hidden rounded-full bg-white/25">
               <span className="block h-full rounded-full bg-white" style={{ width: `${progress}%` }} />
             </span>
             <span
-              className="absolute size-3 -translate-x-1/2 rounded-full bg-white opacity-0 shadow transition-opacity group-hover/seek:opacity-100"
+              className="absolute size-3.5 -translate-x-1/2 rounded-full bg-white shadow ring-2 ring-black/20"
               style={{ left: `${progress}%` }}
             />
           </div>
