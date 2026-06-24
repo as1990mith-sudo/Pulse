@@ -1,10 +1,8 @@
 import Link from "next/link"
 import { SiteHeader } from "@/components/site-header"
-import { HostStudioLauncher } from "@/components/live-session"
-import { VideoStudioConsole } from "@/components/video-studio-console"
-import { StudioErrorBoundary } from "@/components/studio-error-boundary"
+import { HostStudioLauncher, HostVideoStudioLauncher } from "@/components/live-session"
 import { getCurrentUser } from "@/lib/session"
-import { getMyActiveStream } from "@/app/actions/live"
+import { getMyActiveStream, getMyActiveVideoStream } from "@/app/actions/live"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 
@@ -20,13 +18,13 @@ export default async function StudioPage({
   // When signed in, the console owns the full viewport below the header so the
   // studio is compact and only the chat scrolls.
   if (currentUser) {
-    // Video studio is a full-bleed, immersive surface (its own header chrome).
+    // The video studio is now hosted at the app level (see LiveSessionProvider)
+    // just like audio, so the host can minimise the broadcast into a persistent
+    // mini-player and keep navigating. Resume an already-live video stream if
+    // the host reopened the studio after minimising or signing back in.
     if (isVideo) {
-      return (
-        <StudioErrorBoundary>
-          <VideoStudioConsole currentUser={currentUser} />
-        </StudioErrorBoundary>
-      )
+      const activeVideo = await getMyActiveVideoStream()
+      return <HostVideoStudioLauncher currentUser={currentUser} resumeStream={activeVideo} />
     }
     // The audio console is hosted at the app level (see LiveSessionProvider) so
     // the room can be minimised into a persistent mini-player while audio keeps

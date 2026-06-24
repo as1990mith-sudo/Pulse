@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation"
 import { ChevronUp, Radio } from "lucide-react"
 import { StudioConsole } from "@/components/studio-console"
 import { LiveListener } from "@/components/live-listener"
+import { VideoStudioConsole } from "@/components/video-studio-console"
+import { LiveVideoViewer } from "@/components/live-video-viewer"
 import { StudioErrorBoundary } from "@/components/studio-error-boundary"
 import type { CurrentUser } from "@/lib/session"
 import type { LiveStreamView } from "@/app/actions/live"
@@ -31,7 +33,22 @@ type ListenerSession = {
   currentUser: CurrentUser | null
   currentUserId: string | null
 }
-type Session = HostSession | ListenerSession
+type HostVideoSession = {
+  kind: "host-video"
+  key: string
+  currentUser: CurrentUser
+  resumeStream?: LiveStreamView | null
+}
+type ViewerVideoSession = {
+  kind: "viewer-video"
+  key: string
+  stream: LiveStreamView
+  canWatch: boolean
+  currentUser: CurrentUser | null
+  currentUserId: string | null
+  initialFollowing: boolean
+}
+type Session = HostSession | ListenerSession | HostVideoSession | ViewerVideoSession
 
 export type LiveMeta = { title: string; cover: string | null; live: boolean; subtitle?: string }
 
@@ -145,6 +162,31 @@ export function LiveSessionProvider({ children }: { children: React.ReactNode })
                 />
               </div>
             </StudioErrorBoundary>
+          ) : session.kind === "host-video" ? (
+            <StudioErrorBoundary>
+              <div className="flex h-dvh flex-col overflow-hidden">
+                <VideoStudioConsole
+                  currentUser={session.currentUser}
+                  resumeStream={session.resumeStream}
+                  onMinimize={minimize}
+                  onExit={close}
+                  onMeta={setMeta}
+                />
+              </div>
+            </StudioErrorBoundary>
+          ) : session.kind === "viewer-video" ? (
+            <div className="flex h-dvh flex-col overflow-hidden">
+              <LiveVideoViewer
+                stream={session.stream}
+                canWatch={session.canWatch}
+                currentUser={session.currentUser}
+                currentUserId={session.currentUserId}
+                initialFollowing={session.initialFollowing}
+                onMinimize={minimize}
+                onExit={close}
+                onMeta={setMeta}
+              />
+            </div>
           ) : (
             <div className="h-dvh">
               <LiveListener
@@ -239,6 +281,53 @@ export function ListenerLauncher({
   const { open } = useLiveSession()
   useEffect(() => {
     open({ kind: "listener", key: `listener:${stream.roomName}`, stream, canListen, currentUser, currentUserId })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stream.roomName])
+  return null
+}
+
+/** Mounts a host *video* studio session into the app-level provider. */
+export function HostVideoStudioLauncher({
+  currentUser,
+  resumeStream,
+}: {
+  currentUser: CurrentUser
+  resumeStream?: LiveStreamView | null
+}) {
+  const { open } = useLiveSession()
+  useEffect(() => {
+    const key = resumeStream ? `host-video:${resumeStream.roomName}` : "host-video"
+    open({ kind: "host-video", key, currentUser, resumeStream })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeStream?.roomName])
+  return null
+}
+
+/** Mounts a video viewer session into the app-level provider. */
+export function VideoViewerLauncher({
+  stream,
+  canWatch,
+  currentUser,
+  currentUserId,
+  initialFollowing,
+}: {
+  stream: LiveStreamView
+  canWatch: boolean
+  currentUser: CurrentUser | null
+  currentUserId: string | null
+  initialFollowing: boolean
+}) {
+  const { open } = useLiveSession()
+  useEffect(() => {
+    open({
+      kind: "viewer-video",
+      key: `viewer-video:${stream.roomName}`,
+      stream,
+      canWatch,
+      currentUser,
+      currentUserId,
+      initialFollowing,
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stream.roomName])
   return null

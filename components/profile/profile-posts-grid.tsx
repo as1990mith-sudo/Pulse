@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { X, Heart, MessageCircle, Repeat2, Layers } from "lucide-react"
+import { X, Heart, MessageCircle, Repeat2, Layers, Play } from "lucide-react"
 import type { FeedPostView } from "@/app/actions/feed"
 import type { CurrentUser } from "@/lib/session"
 import { PostCard } from "@/components/mind-feed"
@@ -62,6 +62,13 @@ function PostTile({ post, onOpen }: { post: FeedPostView; onOpen: () => void }) 
           <Layers className="size-4" />
         </span>
       )}
+      {/* Compact play badge so video tiles stay recognizable as videos now that
+          the thumbnail shows the first frame rather than a play glyph. */}
+      {post.video && !multiMedia && (
+        <span className="pointer-events-none absolute right-1.5 top-1.5 z-10 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
+          <Play className="size-4 fill-current" />
+        </span>
+      )}
       {post.image ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -71,8 +78,11 @@ function PostTile({ post, onOpen }: { post: FeedPostView; onOpen: () => void }) 
           className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
       ) : post.video ? (
+        // Append a media fragment so mobile browsers decode and paint the frame
+        // at 0.1s as the tile's thumbnail, instead of showing the browser's
+        // blurry default play-glyph on a grey background.
         <video
-          src={post.video}
+          src={post.video.includes("#") ? post.video : `${post.video}#t=0.1`}
           muted
           playsInline
           preload="metadata"

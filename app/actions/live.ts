@@ -468,6 +468,41 @@ export async function getMyActiveStream(): Promise<LiveStreamView | null> {
   }
 }
 
+/**
+ * The current user's own still-live *video* stream, if any. Lets the host
+ * resume their broadcast (rather than starting a duplicate) when they reopen
+ * the studio after minimising or signing back in.
+ */
+export async function getMyActiveVideoStream(): Promise<LiveStreamView | null> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) return null
+  await endStaleStreams()
+  const [r] = await db
+    .select()
+    .from(liveStream)
+    .where(and(eq(liveStream.hostId, session.user.id), eq(liveStream.status, "live")))
+    .orderBy(desc(liveStream.startedAt))
+  if (!r || (r.mode ?? "audio") !== "video") return null
+  return {
+    id: r.id,
+    roomName: r.roomName,
+    hostId: r.hostId,
+    hostName: r.hostName,
+    hostHandle: r.hostHandle,
+    title: r.title,
+    category: r.category,
+    cover: r.cover,
+    mode: (r.mode as LiveMode) ?? "video",
+    visibility: (r.visibility as LiveVisibility) ?? "public",
+    locked: r.locked ?? false,
+    pinnedChatId: r.pinnedChatId ?? null,
+    chatBgUrl: r.chatBgUrl,
+    chatBgEffect: (r.chatBgEffect as ChatBgEffect) ?? "none",
+    theme: r.theme ?? "default",
+    startedAt: r.startedAt.toISOString(),
+  }
+}
+
 /** A single live stream by room name. */
 export async function getLiveStream(roomName: string): Promise<LiveStreamView | null> {
   await endStaleStreams()
