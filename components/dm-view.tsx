@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ImageLightbox } from "@/components/image-lightbox"
 import { VoiceRecorder } from "@/components/voice-recorder"
+import { AudioMessage } from "@/components/audio-message"
 import { DmCall } from "@/components/dm-call"
 import { cn } from "@/lib/utils"
 import { extractFirstUrl } from "@/lib/linkify"
@@ -621,11 +622,7 @@ function DmBubble({
             <video src={m.attachmentUrl} controls className="max-h-64 rounded-xl" />
           )}
           {m.attachmentUrl && m.attachmentType === "audio" && (
-            <div className="flex items-center gap-2 px-1 py-1">
-              <Music className="size-4 shrink-0" />
-              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-              <audio src={m.attachmentUrl} controls className="h-9 max-w-[220px]" />
-            </div>
+            <AudioMessage src={m.attachmentUrl} mine={m.isSelf} className="min-w-[200px] px-1" />
           )}
           {m.attachmentUrl && m.attachmentType === "document" && (
             <a

@@ -42,6 +42,9 @@ export function FeedVideo({ src, className }: { src: string; className?: string 
   const [playing, setPlaying] = useState(false)
   const [current, setCurrent] = useState(0)
   const [duration, setDuration] = useState(0)
+  // Stays false until the first frame is actually decoded. Until then we paint
+  // a solid cover so the browser's blurry default play-glyph never flashes.
+  const [ready, setReady] = useState(false)
 
   // Keep this instance in sync with the shared mute preference.
   useEffect(() => {
@@ -131,6 +134,7 @@ export function FeedVideo({ src, className }: { src: string; className?: string 
         loop
         playsInline
         muted={muted}
+        preload="metadata"
         className={cn("w-full", className)}
         onClick={togglePlay}
         onPlay={() => {
@@ -146,8 +150,13 @@ export function FeedVideo({ src, className }: { src: string; className?: string 
           userPausedRef.current = true
         }}
         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+        onLoadedData={() => setReady(true)}
         onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
       />
+
+      {/* Solid cover painted over the video until its first frame is decoded,
+          hiding the browser's blurry default play-glyph flash. */}
+      {!ready && <div className="absolute inset-0 bg-muted" aria-hidden="true" />}
 
       {/* Center play affordance — shown only while paused */}
       {!playing && (

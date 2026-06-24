@@ -565,40 +565,35 @@
   }
 }
 
-/* Subtle page-entry transition played on every route change (see app/template.tsx) */
+/* Page-entry transition played on every route change (see app/template.tsx).
+   A quick, clean cross-fade — no rise or scale — so switching tabs feels
+   instant and calm rather than springy. */
 @keyframes page-enter {
   from {
     opacity: 0;
-    transform: translate3d(0, 10px, 0) scale(0.992);
   }
   to {
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
   }
 }
 
 .page-enter {
-  animation: page-enter 240ms cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: opacity, transform;
+  animation: page-enter 160ms ease-out;
+  will-change: opacity;
 }
 
-/* Active nav pill: a quick spring-in pop when a tab becomes active. */
+/* Active nav pill: a quick fade-in when a tab becomes active (no bounce). */
 @keyframes nav-pill-pop {
-  0% {
-    transform: scale(0.82);
-    opacity: 0.4;
+  from {
+    opacity: 0;
   }
-  60% {
-    transform: scale(1.04);
+  to {
     opacity: 1;
-  }
-  100% {
-    transform: scale(1);
   }
 }
 
 .nav-pill-active {
-  animation: nav-pill-pop 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: nav-pill-pop 160ms ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
