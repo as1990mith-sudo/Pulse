@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Pause, Play, Radio, RotateCcw, RotateCw, Gauge, Maximize } from "lucide-react"
+import { Pause, Play, Radio, RotateCcw, RotateCw, Gauge, Maximize, Minimize } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { cn } from "@/lib/utils"
 
@@ -21,10 +21,14 @@ const SPEEDS = [1, 1.25, 1.5, 1.75, 2] as const
  */
 export function EpisodePlayer({ show }: { show: Show }) {
   const mediaRef = useRef<HTMLVideoElement>(null)
+  // The video frame is the element we put into fullscreen so our own controls
+  // stay visible (YouTube-style), rather than the bare <video>.
+  const frameRef = useRef<HTMLDivElement>(null)
   const [playing, setPlaying] = useState(false)
   const [current, setCurrent] = useState(0)
   const [duration, setDuration] = useState(0)
   const [speedIdx, setSpeedIdx] = useState(0)
+  const [isFullscreen, setIsFullscreen] = useState(false)
   // A single <video> drives both kinds; for audio the frame is hidden.
   const isVideo = Boolean(show.videoUrl)
   const mediaUrl = show.videoUrl ?? show.audioUrl
@@ -60,20 +64,34 @@ export function EpisodePlayer({ show }: { show: Show }) {
     setCurrent(t)
   }
 
-  // Expand the video to true device fullscreen and, where supported, lock the
-  // screen to landscape for a cinematic view. iOS Safari only exposes the
-  // native player fullscreen via webkitEnterFullscreen (which auto-rotates),
-  // and orientation lock is a no-op on desktop.
-  async function goFullscreen() {
-    const el = mediaRef.current as
-      | (HTMLVideoElement & { webkitEnterFullscreen?: () => void })
+  // Toggle a YouTube-style fullscreen: we put the whole video *frame* into
+  // fullscreen (so our scrubber/controls stay visible) and lock the screen to
+  // landscape. iOS Safari/WKWebView can't fullscreen arbitrary elements, so we
+  // fall back to the native video fullscreen there (which also auto-rotates).
+  async function toggleFullscreen() {
+    const fsEl = document.fullscreenElement ?? (document as Document & { webkitFullscreenElement?: Element }).webkitFullscreenElement
+    if (fsEl) {
+      try {
+        if (document.exitFullscreen) await document.exitFullscreen()
+        else (document as Document & { webkitExitFullscreen?: () => void }).webkitExitFullscreen?.()
+      } catch {
+        /* ignore */
+      }
+      return
+    }
+
+    const frame = frameRef.current as
+      | (HTMLDivElement & { webkitRequestFullscreen?: () => Promise<void> | void })
       | null
-    if (!el) return
+    const video = mediaRef.current as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null
     try {
-      if (el.requestFullscreen) {
-        await el.requestFullscreen()
-      } else if (typeof el.webkitEnterFullscreen === "function") {
-        el.webkitEnterFullscreen()
+      if (frame?.requestFullscreen) {
+        await frame.requestFullscreen()
+      } else if (frame?.webkitRequestFullscreen) {
+        await frame.webkitRequestFullscreen()
+      } else if (video && typeof video.webkitEnterFullscreen === "function") {
+        // iOS: native fullscreen player (handles its own landscape rotation).
+        video.webkitEnterFullscreen()
         return
       }
       const orientation = screen.orientation as ScreenOrientation & {
@@ -87,10 +105,15 @@ export function EpisodePlayer({ show }: { show: Show }) {
     }
   }
 
-  // Release the orientation lock when fullscreen is exited.
+  // Track fullscreen state (to swap the icon/styles) and release the
+  // orientation lock when fullscreen is exited.
   useEffect(() => {
     const onFsChange = () => {
-      if (!document.fullscreenElement) {
+      const active = Boolean(
+        document.fullscreenElement ?? (document as Document & { webkitFullscreenElement?: Element }).webkitFullscreenElement,
+      )
+      setIsFullscreen(active)
+      if (!active) {
         try {
           screen.orientation?.unlock?.()
         } catch {
@@ -99,7 +122,11 @@ export function EpisodePlayer({ show }: { show: Show }) {
       }
     }
     document.addEventListener("fullscreenchange", onFsChange)
-    return () => document.removeEventListener("fullscreenchange", onFsChange)
+    document.addEventListener("webkitfullscreenchange", onFsChange)
+    return () => {
+      document.removeEventListener("fullscreenchange", onFsChange)
+      document.removeEventListener("webkitfullscreenchange", onFsChange)
+    }
   }, [])
 
   // Recorded sessions (webm/streamed blobs) often report duration as Infinity
@@ -144,9 +171,16 @@ export function EpisodePlayer({ show }: { show: Show }) {
         {/* Artwork / video frame — the <video> is the single media engine; for
             audio it's hidden behind the cover art. */}
         <div
+          ref={frameRef}
           className={cn(
-            "relative overflow-hidden rounded-2xl shadow-2xl ring-1 ring-foreground/10",
-            isVideo ? "aspect-video w-full max-w-md bg-black" : "aspect-square w-44 sm:w-52",
+            "relative overflow-hidden shadow-2xl ring-1 ring-foreground/10",
+            // In fullscreen the frame fills the whole screen (black letterbox);
+            // otherwise it's the rounded 16:9 (video) / square (audio) card.
+            isFullscreen
+              ? "flex h-screen w-screen items-center justify-center rounded-none bg-black ring-0"
+              : isVideo
+                ? "aspect-video w-full max-w-md rounded-2xl bg-black"
+                : "aspect-square w-44 rounded-2xl sm:w-52",
           )}
         >
           <video
@@ -155,7 +189,9 @@ export function EpisodePlayer({ show }: { show: Show }) {
             playsInline
             preload="metadata"
             onClick={isVideo ? toggle : undefined}
-            className={cn("size-full", isVideo ? "object-contain" : "absolute inset-0 -z-10 opacity-0")}
+            className={cn(
+              isVideo ? "size-full object-contain" : "absolute inset-0 -z-10 size-full opacity-0",
+            )}
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
             onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
@@ -175,15 +211,15 @@ export function EpisodePlayer({ show }: { show: Show }) {
                 <Radio className="size-16 text-muted-foreground" />
               </div>
             ))}
-          {/* Fullscreen / landscape expand — video episodes only. */}
+          {/* Fullscreen / landscape toggle — video episodes only. */}
           {isVideo && (
             <button
               type="button"
-              onClick={goFullscreen}
-              aria-label="Expand to fullscreen"
-              className="absolute bottom-2 right-2 flex size-9 items-center justify-center rounded-full bg-black/55 text-white ring-1 ring-white/20 backdrop-blur-md transition-colors hover:bg-black/70 active:scale-90"
+              onClick={toggleFullscreen}
+              aria-label={isFullscreen ? "Exit fullscreen" : "Expand to fullscreen"}
+              className="absolute bottom-3 right-3 z-10 flex size-10 items-center justify-center rounded-full bg-black/55 text-white ring-1 ring-white/20 backdrop-blur-md transition-colors hover:bg-black/70 active:scale-90"
             >
-              <Maximize className="size-4" />
+              {isFullscreen ? <Minimize className="size-5" /> : <Maximize className="size-5" />}
             </button>
           )}
         </div>
