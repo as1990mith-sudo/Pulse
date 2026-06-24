@@ -27,7 +27,6 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { ImageLightbox } from "@/components/image-lightbox"
-import { ImageCropper } from "@/components/image-cropper"
 import {
   adminDeleteAnnouncement,
   adminMessageCreator,
@@ -571,7 +570,6 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
   const [price, setPrice] = useState("")
   const [durationHours, setDurationHours] = useState(AD_BLOCK_HOURS)
   const [flyer, setFlyer] = useState<string | null>(null)
-  const [cropSrc, setCropSrc] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<{ status: "approved" | "declined"; declineReason?: string } | null>(null)
@@ -582,12 +580,13 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
   const totalPrice = priceForHours(durationHours)
   const isEvent = adType === "event"
 
-  async function handleCropped(blob: Blob) {
+  // Upload the original, full-size flyer untouched (like cover art in the audio
+  // studio). The feed only crops it visually via object-cover; the stored file
+  // stays whole so the lightbox shows the complete, uncropped flyer on click.
+  async function handleFile(file: File) {
     setError(null)
-    setCropSrc(null)
     setUploading(true)
     try {
-      const file = new File([blob], "flyer.jpg", { type: "image/jpeg" })
       const data = await uploadMedia(file, "chat")
       setFlyer(data.url)
     } catch (err) {
@@ -710,7 +709,9 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
               </div>
               <div className="space-y-1.5">
                 <p className="text-sm font-medium">{isEvent ? "Event flyer" : "Product image"}</p>
-                <p className="text-xs text-muted-foreground">You can adjust the crop to fit the box.</p>
+                <p className="text-xs text-muted-foreground">
+                  The box shows a preview; your full flyer is kept and shown when tapped.
+                </p>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -718,7 +719,7 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0]
-                    if (file) setCropSrc(URL.createObjectURL(file))
+                    if (file) void handleFile(file)
                     if (fileInputRef.current) fileInputRef.current.value = ""
                   }}
                 />
@@ -878,16 +879,6 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
           </form>
         )}
       </Card>
-
-      {cropSrc && (
-        <ImageCropper
-          src={cropSrc}
-          aspect={16 / 9}
-          title={isEvent ? "Adjust your flyer" : "Adjust your product image"}
-          onCancel={() => setCropSrc(null)}
-          onCropped={handleCropped}
-        />
-      )}
     </div>,
     document.body,
   )
