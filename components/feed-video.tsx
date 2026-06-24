@@ -187,11 +187,17 @@ export function FeedVideo({ src, className }: { src: string; className?: string 
 
   const progress = duration > 0 ? (current / duration) * 100 : 0
 
+  // Append a media-fragment so mobile browsers decode and paint the frame at
+  // 0.1s as the element's thumbnail — even before the clip scrolls fully into
+  // view or starts playing. This is what makes the real first frame show
+  // instead of the browser's blurry default play-glyph on a grey box.
+  const posterSrc = src.includes("#") ? src : `${src}#t=0.1`
+
   return (
     <div className="group relative overflow-hidden bg-black">
       <video
         ref={ref}
-        src={src}
+        src={posterSrc}
         loop
         playsInline
         muted={muted}
@@ -211,21 +217,34 @@ export function FeedVideo({ src, className }: { src: string; className?: string 
           }
           userPausedRef.current = true
         }}
-        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+        onLoadedMetadata={(e) => {
+          setDuration(e.currentTarget.duration)
+          // Backstop for browsers that ignore the media fragment: nudge to a
+          // tiny offset so a real frame is decoded and shown as the thumbnail.
+          const el = e.currentTarget
+          if (!started && el.currentTime < 0.05) {
+            try {
+              el.currentTime = 0.1
+            } catch {
+              /* seek not ready yet — the media fragment still covers this */
+            }
+          }
+        }}
         onTimeUpdate={(e) => {
           // While actively dragging, the thumb is driven by the pointer.
           if (!draggingRef.current) setCurrent(e.currentTarget.currentTime)
         }}
       />
 
-      {/* Premium poster overlay — fully covers the frame (and the browser's
-          native play-glyph) until the clip first starts playing. */}
+      {/* Premium poster overlay — sits on top of the real first-frame thumbnail
+          with a light scrim so the thumbnail stays visible, while still hiding
+          the browser's blurry default play-glyph until the clip first plays. */}
       {!started && (
         <button
           type="button"
           onClick={togglePlay}
           aria-label="Play video"
-          className="absolute inset-0 flex items-center justify-center bg-gradient-to-t from-black/70 via-black/45 to-black/35"
+          className="absolute inset-0 flex items-center justify-center bg-gradient-to-t from-black/45 via-black/15 to-black/25"
         >
           <span className="flex size-16 items-center justify-center rounded-full bg-white/15 text-white shadow-lg ring-1 ring-white/25 backdrop-blur-md transition-transform duration-200 group-hover:scale-105">
             <Play className="size-7 translate-x-0.5 fill-current" />

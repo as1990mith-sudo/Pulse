@@ -198,8 +198,7 @@ export function BibleReader() {
         >
           {([
             { key: "kjv", label: "KJV", icon: <BookOpen className="size-4" /> },
-            { key: "nlt", label: "NLT", icon: <BookOpen className="size-4" /> },
-            { key: "interlinear", label: "Strong's", icon: <Languages className="size-4" /> },
+            { key: "interlinear", label: "KJV + Strong's", icon: <Languages className="size-4" /> },
           ] as const).map((t) => (
             <button
               key={t.key}

@@ -82,9 +82,9 @@ export function GoLiveToggle() {
             onClick={() => router.push(`/studio?mode=${mode}`)}
             className="group inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-live px-6 py-3 font-semibold text-live-foreground transition-all hover:opacity-90 active:scale-[0.98]"
           >
-            {mode === "video" ? <Video className="size-4" /> : <Mic className="size-4" />}
-            Open the {mode} studio
-            <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+            {mode === "video" ? <Video className="size-4 shrink-0" /> : <Mic className="size-4 shrink-0" />}
+            <span className="whitespace-nowrap">Open the {mode} studio</span>
+            <ArrowRight className="size-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
           </button>
         </div>
       </div>

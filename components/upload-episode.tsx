@@ -47,7 +47,7 @@ function formatDuration(secs: number): string {
  * catalogue. Media uploads straight to Blob (via uploadMedia), then we publish
  * the episode with publishShow. Shown only on the owner's own profile.
  */
-export function UploadEpisode() {
+export function UploadEpisode({ playlists = [] }: { playlists?: string[] }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -58,6 +58,7 @@ export function UploadEpisode() {
   const [cover, setCover] = useState<string | null>(null)
   const [title, setTitle] = useState("")
   const [category, setCategory] = useState("")
+  const [playlist, setPlaylist] = useState("")
   const [description, setDescription] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -70,6 +71,7 @@ export function UploadEpisode() {
     setCover(null)
     setTitle("")
     setCategory("")
+    setPlaylist("")
     setDescription("")
     setError(null)
     if (mediaInputRef.current) mediaInputRef.current.value = ""
@@ -134,6 +136,7 @@ export function UploadEpisode() {
           cover,
           audioUrl: kind === "audio" ? media.url : null,
           videoUrl: kind === "video" ? media.url : null,
+          playlist: kind === "video" ? playlist.trim() || null : null,
         })
 
         if (!result.ok) {
@@ -288,6 +291,28 @@ export function UploadEpisode() {
           placeholder="Category (e.g. Teaching, Worship)"
           aria-label="Category"
         />
+        {/* Playlists only apply to video episodes (YouTube-style grouping). */}
+        {kind === "video" && (
+          <div>
+            <Input
+              value={playlist}
+              onChange={(e) => setPlaylist(e.target.value)}
+              placeholder="Playlist (optional, e.g. Sunday Sermons)"
+              aria-label="Playlist"
+              list="episode-playlists"
+            />
+            {playlists.length > 0 && (
+              <datalist id="episode-playlists">
+                {playlists.map((p) => (
+                  <option key={p} value={p} />
+                ))}
+              </datalist>
+            )}
+            <p className="mt-1 px-1 text-xs text-muted-foreground">
+              Group this video into a playlist. Pick an existing one or type a new name.
+            </p>
+          </div>
+        )}
         <Textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
