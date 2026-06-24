@@ -4,7 +4,21 @@ import { useEffect, useRef, useState, useTransition } from "react"
 import { createPortal } from "react-dom"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Plus, X, Trash2, Loader2, Send, Camera, Video, ImageIcon, Type, Eye, MoreVertical } from "lucide-react"
+import {
+  Plus,
+  X,
+  Trash2,
+  Loader2,
+  Send,
+  Camera,
+  Video,
+  ImageIcon,
+  Type,
+  Eye,
+  MoreVertical,
+  Volume2,
+  VolumeX,
+} from "lucide-react"
 import {
   createStatus,
   deleteStatus,
@@ -624,6 +638,9 @@ export function StatusViewer({
   const [menuOpen, setMenuOpen] = useState(false)
   // Brief left/right slide animation played when swiping between users.
   const [slide, setSlide] = useState<"left" | "right" | null>(null)
+  // Whether video-status audio is muted. We may flip this to true automatically
+  // if the WebView/browser blocks autoplay-with-sound (see playVideo below).
+  const [muted, setMuted] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const pausedRef = useRef(false)
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -753,11 +770,33 @@ export function StatusViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupIndex, itemIndex])
 
+  // Robustly start a status video. Mobile WebViews (e.g. an Android APK shell)
+  // block autoplay of videos that carry sound, so a plain play() is rejected,
+  // the clip never starts, and — with no painted first frame — the viewer just
+  // shows a black screen. We therefore retry muted, which every browser allows,
+  // so the video always plays. The user can tap the speaker to restore sound.
+  async function playVideo() {
+    const v = videoRef.current
+    if (!v) return
+    try {
+      await v.play()
+    } catch {
+      try {
+        v.muted = true
+        setMuted(true)
+        await v.play()
+      } catch {
+        /* still blocked — the visible first frame (preload=auto) is shown */
+      }
+    }
+  }
+
   useEffect(() => {
     const v = videoRef.current
     if (!v) return
     if (paused) v.pause()
-    else void v.play().catch(() => {})
+    else void playVideo()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paused])
 
   useEffect(() => {
@@ -909,6 +948,24 @@ export function StatusViewer({
             </div>
           </Link>
           <div className="flex items-center gap-1">
+            {item.mediaType === "video" && (
+              <button
+                type="button"
+                onClick={() => {
+                  const v = videoRef.current
+                  const next = !muted
+                  setMuted(next)
+                  if (v) {
+                    v.muted = next
+                    if (!next) void v.play().catch(() => {})
+                  }
+                }}
+                className="flex size-9 items-center justify-center rounded-full text-white/90 transition-colors hover:bg-white/15"
+                aria-label={muted ? "Unmute" : "Mute"}
+              >
+                {muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
+              </button>
+            )}
             {group.isSelf && (
               <button
                 type="button"
@@ -943,7 +1000,12 @@ export function StatusViewer({
               className="max-h-full max-w-full"
               autoPlay
               playsInline
+              muted={muted}
+              // Fetch + paint the first frame so the element is never blank
+              // black while autoplay is being negotiated.
+              preload="auto"
               controls={false}
+              onLoadedData={() => void playVideo()}
               onTimeUpdate={(e) => {
                 const v = e.currentTarget
                 if (v.duration) setProgress((v.currentTime / v.duration) * 100)
