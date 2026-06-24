@@ -16,7 +16,6 @@ import {
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { ProfilePreview } from "@/components/profile-preview"
 import { cn } from "@/lib/utils"
 import { renderMessageBody } from "@/lib/rich-text"
@@ -207,7 +206,11 @@ export function LiveChat({
         </div>
       )}
 
-      <ScrollArea className="relative flex-1">
+      {/* The <ul> is the single bounded scroller (min-h-0 lets it shrink within
+          the flex column so it scrolls instead of growing and pushing the UI up).
+          Older messages stay above and are reachable by scrolling up, newest at
+          the bottom — matching the messages inbox behaviour. */}
+      <div className="relative min-h-0 flex-1">
         <ul
           ref={scrollRef}
           onScroll={handleScroll}
@@ -315,7 +318,7 @@ export function LiveChat({
             Jump to latest
           </button>
         )}
-      </ScrollArea>
+      </div>
 
       {canSend ? (
         <form
