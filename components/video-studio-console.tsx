@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Rewind,
   Send,
+  Settings,
   SkipBack,
   SkipForward,
   Trash2,
@@ -37,7 +38,7 @@ import {
   heartbeatBroadcast,
   type LiveStreamView,
 } from "@/app/actions/live"
-import { useLiveVideo } from "@/lib/use-live-video"
+import { useLiveVideo, isMedianApp, openNativeAppSettings } from "@/lib/use-live-video"
 import { uploadMedia } from "@/lib/upload-media"
 import { ReactionLayer } from "@/components/live-reactions"
 import { LiveChat } from "@/components/live-chat"
@@ -918,6 +919,16 @@ export function VideoStudioConsole({
       {rtcError && live && connected && (
         <div className="absolute bottom-2 left-1/2 z-40 flex w-[min(92%,30rem)] -translate-x-1/2 items-center gap-2 rounded-2xl bg-destructive px-3 py-2 text-sm font-medium text-destructive-foreground shadow-lg">
           <p className="min-w-0 flex-1 text-pretty leading-snug">{rtcError}</p>
+          {isMedianApp() && (
+            <button
+              type="button"
+              onClick={() => openNativeAppSettings()}
+              className="flex shrink-0 items-center gap-1 rounded-full bg-white/20 px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-white/30"
+            >
+              <Settings className="size-3.5" />
+              Settings
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {
