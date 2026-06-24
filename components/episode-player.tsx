@@ -1,7 +1,7 @@
 "use client"
 
-import { useRef, useState } from "react"
-import { Pause, Play, Radio, RotateCcw, RotateCw, Gauge } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { Pause, Play, Radio, RotateCcw, RotateCw, Gauge, Maximize } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { cn } from "@/lib/utils"
 
@@ -59,6 +59,48 @@ export function EpisodePlayer({ show }: { show: Show }) {
     el.currentTime = t
     setCurrent(t)
   }
+
+  // Expand the video to true device fullscreen and, where supported, lock the
+  // screen to landscape for a cinematic view. iOS Safari only exposes the
+  // native player fullscreen via webkitEnterFullscreen (which auto-rotates),
+  // and orientation lock is a no-op on desktop.
+  async function goFullscreen() {
+    const el = mediaRef.current as
+      | (HTMLVideoElement & { webkitEnterFullscreen?: () => void })
+      | null
+    if (!el) return
+    try {
+      if (el.requestFullscreen) {
+        await el.requestFullscreen()
+      } else if (typeof el.webkitEnterFullscreen === "function") {
+        el.webkitEnterFullscreen()
+        return
+      }
+      const orientation = screen.orientation as ScreenOrientation & {
+        lock?: (o: "landscape" | "portrait") => Promise<void>
+      }
+      if (orientation && typeof orientation.lock === "function") {
+        await orientation.lock("landscape").catch(() => {})
+      }
+    } catch {
+      /* user dismissed or the browser blocked the request */
+    }
+  }
+
+  // Release the orientation lock when fullscreen is exited.
+  useEffect(() => {
+    const onFsChange = () => {
+      if (!document.fullscreenElement) {
+        try {
+          screen.orientation?.unlock?.()
+        } catch {
+          /* unlock unsupported */
+        }
+      }
+    }
+    document.addEventListener("fullscreenchange", onFsChange)
+    return () => document.removeEventListener("fullscreenchange", onFsChange)
+  }, [])
 
   // Recorded sessions (webm/streamed blobs) often report duration as Infinity
   // until the browser scans to the end. Force a seek to the end to make the
@@ -133,6 +175,17 @@ export function EpisodePlayer({ show }: { show: Show }) {
                 <Radio className="size-16 text-muted-foreground" />
               </div>
             ))}
+          {/* Fullscreen / landscape expand — video episodes only. */}
+          {isVideo && (
+            <button
+              type="button"
+              onClick={goFullscreen}
+              aria-label="Expand to fullscreen"
+              className="absolute bottom-2 right-2 flex size-9 items-center justify-center rounded-full bg-black/55 text-white ring-1 ring-white/20 backdrop-blur-md transition-colors hover:bg-black/70 active:scale-90"
+            >
+              <Maximize className="size-4" />
+            </button>
+          )}
         </div>
 
         {/* Title block */}
