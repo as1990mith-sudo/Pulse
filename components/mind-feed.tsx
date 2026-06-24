@@ -546,7 +546,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
         <button
           onClick={() => setTab("following")}
           className={cn(
-            "relative flex-1 px-3 py-4 text-[15px] font-semibold transition-colors",
+            "relative flex-1 whitespace-nowrap px-3 py-4 text-[15px] font-semibold transition-colors",
             tab === "following" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
           )}
           aria-pressed={tab === "following"}
