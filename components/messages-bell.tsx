@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import useSWR from "swr"
-import { MessageSquareMore } from "lucide-react"
+import { MessageSquare } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
 import { getUnreadDmCount } from "@/app/actions/dm"
 import { cn } from "@/lib/utils"
@@ -35,7 +35,7 @@ export function MessagesBell() {
           : "text-muted-foreground hover:bg-secondary hover:text-foreground",
       )}
     >
-      <MessageSquareMore className="size-[18px] transition-transform duration-300 group-hover:scale-110" />
+      <MessageSquare className="size-[18px] transition-transform duration-300 group-hover:scale-110" />
       {count > 0 && (
         <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center">
           <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary/60" aria-hidden="true" />
