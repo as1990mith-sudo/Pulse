@@ -82,6 +82,8 @@ export function StatusBar({
   const cameraVideoRef = useRef<HTMLInputElement>(null)
   const libraryRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
+  // Upload progress (0–100) while media transfers; null when idle.
+  const [uploadPct, setUploadPct] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [viewerIndex, setViewerIndex] = useState<number | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -158,7 +160,8 @@ export function StatusBar({
           uploadName = compose.file.name.replace(/\.(heic|heif|png|webp|jpe?g)$/i, "") + ".jpg"
         }
       }
-      const data = await uploadMedia(fileToUpload, "status", uploadName)
+      setUploadPct(0)
+      const data = await uploadMedia(fileToUpload, "status", uploadName, setUploadPct)
       await createStatus({ mediaUrl: data.url, mediaType: compose.type, caption })
       closeComposer()
       router.refresh()
@@ -166,6 +169,7 @@ export function StatusBar({
       setError(err instanceof Error ? err.message : "Upload failed.")
     } finally {
       setUploading(false)
+      setUploadPct(null)
     }
   }
 
@@ -314,7 +318,7 @@ export function StatusBar({
       )}
 
       {compose && (
-        <StatusComposer media={compose} uploading={uploading} onCancel={closeComposer} onShare={shareStatus} />
+        <StatusComposer media={compose} uploading={uploading} uploadPct={uploadPct} onCancel={closeComposer} onShare={shareStatus} />
       )}
 
       {textComposer && (
@@ -414,11 +418,13 @@ function CreateMenu({
 function StatusComposer({
   media,
   uploading,
+  uploadPct,
   onCancel,
   onShare,
 }: {
   media: { url: string; type: "image" | "video" }
   uploading: boolean
+  uploadPct: number | null
   onCancel: () => void
   onShare: (caption: string) => void
 }) {
@@ -458,6 +464,19 @@ function StatusComposer({
         )}
       </div>
 
+      {/* Live upload progress so large videos don't feel stuck. */}
+      {uploading && uploadPct !== null && (
+        <div className="px-4 pb-1">
+          <div className="flex items-center justify-between pb-1 text-xs font-medium text-white/80">
+            <span>Uploading…</span>
+            <span className="tabular-nums">{uploadPct}%</span>
+          </div>
+          <div className="h-1 overflow-hidden rounded-full bg-white/20">
+            <div className="h-full rounded-full bg-primary transition-[width] duration-200" style={{ width: `${uploadPct}%` }} />
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center gap-2 p-3">
         <input
           type="text"
@@ -476,7 +495,15 @@ function StatusComposer({
           className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
           aria-label="Share status"
         >
-          {uploading ? <Loader2 className="size-5 animate-spin" /> : <Send className="size-5" />}
+          {uploading ? (
+            uploadPct !== null ? (
+              <span className="text-xs font-semibold tabular-nums">{uploadPct}%</span>
+            ) : (
+              <Loader2 className="size-5 animate-spin" />
+            )
+          ) : (
+            <Send className="size-5" />
+          )}
         </button>
       </div>
     </div>,
