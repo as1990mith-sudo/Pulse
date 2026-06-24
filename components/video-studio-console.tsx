@@ -710,9 +710,19 @@ export function VideoStudioConsole({
           </div>
         )}
 
-        {/* Music panel */}
+        {/* Music panel — a fixed, centered overlay so it's never clipped by the
+            camera region's overflow-hidden (which previously hid the top of the
+            panel, including the upload button, "up in the frame"). It scrolls
+            internally if it ever exceeds the viewport height. */}
         {live && musicPanelOpen && (
-          <div className="absolute bottom-20 left-1/2 z-30 w-72 -translate-x-1/2 rounded-2xl border border-white/10 bg-zinc-900/95 p-4 shadow-2xl backdrop-blur-xl">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <button
+              type="button"
+              aria-label="Close music panel"
+              onClick={() => setMusicPanelOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <div className="relative z-10 max-h-[80vh] w-72 overflow-y-auto rounded-2xl border border-white/10 bg-zinc-900/95 p-4 shadow-2xl backdrop-blur-xl">
             <div className="mb-3 flex items-center justify-between">
               <p className="text-sm font-semibold">Background music</p>
               <button
@@ -901,6 +911,7 @@ export function VideoStudioConsole({
               )}
             </div>
             {musicError && <p className="mt-2 text-xs text-destructive">{musicError}</p>}
+            </div>
           </div>
         )}
       </div>
