@@ -292,13 +292,13 @@ function AnnouncementCard({ announcement: a, isAdmin = false }: { announcement: 
   if (a.hiddenByMe) {
     return (
       <div className="mx-4 flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-card/40 px-5 py-4 sm:mx-0">
-        <span className="flex items-center gap-3 text-base text-muted-foreground">
-          <Megaphone className="size-5" /> Announcements hidden
+        <span className="flex items-center gap-3 whitespace-nowrap text-base text-muted-foreground">
+          <Megaphone className="size-5 shrink-0" /> Announcements hidden
         </span>
         <Button
           size="sm"
           variant="ghost"
-          className="gap-2 text-base font-semibold text-foreground hover:bg-transparent"
+          className="shrink-0 gap-2 text-base font-semibold text-foreground hover:bg-transparent"
           disabled={isPending}
           onClick={() =>
             startTransition(async () => {
