@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import useSWR from "swr"
 import {
-  Hand,
   Heart,
   Loader2,
   Mic,
@@ -469,23 +468,7 @@ export function LiveVideoViewer({
                 disabled={!connected}
                 className="size-11 bg-black/35 text-white ring-1 ring-inset ring-white/15 backdrop-blur-md hover:bg-black/50"
               />
-              {/* Request to join the call-in slots */}
-              {canWatch && (
-                <button
-                  type="button"
-                  onClick={requestJoin}
-                  disabled={requesting || myStatus === "pending" || locked}
-                  aria-label="Request to join"
-                  className={cn(
-                    "flex size-11 items-center justify-center rounded-full ring-1 ring-inset backdrop-blur-md transition-all active:scale-90 disabled:opacity-60",
-                    myStatus === "pending"
-                      ? "bg-live/80 text-live-foreground ring-white/20"
-                      : "bg-black/35 text-white ring-white/15 hover:bg-black/50",
-                  )}
-                >
-                  {requesting ? <Loader2 className="size-5 animate-spin" /> : <Hand className="size-5" />}
-                </button>
-              )}
+              {/* Viewers join by tapping an open call-in slot below. */}
               <button
                 type="button"
                 onClick={() => setShareOpen(true)}
@@ -498,15 +481,11 @@ export function LiveVideoViewer({
           )}
         </div>
 
-        {/* Self-view label for a promoted guest is shown in its slot below. */}
-        {myStatus === "pending" && !canPublish && (
-          <p className="absolute bottom-3 left-3 z-20 rounded-full bg-black/45 px-3 py-1.5 text-xs font-medium text-white/90 ring-1 ring-inset ring-white/10 backdrop-blur-md">
-            Waiting for the host to let you in…
-          </p>
-        )}
       </div>
 
       {/* ── Two call-in slots (0.75/4 of the screen) ───────────────────────── */}
+      {/* Occupied slots fill left → right, so the left-most empty slot is the
+          next one a viewer can claim by tapping it to request the call-in. */}
       <div className="flex flex-[0.75] min-h-0 gap-2 border-t border-white/10 bg-neutral-950 p-2">
         {[0, 1].map((i) => {
           const slot = slots[i]
@@ -537,7 +516,43 @@ export function LiveVideoViewer({
               </div>
             )
           }
-          return <SlotTile key={i} peer={slot && !slot.self ? slot.peer : undefined} registerEl={registerPeerVideoEl} />
+          if (slot && !slot.self) {
+            return <SlotTile key={i} peer={slot.peer} registerEl={registerPeerVideoEl} />
+          }
+          // Empty slot. Only the left-most empty slot is the active call-in
+          // target; further slots stay passive until it's filled.
+          const isNextOpen = i === slots.length
+          if (canWatch && !canPublish && isNextOpen) {
+            if (myStatus === "pending") {
+              return (
+                <div
+                  key={i}
+                  className="relative flex h-full flex-1 flex-col items-center justify-center gap-1.5 rounded-2xl border border-dashed border-live/50 bg-live/10 text-live-foreground"
+                >
+                  <Loader2 className="size-5 animate-spin text-white/80" />
+                  <span className="px-2 text-center text-[11px] font-medium text-white/80">
+                    Waiting for the host…
+                  </span>
+                </div>
+              )
+            }
+            return (
+              <button
+                key={i}
+                type="button"
+                onClick={requestJoin}
+                disabled={requesting || locked}
+                aria-label="Tap to call in"
+                className="relative flex h-full flex-1 flex-col items-center justify-center gap-1.5 rounded-2xl border border-dashed border-white/25 bg-white/[0.04] text-white/70 transition-colors hover:border-live/60 hover:bg-live/10 hover:text-white active:scale-[0.98] disabled:opacity-60"
+              >
+                {requesting ? <Loader2 className="size-5 animate-spin" /> : <UserPlus className="size-5" />}
+                <span className="px-2 text-center text-[11px] font-semibold">
+                  {locked ? "Call-ins paused" : "Tap to call in"}
+                </span>
+              </button>
+            )
+          }
+          return <SlotTile key={i} registerEl={registerPeerVideoEl} />
         })}
       </div>
 

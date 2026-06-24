@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
-import { ChevronDown, Gauge, ListMusic, Pause, Play, Radio, RotateCcw, RotateCw, X } from "lucide-react"
+import { ChevronDown, Gauge, ListMusic, Maximize, Pause, Play, Radio, RotateCcw, RotateCw, X } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { cn } from "@/lib/utils"
 import { EpisodeNowPlayingActions } from "@/components/episode-now-playing-actions"
@@ -180,6 +180,52 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
     setCurrentTime(t)
   }
 
+  // Expand the video to true device fullscreen and, where supported, lock the
+  // screen to landscape for a premium cinematic view. Falls back gracefully:
+  // iOS Safari only exposes the native player fullscreen via the <video>'s
+  // webkitEnterFullscreen, and orientation lock is a no-op on desktop.
+  async function goFullscreen() {
+    const el = mediaRef.current as
+      | (HTMLVideoElement & {
+          webkitEnterFullscreen?: () => void
+          webkitSupportsFullscreen?: boolean
+        })
+      | null
+    if (!el) return
+    try {
+      if (el.requestFullscreen) {
+        await el.requestFullscreen()
+      } else if (typeof el.webkitEnterFullscreen === "function") {
+        // iOS Safari: opens the native fullscreen player (which auto-rotates).
+        el.webkitEnterFullscreen()
+        return
+      }
+      const orientation = screen.orientation as ScreenOrientation & {
+        lock?: (o: "landscape" | "portrait") => Promise<void>
+      }
+      if (orientation && typeof orientation.lock === "function") {
+        await orientation.lock("landscape").catch(() => {})
+      }
+    } catch {
+      /* user dismissed or the browser blocked the request */
+    }
+  }
+
+  // Release the orientation lock automatically when fullscreen is exited.
+  useEffect(() => {
+    const onFsChange = () => {
+      if (!document.fullscreenElement) {
+        try {
+          screen.orientation?.unlock?.()
+        } catch {
+          /* unlock unsupported */
+        }
+      }
+    }
+    document.addEventListener("fullscreenchange", onFsChange)
+    return () => document.removeEventListener("fullscreenchange", onFsChange)
+  }, [])
+
   // Recorded blobs often report Infinity duration until scanned; force it.
   function onMeta(e: React.SyntheticEvent<HTMLVideoElement>) {
     const el = e.currentTarget
@@ -264,27 +310,53 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
               {/* Artwork / video frame. The <video> is the single media engine for
                   both kinds; for audio it's visually hidden and the cover art shows. */}
               <div className="mt-2 flex justify-center sm:mt-4">
-                <video
-                  ref={mediaRef}
-                  src={mediaUrl}
-                  playsInline
-                  preload="metadata"
-                  className={cn(
-                    isVideo
-                      ? "aspect-video w-full max-w-xl rounded-2xl bg-black object-contain shadow-2xl ring-1 ring-foreground/10"
-                      : "sr-only",
-                  )}
-                  onClick={isVideo ? toggle : undefined}
-                  onPlay={() => setPlaying(true)}
-                  onPause={() => setPlaying(false)}
-                  onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-                  onLoadedMetadata={onMeta}
-                  onDurationChange={(e) => {
-                    const d = e.currentTarget.duration
-                    if (d !== Infinity && !Number.isNaN(d)) setDuration(d)
-                  }}
-                  onEnded={handleEnded}
-                />
+                {isVideo ? (
+                  <div className="group relative w-full max-w-xl">
+                    <video
+                      ref={mediaRef}
+                      src={mediaUrl}
+                      playsInline
+                      preload="metadata"
+                      className="aspect-video w-full rounded-2xl bg-black object-contain shadow-2xl ring-1 ring-foreground/10"
+                      onClick={toggle}
+                      onPlay={() => setPlaying(true)}
+                      onPause={() => setPlaying(false)}
+                      onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+                      onLoadedMetadata={onMeta}
+                      onDurationChange={(e) => {
+                        const d = e.currentTarget.duration
+                        if (d !== Infinity && !Number.isNaN(d)) setDuration(d)
+                      }}
+                      onEnded={handleEnded}
+                    />
+                    {/* Fullscreen / landscape expand */}
+                    <button
+                      type="button"
+                      onClick={goFullscreen}
+                      aria-label="Expand to fullscreen"
+                      className="absolute bottom-2 right-2 flex size-9 items-center justify-center rounded-full bg-black/55 text-white opacity-0 ring-1 ring-white/20 backdrop-blur-md transition-opacity duration-200 hover:bg-black/70 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+                    >
+                      <Maximize className="size-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <video
+                    ref={mediaRef}
+                    src={mediaUrl}
+                    playsInline
+                    preload="metadata"
+                    className="sr-only"
+                    onPlay={() => setPlaying(true)}
+                    onPause={() => setPlaying(false)}
+                    onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+                    onLoadedMetadata={onMeta}
+                    onDurationChange={(e) => {
+                      const d = e.currentTarget.duration
+                      if (d !== Infinity && !Number.isNaN(d)) setDuration(d)
+                    }}
+                    onEnded={handleEnded}
+                  />
+                )}
                 {!isVideo &&
                   (current.cover ? (
                     <div className="relative aspect-square w-52 overflow-hidden rounded-2xl shadow-2xl ring-1 ring-foreground/10 sm:w-60">

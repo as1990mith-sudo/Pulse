@@ -38,6 +38,48 @@ function parseImage(metadata: string | undefined): string | null {
   }
 }
 
+/**
+ * Best-effort detection of an Android/iOS in-app WebView (e.g. an app wrapped as
+ * an APK). These containers only expose the camera/mic to web content if the
+ * native shell is configured to grant it (Android: WebChromeClient
+ * .onPermissionRequest + CAMERA/RECORD_AUDIO manifest permissions). When that
+ * isn't wired up, getUserMedia fails even though the same site works in Chrome.
+ */
+function isInAppWebView(): boolean {
+  if (typeof navigator === "undefined") return false
+  const ua = navigator.userAgent || ""
+  // Android System WebView ("; wv") or common wrappers (Median/GoNative, Capacitor, Cordova).
+  return /; wv\)|Median|GoNative|Capacitor|Cordova/i.test(ua)
+}
+
+/**
+ * Turn a getUserMedia / LiveKit device error into a precise, human message.
+ * Distinguishing the cases avoids showing a misleading "check your permissions"
+ * note in a browser where permission was already granted (it might just be a
+ * transient timeout or the camera being used by another app).
+ */
+function describeMediaError(err: unknown): string {
+  const name = err instanceof Error ? err.name : ""
+  const message = err instanceof Error ? err.message : ""
+
+  if (name === "NotAllowedError" || name === "SecurityError" || /permission|denied/i.test(message)) {
+    if (isInAppWebView()) {
+      return "Camera/microphone access is blocked by the app. The app needs camera and microphone permission enabled — open this stream in your phone's browser, or update the app to allow camera access."
+    }
+    return "Camera access was blocked. Allow camera and microphone for this site in your browser settings, then tap the camera button to try again."
+  }
+  if (name === "NotFoundError" || name === "OverconstrainedError") {
+    return "No camera was found on this device. Connect a camera, then tap the camera button to try again."
+  }
+  if (name === "NotReadableError") {
+    return "Your camera is being used by another app. Close it, then tap the camera button to try again."
+  }
+  if (/timed out/i.test(message)) {
+    return "Starting your camera took too long. Tap the camera button to try again."
+  }
+  return "We couldn't start your camera. Tap the camera button to try again."
+}
+
 /** A remote participant publishing into the room (the host or an accepted guest). */
 export type RemotePeer = {
   identity: string
@@ -314,11 +356,13 @@ export function useLiveVideo({
         setMicOn(false)
       }
       let cameraOk = false
+      let lastErr: unknown = null
       for (let attempt = 0; attempt < 2 && !cameraOk; attempt++) {
         try {
           await withTimeout(room.localParticipant.setCameraEnabled(true), 12000, "Camera start timed out.")
           cameraOk = true
-        } catch {
+        } catch (e) {
+          lastErr = e
           if (attempt === 0) await new Promise((r) => setTimeout(r, 600))
         }
       }
@@ -326,9 +370,7 @@ export function useLiveVideo({
         attachLocalVideo(room)
       } else {
         setCamOn(false)
-        setError(
-          "We couldn't access your camera. Check your browser's camera permissions, then tap the camera button.",
-        )
+        setError(describeMediaError(lastErr))
       }
     }
   }, [token, serverUrl, isHost, attachPeerVideo, refreshPeers])
@@ -368,13 +410,28 @@ export function useLiveVideo({
     setMicOn(next)
   }, [micOn])
 
+  const clearError = useCallback(() => setError(null), [])
+
   const toggleCam = useCallback(async () => {
     const room = roomRef.current
     if (!room) return
     const next = !camOn
-    if (!next) setLocalVideoReady(false)
-    await room.localParticipant.setCameraEnabled(next)
-    setCamOn(next)
+    if (!next) {
+      setLocalVideoReady(false)
+      await room.localParticipant.setCameraEnabled(false).catch(() => {})
+      setCamOn(false)
+      return
+    }
+    // Turning the camera on (also used as the "retry" after a permission error).
+    setError(null)
+    try {
+      await withTimeout(room.localParticipant.setCameraEnabled(true), 12000, "Camera start timed out.")
+      setCamOn(true)
+      attachLocalVideo(room)
+    } catch (e) {
+      setCamOn(false)
+      setError(describeMediaError(e))
+    }
   }, [camOn])
 
   const flipCamera = useCallback(async () => {
@@ -512,6 +569,7 @@ export function useLiveVideo({
     participants,
     peers,
     error,
+    clearError,
     audioBlocked,
     musicPosition,
     musicDuration,
