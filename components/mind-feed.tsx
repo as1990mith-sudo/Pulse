@@ -810,8 +810,17 @@ export function PostCard({
                     media, 11 lines for text-only posts. */}
                 <div
                   ref={textWrapRef}
-                  className={cn("relative", isClamped && "overflow-hidden")}
+                  className={cn("relative", isClamped && "overflow-hidden", clampable && expanded && "cursor-pointer")}
                   style={isClamped ? { maxHeight: `${collapsedMaxEm}em` } : undefined}
+                  onClick={
+                    clampable && expanded
+                      ? (e) => {
+                          // Collapse when tapping the body text, but let real
+                          // links inside the caption open as normal.
+                          if (!(e.target as HTMLElement).closest("a")) setExpanded(false)
+                        }
+                      : undefined
+                  }
                 >
                   {text.split(/\n{2,}/).map((para, i) => (
                     <p key={i} className={cn("whitespace-pre-wrap leading-tight", i > 0 && "mt-1.5")}>
@@ -835,19 +844,6 @@ export function PostCard({
                     </button>
                   )}
                 </div>
-                {clampable && expanded && (
-                  <button
-                    type="button"
-                    onClick={() => setExpanded(false)}
-                    className={cn(
-                      "mt-0.5 font-semibold text-muted-foreground transition-colors hover:text-foreground",
-                      feed ? "text-sm" : "text-xs",
-                    )}
-                    aria-expanded
-                  >
-                    Show less
-                  </button>
-                )}
               </>
             )}
 
