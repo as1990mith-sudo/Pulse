@@ -79,7 +79,17 @@ export function ProfileTabs({
         {tab === "catalogue" ? (
           <div className="space-y-4">
             {/* Owners can upload their own audio/video episodes here. */}
-            {isSelf && <UploadEpisode />}
+            {isSelf && (
+              <UploadEpisode
+                playlists={Array.from(
+                  new Set(
+                    episodes
+                      .filter((e) => (e.mediaType ?? (e.videoUrl ? "video" : "audio")) === "video" && e.playlist)
+                      .map((e) => e.playlist as string),
+                  ),
+                )}
+              />
+            )}
             {episodes.length === 0 ? (
               <EmptyState
                 icon={<Mic className="size-6" />}

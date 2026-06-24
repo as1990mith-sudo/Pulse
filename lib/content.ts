@@ -58,6 +58,7 @@ function episodeToShow(row: typeof episode.$inferSelect): Show {
     audioUrl: row.audioUrl || undefined,
     videoUrl: row.videoUrl || undefined,
     mediaType: row.videoUrl ? "video" : "audio",
+    playlist: row.playlist || undefined,
     episodeId: row.id,
     likes: row.likes,
     isPrivate: row.isPrivate,

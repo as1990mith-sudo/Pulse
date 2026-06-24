@@ -37,6 +37,7 @@ export type Show = {
   audioUrl?: string // recorded audio for on-demand episodes
   videoUrl?: string // recorded/uploaded video for video episodes
   mediaType?: "audio" | "video" // catalogue media kind (video when videoUrl is set)
+  playlist?: string // optional named playlist a video episode belongs to
   episodeId?: number // numeric DB id for published episodes (likes/comments)
   likes?: number // like count for published episodes
   isPrivate?: boolean // hidden from everyone except the host (owner) when true

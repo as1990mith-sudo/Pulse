@@ -162,6 +162,9 @@ export const episode = pgTable("episode", {
   // Recorded/uploaded video for video episodes, uploaded to Blob. When set, the
   // episode is treated as a video episode in the catalogue; otherwise audio.
   videoUrl: text("videoUrl"),
+  // Optional named playlist a video episode belongs to (e.g. "Sunday Sermons").
+  // Null means the video is ungrouped. Used to organize the Video catalogue.
+  playlist: text("playlist"),
   // Set when a host publishes their own streamed session. Null for episodes
   // added by an admin from the content dashboard.
   hostUserId: text("hostUserId"),
