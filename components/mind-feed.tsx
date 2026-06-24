@@ -63,6 +63,7 @@ import { ImageLightbox } from "@/components/image-lightbox"
 import { FeedVideo } from "@/components/feed-video"
 import { ShareSheet } from "@/components/share-sheet"
 import { FindProfiles } from "@/components/find-profiles"
+import { PullToRefresh } from "@/components/pull-to-refresh"
 import type { ShareTarget } from "@/lib/share-types"
 import { cn } from "@/lib/utils"
 import { linkify, extractFirstUrl } from "@/lib/linkify"
@@ -171,6 +172,16 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
     revalidateOnFocus: true,
   })
   const allPosts = livePosts ?? posts
+
+  // Pull-to-refresh: revalidate whichever tab the user is on. The feed key backs
+  // "For you"/"Following"; the "discover" keys back the Find tab's results.
+  async function refreshFeed() {
+    await globalMutate(
+      (key) => key === "feed" || (Array.isArray(key) && key[0] === "discover"),
+      undefined,
+      { revalidate: true },
+    )
+  }
 
   // A fresh shuffle seed is created once per mount, so the "For you" order is
   // randomized every time the app is refreshed or closed and reopened, yet
@@ -332,7 +343,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
   }
 
   return (
-    <div>
+    <PullToRefresh onRefresh={refreshFeed}>
       <div className="border-y border-border/60 bg-gradient-to-b from-card/60 to-background px-4 py-5 sm:px-5">
         <form onSubmit={publish} className="flex gap-4">
           <Avatar className="size-12 shrink-0 ring-2 ring-border/60">
@@ -583,7 +594,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
           </p>
         </Card>
       )}
-    </div>
+    </PullToRefresh>
   )
 }
 
@@ -969,7 +980,9 @@ export function PostCard({
             </Link>
             <span className={cn("truncate text-muted-foreground", feed ? "text-sm" : "text-xs")}>
               {post.handle} · {post.postedAt}
-              {edited && " · edited"}
+              {/* For media-/link-only posts there's no body text to trail, so the
+                  edited note stays here; text posts show "(edited)" inline below. */}
+              {edited && !(text && !textIsOnlyLink) && " · edited"}
             </span>
           </div>
         </div>
@@ -1092,15 +1105,24 @@ export function PostCard({
                       : undefined
                   }
                 >
-                  {text.split(/\n{2,}/).map((para, i) => (
-                    <p key={i} className={cn("whitespace-pre-wrap leading-tight", i > 0 && "mt-1.5")}>
-                      {renderMessageBody(para, {
-                        link: true,
-                        linkClassName:
-                          "font-medium text-primary underline-offset-2 [overflow-wrap:anywhere] hover:underline",
-                      })}
-                    </p>
-                  ))}
+                  {(() => {
+                    const paras = text.split(/\n{2,}/)
+                    return paras.map((para, i) => (
+                      <p key={i} className={cn("whitespace-pre-wrap leading-tight", i > 0 && "mt-1.5")}>
+                        {renderMessageBody(para, {
+                          link: true,
+                          linkClassName:
+                            "font-medium text-primary underline-offset-2 [overflow-wrap:anywhere] hover:underline",
+                        })}
+                        {/* The "(edited)" indicator trails the very last word of the post. */}
+                        {edited && i === paras.length - 1 && (
+                          <span className="ml-1 align-baseline text-xs font-normal text-muted-foreground">
+                            (edited)
+                          </span>
+                        )}
+                      </p>
+                    ))
+                  })()}
                   {isClamped && (
                     // Sits on the last visible line; the text fades directly
                     // into the "Read more" link via the horizontal gradient.
