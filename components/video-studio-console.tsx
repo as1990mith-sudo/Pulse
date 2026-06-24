@@ -195,6 +195,7 @@ export function VideoStudioConsole({
     participants,
     peers,
     error: rtcError,
+    clearError: clearRtcError,
     registerPeerVideoEl,
     toggleMic,
     toggleCam,
@@ -696,10 +697,29 @@ export function VideoStudioConsole({
         <LiveChat asHost currentUser={currentUser} roomName={live ? roomName! : undefined} immersive />
       </div>
 
-      {rtcError && live && (
-        <p className="absolute bottom-2 left-1/2 z-40 -translate-x-1/2 rounded-full bg-destructive px-4 py-1.5 text-sm font-medium text-destructive-foreground shadow-lg">
-          {rtcError}
-        </p>
+      {rtcError && live && connected && (
+        <div className="absolute bottom-2 left-1/2 z-40 flex w-[min(92%,30rem)] -translate-x-1/2 items-center gap-2 rounded-2xl bg-destructive px-3 py-2 text-sm font-medium text-destructive-foreground shadow-lg">
+          <p className="min-w-0 flex-1 text-pretty leading-snug">{rtcError}</p>
+          <button
+            type="button"
+            onClick={() => {
+              clearRtcError()
+              if (!camOn) void toggleCam()
+            }}
+            className="flex shrink-0 items-center gap-1 rounded-full bg-white/20 px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-white/30"
+          >
+            <RefreshCw className="size-3.5" />
+            Retry
+          </button>
+          <button
+            type="button"
+            onClick={clearRtcError}
+            aria-label="Dismiss"
+            className="flex size-7 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-white/20"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
       )}
     </div>
   )
