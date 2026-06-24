@@ -33,6 +33,7 @@ import { ImageCropper } from "@/components/image-cropper"
 import { VoiceRecorder } from "@/components/voice-recorder"
 import { ChatroomCall } from "@/components/chatroom-call"
 import { cn } from "@/lib/utils"
+import { renderMessageBody } from "@/lib/rich-text"
 import { compressImage, uploadMedia } from "@/lib/upload-media"
 import { ActionSheet, type SheetAction } from "@/components/action-sheet"
 import { canEdit, canDelete } from "@/lib/interactions"
@@ -623,12 +624,12 @@ function MessageBubble({
           onPointerLeave={cancelPress}
           onPointerCancel={cancelPress}
           className={cn(
-            "relative inline-block overflow-hidden rounded-2xl text-sm leading-relaxed",
-            m.attachmentType === "image" || m.attachmentType === "video" ? "p-1" : "px-3 py-2",
+            "relative inline-block overflow-hidden rounded-2xl text-sm leading-snug shadow-sm",
+            m.attachmentType === "image" || m.attachmentType === "video" ? "p-1" : "px-3 py-1.5",
             canOpenMenu && "cursor-pointer select-none",
             m.isSelf
-              ? "rounded-tr-sm bg-primary text-primary-foreground"
-              : "rounded-tl-sm bg-secondary text-foreground",
+              ? "rounded-br-md bg-primary text-primary-foreground"
+              : "rounded-bl-md bg-secondary text-foreground ring-1 ring-inset ring-border/50",
           )}
         >
           {m.attachmentUrl && m.attachmentType === "image" && (
@@ -671,7 +672,14 @@ function MessageBubble({
               <span className="truncate">{m.attachmentName ?? "Document"}</span>
             </a>
           )}
-          {m.body && !editing && <p className={cn(m.attachmentUrl && "px-2 pb-1 pt-1.5")}>{m.body}</p>}
+          {m.body && !editing && (
+            <p className={cn("whitespace-pre-wrap [overflow-wrap:anywhere]", m.attachmentUrl && "px-2 pb-1 pt-1.5")}>
+              {renderMessageBody(m.body, {
+                link: true,
+                linkClassName: "font-medium underline underline-offset-2 hover:opacity-80",
+              })}
+            </p>
+          )}
           {m.body && editing && (
             <form
               className="flex flex-col gap-2 p-1"

@@ -11,7 +11,8 @@ import { ImageLightbox } from "@/components/image-lightbox"
 import { VoiceRecorder } from "@/components/voice-recorder"
 import { DmCall } from "@/components/dm-call"
 import { cn } from "@/lib/utils"
-import { linkify, extractFirstUrl } from "@/lib/linkify"
+import { extractFirstUrl } from "@/lib/linkify"
+import { renderMessageBody } from "@/lib/rich-text"
 import { LinkPreview } from "@/components/link-preview"
 import { compressImage, uploadMedia } from "@/lib/upload-media"
 import {
@@ -547,9 +548,11 @@ function DmBubble({
             setMenuOpen(true)
           }}
           className={cn(
-            "inline-block select-none overflow-hidden rounded-2xl text-sm leading-relaxed",
-            m.attachmentType === "image" || m.attachmentType === "video" ? "p-1" : "px-3 py-2",
-            m.isSelf ? "rounded-tr-sm bg-primary text-primary-foreground" : "rounded-tl-sm bg-secondary text-foreground",
+            "inline-block select-none overflow-hidden rounded-2xl text-sm leading-snug shadow-sm",
+            m.attachmentType === "image" || m.attachmentType === "video" ? "p-1" : "px-3 py-1.5",
+            m.isSelf
+              ? "rounded-br-md bg-primary text-primary-foreground"
+              : "rounded-bl-md bg-secondary text-foreground ring-1 ring-inset ring-border/50",
           )}
         >
           {m.statusId != null &&
@@ -637,7 +640,10 @@ function DmBubble({
           )}
           {m.body && !editing && !bodyIsOnlyLink && (
             <p className={cn("whitespace-pre-wrap [overflow-wrap:anywhere]", m.attachmentUrl && "px-2 pb-1 pt-1.5")}>
-              {linkify(m.body, "font-medium underline underline-offset-2 [overflow-wrap:anywhere] hover:opacity-80")}
+              {renderMessageBody(m.body, {
+                link: true,
+                linkClassName: "font-medium underline underline-offset-2 [overflow-wrap:anywhere] hover:opacity-80",
+              })}
             </p>
           )}
           {previewUrl && (

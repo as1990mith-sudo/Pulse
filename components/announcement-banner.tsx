@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import { createPortal } from "react-dom"
 import Image from "next/image"
 import {
@@ -44,6 +44,9 @@ import type { CurrentUser } from "@/lib/session"
 import { cn } from "@/lib/utils"
 import { uploadMedia } from "@/lib/upload-media"
 
+/** localStorage key for the collapsed-promo viewer preference. */
+const AD_PROMO_HIDDEN_KEY = "freq:ad-promo-hidden"
+
 export function AnnouncementBanner({
   announcements,
   myRequests,
@@ -57,6 +60,26 @@ export function AnnouncementBanner({
 }) {
   const [showForm, setShowForm] = useState(false)
 
+  // Hide/unhide only applies to the empty promo (i.e. when no advert is
+  // running). It's a lightweight viewer preference kept in localStorage so the
+  // collapsed state sticks across reloads.
+  const [promoHidden, setPromoHidden] = useState(false)
+  useEffect(() => {
+    try {
+      setPromoHidden(localStorage.getItem(AD_PROMO_HIDDEN_KEY) === "1")
+    } catch {
+      /* localStorage unavailable — fall back to shown */
+    }
+  }, [])
+  function setHidden(hidden: boolean) {
+    setPromoHidden(hidden)
+    try {
+      localStorage.setItem(AD_PROMO_HIDDEN_KEY, hidden ? "1" : "0")
+    } catch {
+      /* ignore */
+    }
+  }
+
   // Pending/declined requests still worth surfacing to their owner (approved
   // ones already appear in the public list above).
   const trackable = myRequests.filter((r) => r.status !== "approved")
@@ -64,6 +87,32 @@ export function AnnouncementBanner({
   // Only one live advert is allowed at a time. When one is already running, the
   // "Advertise" entry point is hidden so a second cannot be created.
   const slotTaken = announcements.length > 0
+
+  // When there's no advert and the viewer collapsed the promo, show a slim bar
+  // with a control to bring it back.
+  if (!slotTaken && promoHidden) {
+    return (
+      <section aria-label="Announcements" className="space-y-3">
+        <div className="mx-4 flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-card/50 px-4 py-2.5 sm:mx-0">
+          <span className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Megaphone className="size-3.5" /> Announcements hidden
+          </span>
+          <Button size="sm" variant="ghost" className="gap-1.5" onClick={() => setHidden(false)}>
+            <Eye className="size-3.5" /> Show
+          </Button>
+        </div>
+        {trackable.length > 0 && (
+          <div className="space-y-2 px-4 sm:px-0">
+            <p className="text-xs font-medium text-muted-foreground">Your advert requests</p>
+            {trackable.map((r) => (
+              <RequestStatusRow key={r.id} request={r} />
+            ))}
+          </div>
+        )}
+        {showForm && currentUser && <AdvertiseForm onClose={() => setShowForm(false)} />}
+      </section>
+    )
+  }
 
   return (
     <section aria-label="Announcements" className="space-y-3">
@@ -77,11 +126,24 @@ export function AnnouncementBanner({
             <p className="text-xs text-muted-foreground">Promoted events &amp; products from creators</p>
           </div>
         </div>
-        {currentUser && !slotTaken && (
-          <Button size="sm" variant="secondary" className="gap-1.5" onClick={() => setShowForm(true)}>
-            <Plus className="size-4" /> Advertise here
-          </Button>
-        )}
+        <div className="flex items-center gap-1">
+          {currentUser && !slotTaken && (
+            <Button size="sm" variant="secondary" className="gap-1.5" onClick={() => setShowForm(true)}>
+              <Plus className="size-4" /> Advertise here
+            </Button>
+          )}
+          {!slotTaken && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="text-muted-foreground"
+              aria-label="Hide announcements"
+              onClick={() => setHidden(true)}
+            >
+              <EyeOff className="size-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       {announcements.length > 0 ? (
