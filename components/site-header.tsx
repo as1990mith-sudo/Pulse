@@ -14,7 +14,7 @@ type NavItem = { href: string; label: string; icon: LucideIcon }
 
 const navItems: NavItem[] = [
   { href: "/", label: "Devotional", icon: Sparkles },
-  { href: "/feed", label: "Post", icon: SquarePen },
+  { href: "/feed", label: "Feed", icon: SquarePen },
   { href: "/live", label: "Live", icon: Podcast },
   { href: "/chatrooms", label: "Chatroom", icon: MessagesSquare },
 ]
