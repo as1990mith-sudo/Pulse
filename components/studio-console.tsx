@@ -18,6 +18,10 @@ import {
   PhoneOff,
   Play,
   Radio,
+  Repeat,
+  Repeat1,
+  Rewind,
+  FastForward,
   Send,
   SkipBack,
   SkipForward,
@@ -104,6 +108,8 @@ export function StudioConsole({
     setMusicVolume,
     setMusicPlaying,
     seekMusic,
+    setMusicLoop,
+    setMusicEndedHandler,
     stopMusic,
     startRecording,
     stopRecording,
@@ -149,6 +155,8 @@ export function StudioConsole({
   const [musicVolume, setMusicVolumeState] = useState(0.4)
   const [musicMixing, setMusicMixing] = useState(false)
   const [musicError, setMusicError] = useState<string | null>(null)
+  // Loop the current track instead of advancing to the next one when it ends.
+  const [musicLoop, setMusicLoopState] = useState(false)
 
   // Mix a playlist track into the broadcast and mark it now-playing.
   async function playMusicTrack(index: number) {
@@ -179,6 +187,34 @@ export function StudioConsole({
     setMusicVolumeState(value)
     setMusicVolume(value)
   }
+
+  function toggleMusicLoop() {
+    const next = !musicLoop
+    setMusicLoopState(next)
+    setMusicLoop(next)
+  }
+
+  // Step to another track in the playlist, wrapping around at the ends.
+  function skipMusic(delta: number) {
+    if (musicTracks.length === 0) return
+    const from = musicActiveIndex ?? (delta > 0 ? -1 : 0)
+    const next = (from + delta + musicTracks.length) % musicTracks.length
+    void playMusicTrack(next)
+  }
+
+  // Auto-advance to the next track when one finishes (unless it's looping).
+  useEffect(() => {
+    setMusicEndedHandler(() => {
+      setMusicActiveIndex((cur) => {
+        if (cur === null || musicTracks.length === 0) return cur
+        const next = (cur + 1) % musicTracks.length
+        void playMusicTrack(next)
+        return cur
+      })
+    })
+    return () => setMusicEndedHandler(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [musicTracks, setMusicEndedHandler])
 
   // Apply a studio theme: update locally at once (snappy), then persist so the
   // change propagates to every listener via their call-state poll.
@@ -665,9 +701,13 @@ export function StudioConsole({
           volume={musicVolume}
           mixing={musicMixing}
           error={musicError}
+          loop={musicLoop}
           onAddTracks={(added) => setMusicTracks((t) => [...t, ...added])}
           onPlayTrack={playMusicTrack}
           onTogglePlay={toggleMusicPlay}
+          onNext={() => skipMusic(1)}
+          onPrev={() => skipMusic(-1)}
+          onToggleLoop={toggleMusicLoop}
           onVolume={changeMusicVolume}
           onSeek={seekMusic}
           onRemoveTrack={removeMusicTrack}
@@ -919,7 +959,7 @@ function PeoplePanel({
 }
 
 /** How many backing tracks the host can keep queued at once. */
-const MAX_MUSIC_TRACKS = 4
+const MAX_MUSIC_TRACKS = 5
 
 /**
  * Background music: a premium multi-track playlist with a now-playing card
@@ -936,10 +976,14 @@ function MusicPanel({
   playing,
   volume,
   mixing,
+  loop,
   error,
   onAddTracks,
   onPlayTrack,
   onTogglePlay,
+  onNext,
+  onPrev,
+  onToggleLoop,
   onVolume,
   onSeek,
   onRemoveTrack,
@@ -954,10 +998,14 @@ function MusicPanel({
   playing: boolean
   volume: number
   mixing: boolean
+  loop: boolean
   error: string | null
   onAddTracks: (tracks: Track[]) => void
   onPlayTrack: (index: number) => void
   onTogglePlay: () => void
+  onNext: () => void
+  onPrev: () => void
+  onToggleLoop: () => void
   onVolume: (value: number) => void
   onSeek: (seconds: number) => void
   onRemoveTrack: (index: number) => void
@@ -1004,16 +1052,44 @@ function MusicPanel({
             <div className="flex items-center gap-3">
               <span
                 className={cn(
-                  "relative flex size-14 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary ring-1 ring-inset ring-primary/20",
+                  "relative flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary ring-1 ring-inset ring-primary/20",
                   playing && "animate-pulse",
                 )}
               >
-                <Music className="size-6" strokeWidth={2.5} />
+                <Music className="size-5" strokeWidth={2.5} />
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-primary">Now playing</p>
                 <p className="truncate text-sm font-semibold text-foreground">{activeTrack.name}</p>
               </div>
+              {/* Loop / replay toggle */}
+              <button
+                type="button"
+                onClick={onToggleLoop}
+                aria-pressed={loop}
+                aria-label={loop ? "Looping current track" : "Loop current track"}
+                className={cn(
+                  "flex size-9 shrink-0 items-center justify-center rounded-full ring-1 ring-inset transition-colors",
+                  loop
+                    ? "bg-primary/15 text-primary ring-primary/30"
+                    : "text-muted-foreground ring-border/60 hover:text-foreground",
+                )}
+              >
+                {loop ? <Repeat1 className="size-4" strokeWidth={2.5} /> : <Repeat className="size-4" strokeWidth={2.5} />}
+              </button>
+            </div>
+
+            {/* Transport: previous / play-pause / next */}
+            <div className="mt-3 flex items-center justify-center gap-5">
+              <button
+                type="button"
+                onClick={onPrev}
+                disabled={!live || mixing || tracks.length < 2}
+                aria-label="Previous track"
+                className="text-foreground/80 transition-colors hover:text-foreground disabled:opacity-40"
+              >
+                <SkipBack className="size-5 fill-current" strokeWidth={2} />
+              </button>
               <button
                 type="button"
                 onClick={onTogglePlay}
@@ -1029,6 +1105,15 @@ function MusicPanel({
                   <Play className="size-5 translate-x-0.5" strokeWidth={2.5} />
                 )}
               </button>
+              <button
+                type="button"
+                onClick={onNext}
+                disabled={!live || mixing || tracks.length < 2}
+                aria-label="Next track"
+                className="text-foreground/80 transition-colors hover:text-foreground disabled:opacity-40"
+              >
+                <SkipForward className="size-5 fill-current" strokeWidth={2} />
+              </button>
             </div>
 
             {/* Scrubber */}
@@ -1039,7 +1124,7 @@ function MusicPanel({
                 aria-label="Back 15 seconds"
                 className="text-muted-foreground transition-colors hover:text-foreground"
               >
-                <SkipBack className="size-4" strokeWidth={2.5} />
+                <Rewind className="size-4" strokeWidth={2.5} />
               </button>
               <div className="relative h-2 flex-1">
                 <div className="absolute inset-0 rounded-full bg-muted" />
@@ -1068,7 +1153,7 @@ function MusicPanel({
                 aria-label="Forward 15 seconds"
                 className="text-muted-foreground transition-colors hover:text-foreground"
               >
-                <SkipForward className="size-4" strokeWidth={2.5} />
+                <FastForward className="size-4" strokeWidth={2.5} />
               </button>
             </div>
             <div className="mt-1.5 flex justify-between font-mono text-[11px] tabular-nums text-muted-foreground">
