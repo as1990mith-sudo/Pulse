@@ -38,8 +38,7 @@ export function AppLaunch() {
 
     const reduce =
       typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
-    // Hold long enough for the tile + wordmark fades to fully settle.
-    const hold = reduce ? 360 : 1500
+    const hold = reduce ? 320 : 1150
 
     const fadeTimer = setTimeout(() => setOut(true), hold)
     const doneTimer = setTimeout(() => {
@@ -50,7 +49,7 @@ export function AppLaunch() {
       } catch {
         /* ignore storage failures */
       }
-    }, hold + 760)
+    }, hold + 480)
 
     return () => {
       clearTimeout(fadeTimer)
