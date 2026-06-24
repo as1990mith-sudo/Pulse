@@ -369,16 +369,20 @@ function DreamReplies({
 function DreamItem({
   dream,
   isAdmin,
+  defaultOpen,
   onDeleted,
   onReplyCountChange,
 }: {
   dream: DreamView
   isAdmin: boolean
+  defaultOpen: boolean
   onDeleted: (id: number) => void
   onReplyCountChange?: (id: number, delta: number) => void
 }) {
-  // The admin sees every dream's thread open as an inbox; members open on tap.
-  const [open, setOpen] = useState(isAdmin)
+  // The admin sees pending dreams' threads open as an inbox, but already-
+  // completed ones stay collapsed until he taps the comment button. Members
+  // always open on tap.
+  const [open, setOpen] = useState(defaultOpen)
   const [count, setCount] = useState(dream.replyCount)
   const [menuOpen, setMenuOpen] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -892,6 +896,7 @@ export function DreamInterpretation({ initialFeed }: { initialFeed: DreamFeed })
                 key={d.id}
                 dream={d}
                 isAdmin={isAdmin}
+                defaultOpen={isAdmin && statusFilter === "awaiting"}
                 onDeleted={handleDeleted}
                 onReplyCountChange={handleReplyCountChange}
               />

@@ -774,8 +774,8 @@ export function PostCard({
         (text || previewUrl) && (
           <div
             className={cn(
-              "text-foreground/90",
-              feed ? "px-[0.825rem] text-lg" : "px-3 text-[15px]",
+              "text-foreground/90 text-[15px]",
+              feed ? "px-[0.825rem]" : "px-3",
               hasMedia ? "pb-3" : "pb-1",
             )}
           >
@@ -787,7 +787,13 @@ export function PostCard({
                     paragraphs (~half the height of a full empty line) instead of
                     rendering each blank line at full line-height. */}
                 {displayText.split(/\n{2,}/).map((para, i) => (
-                  <p key={i} className={cn("whitespace-pre-wrap leading-snug", i > 0 && "mt-1.5")}>
+                  <p
+                    key={i}
+                    className={cn(
+                      "whitespace-pre-wrap break-words leading-relaxed text-justify hyphens-auto [text-justify:inter-word]",
+                      i > 0 && "mt-1.5",
+                    )}
+                  >
                     {linkify(para, "font-medium text-primary underline-offset-2 [overflow-wrap:anywhere] hover:underline")}
                   </p>
                 ))}

@@ -191,6 +191,12 @@ export function useLiveAudio() {
   const musicBassRef = useRef<BiquadFilterNode | null>(null)
   const musicElRef = useRef<HTMLAudioElement | null>(null)
   const musicTrackRef = useRef<LocalAudioTrack | null>(null)
+  // Whether the current track should loop, and a callback fired when a
+  // (non-looping) track finishes — used by the console to auto-advance the
+  // playlist. Held in refs so the persistent audio element's handlers always
+  // see the latest value without re-binding.
+  const musicLoopRef = useRef(false)
+  const musicEndedRef = useRef<(() => void) | null>(null)
   // The single MediaElementSourceNode for the music element. A media element can
   // only ever be wired to ONE source node, so we create it once and reuse it for
   // every track — recreating it is what previously threw and stopped playback.
@@ -494,7 +500,13 @@ export function useLiveAudio() {
       // Report duration + position so the host can scrub the track.
       el.onloadedmetadata = () => update({ musicDuration: el!.duration || 0, musicPosition: 0 })
       el.ontimeupdate = () => update({ musicPosition: el!.currentTime })
+      // When a non-looping track finishes, notify the console so it can advance
+      // to the next track in the playlist.
+      el.onended = () => {
+        if (!musicLoopRef.current) musicEndedRef.current?.()
+      }
     }
+
     if (!musicSourceRef.current) {
       const source = ctx.createMediaElementSource(el)
       const gain = ctx.createGain()
@@ -516,8 +528,8 @@ export function useLiveAudio() {
       musicBassRef.current = bass
     }
 
-    // Swap to the requested track and (re)start playback.
-    el.loop = false
+    // Swap to the requested track and (re)start playback, honoring the loop flag.
+    el.loop = musicLoopRef.current
     el.src = url
     el.currentTime = 0
     update({ musicPosition: 0 })
@@ -568,6 +580,20 @@ export function useLiveAudio() {
     el.currentTime = Math.max(0, Math.min(seconds, el.duration || seconds))
     update({ musicPosition: el.currentTime })
   }, [update])
+
+  /** Toggle whether the current/next backing track loops. Applies immediately. */
+  const setMusicLoop = useCallback((loop: boolean) => {
+    musicLoopRef.current = loop
+    if (musicElRef.current) musicElRef.current.loop = loop
+  }, [])
+
+  /**
+   * Register a callback fired when a non-looping track finishes, so the console
+   * can auto-advance to the next track in the playlist.
+   */
+  const setMusicEndedHandler = useCallback((fn: (() => void) | null) => {
+    musicEndedRef.current = fn
+  }, [])
 
   /** Stops and unpublishes the backing track entirely. */
   const stopMusic = useCallback(async () => {
@@ -735,6 +761,8 @@ export function useLiveAudio() {
     setMusicVolume,
     setMusicPlaying,
     seekMusic,
+    setMusicLoop,
+    setMusicEndedHandler,
     stopMusic,
     playEffect,
     startRecording,
