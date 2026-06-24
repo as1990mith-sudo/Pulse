@@ -305,7 +305,7 @@ export function ShareSheet({
                           </span>
                         )}
                       </span>
-                      <span className="w-full truncate text-center text-xs text-foreground">{p.name.split(" ")[0]}</span>
+                      <span className="w-full truncate text-center text-xs text-foreground">{p.name}</span>
                     </button>
                   </li>
                 )
