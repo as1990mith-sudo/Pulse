@@ -201,15 +201,23 @@ export function ShareSheet({
     }
   }
 
-  async function handleMoreApps() {
-    if (typeof navigator !== "undefined" && navigator.share) {
+  // Opens the device's native share sheet (the OS panel listing other apps).
+  // Falls back to copying only when the platform truly has no Web Share API.
+  async function handleSystemShare() {
+    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
       try {
         await navigator.share({ title: target.title, text: target.subtitle ?? target.title, url: absoluteUrl })
       } catch {
-        // user dismissed — ignore
+        // user dismissed the OS sheet — ignore
       }
-    } else {
-      void handleCopy()
+      return
+    }
+    // No native share support (e.g. a WebView without it configured): copy and tell the user.
+    try {
+      await navigator.clipboard.writeText(absoluteUrl)
+      pushToast("Sharing unavailable here — link copied")
+    } catch {
+      pushToast("Could not share or copy link")
     }
   }
 
@@ -319,6 +327,12 @@ export function ShareSheet({
         {selected.length === 0 ? (
           <div className="shrink-0 border-t border-border/60">
             <Row>
+              <QuickAction
+                icon={<Send className="size-5" />}
+                label="Share"
+                iconClassName="bg-primary text-primary-foreground hover:bg-primary/90"
+                onClick={handleSystemShare}
+              />
               <QuickAction icon={<Copy className="size-5" />} label="Copy link" onClick={handleCopy} />
               {target.downloadUrl ? (
                 <QuickAction
@@ -356,7 +370,7 @@ export function ShareSheet({
                   onClick={() => window.open(t.href, "_blank", "noopener,noreferrer")}
                 />
               ))}
-              <QuickAction icon={<MoreHorizontal className="size-5" />} label="More apps" onClick={handleMoreApps} />
+              <QuickAction icon={<MoreHorizontal className="size-5" />} label="More apps" onClick={handleSystemShare} />
             </Row>
           </div>
         ) : (
