@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { X, Heart, MessageCircle, Repeat2 } from "lucide-react"
+import { X, Heart, MessageCircle, Repeat2, Layers } from "lucide-react"
 import type { FeedPostView } from "@/app/actions/feed"
 import type { CurrentUser } from "@/lib/session"
 import { PostCard } from "@/components/mind-feed"
@@ -49,12 +49,19 @@ export function ProfilePostsGrid({
 
 function PostTile({ post, onOpen }: { post: FeedPostView; onOpen: () => void }) {
   const hasMedia = Boolean(post.image || post.video)
+  const multiMedia = (post.media?.length ?? 0) > 1
   return (
     <button
       type="button"
       onClick={onOpen}
       className="group relative block aspect-[3/4] w-full overflow-hidden bg-muted text-left"
     >
+      {/* Multi-media indicator (stacked layers), like Instagram carousels. */}
+      {multiMedia && (
+        <span className="pointer-events-none absolute right-1.5 top-1.5 z-10 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
+          <Layers className="size-4" />
+        </span>
+      )}
       {post.image ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img

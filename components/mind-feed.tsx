@@ -23,6 +23,9 @@ import {
   Copy,
   Check,
   Bookmark,
+  ChevronLeft,
+  ChevronRight,
+  Images,
 } from "lucide-react"
 import {
   addPostComment,
@@ -37,6 +40,7 @@ import {
   toggleRepost as toggleRepostAction,
   type FeedCommentView,
   type FeedPostView,
+  type PostMedia,
 } from "@/app/actions/feed"
 import { toggleSaveItem } from "@/app/actions/share"
 import { CommentThread, type ThreadComment } from "@/components/comment-thread"
@@ -67,6 +71,9 @@ type DraftMedia = { url: string; type: "image" | "video" }
 
 // Hard cap for uploaded clips: 15 minutes.
 const MAX_VIDEO_SECONDS = 15 * 60
+
+// Max number of media items in a single carousel post (Instagram-style).
+const MAX_MEDIA = 10
 
 /**
  * Reads a local video file's duration (in seconds) without uploading it, by
@@ -137,9 +144,11 @@ function toThreadComment(c: FeedCommentView): ThreadComment {
 export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; currentUser: CurrentUser | null }) {
   const router = useRouter()
   const [draft, setDraft] = useState("")
-  const [media, setMedia] = useState<DraftMedia | null>(null)
+  const [media, setMedia] = useState<DraftMedia[]>([])
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Index currently being dragged in the reorder strip (null when not dragging).
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [isPending, startTransition] = useTransition()
   const [tab, setTab] = useState<"for-you" | "following" | "find">("for-you")
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -200,31 +209,44 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
   }, [])
 
   async function handleMediaPick(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const files = Array.from(e.target.files ?? [])
+    if (files.length === 0) return
     setError(null)
-    const isVideo = file.type.startsWith("video/")
-    const isImage = file.type.startsWith("image/")
-    if (!isVideo && !isImage) {
-      setError("Please choose a photo or video.")
+
+    const remaining = MAX_MEDIA - media.length
+    if (remaining <= 0) {
+      setError(`You can attach up to ${MAX_MEDIA} items per post.`)
       e.target.value = ""
       return
     }
-    // Enforce the 15-minute video cap before uploading anything.
-    if (isVideo) {
-      const duration = await getVideoDuration(file).catch(() => 0)
-      if (duration > MAX_VIDEO_SECONDS + 1) {
-        const mins = Math.floor(duration / 60)
-        const secs = Math.round(duration % 60)
-        setError(`Videos can be up to 15 minutes. This clip is ${mins}m ${secs}s — please trim it and try again.`)
-        e.target.value = ""
-        return
-      }
-    }
+    const selected = files.slice(0, remaining)
+    const droppedForCap = files.length > selected.length
+
     setUploading(true)
     try {
-      const data = await uploadMedia(file, "chat")
-      setMedia({ url: data.url, type: isVideo ? "video" : "image" })
+      const uploaded: DraftMedia[] = []
+      for (const file of selected) {
+        const isVideo = file.type.startsWith("video/")
+        const isImage = file.type.startsWith("image/")
+        if (!isVideo && !isImage) {
+          setError("Please choose photos or videos only.")
+          continue
+        }
+        // Enforce the 15-minute video cap before uploading anything.
+        if (isVideo) {
+          const duration = await getVideoDuration(file).catch(() => 0)
+          if (duration > MAX_VIDEO_SECONDS + 1) {
+            const mins = Math.floor(duration / 60)
+            const secs = Math.round(duration % 60)
+            setError(`Videos can be up to 15 minutes. A clip was ${mins}m ${secs}s — please trim it and try again.`)
+            continue
+          }
+        }
+        const data = await uploadMedia(file, "chat")
+        uploaded.push({ url: data.url, type: isVideo ? "video" : "image" })
+      }
+      if (uploaded.length > 0) setMedia((prev) => [...prev, ...uploaded].slice(0, MAX_MEDIA))
+      if (droppedForCap) setError(`Only the first ${MAX_MEDIA} items were added (max ${MAX_MEDIA} per post).`)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed.")
     } finally {
@@ -234,23 +256,34 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
     }
   }
 
+  function removeMediaAt(index: number) {
+    setMedia((prev) => prev.filter((_, i) => i !== index))
+  }
+
   function clearMedia() {
-    setMedia(null)
+    setMedia([])
     if (fileInputRef.current) fileInputRef.current.value = ""
     if (photoCaptureRef.current) photoCaptureRef.current.value = ""
     if (videoCaptureRef.current) videoCaptureRef.current.value = ""
   }
 
+  // Drag-to-reorder: move the dragged thumbnail to the drop target's slot.
+  function reorderMedia(from: number, to: number) {
+    if (from === to) return
+    setMedia((prev) => {
+      const next = [...prev]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
+  }
+
   function publish(e: React.FormEvent) {
     e.preventDefault()
     const text = draft.trim()
-    if (!text && !media) return
+    if (!text && media.length === 0) return
     startTransition(async () => {
-      await createPost({
-        text,
-        image: media?.type === "image" ? media.url : null,
-        video: media?.type === "video" ? media.url : null,
-      })
+      await createPost({ text, media })
       setDraft("")
       clearMedia()
       await mutateFeed()
@@ -308,13 +341,13 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
               className="min-h-24 resize-none border-0 bg-transparent px-3 text-lg leading-relaxed shadow-none placeholder:text-muted-foreground/70 focus-visible:ring-0"
               aria-label="Write a post"
             />
-            {media && (
+            {media.length === 1 && (
               <div className="relative w-full overflow-hidden rounded-xl border border-border/60 bg-muted">
-                {media.type === "video" ? (
-                  <video src={media.url} controls playsInline className="max-h-[420px] w-full" />
+                {media[0].type === "video" ? (
+                  <video src={media[0].url} controls playsInline className="max-h-[420px] w-full" />
                 ) : (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={media.url || "/placeholder.svg"} alt="Selected upload preview" className="max-h-[420px] w-full object-cover" />
+                  <img src={media[0].url || "/placeholder.svg"} alt="Selected upload preview" className="max-h-[420px] w-full object-cover" />
                 )}
                 <button
                   type="button"
@@ -324,6 +357,57 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
                 >
                   <X className="size-4" />
                 </button>
+              </div>
+            )}
+
+            {media.length > 1 && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Drag to reorder — the first item shows first in your post. ({media.length}/{MAX_MEDIA})
+                </p>
+                <ul className="flex flex-wrap gap-2">
+                  {media.map((item, index) => (
+                    <li
+                      key={item.url}
+                      draggable
+                      onDragStart={() => setDragIndex(index)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={() => {
+                        if (dragIndex !== null) reorderMedia(dragIndex, index)
+                        setDragIndex(null)
+                      }}
+                      onDragEnd={() => setDragIndex(null)}
+                      className={cn(
+                        "group relative size-20 cursor-grab overflow-hidden rounded-lg border border-border/60 bg-muted active:cursor-grabbing",
+                        dragIndex === index && "opacity-50 ring-2 ring-primary",
+                      )}
+                    >
+                      {item.type === "video" ? (
+                        <video src={item.url} muted playsInline className="size-full object-cover" />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={item.url || "/placeholder.svg"} alt={`Upload ${index + 1}`} className="size-full object-cover" />
+                      )}
+                      {/* Order badge */}
+                      <span className="absolute left-1 top-1 flex size-5 items-center justify-center rounded-full bg-black/70 text-[10px] font-bold text-white">
+                        {index + 1}
+                      </span>
+                      {item.type === "video" && (
+                        <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 py-0.5 text-[9px] font-semibold uppercase text-white">
+                          Video
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => removeMediaAt(index)}
+                        className="absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-background/80 text-foreground opacity-0 backdrop-blur transition-opacity hover:bg-background group-hover:opacity-100"
+                        aria-label={`Remove item ${index + 1}`}
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
             {error && <p className="text-xs text-destructive">{error}</p>}
@@ -353,11 +437,12 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              {/* Library picker (photos + videos) */}
+              {/* Library picker (photos + videos, multi-select) */}
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/*,video/*"
+                multiple
                 className="hidden"
                 onChange={handleMediaPick}
               />
@@ -382,7 +467,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
               <Button
                 type="submit"
                 size="lg"
-                disabled={isPending || uploading || (!draft.trim() && !media)}
+                disabled={isPending || uploading || (!draft.trim() && media.length === 0)}
                 className="gap-2 rounded-full bg-foreground px-6 font-semibold text-background hover:bg-foreground/90"
               >
                 <Send className="size-4" /> {isPending ? "Posting…" : "Post"}
@@ -460,6 +545,129 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
   )
 }
 
+/**
+ * Instagram-style media for a post. A single item renders as before (image
+ * opens a lightbox, video plays inline). Multiple items become a horizontal,
+ * scroll-snapping carousel you swipe left/right, with dot indicators, a
+ * "1/N" counter, a multi-media badge, and desktop arrow controls.
+ */
+function PostMediaCarousel({
+  items,
+  feed,
+  authorName,
+}: {
+  items: PostMedia[]
+  feed: boolean
+  authorName: string
+}) {
+  const scrollerRef = useRef<HTMLDivElement>(null)
+  const [active, setActive] = useState(0)
+  const [lightbox, setLightbox] = useState<string | null>(null)
+  const multiple = items.length > 1
+  const heightClass = feed ? "max-h-[85svh]" : "max-h-[640px]"
+
+  // Track which slide is centered as the user swipes, so the dots/counter stay
+  // in sync. We derive the index from scrollLeft rather than IntersectionObserver
+  // to keep it simple and snappy on touch.
+  function onScroll() {
+    const el = scrollerRef.current
+    if (!el) return
+    const idx = Math.round(el.scrollLeft / el.clientWidth)
+    if (idx !== active) setActive(Math.max(0, Math.min(items.length - 1, idx)))
+  }
+
+  function goTo(index: number) {
+    const el = scrollerRef.current
+    if (!el) return
+    const clamped = Math.max(0, Math.min(items.length - 1, index))
+    el.scrollTo({ left: clamped * el.clientWidth, behavior: "smooth" })
+  }
+
+  return (
+    <div className="relative bg-black">
+      <div
+        ref={scrollerRef}
+        onScroll={onScroll}
+        className={cn(
+          "flex w-full snap-x snap-mandatory overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          multiple && "touch-pan-x",
+        )}
+      >
+        {items.map((item, i) => (
+          <div key={i} className="w-full shrink-0 snap-center snap-always">
+            {item.type === "video" ? (
+              <FeedVideo src={item.url} className={cn("mx-auto w-full object-contain", heightClass)} />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setLightbox(item.url)}
+                className="block w-full bg-muted transition-opacity hover:opacity-95"
+                aria-label={`Expand image ${i + 1} of ${items.length} to full screen`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={item.url || "/placeholder.svg"}
+                  alt={`Post attachment ${i + 1} of ${items.length}`}
+                  className={cn("mx-auto w-full object-cover", heightClass)}
+                />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {multiple && (
+        <>
+          {/* Counter + multi-media badge (top-right), like Instagram. */}
+          <div className="pointer-events-none absolute right-3 top-3 flex items-center gap-1 rounded-full bg-black/60 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur">
+            <Images className="size-3.5" />
+            {active + 1}/{items.length}
+          </div>
+
+          {/* Dot indicators (bottom-center). */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-3 flex items-center justify-center gap-1.5">
+            {items.map((_, i) => (
+              <span
+                key={i}
+                className={cn(
+                  "size-1.5 rounded-full transition-all",
+                  i === active ? "w-3 bg-white" : "bg-white/50",
+                )}
+              />
+            ))}
+          </div>
+
+          {/* Desktop arrow controls (hidden on touch-first small screens). */}
+          {active > 0 && (
+            <button
+              type="button"
+              onClick={() => goTo(active - 1)}
+              aria-label="Previous media"
+              className="absolute left-2 top-1/2 hidden size-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur transition-colors hover:bg-black/70 sm:flex"
+            >
+              <ChevronLeft className="size-5" />
+            </button>
+          )}
+          {active < items.length - 1 && (
+            <button
+              type="button"
+              onClick={() => goTo(active + 1)}
+              aria-label="Next media"
+              className="absolute right-2 top-1/2 hidden size-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur transition-colors hover:bg-black/70 sm:flex"
+            >
+              <ChevronRight className="size-5" />
+            </button>
+          )}
+        </>
+      )}
+
+      {lightbox && (
+        <ImageLightbox src={lightbox} alt={`Image posted by ${authorName}`} onClose={() => setLightbox(null)} />
+      )}
+    </div>
+  )
+}
+
 export function PostCard({
   post,
   currentUser,
@@ -490,7 +698,6 @@ export function PostCard({
   const [shareOpen, setShareOpen] = useState(false)
   const [showComments, setShowComments] = useState(false)
   const [commentDraft, setCommentDraft] = useState("")
-  const [lightboxOpen, setLightboxOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleted, setDeleted] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
@@ -635,7 +842,16 @@ export function PostCard({
     router.refresh()
   }
 
-  const hasMedia = !!post.image || !!post.video
+  // Normalized ordered media list (handles legacy single image/video too).
+  const mediaItems: PostMedia[] =
+    post.media && post.media.length > 0
+      ? post.media
+      : post.image
+        ? [{ type: "image", url: post.image }]
+        : post.video
+          ? [{ type: "video", url: post.video }]
+          : []
+  const hasMedia = mediaItems.length > 0
 
   // Captions fade into an inline "Read more" toggle based on line count — after
   // the first line when the post carries media, or after 11 lines for a
@@ -852,42 +1068,8 @@ export function PostCard({
         )
       )}
 
-      {/* Media — large, edge-to-edge Instagram-style */}
-      {post.video ? (
-        <div className="bg-black">
-          {/* Contain (not cover) so landscape clips aren't cropped, while tall
-              portrait clips stay within a 9:16-style viewport-height frame. */}
-          <FeedVideo
-            src={post.video}
-            className={cn("mx-auto object-contain", feed ? "max-h-[85svh] w-full" : "max-h-[640px] w-full")}
-          />
-        </div>
-      ) : post.image ? (
-        <>
-          <button
-            type="button"
-            onClick={() => setLightboxOpen(true)}
-            className="block w-full bg-muted transition-opacity hover:opacity-95"
-            aria-label="Expand image to full screen"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={post.image || "/placeholder.svg"}
-              alt="Post attachment"
-              // Cap tall portrait media to a 9:16-style frame so a single image
-              // never exceeds the viewport; shorter/landscape media shows fully.
-              className={cn("mx-auto w-full object-cover", feed ? "max-h-[85svh]" : "max-h-[640px]")}
-            />
-          </button>
-          {lightboxOpen && (
-            <ImageLightbox
-              src={post.image}
-              alt={`Image posted by ${post.user}`}
-              onClose={() => setLightboxOpen(false)}
-            />
-          )}
-        </>
-      ) : null}
+      {/* Media — large, edge-to-edge Instagram-style (swipeable when multiple) */}
+      {hasMedia && <PostMediaCarousel items={mediaItems} feed={feed} authorName={post.user} />}
 
       {/* Actions — each count sits to the right of its button */}
       <div

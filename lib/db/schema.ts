@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, serial, integer } from "drizzle-orm/pg-core"
+import { pgTable, text, timestamp, boolean, serial, integer, jsonb } from "drizzle-orm/pg-core"
 
 // --- Better Auth required tables -------------------------------------------
 // Column names are camelCase to match Better Auth's defaults. Do not rename.
@@ -65,8 +65,14 @@ export const feedPost = pgTable("feed_post", {
   authorName: text("authorName").notNull(),
   authorHandle: text("authorHandle").notNull(),
   text: text("text").notNull(),
+  // Legacy single-media columns, kept for backward compatibility. New posts use
+  // the `media` array below; `image`/`video` mirror the first item so old
+  // readers still work.
   image: text("image"),
   video: text("video"),
+  // Ordered carousel of media for Instagram-style multi-media posts. Each item
+  // is { type: "image" | "video", url: string }. Null/empty for text posts.
+  media: jsonb("media").$type<{ type: "image" | "video"; url: string }[]>(),
   likes: integer("likes").notNull().default(0),
   reposts: integer("reposts").notNull().default(0),
   // Set the first time the author edits the post; drives the "· edited" label.

@@ -15,6 +15,20 @@ async function requireUser() {
   return session.user
 }
 
+export type PostMedia = { type: "image" | "video"; url: string }
+
+/**
+ * Normalizes a feed_post row's media into an ordered carousel array. New posts
+ * store the `media` jsonb array; legacy posts only have `image`/`video`, so we
+ * synthesize a single-item array from those for a uniform client contract.
+ */
+function toMedia(p: { media: PostMedia[] | null; image: string | null; video: string | null }): PostMedia[] {
+  if (Array.isArray(p.media) && p.media.length > 0) return p.media
+  if (p.image) return [{ type: "image", url: p.image }]
+  if (p.video) return [{ type: "video", url: p.video }]
+  return []
+}
+
 export type FeedCommentView = {
   id: number
   parentId: number | null
@@ -45,6 +59,7 @@ export type FeedPostView = {
   text: string
   image: string | null
   video: string | null
+  media: PostMedia[]
   likes: number
   reposts: number
   reposted: boolean
@@ -168,6 +183,7 @@ export async function getFeed(): Promise<FeedPostView[]> {
     text: p.text,
     image: p.image,
     video: p.video,
+    media: toMedia(p),
     likes: p.likes,
     reposts: p.reposts,
     reposted: repostedSet.has(p.id),
@@ -221,6 +237,7 @@ export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
     text: p.text,
     image: p.image,
     video: p.video,
+    media: toMedia(p),
     likes: p.likes,
     reposts: p.reposts,
     reposted: repostedSet.has(p.id),
@@ -287,6 +304,7 @@ export async function getRepostsByUser(userId: string): Promise<FeedPostView[]> 
     text: p.text,
     image: p.image,
     video: p.video,
+    media: toMedia(p),
     likes: p.likes,
     reposts: p.reposts,
     reposted: repostedSet.has(p.id),
@@ -345,18 +363,34 @@ export async function toggleRepost(postId: number): Promise<{ reposted: boolean;
   return { reposted, reposts: nextCount }
 }
 
-export async function createPost(input: { text: string; image?: string | null; video?: string | null }) {
+export async function createPost(input: {
+  text: string
+  image?: string | null
+  video?: string | null
+  media?: PostMedia[]
+}) {
   const user = await requireUser()
   const text = input.text.trim()
-  if (!text && !input.image && !input.video) throw new Error("Post cannot be empty.")
+
+  // Accept either the new ordered media array or the legacy single image/video.
+  const media: PostMedia[] = (input.media ?? []).filter((m) => m && m.url).slice(0, 10)
+  if (media.length === 0) {
+    if (input.image) media.push({ type: "image", url: input.image })
+    else if (input.video) media.push({ type: "video", url: input.video })
+  }
+  if (!text && media.length === 0) throw new Error("Post cannot be empty.")
+
+  // Mirror the first item into the legacy columns so older readers still work.
+  const first = media[0] ?? null
 
   await db.insert(feedPost).values({
     userId: user.id,
     authorName: user.name,
     authorHandle: getHandle(user.name),
     text,
-    image: input.image ?? null,
-    video: input.video ?? null,
+    image: first?.type === "image" ? first.url : null,
+    video: first?.type === "video" ? first.url : null,
+    media: media.length > 0 ? media : null,
   })
 
   // Note: new posts intentionally do NOT notify followers. Notifications are

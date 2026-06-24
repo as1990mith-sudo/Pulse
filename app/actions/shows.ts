@@ -42,6 +42,7 @@ export async function publishShow(input: {
   description: string
   cover: string | null
   audioUrl?: string | null
+  videoUrl?: string | null
 }): Promise<PublishResult> {
   const user = await requireUser()
 
@@ -71,6 +72,7 @@ export async function publishShow(input: {
     cover: input.cover,
     description,
     audioUrl: input.audioUrl ?? null,
+    videoUrl: input.videoUrl ?? null,
   })
 
   revalidatePath("/live")
