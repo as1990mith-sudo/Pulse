@@ -10,7 +10,7 @@ import {
   type RemoteTrackPublication,
   type RemoteParticipant,
 } from "livekit-client"
-import { Mic, MicOff, Phone, PhoneOff, Video, VideoOff } from "lucide-react"
+import { Mic, MicOff, Phone, PhoneOff, Video, VideoOff, SwitchCamera } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { CallButton } from "@/components/call-controls"
 import { cn } from "@/lib/utils"
@@ -24,11 +24,19 @@ type Peer = {
   image: string | null
 }
 
+// Floating self-view dimensions (WhatsApp-style picture-in-picture).
+const PIP_W = 116
+const PIP_H = 168
+
 /**
- * Full-screen 1:1 call surface for DMs. Handles three states:
+ * Full-screen 1:1 call surface for DMs, modeled on WhatsApp calls:
  *  - incoming  : callee sees accept/decline for a ringing call
- *  - outgoing   : caller sees "ringing…" with cancel
- *  - active     : both connect to LiveKit, audio always + optional video
+ *  - outgoing  : caller sees "ringing…" with cancel
+ *  - active    : both connect to LiveKit, audio always + optional video
+ *
+ * During a live video call the remote feed fills the screen, the controls float
+ * over it and auto-hide (tap to reveal), and the local self-view is a draggable
+ * tile that snaps to the nearest corner so it never blocks a face.
  */
 export function DmCall({
   call,
@@ -47,6 +55,7 @@ export function DmCall({
   const [connected, setConnected] = useState(false)
   const [micOn, setMicOn] = useState(true)
   const [camOn, setCamOn] = useState(call.mode === "video")
+  const [facingMode, setFacingMode] = useState<"user" | "environment">("user")
   const [remoteVideoOn, setRemoteVideoOn] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Seconds elapsed since the call actually connected (callee accepted).
@@ -102,7 +111,7 @@ export function DmCall({
       await room.connect(creds.url, creds.token)
       await room.localParticipant.setMicrophoneEnabled(true)
       if (call.mode === "video") {
-        await room.localParticipant.setCameraEnabled(true)
+        await room.localParticipant.setCameraEnabled(true, { facingMode: "user" })
         // Self-view attachment is handled by the effect that watches `camOn`
         // and `connected`, ensuring the <video> element is mounted first.
       }
@@ -147,7 +156,7 @@ export function DmCall({
     if (call.mode !== "video" || !camOn || !connected) return
     const room = roomRef.current
     if (room) attachLocalVideo(room)
-  }, [call.mode, camOn, connected])
+  }, [call.mode, camOn, connected, facingMode])
 
   // Once the call goes live (callee accepted + connected), start ticking the
   // call duration. Resets if the call ever drops back out of the live state.
@@ -219,6 +228,22 @@ export function DmCall({
     setCamOn(next)
   }
 
+  // Flip between the front (user) and back (environment) cameras, like the
+  // WhatsApp flip-camera button. Re-attaches the self-view to the new track.
+  async function flipCamera() {
+    const room = roomRef.current
+    if (!room) return
+    const next = facingMode === "user" ? "environment" : "user"
+    try {
+      await room.localParticipant.setCameraEnabled(true, { facingMode: next })
+      setFacingMode(next)
+      setCamOn(true)
+      attachLocalVideo(room)
+    } catch {
+      /* device may not have a second camera — ignore */
+    }
+  }
+
   const showVideo = call.mode === "video"
 
   function formatDuration(totalSeconds: number): string {
@@ -234,6 +259,104 @@ export function DmCall({
   const remoteFilling = showVideo && remoteVideoOn
   // Show the breathing rings/spinner state while the call hasn't connected yet.
   const ringing = !isLive
+
+  // ── Auto-hiding controls (only while the remote video fills the screen) ──
+  const [controlsShown, setControlsShown] = useState(true)
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const scheduleHide = useCallback(() => {
+    if (hideTimer.current) clearTimeout(hideTimer.current)
+    if (remoteFilling && phase !== "prompt") {
+      hideTimer.current = setTimeout(() => setControlsShown(false), 4500)
+    }
+  }, [remoteFilling, phase])
+
+  useEffect(() => {
+    if (controlsShown) scheduleHide()
+    return () => {
+      if (hideTimer.current) clearTimeout(hideTimer.current)
+    }
+  }, [controlsShown, scheduleHide])
+
+  // Reveal controls again whenever we drop out of the full-bleed video state.
+  useEffect(() => {
+    if (!remoteFilling) setControlsShown(true)
+  }, [remoteFilling])
+
+  // Controls are always visible unless we're in immersive full-bleed video and
+  // they've been auto/tap hidden.
+  const controlsVisible = !remoteFilling || phase === "prompt" || controlsShown
+
+  function toggleControls() {
+    if (!remoteFilling || phase === "prompt") return
+    setControlsShown((s) => !s)
+  }
+
+  // ── Draggable, corner-snapping self-view (floatable caller tab) ──────────
+  const pipRef = useRef<HTMLDivElement>(null)
+  const [pipPos, setPipPos] = useState<{ x: number; y: number } | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const dragRef = useRef<{ active: boolean; dx: number; dy: number; moved: boolean }>({
+    active: false,
+    dx: 0,
+    dy: 0,
+    moved: false,
+  })
+
+  const snapCorner = useCallback((x: number, y: number) => {
+    if (typeof window === "undefined") return { x, y }
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const margin = 16
+    const topMin = 76 // clear the status pill
+    const bottomMax = Math.max(topMin, vh - PIP_H - 132) // clear the control dock
+    const leftX = margin
+    const rightX = Math.max(margin, vw - PIP_W - margin)
+    const cx = x + PIP_W / 2
+    const cy = y + PIP_H / 2
+    return {
+      x: cx < vw / 2 ? leftX : rightX,
+      y: cy < vh / 2 ? topMin : bottomMax,
+    }
+  }, [])
+
+  // Park the self-view in the bottom-right corner once video starts.
+  useEffect(() => {
+    if (showVideo && pipPos === null && typeof window !== "undefined") {
+      setPipPos(snapCorner(window.innerWidth, window.innerHeight))
+    }
+  }, [showVideo, pipPos, snapCorner])
+
+  // Keep the self-view on-screen across orientation / viewport changes.
+  useEffect(() => {
+    if (!showVideo) return
+    const onResize = () => setPipPos((p) => (p ? snapCorner(p.x, p.y) : p))
+    window.addEventListener("resize", onResize)
+    return () => window.removeEventListener("resize", onResize)
+  }, [showVideo, snapCorner])
+
+  function onPipPointerDown(e: React.PointerEvent) {
+    const el = pipRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    dragRef.current = { active: true, dx: e.clientX - rect.left, dy: e.clientY - rect.top, moved: false }
+    setDragging(true)
+    el.setPointerCapture(e.pointerId)
+  }
+
+  function onPipPointerMove(e: React.PointerEvent) {
+    if (!dragRef.current.active) return
+    dragRef.current.moved = true
+    setPipPos({ x: e.clientX - dragRef.current.dx, y: e.clientY - dragRef.current.dy })
+  }
+
+  function onPipPointerUp(e: React.PointerEvent) {
+    if (!dragRef.current.active) return
+    dragRef.current.active = false
+    setDragging(false)
+    pipRef.current?.releasePointerCapture(e.pointerId)
+    setPipPos((p) => (p ? snapCorner(p.x, p.y) : p))
+  }
 
   const statusText =
     phase === "prompt"
@@ -275,12 +398,13 @@ export function DmCall({
       )}
       <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/70" />
 
-      {/* Full-bleed remote camera */}
+      {/* Full-bleed remote camera — tapping it toggles the floating controls. */}
       {showVideo && (
         <video
           ref={remoteVideoRef}
           autoPlay
           playsInline
+          onClick={toggleControls}
           className={cn(
             "absolute inset-0 h-full w-full object-cover transition-opacity duration-500",
             remoteFilling ? "opacity-100" : "opacity-0",
@@ -288,8 +412,24 @@ export function DmCall({
         />
       )}
 
-      {/* ── Top status bar ───────────────────────────────────────────────── */}
-      <div className="relative z-10 flex items-center justify-center px-6 pt-[calc(env(safe-area-inset-top)+1.25rem)]">
+      {/* Scrim that fades the top/bottom for control legibility over video. */}
+      {remoteFilling && (
+        <div
+          aria-hidden="true"
+          className={cn(
+            "pointer-events-none absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/60 transition-opacity duration-300",
+            controlsVisible ? "opacity-100" : "opacity-0",
+          )}
+        />
+      )}
+
+      {/* ── Top status bar (+ flip camera) ───────────────────────────────── */}
+      <div
+        className={cn(
+          "relative z-20 flex items-center justify-center px-6 pt-[calc(env(safe-area-inset-top)+1.25rem)] transition-all duration-300",
+          controlsVisible ? "opacity-100" : "pointer-events-none -translate-y-2 opacity-0",
+        )}
+      >
         <div className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-xs font-medium text-white/80 ring-1 ring-inset ring-white/15 backdrop-blur-md">
           <span className="relative flex size-2">
             <span
@@ -307,6 +447,18 @@ export function DmCall({
           </span>
           End-to-end encrypted
         </div>
+
+        {/* Flip-camera button floats top-right and never covers a face. */}
+        {showVideo && camOn && connected && (
+          <button
+            type="button"
+            onClick={flipCamera}
+            aria-label="Flip camera"
+            className="absolute right-5 top-[calc(env(safe-area-inset-top)+1.05rem)] flex size-11 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-inset ring-white/15 backdrop-blur-md transition-all duration-200 hover:bg-white/20 active:scale-95"
+          >
+            <SwitchCamera className="size-5" />
+          </button>
+        )}
       </div>
 
       {/* ── Stage ────────────────────────────────────────────────────────── */}
@@ -334,35 +486,24 @@ export function DmCall({
             </div>
             <div className="space-y-2">
               <h1 className="text-pretty text-3xl font-semibold tracking-tight">{peer.name}</h1>
-              <p
-                className={cn(
-                  "text-base font-medium tabular-nums",
-                  isLive ? "text-call-accept" : "text-white/60",
-                )}
-              >
+              <p className={cn("text-base font-medium tabular-nums", isLive ? "text-call-accept" : "text-white/60")}>
                 {statusText}
               </p>
             </div>
           </div>
         )}
 
-        {/* Caption pill over full-bleed remote video. */}
+        {/* Caption pill over full-bleed remote video (fades with controls). */}
         {remoteFilling && (
-          <div className="absolute left-1/2 top-[calc(env(safe-area-inset-top)+4.5rem)] -translate-x-1/2 rounded-2xl bg-black/40 px-4 py-2 text-center backdrop-blur-md">
+          <div
+            className={cn(
+              "absolute left-1/2 top-[calc(env(safe-area-inset-top)+4.5rem)] -translate-x-1/2 rounded-2xl bg-black/40 px-4 py-2 text-center backdrop-blur-md transition-opacity duration-300",
+              controlsVisible ? "opacity-100" : "opacity-0",
+            )}
+          >
             <p className="font-semibold">{peer.name}</p>
             <p className="text-sm tabular-nums text-white/70">{statusText}</p>
           </div>
-        )}
-
-        {/* Local self-view (picture-in-picture) */}
-        {showVideo && camOn && (
-          <video
-            ref={localVideoRef}
-            autoPlay
-            playsInline
-            muted
-            className="absolute bottom-2 right-4 h-44 w-32 -scale-x-100 rounded-3xl object-cover shadow-2xl ring-2 ring-white/20"
-          />
         )}
 
         {error && (
@@ -372,8 +513,40 @@ export function DmCall({
         )}
       </div>
 
+      {/* ── Floating, draggable self-view (the caller's tab) ─────────────── */}
+      {showVideo && camOn && (
+        <div
+          ref={pipRef}
+          onPointerDown={onPipPointerDown}
+          onPointerMove={onPipPointerMove}
+          onPointerUp={onPipPointerUp}
+          onPointerCancel={onPipPointerUp}
+          style={
+            pipPos
+              ? { left: pipPos.x, top: pipPos.y, width: PIP_W, height: PIP_H }
+              : { right: 16, bottom: 112, width: PIP_W, height: PIP_H }
+          }
+          className={cn(
+            "absolute z-30 touch-none overflow-hidden rounded-3xl bg-neutral-900 shadow-2xl ring-2 ring-white/20",
+            dragging ? "cursor-grabbing scale-105" : "cursor-grab transition-all duration-300 ease-out",
+          )}
+        >
+          <video ref={localVideoRef} autoPlay playsInline muted className="h-full w-full -scale-x-100 object-cover" />
+          {/* Subtle grabber affordance so users know the tile is movable. */}
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute left-1/2 top-1.5 h-1 w-8 -translate-x-1/2 rounded-full bg-white/40"
+          />
+        </div>
+      )}
+
       {/* ── Control dock ─────────────────────────────────────────────────── */}
-      <div className="relative z-10 flex justify-center px-6 pb-[calc(env(safe-area-inset-bottom)+2rem)]">
+      <div
+        className={cn(
+          "relative z-20 flex justify-center px-6 pb-[calc(env(safe-area-inset-bottom)+2rem)] transition-all duration-300",
+          controlsVisible ? "opacity-100" : "pointer-events-none translate-y-3 opacity-0",
+        )}
+      >
         {phase === "prompt" ? (
           <div className="flex w-full max-w-xs items-end justify-between">
             <CallButton
@@ -413,6 +586,16 @@ export function DmCall({
                 onClick={toggleCam}
                 disabled={!connected}
                 ariaLabel={camOn ? "Turn off camera" : "Turn on camera"}
+              />
+            )}
+            {showVideo && (
+              <CallButton
+                icon={SwitchCamera}
+                label="Flip"
+                tone="glass"
+                onClick={flipCamera}
+                disabled={!connected || !camOn}
+                ariaLabel="Flip camera"
               />
             )}
             <CallButton
