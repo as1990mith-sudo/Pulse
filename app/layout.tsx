@@ -3,7 +3,6 @@ import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono, Sora } from 'next/font/google'
 import { ThemeProvider } from '@/components/theme-provider'
 import { SkinProvider, SKIN_INIT_SCRIPT } from '@/components/skin-provider'
-import { AppLaunch, LAUNCH_INIT_SCRIPT } from '@/components/app-launch'
 import { LiveSessionProvider } from '@/components/live-session'
 import { EpisodePlayerProvider } from '@/components/episode-player-provider'
 import './globals.css'
@@ -70,7 +69,6 @@ export default function RootLayout({
     >
       <body className="font-sans antialiased">
         <script dangerouslySetInnerHTML={{ __html: SKIN_INIT_SCRIPT }} />
-        <script dangerouslySetInnerHTML={{ __html: LAUNCH_INIT_SCRIPT }} />
         <ThemeProvider
           attribute="class"
           defaultTheme="mid"
@@ -91,7 +89,6 @@ export default function RootLayout({
               </EpisodePlayerProvider>
             </LiveSessionProvider>
           </SkinProvider>
-          <AppLaunch />
         </ThemeProvider>
       </body>
     </html>
