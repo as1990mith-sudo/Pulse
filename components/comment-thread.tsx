@@ -91,8 +91,10 @@ export function CommentThread({
     <ul className="space-y-4">
       {roots.map((comment) => (
         <li key={comment.id}>
-          <CommentItem
+          <CommentNode
             comment={comment}
+            depth={0}
+            repliesByParent={repliesByParent}
             canInteract={canInteract}
             onLike={onLike}
             onReply={onReply}
@@ -101,12 +103,82 @@ export function CommentThread({
             showCopy={showCopy}
             enforceTimeWindows={enforceTimeWindows}
           />
-          {(repliesByParent.get(comment.id) ?? []).length > 0 && (
-            <ul className="mt-3 space-y-3 border-l border-border/50 pl-3.5">
-              {(repliesByParent.get(comment.id) ?? []).map((reply) => (
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** Max reply depth, Instagram-style: comment (0) → reply (1) → reply-to-reply (2). */
+const MAX_DEPTH = 2
+
+/**
+ * Renders a comment plus its nested replies recursively (up to MAX_DEPTH).
+ * Replies are collapsed behind a "View N replies" toggle by default, matching
+ * Instagram, and each level indents a little further to the right.
+ */
+function CommentNode({
+  comment,
+  depth,
+  repliesByParent,
+  canInteract,
+  onLike,
+  onReply,
+  onEdit,
+  onDelete,
+  showCopy,
+  enforceTimeWindows,
+}: {
+  comment: ThreadComment
+  depth: number
+  repliesByParent: Map<number, ThreadComment[]>
+  canInteract: boolean
+  onLike: (commentId: number, liked: boolean) => void
+  onReply: (parentId: number, text: string) => Promise<void> | void
+  onEdit: (commentId: number, text: string) => Promise<void> | void
+  onDelete: (commentId: number) => Promise<void> | void
+  showCopy: boolean
+  enforceTimeWindows: boolean
+}) {
+  const replies = repliesByParent.get(comment.id) ?? []
+  const [collapsed, setCollapsed] = useState(true)
+
+  return (
+    <div>
+      <CommentItem
+        comment={comment}
+        canInteract={canInteract}
+        canReply={canInteract && depth < MAX_DEPTH}
+        isReply={depth > 0}
+        onLike={onLike}
+        onReply={onReply}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        showCopy={showCopy}
+        enforceTimeWindows={enforceTimeWindows}
+      />
+
+      {replies.length > 0 && (
+        <div className="mt-2 border-l border-border/50 pl-3.5">
+          <button
+            type="button"
+            onClick={() => setCollapsed((v) => !v)}
+            className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+            aria-expanded={!collapsed}
+          >
+            <span className="h-px w-5 bg-border" aria-hidden />
+            {collapsed
+              ? `View ${replies.length} ${replies.length === 1 ? "reply" : "replies"}`
+              : "Hide replies"}
+          </button>
+          {!collapsed && (
+            <ul className="space-y-3">
+              {replies.map((reply) => (
                 <li key={reply.id}>
-                  <CommentItem
+                  <CommentNode
                     comment={reply}
+                    depth={depth + 1}
+                    repliesByParent={repliesByParent}
                     canInteract={canInteract}
                     onLike={onLike}
                     onReply={onReply}
@@ -114,21 +186,21 @@ export function CommentThread({
                     onDelete={onDelete}
                     showCopy={showCopy}
                     enforceTimeWindows={enforceTimeWindows}
-                    isReply
                   />
                 </li>
               ))}
             </ul>
           )}
-        </li>
-      ))}
-    </ul>
+        </div>
+      )}
+    </div>
   )
 }
 
 function CommentItem({
   comment,
   canInteract,
+  canReply = false,
   onLike,
   onReply,
   onEdit,
@@ -139,6 +211,7 @@ function CommentItem({
 }: {
   comment: ThreadComment
   canInteract: boolean
+  canReply?: boolean
   onLike: (commentId: number, liked: boolean) => void
   onReply: (parentId: number, text: string) => Promise<void> | void
   onEdit: (commentId: number, text: string) => Promise<void> | void
@@ -208,8 +281,9 @@ function CommentItem({
     e.preventDefault()
     const value = replyDraft.trim()
     if (!value) return
-    // Replies attach to the top-level comment so the thread stays one level deep.
-    await onReply(comment.parentId ?? comment.id, value)
+    // Replies attach to the comment being replied to, so threads can nest
+    // (capped at MAX_DEPTH by hiding the reply button deeper down).
+    await onReply(comment.id, value)
     setReplyDraft("")
     setReplying(false)
   }
@@ -297,7 +371,7 @@ function CommentItem({
             <Heart className={cn("size-4", liked && "fill-current")} />
             {likes > 0 && <span className="tabular-nums">{likes}</span>}
           </button>
-          {canInteract && !isReply && (
+          {canReply && (
             <button
               type="button"
               onClick={() => setReplying((v) => !v)}
