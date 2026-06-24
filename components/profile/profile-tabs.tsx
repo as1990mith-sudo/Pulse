@@ -156,12 +156,31 @@ function SavedGrid({ items }: { items: SavedItemView[] }) {
             href={item.url}
             className="flex items-center gap-3 rounded-xl border border-border/60 bg-card p-3 transition-colors hover:bg-secondary/50"
           >
-            <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-secondary text-muted-foreground">
-              {item.image ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={item.image || "/placeholder.svg"} alt="" className="size-full object-cover" />
-              ) : (
-                <Bookmark className="size-5" />
+            <div className="relative shrink-0">
+              <div className="flex size-14 items-center justify-center overflow-hidden rounded-lg bg-secondary text-muted-foreground">
+                {item.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={item.image || "/placeholder.svg"} alt="" className="size-full object-cover" />
+                ) : (
+                  <Bookmark className="size-5" />
+                )}
+              </div>
+              {/* Avatar of the user whose content this is, overlapping the corner. */}
+              {item.ownerName && (
+                <span
+                  className={cn(
+                    "absolute -bottom-1 -right-1 flex size-6 items-center justify-center overflow-hidden rounded-full text-[10px] font-bold ring-2 ring-card",
+                    item.ownerColor ?? "bg-secondary text-muted-foreground",
+                  )}
+                  title={item.ownerName}
+                >
+                  {item.ownerImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={item.ownerImage || "/placeholder.svg"} alt={item.ownerName} className="size-full object-cover" />
+                  ) : (
+                    item.ownerInitials
+                  )}
+                </span>
               )}
             </div>
             <div className="min-w-0 flex-1">

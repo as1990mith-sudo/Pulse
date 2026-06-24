@@ -5,7 +5,7 @@ import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { dmConversation, follow, savedItem, user as userTable } from "@/lib/db/schema"
+import { dmConversation, episode, feedPost, follow, savedItem, statusUpdate, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { getOrCreateConversation, sendDirectMessage } from "@/app/actions/dm"
 import { createStatus } from "@/app/actions/status"
@@ -175,6 +175,13 @@ export type SavedItemView = {
   subtitle: string | null
   url: string
   image: string | null
+  // Display identity of the user who owns the saved content (post author,
+  // episode host, status owner). Resolved at read time so even items saved
+  // before this existed show the right avatar. Null when unknown.
+  ownerName: string | null
+  ownerImage: string | null
+  ownerInitials: string | null
+  ownerColor: string | null
 }
 
 /**
@@ -189,15 +196,75 @@ export async function getSavedItems(): Promise<SavedItemView[]> {
     .from(savedItem)
     .where(eq(savedItem.userId, session.user.id))
     .orderBy(desc(savedItem.createdAt))
-  return rows.map((r) => ({
-    id: r.id,
-    type: r.itemType,
-    key: r.itemKey,
-    title: r.title,
-    subtitle: r.subtitle,
-    url: r.url,
-    image: r.image,
-  }))
+
+  // Resolve each saved item's owning user so we can show their avatar. We batch
+  // one query per content type, keyed by the item's stored `itemKey`.
+  const postIds = rows.filter((r) => r.itemType === "post").map((r) => Number(r.itemKey)).filter((n) => !Number.isNaN(n))
+  const episodeIds = rows
+    .filter((r) => r.itemType === "episode")
+    .map((r) => Number(r.itemKey))
+    .filter((n) => !Number.isNaN(n))
+  const statusIds = rows
+    .filter((r) => r.itemType === "status")
+    .map((r) => Number(r.itemKey))
+    .filter((n) => !Number.isNaN(n))
+
+  const [postRows, episodeRows, statusRows] = await Promise.all([
+    postIds.length > 0
+      ? db.select({ key: feedPost.id, userId: feedPost.userId }).from(feedPost).where(inArray(feedPost.id, postIds))
+      : Promise.resolve([] as { key: number; userId: string }[]),
+    episodeIds.length > 0
+      ? db
+          .select({ key: episode.id, userId: episode.hostUserId, hostName: episode.hostName })
+          .from(episode)
+          .where(inArray(episode.id, episodeIds))
+      : Promise.resolve([] as { key: number; userId: string | null; hostName: string }[]),
+    statusIds.length > 0
+      ? db
+          .select({ key: statusUpdate.id, userId: statusUpdate.userId, authorName: statusUpdate.authorName })
+          .from(statusUpdate)
+          .where(inArray(statusUpdate.id, statusIds))
+      : Promise.resolve([] as { key: number; userId: string; authorName: string }[]),
+  ])
+
+  // Map itemKey -> owning userId (and a fallback display name when there's no
+  // linked account, e.g. admin-added episodes that only store a host name).
+  const ownerByKey = new Map<string, { userId: string | null; fallbackName: string | null }>()
+  postRows.forEach((p) => ownerByKey.set(`post:${p.key}`, { userId: p.userId, fallbackName: null }))
+  episodeRows.forEach((e) => ownerByKey.set(`episode:${e.key}`, { userId: e.userId, fallbackName: e.hostName }))
+  statusRows.forEach((s) => ownerByKey.set(`status:${s.key}`, { userId: s.userId, fallbackName: s.authorName }))
+
+  // Fetch the user records we need in one go.
+  const ownerUserIds = [
+    ...new Set([...ownerByKey.values()].map((o) => o.userId).filter((id): id is string => Boolean(id))),
+  ]
+  const ownerUsers =
+    ownerUserIds.length > 0
+      ? await db
+          .select({ id: userTable.id, name: userTable.name, image: userTable.image })
+          .from(userTable)
+          .where(inArray(userTable.id, ownerUserIds))
+      : []
+  const userById = new Map(ownerUsers.map((u) => [u.id, u]))
+
+  return rows.map((r) => {
+    const owner = ownerByKey.get(`${r.itemType}:${r.itemKey}`)
+    const ownerUser = owner?.userId ? userById.get(owner.userId) : undefined
+    const ownerName = ownerUser?.name ?? owner?.fallbackName ?? null
+    return {
+      id: r.id,
+      type: r.itemType,
+      key: r.itemKey,
+      title: r.title,
+      subtitle: r.subtitle,
+      url: r.url,
+      image: r.image,
+      ownerName,
+      ownerImage: ownerUser?.image ?? null,
+      ownerInitials: ownerName ? getInitials(ownerName) : null,
+      ownerColor: owner?.userId ? getAvatarColor(owner.userId) : ownerName ? getAvatarColor(ownerName) : null,
+    }
+  })
 }
 
 /** Returns whether the current user has saved the given item. */
