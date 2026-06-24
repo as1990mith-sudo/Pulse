@@ -96,7 +96,7 @@ export function ProfileName({
   return (
     <div className="space-y-1">
       <div className="flex items-center gap-2">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{name}</h1>
+        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{name}</h1>
         {editable && (
           <button
             onClick={() => setEditing(true)}

@@ -45,9 +45,9 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
           aria-hidden
         />
 
-        <div className="relative mx-auto flex w-full max-w-md flex-col items-center px-4 pb-8 pt-4 text-center sm:px-6">
+        <div className="relative mx-auto flex w-full max-w-md flex-col items-center px-4 pb-5 pt-3 text-center sm:px-6">
           {/* Ringed avatar, centered. */}
-          <div className="rounded-full bg-background p-1.5 shadow-xl ring-1 ring-border/50">
+          <div className="rounded-full bg-background p-1 shadow-xl ring-1 ring-border/50">
             <ProfileAvatar
               initials={profile.initials}
               color={profile.color}
@@ -60,18 +60,18 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
           </div>
 
           {/* Name + handle, centered. */}
-          <div className="mt-4 flex flex-col items-center gap-1">
+          <div className="mt-3 flex flex-col items-center gap-0.5">
             <ProfileName name={profile.name} editable={profile.isSelf} />
-            <p className="text-base text-muted-foreground">{profile.handle}</p>
+            <p className="text-sm text-muted-foreground">{profile.handle}</p>
           </div>
 
           {/* Bio, centered. */}
-          <div className="mt-3 flex flex-col items-center text-center">
+          <div className="mt-2 flex flex-col items-center text-center">
             <ProfileBio bio={profile.bio} editable={profile.isSelf} />
           </div>
 
           {/* Stats with a vertical divider. */}
-          <div className="mt-5">
+          <div className="mt-3">
             <ProfileFollowStats
               userId={profile.id}
               followers={profile.followers}
@@ -81,19 +81,19 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
 
           {/* Full-width stacked actions for other people's profiles. */}
           {!profile.isSelf && (
-            <div className="mt-6 flex w-full flex-col gap-3">
+            <div className="mt-4 flex w-full flex-col gap-2">
               <ProfileFollowButton
                 targetUserId={profile.id}
                 targetName={profile.name}
                 initialFollowing={profile.isFollowing}
-                className="h-12 w-full rounded-full text-base font-semibold"
+                className="h-11 w-full rounded-full text-sm font-semibold"
               />
               {currentUser && (
                 <ProfileMessageButton
                   targetUserId={profile.id}
                   targetName={profile.name}
                   variant="outline"
-                  className="h-12 w-full rounded-full text-base font-semibold"
+                  className="h-11 w-full rounded-full text-sm font-semibold"
                 />
               )}
             </div>
@@ -101,7 +101,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-4xl px-4 py-5 sm:px-6">
+      <main className="mx-auto w-full max-w-4xl px-4 py-4 sm:px-6">
         <ProfileTabs
           name={profile.name}
           isSelf={profile.isSelf}
