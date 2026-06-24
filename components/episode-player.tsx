@@ -20,23 +20,26 @@ const SPEEDS = [1, 1.25, 1.5, 1.75, 2] as const
  * recorded session audio when one exists; otherwise notes there's no recording.
  */
 export function EpisodePlayer({ show }: { show: Show }) {
-  const audioRef = useRef<HTMLAudioElement>(null)
+  const mediaRef = useRef<HTMLVideoElement>(null)
   const [playing, setPlaying] = useState(false)
   const [current, setCurrent] = useState(0)
   const [duration, setDuration] = useState(0)
   const [speedIdx, setSpeedIdx] = useState(0)
-  const hasAudio = Boolean(show.audioUrl)
+  // A single <video> drives both kinds; for audio the frame is hidden.
+  const isVideo = Boolean(show.videoUrl)
+  const mediaUrl = show.videoUrl ?? show.audioUrl
+  const hasMedia = Boolean(mediaUrl)
   const pct = duration > 0 ? (current / duration) * 100 : 0
 
   function toggle() {
-    const el = audioRef.current
+    const el = mediaRef.current
     if (!el) return
     if (playing) el.pause()
     else void el.play().catch(() => {})
   }
 
   function skip(delta: number) {
-    const el = audioRef.current
+    const el = mediaRef.current
     if (!el) return
     const t = Math.min(Math.max(0, el.currentTime + delta), duration || el.duration || 0)
     el.currentTime = t
@@ -46,11 +49,11 @@ export function EpisodePlayer({ show }: { show: Show }) {
   function cycleSpeed() {
     const next = (speedIdx + 1) % SPEEDS.length
     setSpeedIdx(next)
-    if (audioRef.current) audioRef.current.playbackRate = SPEEDS[next]
+    if (mediaRef.current) mediaRef.current.playbackRate = SPEEDS[next]
   }
 
   function seek(e: React.ChangeEvent<HTMLInputElement>) {
-    const el = audioRef.current
+    const el = mediaRef.current
     if (!el) return
     const t = Number(e.target.value)
     el.currentTime = t
@@ -60,7 +63,7 @@ export function EpisodePlayer({ show }: { show: Show }) {
   // Recorded sessions (webm/streamed blobs) often report duration as Infinity
   // until the browser scans to the end. Force a seek to the end to make the
   // real length available, then restore the position.
-  function onMeta(e: React.SyntheticEvent<HTMLAudioElement>) {
+  function onMeta(e: React.SyntheticEvent<HTMLVideoElement>) {
     const el = e.currentTarget
     if (el.duration === Infinity || Number.isNaN(el.duration)) {
       const onUpdate = () => {
@@ -96,16 +99,40 @@ export function EpisodePlayer({ show }: { show: Show }) {
       )}
 
       <div className="flex flex-col items-center gap-5 px-6 pt-8 sm:px-10">
-        {/* Artwork */}
-        <div className="relative aspect-square w-44 overflow-hidden rounded-2xl shadow-2xl ring-1 ring-foreground/10 sm:w-52">
-          {show.cover ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={show.cover || "/placeholder.svg"} alt={show.title} className="size-full object-cover" />
-          ) : (
-            <div className="flex size-full items-center justify-center bg-secondary">
-              <Radio className="size-16 text-muted-foreground" />
-            </div>
+        {/* Artwork / video frame — the <video> is the single media engine; for
+            audio it's hidden behind the cover art. */}
+        <div
+          className={cn(
+            "relative overflow-hidden rounded-2xl shadow-2xl ring-1 ring-foreground/10",
+            isVideo ? "aspect-video w-full max-w-md bg-black" : "aspect-square w-44 sm:w-52",
           )}
+        >
+          <video
+            ref={mediaRef}
+            src={mediaUrl}
+            playsInline
+            preload="metadata"
+            onClick={isVideo ? toggle : undefined}
+            className={cn("size-full", isVideo ? "object-contain" : "absolute inset-0 -z-10 opacity-0")}
+            onPlay={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
+            onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
+            onLoadedMetadata={onMeta}
+            onDurationChange={(e) => {
+              const d = e.currentTarget.duration
+              if (d !== Infinity && !Number.isNaN(d)) setDuration(d)
+            }}
+            onEnded={() => setPlaying(false)}
+          />
+          {!isVideo &&
+            (show.cover ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={show.cover || "/placeholder.svg"} alt={show.title} className="size-full object-cover" />
+            ) : (
+              <div className="flex size-full items-center justify-center bg-secondary">
+                <Radio className="size-16 text-muted-foreground" />
+              </div>
+            ))}
         </div>
 
         {/* Title block */}
@@ -116,7 +143,7 @@ export function EpisodePlayer({ show }: { show: Show }) {
       </div>
 
       <div className="px-6 pb-7 pt-5 sm:px-10">
-        {hasAudio ? (
+        {hasMedia ? (
           <div className="flex flex-col gap-4">
             {/* Scrubber */}
             <div className="flex flex-col gap-1.5">
@@ -180,20 +207,6 @@ export function EpisodePlayer({ show }: { show: Show }) {
               </button>
             </div>
 
-            <audio
-              ref={audioRef}
-              src={show.audioUrl}
-              preload="metadata"
-              onPlay={() => setPlaying(true)}
-              onPause={() => setPlaying(false)}
-              onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
-              onLoadedMetadata={onMeta}
-              onDurationChange={(e) => {
-                const d = e.currentTarget.duration
-                if (d !== Infinity && !Number.isNaN(d)) setDuration(d)
-              }}
-              onEnded={() => setPlaying(false)}
-            />
           </div>
         ) : (
           <p className={cn("text-center text-sm text-muted-foreground")}>

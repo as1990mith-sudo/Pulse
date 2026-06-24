@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { ChevronDown, Gauge, ListMusic, Pause, Play, Radio, RotateCcw, RotateCw, X } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { cn } from "@/lib/utils"
+import { EpisodeNowPlayingActions } from "@/components/episode-now-playing-actions"
 
 function fmt(s: number) {
   if (!isFinite(s) || s < 0) return "0:00"
@@ -14,9 +15,9 @@ function fmt(s: number) {
 
 const SPEEDS = [1, 1.25, 1.5, 1.75, 2] as const
 
-/** An episode is playable on-demand when it has a recording and isn't live/upcoming. */
+/** An episode is playable on-demand when it has a recording (audio OR video) and isn't live/upcoming. */
 export function isPlayable(show: Show): boolean {
-  return Boolean(show.audioUrl) && show.status !== "live" && show.status !== "upcoming"
+  return Boolean(show.audioUrl || show.videoUrl) && show.status !== "live" && show.status !== "upcoming"
 }
 
 type Ctx = {
@@ -44,7 +45,7 @@ export function useEpisodePlayer() {
  * while audio keeps playing.
  */
 export function EpisodePlayerProvider({ children }: { children: React.ReactNode }) {
-  const audioRef = useRef<HTMLAudioElement>(null)
+  const mediaRef = useRef<HTMLVideoElement>(null)
   const [current, setCurrent] = useState<Show | null>(null)
   const [queue, setQueue] = useState<Show[]>([])
   const [minimized, setMinimized] = useState(false)
@@ -53,6 +54,14 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [speedIdx, setSpeedIdx] = useState(0)
+  // Repeat the current track when it ends instead of advancing the queue.
+  const [loop, setLoop] = useState(false)
+
+  // The active track's playable source + whether it's a video recording. A
+  // single <video> element drives both audio and video episodes (a <video>
+  // plays audio-only files fine); for audio we simply hide the frame.
+  const isVideo = Boolean(current?.videoUrl)
+  const mediaUrl = current?.videoUrl ?? current?.audioUrl
 
   const play = useCallback((show: Show, q?: Show[]) => {
     if (!isPlayable(show)) return
@@ -78,7 +87,7 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
   }, [])
 
   const close = useCallback(() => {
-    const el = audioRef.current
+    const el = mediaRef.current
     if (el) el.pause()
     if (typeof window !== "undefined" && (window.history.state as { __episodeOverlay?: boolean })?.__episodeOverlay) {
       window.history.back()
@@ -92,12 +101,18 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
   // When the active track changes, (re)load and start playback. This runs off a
   // user tap, so autoplay is permitted.
   useEffect(() => {
-    const el = audioRef.current
-    if (!el || !current?.audioUrl) return
+    const el = mediaRef.current
+    if (!el || !mediaUrl) return
     el.playbackRate = SPEEDS[speedIdx]
+    el.loop = loop
     void el.play().catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.id])
+
+  // Keep the media element's loop flag in sync with the toggle.
+  useEffect(() => {
+    if (mediaRef.current) mediaRef.current.loop = loop
+  }, [loop, current?.id])
 
   // Sentinel history entry so the hardware/browser back gesture collapses the
   // immersive player instead of navigating away from the catalogue underneath.
@@ -137,14 +152,14 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
   }, [overlayOpen])
 
   function toggle() {
-    const el = audioRef.current
+    const el = mediaRef.current
     if (!el) return
     if (playing) el.pause()
     else void el.play().catch(() => {})
   }
 
   function skip(delta: number) {
-    const el = audioRef.current
+    const el = mediaRef.current
     if (!el) return
     const t = Math.min(Math.max(0, el.currentTime + delta), duration || el.duration || 0)
     el.currentTime = t
@@ -154,11 +169,11 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
   function cycleSpeed() {
     const next = (speedIdx + 1) % SPEEDS.length
     setSpeedIdx(next)
-    if (audioRef.current) audioRef.current.playbackRate = SPEEDS[next]
+    if (mediaRef.current) mediaRef.current.playbackRate = SPEEDS[next]
   }
 
   function seek(e: React.ChangeEvent<HTMLInputElement>) {
-    const el = audioRef.current
+    const el = mediaRef.current
     if (!el) return
     const t = Number(e.target.value)
     el.currentTime = t
@@ -166,7 +181,7 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
   }
 
   // Recorded blobs often report Infinity duration until scanned; force it.
-  function onMeta(e: React.SyntheticEvent<HTMLAudioElement>) {
+  function onMeta(e: React.SyntheticEvent<HTMLVideoElement>) {
     const el = e.currentTarget
     el.playbackRate = SPEEDS[speedIdx]
     if (el.duration === Infinity || Number.isNaN(el.duration)) {
@@ -198,23 +213,6 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
   return (
     <EpisodePlayerContext.Provider value={{ play, close, minimize, expand, activeId: current?.id ?? null }}>
       {children}
-
-      {/* Persistent audio element — lives above the router so playback survives
-          navigation and minimise. */}
-      <audio
-        ref={audioRef}
-        src={current?.audioUrl}
-        preload="metadata"
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
-        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-        onLoadedMetadata={onMeta}
-        onDurationChange={(e) => {
-          const d = e.currentTarget.duration
-          if (d !== Infinity && !Number.isNaN(d)) setDuration(d)
-        }}
-        onEnded={handleEnded}
-      />
 
       {/* Immersive overlay */}
       {current && (
@@ -263,18 +261,41 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
           {/* Scrollable content */}
           <div className="flex-1 overflow-y-auto overscroll-contain px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6">
             <div className="mx-auto w-full max-w-xl">
-              {/* Artwork */}
+              {/* Artwork / video frame. The <video> is the single media engine for
+                  both kinds; for audio it's visually hidden and the cover art shows. */}
               <div className="mt-2 flex justify-center sm:mt-4">
-                <div className="relative aspect-square w-52 overflow-hidden rounded-2xl shadow-2xl ring-1 ring-foreground/10 sm:w-60">
-                  {current.cover ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={current.cover || "/placeholder.svg"} alt={current.title} className="size-full object-cover" />
+                <video
+                  ref={mediaRef}
+                  src={mediaUrl}
+                  playsInline
+                  preload="metadata"
+                  className={cn(
+                    isVideo
+                      ? "aspect-video w-full max-w-xl rounded-2xl bg-black object-contain shadow-2xl ring-1 ring-foreground/10"
+                      : "sr-only",
+                  )}
+                  onClick={isVideo ? toggle : undefined}
+                  onPlay={() => setPlaying(true)}
+                  onPause={() => setPlaying(false)}
+                  onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+                  onLoadedMetadata={onMeta}
+                  onDurationChange={(e) => {
+                    const d = e.currentTarget.duration
+                    if (d !== Infinity && !Number.isNaN(d)) setDuration(d)
+                  }}
+                  onEnded={handleEnded}
+                />
+                {!isVideo &&
+                  (current.cover ? (
+                    <div className="relative aspect-square w-52 overflow-hidden rounded-2xl shadow-2xl ring-1 ring-foreground/10 sm:w-60">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={current.cover || "/placeholder.svg"} alt={current.title} className="size-full object-cover" />
+                    </div>
                   ) : (
-                    <div className="flex size-full items-center justify-center bg-secondary">
+                    <div className="relative flex aspect-square w-52 items-center justify-center overflow-hidden rounded-2xl bg-secondary shadow-2xl ring-1 ring-foreground/10 sm:w-60">
                       <Radio className="size-16 text-muted-foreground" />
                     </div>
-                  )}
-                </div>
+                  ))}
               </div>
 
               {/* Title block */}
@@ -343,6 +364,9 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                   {SPEEDS[speedIdx]}x
                 </button>
               </div>
+
+              {/* Social actions: like, comment, loop, save, share */}
+              <EpisodeNowPlayingActions show={current} loop={loop} onToggleLoop={() => setLoop((l) => !l)} />
 
               {/* Up-next queue */}
               {upNext.length > 0 && (
