@@ -632,7 +632,10 @@ function PostMediaCarousel({
         onScroll={onScroll}
         className={cn(
           "flex w-full snap-x snap-mandatory overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-          multiple && "touch-pan-x",
+          // Allow BOTH axes: horizontal swipes move the carousel, while vertical
+          // swipes pass through to scroll the feed. (`pan-x` alone would suppress
+          // vertical gestures that start over the carousel, trapping the scroll.)
+          multiple && "[touch-action:pan-x_pan-y]",
         )}
       >
         {items.map((item, i) => (
