@@ -356,10 +356,12 @@ function DreamItem({
   dream,
   isAdmin,
   onDeleted,
+  onReplyCountChange,
 }: {
   dream: DreamView
   isAdmin: boolean
   onDeleted: (id: number) => void
+  onReplyCountChange?: (id: number, delta: number) => void
 }) {
   // The admin sees every dream's thread open as an inbox; members open on tap.
   const [open, setOpen] = useState(isAdmin)
@@ -531,7 +533,10 @@ function DreamItem({
         <DreamReplies
           dreamId={dream.id}
           isAdmin={isAdmin}
-          onCountChange={(d) => setCount((c) => Math.max(0, c + d))}
+          onCountChange={(d) => {
+            setCount((c) => Math.max(0, c + d))
+            onReplyCountChange?.(dream.id, d)
+          }}
         />
       )}
     </article>
@@ -707,6 +712,30 @@ export function DreamInterpretation({ initialFeed }: { initialFeed: DreamFeed })
   const dreams = feed.dreams
   const [composerOpen, setComposerOpen] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
+  // Interpreter-only: filter the inbox by whether a dream still needs a reply.
+  const [statusFilter, setStatusFilter] = useState<"awaiting" | "completed">("awaiting")
+
+  const awaitingCount = dreams.filter((d) => d.replyCount === 0).length
+  const completedCount = dreams.length - awaitingCount
+  // Members always see every dream; the interpreter sees the active filter.
+  const visibleDreams = isAdmin
+    ? dreams.filter((d) => (statusFilter === "awaiting" ? d.replyCount === 0 : d.replyCount > 0))
+    : dreams
+
+  // Keep the feed cache's replyCount in sync so a freshly interpreted dream
+  // moves from "Awaiting" to "Completed" immediately.
+  function handleReplyCountChange(id: number, delta: number) {
+    mutate(
+      "dream-feed",
+      (prev: DreamFeed | undefined) => ({
+        isAdmin: prev?.isAdmin ?? isAdmin,
+        dreams: (prev?.dreams ?? []).map((d) =>
+          d.id === id ? { ...d, replyCount: Math.max(0, d.replyCount + delta) } : d,
+        ),
+      }),
+      { revalidate: false },
+    )
+  }
 
   function handleCreated(d: DreamView) {
     mutate(
@@ -763,18 +792,74 @@ export function DreamInterpretation({ initialFeed }: { initialFeed: DreamFeed })
         </div>
       </header>
 
+      {isAdmin && (
+        <div className="border-b border-border/60 bg-background/95 px-4 py-2.5 backdrop-blur sm:px-6">
+          <div
+            role="tablist"
+            aria-label="Filter dreams by status"
+            className="flex gap-1 rounded-full bg-secondary/60 p-1"
+          >
+            {(
+              [
+                { key: "awaiting", label: "Awaiting", count: awaitingCount },
+                { key: "completed", label: "Completed", count: completedCount },
+              ] as const
+            ).map((tab) => {
+              const active = statusFilter === tab.key
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setStatusFilter(tab.key)}
+                  className={cn(
+                    "flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition-colors",
+                    active
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {tab.label}
+                  <span
+                    className={cn(
+                      "min-w-5 rounded-full px-1.5 py-0.5 text-xs tabular-nums",
+                      active ? "bg-blue-500/15 text-blue-600 dark:text-blue-400" : "bg-secondary text-muted-foreground",
+                    )}
+                  >
+                    {tab.count}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto scroll-smooth overscroll-contain">
-        {dreams.length === 0 ? (
+        {visibleDreams.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 px-6 py-24 text-center">
             <Avatar className="size-16 ring-2 ring-blue-500/30">
               <AvatarFallback className="bg-blue-600 text-white">
                 <MoonStar className="size-7" />
               </AvatarFallback>
             </Avatar>
-            <p className="text-lg font-semibold">{isAdmin ? "No dreams yet" : "No dreams shared yet"}</p>
+            <p className="text-lg font-semibold">
+              {isAdmin
+                ? dreams.length === 0
+                  ? "No dreams yet"
+                  : statusFilter === "awaiting"
+                    ? "All caught up"
+                    : "No interpretations yet"
+                : "No dreams shared yet"}
+            </p>
             <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
               {isAdmin
-                ? "When members share their dreams, they'll appear here for you to interpret."
+                ? dreams.length === 0
+                  ? "When members share their dreams, they'll appear here for you to interpret."
+                  : statusFilter === "awaiting"
+                    ? "Every dream has been interpreted. New dreams will appear here."
+                    : "Dreams you interpret will move here."
                 : "Be the first to share a dream — only the interpreter will know it's you."}
             </p>
             {!isAdmin && (
@@ -785,8 +870,14 @@ export function DreamInterpretation({ initialFeed }: { initialFeed: DreamFeed })
           </div>
         ) : (
           <div className="divide-y divide-border/60 pb-28">
-            {dreams.map((d) => (
-              <DreamItem key={d.id} dream={d} isAdmin={isAdmin} onDeleted={handleDeleted} />
+            {visibleDreams.map((d) => (
+              <DreamItem
+                key={d.id}
+                dream={d}
+                isAdmin={isAdmin}
+                onDeleted={handleDeleted}
+                onReplyCountChange={handleReplyCountChange}
+              />
             ))}
           </div>
         )}
