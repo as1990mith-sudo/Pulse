@@ -150,18 +150,16 @@ export async function shareToUsers(input: { recipientIds: string[]; target: Shar
 
   const absoluteUrl = await toAbsoluteUrl(input.target.url)
   const note = input.note?.trim()
-  const bodyLines = [input.target.title, input.target.subtitle ?? "", absoluteUrl].filter(Boolean)
-  const body = (note ? `${note}\n\n` : "") + bodyLines.join("\n")
-  const hasImage = Boolean(input.target.image)
+  // Share only the link. The recipient's chat renders it as a rich preview
+  // card (WhatsApp-style), so we deliberately omit the title, subtitle, and
+  // image attachment here. An optional note is kept above the link.
+  const body = note ? `${note}\n${absoluteUrl}` : absoluteUrl
 
   for (const recipientId of recipients) {
     const conversationId = await getOrCreateConversation(recipientId)
     await sendDirectMessage({
       conversationId,
       body,
-      attachmentUrl: hasImage ? input.target.image : null,
-      attachmentType: hasImage ? "image" : null,
-      attachmentName: hasImage ? input.target.title : null,
     })
   }
 

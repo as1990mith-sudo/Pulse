@@ -11,7 +11,8 @@ import { ImageLightbox } from "@/components/image-lightbox"
 import { VoiceRecorder } from "@/components/voice-recorder"
 import { DmCall } from "@/components/dm-call"
 import { cn } from "@/lib/utils"
-import { linkify } from "@/lib/linkify"
+import { linkify, extractFirstUrl } from "@/lib/linkify"
+import { LinkPreview } from "@/components/link-preview"
 import { compressImage, uploadMedia } from "@/lib/upload-media"
 import {
   deleteDirectMessage,
@@ -469,6 +470,11 @@ function DmBubble({
   const canDeleteMsg = actionable && m.isSelf && Date.now() - m.createdAtMs < DM_DELETE_WINDOW_MS
   const canEditMsg = actionable && m.isSelf && !!m.body && Date.now() - m.createdAtMs < DM_EDIT_WINDOW_MS
 
+  // A link in the body gets a WhatsApp-style rich preview card. When the body is
+  // nothing but the link, we hide the raw text and let the card carry it.
+  const previewUrl = m.body && !editing && !m.deleted ? extractFirstUrl(m.body) : null
+  const bodyIsOnlyLink = !!previewUrl && m.body?.trim().split(/\s+/).length === 1
+
   function startPress() {
     if (!actionable) return
     longPressRef.current = setTimeout(() => setMenuOpen(true), 450)
@@ -629,10 +635,15 @@ function DmBubble({
               <span className="truncate">{m.attachmentName ?? "Document"}</span>
             </a>
           )}
-          {m.body && !editing && (
+          {m.body && !editing && !bodyIsOnlyLink && (
             <p className={cn("whitespace-pre-wrap [overflow-wrap:anywhere]", m.attachmentUrl && "px-2 pb-1 pt-1.5")}>
               {linkify(m.body, "font-medium underline underline-offset-2 [overflow-wrap:anywhere] hover:opacity-80")}
             </p>
+          )}
+          {previewUrl && (
+            <div className={cn("w-full", !bodyIsOnlyLink && "pt-1")}>
+              <LinkPreview url={previewUrl} />
+            </div>
           )}
           {m.body && editing && (
             <form
