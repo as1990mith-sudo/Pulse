@@ -54,10 +54,16 @@ export type DreamReplyView = {
   edited: boolean
   postedAt: string
   createdAtMs: number
+  // Author display (the interpreter OR the dream's own author).
   adminName: string
   adminInitials: string
   adminColor: string
   adminImage: string | null
+  // True when this reply was written by the interpreter (admin), so the UI can
+  // badge it. False for replies from the dream's author.
+  isInterpreter: boolean
+  // True when the signed-in viewer wrote this reply (controls edit/delete).
+  isSelf: boolean
 }
 
 export type DreamFeed = {
@@ -180,8 +186,12 @@ export async function deleteDream(dreamId: number) {
   revalidatePath("/chatrooms/dreams")
 }
 
-/** All admin interpretations for a dream, oldest-first. */
+/** All replies for a dream (interpreter + the dream's author), oldest-first. */
 export async function getDreamReplies(dreamId: number): Promise<DreamReplyView[]> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  const viewerId = session?.user?.id ?? null
+  const admin = await getAdminUser()
+
   const rows = await db
     .select()
     .from(dreamReply)
@@ -189,12 +199,12 @@ export async function getDreamReplies(dreamId: number): Promise<DreamReplyView[]
     .orderBy(asc(dreamReply.createdAt))
 
   const imageMap = new Map<string, string | null>()
-  const adminIds = [...new Set(rows.map((r) => r.adminId))]
-  if (adminIds.length) {
+  const authorIds = [...new Set(rows.map((r) => r.adminId))]
+  if (authorIds.length) {
     const users = await db
       .select({ id: userTable.id, image: userTable.image })
       .from(userTable)
-      .where(inArray(userTable.id, adminIds))
+      .where(inArray(userTable.id, authorIds))
     for (const u of users) imageMap.set(u.id, u.image ?? null)
   }
 
@@ -209,26 +219,38 @@ export async function getDreamReplies(dreamId: number): Promise<DreamReplyView[]
     adminInitials: getInitials(r.adminName),
     adminColor: getAvatarColor(r.adminId),
     adminImage: imageMap.get(r.adminId) ?? null,
+    isInterpreter: !!admin && r.adminId === admin.id,
+    isSelf: !!viewerId && r.adminId === viewerId,
   }))
 }
 
-/** Admin-only: posts an interpretation that surfaces as a comment under the dream. */
+/**
+ * Posts a comment under a dream. Allowed for the interpreter (admin) AND the
+ * dream's own author — the author can discuss their dream or reply to the
+ * interpreter. Everyone else can only like/copy.
+ */
 export async function addDreamReply(input: { dreamId: number; body: string }): Promise<DreamReplyView> {
+  const user = await requireUser()
   const admin = await getAdminUser()
-  if (!admin) throw new Error("Only the interpreter can reply to dreams.")
   const text = input.body.trim()
-  if (!text) throw new Error("Your interpretation can't be empty.")
+  if (!text) throw new Error("Your message can't be empty.")
   if (text.length > 2000) throw new Error("Please keep it under 2000 characters.")
 
   const [target] = await db.select().from(dream).where(eq(dream.id, input.dreamId))
   if (!target || target.deleted) throw new Error("This dream no longer exists.")
 
+  const isInterpreter = !!admin && admin.id === user.id
+  const isOwner = target.userId === user.id
+  if (!isInterpreter && !isOwner) {
+    throw new Error("Only the interpreter or the dream's author can reply.")
+  }
+
   const [row] = await db
     .insert(dreamReply)
-    .values({ dreamId: input.dreamId, adminId: admin.id, adminName: admin.name, body: text })
+    .values({ dreamId: input.dreamId, adminId: user.id, adminName: user.name, body: text })
     .returning()
 
-  const [profile] = await db.select({ image: userTable.image }).from(userTable).where(eq(userTable.id, admin.id))
+  const [profile] = await db.select({ image: userTable.image }).from(userTable).where(eq(userTable.id, user.id))
 
   revalidatePath("/chatrooms/dreams")
   return {
@@ -238,23 +260,25 @@ export async function addDreamReply(input: { dreamId: number; body: string }): P
     edited: false,
     postedAt: "now",
     createdAtMs: row.createdAt.getTime(),
-    adminName: admin.name,
-    adminInitials: getInitials(admin.name),
-    adminColor: getAvatarColor(admin.id),
+    adminName: user.name,
+    adminInitials: getInitials(user.name),
+    adminColor: getAvatarColor(user.id),
     adminImage: profile?.image ?? null,
+    isInterpreter,
+    isSelf: true,
   }
 }
 
-/** Admin-only edit of an interpretation, within the edit window. */
+/** Author-only edit of their own reply, within the edit window. */
 export async function editDreamReply(input: { replyId: number; body: string }): Promise<string> {
-  const admin = await getAdminUser()
-  if (!admin) throw new Error("Only the interpreter can edit replies.")
+  const user = await requireUser()
   const text = input.body.trim()
-  if (!text) throw new Error("Your interpretation can't be empty.")
+  if (!text) throw new Error("Your message can't be empty.")
   if (text.length > 2000) throw new Error("Please keep it under 2000 characters.")
 
   const [row] = await db.select().from(dreamReply).where(eq(dreamReply.id, input.replyId))
-  if (!row || row.deleted) throw new Error("This interpretation no longer exists.")
+  if (!row || row.deleted) throw new Error("This reply no longer exists.")
+  if (row.adminId !== user.id) throw new Error("You can only edit your own reply.")
   if (Date.now() - row.createdAt.getTime() > EDIT_WINDOW_MS) throw new Error("This reply can no longer be edited.")
 
   await db.update(dreamReply).set({ body: text, editedAt: new Date() }).where(eq(dreamReply.id, input.replyId))
@@ -262,10 +286,14 @@ export async function editDreamReply(input: { replyId: number; body: string }): 
   return text
 }
 
-/** Admin-only soft delete of an interpretation. */
+/** Soft delete of a reply by its author, or by the admin (moderation). */
 export async function deleteDreamReply(replyId: number) {
+  const user = await requireUser()
   const admin = await getAdminUser()
-  if (!admin) throw new Error("Only the interpreter can delete replies.")
+  const [row] = await db.select().from(dreamReply).where(eq(dreamReply.id, replyId))
+  if (!row || row.deleted) return
+  const isModerator = !!admin && admin.id === user.id
+  if (row.adminId !== user.id && !isModerator) throw new Error("You can only delete your own reply.")
   await db.update(dreamReply).set({ deleted: true }).where(eq(dreamReply.id, replyId))
   revalidatePath("/chatrooms/dreams")
 }

@@ -32,8 +32,20 @@ function hostOf(url: string): string {
  * Renders a rich Open Graph preview card for a URL, with the raw link shown
  * just beneath it. Falls back to a simple link chip while loading or when the
  * target has no usable metadata, so a shared link always renders gracefully.
+ *
+ * `compact` renders a small, horizontal WhatsApp-style card (thumbnail beside
+ * the text) suited to chat bubbles. The default renders the larger stacked card
+ * used in the feed.
  */
-export function LinkPreview({ url, className }: { url: string; className?: string }) {
+export function LinkPreview({
+  url,
+  className,
+  compact = false,
+}: {
+  url: string
+  className?: string
+  compact?: boolean
+}) {
   const { data, isLoading } = useSWR(`/api/link-preview?url=${encodeURIComponent(url)}`, fetcher, {
     revalidateOnFocus: false,
     shouldRetryOnError: false,
@@ -55,6 +67,71 @@ export function LinkPreview({ url, className }: { url: string; className?: strin
     </a>
   )
 
+  // ---- Compact (chat) variant ------------------------------------------------
+  if (compact) {
+    if (isLoading) {
+      return (
+        <div className={cn("w-full max-w-[15rem]", className)}>
+          <div className="flex items-center gap-3 overflow-hidden rounded-xl border border-border/60 bg-card/40 p-2">
+            <div className="size-12 shrink-0 animate-pulse rounded-lg bg-muted" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="h-3 w-3/4 animate-pulse rounded bg-muted" />
+              <div className="h-2.5 w-1/2 animate-pulse rounded bg-muted" />
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    if (!data) {
+      return (
+        <div className={cn("w-full max-w-[15rem]", className)}>
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center gap-2.5 rounded-xl border border-border/60 bg-card/40 px-2.5 py-2 transition-colors hover:bg-card/70"
+          >
+            <ExternalLink className="size-4 shrink-0 text-muted-foreground" />
+            <span className="min-w-0">
+              <span className="block truncate text-xs font-semibold text-foreground">{host}</span>
+              <span className="block truncate text-[11px] text-muted-foreground">{url}</span>
+            </span>
+          </a>
+        </div>
+      )
+    }
+
+    return (
+      <div className={cn("w-full max-w-[15rem]", className)}>
+        <a
+          href={data.url || url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="flex items-stretch gap-2.5 overflow-hidden rounded-xl border border-border/60 bg-card/40 p-2 transition-colors hover:bg-card/70"
+        >
+          {data.image && (
+            <div className="size-12 shrink-0 overflow-hidden rounded-lg bg-muted">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={data.image || "/placeholder.svg"} alt="" className="size-full object-cover" loading="lazy" />
+            </div>
+          )}
+          <div className="flex min-w-0 flex-1 flex-col justify-center">
+            <p className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              {data.siteName || host}
+            </p>
+            {data.title && (
+              <p className="line-clamp-2 text-xs font-semibold leading-snug text-foreground">{data.title}</p>
+            )}
+          </div>
+        </a>
+      </div>
+    )
+  }
+
+  // ---- Full (feed) variant ---------------------------------------------------
   if (isLoading) {
     return (
       <div className={cn("w-full", className)}>
