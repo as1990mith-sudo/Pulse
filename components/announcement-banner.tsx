@@ -297,7 +297,7 @@ function AnnouncementCard({ announcement: a, isAdmin = false }: { announcement: 
         <Button
           size="sm"
           variant="ghost"
-          className="shrink-0 gap-2 text-base font-semibold text-foreground hover:bg-transparent"
+          className="h-auto shrink-0 gap-2 p-0 text-base font-semibold text-foreground hover:bg-transparent"
           disabled={isPending}
           onClick={() =>
             startTransition(async () => {
