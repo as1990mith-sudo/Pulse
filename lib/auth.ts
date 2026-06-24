@@ -11,6 +11,20 @@ export const auth = betterAuth({
       : process.env.VERCEL_URL
         ? `https://${process.env.VERCEL_URL}`
         : process.env.V0_RUNTIME_URL),
+  // Google sign-in / sign-up. Only enabled when the OAuth credentials are
+  // present so the app keeps working before they're configured. Better Auth
+  // auto-creates an account on first Google sign-in, so the same flow handles
+  // both new sign-ups and returning users.
+  ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+    ? {
+        socialProviders: {
+          google: {
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+          },
+        },
+      }
+    : {}),
   emailAndPassword: {
     enabled: true,
     autoSignIn: true,

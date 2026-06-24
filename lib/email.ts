@@ -25,7 +25,11 @@ export async function sendPasswordResetEmail({
 
   const greeting = name ? `Hi ${name},` : "Hi,"
 
-  await resend.emails.send({
+  // Resend's SDK does NOT throw on API errors — it returns `{ data, error }`.
+  // We must inspect `error` and throw, otherwise a rejected send (e.g. an
+  // unverified sender domain, or test-mode recipient restrictions) fails
+  // silently and Better Auth reports success even though nothing was delivered.
+  const { data, error } = await resend.emails.send({
     from: FROM,
     to,
     subject: "Reset your Frequency password",
@@ -60,4 +64,18 @@ export async function sendPasswordResetEmail({
       </div>
     `,
   })
+
+  if (error) {
+    console.log("[v0] Resend failed to send password reset email:", error)
+    // Common cause: the EMAIL_FROM domain isn't verified in Resend, or (when
+    // using onboarding@resend.dev) Resend test mode only allows sending to your
+    // own account email. Verify a domain at resend.com/domains and set EMAIL_FROM.
+    throw new Error(
+      typeof error === "object" && error && "message" in error
+        ? String((error as { message: unknown }).message)
+        : "Failed to send password reset email.",
+    )
+  }
+
+  console.log("[v0] Password reset email sent:", data?.id)
 }
