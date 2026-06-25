@@ -43,9 +43,15 @@ import {
   respondToCallRequest,
   removeFromStage,
   setLiveTheme,
+  makeCoHost,
+  setCoHostPermission,
+  removeCoHost,
+  resolveMusicControl,
   type CallRequestView,
+  type CoHostPermissions,
   type LiveStreamView,
 } from "@/app/actions/live"
+import { ManageCoHostMenu, MusicApprovalPrompt } from "@/components/live/cohost-menu"
 import { useLiveAudio } from "@/lib/use-live-audio"
 import { uploadMedia } from "@/lib/upload-media"
 import { LiveChat } from "@/components/live-chat"
@@ -80,7 +86,7 @@ function formatDuration(s: number) {
 }
 
 type EndedSession = { title: string; duration: string; audioBlob: Blob | null; cover: string | null } | null
-type Track = { url: string; name: string }
+export type Track = { url: string; name: string }
 
 export function StudioConsole({
   currentUser,
@@ -256,6 +262,61 @@ export function StudioConsole({
   const pending = callState?.pendingRequests ?? []
   const guests = callState?.guests ?? []
   const locked = callState?.locked ?? false
+  // Co-host state from the poll.
+  const coHostIds = new Set((callState?.coHosts ?? []).map((c) => c.userId))
+  // When a co-host has taken over the music, the host's own music controls are
+  // disabled and handed to them.
+  const musicControllerId = callState?.musicControllerId ?? null
+  const musicHandedOff = Boolean(musicControllerId)
+  const musicApprovalRequest = callState?.musicApprovalRequest ?? null
+
+  // When a co-host takes over track control, the host's own music yields: stop
+  // any track the host had mixed in so the two never fight over the bus. When
+  // control returns (permission revoked), the host's controls re-enable.
+  useEffect(() => {
+    if (musicHandedOff && musicActiveIndex !== null) {
+      setMusicActiveIndex(null)
+      setMusicPlayingState(false)
+      void stopMusic()
+    }
+  }, [musicHandedOff, musicActiveIndex, stopMusic])
+
+  // The speaker whose context menu (Make / Manage Co-Host) is open.
+  const [menuSpeaker, setMenuSpeaker] = useState<CallRequestView | null>(null)
+  // Keep the open menu's data fresh as the poll updates permissions.
+  const liveMenuSpeaker = menuSpeaker
+    ? (guests.find((g) => g.userId === menuSpeaker.userId) ?? menuSpeaker)
+    : null
+
+  function openSpeakerMenu(identity: string) {
+    const g = guests.find((x) => x.userId === identity)
+    if (g) setMenuSpeaker(g)
+  }
+
+  async function handleMakeCoHost(userId: string) {
+    if (!roomName) return
+    const res = await makeCoHost({ roomName, userId })
+    if (!res.ok && res.error) setError(res.error)
+    refreshCalls()
+  }
+  async function handleTogglePermission(userId: string, permission: keyof CoHostPermissions, enabled: boolean) {
+    if (!roomName) return
+    const res = await setCoHostPermission({ roomName, userId, permission, enabled })
+    if (!res.ok && res.error) setError(res.error)
+    refreshCalls()
+  }
+  async function handleRemoveCoHost(userId: string) {
+    if (!roomName) return
+    const res = await removeCoHost({ roomName, userId })
+    if (!res.ok && res.error) setError(res.error)
+    setMenuSpeaker(null)
+    refreshCalls()
+  }
+  async function handleResolveMusic(userId: string, approve: boolean) {
+    if (!roomName) return
+    await resolveMusicControl({ roomName, userId, approve })
+    refreshCalls()
+  }
 
   useEffect(() => {
     if (!live) return
@@ -617,7 +678,9 @@ export function StudioConsole({
             activeSpeakers={state.activeSpeakers}
             hostQuality={state.connectionQuality}
             isHost
+            coHostIds={coHostIds}
             onRemoveGuest={dropGuest}
+            onTapSpeaker={openSpeakerMenu}
           />
           {live && roomName && <ReactionLayer roomName={roomName} />}
         </div>
@@ -634,9 +697,15 @@ export function StudioConsole({
             />
             <DockButton
               icon={<Music className="size-5" />}
-              label={musicPlaying ? "Background music (playing)" : "Background music"}
+              label={
+                musicHandedOff
+                  ? "A co-host is controlling the music"
+                  : musicPlaying
+                    ? "Background music (playing)"
+                    : "Background music"
+              }
               active={panel === "music" || musicPlaying}
-              disabled={!live}
+              disabled={!live || musicHandedOff}
               onClick={() => setPanel((p) => (p === "music" ? null : "music"))}
             />
             <DockButton
@@ -716,6 +785,28 @@ export function StudioConsole({
         />
       )}
 
+      {/* Tap-a-speaker context menu: Make Co-Host / Manage Co-Host (host only). */}
+      {liveMenuSpeaker && (
+        <ManageCoHostMenu
+          speaker={liveMenuSpeaker}
+          onMakeCoHost={() => void handleMakeCoHost(liveMenuSpeaker.userId)}
+          onTogglePermission={(permission, enabled) =>
+            void handleTogglePermission(liveMenuSpeaker.userId, permission, enabled)
+          }
+          onRemoveCoHost={() => void handleRemoveCoHost(liveMenuSpeaker.userId)}
+          onClose={() => setMenuSpeaker(null)}
+        />
+      )}
+
+      {/* A track-controlling co-host's first music request awaits host approval. */}
+      {musicApprovalRequest && (
+        <MusicApprovalPrompt
+          request={musicApprovalRequest}
+          onApprove={() => void handleResolveMusic(musicApprovalRequest.userId, true)}
+          onDecline={() => void handleResolveMusic(musicApprovalRequest.userId, false)}
+        />
+      )}
+
       {endedSession && (
         <PublishOverlay
           session={endedSession}
@@ -780,7 +871,7 @@ function DockButton({
 }
 
 /** Bottom sheet shell shared by all studio panels. */
-function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
@@ -882,7 +973,7 @@ function ThemePanel({
 }
 
 /** People panel: pending call-in requests, current guests, listener invites. */
-function PeoplePanel({
+export function PeoplePanel({
   roomName,
   pending,
   guests,
@@ -898,7 +989,8 @@ function PeoplePanel({
   viewers: number
   onAccept: (id: number) => void
   onDecline: (id: number) => void
-  onRemove: (identity: string) => void
+  // Omitted for co-hosts, who can't remove speakers (host-only server action).
+  onRemove?: (identity: string) => void
   onClose: () => void
 }) {
   return (
@@ -954,9 +1046,11 @@ function PeoplePanel({
                     </span>
                     <span className="truncate text-sm">{g.userName}</span>
                   </div>
-                  <Button size="sm" variant="ghost" className="h-8 text-destructive" onClick={() => onRemove(g.userId)} disabled={!roomName}>
-                    Remove
-                  </Button>
+                  {onRemove && (
+                    <Button size="sm" variant="ghost" className="h-8 text-destructive" onClick={() => onRemove(g.userId)} disabled={!roomName}>
+                      Remove
+                    </Button>
+                  )}
                 </li>
               ))}
             </ul>
@@ -976,7 +1070,7 @@ const MAX_MUSIC_TRACKS = 5
  * console (so it survives closing this panel / minimising the studio); this
  * component is fully controlled and only owns the transient upload spinner.
  */
-function MusicPanel({
+export function MusicPanel({
   live,
   position,
   duration,
