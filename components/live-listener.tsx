@@ -23,9 +23,10 @@ import { ShareSheet } from "@/components/share-sheet"
 import { BackExitMenu } from "@/components/live-back-menu"
 import { LiveChat } from "@/components/live-chat"
 import { CoverArt } from "@/components/cover-art"
+import { CoHostConsole } from "@/components/cohost-console"
 import type { CurrentUser } from "@/lib/session"
 import type { ShareTarget } from "@/lib/share-types"
-import type { CallRequestView, LiveStreamView } from "@/app/actions/live"
+import type { CallRequestView, CoHostPermissions, LiveRole, LiveStreamView } from "@/app/actions/live"
 import {
   getCallState,
   joinBroadcast,
@@ -112,7 +113,10 @@ export function LiveListener({
   onMeta?: (m: { title: string; cover: string | null; live: boolean; subtitle?: string }) => void
 }) {
   const router = useRouter()
-  const { state, speakers, connect, disconnect, toggleMic, setListenerMuted, startAudioPlayback } = useLiveAudio()
+  // Capture the full audio hook so we can hand the whole connection to the
+  // co-host console (single LiveKit room — never a second connection).
+  const audio = useLiveAudio()
+  const { state, speakers, connect, disconnect, toggleMic, setListenerMuted, startAudioPlayback } = audio
   const [muted, setMuted] = useState(false)
   // The audience/crowd view is hidden by default (frees space for the stage +
   // chat) and revealed by tapping the audience pill in the header.
@@ -183,6 +187,21 @@ export function LiveListener({
   const [locked, setLocked] = useState<boolean>(stream.locked ?? false)
   const prevStatus = useRef<CallRequestView["status"] | null>(null)
 
+  // ── Co-host state (polled): role + permissions + music control flags, plus
+  // the host-style People data a co-host needs (pending requests, guests). ──
+  const [myRole, setMyRole] = useState<LiveRole>("guest")
+  const [myPermissions, setMyPermissions] = useState<CoHostPermissions>({
+    acceptRequests: false,
+    controlTracks: false,
+    endSession: false,
+  })
+  const [myMusicApproved, setMyMusicApproved] = useState(false)
+  const [myMusicRequestPending, setMyMusicRequestPending] = useState(false)
+  const [iControlMusic, setIControlMusic] = useState(false)
+  const [pendingRequests, setPendingRequests] = useState<CallRequestView[]>([])
+  const [guests, setGuests] = useState<CallRequestView[]>([])
+  const [coHostIds, setCoHostIds] = useState<Set<string>>(new Set())
+
   async function join() {
     setError(null)
     setJoining(true)
@@ -248,6 +267,15 @@ export function LiveListener({
       setMyInvite(s.myInvite)
       setLocked(s.locked)
       setTheme(s.theme)
+      // Co-host role + permissions, applied ~instantly on the next poll.
+      setMyRole(s.myRole)
+      setMyPermissions(s.myPermissions)
+      setMyMusicApproved(s.myMusicApproved)
+      setMyMusicRequestPending(s.myMusicRequestPending)
+      setIControlMusic(s.musicControllerId === currentUserId)
+      setPendingRequests(s.pendingRequests)
+      setGuests(s.guests)
+      setCoHostIds(new Set(s.coHosts.map((c) => c.userId)))
       // Flash a "declined" toast when status transitions to declined.
       if (s.myStatus === "declined" && prevStatus.current && prevStatus.current !== "declined") {
         setDeclinedFlash(true)
@@ -326,6 +354,55 @@ export function LiveListener({
   const isOnStage = state.canPublish && state.connected
   const colorById: Record<string, string> = {}
   for (const s of speakers) colorById[s.identity] = getAvatarColor(s.identity)
+
+  // Manually re-poll the call state (used by the co-host console after it
+  // accepts a request, requests music, etc., so the UI updates immediately).
+  async function refreshCallState() {
+    try {
+      const s = await getCallState({ roomName: stream.roomName })
+      setMyRole(s.myRole)
+      setMyPermissions(s.myPermissions)
+      setMyMusicApproved(s.myMusicApproved)
+      setMyMusicRequestPending(s.myMusicRequestPending)
+      setIControlMusic(s.musicControllerId === currentUserId)
+      setPendingRequests(s.pendingRequests)
+      setGuests(s.guests)
+      setCoHostIds(new Set(s.coHosts.map((c) => c.userId)))
+    } catch {
+      // poll will catch up on its next tick
+    }
+  }
+
+  // Promoted to co-host: render the dedicated host-like console, reusing this
+  // component's single LiveKit connection (passed through `audio`).
+  if (myRole === "cohost" && state.connected) {
+    return (
+      <CoHostConsole
+        stream={stream}
+        currentUser={currentUser}
+        currentUserId={currentUserId}
+        audio={audio}
+        elapsed={elapsed}
+        permissions={myPermissions}
+        musicApproved={myMusicApproved}
+        musicRequestPending={myMusicRequestPending}
+        iControlMusic={iControlMusic}
+        pending={pendingRequests}
+        guests={guests}
+        coHostIds={coHostIds}
+        viewers={audience}
+        locked={locked}
+        theme={theme}
+        onMinimize={onMinimize}
+        onExit={() => {
+          void disconnect()
+          if (onExit) onExit()
+          else router.push("/live")
+        }}
+        refreshCalls={() => void refreshCallState()}
+      />
+    )
+  }
 
   if (hostEnded) {
     return (

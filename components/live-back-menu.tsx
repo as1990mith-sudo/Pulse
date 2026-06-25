@@ -2,22 +2,28 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { ArrowLeft, LogOut, Minimize2 } from "lucide-react"
+import { ArrowLeft, LogOut, Minimize2, Radio } from "lucide-react"
 
 /**
  * Back control for a live room. While the session is active it opens a small
  * menu offering the primary exit action (End / Leave) plus Minimise. When the
  * session is no longer active it acts as a plain back button that exits.
+ *
+ * `onEndSession` is optional and only passed for a co-host who holds the End
+ * Session permission — it adds a third "End Session" item that ends the whole
+ * broadcast for everyone.
  */
 export function BackExitMenu({
   exitLabel,
   onExit,
   onMinimize,
+  onEndSession,
   showMenu,
 }: {
   exitLabel: string
   onExit: () => void
   onMinimize: () => void
+  onEndSession?: () => void
   showMenu: boolean
 }) {
   const [open, setOpen] = useState(false)
@@ -95,10 +101,23 @@ export function BackExitMenu({
                 setOpen(false)
                 onExit()
               }}
-              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold text-live transition-colors hover:bg-live/15"
+              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/10"
             >
               <LogOut className="size-4" strokeWidth={2.5} /> {exitLabel}
             </button>
+            {onEndSession && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false)
+                  onEndSession()
+                }}
+                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold text-live transition-colors hover:bg-live/15"
+              >
+                <Radio className="size-4" strokeWidth={2.5} /> End Session
+              </button>
+            )}
           </div>
         </>,
         document.body,
