@@ -1,6 +1,6 @@
 "use server"
 
-import { and, desc, eq } from "drizzle-orm"
+import { and, desc, eq, inArray } from "drizzle-orm"
 import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
@@ -122,5 +122,20 @@ export async function markNotificationsRead(): Promise<void> {
     .update(notification)
     .set({ read: true })
     .where(and(eq(notification.userId, session.user.id), eq(notification.read, false)))
+  revalidatePath("/")
+}
+
+/**
+ * Permanently deletes one or more of the current user's notifications. Used by
+ * swipe-to-delete and the press-and-hold multi-select "Clear" action. Scoped by
+ * userId so a user can only ever delete their own rows.
+ */
+export async function deleteNotifications(ids: number[]): Promise<void> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) return
+  if (ids.length === 0) return
+  await db
+    .delete(notification)
+    .where(and(eq(notification.userId, session.user.id), inArray(notification.id, ids)))
   revalidatePath("/")
 }
