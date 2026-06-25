@@ -1,12 +1,14 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Radio } from "lucide-react"
+import { Camera, Radio } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { ImageCropper } from "@/components/image-cropper"
+import { uploadMedia } from "@/lib/upload-media"
 
 export function AuthForm({ mode, googleEnabled = false }: { mode: "sign-in" | "sign-up"; googleEnabled?: boolean }) {
   const router = useRouter()
@@ -19,25 +21,61 @@ export function AuthForm({ mode, googleEnabled = false }: { mode: "sign-in" | "s
   // Sign-in only: toggles the inline "forgot password" view + its success note.
   const [forgot, setForgot] = useState(false)
   const [resetSent, setResetSent] = useState(false)
+  // Sign-up only: a profile photo is mandatory. We keep the cropped image as a
+  // local blob (with a preview URL) and only upload it AFTER the account is
+  // created, because the blob-upload route requires an authenticated session.
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+  const [avatarBlob, setAvatarBlob] = useState<Blob | null>(null)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [cropSrc, setCropSrc] = useState<string | null>(null)
 
   const isSignUp = mode === "sign-up"
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+
+    // A profile picture is required to sign up.
+    if (isSignUp && !avatarBlob) {
+      setError("Please add a profile picture to continue.")
+      return
+    }
+
     setLoading(true)
 
-    const { error } = isSignUp
-      ? await authClient.signUp.email({ email, password, name })
-      : await authClient.signIn.email({ email, password })
+    if (!isSignUp) {
+      const { error } = await authClient.signIn.email({ email, password })
+      setLoading(false)
+      if (error) {
+        setError(error.message ?? "Something went wrong. Please try again.")
+        return
+      }
+      router.push("/feed")
+      router.refresh()
+      return
+    }
 
-    setLoading(false)
-
+    // Sign-up: create the account first (autoSignIn establishes a session),
+    // then upload the avatar (now authenticated) and persist it on the user.
+    const { error } = await authClient.signUp.email({ email, password, name })
     if (error) {
+      setLoading(false)
       setError(error.message ?? "Something went wrong. Please try again.")
       return
     }
 
+    try {
+      const file = new File([avatarBlob!], "avatar.jpg", { type: "image/jpeg" })
+      const data = await uploadMedia(file, "avatars")
+      const result = await authClient.updateUser({ image: data.url })
+      if (result.error) throw new Error(result.error.message || "Could not save your photo")
+    } catch (err) {
+      // The account exists; surface the issue but still let them in — they can
+      // re-upload from their profile.
+      setError(err instanceof Error ? err.message : "Your photo could not be saved.")
+    }
+
+    setLoading(false)
     router.push("/feed")
     router.refresh()
   }
@@ -77,6 +115,15 @@ export function AuthForm({ mode, googleEnabled = false }: { mode: "sign-in" | "s
       setError(error.message ?? "Couldn't sign in with Google. Please try again.")
     }
     // On success the browser navigates away to Google — no further work here.
+  }
+
+  function handleAvatarCropped(blob: Blob) {
+    setCropSrc(null)
+    setError(null)
+    // Revoke any previous preview URL before replacing it.
+    if (avatarPreview) URL.revokeObjectURL(avatarPreview)
+    setAvatarBlob(blob)
+    setAvatarPreview(URL.createObjectURL(blob))
   }
 
   function backToSignIn() {
@@ -180,6 +227,40 @@ export function AuthForm({ mode, googleEnabled = false }: { mode: "sign-in" | "s
           )}
           <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border border-border/60 bg-card p-6">
             {isSignUp && (
+              <div className="flex flex-col items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  aria-label="Add a profile picture"
+                  className="relative flex size-20 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-muted-foreground transition-colors hover:bg-muted/70"
+                >
+                  {avatarPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={avatarPreview || "/placeholder.svg"} alt="Your profile picture" className="size-full object-cover" />
+                  ) : (
+                    <Camera className="size-6" />
+                  )}
+                  <span className="absolute -bottom-1 -right-1 flex size-7 items-center justify-center rounded-full border-2 border-card bg-primary text-primary-foreground">
+                    <Camera className="size-3.5" />
+                  </span>
+                </button>
+                <p className="text-xs text-muted-foreground">
+                  {avatarPreview ? "Tap to change your photo" : "Add a profile picture (required)"}
+                </p>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) setCropSrc(URL.createObjectURL(file))
+                    e.target.value = ""
+                  }}
+                />
+              </div>
+            )}
+            {isSignUp && (
               <div className="space-y-2">
                 <label htmlFor="name" className="text-sm font-medium">
                   Display name
@@ -261,6 +342,17 @@ export function AuthForm({ mode, googleEnabled = false }: { mode: "sign-in" | "s
           )}
         </div>
       </div>
+
+      {cropSrc && (
+        <ImageCropper
+          src={cropSrc}
+          aspect={1}
+          round
+          title="Adjust profile picture"
+          onCancel={() => setCropSrc(null)}
+          onCropped={handleAvatarCropped}
+        />
+      )}
     </main>
   )
 }
