@@ -16,12 +16,13 @@ import {
 import { SKINS, useSkin } from "@/components/skin-provider"
 import { cn } from "@/lib/utils"
 
+// Display order: Mid (default for new users), then Charcoal, Dark, Light, Grass.
 const themes = [
   { value: "mid", label: "Mid", icon: Contrast },
-  { value: "grass", label: "Grass", icon: Leaf },
-  { value: "dark", label: "Dark", icon: Moon },
   { value: "charcoal", label: "Charcoal", icon: MoonStar },
+  { value: "dark", label: "Dark", icon: Moon },
   { value: "light", label: "Light", icon: Sun },
+  { value: "grass", label: "Grass", icon: Leaf },
 ] as const
 
 // Preview swatch per skin — each shows its accent ring gradient.
@@ -39,7 +40,7 @@ export function ThemeSwitcher() {
 
   useEffect(() => setMounted(true), [])
 
-  const active = themes.find((t) => t.value === theme) ?? themes[1]
+  const active = themes.find((t) => t.value === theme) ?? themes[0]
   const ActiveIcon = active.icon
 
   return (

@@ -1,7 +1,8 @@
 import Link from "next/link"
-import { ArrowLeft, Clock } from "lucide-react"
+import { Clock } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { SiteHeader } from "@/components/site-header"
+import { BackButton } from "@/components/back-button"
 import { EpisodePlayer } from "@/components/episode-player"
 import { EpisodeInteractions } from "@/components/episode-interactions"
 import { getEpisodeComments } from "@/app/actions/episodes"
@@ -20,12 +21,7 @@ export async function EpisodePage({ show }: { show: Show }) {
     <div className="min-h-screen">
       <SiteHeader />
       <main className="mx-auto w-full max-w-3xl py-6">
-        <Link
-          href="/live"
-          className="mb-5 inline-flex items-center gap-1.5 px-4 text-sm text-muted-foreground transition-colors hover:text-foreground sm:px-6"
-        >
-          <ArrowLeft className="size-4" /> Back to all shows
-        </Link>
+        <BackButton fallbackHref="/live" className="mb-5 px-4 sm:px-6" />
 
         {/* The player is rendered edge-to-edge (no horizontal padding) so the
             video bleeds from one screen edge to the other. */}
@@ -45,7 +41,6 @@ export async function EpisodePage({ show }: { show: Show }) {
               {show.publishedDate && <span className="text-sm text-muted-foreground">· {show.publishedDate}</span>}
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-balance">{show.title}</h1>
-            {show.tagline && <p className="text-pretty text-muted-foreground">{show.tagline}</p>}
           </div>
 
           <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card p-4">

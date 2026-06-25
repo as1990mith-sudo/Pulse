@@ -548,7 +548,9 @@ export type CallRequestView = {
   initials: string
   color: string
   kind: "request" | "invite"
-  status: "pending" | "accepted" | "declined" | "ended"
+  // "left" = a co-host who stepped off the call but is still granted co-host
+  // status (can call back in); distinct from "ended" (gone from the room).
+  status: "pending" | "accepted" | "declined" | "ended" | "left"
   // "guest" = ordinary speaker on stage; "cohost" = promoted by the main host.
   role: "guest" | "cohost"
   // Co-host permissions (meaningful only while role === "cohost").
@@ -584,7 +586,8 @@ function mapRequest(r: typeof liveCallRequest.$inferSelect): CallRequestView {
 }
 
 /** True if the user may accept call requests: the main host, or a co-host
- *  who has been granted the "Accept Call Requests" permission. */
+ *  who has been granted the "Accept Call Requests" permission. A co-host keeps
+ *  this power even while off the call (status "left"). */
 async function canManageRequests(roomName: string, userId: string): Promise<boolean> {
   if ((await getHostId(roomName)) === userId) return true
   const [row] = await db
@@ -592,7 +595,25 @@ async function canManageRequests(roomName: string, userId: string): Promise<bool
     .from(liveCallRequest)
     .where(and(eq(liveCallRequest.roomName, roomName), eq(liveCallRequest.userId, userId)))
     .orderBy(desc(liveCallRequest.updatedAt))
-  return row?.status === "accepted" && row.role === "cohost" && !!row.can
+  return (row?.status === "accepted" || row?.status === "left") && row.role === "cohost" && !!row.can
+}
+
+/** Latest co-host-granted row for a user, regardless of status. The grant
+ *  lives on the row, so it survives stepping off the call (status "left") or
+ *  leaving the room (status "ended") — letting the host still manage them. */
+async function getCoHostRow(roomName: string, userId: string) {
+  const [row] = await db
+    .select()
+    .from(liveCallRequest)
+    .where(
+      and(
+        eq(liveCallRequest.roomName, roomName),
+        eq(liveCallRequest.userId, userId),
+        eq(liveCallRequest.role, "cohost"),
+      ),
+    )
+    .orderBy(desc(liveCallRequest.updatedAt))
+  return row ?? null
 }
 
 /** Count of guests currently allowed live (accepted requests/invites). */
@@ -708,6 +729,53 @@ export async function removeFromStage(input: { roomName: string; userId: string 
 }
 
 /**
+ * A participant steps off the call but stays in the room. For a co-host this
+ * preserves their grant (status -> "left") so they can call back in and keep
+ * their permissions; for a plain guest it behaves like leaving the stage.
+ * Self-only.
+ */
+export async function stepOffStage(input: { roomName: string }): Promise<{ ok: boolean }> {
+  const user = await requireUser()
+  await setParticipantPublish({ roomName: input.roomName, identity: user.id, canPublish: false })
+  const [row] = await db
+    .select()
+    .from(liveCallRequest)
+    .where(and(eq(liveCallRequest.roomName, input.roomName), eq(liveCallRequest.userId, user.id)))
+    .orderBy(desc(liveCallRequest.updatedAt))
+  if (!row) return { ok: true }
+  // Co-hosts keep their grant (and thus reappear in the host's Co-hosts tab as
+  // "Off call"); ordinary guests are simply removed from the stage.
+  const nextStatus = row.role === "cohost" ? "left" : "ended"
+  await db
+    .update(liveCallRequest)
+    .set({ status: nextStatus, updatedAt: new Date() })
+    .where(eq(liveCallRequest.id, row.id))
+  return { ok: true }
+}
+
+/**
+ * A co-host who stepped off / dropped the call rejoins the stage. No host
+ * approval needed (they are already trusted), but the guest cap still applies.
+ * Self-only.
+ */
+export async function callIn(input: { roomName: string }): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser()
+  const row = await getCoHostRow(input.roomName, user.id)
+  if (!row) return { ok: false, error: "You're not a co-host of this session." }
+  if (row.status !== "accepted") {
+    if ((await acceptedGuestCount(input.roomName)) >= MAX_GUESTS) {
+      return { ok: false, error: `All ${MAX_GUESTS} stage spots are full.` }
+    }
+  }
+  await setParticipantPublish({ roomName: input.roomName, identity: user.id, canPublish: true })
+  await db
+    .update(liveCallRequest)
+    .set({ status: "accepted", updatedAt: new Date() })
+    .where(eq(liveCallRequest.id, row.id))
+  return { ok: true }
+}
+
+/**
  * Polled by host (sees pending requests + accepted guests) and by listeners
  * (sees their own invite + whether they were accepted).
  */
@@ -730,20 +798,28 @@ export async function getCallState(input: { roomName: string }): Promise<{
   myPermissions: CoHostPermissions
   myMusicApproved: boolean
   myMusicRequestPending: boolean
-  // Co-hosts currently on stage (host view: drives the Manage Co-Host menu).
+  // True when the caller is actively publishing on the call (status "accepted").
+  // A co-host who stepped off keeps myRole "cohost" but myOnCall false.
+  myOnCall: boolean
+  // Every user granted co-host status, regardless of whether they're currently
+  // on the call — drives the host's Co-hosts management tab. Each entry's
+  // `status` is "accepted" (On stage) or otherwise (Off call).
   coHosts: CallRequestView[]
   // The single co-host (if any) who currently controls music — when set, the
   // host's own music controls are disabled and handed to that co-host.
   musicControllerId: string | null
   // Pending "may I control music?" request from a co-host (host view: approve/decline).
   musicApprovalRequest: CallRequestView | null
+  // A co-host's pending "end live session" request awaiting the host's answer.
+  // Includes who asked and how many ms remain before the live auto-ends.
+  endRequest: { byId: string; byName: string; remainingMs: number } | null
 }> {
   // Auto-end abandoned streams first so listeners of a vanished host close out.
   await endStaleStreams()
   const session = await auth.api.getSession({ headers: await headers() })
   const me = session?.user?.id ?? null
 
-  const [stream] = await db
+  let [stream] = await db
     .select({
       chatBgUrl: liveStream.chatBgUrl,
       chatBgEffect: liveStream.chatBgEffect,
@@ -751,9 +827,39 @@ export async function getCallState(input: { roomName: string }): Promise<{
       locked: liveStream.locked,
       pinnedChatId: liveStream.pinnedChatId,
       theme: liveStream.theme,
+      endRequestAt: liveStream.endRequestAt,
+      endRequestById: liveStream.endRequestById,
+      endRequestByName: liveStream.endRequestByName,
     })
     .from(liveStream)
     .where(eq(liveStream.roomName, input.roomName))
+
+  // A co-host's "end live session" request that the host never answered. Once
+  // the 30s window elapses, the live ends automatically on the next poll.
+  let endRequest: { byId: string; byName: string; remainingMs: number } | null = null
+  if (stream && stream.status === "live" && stream.endRequestAt) {
+    const remainingMs = END_REQUEST_WINDOW_MS - (Date.now() - stream.endRequestAt.getTime())
+    if (remainingMs <= 0) {
+      await db
+        .update(liveStream)
+        .set({
+          status: "ended",
+          endedAt: new Date(),
+          endRequestAt: null,
+          endRequestById: null,
+          endRequestByName: null,
+        })
+        .where(and(eq(liveStream.roomName, input.roomName), eq(liveStream.status, "live")))
+      revalidatePath("/live")
+      stream = { ...stream, status: "ended" }
+    } else if (stream.endRequestById) {
+      endRequest = {
+        byId: stream.endRequestById,
+        byName: stream.endRequestByName ?? "A co-host",
+        remainingMs,
+      }
+    }
+  }
 
   const rows = await db
     .select()
@@ -764,22 +870,39 @@ export async function getCallState(input: { roomName: string }): Promise<{
   const pendingRequests = rows.filter((r) => r.kind === "request" && r.status === "pending").map(mapRequest)
   const acceptedRows = rows.filter((r) => r.status === "accepted")
   const guests = acceptedRows.map(mapRequest)
-  const coHosts = acceptedRows.filter((r) => r.role === "cohost").map(mapRequest)
+  // All granted co-hosts, deduped to the latest row per user, regardless of
+  // status — so off-call co-hosts still appear in the host's management tab.
+  const coHostByUser = new Map<string, typeof liveCallRequest.$inferSelect>()
+  for (const r of rows) {
+    if (r.role !== "cohost") continue
+    const prev = coHostByUser.get(r.userId)
+    if (!prev || r.updatedAt.getTime() > prev.updatedAt.getTime()) coHostByUser.set(r.userId, r)
+  }
+  // Sort On-stage (accepted) first, then by most recent. The host can retract
+  // any of them whether or not they're still in the session.
+  const coHosts = [...coHostByUser.values()]
+    .sort((a, b) => {
+      const aOn = a.status === "accepted" ? 0 : 1
+      const bOn = b.status === "accepted" ? 0 : 1
+      return aOn - bOn || b.updatedAt.getTime() - a.updatedAt.getTime()
+    })
+    .map(mapRequest)
   const myRows = me ? rows.filter((r) => r.userId === me) : []
   const myInvite = myRows.find((r) => r.kind === "invite" && r.status === "pending")
   const mine = [...myRows].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0]
 
   const hostId = stream ? await getHostId(input.roomName) : null
-  // Resolve the caller's role: main host > accepted co-host > guest.
-  const myAccepted = mine && mine.status === "accepted" ? mine : null
-  const myRole: LiveRole =
-    me && hostId === me ? "host" : myAccepted?.role === "cohost" ? "cohost" : "guest"
+  // A co-host keeps their role + permissions whether on the call ("accepted")
+  // or stepped off ("left"); only the host outranks them.
+  const myCoHost = mine && mine.role === "cohost" && (mine.status === "accepted" || mine.status === "left") ? mine : null
+  const myRole: LiveRole = me && hostId === me ? "host" : myCoHost ? "cohost" : "guest"
+  const myOnCall = mine?.status === "accepted"
   const myPermissions: CoHostPermissions =
     myRole === "cohost"
       ? {
-          acceptRequests: myAccepted?.canAcceptRequests ?? false,
-          controlTracks: myAccepted?.canControlTracks ?? false,
-          endSession: myAccepted?.canEndSession ?? false,
+          acceptRequests: myCoHost?.canAcceptRequests ?? false,
+          controlTracks: myCoHost?.canControlTracks ?? false,
+          endSession: myCoHost?.canEndSession ?? false,
         }
       : { acceptRequests: false, controlTracks: false, endSession: false }
 
@@ -807,11 +930,13 @@ export async function getCallState(input: { roomName: string }): Promise<{
     ended: !stream || stream.status !== "live",
     myRole,
     myPermissions,
-    myMusicApproved: myAccepted?.musicApproved ?? false,
-    myMusicRequestPending: myAccepted?.musicRequestPending ?? false,
+    myMusicApproved: myCoHost?.musicApproved ?? false,
+    myMusicRequestPending: myCoHost?.musicRequestPending ?? false,
+    myOnCall,
     coHosts,
     musicControllerId: controller?.userId ?? null,
     musicApprovalRequest: pendingMusic ? mapRequest(pendingMusic) : null,
+    endRequest,
   }
 }
 
@@ -871,8 +996,10 @@ export async function setCoHostPermission(input: {
   const user = await requireUser()
   if ((await getHostId(input.roomName)) !== user.id)
     return { ok: false, error: "Only the host can manage co-hosts." }
-  const row = await getAcceptedRow(input.roomName, input.userId)
-  if (!row || row.role !== "cohost") return { ok: false, error: "That user is not a co-host." }
+  // Use the co-host grant row (any status) so permissions are editable even
+  // while the co-host is off the call.
+  const row = await getCoHostRow(input.roomName, input.userId)
+  if (!row) return { ok: false, error: "That user is not a co-host." }
 
   const patch: Partial<typeof liveCallRequest.$inferInsert> = { updatedAt: new Date() }
   if (input.permission === "acceptRequests") patch.canAcceptRequests = input.enabled
@@ -896,8 +1023,10 @@ export async function setCoHostPermission(input: {
 export async function removeCoHost(input: { roomName: string; userId: string }): Promise<{ ok: boolean; error?: string }> {
   const user = await requireUser()
   if ((await getHostId(input.roomName)) !== user.id) return { ok: false, error: "Only the host can manage co-hosts." }
-  const row = await getAcceptedRow(input.roomName, input.userId)
-  if (!row) return { ok: false, error: "That user is no longer on stage." }
+  // Retract via the grant row (any status), so the host can demote a co-host
+  // whether or not they're still in the session.
+  const row = await getCoHostRow(input.roomName, input.userId)
+  if (!row) return { ok: false, error: "That user is not a co-host." }
   await db
     .update(liveCallRequest)
     .set({
@@ -947,21 +1076,60 @@ export async function resolveMusicControl(input: {
   return { ok: true }
 }
 
+// How long the host has to answer a co-host's "end live session" request
+// before the live ends automatically. Not exported — a "use server" module may
+// only export async functions; the client derives its countdown from the
+// server-reported remainingMs instead.
+const END_REQUEST_WINDOW_MS = 30_000
+
 /**
- * Ends the broadcast on behalf of a co-host who holds the End Session
- * permission (the main host uses `endBroadcast`). Verifies the permission
- * server-side before flipping the stream to ended.
+ * A co-host who holds the End Session permission asks the host to end the live.
+ * Instead of ending immediately, this records a pending request on the stream.
+ * The host then has 30s to approve/decline; if unanswered, `getCallState`
+ * auto-ends the stream once the window elapses.
  */
-export async function endLiveAsCoHost(input: { roomName: string }): Promise<{ ok: boolean; error?: string }> {
+export async function requestEndSession(input: { roomName: string }): Promise<{ ok: boolean; error?: string }> {
   const user = await requireUser()
   const row = await getAcceptedRow(input.roomName, user.id)
   if (!row || row.role !== "cohost" || !row.canEndSession)
     return { ok: false, error: "You can't end this session." }
   await db
     .update(liveStream)
-    .set({ status: "ended", endedAt: new Date() })
+    .set({ endRequestAt: new Date(), endRequestById: user.id, endRequestByName: user.name ?? row.userName })
     .where(and(eq(liveStream.roomName, input.roomName), eq(liveStream.status, "live")))
-  revalidatePath("/live")
+  return { ok: true }
+}
+
+/**
+ * The host answers a co-host's pending "end live session" request. `approve`
+ * true ends the broadcast immediately; false clears the request and the session
+ * continues. Only the main host may resolve it.
+ */
+export async function resolveEndSession(input: {
+  roomName: string
+  approve: boolean
+}): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser()
+  if ((await getHostId(input.roomName)) !== user.id)
+    return { ok: false, error: "Only the host can answer this request." }
+  if (input.approve) {
+    await db
+      .update(liveStream)
+      .set({
+        status: "ended",
+        endedAt: new Date(),
+        endRequestAt: null,
+        endRequestById: null,
+        endRequestByName: null,
+      })
+      .where(and(eq(liveStream.roomName, input.roomName), eq(liveStream.status, "live")))
+    revalidatePath("/live")
+  } else {
+    await db
+      .update(liveStream)
+      .set({ endRequestAt: null, endRequestById: null, endRequestByName: null })
+      .where(eq(liveStream.roomName, input.roomName))
+  }
   return { ok: true }
 }
 

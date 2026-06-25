@@ -1,6 +1,7 @@
 "use client"
 
-import { Crown, Music, PhoneIncoming, PowerOff, UserMinus, X } from "lucide-react"
+import { useEffect, useState } from "react"
+import { Crown, Music, PhoneIncoming, PowerOff, Radio, UserMinus, X } from "lucide-react"
 import type { CallRequestView, CoHostPermissions } from "@/app/actions/live"
 import { cn } from "@/lib/utils"
 
@@ -174,6 +175,92 @@ export function ManageCoHostMenu({
 }
 
 /**
+ * The MAIN HOST's "Co-hosts" tab: lists everyone granted co-host status —
+ * whether or not they're still on the call — with their three permission
+ * toggles and a Remove (retract) button. Retracting works regardless of
+ * whether the co-host is currently in the session.
+ */
+export function CoHostsPanel({
+  coHosts,
+  onTogglePermission,
+  onRemoveCoHost,
+  onClose,
+}: {
+  coHosts: CallRequestView[]
+  onTogglePermission: (userId: string, permission: keyof CoHostPermissions, enabled: boolean) => void
+  onRemoveCoHost: (userId: string) => void
+  onClose: () => void
+}) {
+  return (
+    <MenuSheet
+      title="Co-hosts"
+      subtitle={coHosts.length === 1 ? "1 co-host" : `${coHosts.length} co-hosts`}
+      onClose={onClose}
+    >
+      {coHosts.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-border/60 px-3 py-6 text-center text-sm text-muted-foreground">
+          You haven&apos;t made anyone a co-host yet. Tap a speaker on stage to promote them.
+        </p>
+      ) : (
+        <div className="space-y-4">
+          {coHosts.map((c) => {
+            const onStage = c.status === "accepted"
+            return (
+              <div key={c.userId} className="space-y-2 rounded-2xl border border-border/60 p-3">
+                <div className="flex items-center gap-3">
+                  <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold", c.color)}>
+                    {c.initials}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold">{c.userName}</span>
+                  </span>
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                      onStage ? "bg-call-accept/15 text-call-accept" : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {onStage ? "On stage" : "Off call"}
+                  </span>
+                </div>
+                <PermissionToggle
+                  icon={<PhoneIncoming />}
+                  label="Accept Call Requests"
+                  description="Approve listeners who ask to speak."
+                  enabled={c.permissions.acceptRequests}
+                  onToggle={(next) => onTogglePermission(c.userId, "acceptRequests", next)}
+                />
+                <PermissionToggle
+                  icon={<Music />}
+                  label="Control Tracks"
+                  description="Manage the background music. Your music controls pause while they do."
+                  enabled={c.permissions.controlTracks}
+                  onToggle={(next) => onTogglePermission(c.userId, "controlTracks", next)}
+                />
+                <PermissionToggle
+                  icon={<PowerOff />}
+                  label="End Session"
+                  description="Allow this co-host to end the whole live session."
+                  enabled={c.permissions.endSession}
+                  onToggle={(next) => onTogglePermission(c.userId, "endSession", next)}
+                />
+                <button
+                  type="button"
+                  onClick={() => onRemoveCoHost(c.userId)}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/15"
+                >
+                  <UserMinus className="size-4" /> Remove co-host
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </MenuSheet>
+  )
+}
+
+/**
  * Prompt shown to the MAIN HOST when a track-controlling co-host asks to take
  * over the music for the first time. Approve grants control until Control
  * Tracks is revoked; Decline leaves music with the host.
@@ -213,6 +300,69 @@ export function MusicApprovalPrompt({
             className="flex flex-1 items-center justify-center rounded-xl bg-secondary px-3 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-secondary/70"
           >
             Decline
+          </button>
+        </div>
+      </div>
+    </MenuSheet>
+  )
+}
+
+/**
+ * Prompt shown to the MAIN HOST when a co-host (with End Session permission)
+ * asks to end the live. The host has a 30s countdown to End now or Keep live;
+ * if they don't answer, the server auto-ends the live once the window elapses
+ * (this prompt just counts down to that). `remainingMs` is the server-reported
+ * time left, refreshed each poll, so the countdown stays roughly in sync.
+ */
+export function EndSessionPrompt({
+  byName,
+  remainingMs,
+  onApprove,
+  onDecline,
+}: {
+  byName: string
+  remainingMs: number
+  onApprove: () => void
+  onDecline: () => void
+}) {
+  // Local 1s ticker so the countdown moves smoothly between server polls. We
+  // re-sync to the server's remainingMs whenever it changes.
+  const [secondsLeft, setSecondsLeft] = useState(Math.max(0, Math.ceil(remainingMs / 1000)))
+  useEffect(() => {
+    setSecondsLeft(Math.max(0, Math.ceil(remainingMs / 1000)))
+  }, [remainingMs])
+  useEffect(() => {
+    const iv = setInterval(() => setSecondsLeft((s) => Math.max(0, s - 1)), 1000)
+    return () => clearInterval(iv)
+  }, [])
+
+  return (
+    <MenuSheet title="End live session?" onClose={onDecline}>
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-live/15 text-live">
+            <Radio className="size-5" strokeWidth={2.5} />
+          </span>
+          <p className="text-sm text-pretty">
+            <span className="font-semibold">{byName}</span> is asking to end the live session. If you don&apos;t respond,
+            it will end automatically in{" "}
+            <span className="font-semibold tabular-nums text-live">{secondsLeft}s</span>.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onApprove}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-live px-3 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+          >
+            <PowerOff className="size-4" /> End now
+          </button>
+          <button
+            type="button"
+            onClick={onDecline}
+            className="flex flex-1 items-center justify-center rounded-xl bg-secondary px-3 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-secondary/70"
+          >
+            Keep live
           </button>
         </div>
       </div>

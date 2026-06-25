@@ -49,7 +49,7 @@ import { toggleFollow } from "@/app/actions/follow"
 import type { CurrentUser } from "@/lib/session"
 import { uploadMedia } from "@/lib/upload-media"
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
+import { FormattedTextarea } from "@/components/formatted-textarea"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
@@ -374,7 +374,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
             <AvatarFallback className={currentUser.color}>{currentUser.initials}</AvatarFallback>
           </Avatar>
           <div className="flex-1 space-y-3">
-            <Textarea
+            <FormattedTextarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder="Share a thought…"
@@ -1070,7 +1070,7 @@ export function PostCard({
       {/* Caption — shown above the media, or an inline editor while editing */}
       {isEditing ? (
         <div className={cn("pb-3", feed ? "px-[0.825rem]" : "px-3")}>
-          <Textarea
+          <FormattedTextarea
             value={editDraft}
             onChange={(e) => setEditDraft(e.target.value)}
             placeholder="Edit your post…"
@@ -1260,7 +1260,7 @@ export function PostCard({
               <Avatar className="size-8 shrink-0">
                 <AvatarFallback className={cn("text-xs", currentUser.color)}>{currentUser.initials}</AvatarFallback>
               </Avatar>
-              <Textarea
+              <FormattedTextarea
                 value={commentDraft}
                 onChange={(e) => setCommentDraft(e.target.value)}
                 placeholder="Add a comment..."

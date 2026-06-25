@@ -115,7 +115,7 @@ export function BackExitMenu({
                 }}
                 className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold text-live transition-colors hover:bg-live/15"
               >
-                <Radio className="size-4" strokeWidth={2.5} /> End Session
+                <Radio className="size-4" strokeWidth={2.5} /> End live session
               </button>
             )}
           </div>

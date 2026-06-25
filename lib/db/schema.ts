@@ -343,6 +343,13 @@ export const liveStream = pgTable("live_stream", {
   // abandoned tab / dropped host never leaves a stream stuck "live" forever.
   lastSeenAt: timestamp("lastSeenAt").notNull().defaultNow(),
   endedAt: timestamp("endedAt"),
+  // A co-host (with the End Session permission) can ask the host to end the
+  // live. The host has 30s to approve/decline; if unanswered, getCallState
+  // auto-ends the stream. These hold the in-flight request and are cleared when
+  // the host resolves it or the request is approved/auto-ended.
+  endRequestAt: timestamp("endRequestAt"),
+  endRequestById: text("endRequestById"),
+  endRequestByName: text("endRequestByName"),
 })
 
 // Call-in requests (listener -> host) and invites (host -> listener) for a live

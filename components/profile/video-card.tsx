@@ -40,6 +40,14 @@ export function VideoCard({ show, owned = false }: { show: Show; owned?: boolean
       : `${show.videoUrl}#t=0.1`
     : undefined
 
+  // "View count" for a recorded episode is its session audience tally. Compact
+  // formatting keeps the meta line short (e.g. "1.2K views").
+  const viewLabel = `${new Intl.NumberFormat("en", { notation: "compact" }).format(show.listeners)} ${
+    show.listeners === 1 ? "view" : "views"
+  }`
+  // Meta line replaces the template's episode count: views + when published.
+  const meta = [viewLabel, show.publishedAt].filter(Boolean).join(" · ")
+
   function handleTogglePrivacy() {
     setError(null)
     const next = !isPrivate
@@ -66,11 +74,13 @@ export function VideoCard({ show, owned = false }: { show: Show; owned?: boolean
   }
 
   return (
-    <div className="group relative flex flex-col gap-2.5">
+    // Immersive, borderless horizontal row (mirrors the host-library template):
+    // cover-art thumbnail on the left, then title / @username / views · date.
+    <div className="group relative flex items-start gap-2 rounded-xl transition-colors hover:bg-card/60">
       <Link
         href={href}
         aria-label={`Watch ${show.title}`}
-        className="relative block aspect-video w-full overflow-hidden rounded-xl bg-secondary ring-1 ring-border/50 transition-shadow group-hover:ring-primary/40 group-hover:shadow-lg"
+        className="relative block aspect-video w-32 shrink-0 overflow-hidden rounded-xl bg-secondary sm:w-40"
       >
         {hasCover ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -89,45 +99,42 @@ export function VideoCard({ show, owned = false }: { show: Show; owned?: boolean
           />
         ) : (
           <div className="flex size-full items-center justify-center text-muted-foreground">
-            <Play className="size-8" />
+            <Play className="size-7" />
           </div>
         )}
 
         {/* Hover play affordance */}
         <span className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/25">
-          <span className="flex size-12 scale-90 items-center justify-center rounded-full bg-background/90 text-foreground opacity-0 shadow-md backdrop-blur transition-all group-hover:scale-100 group-hover:opacity-100">
-            <Play className="size-5 translate-x-px" />
+          <span className="flex size-10 scale-90 items-center justify-center rounded-full bg-background/90 text-foreground opacity-0 shadow-md backdrop-blur transition-all group-hover:scale-100 group-hover:opacity-100">
+            <Play className="size-4 translate-x-px" />
           </span>
         </span>
 
         {/* Duration badge */}
         {show.duration && (
-          <span className="absolute bottom-1.5 right-1.5 inline-flex items-center gap-1 rounded-md bg-black/80 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-white">
-            <Clock className="size-3" /> {show.duration}
+          <span className="absolute bottom-1 right-1 inline-flex items-center gap-1 rounded-md bg-black/80 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-white">
+            <Clock className="size-2.5" /> {show.duration}
           </span>
         )}
 
         {owned && isPrivate && (
-          <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded-md bg-black/75 px-1.5 py-0.5 text-[10px] font-medium text-white">
+          <span className="absolute left-1 top-1 inline-flex items-center gap-1 rounded-md bg-black/75 px-1.5 py-0.5 text-[10px] font-medium text-white">
             <Lock className="size-2.5" /> Private
           </span>
         )}
       </Link>
 
-      {/* Meta row: title + menu. The uploader's name/avatar is intentionally
-          omitted — the catalogue is always viewed on that owner's own profile. */}
-      <div className="flex items-start gap-2.5">
+      {/* Meta column: video title (in place of display name), the uploader's
+          @username (maintained), then views · published date. */}
+      <div className="flex min-w-0 flex-1 items-start gap-1 py-0.5">
         <Link href={href} className="min-w-0 flex-1">
           {/* Title stays on a single line; it auto-scrolls (marquee) when too long. */}
           <MarqueeTitle
             text={show.title}
             className="font-display text-sm font-semibold leading-snug tracking-tight transition-colors group-hover:text-primary"
           />
-          {(show.category || show.publishedAt) && (
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">
-              {[show.category, show.publishedAt].filter(Boolean).join(" · ")}
-            </p>
-          )}
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">{show.host.handle}</p>
+          {meta && <p className="mt-0.5 truncate text-xs text-muted-foreground">{meta}</p>}
         </Link>
 
         {owned && (

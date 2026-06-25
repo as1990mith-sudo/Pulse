@@ -72,7 +72,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: SKIN_INIT_SCRIPT }} />
         <ThemeProvider
           attribute="class"
-          defaultTheme="mid"
+          defaultTheme="charcoal"
           themes={['light', 'dark', 'mid', 'charcoal', 'grass']}
           value={{
             light: 'theme-light',

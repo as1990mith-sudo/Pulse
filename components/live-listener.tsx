@@ -33,6 +33,7 @@ import {
   requestToJoin,
   respondToCallRequest,
   removeFromStage,
+  stepOffStage,
 } from "@/app/actions/live"
 import { toggleFollow, getFollowingIds } from "@/app/actions/follow"
 import { getOrCreateConversation } from "@/app/actions/dm"
@@ -201,6 +202,9 @@ export function LiveListener({
   const [pendingRequests, setPendingRequests] = useState<CallRequestView[]>([])
   const [guests, setGuests] = useState<CallRequestView[]>([])
   const [coHostIds, setCoHostIds] = useState<Set<string>>(new Set())
+  // True while this co-host's "end live session" request awaits the host's
+  // answer (drives the "Waiting for host…" banner in the co-host console).
+  const [endRequestPending, setEndRequestPending] = useState(false)
 
   async function join() {
     setError(null)
@@ -276,6 +280,7 @@ export function LiveListener({
       setPendingRequests(s.pendingRequests)
       setGuests(s.guests)
       setCoHostIds(new Set(s.coHosts.map((c) => c.userId)))
+      setEndRequestPending(s.endRequest?.byId === currentUserId)
       // Flash a "declined" toast when status transitions to declined.
       if (s.myStatus === "declined" && prevStatus.current && prevStatus.current !== "declined") {
         setDeclinedFlash(true)
@@ -368,6 +373,7 @@ export function LiveListener({
       setPendingRequests(s.pendingRequests)
       setGuests(s.guests)
       setCoHostIds(new Set(s.coHosts.map((c) => c.userId)))
+      setEndRequestPending(s.endRequest?.byId === currentUserId)
     } catch {
       // poll will catch up on its next tick
     }
@@ -393,8 +399,13 @@ export function LiveListener({
         viewers={audience}
         locked={locked}
         theme={theme}
+        endRequestPending={endRequestPending}
         onMinimize={onMinimize}
         onExit={() => {
+          // Leaving the room entirely: step off first so the stage tile clears
+          // (the co-host grant is preserved, so the host can still manage them),
+          // then drop the connection and navigate away.
+          void stepOffStage({ roomName: stream.roomName })
           void disconnect()
           if (onExit) onExit()
           else router.push("/live")

@@ -33,9 +33,6 @@ export default async function MessagesPage() {
     <div className="min-h-screen">
       <SiteHeader />
       <main className="mx-auto w-full max-w-2xl py-8">
-        <header className="mb-6 px-4 sm:px-6">
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Messages</h1>
-        </header>
         <DmInbox conversations={conversations} currentUser={currentUser} />
       </main>
     </div>
