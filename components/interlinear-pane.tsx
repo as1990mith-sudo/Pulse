@@ -1,8 +1,8 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import useSWR from "swr"
-import { Loader2, ScrollText } from "lucide-react"
+import { Check, Copy, Loader2, ScrollText } from "lucide-react"
 
 // Word-level data (Textus Receptus Greek NT) used to tag the KJV reading with
 // Strong's numbers. Field names are kept short in the bundled JSON to reduce
@@ -197,9 +197,67 @@ export function InterlinearPane({
  * superscript Strong's number and is tappable for the full lexical detail;
  * otherwise it is plain reading text.
  */
+const POPUP_WIDTH = 224 // px — matches the w-56 popup; used for viewport clamping.
+
 function StrongsToken({ token }: { token: TaggedToken }) {
   const [open, setOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
+  // Resolved fixed-position coordinates for the popup, clamped to the viewport
+  // so words near the screen edge never push the popup out of frame.
+  const [coords, setCoords] = useState<{ top: number; left: number; placement: "top" | "bottom" }>({
+    top: 0,
+    left: 0,
+    placement: "bottom",
+  })
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const popRef = useRef<HTMLDivElement>(null)
   const w = token.strong
+
+  // Position the popup relative to the word in viewport coordinates. Using fixed
+  // positioning means it escapes the justified-text container's clipping, and we
+  // clamp left/right (and flip above when there isn't room below) to stay on screen.
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return
+    const compute = () => {
+      const rect = btnRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const margin = 8
+      const popHeight = popRef.current?.offsetHeight ?? 180
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      let left = rect.left + rect.width / 2 - POPUP_WIDTH / 2
+      left = Math.max(margin, Math.min(left, vw - POPUP_WIDTH - margin))
+      const spaceBelow = vh - rect.bottom
+      const placement: "top" | "bottom" = spaceBelow < popHeight + margin && rect.top > spaceBelow ? "top" : "bottom"
+      const top = placement === "bottom" ? rect.bottom + 6 : rect.top - popHeight - 6
+      setCoords({ top, left, placement })
+    }
+    compute()
+    window.addEventListener("scroll", compute, true)
+    window.addEventListener("resize", compute)
+    return () => {
+      window.removeEventListener("scroll", compute, true)
+      window.removeEventListener("resize", compute)
+    }
+  }, [open])
+
+  // Dismiss on outside click or Escape.
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (popRef.current?.contains(e.target as Node) || btnRef.current?.contains(e.target as Node)) return
+      setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false)
+    }
+    document.addEventListener("mousedown", onDown)
+    document.addEventListener("keydown", onKey)
+    return () => {
+      document.removeEventListener("mousedown", onDown)
+      document.removeEventListener("keydown", onKey)
+    }
+  }, [open])
 
   if (!w) {
     return (
@@ -211,10 +269,24 @@ function StrongsToken({ token }: { token: TaggedToken }) {
     )
   }
 
+  // Plain-text version of the entry, used for copy-to-clipboard.
+  const copyText = `${token.word} — G${w.s}\n${w.g} (${w.t})\n${w.d}\n${w.m}\n${w.e}`
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(copyText)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // Clipboard may be unavailable (e.g. insecure context); fail silently.
+    }
+  }
+
   return (
     <span className="relative inline-block">
       {token.lead}
       <button
+        ref={btnRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
@@ -229,9 +301,11 @@ function StrongsToken({ token }: { token: TaggedToken }) {
       </button>
       {token.trail}{" "}
       {open && (
-        <span
+        <div
+          ref={popRef}
           role="tooltip"
-          className="absolute left-1/2 top-full z-30 mt-1 w-52 -translate-x-1/2 rounded-xl border border-border/60 bg-card p-3 text-left shadow-xl duration-150 animate-in fade-in zoom-in-95"
+          style={{ position: "fixed", top: coords.top, left: coords.left, width: POPUP_WIDTH }}
+          className="z-50 rounded-xl border border-border/60 bg-card p-3 text-left text-base font-normal not-italic leading-normal shadow-xl duration-150 animate-in fade-in zoom-in-95"
         >
           <span className="block text-lg font-semibold leading-tight text-foreground">{w.g}</span>
           <span className="block text-sm italic leading-tight text-muted-foreground">{w.t}</span>
@@ -243,7 +317,16 @@ function StrongsToken({ token }: { token: TaggedToken }) {
           </span>
           <span className="mt-1 block text-xs text-muted-foreground">{w.m}</span>
           <span className="mt-1.5 block border-t border-border/60 pt-1.5 text-sm text-foreground">{w.e}</span>
-        </span>
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-md border border-border/60 bg-secondary/50 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary active:scale-[0.98]"
+            aria-label="Copy Strong's entry"
+          >
+            {copied ? <Check className="size-3.5 text-primary" /> : <Copy className="size-3.5" />}
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
       )}
     </span>
   )
