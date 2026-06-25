@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useTheme } from "next-themes"
-import { Check, Contrast, Moon, Palette, Sun } from "lucide-react"
+import { Check, Contrast, Leaf, Moon, MoonStar, Palette, Sun } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -18,7 +18,9 @@ import { cn } from "@/lib/utils"
 
 const themes = [
   { value: "mid", label: "Mid", icon: Contrast },
+  { value: "grass", label: "Grass", icon: Leaf },
   { value: "dark", label: "Dark", icon: Moon },
+  { value: "charcoal", label: "Charcoal", icon: MoonStar },
   { value: "light", label: "Light", icon: Sun },
 ] as const
 
@@ -27,6 +29,7 @@ const SKIN_SWATCH: Record<string, string> = {
   orange: "linear-gradient(to top right, oklch(0.79 0.16 62), oklch(0.66 0.23 22), oklch(0.6 0.26 350))",
   white: "linear-gradient(to top right, oklch(1 0 0), oklch(0.9 0.002 285), oklch(0.78 0.004 285))",
   black: "linear-gradient(to top right, oklch(0.34 0.006 285), oklch(0.22 0.006 285), oklch(0.14 0.006 285))",
+  yellow: "linear-gradient(to top right, oklch(0.9 0.16 95), oklch(0.84 0.17 85), oklch(0.76 0.16 68))",
 }
 
 export function ThemeSwitcher() {

@@ -5,6 +5,7 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { SkinProvider, SKIN_INIT_SCRIPT } from '@/components/skin-provider'
 import { LiveSessionProvider } from '@/components/live-session'
 import { EpisodePlayerProvider } from '@/components/episode-player-provider'
+import { AutoRefresh } from '@/components/auto-refresh'
 import './globals.css'
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
@@ -72,11 +73,13 @@ export default function RootLayout({
         <ThemeProvider
           attribute="class"
           defaultTheme="mid"
-          themes={['light', 'dark', 'mid']}
+          themes={['light', 'dark', 'mid', 'charcoal', 'grass']}
           value={{
             light: 'theme-light',
             dark: 'dark',
             mid: 'theme-mid',
+            charcoal: 'theme-charcoal',
+            grass: 'theme-grass',
           }}
           enableSystem={false}
           disableTransitionOnChange
@@ -84,6 +87,9 @@ export default function RootLayout({
           <SkinProvider>
             <LiveSessionProvider>
               <EpisodePlayerProvider>
+                {/* Keeps server-rendered data (feed, adverts, live status, …)
+                    continuously fresh so users never have to manually reload. */}
+                <AutoRefresh />
                 {children}
                 {process.env.NODE_ENV === 'production' && <Analytics />}
               </EpisodePlayerProvider>

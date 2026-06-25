@@ -14,7 +14,6 @@ import {
   Share2,
   UserCheck,
   UserPlus,
-  Users,
   Video,
   VideoOff,
   Volume2,
@@ -30,9 +29,11 @@ import {
 } from "@/app/actions/live"
 import { toggleFollow } from "@/app/actions/follow"
 import { useLiveVideo } from "@/lib/use-live-video"
+import { useLivePresence } from "@/lib/use-live-presence"
 import { ReactionLayer, ReactionPicker } from "@/components/live-reactions"
 import { LiveChat } from "@/components/live-chat"
 import { BackExitMenu } from "@/components/live-back-menu"
+import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { ShareSheet } from "@/components/share-sheet"
 import type { ShareTarget } from "@/lib/share-types"
 import { getAvatarColor, getInitials } from "@/lib/identity"
@@ -274,6 +275,8 @@ export function LiveVideoViewer({
   if (canPublish) slots.push({ self: true })
   guestPeers.forEach((p) => slots.push({ self: false, peer: p }))
   const viewers = Math.max(0, participants - 1 - peers.length)
+  // Presence-backed audience (real names + avatars) for the "who's here" sheet.
+  const { count: presenceCount, members: presenceMembers } = useLivePresence(stream.roomName, canWatch)
   const isSelf = currentUserId === stream.hostId
   const remoteVideoOn = Boolean(hostPeer?.hasVideo)
 
@@ -346,7 +349,7 @@ export function LiveVideoViewer({
 
         {/* Top bar: back menu + host pill + live/viewers */}
         <div className="absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-2 p-4 pt-[calc(env(safe-area-inset-top)+1rem)]">
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <BackExitMenu
               showMenu
               exitLabel="Leave"
@@ -356,31 +359,33 @@ export function LiveVideoViewer({
               }}
               onMinimize={onMinimize ?? (() => {})}
             />
-            <div className="flex items-center gap-2 rounded-full bg-black/35 py-1 pl-1 pr-1.5 ring-1 ring-inset ring-white/10 backdrop-blur-md">
+            <div className="flex min-w-0 items-center gap-2 rounded-full bg-black/35 py-1 pl-1 pr-1.5 ring-1 ring-inset ring-white/10 backdrop-blur-md">
               <span
                 className={cn(
-                  "flex size-9 items-center justify-center rounded-full text-xs font-semibold text-white",
+                  "flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white",
                   getAvatarColor(stream.hostId),
                 )}
                 aria-hidden="true"
               >
                 {getInitials(stream.hostName)}
               </span>
-              <div className="flex flex-col leading-tight">
-                <span className="max-w-28 truncate text-sm font-semibold">{stream.hostName}</span>
-                <span className="text-[11px] text-white/60">@{stream.hostHandle}</span>
+              <div className="flex min-w-0 flex-col leading-tight">
+                <span className="truncate text-sm font-semibold">{stream.hostName}</span>
+                <span className="truncate text-[11px] text-white/60">@{stream.hostHandle}</span>
               </div>
               {!isSelf && (
-                <InlineFollowButton
-                  targetUserId={stream.hostId}
-                  targetName={stream.hostName}
-                  initialFollowing={initialFollowing}
-                />
+                <div className="shrink-0">
+                  <InlineFollowButton
+                    targetUserId={stream.hostId}
+                    targetName={stream.hostName}
+                    initialFollowing={initialFollowing}
+                  />
+                </div>
               )}
             </div>
           </div>
 
-          <div className="flex flex-col items-end gap-1.5">
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
             <span className="flex items-center gap-1.5 rounded-full bg-live px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-live-foreground shadow-lg">
               <span className="relative flex size-2">
                 <span className="absolute inline-flex size-full animate-ping rounded-full bg-live-foreground/70" />
@@ -388,9 +393,12 @@ export function LiveVideoViewer({
               </span>
               Live
             </span>
-            <span className="flex items-center gap-1.5 rounded-full bg-black/35 px-3 py-1.5 text-xs font-medium text-white/90 ring-1 ring-inset ring-white/10 backdrop-blur-md">
-              <Users className="size-3.5" /> {viewers.toLocaleString()}
-            </span>
+            <LiveAudienceSheet
+              count={presenceCount || viewers}
+              members={presenceMembers}
+              immersive
+              className="px-3 py-1.5 text-xs font-medium"
+            />
           </div>
         </div>
 

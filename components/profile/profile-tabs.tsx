@@ -79,17 +79,7 @@ export function ProfileTabs({
         {tab === "catalogue" ? (
           <div className="space-y-4">
             {/* Owners can upload their own audio/video episodes here. */}
-            {isSelf && (
-              <UploadEpisode
-                playlists={Array.from(
-                  new Set(
-                    episodes
-                      .filter((e) => (e.mediaType ?? (e.videoUrl ? "video" : "audio")) === "video" && e.playlist)
-                      .map((e) => e.playlist as string),
-                  ),
-                )}
-              />
-            )}
+            {isSelf && <UploadEpisode />}
             {episodes.length === 0 ? (
               <EmptyState
                 icon={<Mic className="size-6" />}
@@ -167,20 +157,12 @@ function SavedGrid({ items }: { items: SavedItemView[] }) {
               </div>
               {/* Avatar of the user whose content this is, overlapping the corner. */}
               {item.ownerName && (
-                <span
-                  className={cn(
-                    "absolute -bottom-1 -right-1 flex size-6 items-center justify-center overflow-hidden rounded-full text-[10px] font-bold ring-2 ring-card",
-                    item.ownerColor ?? "bg-secondary text-muted-foreground",
-                  )}
-                  title={item.ownerName}
-                >
-                  {item.ownerImage ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.ownerImage || "/placeholder.svg"} alt={item.ownerName} className="size-full object-cover" />
-                  ) : (
-                    item.ownerInitials
-                  )}
-                </span>
+                <SavedOwnerAvatar
+                  name={item.ownerName}
+                  image={item.ownerImage}
+                  initials={item.ownerInitials}
+                  color={item.ownerColor}
+                />
               )}
             </div>
             <div className="min-w-0 flex-1">
@@ -194,6 +176,48 @@ function SavedGrid({ items }: { items: SavedItemView[] }) {
         </li>
       ))}
     </ul>
+  )
+}
+
+/**
+ * Owner avatar overlapping a saved item's thumbnail. Falls back to initials if
+ * the remote image fails to load — previously a failed load (CORS/cache/network
+ * quirks on some devices) left the badge blank instead of showing initials.
+ */
+function SavedOwnerAvatar({
+  name,
+  image,
+  initials,
+  color,
+}: {
+  name: string
+  image: string | null
+  initials: string | null
+  color: string | null
+}) {
+  const [failed, setFailed] = useState(false)
+  const showImage = Boolean(image) && !failed
+  return (
+    <span
+      className={cn(
+        "absolute -bottom-1 -right-1 flex size-6 items-center justify-center overflow-hidden rounded-full text-[10px] font-bold ring-2 ring-card",
+        color ?? "bg-secondary text-muted-foreground",
+      )}
+      title={name}
+    >
+      {showImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={image || "/placeholder.svg"}
+          alt={name}
+          className="size-full object-cover"
+          loading="lazy"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        initials
+      )}
+    </span>
   )
 }
 

@@ -26,19 +26,19 @@ function CommunityHelpEntry() {
   return (
     <Link
       href="/chatrooms/community"
-      className="group flex items-center gap-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-4 transition-colors hover:bg-emerald-500/10 sm:px-5"
+      className="group flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-3 py-2.5 transition-colors hover:bg-emerald-500/10 sm:px-4"
     >
-      <Avatar className="size-14 shrink-0 ring-2 ring-emerald-500/40 transition-transform duration-200 group-hover:scale-105">
+      <Avatar className="size-10 shrink-0 ring-2 ring-emerald-500/40 transition-transform duration-200 group-hover:scale-105">
         <AvatarImage src="/community-help-avatar.png" alt="Community Help" />
-        <AvatarFallback className="bg-emerald-600 text-lg font-bold text-white">?</AvatarFallback>
+        <AvatarFallback className="bg-emerald-600 text-sm font-bold text-white">?</AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-lg font-semibold tracking-tight">Community Help</p>
-        <p className="truncate text-sm leading-relaxed text-muted-foreground">
+        <p className="truncate text-sm font-semibold tracking-tight">Community Help</p>
+        <p className="truncate text-xs leading-snug text-muted-foreground">
           Ask anything anonymously — anyone in the community can help.
         </p>
       </div>
-      <span className="shrink-0 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-opacity group-hover:opacity-90">
+      <span className="shrink-0 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-opacity group-hover:opacity-90">
         Open
       </span>
     </Link>
@@ -49,20 +49,20 @@ function DreamInterpretationEntry() {
   return (
     <Link
       href="/chatrooms/dreams"
-      className="group flex items-center gap-4 rounded-2xl border border-blue-500/30 bg-blue-500/5 px-4 py-4 transition-colors hover:bg-blue-500/10 sm:px-5"
+      className="group flex items-center gap-3 rounded-xl border border-blue-500/30 bg-blue-500/5 px-3 py-2.5 transition-colors hover:bg-blue-500/10 sm:px-4"
     >
-      <Avatar className="size-14 shrink-0 ring-2 ring-blue-500/40 transition-transform duration-200 group-hover:scale-105">
+      <Avatar className="size-10 shrink-0 ring-2 ring-blue-500/40 transition-transform duration-200 group-hover:scale-105">
         <AvatarFallback className="bg-blue-600 text-white">
-          <MoonStar className="size-6" />
+          <MoonStar className="size-5" />
         </AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-lg font-semibold tracking-tight">Dream Interpretation</p>
-        <p className="truncate text-sm leading-relaxed text-muted-foreground">
+        <p className="truncate text-sm font-semibold tracking-tight">Dream Interpretation</p>
+        <p className="truncate text-xs leading-snug text-muted-foreground">
           Share your dreams anonymously — only the interpreter can reply.
         </p>
       </div>
-      <span className="shrink-0 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-opacity group-hover:opacity-90">
+      <span className="shrink-0 rounded-full bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-opacity group-hover:opacity-90">
         Open
       </span>
     </Link>
@@ -71,13 +71,15 @@ function DreamInterpretationEntry() {
 
 export function ChatroomBrowser({ rooms }: { rooms: ChatroomSummary[] }) {
   return (
-    <Tabs defaultValue="my-rooms" className="space-y-6">
-      <CommunityHelpEntry />
-      <DreamInterpretationEntry />
+    <Tabs defaultValue="my-rooms" className="space-y-3">
+      <div className="space-y-2">
+        <CommunityHelpEntry />
+        <DreamInterpretationEntry />
+      </div>
       {/* Immersive, full-bleed segmented bar: one edge-to-edge strip split into
           three equal segments. Every segment shares the exact same box, so only
           the color changes on the active tab — no size-shifting borders. */}
-      <TabsList className="-mx-4 grid h-14 w-[calc(100%+2rem)] grid-cols-3 gap-0 divide-x divide-border/50 rounded-none border-y border-border/60 bg-card/50 p-0 backdrop-blur sm:-mx-6 sm:w-[calc(100%+3rem)]">
+      <TabsList className="-mx-4 grid h-12 w-[calc(100%+2rem)] grid-cols-3 gap-0 divide-x divide-border/50 rounded-none border-y border-border/60 bg-card/50 p-0 backdrop-blur sm:-mx-6 sm:w-[calc(100%+3rem)]">
         {[
           { value: "my-rooms", label: "My rooms", icon: Users },
           { value: "discover", label: "Discover", icon: Compass },
@@ -128,29 +130,35 @@ function MyRooms({ rooms }: { rooms: ChatroomSummary[] }) {
         <Link
           key={room.id}
           href={`/chatrooms/${room.id}`}
-          className="group flex items-center justify-between gap-4 px-4 py-4 transition-colors hover:bg-secondary/40 sm:px-6"
+          className="group flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-secondary/40 sm:px-6"
         >
-          <div className="flex min-w-0 items-center gap-4">
-            <Avatar className="size-16 shrink-0 ring-2 ring-border/60 transition-transform duration-200 group-hover:scale-105">
+          <div className="flex min-w-0 items-center gap-3">
+            <Avatar className="size-12 shrink-0 ring-2 ring-border/60 transition-transform duration-200 group-hover:scale-105">
               {room.image && <AvatarImage src={room.image || "/placeholder.svg"} alt={room.name} />}
-              <AvatarFallback className="bg-secondary text-lg font-semibold">
+              <AvatarFallback className="bg-secondary text-base font-semibold">
                 {room.name.slice(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <div className="min-w-0">
-              <div className="flex min-w-0 items-center gap-2">
-                <p className="min-w-0 truncate text-lg font-semibold tracking-tight">{room.name}</p>
-                {room.isOwner && <Badge variant="secondary" className="shrink-0">Admin</Badge>}
-              </div>
+              {/* Name gets the full width and truncates on its own line, so the
+                  Admin tag (moved to the meta line below) never overlaps it. */}
+              <p className="min-w-0 truncate text-base font-semibold tracking-tight">{room.name}</p>
               {room.description && (
-                <p className="truncate text-sm leading-relaxed text-muted-foreground">{room.description}</p>
+                <p className="truncate text-xs leading-snug text-muted-foreground">{room.description}</p>
               )}
-              <p className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                <Users className="size-3.5" /> {room.memberCount} {room.memberCount === 1 ? "member" : "members"}
+              <p className="mt-1 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <Users className="size-3.5" /> {room.memberCount} {room.memberCount === 1 ? "member" : "members"}
+                </span>
+                {room.isOwner && (
+                  <Badge variant="secondary" className="h-4 shrink-0 px-1.5 text-[10px] font-semibold leading-none">
+                    Admin
+                  </Badge>
+                )}
               </p>
             </div>
           </div>
-          <span className="shrink-0 rounded-full bg-foreground px-4 py-2 text-sm font-semibold text-background transition-opacity group-hover:opacity-90">
+          <span className="shrink-0 rounded-full bg-foreground px-3.5 py-1.5 text-xs font-semibold text-background transition-opacity group-hover:opacity-90">
             Open
           </span>
         </Link>

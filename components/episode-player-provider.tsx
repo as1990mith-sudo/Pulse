@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
-import { ChevronDown, Gauge, ListMusic, Maximize, Pause, Play, Radio, RotateCcw, RotateCw, X } from "lucide-react"
+import { ChevronDown, Gauge, ListMusic, Maximize, Minimize, Pause, Play, Radio, RotateCcw, RotateCw, X } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { cn } from "@/lib/utils"
 import { EpisodeNowPlayingActions } from "@/components/episode-now-playing-actions"
@@ -46,9 +46,13 @@ export function useEpisodePlayer() {
  */
 export function EpisodePlayerProvider({ children }: { children: React.ReactNode }) {
   const mediaRef = useRef<HTMLVideoElement>(null)
+  // The video frame is the element we put into fullscreen so our own controls
+  // (docked inside it) stay visible — rather than the bare, control-less <video>.
+  const frameRef = useRef<HTMLDivElement>(null)
   const [current, setCurrent] = useState<Show | null>(null)
   const [queue, setQueue] = useState<Show[]>([])
   const [minimized, setMinimized] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -180,24 +184,35 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
     setCurrentTime(t)
   }
 
-  // Expand the video to true device fullscreen and, where supported, lock the
-  // screen to landscape for a premium cinematic view. Falls back gracefully:
-  // iOS Safari only exposes the native player fullscreen via the <video>'s
-  // webkitEnterFullscreen, and orientation lock is a no-op on desktop.
-  async function goFullscreen() {
-    const el = mediaRef.current as
-      | (HTMLVideoElement & {
-          webkitEnterFullscreen?: () => void
-          webkitSupportsFullscreen?: boolean
-        })
+  // Toggle a YouTube-style fullscreen: we put the whole video *frame* into
+  // fullscreen (so our scrubber/controls stay visible) and lock to landscape
+  // where supported. iOS Safari/WKWebView can't fullscreen arbitrary elements,
+  // so we fall back to the native video fullscreen there.
+  async function toggleFullscreen() {
+    const fsEl =
+      document.fullscreenElement ??
+      (document as Document & { webkitFullscreenElement?: Element }).webkitFullscreenElement
+    if (fsEl) {
+      try {
+        if (document.exitFullscreen) await document.exitFullscreen()
+        else (document as Document & { webkitExitFullscreen?: () => void }).webkitExitFullscreen?.()
+      } catch {
+        /* ignore */
+      }
+      return
+    }
+    const frame = frameRef.current as
+      | (HTMLDivElement & { webkitRequestFullscreen?: () => Promise<void> | void })
       | null
-    if (!el) return
+    const video = mediaRef.current as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null
     try {
-      if (el.requestFullscreen) {
-        await el.requestFullscreen()
-      } else if (typeof el.webkitEnterFullscreen === "function") {
+      if (frame?.requestFullscreen) {
+        await frame.requestFullscreen()
+      } else if (frame?.webkitRequestFullscreen) {
+        await frame.webkitRequestFullscreen()
+      } else if (video && typeof video.webkitEnterFullscreen === "function") {
         // iOS Safari: opens the native fullscreen player (which auto-rotates).
-        el.webkitEnterFullscreen()
+        video.webkitEnterFullscreen()
         return
       }
       const orientation = screen.orientation as ScreenOrientation & {
@@ -211,10 +226,16 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
     }
   }
 
-  // Release the orientation lock automatically when fullscreen is exited.
+  // Track fullscreen state (to dock/undock the controls) and release the
+  // orientation lock automatically when fullscreen is exited.
   useEffect(() => {
     const onFsChange = () => {
-      if (!document.fullscreenElement) {
+      const active = Boolean(
+        document.fullscreenElement ??
+          (document as Document & { webkitFullscreenElement?: Element }).webkitFullscreenElement,
+      )
+      setIsFullscreen(active)
+      if (!active) {
         try {
           screen.orientation?.unlock?.()
         } catch {
@@ -223,7 +244,11 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
       }
     }
     document.addEventListener("fullscreenchange", onFsChange)
-    return () => document.removeEventListener("fullscreenchange", onFsChange)
+    document.addEventListener("webkitfullscreenchange", onFsChange)
+    return () => {
+      document.removeEventListener("fullscreenchange", onFsChange)
+      document.removeEventListener("webkitfullscreenchange", onFsChange)
+    }
   }, [])
 
   // Recorded blobs often report Infinity duration until scanned; force it.
@@ -311,14 +336,22 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                   both kinds; for audio it's visually hidden and the cover art shows. */}
               <div className="mt-2 flex justify-center sm:mt-4">
                 {isVideo ? (
-                  <div className="group relative w-full max-w-xl">
+                  <div
+                    ref={frameRef}
+                    className={cn(
+                      "group relative bg-black",
+                      isFullscreen
+                        ? "flex h-screen w-screen items-center justify-center"
+                        : "aspect-video w-full max-w-xl overflow-hidden rounded-2xl shadow-2xl ring-1 ring-foreground/10",
+                    )}
+                  >
                     <video
                       ref={mediaRef}
                       src={mediaUrl}
+                      poster={current.cover ?? undefined}
                       playsInline
                       preload="metadata"
-                      className="aspect-video w-full rounded-2xl bg-black object-contain shadow-2xl ring-1 ring-foreground/10"
-                      onClick={toggle}
+                      className="size-full object-contain"
                       onPlay={() => setPlaying(true)}
                       onPause={() => setPlaying(false)}
                       onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
@@ -329,15 +362,64 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                       }}
                       onEnded={handleEnded}
                     />
-                    {/* Fullscreen / landscape expand */}
-                    <button
-                      type="button"
-                      onClick={goFullscreen}
-                      aria-label="Expand to fullscreen"
-                      className="absolute bottom-2 right-2 flex size-9 items-center justify-center rounded-full bg-black/55 text-white opacity-0 ring-1 ring-white/20 backdrop-blur-md transition-opacity duration-200 hover:bg-black/70 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
-                    >
-                      <Maximize className="size-4" />
-                    </button>
+
+                    {/* Fullscreen: dock controls inside the frame so they stay visible. */}
+                    {isFullscreen && (
+                      <div className="absolute inset-x-0 bottom-0 z-10 mx-auto flex max-w-3xl flex-col gap-3 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-[max(1.5rem,env(safe-area-inset-left))] pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-20 text-white">
+                        <div className="flex flex-col gap-1.5">
+                          <div className="relative h-1.5 w-full">
+                            <div className="absolute inset-0 rounded-full bg-white/25" />
+                            <div className="absolute inset-y-0 left-0 rounded-full bg-white" style={{ width: `${pct}%` }} />
+                            <input
+                              type="range"
+                              min={0}
+                              max={duration || 0}
+                              step={0.1}
+                              value={currentTime}
+                              onChange={seek}
+                              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                              aria-label="Seek"
+                            />
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] font-medium tabular-nums text-white/80">
+                            <span>{fmt(currentTime)}</span>
+                            <span>-{fmt(Math.max(0, duration - currentTime))}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-center gap-6">
+                          <button onClick={() => skip(-15)} aria-label="Rewind 15 seconds" className="text-white/85 transition-colors hover:text-white active:scale-90">
+                            <RotateCcw className="size-6" />
+                          </button>
+                          <button onClick={toggle} aria-label={playing ? "Pause" : "Play"} className="flex size-14 items-center justify-center rounded-full bg-white text-black shadow-lg transition-transform hover:scale-105 active:scale-95">
+                            {playing ? <Pause className="size-6" /> : <Play className="size-6 translate-x-0.5" />}
+                          </button>
+                          <button onClick={() => skip(15)} aria-label="Forward 15 seconds" className="text-white/85 transition-colors hover:text-white active:scale-90">
+                            <RotateCw className="size-6" />
+                          </button>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <button onClick={cycleSpeed} aria-label="Change playback speed" className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-white/90 transition-colors hover:bg-white/25 hover:text-white">
+                            <Gauge className="size-3.5" />
+                            {SPEEDS[speedIdx]}x
+                          </button>
+                          <button onClick={toggleFullscreen} aria-label="Exit fullscreen" className="flex size-10 items-center justify-center rounded-full bg-white/15 text-white transition-colors hover:bg-white/25 active:scale-90">
+                            <Minimize className="size-5" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Enter-fullscreen / landscape expand (windowed only). */}
+                    {!isFullscreen && (
+                      <button
+                        type="button"
+                        onClick={toggleFullscreen}
+                        aria-label="Expand to fullscreen"
+                        className="absolute bottom-2 right-2 flex size-9 items-center justify-center rounded-full bg-black/55 text-white opacity-0 ring-1 ring-white/20 backdrop-blur-md transition-opacity duration-200 hover:bg-black/70 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+                      >
+                        <Maximize className="size-4" />
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <video

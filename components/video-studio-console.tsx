@@ -20,7 +20,6 @@ import {
   SkipForward,
   Trash2,
   UserPlus,
-  Users,
   Video,
   VideoOff,
   Volume2,
@@ -43,6 +42,8 @@ import { uploadMedia } from "@/lib/upload-media"
 import { ReactionLayer } from "@/components/live-reactions"
 import { LiveChat } from "@/components/live-chat"
 import { BackExitMenu } from "@/components/live-back-menu"
+import { LiveAudienceSheet } from "@/components/live-audience-sheet"
+import { useLivePresence } from "@/lib/use-live-presence"
 import { ShareSheet } from "@/components/share-sheet"
 import type { ShareTarget } from "@/lib/share-types"
 import { getAvatarColor, getInitials } from "@/lib/identity"
@@ -56,7 +57,7 @@ function formatTime(s: number) {
 }
 
 /** How many backing tracks the host can keep loaded at once. */
-const MAX_MUSIC_TRACKS = 2
+const MAX_MUSIC_TRACKS = 4
 
 function formatElapsed(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds))
@@ -475,6 +476,8 @@ export function VideoStudioConsole({
   }, [musicTracks, musicActiveIndex])
 
   const viewers = Math.max(0, participants - 1 - peers.length)
+  // Presence-backed audience (real names + avatars) for the "who's here" sheet.
+  const { count: audienceCount, members: audienceMembers } = useLivePresence(roomName, live)
   // Guests are remote publishers (the host publishes locally, not remotely).
   const guests = peers.slice(0, 2)
 
@@ -550,8 +553,8 @@ export function VideoStudioConsole({
         {live && <ReactionLayer roomName={connected ? roomName! : undefined} />}
 
         {/* Top bar: back menu + LIVE/viewers/timer */}
-        <div className="absolute inset-x-0 top-0 z-20 flex items-start justify-between p-4 pt-[calc(env(safe-area-inset-top)+1rem)]">
-          <div className="flex items-center gap-2">
+        <div className="absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-2 p-4 pt-[calc(env(safe-area-inset-top)+1rem)]">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             <BackExitMenu
               showMenu={live}
               exitLabel="End"
@@ -572,9 +575,12 @@ export function VideoStudioConsole({
               </span>
             )}
             {live && (
-              <span className="flex items-center gap-1.5 rounded-full bg-black/35 px-3 py-1.5 text-xs font-medium text-white/90 ring-1 ring-inset ring-white/10 backdrop-blur-md">
-                <Users className="size-3.5" /> {viewers.toLocaleString()}
-              </span>
+              <LiveAudienceSheet
+                count={audienceCount || viewers}
+                members={audienceMembers}
+                immersive
+                className="px-3 py-1.5 text-xs font-medium"
+              />
             )}
             {live && (
               <span className="rounded-full bg-black/35 px-3 py-1.5 font-mono text-xs tabular-nums text-white/90 ring-1 ring-inset ring-white/10 backdrop-blur-md">
@@ -589,7 +595,7 @@ export function VideoStudioConsole({
               type="button"
               onClick={() => setShareOpen(true)}
               aria-label="Share this live"
-              className="flex size-10 items-center justify-center rounded-full bg-black/35 text-white ring-1 ring-inset ring-white/15 backdrop-blur-md transition-colors hover:bg-black/50 active:scale-90"
+              className="flex size-10 shrink-0 items-center justify-center rounded-full bg-black/35 text-white ring-1 ring-inset ring-white/15 backdrop-blur-md transition-colors hover:bg-black/50 active:scale-90"
             >
               <Send className="size-5" />
             </button>

@@ -31,8 +31,7 @@ export function GoLiveToggle() {
             Your audience is waiting. Choose how you want to go on air.
           </h2>
           <p className="leading-relaxed text-muted-foreground">
-            Broadcast a live audio room or a full-screen video stream. Either way, your followers get notified and can
-            join the chat, send reactions, and gift in real time.
+            Broadcast a live audio room or a full-screen video stream.
           </p>
         </div>
 

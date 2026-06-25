@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { Clock, Globe, Loader2, Lock, MoreVertical, Play, Trash2 } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { deleteEpisode, setEpisodePrivacy } from "@/app/actions/shows"
-import { getAvatarColor } from "@/lib/identity"
+import { MarqueeTitle } from "@/components/marquee-title"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -114,31 +114,20 @@ export function VideoCard({ show, owned = false }: { show: Show; owned?: boolean
         )}
       </Link>
 
-      {/* Meta row: avatar + title + menu, YouTube-style */}
+      {/* Meta row: title + menu. The uploader's name/avatar is intentionally
+          omitted — the catalogue is always viewed on that owner's own profile. */}
       <div className="flex items-start gap-2.5">
-        <Link href={href} aria-hidden tabIndex={-1} className="shrink-0">
-          <span
-            className="flex size-9 items-center justify-center overflow-hidden rounded-full text-xs font-semibold text-white"
-            style={{ backgroundColor: getAvatarColor(show.host.id || show.host.name || show.id) }}
-          >
-            {show.host.avatar && show.host.avatar !== "/placeholder.svg" ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={show.host.avatar || "/placeholder.svg"} alt="" className="size-full object-cover" />
-            ) : (
-              (show.host.name?.[0] ?? "?").toUpperCase()
-            )}
-          </span>
-        </Link>
-
         <Link href={href} className="min-w-0 flex-1">
-          <h3 className="line-clamp-2 text-pretty font-display text-sm font-semibold leading-snug tracking-tight transition-colors group-hover:text-primary">
-            {show.title}
-          </h3>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">{show.host.name}</p>
-          <p className="truncate text-xs text-muted-foreground">
-            {show.category}
-            {show.publishedAt ? ` · ${show.publishedAt}` : ""}
-          </p>
+          {/* Title stays on a single line; it auto-scrolls (marquee) when too long. */}
+          <MarqueeTitle
+            text={show.title}
+            className="font-display text-sm font-semibold leading-snug tracking-tight transition-colors group-hover:text-primary"
+          />
+          {(show.category || show.publishedAt) && (
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+              {[show.category, show.publishedAt].filter(Boolean).join(" · ")}
+            </p>
+          )}
         </Link>
 
         {owned && (

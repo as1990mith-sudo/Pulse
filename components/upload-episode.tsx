@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import { Plus, X, Loader2, Headphones, Video, UploadCloud, CheckCircle2, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { CoverUpload } from "@/components/admin/cover-upload"
 import { uploadMedia } from "@/lib/upload-media"
 import { publishShow } from "@/app/actions/shows"
@@ -47,7 +46,7 @@ function formatDuration(secs: number): string {
  * catalogue. Media uploads straight to Blob (via uploadMedia), then we publish
  * the episode with publishShow. Shown only on the owner's own profile.
  */
-export function UploadEpisode({ playlists = [] }: { playlists?: string[] }) {
+export function UploadEpisode() {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -57,9 +56,6 @@ export function UploadEpisode({ playlists = [] }: { playlists?: string[] }) {
   const [mediaDuration, setMediaDuration] = useState(0)
   const [cover, setCover] = useState<string | null>(null)
   const [title, setTitle] = useState("")
-  const [category, setCategory] = useState("")
-  const [playlist, setPlaylist] = useState("")
-  const [description, setDescription] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
 
@@ -70,9 +66,6 @@ export function UploadEpisode({ playlists = [] }: { playlists?: string[] }) {
     setMediaDuration(0)
     setCover(null)
     setTitle("")
-    setCategory("")
-    setPlaylist("")
-    setDescription("")
     setError(null)
     if (mediaInputRef.current) mediaInputRef.current.value = ""
   }
@@ -129,14 +122,14 @@ export function UploadEpisode({ playlists = [] }: { playlists?: string[] }) {
 
         const result = await publishShow({
           title: title.trim(),
-          tagline: category.trim(),
-          category: category.trim(),
+          tagline: "",
+          category: "",
           duration: formatDuration(mediaDuration),
-          description: description.trim(),
+          description: "",
           cover,
           audioUrl: kind === "audio" ? media.url : null,
           videoUrl: kind === "video" ? media.url : null,
-          playlist: kind === "video" ? playlist.trim() || null : null,
+          playlist: null,
         })
 
         if (!result.ok) {
@@ -282,43 +275,8 @@ export function UploadEpisode({ playlists = [] }: { playlists?: string[] }) {
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Episode title"
-          aria-label="Episode title"
-        />
-        <Input
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          placeholder="Category (e.g. Teaching, Worship)"
-          aria-label="Category"
-        />
-        {/* Playlists only apply to video episodes (YouTube-style grouping). */}
-        {kind === "video" && (
-          <div>
-            <Input
-              value={playlist}
-              onChange={(e) => setPlaylist(e.target.value)}
-              placeholder="Playlist (optional, e.g. Sunday Sermons)"
-              aria-label="Playlist"
-              list="episode-playlists"
-            />
-            {playlists.length > 0 && (
-              <datalist id="episode-playlists">
-                {playlists.map((p) => (
-                  <option key={p} value={p} />
-                ))}
-              </datalist>
-            )}
-            <p className="mt-1 px-1 text-xs text-muted-foreground">
-              Group this video into a playlist. Pick an existing one or type a new name.
-            </p>
-          </div>
-        )}
-        <Textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Add a description (optional)"
-          aria-label="Description"
-          className="min-h-20 resize-none"
+          placeholder={kind === "video" ? "Video title" : "Track title"}
+          aria-label={kind === "video" ? "Video title" : "Track title"}
         />
 
         <CoverUpload value={cover} onChange={setCover} label="Cover art (optional)" />

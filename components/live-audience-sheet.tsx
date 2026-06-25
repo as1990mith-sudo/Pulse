@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { createPortal } from "react-dom"
 import { Users, X } from "lucide-react"
 import type { LiveAudienceMember } from "@/app/actions/live"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -25,6 +26,9 @@ export function LiveAudienceSheet({
   className?: string
 }) {
   const [open, setOpen] = useState(false)
+  // Portals need the DOM; guard against SSR so we only render once mounted.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   return (
     <>
@@ -44,8 +48,10 @@ export function LiveAudienceSheet({
         {count.toLocaleString()}
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
+      {open &&
+        mounted &&
+        createPortal(
+        <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
           <button
             type="button"
             aria-label="Close listeners"
@@ -94,7 +100,8 @@ export function LiveAudienceSheet({
               ))}
             </ul>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   )
