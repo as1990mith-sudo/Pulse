@@ -23,7 +23,7 @@ import {
   requestMusicControl,
   stepOffStage,
   callIn,
-  endLiveAsCoHost,
+  requestEndSession,
 } from "@/app/actions/live"
 import { cn } from "@/lib/utils"
 
@@ -101,6 +101,7 @@ export function CoHostConsole({
   viewers,
   locked,
   theme,
+  endRequestPending,
   onMinimize,
   onExit,
   refreshCalls,
@@ -120,6 +121,8 @@ export function CoHostConsole({
   viewers: number
   locked: boolean
   theme: string
+  // True while this co-host's "end live session" request awaits the host.
+  endRequestPending: boolean
   onMinimize?: (to?: string) => void
   onExit?: () => void
   refreshCalls: () => void
@@ -290,7 +293,9 @@ export function CoHostConsole({
     refreshCalls()
   }
   async function handleEndSession() {
-    await endLiveAsCoHost({ roomName: stream.roomName })
+    const res = await requestEndSession({ roomName: stream.roomName })
+    if (!res.ok && res.error) setMusicError(res.error)
+    refreshCalls()
   }
 
   const shareTarget: ShareTarget = {
@@ -402,6 +407,12 @@ export function CoHostConsole({
         {musicRequestPending && !musicApproved && onCall && (
           <p className="relative mx-auto rounded-full bg-amber-400/15 px-3 py-1.5 text-xs font-medium text-amber-200 ring-1 ring-inset ring-amber-400/20 backdrop-blur-md">
             Waiting for the host to approve your music control…
+          </p>
+        )}
+
+        {endRequestPending && (
+          <p className="relative mx-auto rounded-full bg-live/15 px-3 py-1.5 text-xs font-medium text-live ring-1 ring-inset ring-live/20 backdrop-blur-md">
+            Waiting for the host to end the live session…
           </p>
         )}
 

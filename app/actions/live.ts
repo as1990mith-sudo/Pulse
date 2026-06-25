@@ -810,13 +810,16 @@ export async function getCallState(input: { roomName: string }): Promise<{
   musicControllerId: string | null
   // Pending "may I control music?" request from a co-host (host view: approve/decline).
   musicApprovalRequest: CallRequestView | null
+  // A co-host's pending "end live session" request awaiting the host's answer.
+  // Includes who asked and how many ms remain before the live auto-ends.
+  endRequest: { byId: string; byName: string; remainingMs: number } | null
 }> {
   // Auto-end abandoned streams first so listeners of a vanished host close out.
   await endStaleStreams()
   const session = await auth.api.getSession({ headers: await headers() })
   const me = session?.user?.id ?? null
 
-  const [stream] = await db
+  let [stream] = await db
     .select({
       chatBgUrl: liveStream.chatBgUrl,
       chatBgEffect: liveStream.chatBgEffect,
@@ -824,9 +827,39 @@ export async function getCallState(input: { roomName: string }): Promise<{
       locked: liveStream.locked,
       pinnedChatId: liveStream.pinnedChatId,
       theme: liveStream.theme,
+      endRequestAt: liveStream.endRequestAt,
+      endRequestById: liveStream.endRequestById,
+      endRequestByName: liveStream.endRequestByName,
     })
     .from(liveStream)
     .where(eq(liveStream.roomName, input.roomName))
+
+  // A co-host's "end live session" request that the host never answered. Once
+  // the 30s window elapses, the live ends automatically on the next poll.
+  let endRequest: { byId: string; byName: string; remainingMs: number } | null = null
+  if (stream && stream.status === "live" && stream.endRequestAt) {
+    const remainingMs = END_REQUEST_WINDOW_MS - (Date.now() - stream.endRequestAt.getTime())
+    if (remainingMs <= 0) {
+      await db
+        .update(liveStream)
+        .set({
+          status: "ended",
+          endedAt: new Date(),
+          endRequestAt: null,
+          endRequestById: null,
+          endRequestByName: null,
+        })
+        .where(and(eq(liveStream.roomName, input.roomName), eq(liveStream.status, "live")))
+      revalidatePath("/live")
+      stream = { ...stream, status: "ended" }
+    } else if (stream.endRequestById) {
+      endRequest = {
+        byId: stream.endRequestById,
+        byName: stream.endRequestByName ?? "A co-host",
+        remainingMs,
+      }
+    }
+  }
 
   const rows = await db
     .select()
@@ -903,6 +936,7 @@ export async function getCallState(input: { roomName: string }): Promise<{
     coHosts,
     musicControllerId: controller?.userId ?? null,
     musicApprovalRequest: pendingMusic ? mapRequest(pendingMusic) : null,
+    endRequest,
   }
 }
 
@@ -1042,21 +1076,58 @@ export async function resolveMusicControl(input: {
   return { ok: true }
 }
 
+// How long the host has to answer a co-host's "end live session" request
+// before the live ends automatically. Mirrored on the client countdowns.
+export const END_REQUEST_WINDOW_MS = 30_000
+
 /**
- * Ends the broadcast on behalf of a co-host who holds the End Session
- * permission (the main host uses `endBroadcast`). Verifies the permission
- * server-side before flipping the stream to ended.
+ * A co-host who holds the End Session permission asks the host to end the live.
+ * Instead of ending immediately, this records a pending request on the stream.
+ * The host then has 30s to approve/decline; if unanswered, `getCallState`
+ * auto-ends the stream once the window elapses.
  */
-export async function endLiveAsCoHost(input: { roomName: string }): Promise<{ ok: boolean; error?: string }> {
+export async function requestEndSession(input: { roomName: string }): Promise<{ ok: boolean; error?: string }> {
   const user = await requireUser()
   const row = await getAcceptedRow(input.roomName, user.id)
   if (!row || row.role !== "cohost" || !row.canEndSession)
     return { ok: false, error: "You can't end this session." }
   await db
     .update(liveStream)
-    .set({ status: "ended", endedAt: new Date() })
+    .set({ endRequestAt: new Date(), endRequestById: user.id, endRequestByName: user.name ?? row.userName })
     .where(and(eq(liveStream.roomName, input.roomName), eq(liveStream.status, "live")))
-  revalidatePath("/live")
+  return { ok: true }
+}
+
+/**
+ * The host answers a co-host's pending "end live session" request. `approve`
+ * true ends the broadcast immediately; false clears the request and the session
+ * continues. Only the main host may resolve it.
+ */
+export async function resolveEndSession(input: {
+  roomName: string
+  approve: boolean
+}): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser()
+  if ((await getHostId(input.roomName)) !== user.id)
+    return { ok: false, error: "Only the host can answer this request." }
+  if (input.approve) {
+    await db
+      .update(liveStream)
+      .set({
+        status: "ended",
+        endedAt: new Date(),
+        endRequestAt: null,
+        endRequestById: null,
+        endRequestByName: null,
+      })
+      .where(and(eq(liveStream.roomName, input.roomName), eq(liveStream.status, "live")))
+    revalidatePath("/live")
+  } else {
+    await db
+      .update(liveStream)
+      .set({ endRequestAt: null, endRequestById: null, endRequestByName: null })
+      .where(eq(liveStream.roomName, input.roomName))
+  }
   return { ok: true }
 }
 
