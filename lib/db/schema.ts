@@ -355,6 +355,18 @@ export const liveCallRequest = pgTable("live_call_request", {
   userName: text("userName").notNull(),
   kind: text("kind").notNull(),
   status: text("status").notNull().default("pending"),
+  // Co-host system: an accepted speaker can be promoted by the main host to
+  // "cohost", which unlocks a host-like console gated by the permissions below.
+  role: text("role").notNull().default("guest"),
+  // Co-host permissions (tickable by the main host only).
+  canAcceptRequests: boolean("canAcceptRequests").notNull().default(false),
+  canControlTracks: boolean("canControlTracks").notNull().default(false),
+  canEndSession: boolean("canEndSession").notNull().default(false),
+  // Music approval flow: the first time a co-host with Control Tracks tries to
+  // upload, the host must approve. Once approved they keep control until the
+  // Control Tracks permission is revoked.
+  musicApproved: boolean("musicApproved").notNull().default(false),
+  musicRequestPending: boolean("musicRequestPending").notNull().default(false),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 })

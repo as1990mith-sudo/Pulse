@@ -88,9 +88,11 @@ export function LiveStage({
   canRequestCall = false,
   callPending = false,
   mutedIds = new Set<string>(),
+  coHostIds = new Set<string>(),
   hostFollow = null,
   onRequestCall,
   onRemoveGuest,
+  onTapSpeaker,
 }: {
   host: StageHost
   speakers: LiveParticipant[]
@@ -101,9 +103,13 @@ export function LiveStage({
   canRequestCall?: boolean
   callPending?: boolean
   mutedIds?: Set<string>
+  // Identities currently promoted to co-host (distinct stage tag for everyone).
+  coHostIds?: Set<string>
   hostFollow?: HostFollow | null
   onRequestCall?: () => void
   onRemoveGuest?: (identity: string) => void
+  // Host taps a speaker tile to open the Make/Manage Co-Host context menu.
+  onTapSpeaker?: (identity: string) => void
 }) {
   const active = new Set(activeSpeakers)
 
@@ -146,8 +152,9 @@ export function LiveStage({
             muted: mutedIds.has(g.identity),
             quality: g.quality,
           }}
-          role="Guest"
+          role={coHostIds.has(g.identity) ? "Co-Host" : "Guest"}
           onRemove={isHost && onRemoveGuest ? () => onRemoveGuest(g.identity) : undefined}
+          onTap={isHost && onTapSpeaker ? () => onTapSpeaker(g.identity) : undefined}
         />
       ))}
 
@@ -167,19 +174,29 @@ function StageTile({
   slot,
   role,
   onRemove,
+  onTap,
   hostFollow = null,
 }: {
   slot: StageSlot
-  role: "Host" | "Guest"
+  role: "Host" | "Guest" | "Co-Host"
   onRemove?: () => void
+  onTap?: () => void
   hostFollow?: HostFollow | null
 }) {
   const isHost = role === "Host"
+  const isCoHost = role === "Co-Host"
   return (
     <div
+      onClick={onTap}
+      role={onTap ? "button" : undefined}
+      tabIndex={onTap ? 0 : undefined}
+      onKeyDown={onTap ? (e) => (e.key === "Enter" || e.key === " ") && onTap() : undefined}
+      aria-label={onTap ? `Manage ${slot.name}` : undefined}
       className={cn(
         "flex flex-col items-center gap-1.5 rounded-2xl border border-white/15 bg-zinc-900 px-1 py-3 shadow-lg shadow-black/30 transition-colors",
         slot.isSpeaking && "border-call-accept/60 bg-call-accept/10",
+        isCoHost && "border-amber-400/40",
+        onTap && "cursor-pointer hover:border-white/40",
         !isHost && "speaker-in",
       )}
     >
@@ -256,7 +273,10 @@ function StageTile({
         {onRemove && (
           <button
             type="button"
-            onClick={onRemove}
+            onClick={(e) => {
+              e.stopPropagation()
+              onRemove()
+            }}
             aria-label={`Remove ${slot.name} from stage`}
             className="absolute -left-1 -top-1 z-20 flex size-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow transition-transform hover:scale-110"
           >
@@ -275,7 +295,11 @@ function StageTile({
       <span
         className={cn(
           "rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide",
-          isHost ? "bg-primary/20 text-primary" : "bg-white/15 text-white/70",
+          isHost
+            ? "bg-primary/20 text-primary"
+            : isCoHost
+              ? "bg-amber-400/20 text-amber-300"
+              : "bg-white/15 text-white/70",
         )}
       >
         {role}
