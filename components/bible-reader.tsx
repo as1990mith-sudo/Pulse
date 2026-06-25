@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import useSWR from "swr"
 import {
@@ -128,8 +128,10 @@ export function BibleReader() {
   const readingError = isApiMode ? apiError : error
   const translationKey = (mode === "interlinear" ? "kjv" : mode) as "kjv" | "nlt" | "msg"
 
-  // Verse tapped for the Copy / Share / Highlight action sheet.
+  // Verse tapped for the Copy / Share / Highlight popover, plus the on-screen
+  // rect of the tapped verse so the popover can anchor near it.
   const [selectedVerse, setSelectedVerse] = useState<number | null>(null)
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null)
 
   function scrollTop() {
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" })
@@ -178,10 +180,13 @@ export function BibleReader() {
   }
 
   // Tapping a verse highlights it when a colour is armed, otherwise opens the
-  // Copy / Share / Highlight action sheet.
-  function onVerseTap(verse: number) {
+  // Copy / Share / Highlight popover anchored to the tapped verse.
+  function onVerseTap(verse: number, el: HTMLElement) {
     if (activeColor) toggleHighlight(verse)
-    else setSelectedVerse(verse)
+    else {
+      setAnchorRect(el.getBoundingClientRect())
+      setSelectedVerse(verse)
+    }
   }
 
   const isFirst = bookIndex === 0 && chapter === 1
@@ -339,7 +344,7 @@ export function BibleReader() {
               return (
                 <li
                   key={v.verse}
-                  onClick={() => onVerseTap(v.verse)}
+                  onClick={(e) => onVerseTap(v.verse, e.currentTarget)}
                   className={cn(
                     "flex cursor-pointer gap-3 rounded-md px-2 py-0.5 text-lg leading-relaxed text-justify [text-justify:inter-word] transition-colors hover:bg-secondary/60",
                   )}
@@ -365,6 +370,7 @@ export function BibleReader() {
             reference={`${book} ${chapter}:${selectedVerse}`}
             translationShort={TRANSLATION_SHORT[translationKey]}
             text={v.text}
+            anchorRect={anchorRect}
             activeHighlight={highlights[id] ?? null}
             onHighlight={(key) => setVerseHighlight(selectedVerse, key)}
             onClose={() => setSelectedVerse(null)}
@@ -523,14 +529,18 @@ function ChapterPicker({
   )
 }
 
+const VERSE_POPOVER_WIDTH = 300 // px — used to clamp the popover within the viewport.
+
 /**
- * Slide-up sheet shown when a verse is tapped: copy the text, share it via the
- * native share sheet (with a clipboard fallback), or highlight it in a colour.
+ * Compact popover shown when a verse is tapped, anchored near the verse itself
+ * (not a full-screen sheet): copy the text, share it via the native share sheet
+ * (with a clipboard fallback), or highlight it in a colour.
  */
 function VerseActionSheet({
   reference,
   translationShort,
   text,
+  anchorRect,
   activeHighlight,
   onHighlight,
   onClose,
@@ -538,12 +548,43 @@ function VerseActionSheet({
   reference: string
   translationShort: string
   text: string
+  anchorRect: DOMRect | null
   activeHighlight: HighlightKey | null
   onHighlight: (key: HighlightKey | null) => void
   onClose: () => void
 }) {
   const [copied, setCopied] = useState(false)
+  const popRef = useRef<HTMLDivElement>(null)
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null)
   const formatted = `"${text}" — ${reference} (${translationShort})`
+
+  // Anchor the popover to the tapped verse, clamped to the viewport and flipped
+  // above the verse when there isn't enough room below it.
+  useLayoutEffect(() => {
+    if (!anchorRect) return
+    const compute = () => {
+      const margin = 8
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      const width = Math.min(VERSE_POPOVER_WIDTH, vw - margin * 2)
+      const height = popRef.current?.offsetHeight ?? 220
+      let left = anchorRect.left + anchorRect.width / 2 - width / 2
+      left = Math.max(margin, Math.min(left, vw - width - margin))
+      const spaceBelow = vh - anchorRect.bottom
+      const top =
+        spaceBelow < height + margin && anchorRect.top > spaceBelow
+          ? Math.max(margin, anchorRect.top - height - 6)
+          : Math.min(anchorRect.bottom + 6, vh - height - margin)
+      setCoords({ top, left })
+    }
+    compute()
+    window.addEventListener("scroll", compute, true)
+    window.addEventListener("resize", compute)
+    return () => {
+      window.removeEventListener("scroll", compute, true)
+      window.removeEventListener("resize", compute)
+    }
+  }, [anchorRect])
 
   async function copy() {
     try {
@@ -571,17 +612,34 @@ function VerseActionSheet({
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose()
     }
+    function onDown(e: MouseEvent) {
+      if (popRef.current && !popRef.current.contains(e.target as Node)) onClose()
+    }
     document.addEventListener("keydown", onKey)
-    return () => document.removeEventListener("keydown", onKey)
+    document.addEventListener("mousedown", onDown)
+    return () => {
+      document.removeEventListener("keydown", onKey)
+      document.removeEventListener("mousedown", onDown)
+    }
   }, [onClose])
 
   if (typeof document === "undefined") return null
 
   return createPortal(
-    <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
-      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-      <div className="relative w-full max-w-lg rounded-t-2xl border border-border bg-popover-solid p-4 text-popover-foreground shadow-2xl sm:rounded-2xl">
-        <div className="mb-3 flex items-start justify-between gap-3">
+    <div
+      ref={popRef}
+      role="dialog"
+      aria-label={`${reference} actions`}
+      style={{
+        position: "fixed",
+        top: coords?.top ?? -9999,
+        left: coords?.left ?? -9999,
+        width: Math.min(VERSE_POPOVER_WIDTH, typeof window !== "undefined" ? window.innerWidth - 16 : VERSE_POPOVER_WIDTH),
+        visibility: coords ? "visible" : "hidden",
+      }}
+      className="z-[70] rounded-2xl border border-border bg-popover-solid p-3 text-popover-foreground shadow-2xl duration-150 animate-in fade-in zoom-in-95"
+    >
+        <div className="mb-2.5 flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-sm font-bold">{reference}</p>
             <p className="text-xs uppercase tracking-wider text-muted-foreground">{translationShort}</p>
@@ -644,7 +702,6 @@ function VerseActionSheet({
             </button>
           )}
         </div>
-      </div>
     </div>,
     document.body,
   )
