@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Loader2, Mic, MicOff, Music, Radio, Send, Users, Volume2, VolumeX } from "lucide-react"
+import { Mic, MicOff, Music, Radio, Send, Users, Volume2, VolumeX } from "lucide-react"
 import { ShareSheet } from "@/components/share-sheet"
 import { BackExitMenu } from "@/components/live-back-menu"
 import { LiveChat } from "@/components/live-chat"
