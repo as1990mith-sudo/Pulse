@@ -33,6 +33,7 @@ import {
   requestToJoin,
   respondToCallRequest,
   removeFromStage,
+  stepOffStage,
 } from "@/app/actions/live"
 import { toggleFollow, getFollowingIds } from "@/app/actions/follow"
 import { getOrCreateConversation } from "@/app/actions/dm"
@@ -395,6 +396,10 @@ export function LiveListener({
         theme={theme}
         onMinimize={onMinimize}
         onExit={() => {
+          // Leaving the room entirely: step off first so the stage tile clears
+          // (the co-host grant is preserved, so the host can still manage them),
+          // then drop the connection and navigate away.
+          void stepOffStage({ roomName: stream.roomName })
           void disconnect()
           if (onExit) onExit()
           else router.push("/live")

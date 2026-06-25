@@ -174,6 +174,92 @@ export function ManageCoHostMenu({
 }
 
 /**
+ * The MAIN HOST's "Co-hosts" tab: lists everyone granted co-host status —
+ * whether or not they're still on the call — with their three permission
+ * toggles and a Remove (retract) button. Retracting works regardless of
+ * whether the co-host is currently in the session.
+ */
+export function CoHostsPanel({
+  coHosts,
+  onTogglePermission,
+  onRemoveCoHost,
+  onClose,
+}: {
+  coHosts: CallRequestView[]
+  onTogglePermission: (userId: string, permission: keyof CoHostPermissions, enabled: boolean) => void
+  onRemoveCoHost: (userId: string) => void
+  onClose: () => void
+}) {
+  return (
+    <MenuSheet
+      title="Co-hosts"
+      subtitle={coHosts.length === 1 ? "1 co-host" : `${coHosts.length} co-hosts`}
+      onClose={onClose}
+    >
+      {coHosts.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-border/60 px-3 py-6 text-center text-sm text-muted-foreground">
+          You haven&apos;t made anyone a co-host yet. Tap a speaker on stage to promote them.
+        </p>
+      ) : (
+        <div className="space-y-4">
+          {coHosts.map((c) => {
+            const onStage = c.status === "accepted"
+            return (
+              <div key={c.userId} className="space-y-2 rounded-2xl border border-border/60 p-3">
+                <div className="flex items-center gap-3">
+                  <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold", c.color)}>
+                    {c.initials}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold">{c.userName}</span>
+                  </span>
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                      onStage ? "bg-call-accept/15 text-call-accept" : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {onStage ? "On stage" : "Off call"}
+                  </span>
+                </div>
+                <PermissionToggle
+                  icon={<PhoneIncoming />}
+                  label="Accept Call Requests"
+                  description="Approve listeners who ask to speak."
+                  enabled={c.permissions.acceptRequests}
+                  onToggle={(next) => onTogglePermission(c.userId, "acceptRequests", next)}
+                />
+                <PermissionToggle
+                  icon={<Music />}
+                  label="Control Tracks"
+                  description="Manage the background music. Your music controls pause while they do."
+                  enabled={c.permissions.controlTracks}
+                  onToggle={(next) => onTogglePermission(c.userId, "controlTracks", next)}
+                />
+                <PermissionToggle
+                  icon={<PowerOff />}
+                  label="End Session"
+                  description="Allow this co-host to end the whole live session."
+                  enabled={c.permissions.endSession}
+                  onToggle={(next) => onTogglePermission(c.userId, "endSession", next)}
+                />
+                <button
+                  type="button"
+                  onClick={() => onRemoveCoHost(c.userId)}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/15"
+                >
+                  <UserMinus className="size-4" /> Remove co-host
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </MenuSheet>
+  )
+}
+
+/**
  * Prompt shown to the MAIN HOST when a track-controlling co-host asks to take
  * over the music for the first time. Approve grants control until Control
  * Tracks is revoked; Decline leaves music with the host.

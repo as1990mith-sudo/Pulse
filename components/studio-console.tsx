@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import {
   CheckCircle2,
+  Crown,
   Globe,
   Loader2,
   Lock,
@@ -51,7 +52,7 @@ import {
   type CoHostPermissions,
   type LiveStreamView,
 } from "@/app/actions/live"
-import { ManageCoHostMenu, MusicApprovalPrompt } from "@/components/live/cohost-menu"
+import { ManageCoHostMenu, MusicApprovalPrompt, CoHostsPanel } from "@/components/live/cohost-menu"
 import { useLiveAudio } from "@/lib/use-live-audio"
 import { uploadMedia } from "@/lib/upload-media"
 import { LiveChat } from "@/components/live-chat"
@@ -148,7 +149,7 @@ export function StudioConsole({
   // mid-session so it can still be published when they go off air.
   const recordedBlobRef = useRef<Blob | null>(null)
   // Which slide-up panel is open. Only one at a time keeps the studio compact.
-  const [panel, setPanel] = useState<null | "music" | "people" | "theme">(null)
+  const [panel, setPanel] = useState<null | "music" | "people" | "theme" | "cohosts">(null)
   // Immersive studio theme (persisted server-side, applied live to listeners).
   const [theme, setTheme] = useState(resumeStream?.theme ?? "default")
 
@@ -262,8 +263,10 @@ export function StudioConsole({
   const pending = callState?.pendingRequests ?? []
   const guests = callState?.guests ?? []
   const locked = callState?.locked ?? false
-  // Co-host state from the poll.
-  const coHostIds = new Set((callState?.coHosts ?? []).map((c) => c.userId))
+  // Co-host state from the poll. `coHosts` includes everyone granted co-host
+  // status (on the call or off it) so the host can manage them all.
+  const coHosts = callState?.coHosts ?? []
+  const coHostIds = new Set(coHosts.map((c) => c.userId))
   // When a co-host has taken over the music, the host's own music controls are
   // disabled and handed to them.
   const musicControllerId = callState?.musicControllerId ?? null
@@ -723,6 +726,16 @@ export function StudioConsole({
               disabled={!live}
               onClick={() => setPanel((p) => (p === "theme" ? null : "theme"))}
             />
+            {coHosts.length > 0 && (
+              <DockButton
+                icon={<Crown className="size-5" />}
+                label="Co-hosts"
+                badge={coHosts.length}
+                active={panel === "cohosts"}
+                disabled={!live}
+                onClick={() => setPanel((p) => (p === "cohosts" ? null : "cohosts"))}
+              />
+            )}
             {live && roomName && <ShareButton roomName={roomName} title={title} cover={cover} />}
           </div>
         </div>
@@ -758,6 +771,16 @@ export function StudioConsole({
       )}
       {panel === "theme" && (
         <ThemePanel current={theme} onSelect={changeTheme} onClose={() => setPanel(null)} />
+      )}
+      {panel === "cohosts" && (
+        <CoHostsPanel
+          coHosts={coHosts}
+          onTogglePermission={(userId, permission, enabled) =>
+            void handleTogglePermission(userId, permission, enabled)
+          }
+          onRemoveCoHost={(userId) => void handleRemoveCoHost(userId)}
+          onClose={() => setPanel(null)}
+        />
       )}
       {panel === "music" && (
         <MusicPanel

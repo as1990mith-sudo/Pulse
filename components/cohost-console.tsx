@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Mic, MicOff, Music, Radio, Send, Users, Volume2, VolumeX } from "lucide-react"
+import { Mic, MicOff, Music, PhoneCall, Radio, Send, Users, Volume2, VolumeX } from "lucide-react"
 import { ShareSheet } from "@/components/share-sheet"
 import { BackExitMenu } from "@/components/live-back-menu"
 import { LiveChat } from "@/components/live-chat"
@@ -21,7 +21,8 @@ import type { CallRequestView, CoHostPermissions, LiveStreamView } from "@/app/a
 import {
   respondToCallRequest,
   requestMusicControl,
-  removeFromStage,
+  stepOffStage,
+  callIn,
   endLiveAsCoHost,
 } from "@/app/actions/live"
 import { cn } from "@/lib/utils"
@@ -48,7 +49,7 @@ function DockButton({
   onClick?: () => void
   disabled?: boolean
   active?: boolean
-  tone?: "default" | "danger"
+  tone?: "default" | "danger" | "success"
   children: React.ReactNode
 }) {
   return (
@@ -62,9 +63,11 @@ function DockButton({
         "flex size-12 items-center justify-center rounded-full shadow-xl ring-1 ring-inset transition-all hover:scale-105 active:scale-95 disabled:opacity-50 [&>svg]:size-[22px] [&>svg]:stroke-[2.5]",
         tone === "danger"
           ? "bg-destructive text-white shadow-destructive/40 ring-white/25 hover:bg-destructive/90"
-          : active
-            ? "bg-primary text-primary-foreground shadow-primary/40 ring-white/25"
-            : "bg-white/25 text-white ring-white/25 hover:bg-white/35",
+          : tone === "success"
+            ? "bg-call-accept text-white shadow-call-accept/40 ring-white/25 hover:bg-call-accept/90"
+            : active
+              ? "bg-primary text-primary-foreground shadow-primary/40 ring-white/25"
+              : "bg-white/25 text-white ring-white/25 hover:bg-white/35",
       )}
     >
       {children}
@@ -136,6 +139,11 @@ export function CoHostConsole({
     stopMusic,
   } = audio
 
+  // Whether the co-host is actively on the call (publishing). Driven by the
+  // LiveKit publish permission, which the host revokes on step-off / drop and
+  // restores on call-in — so this flips responsively without waiting on a poll.
+  const onCall = state.canPublish
+
   const [panel, setPanel] = useState<null | "music" | "people">(null)
   const [muted, setMuted] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
@@ -173,6 +181,11 @@ export function CoHostConsole({
   async function playMusicTrack(index: number) {
     const track = musicTracks[index]
     if (!track) return
+    // Music can only be mixed in while actually on the call.
+    if (!onCall) {
+      setMusicError("Call back in to control the music.")
+      return
+    }
     // Gate on host approval the first time.
     const approved = await ensureApproval()
     if (!approved) {
@@ -264,10 +277,17 @@ export function CoHostConsole({
     await respondToCallRequest({ id, accept: false })
     refreshCalls()
   }
-  async function leaveStage() {
-    if (!currentUserId) return
-    await removeFromStage({ roomName: stream.roomName, userId: currentUserId })
-    if (onExit) onExit()
+  // Step off the call but stay in the room as a co-host (keeps the grant +
+  // permissions; the dock swaps to a "Call in" button to return).
+  async function handleStepOff() {
+    await stepOffStage({ roomName: stream.roomName })
+    refreshCalls()
+  }
+  // Rejoin the stage after stepping off / dropping (no host approval needed).
+  async function handleCallIn() {
+    const res = await callIn({ roomName: stream.roomName })
+    if (!res.ok && res.error) setMusicError(res.error)
+    refreshCalls()
   }
   async function handleEndSession() {
     await endLiveAsCoHost({ roomName: stream.roomName })
@@ -379,9 +399,15 @@ export function CoHostConsole({
           </button>
         )}
 
-        {musicRequestPending && !musicApproved && (
+        {musicRequestPending && !musicApproved && onCall && (
           <p className="relative mx-auto rounded-full bg-amber-400/15 px-3 py-1.5 text-xs font-medium text-amber-200 ring-1 ring-inset ring-amber-400/20 backdrop-blur-md">
             Waiting for the host to approve your music control…
+          </p>
+        )}
+
+        {!onCall && (
+          <p className="relative mx-auto rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white/80 ring-1 ring-inset ring-white/15 backdrop-blur-md">
+            You&apos;re off the call — tap Call in to rejoin the stage.
           </p>
         )}
       </div>
@@ -389,14 +415,16 @@ export function CoHostConsole({
       {/* ───────── Co-host dock ───────── */}
       <div className="relative shrink-0 border-t border-white/10 px-4 py-2 pl-safe pr-safe backdrop-blur-xl">
         <div className="flex items-center justify-center gap-2 sm:gap-3">
-          {/* Mic — a co-host is always on stage. */}
-          <DockButton
-            label={state.micEnabled ? "Mute your mic" : "Unmute your mic"}
-            onClick={() => void toggleMic()}
-            active={state.micEnabled}
-          >
-            {state.micEnabled ? <Mic className="size-5" /> : <MicOff className="size-5" />}
-          </DockButton>
+          {/* Mic — only while on the call. */}
+          {onCall && (
+            <DockButton
+              label={state.micEnabled ? "Mute your mic" : "Unmute your mic"}
+              onClick={() => void toggleMic()}
+              active={state.micEnabled}
+            >
+              {state.micEnabled ? <Mic className="size-5" /> : <MicOff className="size-5" />}
+            </DockButton>
+          )}
 
           {/* Listener mute (monitor others). */}
           <DockButton label={muted ? "Unmute audio" : "Mute audio"} onClick={toggleMute} active={muted}>
@@ -419,8 +447,8 @@ export function CoHostConsole({
             </DockButton>
           )}
 
-          {/* Music — gated by the Control Tracks permission. */}
-          {permissions.controlTracks && (
+          {/* Music — gated by the Control Tracks permission, and only on the call. */}
+          {permissions.controlTracks && onCall && (
             <DockButton
               label={musicPlaying ? "Background music (playing)" : "Background music"}
               onClick={() => setPanel((p) => (p === "music" ? null : "music"))}
@@ -434,9 +462,16 @@ export function CoHostConsole({
             <Send className="size-5" />
           </DockButton>
 
-          <DockButton label="Leave the stage" onClick={() => void leaveStage()} tone="danger">
-            <Radio className="size-5" />
-          </DockButton>
+          {/* On the call → step off (stay in the room); off the call → call back in. */}
+          {onCall ? (
+            <DockButton label="Step off the call" onClick={() => void handleStepOff()} tone="danger">
+              <Radio className="size-5" />
+            </DockButton>
+          ) : (
+            <DockButton label="Call in" onClick={() => void handleCallIn()} tone="success">
+              <PhoneCall className="size-5" />
+            </DockButton>
+          )}
         </div>
       </div>
 
@@ -465,7 +500,7 @@ export function CoHostConsole({
         />
       )}
 
-      {panel === "music" && permissions.controlTracks && (
+      {panel === "music" && permissions.controlTracks && onCall && (
         <MusicPanel
           live={state.connected}
           position={musicPosition}
