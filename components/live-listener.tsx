@@ -107,7 +107,7 @@ export function LiveListener({
   canListen: boolean
   currentUser?: CurrentUser | null
   currentUserId?: string | null
-  onMinimize?: () => void
+  onMinimize?: (to?: string) => void
   onExit?: () => void
   onMeta?: (m: { title: string; cover: string | null; live: boolean; subtitle?: string }) => void
 }) {
@@ -148,8 +148,11 @@ export function LiveListener({
     setMessaging(true)
     try {
       const conversationId = await getOrCreateConversation(stream.hostId)
-      onMinimize?.()
-      router.push(`/messages/${conversationId}`)
+      // Minimise straight to the DM thread in a single navigation. Previously we
+      // minimised (which pushed "/live") and then pushed "/messages/[id]", and
+      // the two competing router.push calls made the page reload in a loop.
+      if (onMinimize) onMinimize(`/messages/${conversationId}`)
+      else router.push(`/messages/${conversationId}`)
     } catch {
       setMessaging(false)
     }

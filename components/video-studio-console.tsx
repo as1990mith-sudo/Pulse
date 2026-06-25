@@ -553,8 +553,8 @@ export function VideoStudioConsole({
         {live && <ReactionLayer roomName={connected ? roomName! : undefined} />}
 
         {/* Top bar: back menu + LIVE/viewers/timer */}
-        <div className="absolute inset-x-0 top-0 z-20 flex items-start justify-between p-4 pt-[calc(env(safe-area-inset-top)+1rem)]">
-          <div className="flex items-center gap-2">
+        <div className="absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-2 p-4 pt-[calc(env(safe-area-inset-top)+1rem)]">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             <BackExitMenu
               showMenu={live}
               exitLabel="End"
@@ -595,7 +595,7 @@ export function VideoStudioConsole({
               type="button"
               onClick={() => setShareOpen(true)}
               aria-label="Share this live"
-              className="flex size-10 items-center justify-center rounded-full bg-black/35 text-white ring-1 ring-inset ring-white/15 backdrop-blur-md transition-colors hover:bg-black/50 active:scale-90"
+              className="flex size-10 shrink-0 items-center justify-center rounded-full bg-black/35 text-white ring-1 ring-inset ring-white/15 backdrop-blur-md transition-colors hover:bg-black/50 active:scale-90"
             >
               <Send className="size-5" />
             </button>

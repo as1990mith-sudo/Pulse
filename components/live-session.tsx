@@ -55,7 +55,7 @@ export type LiveMeta = { title: string; cover: string | null; live: boolean; sub
 type Ctx = {
   open: (s: Session) => void
   close: () => void
-  minimize: () => void
+  minimize: (to?: string) => void
   expand: () => void
   setMeta: (m: LiveMeta) => void
   activeKey: string | null
@@ -87,10 +87,16 @@ export function LiveSessionProvider({ children }: { children: React.ReactNode })
     router.push("/live")
   }, [router])
 
-  const minimize = useCallback(() => {
-    setMinimized(true)
-    router.push("/live")
-  }, [router])
+  // Minimise the immersive room (keeping audio alive) and navigate. Defaults to
+  // the live listing, but callers can pass a destination (e.g. a DM thread) so
+  // we perform a single navigation instead of racing two router.push calls.
+  const minimize = useCallback(
+    (to: string = "/live") => {
+      setMinimized(true)
+      router.push(to)
+    },
+    [router],
+  )
 
   const expand = useCallback(() => setMinimized(false), [])
   const setMeta = useCallback((m: LiveMeta) => setMetaState(m), [])
