@@ -716,7 +716,16 @@ export function StudioConsole({
         />
       )}
 
-      {endedSession && <PublishOverlay session={endedSession} onClose={() => setEndedSession(null)} />}
+      {endedSession && (
+        <PublishOverlay
+          session={endedSession}
+          onClose={() => setEndedSession(null)}
+          onExit={() => {
+            setEndedSession(null)
+            onExit?.()
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -1286,7 +1295,16 @@ function EqBars() {
  * with its live title. The host can then optionally refine the title,
  * description, and cover (saved back to the same episode) or just close.
  */
-function PublishOverlay({ session, onClose }: { session: { title: string; duration: string; audioBlob: Blob | null; cover: string | null }; onClose: () => void }) {
+function PublishOverlay({
+  session,
+  onClose,
+  onExit,
+}: {
+  session: { title: string; duration: string; audioBlob: Blob | null; cover: string | null }
+  onClose: () => void
+  // Called once auto-publishing finishes so the host is returned to the Live tab.
+  onExit: () => void
+}) {
   const router = useRouter()
   const [isSaving, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -1332,6 +1350,9 @@ function PublishOverlay({ session, onClose }: { session: { title: string; durati
         setSlug(res.slug)
         setPhase("published")
         router.refresh()
+        // Auto-publish is complete — return the host to the Live tab. The new
+        // episode is published and remains editable from their profile catalogue.
+        onExit()
       } else {
         setError(res.error)
         setPhase("failed")

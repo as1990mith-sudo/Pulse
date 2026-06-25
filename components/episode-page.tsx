@@ -19,17 +19,19 @@ export async function EpisodePage({ show }: { show: Show }) {
   return (
     <div className="min-h-screen">
       <SiteHeader />
-      <main className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
+      <main className="mx-auto w-full max-w-3xl py-6">
         <Link
           href="/live"
-          className="mb-5 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          className="mb-5 inline-flex items-center gap-1.5 px-4 text-sm text-muted-foreground transition-colors hover:text-foreground sm:px-6"
         >
           <ArrowLeft className="size-4" /> Back to all shows
         </Link>
 
-        <div className="space-y-6">
-          <EpisodePlayer show={show} />
+        {/* The player is rendered edge-to-edge (no horizontal padding) so the
+            video bleeds from one screen edge to the other. */}
+        <EpisodePlayer show={show} />
 
+        <div className="space-y-6 px-4 pt-6 sm:px-6">
           <EpisodeInteractions show={show} currentUser={currentUser} initialComments={comments} />
 
           <div className="space-y-3">
