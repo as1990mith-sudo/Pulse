@@ -506,12 +506,11 @@ export function LiveListener({
           <div className="flex items-center justify-center gap-2 sm:gap-3">
             {isOnStage ? (
               <>
-                {/* On-stage guest: mute own mic + leave stage. */}
+                {/* On-stage guest: mute own mic + leave stage. The mic stays
+                    white (only the Leave button is red); the icon conveys state. */}
                 <DockButton
                   label={state.micEnabled ? "Mute your mic" : "Unmute your mic"}
                   onClick={() => void toggleMic()}
-                  active={state.micEnabled}
-                  tone="live"
                 >
                   {state.micEnabled ? <Mic className="size-5" /> : <MicOff className="size-5" />}
                 </DockButton>
