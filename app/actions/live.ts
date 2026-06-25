@@ -1077,8 +1077,10 @@ export async function resolveMusicControl(input: {
 }
 
 // How long the host has to answer a co-host's "end live session" request
-// before the live ends automatically. Mirrored on the client countdowns.
-export const END_REQUEST_WINDOW_MS = 30_000
+// before the live ends automatically. Not exported — a "use server" module may
+// only export async functions; the client derives its countdown from the
+// server-reported remainingMs instead.
+const END_REQUEST_WINDOW_MS = 30_000
 
 /**
  * A co-host who holds the End Session permission asks the host to end the live.
