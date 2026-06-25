@@ -258,7 +258,9 @@ export function EpisodePlayer({ show }: { show: Show }) {
             "relative bg-black",
             isFullscreen
               ? "flex h-screen w-screen items-center justify-center"
-              : "-mx-4 aspect-video overflow-hidden sm:-mx-6",
+              : // Full-bleed within the player (the page renders this player
+                // without horizontal padding, so it reaches both screen edges).
+                "aspect-video w-full overflow-hidden",
           )}
         >
           <video
