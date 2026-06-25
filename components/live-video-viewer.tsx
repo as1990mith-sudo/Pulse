@@ -14,7 +14,6 @@ import {
   Share2,
   UserCheck,
   UserPlus,
-  Users,
   Video,
   VideoOff,
   Volume2,
@@ -30,9 +29,11 @@ import {
 } from "@/app/actions/live"
 import { toggleFollow } from "@/app/actions/follow"
 import { useLiveVideo } from "@/lib/use-live-video"
+import { useLivePresence } from "@/lib/use-live-presence"
 import { ReactionLayer, ReactionPicker } from "@/components/live-reactions"
 import { LiveChat } from "@/components/live-chat"
 import { BackExitMenu } from "@/components/live-back-menu"
+import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { ShareSheet } from "@/components/share-sheet"
 import type { ShareTarget } from "@/lib/share-types"
 import { getAvatarColor, getInitials } from "@/lib/identity"
@@ -274,6 +275,8 @@ export function LiveVideoViewer({
   if (canPublish) slots.push({ self: true })
   guestPeers.forEach((p) => slots.push({ self: false, peer: p }))
   const viewers = Math.max(0, participants - 1 - peers.length)
+  // Presence-backed audience (real names + avatars) for the "who's here" sheet.
+  const { count: presenceCount, members: presenceMembers } = useLivePresence(stream.roomName, canWatch)
   const isSelf = currentUserId === stream.hostId
   const remoteVideoOn = Boolean(hostPeer?.hasVideo)
 
@@ -390,9 +393,12 @@ export function LiveVideoViewer({
               </span>
               Live
             </span>
-            <span className="flex items-center gap-1.5 rounded-full bg-black/35 px-3 py-1.5 text-xs font-medium text-white/90 ring-1 ring-inset ring-white/10 backdrop-blur-md">
-              <Users className="size-3.5" /> {viewers.toLocaleString()}
-            </span>
+            <LiveAudienceSheet
+              count={presenceCount || viewers}
+              members={presenceMembers}
+              immersive
+              className="px-3 py-1.5 text-xs font-medium"
+            />
           </div>
         </div>
 
