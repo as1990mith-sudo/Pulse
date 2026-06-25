@@ -2,7 +2,7 @@
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 
-@custom-variant dark (&:is(.dark *, .theme-mid *));
+@custom-variant dark (&:is(.dark *, .theme-mid *, .theme-charcoal *, .theme-grass *));
 
 @theme inline {
   --font-heading: var(--font-sans);
@@ -166,6 +166,72 @@
   --sidebar-border: oklch(1 0 0 / 18%);
   }
 
+/* Charcoal mode — a true, OLED-deep black appearance (matching a near-#000
+   backdrop). Neutral, fully achromatic surfaces with high-contrast text. */
+.theme-charcoal {
+  color-scheme: dark;
+  --background: oklch(0.04 0 0);
+  --foreground: oklch(0.98 0 0);
+  --card: oklch(0.13 0 0);
+  --card-foreground: oklch(0.98 0 0);
+  --popover: oklch(0.13 0 0);
+  --popover-foreground: oklch(0.98 0 0);
+  --popover-solid: oklch(0.12 0 0);
+  --primary: oklch(0.72 0.18 55);
+  --primary-foreground: oklch(0.99 0.005 60);
+  --secondary: oklch(0.18 0 0);
+  --secondary-foreground: oklch(0.98 0 0);
+  --muted: oklch(0.18 0 0);
+  --muted-foreground: oklch(0.7 0 0);
+  --accent: oklch(0.2 0 0);
+  --accent-foreground: oklch(0.98 0 0);
+  --destructive: oklch(0.66 0.21 24);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.72 0.18 55);
+  --live: oklch(0.66 0.21 24);
+  --live-foreground: oklch(0.99 0.005 60);
+  --chart-5: oklch(0.7 0 0);
+  --sidebar: oklch(0.06 0 0);
+  --sidebar-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.18 0 0);
+  --sidebar-accent-foreground: oklch(0.98 0 0);
+  --sidebar-border: oklch(1 0 0 / 12%);
+}
+
+/* Grass mode — same translucent-glass treatment as Mid, but the twilight
+   palette is swapped for a bright, vibrant green instead of Mid's blue lean. */
+.theme-grass {
+  color-scheme: dark;
+  --background: oklch(0.28 0.05 150 / 95%);
+  --foreground: oklch(0.99 0.002 145);
+  --card: oklch(0.34 0.06 150 / 95%);
+  --card-foreground: oklch(0.99 0.002 145);
+  --popover: oklch(0.3 0.06 150 / 95%);
+  --popover-foreground: oklch(0.99 0.002 145);
+  --popover-solid: oklch(0.3 0.06 150);
+  --primary: oklch(0.74 0.18 55);
+  --primary-foreground: oklch(0.99 0.005 60);
+  --secondary: oklch(0.38 0.055 150 / 95%);
+  --secondary-foreground: oklch(0.99 0.002 145);
+  --muted: oklch(0.36 0.05 150 / 95%);
+  --muted-foreground: oklch(0.92 0.03 150);
+  --accent: oklch(0.4 0.06 150 / 95%);
+  --accent-foreground: oklch(0.99 0.002 145);
+  --destructive: oklch(0.68 0.21 24);
+  --border: oklch(1 0 0 / 18%);
+  --input: oklch(1 0 0 / 22%);
+  --ring: oklch(0.74 0.18 55);
+  --live: oklch(0.68 0.21 24);
+  --live-foreground: oklch(0.99 0.005 60);
+  --chart-5: oklch(0.92 0.03 150);
+  --sidebar: oklch(0.28 0.05 150 / 95%);
+  --sidebar-foreground: oklch(0.99 0.002 145);
+  --sidebar-accent: oklch(0.38 0.055 150 / 95%);
+  --sidebar-accent-foreground: oklch(0.99 0.002 145);
+  --sidebar-border: oklch(1 0 0 / 18%);
+}
+
 /* ── Skins ───────────────────────────────────────────────────────────────
    A second theming axis, independent of the light/dark/mid appearance. A skin
    only re-tints the accent (primary/ring/charts) and the status-ring gradient
@@ -204,6 +270,18 @@
   --skin-ring: linear-gradient(to top right, oklch(0.34 0.006 285), oklch(0.22 0.006 285), oklch(0.14 0.006 285));
 }
 
+/* "Yellow" — a bright, vivid golden-amber accent (matching the bold yellow of
+   the reference). Light fill, so it pairs with near-black text. */
+[data-skin="yellow"] {
+  --primary: oklch(0.84 0.17 88);
+  --primary-foreground: oklch(0.2 0.03 90);
+  --ring: oklch(0.84 0.17 88);
+  --sidebar-primary: oklch(0.84 0.17 88);
+  --sidebar-ring: oklch(0.84 0.17 88);
+  --chart-1: oklch(0.84 0.17 88);
+  --skin-ring: linear-gradient(to top right, oklch(0.9 0.16 95), oklch(0.84 0.17 85), oklch(0.76 0.16 68));
+}
+
 /* Dark mode — translucent ~95%-solid panels floating over a soft dark zinc
    gradient, mirroring the Mid treatment but keeping dark's neutral palette. */
 .dark body {
@@ -240,6 +318,37 @@
 /* Panels are ~95% solid now, so only a light blur smooths the faint 5% of the
    twilight gradient that shows through. */
 .theme-mid :is(.bg-card, .bg-popover, .bg-secondary, .bg-muted, .bg-accent) {
+  backdrop-filter: blur(6px) saturate(120%);
+  -webkit-backdrop-filter: blur(6px) saturate(120%);
+}
+
+/* Charcoal mode — a flat, near-pure-black canvas (OLED black) with only the
+   faintest lift so panels read against it. */
+.theme-charcoal body {
+  background-color: oklch(0.03 0 0);
+  background-image: linear-gradient(155deg, oklch(0.07 0 0), oklch(0.03 0 0) 55%, oklch(0.02 0 0));
+  background-attachment: fixed;
+}
+
+.theme-charcoal :is(.bg-card, .bg-popover, .bg-secondary, .bg-muted, .bg-accent) {
+  backdrop-filter: blur(6px) saturate(120%);
+  -webkit-backdrop-filter: blur(6px) saturate(120%);
+}
+
+/* Grass mode — a bright, vibrant green gradient canvas that the translucent
+   panels float over, mirroring Mid's treatment with a green lean. */
+.theme-grass body {
+  background-color: oklch(0.24 0.06 150);
+  background-image: linear-gradient(
+    155deg,
+    oklch(0.46 0.15 150),
+    oklch(0.41 0.16 145) 50%,
+    oklch(0.43 0.14 165)
+  );
+  background-attachment: fixed;
+}
+
+.theme-grass :is(.bg-card, .bg-popover, .bg-secondary, .bg-muted, .bg-accent) {
   backdrop-filter: blur(6px) saturate(120%);
   -webkit-backdrop-filter: blur(6px) saturate(120%);
 }

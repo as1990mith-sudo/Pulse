@@ -72,11 +72,13 @@ export default function RootLayout({
         <ThemeProvider
           attribute="class"
           defaultTheme="mid"
-          themes={['light', 'dark', 'mid']}
+          themes={['light', 'dark', 'mid', 'charcoal', 'grass']}
           value={{
             light: 'theme-light',
             dark: 'dark',
             mid: 'theme-mid',
+            charcoal: 'theme-charcoal',
+            grass: 'theme-grass',
           }}
           enableSystem={false}
           disableTransitionOnChange
