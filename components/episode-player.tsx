@@ -31,11 +31,49 @@ export function EpisodePlayer({ show }: { show: Show }) {
   const [duration, setDuration] = useState(0)
   const [speedIdx, setSpeedIdx] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  // YouTube-style overlay controls: visible by default, auto-hidden a few
+  // seconds into playback, and toggled when the video surface is tapped.
+  const [controlsVisible, setControlsVisible] = useState(true)
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // A single <video> drives both kinds; for audio the frame is hidden.
   const isVideo = Boolean(show.videoUrl)
   const mediaUrl = show.videoUrl ?? show.audioUrl
   const hasMedia = Boolean(mediaUrl)
   const pct = duration > 0 ? (current / duration) * 100 : 0
+
+  // Reveal the overlay controls and schedule an auto-hide while playing. When
+  // paused we keep them up so the surface never looks "dead".
+  function scheduleHide() {
+    if (hideTimer.current) clearTimeout(hideTimer.current)
+    hideTimer.current = setTimeout(() => setControlsVisible(false), 3000)
+  }
+  function revealControls() {
+    setControlsVisible(true)
+    if (playing) scheduleHide()
+    else if (hideTimer.current) clearTimeout(hideTimer.current)
+  }
+  // Tapping the video surface toggles the controls (hide if shown, reveal if not).
+  function onSurfaceTap() {
+    if (controlsVisible) {
+      if (hideTimer.current) clearTimeout(hideTimer.current)
+      setControlsVisible(false)
+    } else {
+      revealControls()
+    }
+  }
+
+  // Keep controls pinned while paused; start the auto-hide countdown on play.
+  useEffect(() => {
+    if (playing) scheduleHide()
+    else {
+      if (hideTimer.current) clearTimeout(hideTimer.current)
+      setControlsVisible(true)
+    }
+    return () => {
+      if (hideTimer.current) clearTimeout(hideTimer.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing])
 
   function toggle() {
     const el = mediaRef.current
@@ -247,6 +285,111 @@ export function EpisodePlayer({ show }: { show: Show }) {
     </div>
   )
 
+  // YouTube-style overlay that lives *on* the video: transport cluster centered,
+  // scrubber + times docked at the base, speed + fullscreen as secondary
+  // affordances. Fades out (and ignores taps) when the controls are hidden.
+  const renderVideoOverlay = () => (
+    <div
+      className={cn(
+        "absolute inset-0 z-10 transition-opacity duration-200",
+        controlsVisible ? "opacity-100" : "pointer-events-none opacity-0",
+      )}
+    >
+      {/* Legibility scrim, darker at the base where the scrubber sits. */}
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-black/35" />
+
+      {/* Fullscreen toggle (top-right). */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          void toggleFullscreen()
+          revealControls()
+        }}
+        aria-label={isFullscreen ? "Exit fullscreen" : "Expand to fullscreen"}
+        className="absolute right-3 top-3 flex size-10 items-center justify-center rounded-full bg-black/45 text-white ring-1 ring-white/15 backdrop-blur-md transition-colors hover:bg-black/65 active:scale-90"
+      >
+        {isFullscreen ? <Minimize className="size-5" /> : <Maximize className="size-5" />}
+      </button>
+
+      {/* Centered transport cluster (rewind / play / forward) + speed pill. */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
+        <div className="flex items-center justify-center gap-8">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              skip(-15)
+              revealControls()
+            }}
+            className="flex items-center justify-center text-white/85 transition-colors hover:text-white active:scale-90"
+            aria-label="Rewind 15 seconds"
+          >
+            <RotateCcw className="size-7" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              toggle()
+              revealControls()
+            }}
+            className="flex size-16 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/40 transition-transform hover:scale-105 active:scale-95"
+            aria-label={playing ? "Pause episode" : "Play episode"}
+          >
+            {playing ? <Pause className="size-7" /> : <Play className="size-7 translate-x-0.5" />}
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              skip(15)
+              revealControls()
+            }}
+            className="flex items-center justify-center text-white/85 transition-colors hover:text-white active:scale-90"
+            aria-label="Forward 15 seconds"
+          >
+            <RotateCw className="size-7" />
+          </button>
+        </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            cycleSpeed()
+            revealControls()
+          }}
+          className="inline-flex items-center gap-1.5 rounded-full bg-black/45 px-3 py-1.5 text-xs font-semibold text-white/90 backdrop-blur-md transition-colors hover:bg-black/65"
+          aria-label="Change playback speed"
+        >
+          <Gauge className="size-3.5" />
+          {SPEEDS[speedIdx]}x
+        </button>
+      </div>
+
+      {/* Scrubber docked at the base (YouTube-style). */}
+      <div className="absolute inset-x-0 bottom-0 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium tabular-nums text-white/85">
+          <span>{fmt(current)}</span>
+          <span>-{fmt(Math.max(0, duration - current))}</span>
+        </div>
+        <div className="group relative h-1.5 w-full" onClick={(e) => e.stopPropagation()}>
+          <div className="absolute inset-0 rounded-full bg-white/25" />
+          <div className="absolute inset-y-0 left-0 rounded-full bg-primary" style={{ width: `${pct}%` }} />
+          <input
+            type="range"
+            min={0}
+            max={duration || 0}
+            step={0.1}
+            value={current}
+            onChange={(e) => {
+              seek(e)
+              revealControls()
+            }}
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            aria-label="Seek"
+          />
+        </div>
+      </div>
+    </div>
+  )
+
   return (
     <div className="relative isolate">
       {/* Immersive, edge-to-edge video frame (no card). The cover art is the
@@ -254,8 +397,9 @@ export function EpisodePlayer({ show }: { show: Show }) {
       {isVideo ? (
         <div
           ref={frameRef}
+          onClick={onSurfaceTap}
           className={cn(
-            "relative bg-black",
+            "relative cursor-pointer bg-black",
             isFullscreen
               ? "flex h-screen w-screen items-center justify-center"
               : // Full-bleed within the player (the page renders this player
@@ -281,24 +425,9 @@ export function EpisodePlayer({ show }: { show: Show }) {
             onEnded={() => setPlaying(false)}
           />
 
-          {/* Fullscreen: dock the controls inside the frame so they stay visible. */}
-          {isFullscreen && hasMedia && (
-            <div className="absolute inset-x-0 bottom-0 z-10 mx-auto flex max-w-3xl flex-col gap-3 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-[max(1.5rem,env(safe-area-inset-left))] pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-20">
-            {renderControls(true)}
-            </div>
-          )}
-
-          {/* Enter-fullscreen button (windowed only). */}
-          {!isFullscreen && (
-            <button
-              type="button"
-              onClick={toggleFullscreen}
-              aria-label="Expand to fullscreen"
-              className="absolute bottom-3 right-3 z-10 flex size-10 items-center justify-center rounded-full bg-black/55 text-white ring-1 ring-white/20 backdrop-blur-md transition-colors hover:bg-black/70 active:scale-90"
-            >
-              <Maximize className="size-5" />
-            </button>
-          )}
+          {/* YouTube-style controls overlaid on the video itself (windowed and
+              fullscreen alike); tapping the surface hides/reveals them. */}
+          {hasMedia && renderVideoOverlay()}
         </div>
       ) : (
         /* Audio: ambient cover-art card. */
@@ -356,15 +485,19 @@ export function EpisodePlayer({ show }: { show: Show }) {
         </div>
       </div>
 
-      <div className="px-6 pb-7 pt-5 sm:px-10">
-        {hasMedia ? (
-          <div className="flex items-center justify-center">{renderControls(false)}</div>
-        ) : (
-          <p className="text-center text-sm text-muted-foreground">
-            This episode was published without a recording, so there&apos;s no audio to play.
-          </p>
-        )}
-      </div>
+      {/* Audio keeps its controls below the cover-art card; video controls now
+          live on the video surface itself, so nothing renders here for video. */}
+      {!isVideo && (
+        <div className="px-6 pb-7 pt-5 sm:px-10">
+          {hasMedia ? (
+            <div className="flex items-center justify-center">{renderControls(false)}</div>
+          ) : (
+            <p className="text-center text-sm text-muted-foreground">
+              This episode was published without a recording, so there&apos;s no audio to play.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
