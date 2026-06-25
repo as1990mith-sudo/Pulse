@@ -422,8 +422,16 @@ export const dmConversation = pgTable("dm_conversation", {
   // Official "Frequency Team" messages are flagged priority: they stay pinned
   // to the top of the recipient's inbox until the recipient opens the thread.
   priority: boolean("priority").notNull().default(false),
+  // "Respond later" (WhatsApp-style archive) is per-user: each side can move the
+  // thread out of their main inbox into their own Respond later list.
+  userAArchived: boolean("userAArchived").notNull().default(false),
+  userBArchived: boolean("userBArchived").notNull().default(false),
+  // Per-user "delete chat": clears the thread from that user's inbox up to this
+  // moment. Messages that arrive afterwards bring the conversation back.
+  userADeletedAt: timestamp("userADeletedAt"),
+  userBDeletedAt: timestamp("userBDeletedAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
-})
+  })
 
 export const dmMessage = pgTable("dm_message", {
   id: serial("id").primaryKey(),

@@ -56,6 +56,8 @@ export type DmConversationSummary = {
   statusAllViewed: boolean
   // Official "Frequency Team" priority thread, still unopened — pinned to top.
   priority: boolean
+  // Whether the current user has moved this thread to "Respond later" (archive).
+  archived: boolean
 }
 
 export type DmConversationDetail = {
@@ -229,8 +231,12 @@ export async function getConversations(): Promise<DmConversationSummary[]> {
 
   const summaries = await Promise.all(
     rows.map(async (conv) => {
-      const otherId = conv.userAId === user.id ? conv.userBId : conv.userAId
-      const myLastRead = conv.userAId === user.id ? conv.userALastReadAt : conv.userBLastReadAt
+      const isUserA = conv.userAId === user.id
+      const otherId = isUserA ? conv.userBId : conv.userAId
+      const myLastRead = isUserA ? conv.userALastReadAt : conv.userBLastReadAt
+      const archived = isUserA ? conv.userAArchived : conv.userBArchived
+      // Per-user "delete chat" marker: hide messages sent at/before this time.
+      const myDeletedAt = isUserA ? conv.userADeletedAt : conv.userBDeletedAt
       const statusIds = statusIdsByUser.get(otherId) ?? []
       const hasActiveStatus = statusIds.length > 0
       const statusAllViewed = hasActiveStatus && statusIds.every((id) => viewedStatusIds.has(id))
@@ -242,6 +248,10 @@ export async function getConversations(): Promise<DmConversationSummary[]> {
         .where(eq(dmMessage.conversationId, conv.id))
         .orderBy(desc(dmMessage.createdAt))
         .limit(1)
+
+      // A "delete chat" hides every message up to that moment. If the newest
+      // message is at/before the marker, the conversation is gone from my inbox.
+      const clearedByDelete = Boolean(last && myDeletedAt && last.createdAt <= myDeletedAt)
 
       // Unread when the latest message arrived after I last opened the thread
       // and it wasn't sent by me.
@@ -262,26 +272,62 @@ export async function getConversations(): Promise<DmConversationSummary[]> {
         statusAllViewed,
         // Priority pinning only applies while the recipient hasn't opened it.
         priority: conv.priority && unread,
+        archived,
+        clearedByDelete,
         lastMessageAtMs: conv.lastMessageAt.getTime(),
       }
     }),
   )
 
-  // Hide brand-new conversations that have no messages yet from the inbox, then
-  // pin still-unopened priority (Frequency Team) threads to the very top.
+  // Hide conversations with no messages yet, and those the user has cleared via
+  // "delete chat", then pin still-unopened priority threads to the very top.
   return summaries
-    .filter((s) => s.lastMessage !== null)
+    .filter((s) => s.lastMessage !== null && !s.clearedByDelete)
     .sort((a, b) => {
       if (a.priority !== b.priority) return a.priority ? -1 : 1
       return b.lastMessageAtMs - a.lastMessageAtMs
     })
-    .map(({ lastMessageAtMs: _omit, ...s }) => s)
+    .map(({ lastMessageAtMs: _omit, clearedByDelete: _omit2, ...s }) => s)
 }
 
-/** Number of conversations with unread messages — drives the nav badge. */
+/** Number of conversations with unread messages — drives the nav badge.
+ *  Archived ("Respond later") threads don't contribute to the badge. */
 export async function getUnreadDmCount(): Promise<number> {
   const convos = await getConversations()
-  return convos.filter((c) => c.unread).length
+  return convos.filter((c) => c.unread && !c.archived).length
+}
+
+/**
+ * Moves a conversation into / out of the current user's "Respond later" list
+ * (WhatsApp-style archive). Per-user: only affects the caller's own inbox.
+ */
+export async function setConversationArchived(conversationId: number, archived: boolean) {
+  const user = await requireUser()
+  const conv = await loadConversationForUser(conversationId, user.id)
+  await db
+    .update(dmConversation)
+    .set(conv.userAId === user.id ? { userAArchived: archived } : { userBArchived: archived })
+    .where(eq(dmConversation.id, conversationId))
+  revalidatePath("/messages")
+}
+
+/**
+ * "Delete chat" for the current user only: clears the thread from their inbox
+ * up to now. The other participant keeps it, and any new message brings it back.
+ */
+export async function deleteConversation(conversationId: number) {
+  const user = await requireUser()
+  const conv = await loadConversationForUser(conversationId, user.id)
+  const now = new Date()
+  await db
+    .update(dmConversation)
+    .set(
+      conv.userAId === user.id
+        ? { userADeletedAt: now, userAArchived: false }
+        : { userBDeletedAt: now, userBArchived: false },
+    )
+    .where(eq(dmConversation.id, conversationId))
+  revalidatePath("/messages")
 }
 
 async function loadConversationForUser(conversationId: number, userId: string) {
