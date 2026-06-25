@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { Pause, Play, Radio, RotateCcw, RotateCw, Gauge, Maximize, Minimize } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { cn } from "@/lib/utils"
+import { MarqueeTitle } from "@/components/marquee-title"
 
 function fmt(s: number) {
   if (!isFinite(s) || s < 0) return "0:00"
@@ -479,9 +480,17 @@ export function EpisodePlayer({ show }: { show: Show }) {
 
       {/* Title + windowed controls (hidden behind the frame while fullscreen). */}
       <div className="flex flex-col items-center gap-5 px-6 pt-6 sm:px-10">
-        <div className="text-center">
-          <h2 className="text-balance text-lg font-bold leading-tight tracking-tight">{show.title}</h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">{show.host.name}</p>
+        <div className="w-full max-w-full text-center">
+          {/* Title stays on a single line; it auto-scrolls right-to-left when
+              it can't fit, so the full title is always readable. */}
+          <MarqueeTitle
+            text={show.title}
+            className="text-center text-lg font-bold leading-tight tracking-tight"
+          />
+          <p className="mt-0.5 truncate text-sm text-muted-foreground">
+            {show.host.name}
+            {show.publishedAt && <span> · {show.publishedAt}</span>}
+          </p>
         </div>
       </div>
 
