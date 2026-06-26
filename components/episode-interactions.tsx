@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import Link from "next/link"
-import { Heart, MessageCircle, Share2, Send, Loader2 } from "lucide-react"
+import { Bookmark, Heart, MessageCircle, Share2, Send, Loader2 } from "lucide-react"
 import { ShareSheet } from "@/components/share-sheet"
+import { isItemSaved, toggleSaveItem } from "@/app/actions/share"
 import type { ShareTarget } from "@/lib/share-types"
 import type { Show } from "@/lib/data"
 import type { CurrentUser } from "@/lib/session"
@@ -51,10 +52,26 @@ export function EpisodeInteractions({
   const episodeId = show.episodeId
   const [liked, setLiked] = useState(false)
   const [likes, setLikes] = useState(show.likes ?? 0)
+  const [saved, setSaved] = useState(false)
   const [comments, setComments] = useState<EpisodeCommentView[]>(initialComments)
   const [draft, setDraft] = useState("")
   const [shareOpen, setShareOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
+
+  // Load whether this episode is already saved by the current user.
+  useEffect(() => {
+    if (!currentUser || !episodeId) {
+      setSaved(false)
+      return
+    }
+    let active = true
+    isItemSaved("episode", String(episodeId))
+      .then((s) => active && setSaved(s))
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [currentUser, episodeId])
 
   if (!episodeId) return null
 
@@ -76,6 +93,20 @@ export function EpisodeInteractions({
     setLikes((n) => Math.max(0, n + (next ? 1 : -1)))
     startTransition(async () => {
       await setEpisodeLike({ episodeId: episodeId!, liked: next })
+    })
+  }
+
+  function toggleSave() {
+    if (!currentUser) return
+    setSaved((s) => !s)
+    startTransition(async () => {
+      try {
+        const r = await toggleSaveItem(shareTarget)
+        setSaved(r.saved)
+      } catch {
+        // Revert optimistic state on failure.
+        setSaved((s) => !s)
+      }
     })
   }
 
@@ -114,8 +145,22 @@ export function EpisodeInteractions({
         </span>
 
         <button
+          onClick={toggleSave}
+          disabled={!currentUser}
+          className={cn(
+            "ml-auto flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors hover:bg-secondary disabled:opacity-50",
+            saved ? "text-primary" : "text-foreground",
+          )}
+          aria-pressed={saved}
+          aria-label={saved ? "Unsave episode" : "Save episode"}
+        >
+          <Bookmark className={cn("size-5", saved && "fill-current")} />
+          {saved ? "Saved" : "Save"}
+        </button>
+
+        <button
           onClick={() => setShareOpen(true)}
-          className="ml-auto flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+          className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
           aria-label="Share episode"
         >
           <Share2 className="size-5" />

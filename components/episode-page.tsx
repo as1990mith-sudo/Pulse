@@ -1,21 +1,25 @@
 import Link from "next/link"
-import { Clock } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { SiteHeader } from "@/components/site-header"
 import { BackButton } from "@/components/back-button"
 import { EpisodePlayer } from "@/components/episode-player"
 import { EpisodeInteractions } from "@/components/episode-interactions"
+import { VideoCard } from "@/components/profile/video-card"
 import { getEpisodeComments } from "@/app/actions/episodes"
+import { getEpisodesByUser } from "@/lib/content"
 import { getCurrentUser } from "@/lib/session"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
 
 /** Full page shown for a published, on-demand episode (a recorded session). */
 export async function EpisodePage({ show }: { show: Show }) {
-  const [currentUser, comments] = await Promise.all([
+  const [currentUser, comments, creatorEpisodes] = await Promise.all([
     getCurrentUser(),
     show.episodeId ? getEpisodeComments(show.episodeId) : Promise.resolve([]),
+    getEpisodesByUser(show.host.id),
   ])
+
+  // "Up next" queue: the same creator's other video episodes (excluding this one).
+  const queue = creatorEpisodes.filter((ep) => ep.mediaType === "video" && ep.id !== show.id)
 
   return (
     <div className="min-h-screen">
@@ -29,19 +33,6 @@ export async function EpisodePage({ show }: { show: Show }) {
 
         <div className="space-y-6 px-4 pt-6 sm:px-6">
           <EpisodeInteractions show={show} currentUser={currentUser} initialComments={comments} />
-
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary">{show.category}</Badge>
-              {show.duration && (
-                <span className="inline-flex items-center gap-1 text-sm text-muted-foreground">
-                  <Clock className="size-3.5" /> {show.duration}
-                </span>
-              )}
-              {show.publishedDate && <span className="text-sm text-muted-foreground">· {show.publishedDate}</span>}
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight text-balance">{show.title}</h1>
-          </div>
 
           <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card p-4">
             <Avatar className="size-11">
@@ -60,6 +51,18 @@ export async function EpisodePage({ show }: { show: Show }) {
                 {show.description}
               </p>
             </div>
+          )}
+
+          {/* Up next: the rest of this creator's video episodes, queued below. */}
+          {queue.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="text-sm font-semibold">More from {show.host.name}</h2>
+              <div className="flex flex-col gap-3">
+                {queue.map((ep) => (
+                  <VideoCard key={ep.id} show={ep} />
+                ))}
+              </div>
+            </section>
           )}
         </div>
       </main>
