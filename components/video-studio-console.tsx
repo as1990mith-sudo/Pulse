@@ -36,6 +36,7 @@ import {
   removeFromStage,
   heartbeatBroadcast,
   type LiveStreamView,
+  type LiveOrientation,
 } from "@/app/actions/live"
 import { useLiveVideo, isMedianApp, openNativeAppSettings } from "@/lib/use-live-video"
 import { uploadMedia } from "@/lib/upload-media"
@@ -188,6 +189,9 @@ export function VideoStudioConsole({
   onMeta?: (m: { title: string; cover: string | null; live: boolean; subtitle?: string }) => void
 }) {
   const [title, setTitle] = useState(resumeStream?.title ?? `${currentUser.name} — live`)
+  // Host-chosen broadcast layout. "portrait" = the original full-bleed vertical
+  // design; "landscape" = the Facebook-style 16:9 video + comment feed layout.
+  const [orientation, setOrientation] = useState<LiveOrientation>(resumeStream?.orientation ?? "portrait")
   const [roomName, setRoomName] = useState<string | null>(resumeStream?.roomName ?? null)
   const [creds, setCreds] = useState<{ token: string; serverUrl: string } | null>(null)
   const [starting, setStarting] = useState(false)
@@ -341,7 +345,11 @@ export function VideoStudioConsole({
     setError(null)
     setStarting(true)
     try {
-      const res = await startBroadcast({ title: title.trim() || `${currentUser.name} — live`, mode: "video" })
+      const res = await startBroadcast({
+        title: title.trim() || `${currentUser.name} — live`,
+        mode: "video",
+        orientation,
+      })
       if (!res.ok) {
         setError(res.error)
         return

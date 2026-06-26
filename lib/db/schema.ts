@@ -326,6 +326,10 @@ export const liveStream = pgTable("live_stream", {
   category: text("category"),
   cover: text("cover"),
   mode: text("mode").notNull().default("audio"), // "audio" | "video"
+  // For video streams, the layout the host chose to broadcast in:
+  // "portrait" (full-bleed vertical, overlaid controls) or "landscape"
+  // (Facebook-style: letterboxed 16:9 video on top, scrolling comment feed below).
+  orientation: text("orientation").notNull().default("portrait"), // "portrait" | "landscape"
   status: text("status").notNull().default("live"), // "live" | "ended"
   // "public" streams appear in the live discovery list; "private" streams are
   // unlisted and reachable only by direct link (host-controlled before going live).

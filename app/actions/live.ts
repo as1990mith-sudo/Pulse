@@ -53,6 +53,8 @@ export async function heartbeatBroadcast(input: { roomName: string }): Promise<{
 
 export type LiveMode = "audio" | "video"
 export type LiveVisibility = "public" | "private"
+// Video layout the host broadcasts in. Only meaningful when mode === "video".
+export type LiveOrientation = "portrait" | "landscape"
 
 export type LiveStreamView = {
   id: number
@@ -64,6 +66,7 @@ export type LiveStreamView = {
   category: string | null
   cover: string | null
   mode: LiveMode
+  orientation: LiveOrientation
   visibility: LiveVisibility
   locked?: boolean
   pinnedChatId?: number | null
@@ -87,6 +90,7 @@ export async function startBroadcast(input: {
   category?: string
   cover?: string | null
   mode?: LiveMode
+  orientation?: LiveOrientation
   visibility?: LiveVisibility
 }): Promise<GoLiveResult> {
   const user = await requireUser()
@@ -94,6 +98,8 @@ export async function startBroadcast(input: {
     return { ok: false, error: "Live is not configured yet. Add your LiveKit credentials to start broadcasting." }
   }
   const mode: LiveMode = input.mode === "video" ? "video" : "audio"
+  // Orientation only applies to video; audio is always stored as "portrait".
+  const orientation: LiveOrientation = mode === "video" && input.orientation === "landscape" ? "landscape" : "portrait"
   const visibility: LiveVisibility = input.visibility === "private" ? "private" : "public"
 
   const title = input.title.trim() || `${user.name} — live`
@@ -115,6 +121,7 @@ export async function startBroadcast(input: {
     category: input.category?.trim() || null,
     cover: input.cover ?? null,
     mode,
+    orientation,
     visibility,
     status: "live",
   })
@@ -207,6 +214,7 @@ export async function getLiveStreams(): Promise<LiveStreamView[]> {
     category: r.category,
     cover: r.cover,
     mode: (r.mode as LiveMode) ?? "audio",
+    orientation: (r.orientation as LiveOrientation) ?? "portrait",
     visibility: (r.visibility as LiveVisibility) ?? "public",
     startedAt: r.startedAt.toISOString(),
   }))
@@ -458,6 +466,7 @@ export async function getMyActiveStream(): Promise<LiveStreamView | null> {
     category: r.category,
     cover: r.cover,
     mode: (r.mode as LiveMode) ?? "audio",
+    orientation: (r.orientation as LiveOrientation) ?? "portrait",
     visibility: (r.visibility as LiveVisibility) ?? "public",
     locked: r.locked ?? false,
     pinnedChatId: r.pinnedChatId ?? null,
@@ -493,6 +502,7 @@ export async function getMyActiveVideoStream(): Promise<LiveStreamView | null> {
     category: r.category,
     cover: r.cover,
     mode: (r.mode as LiveMode) ?? "video",
+    orientation: (r.orientation as LiveOrientation) ?? "portrait",
     visibility: (r.visibility as LiveVisibility) ?? "public",
     locked: r.locked ?? false,
     pinnedChatId: r.pinnedChatId ?? null,
@@ -521,6 +531,7 @@ export async function getLiveStream(roomName: string): Promise<LiveStreamView | 
     category: r.category,
     cover: r.cover,
     mode: (r.mode as LiveMode) ?? "audio",
+    orientation: (r.orientation as LiveOrientation) ?? "portrait",
     visibility: (r.visibility as LiveVisibility) ?? "public",
     locked: r.locked ?? false,
     pinnedChatId: r.pinnedChatId ?? null,
