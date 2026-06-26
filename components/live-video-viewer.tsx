@@ -279,6 +279,10 @@ export function LiveVideoViewer({
   const { count: presenceCount, members: presenceMembers } = useLivePresence(stream.roomName, canWatch)
   const isSelf = currentUserId === stream.hostId
   const remoteVideoOn = Boolean(hostPeer?.hasVideo)
+  // Landscape = Facebook-style layout: a letterboxed 16:9 video pinned at the
+  // top with a solid scrolling comment feed below. Portrait keeps the original
+  // full-bleed vertical stage with call-in slots.
+  const landscape = stream.orientation === "landscape"
 
   if (hostEnded) {
     return (
@@ -289,6 +293,170 @@ export function LiveVideoViewer({
         <p className="text-lg font-semibold">Session ended</p>
         <p className="text-sm text-white/60">The host has ended this live. Taking you back to Live…</p>
         <Loader2 className="size-4 animate-spin text-white/60" />
+      </div>
+    )
+  }
+
+  // ── Landscape (Facebook-style) viewer ─────────────────────────────────────
+  // Letterboxed 16:9 video pinned to the top, then a solid scrolling comment
+  // feed filling the rest. Host-only broadcast: no call-in slots.
+  if (landscape) {
+    return (
+      <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-neutral-950 text-white [isolation:isolate]">
+        {/* Video pane: full 16:9 letterboxed on black so nothing is cropped. */}
+        <div className="relative aspect-video w-full shrink-0 overflow-hidden bg-black">
+          <div className="absolute inset-0" onClick={handleTapHeart}>
+            {hostPeer ? (
+              <video
+                ref={(el) => registerPeerVideoEl(hostPeer.identity, el)}
+                autoPlay
+                playsInline
+                className={cn(
+                  "h-full w-full object-contain transition-opacity duration-500",
+                  remoteVideoOn ? "opacity-100" : "opacity-0",
+                )}
+              />
+            ) : null}
+            {!remoteVideoOn && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/70">
+                {stream.cover && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={stream.cover || "/placeholder.svg"}
+                    alt=""
+                    aria-hidden="true"
+                    className="absolute inset-0 size-full scale-110 object-cover opacity-20 blur-2xl"
+                  />
+                )}
+                <Loader2 className="relative size-7 animate-spin" />
+                <p className="relative text-sm font-medium">
+                  {ended ? error ?? "This stream has ended." : "Connecting to the live…"}
+                </p>
+              </div>
+            )}
+            {bursts.map((b) => (
+              <span
+                key={b.key}
+                className="tap-heart pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 text-4xl"
+                style={{ left: `${b.x}%`, top: `${b.y}%` }}
+                aria-hidden="true"
+              >
+                ❤️
+              </span>
+            ))}
+          </div>
+
+          {/* Floating reactions over the video */}
+          <ReactionLayer roomName={connected ? stream.roomName : undefined} />
+
+          {/* Top bar: back menu + LIVE + viewers */}
+          <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-2 p-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
+            <BackExitMenu
+              showMenu
+              exitLabel="Leave"
+              onExit={() => {
+                disconnect()
+                onExit?.()
+              }}
+              onMinimize={onMinimize ?? (() => {})}
+            />
+            <div className="flex items-center gap-2">
+              <span className="flex items-center gap-1.5 rounded-full bg-live px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-live-foreground shadow-lg">
+                <span className="relative flex size-2">
+                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-live-foreground/70" />
+                  <span className="relative inline-flex size-2 rounded-full bg-live-foreground" />
+                </span>
+                Live
+              </span>
+              <LiveAudienceSheet
+                count={presenceCount || viewers}
+                members={presenceMembers}
+                immersive
+                className="px-3 py-1.5 text-xs font-medium"
+              />
+            </div>
+          </div>
+
+          {/* Tap-to-enable-sound (autoplay unblock) */}
+          {connected && audioBlocked && (
+            <button
+              type="button"
+              onClick={() => void startAudioPlayback()}
+              className="absolute left-1/2 top-1/2 z-30 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full bg-white/15 px-5 py-2.5 text-sm font-semibold text-white ring-1 ring-inset ring-white/20 backdrop-blur-md"
+            >
+              <Volume2 className="size-4" /> Tap to enable sound
+            </button>
+          )}
+        </div>
+
+        {/* Host info + actions bar between the video and the feed. */}
+        <div className="flex items-center gap-2 border-b border-white/10 bg-neutral-950 px-3 py-2">
+          <span
+            className={cn(
+              "flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white",
+              getAvatarColor(stream.hostId),
+            )}
+            aria-hidden="true"
+          >
+            {getInitials(stream.hostName)}
+          </span>
+          <div className="flex min-w-0 flex-1 flex-col leading-tight">
+            <span className="truncate text-sm font-semibold">{stream.title}</span>
+            <span className="truncate text-[11px] text-white/60">
+              {stream.hostName} · @{stream.hostHandle}
+            </span>
+          </div>
+          {!isSelf && (
+            <InlineFollowButton
+              targetUserId={stream.hostId}
+              targetName={stream.hostName}
+              initialFollowing={initialFollowing}
+            />
+          )}
+          <button
+            type="button"
+            onClick={() =>
+              canWatch && void sendLiveReaction({ roomName: stream.roomName, emoji: "❤️", kind: "reaction" }).catch(() => {})
+            }
+            disabled={!canWatch || !connected}
+            aria-label="Send a heart"
+            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-inset ring-white/15 transition-colors hover:bg-white/20 active:scale-90 disabled:opacity-40"
+          >
+            <Heart className="size-4 fill-live text-live" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setShareOpen(true)}
+            aria-label="Share this live"
+            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-inset ring-white/15 transition-colors hover:bg-white/20 active:scale-90"
+          >
+            <Share2 className="size-4" />
+          </button>
+        </div>
+
+        {/* Comment feed fills the remaining height. */}
+        <div className="min-h-0 flex-1 bg-neutral-950">
+          {canWatch ? (
+            <LiveChat currentUser={currentUser} roomName={stream.roomName} immersive />
+          ) : (
+            <div className="flex h-full items-center justify-center p-4 text-center text-sm text-white/70">
+              <p>
+                <Link href="/sign-in" className="font-semibold text-white underline">
+                  Sign in
+                </Link>{" "}
+                to comment and react.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {(rtcError || (error && !ended)) && (
+          <p className="absolute bottom-2 left-1/2 z-40 -translate-x-1/2 rounded-full bg-destructive px-4 py-1.5 text-sm font-medium text-destructive-foreground shadow-lg">
+            {rtcError ?? error}
+          </p>
+        )}
+
+        <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
       </div>
     )
   }
