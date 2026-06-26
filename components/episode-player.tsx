@@ -41,6 +41,11 @@ export function EpisodePlayer({ show }: { show: Show }) {
   const mediaUrl = show.videoUrl ?? show.audioUrl
   const hasMedia = Boolean(mediaUrl)
   const pct = duration > 0 ? (current / duration) * 100 : 0
+  // A real, host-uploaded cover vs. the generic "/placeholder.svg" fallback that
+  // `lib/content.ts` substitutes when no cover was set. When there's no real
+  // cover we let the <video> paint its own first frame as the thumbnail instead
+  // of pinning the blank placeholder poster.
+  const hasRealCover = Boolean(show.cover) && !show.cover!.includes("/placeholder.svg")
 
   // Reveal the overlay controls and schedule an auto-hide while playing. When
   // paused we keep them up so the surface never looks "dead".
@@ -179,7 +184,9 @@ export function EpisodePlayer({ show }: { show: Show }) {
       const onUpdate = () => {
         if (el.duration !== Infinity && !Number.isNaN(el.duration)) {
           setDuration(el.duration)
-          el.currentTime = 0
+          // Seek slightly past 0 (when no real cover) so a frame is decoded and
+          // shown as the thumbnail; otherwise reset to the start.
+          el.currentTime = hasRealCover ? 0 : 0.1
           el.removeEventListener("timeupdate", onUpdate)
         }
       }
@@ -187,6 +194,16 @@ export function EpisodePlayer({ show }: { show: Show }) {
       el.currentTime = 1e7
     } else {
       setDuration(el.duration)
+      // Finite duration: with preload="metadata" no frame is decoded yet, so the
+      // surface would stay blank. Nudge a tiny seek to paint the first frame as
+      // the thumbnail when there's no host-provided cover.
+      if (!hasRealCover && el.currentTime === 0) {
+        try {
+          el.currentTime = 0.1
+        } catch {
+          /* ignore seek errors */
+        }
+      }
     }
   }
 
@@ -414,7 +431,7 @@ export function EpisodePlayer({ show }: { show: Show }) {
           <video
             ref={mediaRef}
             src={mediaUrl}
-            poster={show.cover ?? undefined}
+            poster={hasRealCover ? (show.cover ?? undefined) : undefined}
             playsInline
             preload="metadata"
             className="size-full object-contain"

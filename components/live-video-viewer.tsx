@@ -6,8 +6,10 @@ import useSWR from "swr"
 import {
   Heart,
   Loader2,
+  Maximize,
   Mic,
   MicOff,
+  Minimize,
   PhoneOff,
   Radio,
   RefreshCw,
@@ -164,6 +166,11 @@ export function LiveVideoViewer({
   const [shareOpen, setShareOpen] = useState(false)
   const [bursts, setBursts] = useState<Burst[]>([])
   const [requesting, setRequesting] = useState(false)
+  // Landscape-viewer chrome: the video pane (for fullscreen), whether we're in
+  // fullscreen, and whether the tap-to-toggle controls overlay is showing.
+  const videoPaneRef = useRef<HTMLDivElement>(null)
+  const [lsFullscreen, setLsFullscreen] = useState(false)
+  const [controlsVisible, setControlsVisible] = useState(true)
 
   const {
     localVideoRef,
@@ -256,6 +263,62 @@ export function LiveVideoViewer({
     void sendLiveReaction({ roomName: stream.roomName, emoji: "❤️", kind: "reaction" }).catch(() => {})
   }
 
+  // Landscape fullscreen: expand the 16:9 pane and rotate the phone to landscape.
+  async function toggleLandscapeFullscreen() {
+    const fsEl =
+      document.fullscreenElement ??
+      (document as Document & { webkitFullscreenElement?: Element }).webkitFullscreenElement
+    if (fsEl) {
+      try {
+        if (document.exitFullscreen) await document.exitFullscreen()
+        else (document as Document & { webkitExitFullscreen?: () => void }).webkitExitFullscreen?.()
+      } catch {
+        /* ignore */
+      }
+      return
+    }
+    const pane = videoPaneRef.current as
+      | (HTMLDivElement & { webkitRequestFullscreen?: () => Promise<void> | void })
+      | null
+    try {
+      if (pane?.requestFullscreen) await pane.requestFullscreen()
+      else if (pane?.webkitRequestFullscreen) await pane.webkitRequestFullscreen()
+      const orientation = screen.orientation as ScreenOrientation & {
+        lock?: (o: "landscape" | "portrait") => Promise<void>
+      }
+      if (orientation && typeof orientation.lock === "function") {
+        await orientation.lock("landscape").catch(() => {})
+      }
+    } catch {
+      /* user dismissed or the browser blocked the request */
+    }
+  }
+
+  // Track fullscreen state (to swap the icon) and release the orientation lock
+  // when fullscreen is exited.
+  useEffect(() => {
+    const onFsChange = () => {
+      const active = Boolean(
+        document.fullscreenElement ??
+          (document as Document & { webkitFullscreenElement?: Element }).webkitFullscreenElement,
+      )
+      setLsFullscreen(active)
+      if (!active) {
+        try {
+          screen.orientation?.unlock?.()
+        } catch {
+          /* unlock unsupported */
+        }
+      }
+    }
+    document.addEventListener("fullscreenchange", onFsChange)
+    document.addEventListener("webkitfullscreenchange", onFsChange)
+    return () => {
+      document.removeEventListener("fullscreenchange", onFsChange)
+      document.removeEventListener("webkitfullscreenchange", onFsChange)
+    }
+  }, [])
+
   const shareTarget: ShareTarget = {
     type: "live",
     key: stream.roomName,
@@ -303,9 +366,17 @@ export function LiveVideoViewer({
   if (landscape) {
     return (
       <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-neutral-950 text-white [isolation:isolate]">
-        {/* Video pane: full 16:9 letterboxed on black so nothing is cropped. */}
-        <div className="relative aspect-video w-full shrink-0 overflow-hidden bg-black">
-          <div className="absolute inset-0" onClick={handleTapHeart}>
+        {/* Video pane: full 16:9 letterboxed on black so nothing is cropped.
+            In fullscreen it fills the (landscape-rotated) screen. */}
+        <div
+          ref={videoPaneRef}
+          className={cn(
+            "relative w-full shrink-0 overflow-hidden bg-black",
+            lsFullscreen ? "h-screen" : "aspect-video",
+          )}
+        >
+          {/* Tapping the video toggles the controls overlay (top bar + fullscreen). */}
+          <div className="absolute inset-0" onClick={() => setControlsVisible((v) => !v)}>
             {hostPeer ? (
               <video
                 ref={(el) => registerPeerVideoEl(hostPeer.identity, el)}
@@ -349,32 +420,54 @@ export function LiveVideoViewer({
           {/* Floating reactions over the video */}
           <ReactionLayer roomName={connected ? stream.roomName : undefined} />
 
-          {/* Top bar: back menu + LIVE + viewers */}
-          <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-2 p-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
-            <BackExitMenu
-              showMenu
-              exitLabel="Leave"
-              onExit={() => {
-                disconnect()
-                onExit?.()
-              }}
-              onMinimize={onMinimize ?? (() => {})}
-            />
-            <div className="flex items-center gap-2">
-              <span className="flex items-center gap-1.5 rounded-full bg-live px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-live-foreground shadow-lg">
-                <span className="relative flex size-2">
-                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-live-foreground/70" />
-                  <span className="relative inline-flex size-2 rounded-full bg-live-foreground" />
-                </span>
-                Live
-              </span>
-              <LiveAudienceSheet
-                count={presenceCount || viewers}
-                members={presenceMembers}
-                immersive
-                className="px-3 py-1.5 text-xs font-medium"
+          {/* Controls overlay: top bar + fullscreen button. Tap the video to
+              show/hide. */}
+          <div
+            className={cn(
+              "pointer-events-none absolute inset-0 z-20 transition-opacity duration-300",
+              controlsVisible ? "opacity-100" : "opacity-0",
+            )}
+          >
+            {/* Top bar: back menu + LIVE + viewers */}
+            <div className="pointer-events-auto absolute inset-x-0 top-0 flex items-center justify-between gap-2 bg-gradient-to-b from-black/50 to-transparent p-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
+              <BackExitMenu
+                showMenu
+                exitLabel="Leave"
+                onExit={() => {
+                  disconnect()
+                  onExit?.()
+                }}
+                onMinimize={onMinimize ?? (() => {})}
               />
+              <div className="flex items-center gap-2">
+                <span className="flex items-center gap-1.5 rounded-full bg-live px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-live-foreground shadow-lg">
+                  <span className="relative flex size-2">
+                    <span className="absolute inline-flex size-full animate-ping rounded-full bg-live-foreground/70" />
+                    <span className="relative inline-flex size-2 rounded-full bg-live-foreground" />
+                  </span>
+                  Live
+                </span>
+                <LiveAudienceSheet
+                  count={presenceCount || viewers}
+                  members={presenceMembers}
+                  immersive
+                  className="px-3 py-1.5 text-xs font-medium"
+                />
+              </div>
             </div>
+
+            {/* Fullscreen / rotate-to-landscape button. */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                void toggleLandscapeFullscreen()
+              }}
+              aria-label={lsFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+              className="pointer-events-auto absolute bottom-3 right-3 flex size-10 items-center justify-center rounded-full bg-black/50 text-white ring-1 ring-inset ring-white/20 backdrop-blur-md transition-colors hover:bg-black/70 active:scale-90"
+            >
+              {lsFullscreen ? <Minimize className="size-5" /> : <Maximize className="size-5" />}
+            </button>
           </div>
 
           {/* Tap-to-enable-sound (autoplay unblock) */}

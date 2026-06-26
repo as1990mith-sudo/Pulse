@@ -205,6 +205,9 @@ export function VideoStudioConsole({
   // Music state — a small playlist (up to MAX_MUSIC_TRACKS) with the active
   // track scrubbable on its own timeline, mirroring the audio studio.
   const [musicPanelOpen, setMusicPanelOpen] = useState(false)
+  // Tap the camera surface to show/hide the bottom control dock (mic, camera,
+  // music, etc.), so the host can preview a clean frame.
+  const [controlsVisible, setControlsVisible] = useState(true)
   const [musicTracks, setMusicTracks] = useState<{ url: string; name: string }[]>([])
   const [musicActiveIndex, setMusicActiveIndex] = useState<number | null>(null)
   const [musicPlaying, setMusicPlayingState] = useState(false)
@@ -522,6 +525,17 @@ export function VideoStudioConsole({
           />
         )}
 
+        {/* Tap-capture layer: sits above the camera feed but below the chrome
+            (top bar, request panels at z-20; dock at z-40) so tapping the bare
+            video toggles the control dock without blocking those controls. */}
+        {live && (
+          <div
+            className="absolute inset-0 z-10"
+            onClick={() => setControlsVisible((v) => !v)}
+            aria-hidden="true"
+          />
+        )}
+
         {/* Camera-off / connecting wash */}
         {live && (!camOn || !connected || !localVideoReady) && (
           <div className="absolute inset-0 z-30 flex items-center justify-center bg-neutral-950 px-6">
@@ -661,6 +675,18 @@ export function VideoStudioConsole({
         {!live && (
           <div className="absolute inset-0 z-20 flex items-end justify-center px-5 pb-6">
             <div className="w-full max-w-md space-y-4 rounded-3xl bg-black/40 p-5 ring-1 ring-inset ring-white/10 backdrop-blur-2xl">
+              {/* Header: title + close, so the host can dismiss setup before going live. */}
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-semibold text-white">Set up your live</h2>
+                <button
+                  type="button"
+                  onClick={() => onExit?.()}
+                  aria-label="Close"
+                  className="flex size-8 items-center justify-center rounded-full bg-white/10 text-white/80 ring-1 ring-inset ring-white/15 transition-colors hover:bg-white/20 active:scale-90"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
               <div className="space-y-1.5">
                 <label htmlFor="live-title" className="text-xs font-semibold uppercase tracking-wider text-white/60">
                   Stream title
@@ -733,7 +759,12 @@ export function VideoStudioConsole({
             above the camera-off / connecting wash (z-30) so the camera and mic
             controls stay tappable even when the camera is turned off. */}
         {live && (
-          <div className="absolute inset-x-0 bottom-0 z-40 flex items-center justify-center gap-3 p-3">
+          <div
+            className={cn(
+              "absolute inset-x-0 bottom-0 z-40 flex items-center justify-center gap-3 p-3 transition-opacity duration-300",
+              controlsVisible ? "opacity-100" : "pointer-events-none opacity-0",
+            )}
+          >
             <GlassButton label="Flip camera" onClick={() => void flipCamera()} disabled={!connected || !camOn}>
               <RefreshCw className="size-5" />
             </GlassButton>
