@@ -8,10 +8,12 @@ import {
   Loader2,
   Mic,
   MicOff,
+  MonitorPlay,
   Music,
   Pause,
   Play,
   Radio,
+  Smartphone,
   RefreshCw,
   Rewind,
   Send,
@@ -500,7 +502,9 @@ export function VideoStudioConsole({
           playsInline
           muted
           className={cn(
-            "absolute inset-0 z-0 h-full w-full -scale-x-100 object-cover transition-opacity duration-500",
+            "absolute inset-0 z-0 h-full w-full -scale-x-100 transition-opacity duration-500",
+            // Landscape broadcasts letterbox the feed so nothing is cropped.
+            orientation === "landscape" ? "object-contain" : "object-cover",
             live && camOn && localVideoReady ? "opacity-100" : "opacity-0",
           )}
         />
@@ -511,7 +515,10 @@ export function VideoStudioConsole({
             autoPlay
             playsInline
             muted
-            className="absolute inset-0 z-0 h-full w-full -scale-x-100 object-cover"
+            className={cn(
+              "absolute inset-0 z-0 h-full w-full -scale-x-100",
+              orientation === "landscape" ? "object-contain" : "object-cover",
+            )}
           />
         )}
 
@@ -610,8 +617,8 @@ export function VideoStudioConsole({
           )}
         </div>
 
-        {/* Pending call-in requests (host) */}
-        {live && pending.length > 0 && (
+        {/* Pending call-in requests (host) — not offered in landscape lives. */}
+        {live && orientation !== "landscape" && pending.length > 0 && (
           <div className="absolute left-4 right-4 top-[calc(env(safe-area-inset-top)+4rem)] z-20 flex flex-col gap-2">
             {pending.map((r) => (
               <div
@@ -667,6 +674,42 @@ export function VideoStudioConsole({
                   className="w-full rounded-2xl bg-white/10 px-4 py-3 text-base font-medium text-white ring-1 ring-inset ring-white/15 placeholder:text-white/40 focus:outline-none focus:ring-primary"
                 />
               </div>
+
+              {/* Layout chooser: portrait (original full-bleed) vs landscape
+                  (Facebook-style 16:9 video + comment feed below). */}
+              <div className="space-y-1.5">
+                <span className="text-xs font-semibold uppercase tracking-wider text-white/60">Layout</span>
+                <div className="grid grid-cols-2 gap-2">
+                  {(
+                    [
+                      { value: "portrait", label: "Portrait", hint: "Full-screen vertical", icon: Smartphone },
+                      { value: "landscape", label: "Landscape", hint: "Video + comments", icon: MonitorPlay },
+                    ] as const
+                  ).map((opt) => {
+                    const active = orientation === opt.value
+                    const Icon = opt.icon
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setOrientation(opt.value)}
+                        aria-pressed={active}
+                        className={cn(
+                          "flex flex-col items-center gap-1.5 rounded-2xl px-3 py-3 text-center ring-1 ring-inset transition-colors",
+                          active
+                            ? "bg-primary/20 text-white ring-primary"
+                            : "bg-white/5 text-white/70 ring-white/15 hover:bg-white/10",
+                        )}
+                      >
+                        <Icon className="size-5" />
+                        <span className="text-sm font-semibold leading-none">{opt.label}</span>
+                        <span className="text-[11px] leading-none text-white/50">{opt.hint}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
               {error && <p className="text-sm font-medium text-destructive">{error}</p>}
               <button
                 type="button"
@@ -678,7 +721,9 @@ export function VideoStudioConsole({
                 {starting ? "Starting…" : "Go live"}
               </button>
               <p className="text-center text-xs text-white/50">
-                Viewers can comment, react, send gifts, and request to join your call-in slots.
+                {orientation === "landscape"
+                  ? "Viewers watch your widescreen video with a live comment feed below."
+                  : "Viewers can comment, react, send gifts, and request to join your call-in slots."}
               </p>
             </div>
           </div>
@@ -930,11 +975,15 @@ export function VideoStudioConsole({
         )}
       </div>
 
-      {/* ── Two guest call-in slots (0.75/4 of the screen) ─────────────────── */}
-      <div className="flex flex-[0.75] min-h-0 gap-2 border-t border-white/10 bg-neutral-950 p-2">
-        <GuestSlot peer={guests[0]} registerEl={registerPeerVideoEl} onRemove={live ? dropGuest : undefined} />
-        <GuestSlot peer={guests[1]} registerEl={registerPeerVideoEl} onRemove={live ? dropGuest : undefined} />
-      </div>
+      {/* ── Two guest call-in slots (0.75/4 of the screen) ─────────────────────
+          Landscape lives are host-only broadcasts, so the call-in row is hidden
+          and that space goes to the camera + comment feed instead. */}
+      {orientation !== "landscape" && (
+        <div className="flex flex-[0.75] min-h-0 gap-2 border-t border-white/10 bg-neutral-950 p-2">
+          <GuestSlot peer={guests[0]} registerEl={registerPeerVideoEl} onRemove={live ? dropGuest : undefined} />
+          <GuestSlot peer={guests[1]} registerEl={registerPeerVideoEl} onRemove={live ? dropGuest : undefined} />
+        </div>
+      )}
 
       {/* ── Live chatroom (remaining 1.5/4 of the screen) ──────────────────── */}
       <div className="flex-[1.5] min-h-0 border-t border-white/10 bg-neutral-950">
