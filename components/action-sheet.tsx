@@ -105,7 +105,7 @@ export function ActionSheet({
       <div
         style={{ transform: dragY ? `translateY(${dragY}px)` : undefined }}
         className={cn(
-          "relative z-10 m-3 w-full max-w-sm overflow-hidden rounded-3xl border border-border/70 bg-popover/95 p-2 shadow-2xl shadow-black/30 backdrop-blur-xl",
+          "relative z-10 m-3 w-full max-w-sm overflow-hidden rounded-3xl border border-border/70 bg-popover/95 p-2 shadow-floating backdrop-blur-xl",
           "animate-in slide-in-from-bottom-4 fade-in zoom-in-95 duration-200",
           !dragging && "sheet-settle",
         )}

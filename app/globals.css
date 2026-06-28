@@ -68,6 +68,11 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  /* Soft, consistent elevation scale (multi-layer for a modern, diffuse look).
+     Exposes shadow-soft / shadow-elevated / shadow-floating utilities. */
+  --shadow-soft: 0 1px 2px -1px oklch(0 0 0 / 0.12), 0 2px 8px -2px oklch(0 0 0 / 0.12);
+  --shadow-elevated: 0 2px 4px -2px oklch(0 0 0 / 0.14), 0 8px 20px -6px oklch(0 0 0 / 0.18);
+  --shadow-floating: 0 4px 8px -4px oklch(0 0 0 / 0.16), 0 16px 40px -8px oklch(0 0 0 / 0.24);
 }
 
 :root,
@@ -395,6 +400,31 @@
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
   }
+  /* Thin, themed scrollbars so internal scroll areas feel native and unobtrusive
+     (Firefox + WebKit). */
+  [data-scroll],
+  .overflow-y-auto,
+  .overflow-auto {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--foreground) 18%, transparent) transparent;
+  }
+  [data-scroll]::-webkit-scrollbar,
+  .overflow-y-auto::-webkit-scrollbar,
+  .overflow-auto::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  [data-scroll]::-webkit-scrollbar-thumb,
+  .overflow-y-auto::-webkit-scrollbar-thumb,
+  .overflow-auto::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklab, var(--foreground) 18%, transparent);
+    border-radius: 9999px;
+  }
+  [data-scroll]::-webkit-scrollbar-track,
+  .overflow-y-auto::-webkit-scrollbar-track,
+  .overflow-auto::-webkit-scrollbar-track {
+    background: transparent;
+  }
   /* Consistent, snappy transitions on interactive surfaces for a 120Hz-like feel */
   a,
   button,
@@ -659,6 +689,14 @@
   animation: sheet-up 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* Render-optimization for long lists (feed, chat history): skip layout/paint
+   for off-screen rows to reduce dropped frames while scrolling. The size hint
+   reserves space so the scrollbar stays stable and there is no layout shift. */
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
+}
+
 /* Gentle pop-in for newly-joined speaker tiles. */
 @keyframes speaker-in {
   from {
@@ -687,6 +725,9 @@
   .sheet-up,
   .speaker-in {
     animation: none;
+  }
+  html {
+    scroll-behavior: auto;
   }
 }
 

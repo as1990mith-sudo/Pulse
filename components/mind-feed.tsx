@@ -66,6 +66,7 @@ import { FindProfiles } from "@/components/find-profiles"
 import { PullToRefresh } from "@/components/pull-to-refresh"
 import type { ShareTarget } from "@/lib/share-types"
 import { cn } from "@/lib/utils"
+import { haptic } from "@/lib/haptics"
 import { linkify, extractFirstUrl } from "@/lib/linkify"
 import { renderMessageBody } from "@/lib/rich-text"
 import { LinkPreview } from "@/components/link-preview"
@@ -839,6 +840,7 @@ export function PostCard({
     setLikes((n) => (next ? n + 1 : n - 1))
     // Trigger the springy pop only when liking (not when un-liking).
     if (next) {
+      haptic("light")
       setLikeBurst(false)
       // Re-arm on the next frame so the animation replays on rapid taps.
       requestAnimationFrame(() => setLikeBurst(true))
@@ -872,7 +874,10 @@ export function PostCard({
     if (!currentUser) return
     const next = !saved
     setSaved(next) // optimistic
-    if (next) setSaveBurst(true) // delightful pop only when saving (not un-saving)
+    if (next) {
+      haptic("light")
+      setSaveBurst(true) // delightful pop only when saving (not un-saving)
+    }
     startTransition(async () => {
       try {
         const res = await toggleSaveItem(shareTarget)
@@ -982,7 +987,7 @@ export function PostCard({
       className={cn(
         "overflow-hidden scroll-mt-24 transition-shadow",
         feed
-          ? "bg-background"
+          ? "cv-auto bg-background"
           : "rounded-xl border border-border bg-card text-card-foreground",
         highlighted && "ring-2 ring-primary ring-offset-2 ring-offset-background",
       )}
@@ -1320,7 +1325,10 @@ function FollowButton({
   function onClick() {
     const next = !following
     setFollowing(next)
-    if (next) setFollowBurst(true) // delightful pop only when following
+    if (next) {
+      haptic("medium")
+      setFollowBurst(true) // delightful pop only when following
+    }
     startTransition(async () => {
       try {
         await toggleFollow({ targetUserId: authorId, follow: next })

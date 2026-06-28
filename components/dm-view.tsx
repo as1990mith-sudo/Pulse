@@ -12,6 +12,7 @@ import { VoiceRecorder } from "@/components/voice-recorder"
 import { AudioMessage } from "@/components/audio-message"
 import { DmCall } from "@/components/dm-call"
 import { cn } from "@/lib/utils"
+import { haptic } from "@/lib/haptics"
 import { extractFirstUrl } from "@/lib/linkify"
 import { renderMessageBody } from "@/lib/rich-text"
 import { LinkPreview } from "@/components/link-preview"
@@ -167,6 +168,7 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
     e.preventDefault()
     const body = draft.trim()
     if (!body && !attachment) return
+    haptic("light")
     setDraft("")
     setShowEmoji(false)
     const sent = attachment

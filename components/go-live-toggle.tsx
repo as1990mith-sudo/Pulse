@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowRight, Mic, Video } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { haptic } from "@/lib/haptics"
 
 type Mode = "audio" | "video"
 
@@ -78,7 +79,10 @@ export function GoLiveToggle() {
 
           <button
             type="button"
-            onClick={() => router.push(`/studio?mode=${mode}`)}
+            onClick={() => {
+              haptic("medium")
+              router.push(`/studio?mode=${mode}`)
+            }}
             className="group inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-live px-6 py-3 font-semibold text-live-foreground transition-all hover:opacity-90 active:scale-[0.98]"
           >
             {mode === "video" ? <Video className="size-4 shrink-0" /> : <Mic className="size-4 shrink-0" />}
