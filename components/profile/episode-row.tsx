@@ -133,7 +133,7 @@ export function EpisodeRow({ show, owned = false, queue }: { show: Show; owned?:
   return (
     <div
       className={cn(
-        "group relative flex items-center gap-3 px-4 py-2.5 transition-colors sm:px-6",
+        "group relative flex items-center gap-3 px-4 py-3 transition-colors sm:px-6",
         isActive ? "bg-primary/5" : "hover:bg-secondary/40",
       )}
     >

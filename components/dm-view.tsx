@@ -331,7 +331,7 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
       <div className="border-t border-border/60 bg-background px-4 py-3 pb-safe-2 pl-safe pr-safe sm:px-6">
         <div className="mx-auto w-full max-w-3xl space-y-3">
           {attachment && (
-            <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card p-2.5">
+            <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card p-3">
               {attachment.type === "image" ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={attachment.url || "/placeholder.svg"} alt={attachment.name} className="size-12 rounded-md object-cover" />
@@ -505,7 +505,7 @@ function DmBubble({
   // Deleted messages keep their slot but show a tombstone instead of content.
   if (m.deleted) {
     return (
-      <div className={cn("flex gap-2.5", m.isSelf && "flex-row-reverse")}>
+      <div className={cn("flex gap-3", m.isSelf && "flex-row-reverse")}>
         <Avatar className="size-7 shrink-0">
           {image && <AvatarImage src={image || "/placeholder.svg"} alt={name} />}
           <AvatarFallback className={cn("text-[10px]", color)}>{initials}</AvatarFallback>
@@ -526,7 +526,7 @@ function DmBubble({
   }
 
   return (
-    <div className={cn("flex gap-2.5", m.isSelf && "flex-row-reverse")}>
+    <div className={cn("flex gap-3", m.isSelf && "flex-row-reverse")}>
       <Avatar className="size-7 shrink-0">
         {image && <AvatarImage src={image || "/placeholder.svg"} alt={name} />}
         <AvatarFallback className={cn("text-[10px]", color)}>{initials}</AvatarFallback>

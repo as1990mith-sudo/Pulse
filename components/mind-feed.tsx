@@ -349,7 +349,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
           </div>
         </Card>
 
-        <ul className="stagger mt-5 divide-y divide-border/60 border-y border-border/60">
+        <ul className="stagger mt-6 flex flex-col gap-2 border-y border-border/60 bg-border/40">
           {allPosts.map((post) => (
             <li key={post.id}>
               <PostCard
@@ -593,7 +593,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
       {tab === "find" ? (
         <FindProfiles />
       ) : visiblePosts.length > 0 ? (
-        <ul className="stagger divide-y divide-border/60 border-b border-border/60">
+        <ul className="stagger flex flex-col gap-2 border-b border-border/60 bg-border/40">
           {visiblePosts.map((post) => (
             <li key={post.id}>
               <PostCard
@@ -988,7 +988,7 @@ export function PostCard({
       )}
     >
       {/* Header */}
-      <div className={cn("flex items-center justify-between gap-2", feed ? "px-[0.825rem] py-[0.7rem]" : "px-3 py-2.5")}>
+      <div className={cn("flex items-center justify-between gap-2", feed ? "px-4 py-3" : "px-3 py-3")}>
         <div className="flex min-w-0 items-center gap-3">
           <Link href={`/u/${post.authorId}`} aria-label={`View ${post.user}'s profile`} className="shrink-0">
             <Avatar className={cn(feed ? "size-12 ring-2 ring-border/60" : "size-9")}>
@@ -1071,7 +1071,7 @@ export function PostCard({
 
       {/* Caption — shown above the media, or an inline editor while editing */}
       {isEditing ? (
-        <div className={cn("pb-3", feed ? "px-[0.825rem]" : "px-3")}>
+        <div className={cn("pb-3", feed ? "px-4" : "px-3")}>
           <FormattedTextarea
             value={editDraft}
             onChange={(e) => setEditDraft(e.target.value)}
@@ -1105,7 +1105,7 @@ export function PostCard({
           <div
             className={cn(
               "text-foreground/90",
-              feed ? "px-[0.825rem] text-base" : "px-3 text-[13px]",
+              feed ? "px-4 text-base" : "px-3 text-[13px]",
               hasMedia ? "pb-3" : "pb-1",
             )}
           >
@@ -1168,7 +1168,7 @@ export function PostCard({
               </>
             )}
 
-            {previewUrl && <LinkPreview url={previewUrl} className={cn(text && !textIsOnlyLink && "mt-2.5")} />}
+            {previewUrl && <LinkPreview url={previewUrl} className={cn(text && !textIsOnlyLink && "mt-3")} />}
           </div>
         )
       )}
@@ -1180,7 +1180,7 @@ export function PostCard({
       <div
         className={cn(
           "flex items-center text-foreground",
-          feed ? "gap-7 px-[0.825rem] pb-[0.7rem] pt-3.5" : "gap-5 px-3 pb-3 pt-3",
+              feed ? "gap-6 px-4 pb-3 pt-4" : "gap-5 px-3 pb-3 pt-3",
         )}
       >
         <button

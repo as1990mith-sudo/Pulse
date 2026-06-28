@@ -56,7 +56,7 @@ export function GoLiveToggle() {
               aria-selected={mode === "video"}
               onClick={() => setMode("video")}
               className={cn(
-                "relative z-10 flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors duration-200",
+                "relative z-10 flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition-colors duration-200",
                 mode === "video" ? "text-live-foreground" : "text-muted-foreground hover:text-foreground",
               )}
             >
@@ -68,7 +68,7 @@ export function GoLiveToggle() {
               aria-selected={mode === "audio"}
               onClick={() => setMode("audio")}
               className={cn(
-                "relative z-10 flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors duration-200",
+                "relative z-10 flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition-colors duration-200",
                 mode === "audio" ? "text-live-foreground" : "text-muted-foreground hover:text-foreground",
               )}
             >

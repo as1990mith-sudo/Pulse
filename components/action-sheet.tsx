@@ -105,7 +105,7 @@ export function ActionSheet({
       <div
         style={{ transform: dragY ? `translateY(${dragY}px)` : undefined }}
         className={cn(
-          "relative z-10 m-3 w-full max-w-sm overflow-hidden rounded-3xl border border-border/70 bg-popover/95 p-1.5 shadow-2xl shadow-black/30 backdrop-blur-xl",
+          "relative z-10 m-3 w-full max-w-sm overflow-hidden rounded-3xl border border-border/70 bg-popover/95 p-2 shadow-2xl shadow-black/30 backdrop-blur-xl",
           "animate-in slide-in-from-bottom-4 fade-in zoom-in-95 duration-200",
           !dragging && "sheet-settle",
         )}
@@ -120,14 +120,14 @@ export function ActionSheet({
           <span className="h-1.5 w-10 rounded-full bg-foreground/20" />
         </div>
         {(title || preview) && (
-          <div className="px-4 pb-1.5 pt-3 text-center">
+          <div className="px-4 pb-2 pt-2 text-center">
             {title && (
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</p>
             )}
-            {preview && <p className="mt-0.5 line-clamp-2 text-sm text-foreground/70">{preview}</p>}
+            {preview && <p className="mt-1 line-clamp-2 text-sm text-foreground/70">{preview}</p>}
           </div>
         )}
-        <div className="space-y-0.5 p-1">
+        <div className="space-y-1">
           {actions.map((action) => {
             const Icon = action.icon
             return (
@@ -140,7 +140,7 @@ export function ActionSheet({
                   onClose()
                 }}
                 className={cn(
-                  "flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-medium transition-colors",
+                  "flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-medium transition-colors",
                   action.disabled
                     ? "cursor-not-allowed opacity-40"
                     : action.destructive

@@ -2,6 +2,22 @@
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 
+/* ===========================================================================
+   8-POINT SPACING SYSTEM (vocabulary, not runtime tokens)
+   Use Tailwind grid utilities consistently so the whole app shares one rhythm:
+
+     - 1  (4px)  hairline   — title ↔ subtitle, label ↔ value
+     - 2  (8px)  tight      — icon ↔ text, chips, dense rows
+     - 3  (12px) snug       — avatar ↔ text, inline controls
+     - 4  (16px) base       — card / sheet / row padding, default content gap
+     - 6  (24px) comfortable— around primary actions, between feed cards
+     - 8  (32px) section    — between major page sections
+
+   Avoid off-grid arbitrary values (e.g. px-[0.825rem], py-[0.7rem]) and
+   odd half-steps; round to the steps above so spacing stays balanced across
+   every screen size.
+   =========================================================================== */
+
 @custom-variant dark (&:is(.dark *, .theme-mid *, .theme-charcoal *, .theme-grass *));
 
 @theme inline {
