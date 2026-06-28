@@ -9,8 +9,8 @@ import {
   Check,
   Copy,
   Download,
-  Link2,
   Loader2,
+  Mail,
   MoreHorizontal,
   PlusCircle,
   QrCode,
@@ -276,10 +276,14 @@ export function ShareSheet({
           </div>
         </div>
 
-        {/* People grid */}
-        <div className="min-h-[8rem] flex-1 overflow-y-auto px-2 pb-2">
+        {/* People grid — capped to ~two rows (frequently-contacted first); the
+            rest scroll into view. */}
+        <div
+          data-scroll
+          className="max-h-[13.25rem] min-h-[6.5rem] flex-1 overflow-y-auto overscroll-contain px-2 pb-1"
+        >
           {listLoading && people.length === 0 ? (
-            <div className="flex h-32 items-center justify-center text-muted-foreground">
+            <div className="flex h-28 items-center justify-center text-muted-foreground">
               <Loader2 className="size-5 animate-spin" />
             </div>
           ) : people.length === 0 ? (
@@ -287,7 +291,7 @@ export function ShareSheet({
               {debounced ? "No people found." : "Follow people to share with them here."}
             </p>
           ) : (
-            <ul className="grid grid-cols-4 gap-1">
+            <ul className="grid grid-cols-4 gap-0.5">
               {people.map((p) => {
                 const isSel = selected.includes(p.id)
                 return (
@@ -295,18 +299,20 @@ export function ShareSheet({
                     <button
                       type="button"
                       onClick={() => toggleSelect(p.id)}
-                      className="flex w-full flex-col items-center gap-1.5 rounded-xl px-1 py-2.5 transition-colors hover:bg-secondary/50"
+                      className="tap-scale flex w-full flex-col items-center gap-1.5 rounded-2xl px-1 py-2 transition-colors hover:bg-secondary/50"
                       aria-pressed={isSel}
                     >
                       <span className="relative">
                         <Avatar
                           className={cn(
-                            "size-16 transition-all",
+                            "size-[3.25rem] transition-all duration-200",
                             isSel ? "ring-2 ring-primary ring-offset-2 ring-offset-popover" : "",
                           )}
                         >
                           {p.image && <AvatarImage src={p.image || "/placeholder.svg"} alt={p.name} />}
-                          <AvatarFallback className={cn("text-sm", p.color)}>{p.initials}</AvatarFallback>
+                          <AvatarFallback className={cn("text-sm font-medium", p.color)}>
+                            {p.initials}
+                          </AvatarFallback>
                         </Avatar>
                         {isSel && (
                           <span className="absolute -bottom-0.5 -right-0.5 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground ring-2 ring-popover">
@@ -314,7 +320,9 @@ export function ShareSheet({
                           </span>
                         )}
                       </span>
-                      <span className="w-full truncate text-center text-xs text-foreground">{p.name}</span>
+                      <span className="w-full truncate text-center text-[11px] leading-tight text-foreground">
+                        {p.name}
+                      </span>
                     </button>
                   </li>
                 )
@@ -426,7 +434,14 @@ export function ShareSheet({
 }
 
 function Row({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className={cn("flex gap-1 overflow-x-auto px-3 py-3", className)}>{children}</div>
+  return (
+    <div
+      data-scroll
+      className={cn("flex gap-2 overflow-x-auto px-3 py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", className)}
+    >
+      {children}
+    </div>
+  )
 }
 
 function QuickAction({
@@ -441,14 +456,10 @@ function QuickAction({
   iconClassName?: string
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex w-16 shrink-0 flex-col items-center gap-1.5"
-    >
+    <button type="button" onClick={onClick} className="tap-scale flex w-[3.75rem] shrink-0 flex-col items-center gap-1.5">
       <span
         className={cn(
-          "flex size-14 items-center justify-center rounded-full bg-secondary text-foreground transition-colors hover:bg-secondary/70",
+          "flex size-12 items-center justify-center rounded-full bg-secondary text-foreground transition-colors hover:bg-secondary/70",
           iconClassName,
         )}
       >
@@ -472,13 +483,13 @@ function buildExternalTargets(target: ShareTarget, url: string) {
       label: "WhatsApp",
       href: `https://wa.me/?text=${enc(`${text} ${url}`)}`,
       className: "bg-[#25D366] text-white hover:bg-[#25D366]/90",
-      icon: <Link2 className="size-5" />,
+      icon: <WhatsAppLogo className="size-5" />,
     },
     {
       label: "Telegram",
       href: `https://t.me/share/url?url=${enc(url)}&text=${enc(text)}`,
       className: "bg-[#229ED9] text-white hover:bg-[#229ED9]/90",
-      icon: <Send className="size-5" />,
+      icon: <TelegramLogo className="size-5" />,
     },
     {
       label: "X",
@@ -496,9 +507,25 @@ function buildExternalTargets(target: ShareTarget, url: string) {
       label: "Email",
       href: `mailto:?subject=${enc(text)}&body=${enc(url)}`,
       className: "bg-secondary text-foreground",
-      icon: <Copy className="size-5" />,
+      icon: <Mail className="size-5" />,
     },
   ]
+}
+
+function WhatsAppLogo({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
+      <path d="M.057 24l1.687-6.163a11.867 11.867 0 01-1.587-5.945C.16 5.335 5.495 0 12.05 0a11.817 11.817 0 018.413 3.488 11.824 11.824 0 013.48 8.414c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 01-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884a9.86 9.86 0 001.512 5.26l-.999 3.648 3.736-.957a9.834 9.834 0 002.24.95zm5.413-6.467c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.71.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z" />
+    </svg>
+  )
+}
+
+function TelegramLogo({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
+      <path d="M11.944 0A12 12 0 000 12a12 12 0 0012 12 12 12 0 0012-12A12 12 0 0012 0a12 12 0 00-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 01.171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.479.329-.913.489-1.302.481-.428-.009-1.252-.242-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
+    </svg>
+  )
 }
 
 function XLogo({ className }: { className?: string }) {
