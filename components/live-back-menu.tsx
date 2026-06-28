@@ -49,7 +49,7 @@ export function BackExitMenu({
         aria-label="Back"
         className="relative flex size-10 shrink-0 items-center justify-center rounded-full bg-white/15 text-white ring-1 ring-inset ring-white/15 transition-colors hover:bg-white/25"
       >
-        <ArrowLeft className="size-5" strokeWidth={2.75} />
+        <ArrowLeft className="size-5" strokeWidth={2.5} />
       </button>
     )
   }
@@ -64,7 +64,7 @@ export function BackExitMenu({
         aria-expanded={open}
         className="relative flex size-10 items-center justify-center rounded-full bg-white/15 text-white ring-1 ring-inset ring-white/15 transition-colors hover:bg-white/25"
       >
-        <ArrowLeft className="size-5" strokeWidth={2.75} />
+        <ArrowLeft className="size-5" strokeWidth={2.5} />
       </button>
       {open &&
         mounted &&

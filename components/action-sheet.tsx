@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import type { LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -40,14 +40,55 @@ export function ActionSheet({
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
 
+  // Interactive drag-to-dismiss (mobile bottom-sheet). Track the live drag
+  // offset and whether a drag is in progress so we can disable the spring
+  // transition while the finger is down, then spring back / dismiss on release.
+  const [dragY, setDragY] = useState(0)
+  const [dragging, setDragging] = useState(false)
+  const dragState = useRef<{ startY: number; startT: number } | null>(null)
+
   useEffect(() => {
     if (!open) return
+    // Reset any leftover drag offset whenever the sheet (re)opens.
+    setDragY(0)
+    setDragging(false)
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose()
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [open, onClose])
+
+  function onPointerDown(e: React.PointerEvent) {
+    dragState.current = { startY: e.clientY, startT: Date.now() }
+    setDragging(true)
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  function onPointerMove(e: React.PointerEvent) {
+    if (!dragState.current) return
+    // Only allow dragging downward; clamp upward pull with light resistance.
+    const delta = e.clientY - dragState.current.startY
+    setDragY(delta > 0 ? delta : delta / 4)
+  }
+  function onPointerUp(e: React.PointerEvent) {
+    if (!dragState.current) return
+    const delta = e.clientY - dragState.current.startY
+    const elapsed = Date.now() - dragState.current.startT
+    const velocity = delta / Math.max(elapsed, 1) // px per ms
+    dragState.current = null
+    setDragging(false)
+    // Dismiss on a long enough pull or a quick flick; otherwise spring back.
+    if (delta > 110 || velocity > 0.6) {
+      onClose()
+    } else {
+      setDragY(0)
+    }
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    } catch {
+      /* pointer already released */
+    }
+  }
 
   if (!open || !mounted) return null
 
@@ -62,20 +103,31 @@ export function ActionSheet({
       />
       {/* Sheet */}
       <div
+        style={{ transform: dragY ? `translateY(${dragY}px)` : undefined }}
         className={cn(
-          "relative z-10 m-3 w-full max-w-sm overflow-hidden rounded-3xl border border-border/70 bg-popover/95 p-1.5 shadow-2xl shadow-black/30 backdrop-blur-xl",
+          "relative z-10 m-3 w-full max-w-sm overflow-hidden rounded-3xl border border-border/70 bg-popover/95 p-2 shadow-floating backdrop-blur-xl",
           "animate-in slide-in-from-bottom-4 fade-in zoom-in-95 duration-200",
+          !dragging && "sheet-settle",
         )}
       >
+        {/* Grab handle — drag down to dismiss (primarily for touch). */}
+        <div
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          className="flex cursor-grab touch-none justify-center pb-1 pt-2 active:cursor-grabbing sm:hidden"
+        >
+          <span className="h-1.5 w-10 rounded-full bg-foreground/20" />
+        </div>
         {(title || preview) && (
-          <div className="px-4 pb-1.5 pt-3 text-center">
+          <div className="px-4 pb-2 pt-2 text-center">
             {title && (
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</p>
             )}
-            {preview && <p className="mt-0.5 line-clamp-2 text-sm text-foreground/70">{preview}</p>}
+            {preview && <p className="mt-1 line-clamp-2 text-sm text-foreground/70">{preview}</p>}
           </div>
         )}
-        <div className="space-y-0.5 p-1">
+        <div className="space-y-1">
           {actions.map((action) => {
             const Icon = action.icon
             return (
@@ -88,7 +140,7 @@ export function ActionSheet({
                   onClose()
                 }}
                 className={cn(
-                  "flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-medium transition-colors",
+                  "flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-medium transition-colors",
                   action.disabled
                     ? "cursor-not-allowed opacity-40"
                     : action.destructive

@@ -66,6 +66,7 @@ import { FindProfiles } from "@/components/find-profiles"
 import { PullToRefresh } from "@/components/pull-to-refresh"
 import type { ShareTarget } from "@/lib/share-types"
 import { cn } from "@/lib/utils"
+import { haptic } from "@/lib/haptics"
 import { linkify, extractFirstUrl } from "@/lib/linkify"
 import { renderMessageBody } from "@/lib/rich-text"
 import { LinkPreview } from "@/components/link-preview"
@@ -349,7 +350,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
           </div>
         </Card>
 
-        <ul className="mt-5 divide-y divide-border/60 border-y border-border/60">
+        <ul className="stagger mt-6 flex flex-col gap-2 border-y border-border/60 bg-border/40">
           {allPosts.map((post) => (
             <li key={post.id}>
               <PostCard
@@ -593,7 +594,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
       {tab === "find" ? (
         <FindProfiles />
       ) : visiblePosts.length > 0 ? (
-        <ul className="divide-y divide-border/60 border-b border-border/60">
+        <ul className="stagger flex flex-col gap-2 border-b border-border/60 bg-border/40">
           {visiblePosts.map((post) => (
             <li key={post.id}>
               <PostCard
@@ -778,6 +779,7 @@ export function PostCard({
   const [reposted, setReposted] = useState(post.reposted)
   const [reposts, setReposts] = useState(post.reposts)
   const [saved, setSaved] = useState(post.saved)
+  const [saveBurst, setSaveBurst] = useState(false)
   const [expanded, setExpanded] = useState(false)
   // Post tab only: measures whether the caption overflows its line clamp so we
   // know when to fade it into a "Read more" toggle.
@@ -838,6 +840,7 @@ export function PostCard({
     setLikes((n) => (next ? n + 1 : n - 1))
     // Trigger the springy pop only when liking (not when un-liking).
     if (next) {
+      haptic("light")
       setLikeBurst(false)
       // Re-arm on the next frame so the animation replays on rapid taps.
       requestAnimationFrame(() => setLikeBurst(true))
@@ -871,6 +874,10 @@ export function PostCard({
     if (!currentUser) return
     const next = !saved
     setSaved(next) // optimistic
+    if (next) {
+      haptic("light")
+      setSaveBurst(true) // delightful pop only when saving (not un-saving)
+    }
     startTransition(async () => {
       try {
         const res = await toggleSaveItem(shareTarget)
@@ -980,13 +987,13 @@ export function PostCard({
       className={cn(
         "overflow-hidden scroll-mt-24 transition-shadow",
         feed
-          ? "bg-background"
+          ? "cv-auto bg-background"
           : "rounded-xl border border-border bg-card text-card-foreground",
         highlighted && "ring-2 ring-primary ring-offset-2 ring-offset-background",
       )}
     >
       {/* Header */}
-      <div className={cn("flex items-center justify-between gap-2", feed ? "px-[0.825rem] py-[0.7rem]" : "px-3 py-2.5")}>
+      <div className={cn("flex items-center justify-between gap-2", feed ? "px-4 py-3" : "px-3 py-3")}>
         <div className="flex min-w-0 items-center gap-3">
           <Link href={`/u/${post.authorId}`} aria-label={`View ${post.user}'s profile`} className="shrink-0">
             <Avatar className={cn(feed ? "size-12 ring-2 ring-border/60" : "size-9")}>
@@ -1069,7 +1076,7 @@ export function PostCard({
 
       {/* Caption — shown above the media, or an inline editor while editing */}
       {isEditing ? (
-        <div className={cn("pb-3", feed ? "px-[0.825rem]" : "px-3")}>
+        <div className={cn("pb-3", feed ? "px-4" : "px-3")}>
           <FormattedTextarea
             value={editDraft}
             onChange={(e) => setEditDraft(e.target.value)}
@@ -1103,7 +1110,7 @@ export function PostCard({
           <div
             className={cn(
               "text-foreground/90",
-              feed ? "px-[0.825rem] text-base" : "px-3 text-[13px]",
+              feed ? "px-4 text-base" : "px-3 text-[13px]",
               hasMedia ? "pb-3" : "pb-1",
             )}
           >
@@ -1166,7 +1173,7 @@ export function PostCard({
               </>
             )}
 
-            {previewUrl && <LinkPreview url={previewUrl} className={cn(text && !textIsOnlyLink && "mt-2.5")} />}
+            {previewUrl && <LinkPreview url={previewUrl} className={cn(text && !textIsOnlyLink && "mt-3")} />}
           </div>
         )
       )}
@@ -1178,7 +1185,7 @@ export function PostCard({
       <div
         className={cn(
           "flex items-center text-foreground",
-          feed ? "gap-7 px-[0.825rem] pb-[0.7rem] pt-3.5" : "gap-5 px-3 pb-3 pt-3",
+              feed ? "gap-6 px-4 pb-3 pt-4" : "gap-5 px-3 pb-3 pt-3",
         )}
       >
         <button
@@ -1236,7 +1243,10 @@ export function PostCard({
           aria-pressed={saved}
           aria-label={saved ? "Remove bookmark" : "Save post"}
         >
-          <Bookmark className={cn(feed ? "size-7" : "size-6", saved && "fill-current")} />
+          <Bookmark
+            onAnimationEnd={() => setSaveBurst(false)}
+            className={cn(feed ? "size-7" : "size-6", saved && "fill-current", saveBurst && "motion-pop")}
+          />
         </button>
 
         <button
@@ -1309,11 +1319,16 @@ function FollowButton({
 }) {
   const router = useRouter()
   const [following, setFollowing] = useState(initialFollowing)
+  const [followBurst, setFollowBurst] = useState(false)
   const [isPending, startTransition] = useTransition()
 
   function onClick() {
     const next = !following
     setFollowing(next)
+    if (next) {
+      haptic("medium")
+      setFollowBurst(true) // delightful pop only when following
+    }
     startTransition(async () => {
       try {
         await toggleFollow({ targetUserId: authorId, follow: next })
@@ -1335,7 +1350,12 @@ function FollowButton({
       aria-label={following ? `Unfollow ${authorName}` : `Follow ${authorName}`}
       title={following ? "Following" : "Follow"}
     >
-      {following ? <UserCheck className="size-4" /> : <UserPlus className="size-4" />}
+      <span
+        onAnimationEnd={() => setFollowBurst(false)}
+        className={cn("inline-flex", followBurst && "motion-pop")}
+      >
+        {following ? <UserCheck className="size-4" /> : <UserPlus className="size-4" />}
+      </span>
     </Button>
   )
 }

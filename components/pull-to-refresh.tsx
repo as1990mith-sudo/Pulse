@@ -3,6 +3,7 @@
 import { useRef, useState, type ReactNode } from "react"
 import { ArrowDown, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { haptic } from "@/lib/haptics"
 
 const THRESHOLD = 72 // px of pull needed to trigger a refresh
 const MAX_PULL = 110 // px the indicator can travel at most
@@ -24,6 +25,9 @@ export function PullToRefresh({
   const [pull, setPull] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const startY = useRef<number | null>(null)
+  // Tracks whether we've already buzzed for this gesture so the haptic fires
+  // once, the moment the pull crosses the trigger threshold.
+  const armed = useRef(false)
 
   function onTouchStart(e: React.TouchEvent) {
     if (refreshing) return
@@ -44,12 +48,22 @@ export function PullToRefresh({
       return
     }
     // Apply resistance so the pull feels rubber-banded.
-    setPull(Math.min(MAX_PULL, dy * 0.5))
+    const next = Math.min(MAX_PULL, dy * 0.5)
+    // Buzz once the moment the pull crosses the trigger threshold; reset when
+    // the user relaxes back below it so a re-pull can buzz again.
+    if (next >= THRESHOLD && !armed.current) {
+      armed.current = true
+      haptic("light")
+    } else if (next < THRESHOLD) {
+      armed.current = false
+    }
+    setPull(next)
   }
 
   async function onTouchEnd() {
     if (startY.current === null) return
     startY.current = null
+    armed.current = false
     if (pull >= THRESHOLD && !refreshing) {
       setRefreshing(true)
       setPull(THRESHOLD)
@@ -77,7 +91,7 @@ export function PullToRefresh({
         aria-hidden={height === 0}
       >
         <div
-          className="mb-2 flex size-9 items-center justify-center rounded-full bg-background shadow-md ring-1 ring-border"
+          className="mb-2 flex size-9 items-center justify-center rounded-full bg-background shadow-elevated ring-1 ring-border"
           style={{ opacity: Math.min(1, pull / THRESHOLD) }}
         >
           {refreshing ? (

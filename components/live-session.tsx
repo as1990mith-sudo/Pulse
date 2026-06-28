@@ -246,7 +246,7 @@ function MiniPlayer({ meta, onExpand }: { meta: LiveMeta; onExpand: () => void }
           </span>
         </span>
         <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/15 text-white ring-1 ring-inset ring-white/15">
-          <ChevronUp className="size-5" strokeWidth={2.75} />
+          <ChevronUp className="size-5" strokeWidth={2.5} />
         </span>
       </button>
     </div>

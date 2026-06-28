@@ -578,7 +578,7 @@ export function LiveListener({
               onClick={() => void join()}
               className="flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/30 transition-all hover:opacity-95 active:scale-[0.98]"
             >
-              <Play className="size-4 translate-x-0.5" strokeWidth={2.75} /> Join the room
+              <Play className="size-4 translate-x-0.5" strokeWidth={2.5} /> Join the room
             </button>
             <DockButton label="Share room" onClick={() => setShareOpen(true)}>
               <Send className="size-5" />
@@ -645,7 +645,7 @@ export function LiveListener({
                   onClick={handleRequestCall}
                   className="flex items-center gap-1.5 rounded-full bg-call-accept px-4 py-2.5 text-xs font-bold text-call-accept-foreground shadow-lg shadow-call-accept/30 transition-all hover:opacity-95 active:scale-95"
                 >
-                  <Mic className="size-4" strokeWidth={2.75} /> Speak
+                  <Mic className="size-4" strokeWidth={2.5} /> Speak
                 </button>
               ))}
           </div>

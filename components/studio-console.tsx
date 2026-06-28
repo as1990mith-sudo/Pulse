@@ -607,7 +607,7 @@ export function StudioConsole({
               {starting || state.connecting ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
-                <Radio className="size-4" strokeWidth={2.75} />
+                <Radio className="size-4" strokeWidth={2.5} />
               )}
               {starting || state.connecting ? "…" : "Go live"}
             </Button>
