@@ -55,7 +55,7 @@ export function CoverArt({
           <img src={src || "/placeholder.svg"} alt={alt} className="size-full object-cover" />
         ) : (
           <span className="flex size-full items-center justify-center text-white/80">
-            <Radio className="size-5" strokeWidth={2.75} />
+            <Radio className="size-5" strokeWidth={2.5} />
           </span>
         )}
       </button>

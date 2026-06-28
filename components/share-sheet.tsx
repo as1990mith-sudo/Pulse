@@ -5,6 +5,7 @@ import { createPortal } from "react-dom"
 import useSWR from "swr"
 import QRCode from "qrcode"
 import {
+  Bookmark,
   Check,
   Copy,
   Download,
@@ -352,7 +353,7 @@ export function ShareSheet({
                   saved ? (
                     <Check className="size-5 text-primary" />
                   ) : (
-                    <BookmarkIcon className="size-5" />
+                    <Bookmark className="size-5" />
                   )
                 }
                 label={saved ? "Saved" : "Save"}
@@ -455,14 +456,6 @@ function QuickAction({
       </span>
       <span className="w-full truncate text-center text-[11px] text-muted-foreground">{label}</span>
     </button>
-  )
-}
-
-function BookmarkIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className} aria-hidden>
-      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   )
 }
 
