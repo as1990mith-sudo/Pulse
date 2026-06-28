@@ -1010,9 +1010,9 @@ export function PostCard({
             </Link>
             <span className={cn("truncate text-muted-foreground", feed ? "text-sm" : "text-xs")}>
               {post.handle} · {post.postedAt}
-              {/* For media-/link-only posts there's no body text to trail, so the
-                  edited note stays here; text posts show "(edited)" inline below. */}
-              {edited && !(text && !textIsOnlyLink) && " · edited"}
+              {/* Modern social style: the edited marker lives in the header
+                  metadata line next to the timestamp for every post type. */}
+              {edited && " · Edited"}
             </span>
           </div>
         </div>
@@ -1144,12 +1144,6 @@ export function PostCard({
                           linkClassName:
                             "font-medium text-primary underline-offset-2 [overflow-wrap:anywhere] hover:underline",
                         })}
-                        {/* The "(edited)" indicator trails the very last word of the post. */}
-                        {edited && i === paras.length - 1 && (
-                          <span className="ml-1 align-baseline text-xs font-normal text-muted-foreground">
-                            (edited)
-                          </span>
-                        )}
                       </p>
                     ))
                   })()}
