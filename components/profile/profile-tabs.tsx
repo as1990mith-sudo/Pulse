@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Mic, MessageSquare, Repeat2, Bookmark, BookOpen, Clapperboard, ChevronLeft } from "lucide-react"
+import { Mic, MessageSquare, Repeat2, Bookmark, BookOpen, Clapperboard, ChevronLeft, ArrowLeft } from "lucide-react"
 import type { Show } from "@/lib/data"
 import type { FeedPostView } from "@/app/actions/feed"
 import type { SavedItemView } from "@/app/actions/share"
@@ -43,10 +43,31 @@ export function ProfileTabs({
   ]
 
   const [tab, setTab] = useState<TabKey>("posts")
+  // The tab the user was on before opening Catalogue, so the back arrow can
+  // return them exactly where they were.
+  const [prevTab, setPrevTab] = useState<TabKey>("posts")
+  const catalogueOpen = tab === "catalogue"
   const activeIndex = Math.max(
     0,
     tabs.findIndex((t) => t.key === tab),
   )
+
+  // Catalogue opens as an immersive full-screen view, so lock background scroll
+  // while it's open and restore it on close.
+  useEffect(() => {
+    if (!catalogueOpen) return
+    const previous = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = previous
+    }
+  }, [catalogueOpen])
+
+  function selectTab(key: TabKey) {
+    // Remember where we came from when entering Catalogue.
+    if (key === "catalogue" && tab !== "catalogue") setPrevTab(tab)
+    setTab(key)
+  }
 
   return (
     <section className="mt-2">
@@ -60,7 +81,7 @@ export function ProfileTabs({
           <TabButton
             key={t.key}
             active={tab === t.key}
-            onClick={() => setTab(t.key)}
+            onClick={() => selectTab(t.key)}
             icon={t.icon}
             label={t.label}
             count={t.count}
@@ -74,27 +95,10 @@ export function ProfileTabs({
         />
       </div>
 
-      {/* Content with a smooth fade/slide transition between tabs. */}
+      {/* Content with a smooth fade/slide transition between tabs. Catalogue is
+          rendered separately as a full-screen overlay below. */}
       <div key={tab} className="animate-in fade-in slide-in-from-bottom-1 duration-300 pt-4">
-        {tab === "catalogue" ? (
-          <div className="space-y-4">
-            {/* Owners can upload their own audio/video episodes here. */}
-            {isSelf && <UploadEpisode />}
-            {episodes.length === 0 ? (
-              <EmptyState
-                icon={<Mic className="size-6" />}
-                title="No published episodes yet"
-                message={
-                  isSelf
-                    ? "Upload an audio or video episode above, or finish a live session in the studio to publish one automatically."
-                    : `${name} hasn't published any episodes yet. Follow them to know when they go live.`
-                }
-              />
-            ) : (
-              <EpisodeCatalog episodes={episodes} owned={isSelf} />
-            )}
-          </div>
-        ) : tab === "reposts" ? (
+        {tab === "catalogue" ? null : tab === "reposts" ? (
           reposts.length === 0 ? (
             <EmptyState
               icon={<Repeat2 className="size-6" />}
@@ -132,6 +136,44 @@ export function ProfileTabs({
           <ProfilePostsGrid posts={posts} currentUser={currentUser} />
         )}
       </div>
+
+      {/* Catalogue opens full-screen, hiding the app/profile header. Only a back
+          arrow remains, returning the user to the tab they came from. */}
+      {catalogueOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-background animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border/60 bg-background/80 px-4 py-3 backdrop-blur-xl">
+            <button
+              type="button"
+              onClick={() => setTab(prevTab)}
+              aria-label="Back"
+              className="tap-scale -ml-1 flex size-9 items-center justify-center rounded-full text-foreground transition-colors hover:bg-secondary/60"
+            >
+              <ArrowLeft className="size-5" />
+            </button>
+            <h2 className="text-base font-semibold">Catalogue</h2>
+          </header>
+
+          <div data-scroll className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
+            <div className="mx-auto w-full max-w-4xl space-y-4">
+              {/* Owners can upload their own audio/video episodes here. */}
+              {isSelf && <UploadEpisode />}
+              {episodes.length === 0 ? (
+                <EmptyState
+                  icon={<Mic className="size-6" />}
+                  title="No published episodes yet"
+                  message={
+                    isSelf
+                      ? "Upload an audio or video episode above, or finish a live session in the studio to publish one automatically."
+                      : `${name} hasn't published any episodes yet. Follow them to know when they go live.`
+                  }
+                />
+              ) : (
+                <EpisodeCatalog episodes={episodes} owned={isSelf} />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
