@@ -349,7 +349,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
           </div>
         </Card>
 
-        <ul className="mt-5 divide-y divide-border/60 border-y border-border/60">
+        <ul className="stagger mt-5 divide-y divide-border/60 border-y border-border/60">
           {allPosts.map((post) => (
             <li key={post.id}>
               <PostCard
@@ -593,7 +593,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
       {tab === "find" ? (
         <FindProfiles />
       ) : visiblePosts.length > 0 ? (
-        <ul className="divide-y divide-border/60 border-b border-border/60">
+        <ul className="stagger divide-y divide-border/60 border-b border-border/60">
           {visiblePosts.map((post) => (
             <li key={post.id}>
               <PostCard
@@ -778,6 +778,7 @@ export function PostCard({
   const [reposted, setReposted] = useState(post.reposted)
   const [reposts, setReposts] = useState(post.reposts)
   const [saved, setSaved] = useState(post.saved)
+  const [saveBurst, setSaveBurst] = useState(false)
   const [expanded, setExpanded] = useState(false)
   // Post tab only: measures whether the caption overflows its line clamp so we
   // know when to fade it into a "Read more" toggle.
@@ -871,6 +872,7 @@ export function PostCard({
     if (!currentUser) return
     const next = !saved
     setSaved(next) // optimistic
+    if (next) setSaveBurst(true) // delightful pop only when saving (not un-saving)
     startTransition(async () => {
       try {
         const res = await toggleSaveItem(shareTarget)
@@ -1236,7 +1238,10 @@ export function PostCard({
           aria-pressed={saved}
           aria-label={saved ? "Remove bookmark" : "Save post"}
         >
-          <Bookmark className={cn(feed ? "size-7" : "size-6", saved && "fill-current")} />
+          <Bookmark
+            onAnimationEnd={() => setSaveBurst(false)}
+            className={cn(feed ? "size-7" : "size-6", saved && "fill-current", saveBurst && "motion-pop")}
+          />
         </button>
 
         <button
@@ -1309,11 +1314,13 @@ function FollowButton({
 }) {
   const router = useRouter()
   const [following, setFollowing] = useState(initialFollowing)
+  const [followBurst, setFollowBurst] = useState(false)
   const [isPending, startTransition] = useTransition()
 
   function onClick() {
     const next = !following
     setFollowing(next)
+    if (next) setFollowBurst(true) // delightful pop only when following
     startTransition(async () => {
       try {
         await toggleFollow({ targetUserId: authorId, follow: next })
@@ -1335,7 +1342,12 @@ function FollowButton({
       aria-label={following ? `Unfollow ${authorName}` : `Follow ${authorName}`}
       title={following ? "Following" : "Follow"}
     >
-      {following ? <UserCheck className="size-4" /> : <UserPlus className="size-4" />}
+      <span
+        onAnimationEnd={() => setFollowBurst(false)}
+        className={cn("inline-flex", followBurst && "motion-pop")}
+      >
+        {following ? <UserCheck className="size-4" /> : <UserPlus className="size-4" />}
+      </span>
     </Button>
   )
 }
