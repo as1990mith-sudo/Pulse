@@ -11,12 +11,12 @@ type Tab = { href: string; label: string; icon: LucideIcon }
 // The four core experiences, in order. Icons are chosen to read clearly at a
 // glance and to look great both outlined (inactive) and filled (active):
 //   Rhema → Flame (the living word)   Feed → NotebookPen (paper + pen)
-//   Live  → Radio (on-air)           Chatroom → MessagesSquare (community)
+//   Chatroom → MessagesSquare (community)   Live → Radio (on-air)
 const TABS: Tab[] = [
   { href: "/", label: "Rhema", icon: Flame },
   { href: "/feed", label: "Feed", icon: NotebookPen },
-  { href: "/live", label: "Live", icon: Radio },
   { href: "/chatrooms", label: "Chatroom", icon: MessagesSquare },
+  { href: "/live", label: "Live", icon: Radio },
 ]
 
 /**
