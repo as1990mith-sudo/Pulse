@@ -6,6 +6,7 @@ import { SkinProvider, SKIN_INIT_SCRIPT } from '@/components/skin-provider'
 import { LiveSessionProvider } from '@/components/live-session'
 import { EpisodePlayerProvider } from '@/components/episode-player-provider'
 import { AutoRefresh } from '@/components/auto-refresh'
+import { BottomNav } from '@/components/bottom-nav'
 import './globals.css'
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
@@ -91,6 +92,10 @@ export default function RootLayout({
                     continuously fresh so users never have to manually reload. */}
                 <AutoRefresh />
                 {children}
+                {/* Persistent, flagship-quality tab bar. Lives in the layout so
+                    it never remounts on navigation — the active capsule morphs
+                    between tabs and per-tab state/scroll are preserved. */}
+                <BottomNav />
                 {process.env.NODE_ENV === 'production' && <Analytics />}
               </EpisodePlayerProvider>
             </LiveSessionProvider>
