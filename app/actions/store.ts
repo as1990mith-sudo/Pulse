@@ -363,3 +363,33 @@ export async function getMyListings(): Promise<StoreProduct[]> {
   const lessonMap = await lessonsByProduct(courseIds)
   return rows.map((r) => (r.kind === "course" ? toCourse(r, lessonMap.get(r.id) ?? []) : toBook(r)))
 }
+
+/**
+ * Permanently delete a listing the current user published. Scoped to the
+ * creator so no one can remove someone else's product. Removes the product's
+ * lessons and any purchase records alongside it (the deliverable is gone), then
+ * refreshes the store, library and product surfaces.
+ */
+export async function deleteProduct(productId: string): Promise<{ ok: true }> {
+  const user = await requireUser()
+  const numId = Number(productId)
+  if (!Number.isFinite(numId)) throw new Error("Invalid product.")
+
+  const [product] = await db
+    .select({ id: storeProduct.id, creatorId: storeProduct.creatorId, kind: storeProduct.kind })
+    .from(storeProduct)
+    .where(eq(storeProduct.id, numId))
+    .limit(1)
+  if (!product) throw new Error("Listing not found.")
+  if (product.creatorId !== user.id) throw new Error("You can only delete your own listings.")
+
+  await db.delete(storeLesson).where(eq(storeLesson.productId, numId))
+  await db.delete(storePurchase).where(eq(storePurchase.productId, numId))
+  await db.delete(storeProduct).where(and(eq(storeProduct.id, numId), eq(storeProduct.creatorId, user.id)))
+
+  revalidatePath("/store")
+  revalidatePath("/store/listings")
+  revalidatePath("/library")
+  revalidatePath(`/store/${product.kind}/${numId}`)
+  return { ok: true }
+}

@@ -86,10 +86,10 @@ function PriceBadge({ price, className }: { price: number; className?: string })
  * with a floating wishlist heart and price badge, then a tiny rating, title
  * (max 2 lines) and author beneath. Fades + slides up into view on mount.
  */
-export function BookGridCard({ book, index = 0 }: { book: Book; index?: number }) {
+export function BookGridCard({ book, index = 0, href }: { book: Book; index?: number; href?: string }) {
   return (
     <Link
-      href={`/store/book/${book.id}`}
+      href={href ?? `/store/book/${book.id}`}
       className="group flex flex-col animate-in fade-in slide-in-from-bottom-3 duration-500 fill-mode-both"
       style={{ animationDelay: `${Math.min(index, 12) * 45}ms` }}
     >
@@ -135,10 +135,10 @@ export function BookRailCard({ book }: { book: Book }) {
 }
 
 /** Landscape course card with thumbnail, play affordance, meta + optional progress. */
-export function CourseCard({ course, className }: { course: Course; className?: string }) {
+export function CourseCard({ course, className, href }: { course: Course; className?: string; href?: string }) {
   const showProgress = course.progress != null && course.progress > 0
   return (
-    <Link href={`/store/course/${course.id}`} className={cn("group flex flex-col", className)}>
+    <Link href={href ?? `/store/course/${course.id}`} className={cn("group flex flex-col", className)}>
       <div className="relative aspect-video w-full overflow-hidden rounded-[1.5rem] border border-border/60 bg-muted shadow-elevated transition-transform duration-300 group-active:scale-[0.98]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img

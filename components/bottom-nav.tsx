@@ -32,6 +32,7 @@ function isImmersive(p: string): boolean {
   if (/^\/live\/[^/]+/.test(p)) return true // inside a live room
   if (/^\/messages(\/|$)/.test(p)) return true // DM inbox + threads
   if (/^\/status\/[^/]+/.test(p)) return true // full-screen status viewer
+  if (/^\/library\/[^/]+\/[^/]+/.test(p)) return true // in-app reader / course player
   if (/^\/store\/[^/]+\/[^/]+/.test(p)) return true // product page (sticky CTA)
   if (/^\/bible(\/|$)/.test(p)) return true // immersive reader
   if (/^\/studio(\/|$)/.test(p)) return true // broadcast studio

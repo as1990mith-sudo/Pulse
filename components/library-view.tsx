@@ -66,7 +66,7 @@ export function LibraryView({ books, courses }: { books: Book[]; courses: Course
               </h2>
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                 {courses.map((c) => (
-                  <CourseCard key={c.id} course={c} />
+                  <CourseCard key={c.id} course={c} href={`/library/course/${c.id}`} />
                 ))}
               </div>
             </section>
@@ -80,7 +80,7 @@ export function LibraryView({ books, courses }: { books: Book[]; courses: Course
               </h2>
               <div className="grid grid-cols-3 gap-x-3 gap-y-5 sm:grid-cols-4 md:grid-cols-5">
                 {books.map((b, i) => (
-                  <BookGridCard key={b.id} book={b} index={i} />
+                  <BookGridCard key={b.id} book={b} index={i} href={`/library/book/${b.id}`} />
                 ))}
               </div>
             </section>

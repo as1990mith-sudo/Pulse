@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { Plus, Search } from "lucide-react"
+import { Plus, Search, Store } from "lucide-react"
 import { BOOK_CATEGORIES, COURSE_CATEGORIES, type Book, type Course, type StoreCategory } from "@/lib/store-data"
 import { BookGridCard, BookRailCard, CourseGridCard, CourseRailCard } from "@/components/store/store-cards"
 import { cn } from "@/lib/utils"
@@ -53,21 +53,32 @@ export function StoreView({
 
 function SearchBar() {
   return (
-    <div className="mb-5 flex items-center gap-2">
-      <Link
-        href="/search"
-        className="flex flex-1 items-center gap-3 rounded-2xl border border-border/60 bg-secondary/40 px-4 py-3 text-muted-foreground shadow-soft backdrop-blur-md transition-colors hover:bg-secondary/70"
-      >
-        <Search className="size-5 shrink-0" />
-        <span className="text-sm">Search books, courses, authors…</span>
-      </Link>
-      <Link
-        href="/store/publish"
-        className="tap-scale flex shrink-0 items-center gap-1.5 rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-elevated"
-      >
-        <Plus className="size-4" />
-        Sell
-      </Link>
+    <div className="mb-5">
+      <div className="flex items-center gap-2">
+        <Link
+          href="/search"
+          className="flex flex-1 items-center gap-3 rounded-2xl border border-border/60 bg-secondary/40 px-4 py-3 text-muted-foreground shadow-soft backdrop-blur-md transition-colors hover:bg-secondary/70"
+        >
+          <Search className="size-5 shrink-0" />
+          <span className="text-sm">Search books, courses, authors…</span>
+        </Link>
+        <Link
+          href="/store/publish"
+          className="tap-scale flex shrink-0 items-center gap-1.5 rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-elevated"
+        >
+          <Plus className="size-4" />
+          Sell
+        </Link>
+      </div>
+      <div className="mt-2 flex justify-end">
+        <Link
+          href="/store/listings"
+          className="tap-scale flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+        >
+          <Store className="size-4" />
+          Your listings
+        </Link>
+      </div>
     </div>
   )
 }
