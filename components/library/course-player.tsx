@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, CheckCircle2, Headphones, ListVideo, Play, Volume2 } from "lucide-react"
+import { ArrowLeft, CheckCircle2, Headphones, ListVideo, Play, Video } from "lucide-react"
 import type { Course, Lesson } from "@/lib/store-data"
 import { cn } from "@/lib/utils"
 
@@ -145,7 +145,7 @@ export function CoursePlayer({ course }: { course: Course }) {
                       {lesson.title}
                     </p>
                     <p className="flex items-center gap-1 text-xs capitalize text-muted-foreground">
-                      {lesson.kind === "audio" ? <Headphones className="size-3" /> : <Volume2 className="size-3" />}
+                      {lesson.kind === "audio" ? <Headphones className="size-3" /> : <Video className="size-3" />}
                       {lesson.kind}
                       {lesson.duration ? ` · ${lesson.duration}` : ""}
                     </p>
