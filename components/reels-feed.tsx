@@ -21,7 +21,7 @@ type Reel = { post: FeedPostView; url: string; key: string }
  * viewport; scrolling snaps to exactly one neighbour at a time, and the visible
  * clip autoplays while the rest pause — just like Instagram Reels.
  */
-export function ReelsFeed({ posts, onClose }: { posts: FeedPostView[]; onClose: () => void }) {
+export function ReelsFeed({ posts, onClose }: { posts: FeedPostView[]; onClose?: () => void }) {
   const scrollerRef = useRef<HTMLDivElement>(null)
 
   // One reel per video media item, shuffled once per open so the order feels
@@ -96,14 +96,16 @@ export function ReelsFeed({ posts, onClose }: { posts: FeedPostView[]; onClose: 
       {/* Persistent top bar (outside the scroller so it never scrolls away). */}
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between p-4 pt-[max(env(safe-area-inset-top),1rem)]">
         <span className="text-lg font-bold text-white drop-shadow">Reels</span>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close reels"
-          className="pointer-events-auto flex size-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition-colors hover:bg-black/60"
-        >
-          <X className="size-5" />
-        </button>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close reels"
+            className="pointer-events-auto flex size-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition-colors hover:bg-black/60"
+          >
+            <X className="size-5" />
+          </button>
+        )}
       </div>
     </div>
   )
@@ -124,6 +126,7 @@ function ReelItem({
 }) {
   const { post, url } = reel
   const videoRef = useRef<HTMLVideoElement>(null)
+  const backdropRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [active, setActive] = useState(false)
   const [paused, setPaused] = useState(false)
@@ -131,7 +134,8 @@ function ReelItem({
   const [liked, setLiked] = useState(post.liked)
   const [likes, setLikes] = useState(post.likes)
 
-  // Keep the element's mute state in sync with the global toggle.
+  // Keep the element's mute state in sync with the global toggle. The blurred
+  // backdrop copy is always muted.
   useEffect(() => {
     if (videoRef.current) videoRef.current.muted = muted
   }, [muted])
@@ -146,13 +150,19 @@ function ReelItem({
         const isActive = entry.isIntersecting && entry.intersectionRatio >= 0.6
         setActive(isActive)
         const v = videoRef.current
+        const bg = backdropRef.current
         if (!v) return
         if (isActive) {
           setPaused(false)
           v.play().catch(() => {})
+          bg?.play().catch(() => {})
         } else {
           v.pause()
           v.currentTime = 0
+          if (bg) {
+            bg.pause()
+            bg.currentTime = 0
+          }
         }
       },
       { root: root.current, threshold: [0, 0.6, 1] },
@@ -163,12 +173,15 @@ function ReelItem({
 
   function togglePlay() {
     const v = videoRef.current
+    const bg = backdropRef.current
     if (!v) return
     if (v.paused) {
       v.play().catch(() => {})
+      bg?.play().catch(() => {})
       setPaused(false)
     } else {
       v.pause()
+      bg?.pause()
       setPaused(true)
     }
   }
@@ -187,11 +200,26 @@ function ReelItem({
   }
 
   return (
-    <div ref={containerRef} className="relative flex h-full w-full snap-start snap-always items-center justify-center">
+    <div ref={containerRef} className="relative flex h-full w-full snap-start snap-always items-center justify-center overflow-hidden">
+      {/* Blurred backdrop: the same clip stretched to cover the frame so off-ratio
+          videos fill edge-to-edge (no black bars, nothing "hanging"), while the
+          real clip plays contained on top so no content is ever cropped. */}
+      <video
+        ref={backdropRef}
+        src={url}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-2xl"
+        playsInline
+        loop
+        muted
+        preload="metadata"
+        tabIndex={-1}
+      />
+      <div aria-hidden="true" className="absolute inset-0 bg-black/30" />
       <video
         ref={videoRef}
         src={url}
-        className="h-full w-full object-contain"
+        className="relative h-full w-full object-contain"
         playsInline
         loop
         muted={muted}

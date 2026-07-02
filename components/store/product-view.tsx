@@ -21,7 +21,8 @@ import {
   ShoppingCart,
 } from "lucide-react"
 import type { Book, Course } from "@/lib/store-data"
-import { BOOKS, COURSES, formatPrice } from "@/lib/store-data"
+import { formatPrice } from "@/lib/store-data"
+import { purchaseProduct } from "@/app/actions/store"
 import { useStoreState } from "@/lib/use-store-state"
 import { ShareButton, Stars, BookRailCard, CourseRailCard } from "@/components/store/store-cards"
 import { cn } from "@/lib/utils"
@@ -32,11 +33,19 @@ function isCourse(p: Product): p is Course {
   return p.type === "course"
 }
 
-export function ProductView({ product }: { product: Product }) {
+export function ProductView({
+  product,
+  owned: ownedInitial,
+  related,
+}: {
+  product: Product
+  owned: boolean
+  related: Product[]
+}) {
   const router = useRouter()
-  const { isWishlisted, toggleWishlist, isInLibrary, addToLibrary, isInCart, addToCart, removeFromCart } =
-    useStoreState()
-  const owned = isInLibrary(product.id)
+  const { isWishlisted, toggleWishlist, isInCart, addToCart, removeFromCart } = useStoreState()
+  const [justPurchased, setJustPurchased] = useState(false)
+  const owned = ownedInitial || justPurchased
   const wished = isWishlisted(product.id)
   const inCart = isInCart(product.id)
 
@@ -52,19 +61,22 @@ export function ProductView({ product }: { product: Product }) {
   const course = isCourse(product) ? product : null
   const book = !isCourse(product) ? product : null
 
-  function purchase() {
+  async function purchase() {
     if (owned || status === "processing") return
     setStatus("processing")
-    // Simulated purchase — real checkout is wired in a later pass.
-    setTimeout(() => {
-      addToLibrary(product.id)
-      setStatus("idle")
+    try {
+      await purchaseProduct(product.id)
+      setJustPurchased(true)
       setCelebrate(true)
       setTimeout(() => setCelebrate(false), 2200)
-    }, 1200)
+      router.refresh()
+    } catch (err) {
+      console.log("[v0] purchase failed:", err instanceof Error ? err.message : err)
+      alert(err instanceof Error ? err.message : "Purchase failed. Please sign in and try again.")
+    } finally {
+      setStatus("idle")
+    }
   }
-
-  const related = (isCourse(product) ? COURSES : BOOKS).filter((p) => p.id !== product.id).slice(0, 8)
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 pb-28 pt-3 sm:px-6">
@@ -156,29 +168,47 @@ export function ProductView({ product }: { product: Product }) {
             {course.lessons.map((lesson, i) => {
               const preview = i === 0
               const unlocked = owned || preview
+              const playable = unlocked && !!lesson.mediaUrl
+              const Row = playable ? "a" : "div"
+              const rowProps = playable
+                ? { href: lesson.mediaUrl as string, target: "_blank", rel: "noopener noreferrer" }
+                : {}
               return (
-                <li key={lesson.id} className="flex items-center gap-3 px-4 py-3">
-                  <span
+                <li key={lesson.id}>
+                  <Row
+                    {...rowProps}
                     className={cn(
-                      "flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
-                      unlocked ? "bg-primary/15 text-primary" : "bg-secondary/60 text-muted-foreground",
+                      "flex items-center gap-3 px-4 py-3",
+                      playable && "transition-colors hover:bg-secondary/40",
                     )}
                   >
-                    {unlocked ? <Play className="size-3.5 translate-x-px fill-current" /> : <Lock className="size-3.5" />}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {i + 1}. {lesson.title}
-                    </p>
-                    <p className="text-xs capitalize text-muted-foreground">
-                      {lesson.kind} · {lesson.duration}
-                    </p>
-                  </div>
-                  {preview && !owned && (
-                    <span className="rounded-full bg-secondary/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                      Preview
+                    <span
+                      className={cn(
+                        "flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+                        unlocked ? "bg-primary/15 text-primary" : "bg-secondary/60 text-muted-foreground",
+                      )}
+                    >
+                      {unlocked ? (
+                        <Play className="size-3.5 translate-x-px fill-current" />
+                      ) : (
+                        <Lock className="size-3.5" />
+                      )}
                     </span>
-                  )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {i + 1}. {lesson.title}
+                      </p>
+                      <p className="text-xs capitalize text-muted-foreground">
+                        {lesson.kind}
+                        {lesson.duration ? ` · ${lesson.duration}` : ""}
+                      </p>
+                    </div>
+                    {preview && !owned && (
+                      <span className="rounded-full bg-secondary/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                        Preview
+                      </span>
+                    )}
+                  </Row>
                 </li>
               )
             })}
@@ -186,10 +216,33 @@ export function ProductView({ product }: { product: Product }) {
         </section>
       )}
 
+      {/* Book delivery — unlocked for owners */}
+      {book && owned && book.fileUrl && (
+        <section className="mb-8">
+          <h2 className="mb-3 text-lg font-semibold text-foreground">Your copy</h2>
+          <a
+            href={book.fileUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card p-4 transition-colors hover:bg-secondary/40"
+          >
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
+              <BookOpen className="size-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-foreground">Read {product.title}</p>
+              <p className="truncate text-xs text-muted-foreground">{book.fileName || "Open your file"}</p>
+            </div>
+            <Check className="size-5 shrink-0 text-primary" />
+          </a>
+        </section>
+      )}
+
       {/* Related */}
+      {related.length > 0 && (
       <section className="mb-4">
         <h2 className="mb-3 text-lg font-semibold text-foreground">You may also like</h2>
-        <div data-scroll className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
+        <div data-scroll className="hscroll -mx-4 flex gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
           {related.map((p) =>
             p.type === "course" ? (
               <CourseRailCard key={p.id} course={p} />
@@ -199,6 +252,7 @@ export function ProductView({ product }: { product: Product }) {
           )}
         </div>
       </section>
+      )}
 
       {/* Sticky purchase bar — portaled to <body> so it stays pinned to the
           viewport regardless of the page-transition wrapper's transform. */}

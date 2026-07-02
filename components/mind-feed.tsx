@@ -27,7 +27,6 @@ import {
   ChevronRight,
   Images,
   GripVertical,
-  Film,
 } from "lucide-react"
 import {
   addPostComment,
@@ -63,7 +62,6 @@ import {
 import { ImageLightbox } from "@/components/image-lightbox"
 import { FeedVideo } from "@/components/feed-video"
 import { ShareSheet } from "@/components/share-sheet"
-import { ReelsFeed } from "@/components/reels-feed"
 import { PullToRefresh } from "@/components/pull-to-refresh"
 import type { ShareTarget } from "@/lib/share-types"
 import { cn } from "@/lib/utils"
@@ -158,7 +156,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
   // Index currently being dragged in the reorder strip (null when not dragging).
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [isPending, startTransition] = useTransition()
-  const [tab, setTab] = useState<"for-you" | "following" | "reels">("for-you")
+  const [tab, setTab] = useState<"for-you" | "following">("for-you")
   const fileInputRef = useRef<HTMLInputElement>(null)
   // Separate inputs so we can request the device camera directly: one for
   // capturing a photo and one for recording a video. The "capture" attribute
@@ -580,23 +578,9 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
           Following{followingCount > 0 ? ` (${followingCount})` : ""}
           {tab === "following" && <span className="absolute inset-x-0 -bottom-px mx-auto h-1 w-14 rounded-full bg-primary" />}
         </button>
-        <button
-          onClick={() => setTab("reels")}
-          className={cn(
-            "relative flex flex-1 items-center justify-center gap-1.5 px-3 py-4 text-[15px] font-semibold transition-colors",
-            tab === "reels" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
-          )}
-          aria-pressed={tab === "reels"}
-        >
-          <Film className="size-4" />
-          Reels
-          {tab === "reels" && <span className="absolute inset-x-0 -bottom-px mx-auto h-1 w-14 rounded-full bg-primary" />}
-        </button>
       </div>
 
-      {tab === "reels" ? (
-        <ReelsFeed posts={allPosts} onClose={() => setTab("for-you")} />
-      ) : visiblePosts.length > 0 ? (
+      {visiblePosts.length > 0 ? (
         <ul className="stagger flex flex-col gap-2 border-b border-border/60 bg-border/40">
           {visiblePosts.map((post) => (
             <li key={post.id}>

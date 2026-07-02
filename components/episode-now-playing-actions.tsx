@@ -1,29 +1,31 @@
 "use client"
 
 import { useEffect, useState, useTransition } from "react"
-import { Bookmark, Heart, MessageCircle, Repeat, Share2 } from "lucide-react"
+import { Bookmark, Heart, MessageCircle, Share2 } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
 import type { Show } from "@/lib/data"
 import type { ShareTarget } from "@/lib/share-types"
-import { getEpisodeComments, isEpisodeLiked, setEpisodeLike } from "@/app/actions/episodes"
+import { isEpisodeLiked, setEpisodeLike } from "@/app/actions/episodes"
 import { isItemSaved, toggleSaveItem } from "@/app/actions/share"
 import { ShareSheet } from "@/components/share-sheet"
-import { EpisodeCommentsSheet } from "@/components/episode-comments-sheet"
 import { cn } from "@/lib/utils"
 
 /**
- * Social action bar for the immersive episode player: like, comment, loop,
- * save, and share. Like/comment/save are wired to the same server actions the
- * episode page uses; loop toggles the player's media element repeat flag.
+ * Pinned social action bar for the immersive episode player: Like, Comment,
+ * Save, Share. Like/save are wired to the same server actions the episode page
+ * uses. Comment is a controlled toggle owned by the player so it can expand /
+ * collapse the inline comment section in the scroll area below.
  */
 export function EpisodeNowPlayingActions({
   show,
-  loop,
-  onToggleLoop,
+  commentCount,
+  commentsExpanded,
+  onToggleComments,
 }: {
   show: Show
-  loop: boolean
-  onToggleLoop: () => void
+  commentCount: number
+  commentsExpanded: boolean
+  onToggleComments: () => void
 }) {
   const { data: session } = authClient.useSession()
   const signedIn = Boolean(session?.user)
@@ -32,9 +34,7 @@ export function EpisodeNowPlayingActions({
   const [liked, setLiked] = useState(false)
   const [likes, setLikes] = useState(show.likes ?? 0)
   const [saved, setSaved] = useState(false)
-  const [commentCount, setCommentCount] = useState(0)
   const [shareOpen, setShareOpen] = useState(false)
-  const [commentsOpen, setCommentsOpen] = useState(false)
   const [, startTransition] = useTransition()
 
   const shareTarget: ShareTarget = {
@@ -54,18 +54,14 @@ export function EpisodeNowPlayingActions({
     setLikes(show.likes ?? 0)
   }, [show.id, show.likes])
 
-  // Load comment count + saved/liked state for the current track.
+  // Load saved/liked state for the current track.
   useEffect(() => {
     if (!episodeId) {
-      setCommentCount(0)
       setSaved(false)
       setLiked(false)
       return
     }
     let active = true
-    getEpisodeComments(episodeId)
-      .then((c) => active && setCommentCount(c.length))
-      .catch(() => {})
     if (signedIn) {
       isItemSaved("episode", String(episodeId))
         .then((s) => active && setSaved(s))
@@ -107,11 +103,11 @@ export function EpisodeNowPlayingActions({
   }
 
   const baseBtn =
-    "flex flex-col items-center gap-1 rounded-2xl px-3 py-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+    "flex flex-1 flex-col items-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
 
   return (
     <>
-      <div className="mt-5 flex items-center justify-between gap-1 border-t border-foreground/10 pt-4">
+      <div className="flex items-center justify-between gap-1">
         <button
           type="button"
           onClick={toggleLike}
@@ -126,24 +122,14 @@ export function EpisodeNowPlayingActions({
 
         <button
           type="button"
-          onClick={() => setCommentsOpen(true)}
+          onClick={onToggleComments}
           disabled={!episodeId}
-          aria-label="View comments"
-          className={cn(baseBtn)}
+          aria-pressed={commentsExpanded}
+          aria-label={commentsExpanded ? "Hide comments" : "Show comments"}
+          className={cn(baseBtn, commentsExpanded && "text-primary hover:text-primary")}
         >
           <MessageCircle className="size-6" />
           <span className="tabular-nums">{commentCount > 0 ? commentCount : "Comment"}</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={onToggleLoop}
-          aria-pressed={loop}
-          aria-label="Repeat episode"
-          className={cn(baseBtn, loop && "text-primary hover:text-primary")}
-        >
-          <Repeat className="size-6" />
-          <span>Loop</span>
         </button>
 
         <button
@@ -170,14 +156,6 @@ export function EpisodeNowPlayingActions({
       </div>
 
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
-      {episodeId ? (
-        <EpisodeCommentsSheet
-          episodeId={episodeId}
-          open={commentsOpen}
-          onClose={() => setCommentsOpen(false)}
-          onCountChange={setCommentCount}
-        />
-      ) : null}
     </>
   )
 }

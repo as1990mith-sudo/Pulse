@@ -2,22 +2,24 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { ArrowRight, Search, Sparkles } from "lucide-react"
-import {
-  BOOKS,
-  COURSES,
-  BOOK_CATEGORIES,
-  COURSE_CATEGORIES,
-  booksByTag,
-  coursesByTag,
-  type StoreCategory,
-} from "@/lib/store-data"
+import { Plus, Search } from "lucide-react"
+import { BOOK_CATEGORIES, COURSE_CATEGORIES, type Book, type Course, type StoreCategory } from "@/lib/store-data"
 import { BookGridCard, BookRailCard, CourseGridCard, CourseRailCard } from "@/components/store/store-cards"
 import { cn } from "@/lib/utils"
 
 type Tab = "books" | "courses"
 
-export function StoreView() {
+export function StoreView({
+  books,
+  courses,
+  trendingBooks,
+  trendingCourses,
+}: {
+  books: Book[]
+  courses: Course[]
+  trendingBooks: Book[]
+  trendingCourses: Course[]
+}) {
   const [tab, setTab] = useState<Tab>("books")
   const [category, setCategory] = useState<StoreCategory | "All">("All")
 
@@ -30,8 +32,6 @@ export function StoreView() {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pb-16 pt-4 sm:px-6">
-      <StoreHero />
-
       <SearchBar />
 
       <TabBar tab={tab} onChange={switchTab} />
@@ -42,52 +42,33 @@ export function StoreView() {
         onChange={setCategory}
       />
 
-      {tab === "books" ? <BooksTab category={category} /> : <CoursesTab category={category} />}
+      {tab === "books" ? (
+        <BooksTab books={books} trending={trendingBooks} category={category} />
+      ) : (
+        <CoursesTab courses={courses} trending={trendingCourses} category={category} />
+      )}
     </div>
-  )
-}
-
-function StoreHero() {
-  const featured = booksByTag("featured")[0] ?? BOOKS[0]
-  return (
-    <Link
-      href={`/store/book/${featured.id}`}
-      className="group relative mb-5 block aspect-[16/9] w-full overflow-hidden rounded-[2rem] border border-border/60 shadow-floating sm:aspect-[21/9]"
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/store/hero-featured.png"
-        alt=""
-        className="size-full object-cover transition-transform duration-700 group-hover:scale-105"
-      />
-      <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
-      <div className="absolute inset-0 flex flex-col justify-end gap-2 p-5 sm:p-8">
-        <span className="flex w-fit items-center gap-1.5 rounded-full bg-primary/90 px-3 py-1 text-xs font-semibold text-primary-foreground">
-          <Sparkles className="size-3.5" />
-          Editor&apos;s Pick
-        </span>
-        <h2 className="max-w-md text-balance font-display text-2xl font-bold leading-tight text-white sm:text-3xl">
-          {featured.title}
-        </h2>
-        <p className="max-w-sm text-pretty text-sm text-white/80">{featured.subtitle}</p>
-        <span className="mt-1 flex w-fit items-center gap-1.5 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-white backdrop-blur-md transition-colors group-hover:bg-white/25">
-          Explore now
-          <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-        </span>
-      </div>
-    </Link>
   )
 }
 
 function SearchBar() {
   return (
-    <Link
-      href="/search"
-      className="mb-5 flex items-center gap-3 rounded-2xl border border-border/60 bg-secondary/40 px-4 py-3 text-muted-foreground shadow-soft backdrop-blur-md transition-colors hover:bg-secondary/70"
-    >
-      <Search className="size-5 shrink-0" />
-      <span className="text-sm">Search books, courses, authors…</span>
-    </Link>
+    <div className="mb-5 flex items-center gap-2">
+      <Link
+        href="/search"
+        className="flex flex-1 items-center gap-3 rounded-2xl border border-border/60 bg-secondary/40 px-4 py-3 text-muted-foreground shadow-soft backdrop-blur-md transition-colors hover:bg-secondary/70"
+      >
+        <Search className="size-5 shrink-0" />
+        <span className="text-sm">Search books, courses, authors…</span>
+      </Link>
+      <Link
+        href="/store/publish"
+        className="tap-scale flex shrink-0 items-center gap-1.5 rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-elevated"
+      >
+        <Plus className="size-4" />
+        Sell
+      </Link>
+    </div>
   )
 }
 
@@ -130,7 +111,7 @@ function CategoryPills({
 }) {
   const all: (StoreCategory | "All")[] = ["All", ...categories]
   return (
-    <div data-scroll className="-mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+    <div data-scroll className="hscroll -mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
       {all.map((c) => (
         <button
           key={c}
@@ -156,7 +137,7 @@ function SectionRail({ title, children }: { title: string; children: React.React
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-foreground">{title}</h2>
       </div>
-      <div data-scroll className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
+      <div data-scroll className="hscroll -mx-4 flex gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
         {children}
       </div>
     </section>
@@ -165,10 +146,18 @@ function SectionRail({ title, children }: { title: string; children: React.React
 
 const PAGE = 9
 
-function BooksTab({ category }: { category: StoreCategory | "All" }) {
+function BooksTab({
+  books,
+  trending,
+  category,
+}: {
+  books: Book[]
+  trending: Book[]
+  category: StoreCategory | "All"
+}) {
   const filtered = useMemo(
-    () => (category === "All" ? BOOKS : BOOKS.filter((b) => b.category === category)),
-    [category],
+    () => (category === "All" ? books : books.filter((b) => b.category === category)),
+    [books, category],
   )
   const [visible, setVisible] = useState(PAGE)
   const sentinel = useRef<HTMLDivElement>(null)
@@ -191,9 +180,9 @@ function BooksTab({ category }: { category: StoreCategory | "All" }) {
 
   return (
     <div>
-      {category === "All" && (
+      {category === "All" && trending.length > 0 && (
         <SectionRail title="Trending now">
-          {booksByTag("trending").map((b) => (
+          {trending.map((b) => (
             <BookRailCard key={b.id} book={b} />
           ))}
         </SectionRail>
@@ -204,7 +193,7 @@ function BooksTab({ category }: { category: StoreCategory | "All" }) {
           {category === "All" ? "All books" : category}
         </h2>
         {filtered.length === 0 ? (
-          <EmptyState label="No books in this category yet." />
+          <EmptyState label="No books published yet. Be the first to sell one." />
         ) : (
           <div className="grid grid-cols-3 gap-x-3 gap-y-5 sm:grid-cols-4 md:grid-cols-5">
             {filtered.slice(0, visible).map((b, i) => (
@@ -218,17 +207,25 @@ function BooksTab({ category }: { category: StoreCategory | "All" }) {
   )
 }
 
-function CoursesTab({ category }: { category: StoreCategory | "All" }) {
+function CoursesTab({
+  courses,
+  trending,
+  category,
+}: {
+  courses: Course[]
+  trending: Course[]
+  category: StoreCategory | "All"
+}) {
   const filtered = useMemo(
-    () => (category === "All" ? COURSES : COURSES.filter((c) => c.category === category)),
-    [category],
+    () => (category === "All" ? courses : courses.filter((c) => c.category === category)),
+    [courses, category],
   )
 
   return (
     <div>
-      {category === "All" && coursesByTag("trending").length > 0 && (
+      {category === "All" && trending.length > 0 && (
         <SectionRail title="Trending now">
-          {coursesByTag("trending").map((c) => (
+          {trending.map((c) => (
             <CourseRailCard key={c.id} course={c} />
           ))}
         </SectionRail>
@@ -239,7 +236,7 @@ function CoursesTab({ category }: { category: StoreCategory | "All" }) {
           {category === "All" ? "All courses" : category}
         </h2>
         {filtered.length === 0 ? (
-          <EmptyState label="No courses in this category yet." />
+          <EmptyState label="No courses published yet. Be the first to sell one." />
         ) : (
           <div className="grid grid-cols-3 gap-x-3 gap-y-5 sm:grid-cols-4 md:grid-cols-5">
             {filtered.map((c, i) => (

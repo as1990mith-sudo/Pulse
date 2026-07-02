@@ -79,7 +79,7 @@ const MULTIPART_THRESHOLD = 5 * 1024 * 1024 // 5 MB
 
 export async function uploadMedia(
   file: File | Blob,
-  folder: "chat" | "status" | "covers" | "avatars" | "live-music" | "episodes" | "dm",
+  folder: "chat" | "status" | "covers" | "avatars" | "live-music" | "episodes" | "dm" | "store",
   fileName?: string,
   onProgress?: (percentage: number) => void,
 ): Promise<UploadedMedia> {

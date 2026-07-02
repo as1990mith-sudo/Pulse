@@ -3,19 +3,21 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Flame, NotebookPen, Radio, MessagesSquare, type LucideIcon } from "lucide-react"
+import { Flame, SquarePen, Clapperboard, Radio, MessagesSquare, type LucideIcon } from "lucide-react"
 import { haptic } from "@/lib/haptics"
 import { cn } from "@/lib/utils"
 
 type Tab = { href: string; label: string; icon: LucideIcon }
 
-// The four core experiences, in order. Icons are chosen to read clearly at a
+// The five core experiences, in order. Icons are chosen to read clearly at a
 // glance and to look great both outlined (inactive) and filled (active):
-//   Rhema → Flame (the living word)   Feed → NotebookPen (paper + pen)
-//   Chatroom → MessagesSquare (community)   Live → Radio (on-air)
+//   Rhema → Flame (the living word)   Feed → SquarePen (pen on paper)
+//   Reels → Clapperboard (short video)   Chatroom → MessagesSquare (community)
+//   Live → Radio (on-air)
 const TABS: Tab[] = [
   { href: "/", label: "Rhema", icon: Flame },
-  { href: "/feed", label: "Feed", icon: NotebookPen },
+  { href: "/feed", label: "Feed", icon: SquarePen },
+  { href: "/reels", label: "Reels", icon: Clapperboard },
   { href: "/chatrooms", label: "Chatroom", icon: MessagesSquare },
   { href: "/live", label: "Live", icon: Radio },
 ]
@@ -97,10 +99,10 @@ export function BottomNav() {
       )}
     >
       {/* Soft gradient fade where page content meets the navigation bar. */}
-      <div aria-hidden="true" className="h-4 w-full bg-gradient-to-t from-[#0B0B0D] to-transparent" />
+      <div aria-hidden="true" className="h-4 w-full bg-gradient-to-t from-background to-transparent" />
       <nav
         aria-label="Primary"
-        className="pointer-events-auto flex items-stretch border-t border-white/10 bg-[#0B0B0D] pb-[env(safe-area-inset-bottom)]"
+        className="pointer-events-auto flex items-stretch border-t border-border bg-background pb-[env(safe-area-inset-bottom)]"
       >
         {TABS.map((tab, i) => {
           const active = i === activeIndex
@@ -113,8 +115,8 @@ export function BottomNav() {
               aria-current={active ? "page" : undefined}
               aria-label={tab.label}
               className={cn(
-                "group flex h-[48px] flex-1 items-center justify-center gap-1.5 outline-none transition-colors focus-visible:bg-white/5",
-                active ? "text-primary" : "text-white/75 hover:text-white",
+                "group flex h-[48px] flex-1 items-center justify-center gap-1.5 outline-none transition-colors focus-visible:bg-foreground/5",
+                active ? "text-primary" : "text-muted-foreground hover:text-foreground",
               )}
             >
               <Icon

@@ -912,7 +912,7 @@ export function DreamInterpretation({ initialFeed }: { initialFeed: DreamFeed })
         <button
           type="button"
           onClick={() => setComposerOpen(true)}
-          className="absolute bottom-6 right-5 z-30 flex h-14 items-center gap-2 rounded-full bg-primary px-5 font-semibold text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95 sm:right-8"
+          className="absolute bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-5 z-30 flex h-14 items-center gap-2 rounded-full bg-primary px-5 font-semibold text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95 sm:right-8"
         >
           <Plus className="size-5" />
           Share dream
