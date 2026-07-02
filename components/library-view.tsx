@@ -1,25 +1,16 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { BookOpen, GraduationCap, Library as LibraryIcon, ShoppingBag } from "lucide-react"
-import { getBook, getCourse } from "@/lib/store-data"
-import { useStoreState } from "@/lib/use-store-state"
+import type { Book, Course } from "@/lib/store-data"
 import { BookGridCard, CourseCard } from "@/components/store/store-cards"
 import { cn } from "@/lib/utils"
 
 type Filter = "all" | "books" | "courses"
 
-export function LibraryView() {
-  const { libraryIds } = useStoreState()
+export function LibraryView({ books, courses }: { books: Book[]; courses: Course[] }) {
   const [filter, setFilter] = useState<Filter>("all")
-
-  const ids = libraryIds()
-  const { books, courses } = useMemo(() => {
-    const books = ids.map((id) => getBook(id)).filter((b): b is NonNullable<typeof b> => !!b)
-    const courses = ids.map((id) => getCourse(id)).filter((c): c is NonNullable<typeof c> => !!c)
-    return { books, courses }
-  }, [ids])
 
   const total = books.length + courses.length
   const showBooks = filter !== "courses" && books.length > 0
