@@ -750,9 +750,25 @@
 }
 
 /* --- Instagram-style edge-to-edge bottom navigation ----------------------- */
-/* Reserve room so page content never sits behind the fixed bar (68px bar). */
+/* Reserve room so page content never sits behind the fixed bar. The bar is a
+   48px nav row plus a 16px gradient fade (~64px), so reserve 4.25rem to keep the
+   last item comfortably clear of the footer across every page. */
 body.has-bottom-nav {
-  padding-bottom: calc(3rem + env(safe-area-inset-bottom));
+  padding-bottom: calc(4.25rem + env(safe-area-inset-bottom));
+}
+
+/* Horizontal rails (category pills, "Trending" carousels). Hide the scrollbar so
+   it never shows through overlapping content, and only trap horizontal
+   overscroll — vertical swipes must still chain to the page so users can scroll
+   down while their finger is over a rail. */
+.hscroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: auto;
+}
+.hscroll::-webkit-scrollbar {
+  display: none;
 }
 
 /* --- Facebook-style left drawer: micro-parallax on the app shell ---------- */

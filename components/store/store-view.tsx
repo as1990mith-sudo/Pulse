@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { ArrowRight, Search, Sparkles } from "lucide-react"
+import { Search } from "lucide-react"
 import {
   BOOKS,
   COURSES,
@@ -30,8 +30,6 @@ export function StoreView() {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pb-16 pt-4 sm:px-6">
-      <StoreHero />
-
       <SearchBar />
 
       <TabBar tab={tab} onChange={switchTab} />
@@ -44,38 +42,6 @@ export function StoreView() {
 
       {tab === "books" ? <BooksTab category={category} /> : <CoursesTab category={category} />}
     </div>
-  )
-}
-
-function StoreHero() {
-  const featured = booksByTag("featured")[0] ?? BOOKS[0]
-  return (
-    <Link
-      href={`/store/book/${featured.id}`}
-      className="group relative mb-5 block aspect-[16/9] w-full overflow-hidden rounded-[2rem] border border-border/60 shadow-floating sm:aspect-[21/9]"
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/store/hero-featured.png"
-        alt=""
-        className="size-full object-cover transition-transform duration-700 group-hover:scale-105"
-      />
-      <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
-      <div className="absolute inset-0 flex flex-col justify-end gap-2 p-5 sm:p-8">
-        <span className="flex w-fit items-center gap-1.5 rounded-full bg-primary/90 px-3 py-1 text-xs font-semibold text-primary-foreground">
-          <Sparkles className="size-3.5" />
-          Editor&apos;s Pick
-        </span>
-        <h2 className="max-w-md text-balance font-display text-2xl font-bold leading-tight text-white sm:text-3xl">
-          {featured.title}
-        </h2>
-        <p className="max-w-sm text-pretty text-sm text-white/80">{featured.subtitle}</p>
-        <span className="mt-1 flex w-fit items-center gap-1.5 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-white backdrop-blur-md transition-colors group-hover:bg-white/25">
-          Explore now
-          <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-        </span>
-      </div>
-    </Link>
   )
 }
 
@@ -130,7 +96,7 @@ function CategoryPills({
 }) {
   const all: (StoreCategory | "All")[] = ["All", ...categories]
   return (
-    <div data-scroll className="-mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+    <div data-scroll className="hscroll -mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
       {all.map((c) => (
         <button
           key={c}
@@ -156,7 +122,7 @@ function SectionRail({ title, children }: { title: string; children: React.React
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-foreground">{title}</h2>
       </div>
-      <div data-scroll className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
+      <div data-scroll className="hscroll -mx-4 flex gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
         {children}
       </div>
     </section>

@@ -97,10 +97,10 @@ export function BottomNav() {
       )}
     >
       {/* Soft gradient fade where page content meets the navigation bar. */}
-      <div aria-hidden="true" className="h-4 w-full bg-gradient-to-t from-[#0B0B0D] to-transparent" />
+      <div aria-hidden="true" className="h-4 w-full bg-gradient-to-t from-background to-transparent" />
       <nav
         aria-label="Primary"
-        className="pointer-events-auto flex items-stretch border-t border-white/10 bg-[#0B0B0D] pb-[env(safe-area-inset-bottom)]"
+        className="pointer-events-auto flex items-stretch border-t border-border bg-background pb-[env(safe-area-inset-bottom)]"
       >
         {TABS.map((tab, i) => {
           const active = i === activeIndex
@@ -113,8 +113,8 @@ export function BottomNav() {
               aria-current={active ? "page" : undefined}
               aria-label={tab.label}
               className={cn(
-                "group flex h-[48px] flex-1 items-center justify-center gap-1.5 outline-none transition-colors focus-visible:bg-white/5",
-                active ? "text-primary" : "text-white/75 hover:text-white",
+                "group flex h-[48px] flex-1 items-center justify-center gap-1.5 outline-none transition-colors focus-visible:bg-foreground/5",
+                active ? "text-primary" : "text-muted-foreground hover:text-foreground",
               )}
             >
               <Icon
