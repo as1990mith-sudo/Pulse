@@ -222,28 +222,32 @@ export function EpisodeWatch({
       {/* ========================= SECTION 2 — scrollable ==================== */}
       <div className="flex-1 overflow-y-auto overscroll-contain">
         <div className="space-y-6 px-4 py-4 pb-16 sm:px-6">
-          {/* Compact comments row — shown only while collapsed. Tapping it (or the
-              Comment button above) re-expands the comments. */}
-          {!commentsOpen && (
-            <button
-              type="button"
-              onClick={() => setCommentsOpen(true)}
-              className="flex w-full items-center justify-between rounded-xl border border-border/60 bg-card px-4 py-3 text-sm font-semibold transition-colors hover:bg-secondary/60"
-              aria-expanded={false}
-            >
-              <span>Comments{count > 0 && <span className="ml-1 text-muted-foreground">({count})</span>}</span>
-              <ChevronDown className="size-4 text-muted-foreground" />
-            </button>
-          )}
-
-          {/* Collapsible comment section (composer + thread). Animates height via
-              grid-template-rows so there are no layout jumps. */}
-          <div
-            className={cn(
-              "grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none",
-              commentsOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+          {/* Comment toggle group — the compact row and the collapsible section are
+              grouped so that when collapsed there's no stray gap before "More
+              from…", which must sit directly beneath the compact row. */}
+          <div>
+            {/* Compact comments row — shown only while collapsed. Tapping it (or the
+                Comment button above) re-expands the comments. */}
+            {!commentsOpen && (
+              <button
+                type="button"
+                onClick={() => setCommentsOpen(true)}
+                className="flex w-full items-center justify-between rounded-xl border border-border/60 bg-card px-4 py-3 text-sm font-semibold transition-colors hover:bg-secondary/60"
+                aria-expanded={false}
+              >
+                <span>Comments{count > 0 && <span className="ml-1 text-muted-foreground">({count})</span>}</span>
+                <ChevronDown className="size-4 text-muted-foreground" />
+              </button>
             )}
-          >
+
+            {/* Collapsible comment section (composer + thread). Animates height via
+                grid-template-rows so there are no layout jumps. */}
+            <div
+              className={cn(
+                "grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none",
+                commentsOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+              )}
+            >
             <div className={cn("min-h-0 overflow-hidden", commentsOpen ? "opacity-100" : "opacity-0")}>
               <div className="space-y-4 rounded-xl border border-border/60 bg-card p-4">
                 {/* Header with a collapse affordance. */}
@@ -314,7 +318,22 @@ export function EpisodeWatch({
                 />
               </div>
             </div>
+            </div>
           </div>
+
+          {/* More from… (next / recommended videos) — sits directly beneath the
+              comments (expanded) or the compact comments row (collapsed), per the
+              spec. Everything else (creator card, About) follows below it. */}
+          {queue.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="text-sm font-semibold">More from {show.host.name}</h2>
+              <div className="flex flex-col gap-3">
+                {queue.map((ep) => (
+                  <VideoCard key={ep.id} show={ep} />
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* Creator card */}
           <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card p-4">
@@ -326,19 +345,6 @@ export function EpisodeWatch({
               <p className="truncate text-sm text-muted-foreground">{show.host.handle}</p>
             </Link>
           </div>
-
-          {/* More from… (next / recommended videos) — sits directly beneath the
-              comments (expanded) or the compact comments row (collapsed). */}
-          {queue.length > 0 && (
-            <section className="space-y-3">
-              <h2 className="text-sm font-semibold">More from {show.host.name}</h2>
-              <div className="flex flex-col gap-3">
-                {queue.map((ep) => (
-                  <VideoCard key={ep.id} show={ep} />
-                ))}
-              </div>
-            </section>
-          )}
 
           {/* About this episode */}
           {show.description && (
