@@ -111,7 +111,7 @@ function DreamReplyItem({
   isAdmin: boolean
   onChanged: () => void
 }) {
-  const [liked, setLiked] = useState(false)
+  const [liked, setLiked] = useState(reply.liked)
   const [likes, setLikes] = useState(reply.likes)
   const [copied, setCopied] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)

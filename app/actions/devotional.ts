@@ -8,6 +8,7 @@ import { db } from "@/lib/db"
 import { devotionalComment } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { EDIT_WINDOW_MS, DELETE_WINDOW_MS } from "@/lib/interactions"
+import { getLikedSet, setLike } from "@/lib/likes"
 
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -26,6 +27,7 @@ export type DevotionalCommentView = {
   color: string
   text: string
   likes: number
+  liked: boolean
   edited: boolean
   postedAt: string
   createdAtMs: number
@@ -52,6 +54,8 @@ export async function getDevotionalComments(devotionalDate: string): Promise<Dev
     .where(eq(devotionalComment.devotionalDate, devotionalDate))
     .orderBy(asc(devotionalComment.createdAt))
 
+  const likedSet = await getLikedSet(viewerId, "devotional_comment", rows.map((r) => r.id))
+
   return rows.map((c) => ({
     id: c.id,
     parentId: c.parentId ?? null,
@@ -63,6 +67,7 @@ export async function getDevotionalComments(devotionalDate: string): Promise<Dev
     color: getAvatarColor(c.userId),
     text: c.text,
     likes: c.likes,
+    liked: likedSet.has(c.id),
     edited: !!c.editedAt,
     postedAt: timeAgo(c.createdAt),
     createdAtMs: c.createdAt.getTime(),
@@ -84,14 +89,16 @@ export async function addDevotionalComment(input: { devotionalDate: string; text
   revalidatePath("/devotional")
 }
 
-/** Toggle a like on a devotional comment. */
+/** Toggle a like on a devotional comment. Idempotent — persists per-user state. */
 export async function setDevotionalCommentLike(input: { commentId: number; liked: boolean }) {
-  await requireUser()
+  const user = await requireUser()
   const [row] = await db
     .select({ likes: devotionalComment.likes })
     .from(devotionalComment)
     .where(eq(devotionalComment.id, input.commentId))
   if (!row) return
+  const { changed } = await setLike(user.id, "devotional_comment", input.commentId, input.liked)
+  if (!changed) return
   const next = Math.max(0, row.likes + (input.liked ? 1 : -1))
   await db.update(devotionalComment).set({ likes: next }).where(eq(devotionalComment.id, input.commentId))
   revalidatePath("/devotional")

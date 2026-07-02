@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { feedComment, feedPost, follow, repost, savedItem, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
+import { getLikedSet, setLike } from "@/lib/likes"
 import { notifyUser } from "@/app/actions/notifications"
 
 async function requireUser() {
@@ -41,6 +42,7 @@ export type FeedCommentView = {
   authorImage: string | null
   text: string
   likes: number
+  liked: boolean
   edited: boolean
   postedAt: string
   createdAtMs: number
@@ -61,6 +63,7 @@ export type FeedPostView = {
   video: string | null
   media: PostMedia[]
   likes: number
+  liked: boolean
   reposts: number
   reposted: boolean
   saved: boolean
@@ -92,6 +95,7 @@ function toCommentView(
   c: typeof feedComment.$inferSelect,
   infoMap: Map<string, { name: string; image: string | null }>,
   currentUserId: string | null,
+  likedCommentSet: Set<number>,
 ): FeedCommentView {
   const name = infoMap.get(c.userId)?.name ?? c.authorName
   return {
@@ -106,6 +110,7 @@ function toCommentView(
     authorImage: infoMap.get(c.userId)?.image ?? null,
     text: c.text,
     likes: c.likes,
+    liked: likedCommentSet.has(c.id),
     edited: !!c.editedAt,
     postedAt: timeAgo(c.createdAt),
     createdAtMs: c.createdAt.getTime(),
@@ -158,6 +163,8 @@ export async function getFeed(): Promise<FeedPostView[]> {
   const comments = await db.select().from(feedComment).orderBy(asc(feedComment.createdAt))
   const repostedSet = await getRepostedSet(currentUserId)
   const savedSet = await getSavedPostSet(currentUserId)
+  const likedPostSet = await getLikedSet(currentUserId, "post", posts.map((p) => p.id))
+  const likedCommentSet = await getLikedSet(currentUserId, "feed_comment", comments.map((c) => c.id))
 
   const infoMap = await getUserInfoMap([
     ...posts.map((p) => p.userId),
@@ -185,13 +192,16 @@ export async function getFeed(): Promise<FeedPostView[]> {
     video: p.video,
     media: toMedia(p),
     likes: p.likes,
+    liked: likedPostSet.has(p.id),
     reposts: p.reposts,
     reposted: repostedSet.has(p.id),
     saved: savedSet.has(String(p.id)),
     edited: !!p.editedAt,
     isFollowing: followingIds.has(p.userId),
     isSelf: currentUserId === p.userId,
-    comments: comments.filter((c) => c.postId === p.id).map((c) => toCommentView(c, infoMap, currentUserId)),
+    comments: comments
+      .filter((c) => c.postId === p.id)
+      .map((c) => toCommentView(c, infoMap, currentUserId, likedCommentSet)),
   }))
 }
 
@@ -218,6 +228,8 @@ export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
   const comments = await db.select().from(feedComment).orderBy(asc(feedComment.createdAt))
   const repostedSet = await getRepostedSet(currentUserId)
   const savedSet = await getSavedPostSet(currentUserId)
+  const likedPostSet = await getLikedSet(currentUserId, "post", posts.map((p) => p.id))
+  const likedCommentSet = await getLikedSet(currentUserId, "feed_comment", comments.map((c) => c.id))
 
   const infoMap = await getUserInfoMap([
     ...posts.map((p) => p.userId),
@@ -239,13 +251,16 @@ export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
     video: p.video,
     media: toMedia(p),
     likes: p.likes,
+    liked: likedPostSet.has(p.id),
     reposts: p.reposts,
     reposted: repostedSet.has(p.id),
     saved: savedSet.has(String(p.id)),
     edited: !!p.editedAt,
     isFollowing: followingIds.has(p.userId),
     isSelf: currentUserId === p.userId,
-    comments: comments.filter((c) => c.postId === p.id).map((c) => toCommentView(c, infoMap, currentUserId)),
+    comments: comments
+      .filter((c) => c.postId === p.id)
+      .map((c) => toCommentView(c, infoMap, currentUserId, likedCommentSet)),
   }))
 }
 
@@ -271,6 +286,8 @@ export async function getRepostsByUser(userId: string): Promise<FeedPostView[]> 
   const comments = await db.select().from(feedComment).orderBy(asc(feedComment.createdAt))
   const repostedSet = await getRepostedSet(currentUserId)
   const savedSet = await getSavedPostSet(currentUserId)
+  const likedPostSet = await getLikedSet(currentUserId, "post", posts.map((p) => p.id))
+  const likedCommentSet = await getLikedSet(currentUserId, "feed_comment", comments.map((c) => c.id))
 
   const followingIds = currentUserId
     ? new Set(
@@ -306,13 +323,16 @@ export async function getRepostsByUser(userId: string): Promise<FeedPostView[]> 
     video: p.video,
     media: toMedia(p),
     likes: p.likes,
+    liked: likedPostSet.has(p.id),
     reposts: p.reposts,
     reposted: repostedSet.has(p.id),
     saved: savedSet.has(String(p.id)),
     edited: !!p.editedAt,
     isFollowing: followingIds.has(p.userId),
     isSelf: currentUserId === p.userId,
-    comments: comments.filter((c) => c.postId === p.id).map((c) => toCommentView(c, infoMap, currentUserId)),
+    comments: comments
+      .filter((c) => c.postId === p.id)
+      .map((c) => toCommentView(c, infoMap, currentUserId, likedCommentSet)),
   }))
 }
 
@@ -485,6 +505,8 @@ export async function setPostLike(input: { postId: number; liked: boolean }) {
     .from(feedPost)
     .where(eq(feedPost.id, input.postId))
   if (!row) return
+  const { changed } = await setLike(user.id, "post", input.postId, input.liked)
+  if (!changed) return
   const next = Math.max(0, row.likes + (input.liked ? 1 : -1))
   await db.update(feedPost).set({ likes: next }).where(eq(feedPost.id, input.postId))
 
@@ -503,14 +525,16 @@ export async function setPostLike(input: { postId: number; liked: boolean }) {
   revalidatePath("/feed")
 }
 
-/** Toggle a like on a comment (simple counter, mirrors post likes). */
+/** Toggle a like on a comment. Idempotent — persists per-user state. */
 export async function setCommentLike(input: { commentId: number; liked: boolean }) {
-  await requireUser()
+  const user = await requireUser()
   const [row] = await db
     .select({ likes: feedComment.likes })
     .from(feedComment)
     .where(eq(feedComment.id, input.commentId))
   if (!row) return
+  const { changed } = await setLike(user.id, "feed_comment", input.commentId, input.liked)
+  if (!changed) return
   const next = Math.max(0, row.likes + (input.liked ? 1 : -1))
   await db.update(feedComment).set({ likes: next }).where(eq(feedComment.id, input.commentId))
   revalidatePath("/feed")

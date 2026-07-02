@@ -34,6 +34,7 @@ function toThreadComment(c: DevotionalCommentView): ThreadComment {
     image: null,
     text: c.text,
     likes: c.likes,
+    liked: c.liked,
     edited: c.edited,
     postedAt: c.postedAt,
     createdAtMs: c.createdAtMs,

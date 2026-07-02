@@ -139,6 +139,7 @@ function toThreadComment(c: FeedCommentView): ThreadComment {
     image: c.authorImage,
     text: c.text,
     likes: c.likes,
+    liked: c.liked,
     edited: c.edited,
     postedAt: c.postedAt,
     createdAtMs: c.createdAtMs,
@@ -773,7 +774,7 @@ export function PostCard({
 }) {
   const feed = variant === "feed"
   const router = useRouter()
-  const [liked, setLiked] = useState(false)
+  const [liked, setLiked] = useState(post.liked)
   const [likes, setLikes] = useState(post.likes)
   const [likeBurst, setLikeBurst] = useState(false)
   const [reposted, setReposted] = useState(post.reposted)

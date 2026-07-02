@@ -8,6 +8,7 @@ import { db } from "@/lib/db"
 import { communityComment, communityPost, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { EDIT_WINDOW_MS } from "@/lib/interactions"
+import { getLikedSet, setLike } from "@/lib/likes"
 
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -57,6 +58,7 @@ export type CommunityCommentView = {
   image: string | null
   body: string
   likes: number
+  liked: boolean
   edited: boolean
   postedAt: string
   createdAtMs: number
@@ -165,6 +167,8 @@ export async function getCommunityComments(postId: number): Promise<CommunityCom
     for (const u of users) imageMap.set(u.id, u.image ?? null)
   }
 
+  const likedSet = await getLikedSet(viewerId, "community_comment", rows.map((r) => r.id))
+
   return rows.map((r) => ({
     id: r.id,
     parentId: r.parentId ?? null,
@@ -176,6 +180,7 @@ export async function getCommunityComments(postId: number): Promise<CommunityCom
     image: imageMap.get(r.userId) ?? null,
     body: r.body,
     likes: r.likes,
+    liked: likedSet.has(r.id),
     edited: !!r.editedAt,
     postedAt: timeAgo(r.createdAt),
     createdAtMs: r.createdAt.getTime(),
@@ -219,6 +224,7 @@ export async function addCommunityComment(input: {
     image: profile?.image ?? null,
     body: row.body,
     likes: 0,
+    liked: false,
     edited: false,
     postedAt: "now",
     createdAtMs: row.createdAt.getTime(),
@@ -262,14 +268,16 @@ export async function editCommunityComment(input: { commentId: number; body: str
   return text
 }
 
-/** Toggle a like on a community comment. */
+/** Toggle a like on a community comment. Idempotent — persists per-user state. */
 export async function setCommunityCommentLike(input: { commentId: number; liked: boolean }) {
-  await requireUser()
+  const user = await requireUser()
   const [row] = await db
     .select({ likes: communityComment.likes })
     .from(communityComment)
     .where(eq(communityComment.id, input.commentId))
   if (!row) return
+  const { changed } = await setLike(user.id, "community_comment", input.commentId, input.liked)
+  if (!changed) return
   const next = Math.max(0, row.likes + (input.liked ? 1 : -1))
   await db.update(communityComment).set({ likes: next }).where(eq(communityComment.id, input.commentId))
   revalidatePath("/chatrooms/community")

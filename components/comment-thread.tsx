@@ -27,6 +27,7 @@ export type ThreadComment = {
   image: string | null
   text: string
   likes: number
+  liked: boolean
   edited: boolean
   postedAt: string
   createdAtMs: number
@@ -220,7 +221,7 @@ function CommentItem({
   enforceTimeWindows?: boolean
   isReply?: boolean
 }) {
-  const [liked, setLiked] = useState(false)
+  const [liked, setLiked] = useState(comment.liked)
   const [likes, setLikes] = useState(comment.likes)
   const [menuOpen, setMenuOpen] = useState(false)
   const [replying, setReplying] = useState(false)
