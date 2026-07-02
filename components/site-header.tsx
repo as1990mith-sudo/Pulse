@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BookOpen, Radio, Sparkles, SquarePen, Podcast, MessagesSquare, type LucideIcon } from "lucide-react"
-import { ThemeSwitcher } from "@/components/theme-switcher"
+import { Radio, Sparkles, SquarePen, Podcast, MessagesSquare, Search, type LucideIcon } from "lucide-react"
+import { AppMenu } from "@/components/app-menu"
 import { UserMenu } from "@/components/user-menu"
 import { MessagesBell } from "@/components/messages-bell"
 import { NotificationBell } from "@/components/notification-bell"
@@ -112,31 +112,35 @@ export function SiteHeader() {
       )}
     >
       <div className="relative mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] sm:pl-[max(2rem,env(safe-area-inset-left))] sm:pr-[max(2rem,env(safe-area-inset-right))]">
-        <Link href="/" className="flex items-center gap-2">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Radio className="size-4" />
-          </span>
-          <span className="text-lg font-semibold tracking-tight">Frequency</span>
-        </Link>
+        {/* Left: floating hamburger + brand (icon left of text), tightly aligned. */}
+        <div className="flex items-center gap-2.5">
+          <AppMenu />
+          <Link href="/" className="flex items-center gap-2">
+            <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <Radio className="size-4" />
+            </span>
+            <span className="text-lg font-semibold tracking-tight">Frequency</span>
+          </Link>
+        </div>
 
         <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center md:flex">
           <NavTabs isActive={isActive} />
         </nav>
 
-        <div className="flex items-center gap-2">
+        {/* Right, iOS-aligned: Search · Notifications · Messages · Profile. */}
+        <div className="flex items-center gap-1">
           <Link
-            href="/bible"
-            aria-label="Read the Bible"
+            href="/search"
+            aria-label="Search"
             className={cn(
               "relative flex size-9 items-center justify-center rounded-full outline-none transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring",
-              isActive("/bible") ? "text-primary" : "text-muted-foreground hover:text-foreground",
+              isActive("/search") ? "text-primary" : "text-muted-foreground hover:text-foreground",
             )}
           >
-            <BookOpen className="size-[18px]" />
+            <Search className="size-[18px]" />
           </Link>
-          <MessagesBell />
           <NotificationBell />
-          <ThemeSwitcher />
+          <MessagesBell />
           <UserMenu />
         </div>
       </div>

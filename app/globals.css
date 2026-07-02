@@ -758,6 +758,21 @@
   transform: scale(0.97);
 }
 
+/* --- Floating menu button: premium elevation + orange glow on press -------- */
+.menu-fab {
+  transition:
+    transform var(--motion-fast) var(--ease-spring),
+    box-shadow var(--motion-base) var(--ease-standard),
+    background-color var(--motion-fast) var(--ease-standard);
+}
+.menu-fab:active {
+  transform: scale(0.92);
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--primary) 70%, transparent),
+    0 0 22px -2px color-mix(in oklab, var(--primary) 65%, transparent),
+    0 6px 16px -6px oklch(0 0 0 / 0.4);
+}
+
 /* --- Card touch elevation: subtly lift + scale while pressed --------------- */
 .press-card {
   transition:
