@@ -3,18 +3,18 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Flame, Compass, Radio, MessagesSquare, type LucideIcon } from "lucide-react"
+import { Flame, NotebookPen, Radio, MessagesSquare, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 type Tab = { href: string; label: string; icon: LucideIcon }
 
 // The four core experiences, in order. Icons are chosen to read clearly at a
 // glance and to look great both outlined (inactive) and filled (active):
-//   Rhema → Flame (the living word)   Feed → Compass (discover)
+//   Rhema → Flame (the living word)   Feed → NotebookPen (paper + pen)
 //   Live  → Radio (on-air)           Chatroom → MessagesSquare (community)
 const TABS: Tab[] = [
   { href: "/", label: "Rhema", icon: Flame },
-  { href: "/feed", label: "Feed", icon: Compass },
+  { href: "/feed", label: "Feed", icon: NotebookPen },
   { href: "/live", label: "Live", icon: Radio },
   { href: "/chatrooms", label: "Chatroom", icon: MessagesSquare },
 ]
