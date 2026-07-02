@@ -36,6 +36,7 @@ import { authClient } from "@/lib/auth-client"
 import { SKINS, useSkin } from "@/components/skin-provider"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { startMenuFlow } from "@/lib/menu-flow"
+import { haptic } from "@/lib/haptics"
 import { cn } from "@/lib/utils"
 
 const themes = [
@@ -94,6 +95,8 @@ export function AppMenu() {
   }, [])
 
   const openDrawer = useCallback(() => {
+    // Subtle tactile cue as the navigation drawer opens.
+    haptic("light")
     setOpen(true)
     // Next frame: flip to active so the transform transition plays.
     requestAnimationFrame(() => requestAnimationFrame(() => setActive(true)))

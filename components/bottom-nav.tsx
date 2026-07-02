@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Flame, NotebookPen, Radio, MessagesSquare, type LucideIcon } from "lucide-react"
+import { haptic } from "@/lib/haptics"
 import { cn } from "@/lib/utils"
 
 type Tab = { href: string; label: string; icon: LucideIcon }
@@ -84,12 +85,8 @@ export function BottomNav() {
   if (hidden) return null
 
   function tap() {
-    // Soft haptic feedback where supported (Android / some browsers).
-    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-      try {
-        navigator.vibrate(8)
-      } catch {}
-    }
+    // Soft, reduced-motion-aware tick on tab change (see lib/haptics).
+    haptic("select")
   }
 
   return (

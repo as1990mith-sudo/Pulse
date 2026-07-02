@@ -7,9 +7,10 @@
  * detection and the user's reduced-motion preference are handled here.
  */
 
-type HapticPattern = "light" | "medium" | "success" | "warning" | "error"
+type HapticPattern = "select" | "light" | "medium" | "success" | "warning" | "error"
 
 const PATTERNS: Record<HapticPattern, number | number[]> = {
+  select: 6, // a barely-there tick for tab switches / menu selections
   light: 10,
   medium: 18,
   success: [12, 40, 12],

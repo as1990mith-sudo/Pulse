@@ -11,6 +11,7 @@ import {
   type NotificationType,
   type NotificationView,
 } from "@/app/actions/notifications"
+import { haptic } from "@/lib/haptics"
 import { cn } from "@/lib/utils"
 
 const ICONS: Record<NotificationType, typeof Bell> = {
@@ -214,7 +215,7 @@ function NotificationRow({
         // Snap back any swipe offset before entering selection mode.
         setDx(0)
         onLongPress()
-        if (navigator.vibrate) navigator.vibrate(10)
+        haptic("medium")
       }, LONG_PRESS_MS)
     }
   }
