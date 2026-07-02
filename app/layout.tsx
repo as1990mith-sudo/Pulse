@@ -6,6 +6,7 @@ import { SkinProvider, SKIN_INIT_SCRIPT } from '@/components/skin-provider'
 import { LiveSessionProvider } from '@/components/live-session'
 import { EpisodePlayerProvider } from '@/components/episode-player-provider'
 import { AutoRefresh } from '@/components/auto-refresh'
+import { BottomNav } from '@/components/bottom-nav'
 import './globals.css'
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
@@ -90,7 +91,15 @@ export default function RootLayout({
                 {/* Keeps server-rendered data (feed, adverts, live status, …)
                     continuously fresh so users never have to manually reload. */}
                 <AutoRefresh />
-                {children}
+                {/* The whole app shell gently slides right (micro-parallax) when
+                    the left navigation drawer opens. */}
+                <div id="app-shell" className="app-shell">
+                  {children}
+                  {/* Persistent, flagship-quality tab bar. Lives in the layout so
+                      it never remounts on navigation — the active capsule morphs
+                      between tabs and per-tab state/scroll are preserved. */}
+                  <BottomNav />
+                </div>
                 {process.env.NODE_ENV === 'production' && <Analytics />}
               </EpisodePlayerProvider>
             </LiveSessionProvider>

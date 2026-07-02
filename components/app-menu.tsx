@@ -1,27 +1,42 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
 import {
+  AlignLeft,
   BookOpen,
+  Bookmark,
+  ChevronDown,
   ChevronRight,
   Contrast,
+  Download,
+  Info,
   Leaf,
   Library as LibraryIcon,
-  Menu,
+  LifeBuoy,
+  LogOut,
+  MessageCircle,
   Moon,
   MoonStar,
   Palette,
+  Radio,
+  Bell,
   ShoppingBag,
   Sun,
+  User,
+  UserPlus,
   Check,
   X,
   type LucideIcon,
 } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
 import { SKINS, useSkin } from "@/components/skin-provider"
+import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
+import { startMenuFlow } from "@/lib/menu-flow"
+import { haptic } from "@/lib/haptics"
 import { cn } from "@/lib/utils"
 
 const themes = [
@@ -39,128 +54,276 @@ const SKIN_SWATCH: Record<string, string> = {
   yellow: "linear-gradient(to top right, oklch(0.9 0.16 95), oklch(0.84 0.17 85), oklch(0.76 0.16 68))",
 }
 
-function greetingFor(date: Date): string {
-  const h = date.getHours()
-  if (h < 12) return "Good morning"
-  if (h < 18) return "Good afternoon"
-  return "Good evening"
-}
+// How far (px) the drawer must be dragged left before release dismisses it.
+const CLOSE_THRESHOLD = 90
+const ANIM_MS = 300
 
 /**
- * The premium app menu: a floating, glassy hamburger button that opens a
- * half-height bottom sheet with a time-aware greeting and four large menu
- * cards (Bible, Theme, Store, Library). The Theme card expands in place to
- * expose the full appearance + skin controls.
+ * Facebook-style left navigation drawer. The hamburger opens a full-height
+ * sheet that slides in from the left edge, covering ~85% of the width and
+ * dimming + gently pushing the page behind it (micro-parallax). It closes via
+ * tap-outside, swipe-left, Escape, or the browser back gesture.
  */
 export function AppMenu() {
-  const [open, setOpen] = useState(false)
-  const [mounted, setMounted] = useState(false)
+  const router = useRouter()
   const { data: session } = authClient.useSession()
 
-  const firstName = (session?.user?.name || "friend").trim().split(/\s+/)[0]
+  const [mounted, setMounted] = useState(false)
+  const [open, setOpen] = useState(false) // portal present (enter + exit)
+  const [active, setActive] = useState(false) // slid fully into view
+
+  // Live drag state for swipe-to-close.
+  const [dragX, setDragX] = useState(0)
+  const [dragging, setDragging] = useState(false)
+  const drag = useRef<{ startX: number; startY: number; horizontal: boolean | null }>({
+    startX: 0,
+    startY: 0,
+    horizontal: null,
+  })
 
   useEffect(() => setMounted(true), [])
 
-  // Lock background scroll + allow Escape to dismiss while the sheet is open.
+  const name = session?.user?.name || "Guest"
+  const firstName = name.trim().split(/\s+/)[0]
+  const initials = getInitials(name)
+  const avatarColor = getAvatarColor(session?.user?.id || name)
+
+  const close = useCallback(() => {
+    setActive(false)
+    setDragX(0)
+    window.setTimeout(() => setOpen(false), ANIM_MS)
+  }, [])
+
+  const openDrawer = useCallback(() => {
+    // Subtle tactile cue as the navigation drawer opens.
+    haptic("light")
+    setOpen(true)
+    // Next frame: flip to active so the transform transition plays.
+    requestAnimationFrame(() => requestAnimationFrame(() => setActive(true)))
+    // Push a history entry so the Android back gesture/button closes the drawer.
+    try {
+      window.history.pushState({ frequencyDrawer: true }, "")
+    } catch {
+      /* no-op */
+    }
+  }, [])
+
+  // Lock scroll, toggle the page parallax shift, and wire Escape + back button.
   useEffect(() => {
     if (!open) return
-    const prev = document.body.style.overflow
+    const prevOverflow = document.body.style.overflow
     document.body.style.overflow = "hidden"
+    document.body.classList.add("drawer-open")
+
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false)
+      if (e.key === "Escape") close()
+    }
+    function onPop() {
+      close()
     }
     window.addEventListener("keydown", onKey)
+    window.addEventListener("popstate", onPop)
     return () => {
-      document.body.style.overflow = prev
+      document.body.style.overflow = prevOverflow
+      document.body.classList.remove("drawer-open")
       window.removeEventListener("keydown", onKey)
+      window.removeEventListener("popstate", onPop)
     }
-  }, [open])
+  }, [open, close])
+
+  function navigate() {
+    // Record where we came from so the destination page can offer Back/Close
+    // controls that return here (the page shown before the menu was opened).
+    startMenuFlow(window.location.pathname)
+    close()
+  }
+
+  async function handleSignOut() {
+    close()
+    await authClient.signOut()
+    router.refresh()
+  }
+
+  function handleInvite() {
+    const shareData = {
+      title: "Frequency",
+      text: "Join me on Frequency — live worship, teaching, and community.",
+      url: typeof window !== "undefined" ? window.location.origin : "https://frequency.app",
+    }
+    if (typeof navigator !== "undefined" && navigator.share) {
+      navigator.share(shareData).catch(() => {})
+    } else if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(shareData.url).catch(() => {})
+    }
+    close()
+  }
+
+  // ---- Swipe-to-close handlers -------------------------------------------
+  function onPointerDown(e: React.PointerEvent) {
+    drag.current = { startX: e.clientX, startY: e.clientY, horizontal: null }
+  }
+  function onPointerMove(e: React.PointerEvent) {
+    if (e.buttons === 0) return
+    const dx = e.clientX - drag.current.startX
+    const dy = e.clientY - drag.current.startY
+    if (drag.current.horizontal === null) {
+      if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return
+      drag.current.horizontal = Math.abs(dx) > Math.abs(dy)
+    }
+    if (!drag.current.horizontal) return // vertical → let the list scroll
+    if (dx < 0) {
+      if (!dragging) setDragging(true)
+      setDragX(dx)
+    }
+  }
+  function onPointerUp() {
+    if (drag.current.horizontal && dragX <= -CLOSE_THRESHOLD) {
+      close()
+    } else {
+      setDragX(0)
+    }
+    setDragging(false)
+    drag.current.horizontal = null
+  }
+
+  const profileHref = session?.user ? `/u/${session.user.id}` : "/sign-in"
+
+  // Drawer transform: fully in view = 0; hidden = -100%; plus live drag offset.
+  const drawerStyle: React.CSSProperties = {
+    transform: active ? `translateX(${dragX}px)` : "translateX(-100%)",
+    transition: dragging ? "none" : `transform ${ANIM_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`,
+  }
+  // Fade the scrim out as the drawer is dragged away.
+  const dragFade = dragging ? Math.max(0, 1 + dragX / 320) : 1
+  const scrimStyle: React.CSSProperties = {
+    opacity: active ? dragFade : 0,
+    transition: dragging ? "none" : `opacity ${ANIM_MS}ms ease`,
+  }
 
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={openDrawer}
         aria-label="Open menu"
         aria-haspopup="dialog"
         aria-expanded={open}
-        className="menu-fab tap-scale flex size-10 items-center justify-center rounded-2xl border border-border/60 bg-secondary/40 text-foreground shadow-soft backdrop-blur-md transition-all duration-200 hover:bg-secondary/70"
+        className="menu-fab tap-scale flex size-11 items-center justify-center rounded-2xl border border-border/60 bg-secondary/40 text-foreground shadow-soft backdrop-blur-md transition-all duration-200 hover:bg-secondary/70"
       >
-        <Menu className="size-[18px]" />
+        <AlignLeft className="size-[22px]" strokeWidth={2.25} />
       </button>
 
       {open &&
         mounted &&
         createPortal(
-          <div className="fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label="Menu">
-          {/* Blurred scrim */}
-          <button
-            type="button"
-            aria-label="Close menu"
-            onClick={() => setOpen(false)}
-            className="absolute inset-0 bg-background/50 backdrop-blur-md animate-in fade-in duration-300"
-          />
+          <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true" aria-label="Navigation menu">
+            {/* Dimming + blurred scrim */}
+            <button
+              type="button"
+              aria-label="Close menu"
+              onClick={close}
+              style={scrimStyle}
+              className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+            />
 
-          {/* Half-height floating sheet with a spring slide-up */}
-          <div
-            className="absolute inset-x-0 bottom-0 flex max-h-[86vh] min-h-[64vh] flex-col rounded-t-[2rem] border-t border-border/60 bg-popover/95 pb-safe-4 shadow-floating backdrop-blur-2xl animate-in slide-in-from-bottom-10 fade-in duration-500 [animation-timing-function:cubic-bezier(0.34,1.56,0.64,1)]"
-          >
-            {/* Grabber */}
-            <div className="flex shrink-0 items-center justify-center pt-3">
-              <span className="h-1.5 w-10 rounded-full bg-muted-foreground/40" aria-hidden />
-            </div>
-
-            <div data-scroll className="flex-1 overflow-y-auto overscroll-contain px-5 pt-4">
-              <div className="mx-auto w-full max-w-md">
-                {/* Greeting */}
-                <div className="mb-6 flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-muted-foreground">{greetingFor(new Date())}</p>
-                    <h2 className="mt-0.5 truncate font-display text-2xl font-semibold tracking-tight text-foreground">
-                      {firstName}
-                    </h2>
-                  </div>
+            {/* The drawer */}
+            <aside
+              style={drawerStyle}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerUp}
+              className="drawer-panel absolute inset-y-0 left-0 flex w-[85%] max-w-sm flex-col rounded-r-3xl border-r border-border/60 bg-popover shadow-floating"
+            >
+              {/* Pinned header */}
+              <div className="shrink-0 px-5 pt-[max(1.25rem,env(safe-area-inset-top))]">
+                <div className="flex items-center justify-end pb-1">
                   <button
                     type="button"
-                    onClick={() => setOpen(false)}
+                    onClick={close}
                     aria-label="Close"
-                    className="tap-scale flex size-9 shrink-0 items-center justify-center rounded-full bg-secondary/60 text-muted-foreground hover:text-foreground"
+                    className="tap-scale flex size-9 items-center justify-center rounded-full bg-secondary/60 text-muted-foreground hover:text-foreground"
                   >
                     <X className="size-4" />
                   </button>
                 </div>
 
-                {/* Menu cards */}
-                <div className="flex flex-col gap-3 pb-4">
-                  <MenuCard
-                    href="/bible"
-                    icon={BookOpen}
-                    title="Bible"
-                    subtitle="Read, study and explore God's Word."
-                    onNavigate={() => setOpen(false)}
-                  />
-
-                  <ThemeCard />
-
-                  <MenuCard
-                    href="/store"
-                    icon={ShoppingBag}
-                    title="Store"
-                    subtitle="Books, Courses & Resources"
-                    onNavigate={() => setOpen(false)}
-                  />
-
-                  <MenuCard
-                    href="/library"
-                    icon={LibraryIcon}
-                    title="Library"
-                    subtitle="Your books & courses in one place"
-                    onNavigate={() => setOpen(false)}
-                  />
-                </div>
+                <Link
+                  href={profileHref}
+                  onClick={navigate}
+                  className="tap-scale flex items-center gap-3 rounded-2xl p-2 transition-colors hover:bg-secondary/50"
+                >
+                  <span
+                    className={cn(
+                      "flex size-14 items-center justify-center overflow-hidden rounded-full text-lg font-semibold ring-2 ring-border/60",
+                      avatarColor,
+                    )}
+                  >
+                    {session?.user?.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={session.user.image || "/placeholder.svg"} alt="" className="size-full object-cover" />
+                    ) : (
+                      initials
+                    )}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-display text-lg font-semibold text-foreground">{name}</span>
+                    <span className="block truncate text-sm text-muted-foreground">
+                      {session?.user ? getHandle(name) : "Sign in to your account"}
+                    </span>
+                  </span>
+                  <ChevronDown className="size-5 shrink-0 text-muted-foreground" />
+                </Link>
               </div>
-            </div>
-          </div>
+
+              {/* Scrollable menu body */}
+              <div className="mt-2 flex-1 overflow-y-auto overscroll-contain px-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+                <Section>
+                  <DrawerItem href="/bible" icon={BookOpen} label="Bible" onNavigate={navigate} />
+                  <DrawerItem href="/store" icon={ShoppingBag} label="Store" onNavigate={navigate} />
+                  <DrawerItem href="/library" icon={LibraryIcon} label="Library" onNavigate={navigate} />
+                  <DrawerItem href={profileHref} icon={User} label="Profile" onNavigate={navigate} />
+                </Section>
+
+                <Divider />
+
+                <Section label="Activity">
+                  <DrawerItem href="/notifications" icon={Bell} label="Notifications" onNavigate={navigate} />
+                  <DrawerItem href="/messages" icon={MessageCircle} label="Messages" onNavigate={navigate} />
+                  <DrawerItem href="/library" icon={Bookmark} label="Saved" onNavigate={navigate} />
+                  <DrawerItem href="/library" icon={Download} label="Downloads" onNavigate={navigate} />
+                </Section>
+
+                <Divider />
+
+                <Section label="Preferences">
+                  <AppearanceItem />
+                  <DrawerItem href="/studio" icon={Radio} label="Creator Studio" onNavigate={navigate} />
+                </Section>
+
+                <Divider />
+
+                <Section label="Support">
+                  <DrawerButton icon={UserPlus} label="Invite Friends" onClick={handleInvite} />
+                  <DrawerItem
+                    href="mailto:support@frequency.app"
+                    icon={LifeBuoy}
+                    label="Help & Support"
+                    onNavigate={navigate}
+                    external
+                  />
+                  <AboutItem />
+                </Section>
+
+                <Divider />
+
+                {session?.user && (
+                  <div className="pt-1">
+                    <DrawerButton icon={LogOut} label="Sign Out" onClick={handleSignOut} destructive />
+                  </div>
+                )}
+              </div>
+            </aside>
           </div>,
           document.body,
         )}
@@ -168,39 +331,96 @@ export function AppMenu() {
   )
 }
 
-function cardClasses() {
-  return "group relative flex w-full items-center gap-4 rounded-[1.75rem] border border-border/60 bg-card/70 p-4 text-left shadow-soft backdrop-blur-md transition-all duration-200 hover:border-border active:scale-[0.99]"
+function Section({ label, children }: { label?: string; children: React.ReactNode }) {
+  return (
+    <div className="py-1">
+      {label && (
+        <p className="px-4 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      )}
+      <div className="flex flex-col">{children}</div>
+    </div>
+  )
 }
 
-function MenuCard({
+function Divider() {
+  return <div className="mx-4 my-1 h-px bg-border/50" aria-hidden />
+}
+
+const itemClasses =
+  "group flex min-h-[56px] w-full items-center gap-4 rounded-2xl px-3 text-left transition-colors duration-150 hover:bg-secondary/60 active:bg-secondary/80"
+
+function IconBubble({ icon: Icon }: { icon: LucideIcon }) {
+  return (
+    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary/70 text-foreground transition-transform duration-150 group-active:scale-105">
+      <Icon className="size-[22px]" />
+    </span>
+  )
+}
+
+function DrawerItem({
   href,
-  icon: Icon,
-  title,
-  subtitle,
+  icon,
+  label,
   onNavigate,
+  external,
 }: {
   href: string
   icon: LucideIcon
-  title: string
-  subtitle: string
+  label: string
   onNavigate: () => void
+  external?: boolean
 }) {
+  if (external) {
+    return (
+      <a href={href} onClick={onNavigate} className={itemClasses}>
+        <IconBubble icon={icon} />
+        <span className="flex-1 text-[15px] font-medium text-foreground">{label}</span>
+        <ChevronRight className="size-5 shrink-0 text-muted-foreground/60" />
+      </a>
+    )
+  }
   return (
-    <Link href={href} onClick={onNavigate} className={cardClasses()}>
-      <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
-        <Icon className="size-6" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-base font-semibold text-foreground">{title}</span>
-        <span className="mt-0.5 block truncate text-sm text-muted-foreground">{subtitle}</span>
-      </span>
-      <ChevronRight className="size-5 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5" />
+    <Link href={href} onClick={onNavigate} className={itemClasses}>
+      <IconBubble icon={icon} />
+      <span className="flex-1 text-[15px] font-medium text-foreground">{label}</span>
+      <ChevronRight className="size-5 shrink-0 text-muted-foreground/60" />
     </Link>
   )
 }
 
-/** The Theme card expands in place to reveal appearance + skin controls. */
-function ThemeCard() {
+function DrawerButton({
+  icon,
+  label,
+  onClick,
+  destructive,
+}: {
+  icon: LucideIcon
+  label: string
+  onClick: () => void
+  destructive?: boolean
+}) {
+  return (
+    <button type="button" onClick={onClick} className={itemClasses}>
+      <span
+        className={cn(
+          "flex size-10 shrink-0 items-center justify-center rounded-xl transition-transform duration-150 group-active:scale-105",
+          destructive ? "bg-destructive/15 text-destructive" : "bg-secondary/70 text-foreground",
+        )}
+      >
+        {(() => {
+          const Icon = icon
+          return <Icon className="size-[22px]" />
+        })()}
+      </span>
+      <span className={cn("flex-1 text-[15px] font-medium", destructive ? "text-destructive" : "text-foreground")}>
+        {label}
+      </span>
+    </button>
+  )
+}
+
+/** Appearance row expands in place to reveal theme + skin controls. */
+function AppearanceItem() {
   const { theme, setTheme } = useTheme()
   const { skin, setSkin, mounted: skinMounted } = useSkin()
   const [mounted, setMounted] = useState(false)
@@ -209,32 +429,19 @@ function ThemeCard() {
   useEffect(() => setMounted(true), [])
 
   return (
-    <div className="rounded-[1.75rem] border border-border/60 bg-card/70 shadow-soft backdrop-blur-md">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        aria-expanded={expanded}
-        className="flex w-full items-center gap-4 p-4 text-left transition-all duration-200 active:scale-[0.99]"
-      >
-        <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
-          <Moon className="size-6" />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-base font-semibold text-foreground">Theme</span>
-          <span className="mt-0.5 block truncate text-sm text-muted-foreground">Customize your experience.</span>
-        </span>
-        <ChevronRight
-          className={cn(
-            "size-5 shrink-0 text-muted-foreground transition-transform duration-300",
-            expanded && "rotate-90",
-          )}
+    <div>
+      <button type="button" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded} className={itemClasses}>
+        <IconBubble icon={Moon} />
+        <span className="flex-1 text-[15px] font-medium text-foreground">Appearance</span>
+        <ChevronDown
+          className={cn("size-5 shrink-0 text-muted-foreground/60 transition-transform duration-300", expanded && "rotate-180")}
         />
       </button>
 
       {expanded && (
-        <div className="animate-in fade-in slide-in-from-top-2 space-y-4 border-t border-border/60 px-4 py-4 duration-300">
+        <div className="animate-in fade-in slide-in-from-top-2 space-y-4 px-3 py-3 duration-300">
           <div>
-            <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Appearance</p>
+            <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Theme</p>
             <div className="grid grid-cols-2 gap-2">
               {themes.map((t) => {
                 const Icon = t.icon
@@ -292,6 +499,28 @@ function ThemeCard() {
               })}
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** About row expands to show a short blurb + version. */
+function AboutItem() {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <div>
+      <button type="button" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded} className={itemClasses}>
+        <IconBubble icon={Info} />
+        <span className="flex-1 text-[15px] font-medium text-foreground">About Frequency</span>
+        <ChevronDown
+          className={cn("size-5 shrink-0 text-muted-foreground/60 transition-transform duration-300", expanded && "rotate-180")}
+        />
+      </button>
+      {expanded && (
+        <div className="animate-in fade-in slide-in-from-top-2 px-4 py-3 text-sm leading-relaxed text-muted-foreground duration-300">
+          <p>Frequency is a flagship Christian platform for live worship, teaching, community, and resources.</p>
+          <p className="mt-2 text-xs text-muted-foreground/70">Version 1.0.0</p>
         </div>
       )}
     </div>

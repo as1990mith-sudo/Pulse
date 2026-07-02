@@ -28,6 +28,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { linkify } from "@/lib/linkify"
+import { useAutoHideChatChrome } from "@/lib/chat-chrome"
 import { cn } from "@/lib/utils"
 import { EDIT_WINDOW_MS } from "@/lib/interactions"
 import {
@@ -735,6 +736,8 @@ export function DreamInterpretation({ initialFeed }: { initialFeed: DreamFeed })
   const [infoOpen, setInfoOpen] = useState(false)
   // Interpreter-only: filter the inbox by whether a dream still needs a reply.
   const [statusFilter, setStatusFilter] = useState<"awaiting" | "completed">("awaiting")
+  // Auto-hide the global app header as the feed scrolls (Instagram/Telegram feel).
+  const onFeedScroll = useAutoHideChatChrome()
 
   const awaitingCount = dreams.filter((d) => d.replyCount === 0).length
   const completedCount = dreams.length - awaitingCount
@@ -857,7 +860,7 @@ export function DreamInterpretation({ initialFeed }: { initialFeed: DreamFeed })
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto scroll-smooth overscroll-contain">
+      <div onScroll={onFeedScroll} className="flex-1 overflow-y-auto scroll-smooth overscroll-contain">
         {visibleDreams.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 px-6 py-24 text-center">
             <Avatar className="size-16 ring-2 ring-blue-500/30">

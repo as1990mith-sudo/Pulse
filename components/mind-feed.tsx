@@ -1016,7 +1016,10 @@ export function PostCard({
             </span>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        {/* Aligned to the top (username line) rather than centered, so the
+            follow icon doesn't hover over — and visually truncate — the second
+            metadata line that carries the "· Edited" tag on longer usernames. */}
+        <div className="flex shrink-0 items-center gap-1 self-start">
           {currentUser && !post.isSelf && (
             <FollowButton authorId={post.authorId} authorName={post.user} initialFollowing={post.isFollowing} />
           )}

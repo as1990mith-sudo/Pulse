@@ -211,7 +211,7 @@ export function EpisodeCatalog({
                 </div>
                 <div className="grid grid-cols-1 gap-x-2 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
                   {section.items.map((show) => (
-                    <VideoCard key={show.id} show={show} owned={owned} />
+                    <VideoCard key={show.id} show={show} owned={owned} queue={queue} />
                   ))}
                 </div>
               </section>
@@ -220,7 +220,7 @@ export function EpisodeCatalog({
         ) : (
           <div className="grid grid-cols-1 gap-x-2 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((show) => (
-              <VideoCard key={show.id} show={show} owned={owned} />
+              <VideoCard key={show.id} show={show} owned={owned} queue={queue} />
             ))}
           </div>
         )

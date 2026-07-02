@@ -78,20 +78,20 @@
 :root,
 .dark {
   color-scheme: dark;
-  --background: oklch(0.16 0.006 285 / 95%);
+  --background: oklch(0.16 0.006 285);
   --foreground: oklch(0.97 0.002 285);
-  --card: oklch(0.22 0.008 285 / 95%);
+  --card: oklch(0.22 0.008 285);
   --card-foreground: oklch(0.97 0.002 285);
-  --popover: oklch(0.22 0.008 285 / 95%);
+  --popover: oklch(0.22 0.008 285);
   --popover-foreground: oklch(0.97 0.002 285);
   --popover-solid: oklch(0.205 0.007 285);
   --primary: oklch(0.72 0.18 55);
   --primary-foreground: oklch(0.99 0.005 60);
-  --secondary: oklch(0.27 0.008 285 / 95%);
+  --secondary: oklch(0.27 0.008 285);
   --secondary-foreground: oklch(0.97 0.002 285);
-  --muted: oklch(0.27 0.008 285 / 95%);
+  --muted: oklch(0.27 0.008 285);
   --muted-foreground: oklch(0.7 0.006 285);
-  --accent: oklch(0.27 0.008 285 / 95%);
+  --accent: oklch(0.27 0.008 285);
   --accent-foreground: oklch(0.97 0.002 285);
   --destructive: oklch(0.66 0.21 24);
   --border: oklch(1 0 0 / 10%);
@@ -111,11 +111,11 @@
   --chart-4: oklch(0.6 0.16 40);
   --chart-5: oklch(0.7 0.006 285);
   --radius: 0.75rem;
-  --sidebar: oklch(0.18 0.006 285 / 95%);
+  --sidebar: oklch(0.18 0.006 285);
   --sidebar-foreground: oklch(0.97 0.002 285);
   --sidebar-primary: oklch(0.72 0.18 55);
   --sidebar-primary-foreground: oklch(0.99 0.005 60);
-  --sidebar-accent: oklch(0.27 0.008 285 / 95%);
+  --sidebar-accent: oklch(0.27 0.008 285);
   --sidebar-accent-foreground: oklch(0.97 0.002 285);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.72 0.18 55);
@@ -158,20 +158,20 @@
    surfaces are tinted glass over an in-app indigo→blue→teal gradient. */
 .theme-mid {
   color-scheme: dark;
-  --background: oklch(0.26 0.03 265 / 95%);
+  --background: oklch(0.26 0.03 265);
   --foreground: oklch(0.99 0.002 285);
-  --card: oklch(0.32 0.04 262 / 95%);
+  --card: oklch(0.32 0.04 262);
   --card-foreground: oklch(0.99 0.002 285);
-  --popover: oklch(0.28 0.04 265 / 95%);
+  --popover: oklch(0.28 0.04 265);
   --popover-foreground: oklch(0.99 0.002 285);
   --popover-solid: oklch(0.28 0.04 262);
   --primary: oklch(0.74 0.18 55);
   --primary-foreground: oklch(0.99 0.005 60);
-  --secondary: oklch(0.36 0.035 258 / 95%);
+  --secondary: oklch(0.36 0.035 258);
   --secondary-foreground: oklch(0.99 0.002 285);
-  --muted: oklch(0.34 0.03 260 / 95%);
+  --muted: oklch(0.34 0.03 260);
   --muted-foreground: oklch(0.9 0.01 270);
-  --accent: oklch(0.38 0.04 255 / 95%);
+  --accent: oklch(0.38 0.04 255);
   --accent-foreground: oklch(0.99 0.002 285);
   --destructive: oklch(0.68 0.21 24);
   --border: oklch(1 0 0 / 18%);
@@ -180,9 +180,9 @@
   --live: oklch(0.68 0.21 24);
   --live-foreground: oklch(0.99 0.005 60);
   --chart-5: oklch(0.9 0.01 270);
-  --sidebar: oklch(0.26 0.03 265 / 95%);
+  --sidebar: oklch(0.26 0.03 265);
   --sidebar-foreground: oklch(0.99 0.002 285);
-  --sidebar-accent: oklch(0.36 0.035 258 / 95%);
+  --sidebar-accent: oklch(0.36 0.035 258);
   --sidebar-accent-foreground: oklch(0.99 0.002 285);
   --sidebar-border: oklch(1 0 0 / 18%);
   }
@@ -224,20 +224,20 @@
    palette is swapped for a bright, vibrant green instead of Mid's blue lean. */
 .theme-grass {
   color-scheme: dark;
-  --background: oklch(0.28 0.05 150 / 95%);
+  --background: oklch(0.28 0.05 150);
   --foreground: oklch(0.99 0.002 145);
-  --card: oklch(0.34 0.06 150 / 95%);
+  --card: oklch(0.34 0.06 150);
   --card-foreground: oklch(0.99 0.002 145);
-  --popover: oklch(0.3 0.06 150 / 95%);
+  --popover: oklch(0.3 0.06 150);
   --popover-foreground: oklch(0.99 0.002 145);
   --popover-solid: oklch(0.3 0.06 150);
   --primary: oklch(0.74 0.18 55);
   --primary-foreground: oklch(0.99 0.005 60);
-  --secondary: oklch(0.38 0.055 150 / 95%);
+  --secondary: oklch(0.38 0.055 150);
   --secondary-foreground: oklch(0.99 0.002 145);
-  --muted: oklch(0.36 0.05 150 / 95%);
+  --muted: oklch(0.36 0.05 150);
   --muted-foreground: oklch(0.92 0.03 150);
-  --accent: oklch(0.4 0.06 150 / 95%);
+  --accent: oklch(0.4 0.06 150);
   --accent-foreground: oklch(0.99 0.002 145);
   --destructive: oklch(0.68 0.21 24);
   --border: oklch(1 0 0 / 18%);
@@ -246,9 +246,9 @@
   --live: oklch(0.68 0.21 24);
   --live-foreground: oklch(0.99 0.005 60);
   --chart-5: oklch(0.92 0.03 150);
-  --sidebar: oklch(0.28 0.05 150 / 95%);
+  --sidebar: oklch(0.28 0.05 150);
   --sidebar-foreground: oklch(0.99 0.002 145);
-  --sidebar-accent: oklch(0.38 0.055 150 / 95%);
+  --sidebar-accent: oklch(0.38 0.055 150);
   --sidebar-accent-foreground: oklch(0.99 0.002 145);
   --sidebar-border: oklch(1 0 0 / 18%);
 }
@@ -316,13 +316,6 @@
   background-attachment: fixed;
 }
 
-/* Panels are ~95% solid, so only a light blur smooths the faint 5% of the
-   gradient that shows through. */
-.dark :is(.bg-card, .bg-popover, .bg-secondary, .bg-muted, .bg-accent) {
-  backdrop-filter: blur(6px) saturate(120%);
-  -webkit-backdrop-filter: blur(6px) saturate(120%);
-}
-
 /* Mid mode — a soft twilight gradient canvas (indigo → blue → teal) that the
    translucent panels float over. */
 .theme-mid body {
@@ -336,24 +329,12 @@
   background-attachment: fixed;
 }
 
-/* Panels are ~95% solid now, so only a light blur smooths the faint 5% of the
-   twilight gradient that shows through. */
-.theme-mid :is(.bg-card, .bg-popover, .bg-secondary, .bg-muted, .bg-accent) {
-  backdrop-filter: blur(6px) saturate(120%);
-  -webkit-backdrop-filter: blur(6px) saturate(120%);
-}
-
 /* Charcoal mode — a flat, near-pure-black canvas (OLED black) with only the
    faintest lift so panels read against it. */
 .theme-charcoal body {
   background-color: oklch(0.03 0 0);
   background-image: linear-gradient(155deg, oklch(0.07 0 0), oklch(0.03 0 0) 55%, oklch(0.02 0 0));
   background-attachment: fixed;
-}
-
-.theme-charcoal :is(.bg-card, .bg-popover, .bg-secondary, .bg-muted, .bg-accent) {
-  backdrop-filter: blur(6px) saturate(120%);
-  -webkit-backdrop-filter: blur(6px) saturate(120%);
 }
 
 /* Grass mode — a bright, vibrant green gradient canvas that the translucent
@@ -367,11 +348,6 @@
     oklch(0.43 0.14 165)
   );
   background-attachment: fixed;
-}
-
-.theme-grass :is(.bg-card, .bg-popover, .bg-secondary, .bg-muted, .bg-accent) {
-  backdrop-filter: blur(6px) saturate(120%);
-  -webkit-backdrop-filter: blur(6px) saturate(120%);
 }
 
 @layer base {
@@ -771,6 +747,31 @@
     0 0 0 1px color-mix(in oklab, var(--primary) 70%, transparent),
     0 0 22px -2px color-mix(in oklab, var(--primary) 65%, transparent),
     0 6px 16px -6px oklch(0 0 0 / 0.4);
+}
+
+/* --- Instagram-style edge-to-edge bottom navigation ----------------------- */
+/* Reserve room so page content never sits behind the fixed bar (68px bar). */
+body.has-bottom-nav {
+  padding-bottom: calc(3rem + env(safe-area-inset-bottom));
+}
+
+/* --- Facebook-style left drawer: micro-parallax on the app shell ---------- */
+/* The whole app eases a few px to the right while the drawer is open. Transform
+   is only applied while open, so it never creates a persistent containing
+   block that would trap fixed descendants. */
+.app-shell {
+  transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+body.drawer-open .app-shell {
+  transform: translateX(7px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell {
+    transition: none;
+  }
+  body.drawer-open .app-shell {
+    transform: none;
+  }
 }
 
 /* --- Card touch elevation: subtly lift + scale while pressed --------------- */
