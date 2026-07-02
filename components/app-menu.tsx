@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { createPortal } from "react-dom"
 import Link from "next/link"
 import { useTheme } from "next-themes"
 import {
@@ -53,9 +54,12 @@ function greetingFor(date: Date): string {
  */
 export function AppMenu() {
   const [open, setOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
   const { data: session } = authClient.useSession()
 
   const firstName = (session?.user?.name || "friend").trim().split(/\s+/)[0]
+
+  useEffect(() => setMounted(true), [])
 
   // Lock background scroll + allow Escape to dismiss while the sheet is open.
   useEffect(() => {
@@ -85,8 +89,10 @@ export function AppMenu() {
         <Menu className="size-[18px]" />
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label="Menu">
+      {open &&
+        mounted &&
+        createPortal(
+          <div className="fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label="Menu">
           {/* Blurred scrim */}
           <button
             type="button"
@@ -155,8 +161,9 @@ export function AppMenu() {
               </div>
             </div>
           </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </>
   )
 }
