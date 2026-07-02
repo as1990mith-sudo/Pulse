@@ -100,7 +100,7 @@ export function BottomNav() {
       <div aria-hidden="true" className="h-4 w-full bg-gradient-to-t from-[#0B0B0D] to-transparent" />
       <nav
         aria-label="Primary"
-        className="pointer-events-auto flex items-stretch border-t border-white/10 bg-[#0B0B0D]/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-md"
+        className="pointer-events-auto flex items-stretch border-t border-white/10 bg-[#0B0B0D] pb-[env(safe-area-inset-bottom)]"
       >
         {TABS.map((tab, i) => {
           const active = i === activeIndex
