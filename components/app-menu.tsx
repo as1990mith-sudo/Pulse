@@ -15,6 +15,7 @@ import {
   Contrast,
   Info,
   Leaf,
+  Library as LibraryIcon,
   LifeBuoy,
   LogOut,
   MessageCircle,
@@ -294,6 +295,7 @@ export function AppMenu() {
                 <Section>
                   <DrawerItem href="/bible" icon={BookOpen} label="Bible" onNavigate={navigate} />
                   <DrawerItem href="/store" icon={ShoppingBag} label="Store" onNavigate={navigate} />
+                  <DrawerItem href="/library" icon={LibraryIcon} label="Library" onNavigate={navigate} />
                   <DrawerItem
                     href="/cart"
                     icon={ShoppingCart}
