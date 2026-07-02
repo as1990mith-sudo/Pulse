@@ -21,7 +21,7 @@ type Reel = { post: FeedPostView; url: string; key: string }
  * viewport; scrolling snaps to exactly one neighbour at a time, and the visible
  * clip autoplays while the rest pause — just like Instagram Reels.
  */
-export function ReelsFeed({ posts, onClose }: { posts: FeedPostView[]; onClose: () => void }) {
+export function ReelsFeed({ posts, onClose }: { posts: FeedPostView[]; onClose?: () => void }) {
   const scrollerRef = useRef<HTMLDivElement>(null)
 
   // One reel per video media item, shuffled once per open so the order feels
@@ -96,14 +96,16 @@ export function ReelsFeed({ posts, onClose }: { posts: FeedPostView[]; onClose: 
       {/* Persistent top bar (outside the scroller so it never scrolls away). */}
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between p-4 pt-[max(env(safe-area-inset-top),1rem)]">
         <span className="text-lg font-bold text-white drop-shadow">Reels</span>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close reels"
-          className="pointer-events-auto flex size-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition-colors hover:bg-black/60"
-        >
-          <X className="size-5" />
-        </button>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close reels"
+            className="pointer-events-auto flex size-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition-colors hover:bg-black/60"
+          >
+            <X className="size-5" />
+          </button>
+        )}
       </div>
     </div>
   )
