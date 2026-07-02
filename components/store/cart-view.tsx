@@ -1,39 +1,43 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import useSWR from "swr"
 import { Check, Loader2, ShoppingBag, ShoppingCart, Trash2 } from "lucide-react"
-import { getBook, getCourse, formatPrice, type Book, type Course } from "@/lib/store-data"
+import { formatPrice, type Book, type Course } from "@/lib/store-data"
+import { getProductsByIds, purchaseMany } from "@/app/actions/store"
 import { useStoreState } from "@/lib/use-store-state"
 import { cn } from "@/lib/utils"
 
 type CartEntry = Book | Course
 
 export function CartView() {
-  const { cartIds, removeFromCart, checkoutCart } = useStoreState()
+  const router = useRouter()
+  const { cartIds, removeFromCart, clearCart } = useStoreState()
   const [status, setStatus] = useState<"idle" | "processing">("idle")
   const [done, setDone] = useState(false)
 
   const ids = cartIds()
-  const items = useMemo(
-    () =>
-      ids
-        .map((id) => getBook(id) ?? getCourse(id))
-        .filter((p): p is CartEntry => !!p),
-    [ids],
-  )
+  const key = ids.length ? ["cart", ...ids].join(":") : null
+  const { data: items = [], isLoading } = useSWR<CartEntry[]>(key, () => getProductsByIds(ids))
 
   const total = items.reduce((sum, p) => sum + p.price, 0)
 
-  function checkout() {
+  async function checkout() {
     if (status === "processing" || items.length === 0) return
     setStatus("processing")
-    // Simulated checkout — real payment is wired in a later pass.
-    setTimeout(() => {
-      checkoutCart()
-      setStatus("idle")
+    try {
+      await purchaseMany(items.map((p) => p.id))
+      clearCart()
       setDone(true)
-    }, 1200)
+      router.refresh()
+    } catch (err) {
+      console.log("[v0] checkout failed:", err instanceof Error ? err.message : err)
+      alert(err instanceof Error ? err.message : "Checkout failed. Please sign in and try again.")
+    } finally {
+      setStatus("idle")
+    }
   }
 
   return (
@@ -54,8 +58,12 @@ export function CartView() {
 
       {done ? (
         <CheckoutSuccess />
-      ) : items.length === 0 ? (
+      ) : ids.length === 0 ? (
         <EmptyCart />
+      ) : isLoading ? (
+        <div className="flex items-center justify-center py-20 text-muted-foreground">
+          <Loader2 className="size-6 animate-spin" />
+        </div>
       ) : (
         <>
           <ul className="flex flex-col gap-3">

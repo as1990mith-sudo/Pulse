@@ -597,3 +597,60 @@ export const like = pgTable(
     uniq: uniqueIndex("like_user_target_unique").on(t.userId, t.targetType, t.targetId),
   }),
 )
+
+// --- Store (creator marketplace) -------------------------------------------
+// A product any signed-in user can publish and sell: a book or a course. Prices
+// are stored in integer cents to avoid floating-point money bugs. The creator
+// is the seller; `creatorId` scopes "my listings" queries. Book-only and
+// course-only columns are nullable and validated in the action by `kind`.
+export const storeProduct = pgTable("store_product", {
+  id: serial("id").primaryKey(),
+  kind: text("kind").notNull(), // "book" | "course"
+  creatorId: text("creatorId").notNull(),
+  creatorName: text("creatorName").notNull(),
+  title: text("title").notNull(),
+  subtitle: text("subtitle").notNull().default(""),
+  description: text("description").notNull().default(""),
+  category: text("category").notNull(),
+  language: text("language").notNull().default("English"),
+  coverUrl: text("coverUrl").notNull(),
+  priceCents: integer("priceCents").notNull().default(0),
+  // Book: the deliverable file (PDF/EPUB) + page count.
+  bookFileUrl: text("bookFileUrl"),
+  bookFileName: text("bookFileName"),
+  pages: integer("pages"),
+  // Course: difficulty label + human-readable total duration.
+  difficulty: text("difficulty"), // "Beginner" | "Intermediate" | "Advanced"
+  totalDuration: text("totalDuration"),
+  published: boolean("published").notNull().default(true),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// Ordered lessons that make up a course. Each lesson carries a playable media
+// URL (video or audio) delivered to buyers who own the parent product.
+export const storeLesson = pgTable("store_lesson", {
+  id: serial("id").primaryKey(),
+  productId: integer("productId").notNull(),
+  position: integer("position").notNull().default(0),
+  title: text("title").notNull(),
+  kind: text("kind").notNull().default("video"), // "video" | "audio"
+  duration: text("duration").notNull().default(""),
+  mediaUrl: text("mediaUrl").notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// One row per (buyer, product). Backs the buyer's Library and the "owned" gate
+// on product pages. Unique index enforces one purchase per product per user.
+export const storePurchase = pgTable(
+  "store_purchase",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("userId").notNull(),
+    productId: integer("productId").notNull(),
+    pricePaidCents: integer("pricePaidCents").notNull().default(0),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    uniq: uniqueIndex("store_purchase_user_product_unique").on(t.userId, t.productId),
+  }),
+)

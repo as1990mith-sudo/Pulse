@@ -2,15 +2,15 @@
 
 import { useSyncExternalStore } from "react"
 
-// Lightweight, session-scoped client state for the Store's wishlist and the
-// user's owned/purchased library. This is intentionally in-memory for now — it
-// resets on reload and will be replaced by real persistence (Neon) in a later
-// pass. Using an external store lets every card + the product page stay in sync
-// without threading a provider through separate routes.
+// Session-scoped client state for the Store's wishlist and cart. These are
+// intentionally ephemeral browser state: the wishlist is a personal shortlist
+// and the cart is a pre-checkout staging area. Ownership ("library") is NOT
+// stored here — it is the source of truth in Neon (store_purchase) and is read
+// per-request via server actions. Using an external store lets every card and
+// the product page stay in sync without a provider spanning separate routes.
 
 let version = 0
 const wishlist = new Set<string>()
-const library = new Set<string>()
 const cart = new Set<string>()
 const listeners = new Set<() => void>()
 
@@ -40,25 +40,11 @@ export function isWishlisted(id: string) {
   return wishlist.has(id)
 }
 
-export function addToLibrary(id: string) {
-  library.add(id)
-  emit()
-}
-
-export function isInLibrary(id: string) {
-  return library.has(id)
-}
-
-export function libraryIds() {
-  return Array.from(library)
-}
-
 // ---- Cart -----------------------------------------------------------------
-// The cart holds items the user intends to buy before checkout. Owned items
-// never sit in the cart, and checking out moves everything into the library.
+// The cart holds items the user intends to buy before checkout. Checkout is a
+// real server action (purchaseMany) — on success the caller clears the cart.
 
 export function addToCart(id: string) {
-  if (library.has(id)) return
   cart.add(id)
   emit()
 }
@@ -80,27 +66,23 @@ export function cartCount() {
   return cart.size
 }
 
-/** Move every cart item into the owned library and empty the cart. */
-export function checkoutCart() {
-  for (const id of cart) library.add(id)
+/** Empty the cart (called after a successful checkout). */
+export function clearCart() {
   cart.clear()
   emit()
 }
 
-/** Subscribe a component to wishlist/library/cart changes. */
+/** Subscribe a component to wishlist/cart changes. */
 export function useStoreState() {
   useSyncExternalStore(subscribe, getSnapshot, () => 0)
   return {
     isWishlisted,
-    isInLibrary,
     toggleWishlist,
-    addToLibrary,
-    libraryIds,
     addToCart,
     removeFromCart,
     isInCart,
     cartIds,
     cartCount,
-    checkoutCart,
+    clearCart,
   }
 }
