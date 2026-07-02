@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { Clock, Globe, Loader2, Lock, MoreVertical, Play, Trash2 } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { deleteEpisode, setEpisodePrivacy } from "@/app/actions/shows"
+import { isPlayable, useEpisodePlayer } from "@/components/episode-player-provider"
 import { MarqueeTitle } from "@/components/marquee-title"
 import {
   DropdownMenu,
@@ -25,14 +26,23 @@ import { cn } from "@/lib/utils"
  * present; otherwise fall back to the video's first frame so cards never look
  * empty (a muted <video> seeked to 0.1s via a media fragment).
  */
-export function VideoCard({ show, owned = false }: { show: Show; owned?: boolean }) {
+export function VideoCard({ show, owned = false, queue }: { show: Show; owned?: boolean; queue?: Show[] }) {
   const router = useRouter()
+  const { play } = useEpisodePlayer()
   const [confirming, setConfirming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [isPrivate, setIsPrivate] = useState(Boolean(show.isPrivate))
 
+  // On-demand videos open the immersive full-screen player overlay (same as
+  // audio) instead of navigating to a page that still shows the app header.
+  const playable = isPlayable(show) && Boolean(queue && queue.length > 0)
   const href = `/live/${show.id}`
+  // A play trigger when playable, otherwise a link to the watch page.
+  const openProps = playable
+    ? ({ type: "button" as const, onClick: () => play(show, queue!) } as const)
+    : ({ href } as const)
+  const OpenTag: any = playable ? "button" : Link
   const hasCover = Boolean(show.cover && show.cover !== "/placeholder.svg")
   const frameSrc = show.videoUrl
     ? show.videoUrl.includes("#")
@@ -77,9 +87,9 @@ export function VideoCard({ show, owned = false }: { show: Show; owned?: boolean
     // Immersive, borderless horizontal row (mirrors the host-library template):
     // cover-art thumbnail on the left, then title / @username / views · date.
     <div className="group relative flex items-start gap-2 rounded-xl transition-colors hover:bg-card/60">
-      <Link
-        href={href}
-        aria-label={`Watch ${show.title}`}
+      <OpenTag
+        {...openProps}
+        aria-label={playable ? `Play ${show.title}` : `Watch ${show.title}`}
         className="relative block aspect-video w-32 shrink-0 overflow-hidden rounded-xl bg-secondary sm:w-40"
       >
         {hasCover ? (
@@ -122,12 +132,12 @@ export function VideoCard({ show, owned = false }: { show: Show; owned?: boolean
             <Lock className="size-2.5" /> Private
           </span>
         )}
-      </Link>
+      </OpenTag>
 
       {/* Meta column: video title (in place of display name), the uploader's
           @username (maintained), then views · published date. */}
       <div className="flex min-w-0 flex-1 items-start gap-1 py-0.5">
-        <Link href={href} className="min-w-0 flex-1">
+        <OpenTag {...openProps} className="min-w-0 flex-1 text-left">
           {/* Title stays on a single line; it auto-scrolls (marquee) when too long. */}
           <MarqueeTitle
             text={show.title}
@@ -135,7 +145,7 @@ export function VideoCard({ show, owned = false }: { show: Show; owned?: boolean
           />
           <p className="mt-0.5 truncate text-xs text-muted-foreground">{show.host.handle}</p>
           {meta && <p className="mt-0.5 truncate text-xs text-muted-foreground">{meta}</p>}
-        </Link>
+        </OpenTag>
 
         {owned && (
           <DropdownMenu
