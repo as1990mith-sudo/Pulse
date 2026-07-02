@@ -88,7 +88,15 @@ export async function getEpisodeComments(episodeId: number): Promise<EpisodeComm
   }))
 }
 
-/** Toggles a like on an episode (counter-based, matching feed posts). */
+/** Whether the signed-in user has already liked the given episode. */
+export async function isEpisodeLiked(episodeId: number): Promise<boolean> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  const userId = session?.user?.id ?? null
+  const set = await getLikedSet(userId, "episode", [episodeId])
+  return set.has(episodeId)
+}
+
+/** Toggles a like on an episode. Idempotent — persists per-user like state. */
 export async function setEpisodeLike(input: { episodeId: number; liked: boolean }) {
   const user = await requireUser()
   const [row] = await db

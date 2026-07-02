@@ -1,6 +1,6 @@
 import "server-only"
 
-import { and, eq, inArray } from "drizzle-orm"
+import { and, count, eq, inArray } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { like } from "@/lib/db/schema"
 
@@ -13,6 +13,7 @@ export type LikeTarget =
   | "feed_comment"
   | "episode"
   | "episode_comment"
+  | "devotional"
   | "devotional_comment"
   | "community_comment"
   | "dream_reply"
@@ -39,6 +40,18 @@ export async function getLikedSet(
       ),
     )
   return new Set(rows.map((r) => r.targetId))
+}
+
+/**
+ * Total number of likes for a single target. Used where there is no
+ * denormalized counter column (e.g. daily devotionals keyed by date).
+ */
+export async function getLikeCount(targetType: LikeTarget, targetId: number): Promise<number> {
+  const [row] = await db
+    .select({ n: count() })
+    .from(like)
+    .where(and(eq(like.targetType, targetType), eq(like.targetId, targetId)))
+  return row?.n ?? 0
 }
 
 /**

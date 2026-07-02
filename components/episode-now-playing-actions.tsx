@@ -5,7 +5,7 @@ import { Bookmark, Heart, MessageCircle, Repeat, Share2 } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
 import type { Show } from "@/lib/data"
 import type { ShareTarget } from "@/lib/share-types"
-import { getEpisodeComments, setEpisodeLike } from "@/app/actions/episodes"
+import { getEpisodeComments, isEpisodeLiked, setEpisodeLike } from "@/app/actions/episodes"
 import { isItemSaved, toggleSaveItem } from "@/app/actions/share"
 import { ShareSheet } from "@/components/share-sheet"
 import { EpisodeCommentsSheet } from "@/components/episode-comments-sheet"
@@ -48,17 +48,18 @@ export function EpisodeNowPlayingActions({
     downloadKind: show.videoUrl ? "video" : show.audioUrl ? "audio" : null,
   }
 
-  // Reset like state when the track changes.
+  // Reset the like count baseline when the track changes; the actual liked
+  // state is loaded from the server below so it persists across refreshes.
   useEffect(() => {
-    setLiked(false)
     setLikes(show.likes ?? 0)
   }, [show.id, show.likes])
 
-  // Load comment count + saved state for the current track.
+  // Load comment count + saved/liked state for the current track.
   useEffect(() => {
     if (!episodeId) {
       setCommentCount(0)
       setSaved(false)
+      setLiked(false)
       return
     }
     let active = true
@@ -69,8 +70,12 @@ export function EpisodeNowPlayingActions({
       isItemSaved("episode", String(episodeId))
         .then((s) => active && setSaved(s))
         .catch(() => {})
+      isEpisodeLiked(episodeId)
+        .then((l) => active && setLiked(l))
+        .catch(() => {})
     } else {
       setSaved(false)
+      setLiked(false)
     }
     return () => {
       active = false

@@ -8,7 +8,7 @@ import { db } from "@/lib/db"
 import { devotionalComment } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { EDIT_WINDOW_MS, DELETE_WINDOW_MS } from "@/lib/interactions"
-import { getLikedSet, setLike } from "@/lib/likes"
+import { getLikeCount, getLikedSet, setLike } from "@/lib/likes"
 
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -87,6 +87,42 @@ export async function addDevotionalComment(input: { devotionalDate: string; text
     text,
   })
   revalidatePath("/devotional")
+}
+
+/**
+ * Devotionals are keyed by an opaque string id (e.g. "dev-1781901451302")
+ * rather than a numeric row, but the generic like table stores an integer
+ * targetId. We derive a stable, positive 31-bit integer from the string via a
+ * deterministic hash so both the like count and the user's liked state persist
+ * across refreshes.
+ */
+function devotionalTargetId(devotionalDate: string): number {
+  let hash = 0
+  for (let i = 0; i < devotionalDate.length; i++) {
+    hash = (Math.imul(31, hash) + devotionalDate.charCodeAt(i)) | 0
+  }
+  return hash & 0x7fffffff
+}
+
+/** Like count + whether the current user has liked the given devotional day. */
+export async function getDevotionalLikeState(
+  devotionalDate: string,
+): Promise<{ likes: number; liked: boolean }> {
+  const targetId = devotionalTargetId(devotionalDate)
+  const session = await auth.api.getSession({ headers: await headers() })
+  const userId = session?.user?.id ?? null
+  const [likes, likedSet] = await Promise.all([
+    getLikeCount("devotional", targetId),
+    getLikedSet(userId, "devotional", [targetId]),
+  ])
+  return { likes, liked: likedSet.has(targetId) }
+}
+
+/** Toggle the current user's like on a devotional day. Idempotent. */
+export async function setDevotionalLike(input: { devotionalDate: string; liked: boolean }) {
+  const user = await requireUser()
+  await setLike(user.id, "devotional", devotionalTargetId(input.devotionalDate), input.liked)
+  revalidatePath("/")
 }
 
 /** Toggle a like on a devotional comment. Idempotent — persists per-user state. */

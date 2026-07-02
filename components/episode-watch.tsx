@@ -11,6 +11,7 @@ import {
   deleteEpisodeComment,
   editEpisodeComment,
   getEpisodeComments,
+  isEpisodeLiked,
   setEpisodeCommentLike,
   setEpisodeLike,
 } from "@/app/actions/episodes"
@@ -36,6 +37,7 @@ function toThreadComment(c: EpisodeCommentView): ThreadComment {
     image: c.authorImage,
     text: c.text,
     likes: c.likes,
+    liked: c.liked,
     edited: c.edited,
     postedAt: c.postedAt,
     createdAtMs: c.createdAtMs,
@@ -83,11 +85,15 @@ export function EpisodeWatch({
   useEffect(() => {
     if (!currentUser || !episodeId) {
       setSaved(false)
+      setLiked(false)
       return
     }
     let active = true
     isItemSaved("episode", String(episodeId))
       .then((s) => active && setSaved(s))
+      .catch(() => {})
+    isEpisodeLiked(episodeId)
+      .then((l) => active && setLiked(l))
       .catch(() => {})
     return () => {
       active = false
