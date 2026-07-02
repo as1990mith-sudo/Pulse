@@ -56,6 +56,7 @@ function toThreadComment(c: CommunityCommentView): ThreadComment {
     image: c.image,
     text: c.body,
     likes: c.likes,
+    liked: c.liked,
     edited: c.edited,
     postedAt: c.postedAt,
     createdAtMs: c.createdAtMs,

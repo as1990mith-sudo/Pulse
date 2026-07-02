@@ -8,6 +8,7 @@ import { db } from "@/lib/db"
 import { episode, episodeComment, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { EDIT_WINDOW_MS, DELETE_WINDOW_MS } from "@/lib/interactions"
+import { getLikedSet, setLike } from "@/lib/likes"
 import { notifyUser } from "@/app/actions/notifications"
 
 async function requireUser() {
@@ -28,6 +29,7 @@ export type EpisodeCommentView = {
   authorImage: string | null
   text: string
   likes: number
+  liked: boolean
   edited: boolean
   postedAt: string
   createdAtMs: number
@@ -65,6 +67,8 @@ export async function getEpisodeComments(episodeId: number): Promise<EpisodeComm
     for (const u of imgs) imageMap.set(u.id, u.image)
   }
 
+  const likedSet = await getLikedSet(viewerId, "episode_comment", rows.map((r) => r.id))
+
   return rows.map((c) => ({
     id: c.id,
     parentId: c.parentId ?? null,
@@ -77,13 +81,22 @@ export async function getEpisodeComments(episodeId: number): Promise<EpisodeComm
     authorImage: imageMap.get(c.userId) ?? null,
     text: c.text,
     likes: c.likes,
+    liked: likedSet.has(c.id),
     edited: !!c.editedAt,
     postedAt: timeAgo(c.createdAt),
     createdAtMs: c.createdAt.getTime(),
   }))
 }
 
-/** Toggles a like on an episode (counter-based, matching feed posts). */
+/** Whether the signed-in user has already liked the given episode. */
+export async function isEpisodeLiked(episodeId: number): Promise<boolean> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  const userId = session?.user?.id ?? null
+  const set = await getLikedSet(userId, "episode", [episodeId])
+  return set.has(episodeId)
+}
+
+/** Toggles a like on an episode. Idempotent — persists per-user like state. */
 export async function setEpisodeLike(input: { episodeId: number; liked: boolean }) {
   const user = await requireUser()
   const [row] = await db
@@ -91,6 +104,8 @@ export async function setEpisodeLike(input: { episodeId: number; liked: boolean 
     .from(episode)
     .where(eq(episode.id, input.episodeId))
   if (!row) return
+  const { changed } = await setLike(user.id, "episode", input.episodeId, input.liked)
+  if (!changed) return
   const next = Math.max(0, row.likes + (input.liked ? 1 : -1))
   await db.update(episode).set({ likes: next }).where(eq(episode.id, input.episodeId))
 
@@ -140,14 +155,16 @@ export async function addEpisodeComment(input: { episodeId: number; text: string
   if (row) revalidatePath(`/live/${row.slug}`)
 }
 
-/** Likes an episode comment (counter-based). */
+/** Likes an episode comment. Idempotent — persists per-user state. */
 export async function setEpisodeCommentLike(input: { commentId: number; liked: boolean }) {
-  await requireUser()
+  const user = await requireUser()
   const [row] = await db
     .select({ likes: episodeComment.likes })
     .from(episodeComment)
     .where(eq(episodeComment.id, input.commentId))
   if (!row) return
+  const { changed } = await setLike(user.id, "episode_comment", input.commentId, input.liked)
+  if (!changed) return
   const next = Math.max(0, row.likes + (input.liked ? 1 : -1))
   await db.update(episodeComment).set({ likes: next }).where(eq(episodeComment.id, input.commentId))
 }

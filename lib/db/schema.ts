@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, serial, integer, jsonb } from "drizzle-orm/pg-core"
+import { pgTable, text, timestamp, boolean, serial, integer, jsonb, uniqueIndex } from "drizzle-orm/pg-core"
 
 // --- Better Auth required tables -------------------------------------------
 // Column names are camelCase to match Better Auth's defaults. Do not rename.
@@ -576,3 +576,24 @@ export const dreamReply = pgTable("dream_reply", {
   editedAt: timestamp("editedAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
+
+// --- Likes (per-user, per-content) -----------------------------------------
+// One row per (user, targetType, targetId). Backs the denormalized `likes`
+// counters on posts/comments/etc. so a member can like something exactly once
+// and that liked state survives refreshes. The unique index enforces idempotency
+// and lets inserts use onConflictDoNothing.
+export const like = pgTable(
+  "like",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("userId").notNull(),
+    // "post" | "feed_comment" | "episode" | "episode_comment" |
+    // "devotional_comment" | "community_comment" | "dream_reply"
+    targetType: text("targetType").notNull(),
+    targetId: integer("targetId").notNull(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    uniq: uniqueIndex("like_user_target_unique").on(t.userId, t.targetType, t.targetId),
+  }),
+)

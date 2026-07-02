@@ -1,12 +1,14 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import useSWR from "swr"
 import Link from "next/link"
 import { Heart, Share2, MessageCircle, Send } from "lucide-react"
 import {
   addDevotionalComment,
   getDevotionalComments,
+  getDevotionalLikeState,
+  setDevotionalLike,
   setDevotionalCommentLike,
   editDevotionalComment,
   deleteDevotionalComment,
@@ -34,6 +36,7 @@ function toThreadComment(c: DevotionalCommentView): ThreadComment {
     image: null,
     text: c.text,
     likes: c.likes,
+    liked: c.liked,
     edited: c.edited,
     postedAt: c.postedAt,
     createdAtMs: c.createdAtMs,
@@ -69,6 +72,22 @@ export function DevotionalInteractions({
   const [draft, setDraft] = useState("")
   const [isPending, startTransition] = useTransition()
 
+  // Load the persisted like count + this user's liked state so a daily like
+  // survives refresh and can't be re-counted.
+  useEffect(() => {
+    let active = true
+    getDevotionalLikeState(devotionalDate)
+      .then((s) => {
+        if (!active) return
+        setLikes(s.likes)
+        setLiked(s.liked)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [devotionalDate, currentUser])
+
   const shareTarget: ShareTarget = {
     type: "devotional",
     key: devotionalDate,
@@ -81,9 +100,18 @@ export function DevotionalInteractions({
   }
 
   function toggleLike() {
-    setLiked((prev) => {
-      setLikes((n) => (prev ? n - 1 : n + 1))
-      return !prev
+    if (!currentUser) return
+    const next = !liked
+    setLiked(next)
+    setLikes((n) => Math.max(0, n + (next ? 1 : -1)))
+    startTransition(async () => {
+      try {
+        await setDevotionalLike({ devotionalDate, liked: next })
+      } catch {
+        // Revert optimistic state on failure.
+        setLiked((prev) => !prev)
+        setLikes((n) => Math.max(0, n + (next ? -1 : 1)))
+      }
     })
   }
 

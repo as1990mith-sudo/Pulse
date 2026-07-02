@@ -9,6 +9,7 @@ import { db } from "@/lib/db"
 import { dream, dreamReply, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { EDIT_WINDOW_MS } from "@/lib/interactions"
+import { getLikedSet, setLike } from "@/lib/likes"
 
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -51,6 +52,7 @@ export type DreamReplyView = {
   id: number
   body: string
   likes: number
+  liked: boolean
   edited: boolean
   postedAt: string
   createdAtMs: number
@@ -208,10 +210,13 @@ export async function getDreamReplies(dreamId: number): Promise<DreamReplyView[]
     for (const u of users) imageMap.set(u.id, u.image ?? null)
   }
 
+  const likedSet = await getLikedSet(viewerId, "dream_reply", rows.map((r) => r.id))
+
   return rows.map((r) => ({
     id: r.id,
     body: r.body,
     likes: r.likes,
+    liked: likedSet.has(r.id),
     edited: !!r.editedAt,
     postedAt: timeAgo(r.createdAt),
     createdAtMs: r.createdAt.getTime(),
@@ -257,6 +262,7 @@ export async function addDreamReply(input: { dreamId: number; body: string }): P
     id: row.id,
     body: row.body,
     likes: 0,
+    liked: false,
     edited: false,
     postedAt: "now",
     createdAtMs: row.createdAt.getTime(),
@@ -298,11 +304,13 @@ export async function deleteDreamReply(replyId: number) {
   revalidatePath("/chatrooms/dreams")
 }
 
-/** Toggle a like on an interpretation. Available to every signed-in member. */
+/** Toggle a like on an interpretation. Idempotent — persists per-user state. */
 export async function setDreamReplyLike(input: { replyId: number; liked: boolean }) {
-  await requireUser()
+  const user = await requireUser()
   const [row] = await db.select({ likes: dreamReply.likes }).from(dreamReply).where(eq(dreamReply.id, input.replyId))
   if (!row) return
+  const { changed } = await setLike(user.id, "dream_reply", input.replyId, input.liked)
+  if (!changed) return
   const next = Math.max(0, row.likes + (input.liked ? 1 : -1))
   await db.update(dreamReply).set({ likes: next }).where(eq(dreamReply.id, input.replyId))
   revalidatePath("/chatrooms/dreams")

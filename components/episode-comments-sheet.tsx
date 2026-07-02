@@ -31,6 +31,7 @@ function toThreadComment(c: EpisodeCommentView): ThreadComment {
     image: c.authorImage,
     text: c.text,
     likes: c.likes,
+    liked: c.liked,
     edited: c.edited,
     postedAt: c.postedAt,
     createdAtMs: c.createdAtMs,

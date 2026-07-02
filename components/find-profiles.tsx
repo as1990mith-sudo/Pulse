@@ -80,7 +80,7 @@ export function FindProfiles() {
   )
 }
 
-function FindRow({ profile }: { profile: DiscoverProfile }) {
+export function FindRow({ profile }: { profile: DiscoverProfile }) {
   const [following, setFollowing] = useState(profile.isFollowing)
   const [hovering, setHovering] = useState(false)
   const [pending, setPending] = useState(false)

@@ -79,8 +79,13 @@ export default async function LivePage() {
             <PodcastLibrary hosts={hosts} />
           </section>
 
-          {/* Host CTA — pick audio or video, then open the studio in that mode */}
-          <GoLiveToggle />
+          {/* Host CTA — pick audio or video, then open the studio in that mode.
+              The id anchor lets "Creator Studio" in the side menu deep-link
+              straight down to this go-live selector. scroll-mt clears the
+              sticky header so the section isn't hidden beneath it. */}
+          <div id="go-live" className="scroll-mt-24">
+            <GoLiveToggle />
+          </div>
         </div>
       </main>
 

@@ -8,6 +8,7 @@ import { db } from "@/lib/db"
 import { devotionalComment } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { EDIT_WINDOW_MS, DELETE_WINDOW_MS } from "@/lib/interactions"
+import { getLikeCount, getLikedSet, setLike } from "@/lib/likes"
 
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -26,6 +27,7 @@ export type DevotionalCommentView = {
   color: string
   text: string
   likes: number
+  liked: boolean
   edited: boolean
   postedAt: string
   createdAtMs: number
@@ -52,6 +54,8 @@ export async function getDevotionalComments(devotionalDate: string): Promise<Dev
     .where(eq(devotionalComment.devotionalDate, devotionalDate))
     .orderBy(asc(devotionalComment.createdAt))
 
+  const likedSet = await getLikedSet(viewerId, "devotional_comment", rows.map((r) => r.id))
+
   return rows.map((c) => ({
     id: c.id,
     parentId: c.parentId ?? null,
@@ -63,6 +67,7 @@ export async function getDevotionalComments(devotionalDate: string): Promise<Dev
     color: getAvatarColor(c.userId),
     text: c.text,
     likes: c.likes,
+    liked: likedSet.has(c.id),
     edited: !!c.editedAt,
     postedAt: timeAgo(c.createdAt),
     createdAtMs: c.createdAt.getTime(),
@@ -84,14 +89,52 @@ export async function addDevotionalComment(input: { devotionalDate: string; text
   revalidatePath("/devotional")
 }
 
-/** Toggle a like on a devotional comment. */
+/**
+ * Devotionals are keyed by an opaque string id (e.g. "dev-1781901451302")
+ * rather than a numeric row, but the generic like table stores an integer
+ * targetId. We derive a stable, positive 31-bit integer from the string via a
+ * deterministic hash so both the like count and the user's liked state persist
+ * across refreshes.
+ */
+function devotionalTargetId(devotionalDate: string): number {
+  let hash = 0
+  for (let i = 0; i < devotionalDate.length; i++) {
+    hash = (Math.imul(31, hash) + devotionalDate.charCodeAt(i)) | 0
+  }
+  return hash & 0x7fffffff
+}
+
+/** Like count + whether the current user has liked the given devotional day. */
+export async function getDevotionalLikeState(
+  devotionalDate: string,
+): Promise<{ likes: number; liked: boolean }> {
+  const targetId = devotionalTargetId(devotionalDate)
+  const session = await auth.api.getSession({ headers: await headers() })
+  const userId = session?.user?.id ?? null
+  const [likes, likedSet] = await Promise.all([
+    getLikeCount("devotional", targetId),
+    getLikedSet(userId, "devotional", [targetId]),
+  ])
+  return { likes, liked: likedSet.has(targetId) }
+}
+
+/** Toggle the current user's like on a devotional day. Idempotent. */
+export async function setDevotionalLike(input: { devotionalDate: string; liked: boolean }) {
+  const user = await requireUser()
+  await setLike(user.id, "devotional", devotionalTargetId(input.devotionalDate), input.liked)
+  revalidatePath("/")
+}
+
+/** Toggle a like on a devotional comment. Idempotent — persists per-user state. */
 export async function setDevotionalCommentLike(input: { commentId: number; liked: boolean }) {
-  await requireUser()
+  const user = await requireUser()
   const [row] = await db
     .select({ likes: devotionalComment.likes })
     .from(devotionalComment)
     .where(eq(devotionalComment.id, input.commentId))
   if (!row) return
+  const { changed } = await setLike(user.id, "devotional_comment", input.commentId, input.liked)
+  if (!changed) return
   const next = Math.max(0, row.likes + (input.liked ? 1 : -1))
   await db.update(devotionalComment).set({ likes: next }).where(eq(devotionalComment.id, input.commentId))
   revalidatePath("/devotional")

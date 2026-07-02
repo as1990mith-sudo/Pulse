@@ -2,7 +2,6 @@ import { notFound } from "next/navigation"
 import { getProfile } from "@/lib/profile"
 import { getEpisodesByUser } from "@/lib/content"
 import { getPostsByUser, getRepostsByUser } from "@/app/actions/feed"
-import { getSavedItems, type SavedItemView } from "@/app/actions/share"
 import { getActiveStatusForUser } from "@/app/actions/status"
 import { getCurrentUser } from "@/lib/session"
 import { SiteHeader } from "@/components/site-header"
@@ -26,9 +25,6 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
     getCurrentUser(),
     getActiveStatusForUser(id),
   ])
-
-  // Saved bookmarks are private — only fetch them when viewing your own profile.
-  const saved: SavedItemView[] = profile.isSelf ? await getSavedItems() : []
 
   return (
     <div className="min-h-screen">
@@ -108,7 +104,6 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
           episodes={episodes}
           posts={posts}
           reposts={reposts}
-          saved={saved}
           currentUser={currentUser}
         />
       </main>

@@ -11,6 +11,7 @@ import type { CurrentUser } from "@/lib/session"
 import type { EpisodeCommentView } from "@/app/actions/episodes"
 import {
   addEpisodeComment,
+  isEpisodeLiked,
   setEpisodeLike,
   setEpisodeCommentLike,
   editEpisodeComment,
@@ -34,6 +35,7 @@ function toThreadComment(c: EpisodeCommentView): ThreadComment {
     image: c.authorImage,
     text: c.text,
     likes: c.likes,
+    liked: c.liked,
     edited: c.edited,
     postedAt: c.postedAt,
     createdAtMs: c.createdAtMs,
@@ -58,15 +60,20 @@ export function EpisodeInteractions({
   const [shareOpen, setShareOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  // Load whether this episode is already saved by the current user.
+  // Load whether this episode is already saved / liked by the current user, so
+  // the state persists across refreshes and a like can't be re-counted.
   useEffect(() => {
     if (!currentUser || !episodeId) {
       setSaved(false)
+      setLiked(false)
       return
     }
     let active = true
     isItemSaved("episode", String(episodeId))
       .then((s) => active && setSaved(s))
+      .catch(() => {})
+    isEpisodeLiked(episodeId)
+      .then((l) => active && setLiked(l))
       .catch(() => {})
     return () => {
       active = false

@@ -18,6 +18,7 @@ import {
   Lock,
   Play,
   ShoppingBag,
+  ShoppingCart,
 } from "lucide-react"
 import type { Book, Course } from "@/lib/store-data"
 import { BOOKS, COURSES, formatPrice } from "@/lib/store-data"
@@ -33,9 +34,11 @@ function isCourse(p: Product): p is Course {
 
 export function ProductView({ product }: { product: Product }) {
   const router = useRouter()
-  const { isWishlisted, toggleWishlist, isInLibrary, addToLibrary } = useStoreState()
+  const { isWishlisted, toggleWishlist, isInLibrary, addToLibrary, isInCart, addToCart, removeFromCart } =
+    useStoreState()
   const owned = isInLibrary(product.id)
   const wished = isWishlisted(product.id)
+  const inCart = isInCart(product.id)
 
   const [status, setStatus] = useState<"idle" | "processing">("idle")
   const [celebrate, setCelebrate] = useState(false)
@@ -216,6 +219,23 @@ export function ProductView({ product }: { product: Product }) {
             title={product.title}
             className="size-12 shrink-0 rounded-2xl border border-border/60 bg-secondary/40"
           />
+
+          {!owned && (
+            <button
+              type="button"
+              onClick={() => (inCart ? removeFromCart(product.id) : addToCart(product.id))}
+              aria-label={inCart ? "Remove from cart" : "Add to cart"}
+              aria-pressed={inCart}
+              className={cn(
+                "flex size-12 shrink-0 items-center justify-center rounded-2xl border transition-transform active:scale-90",
+                inCart
+                  ? "border-primary/50 bg-primary/15 text-primary"
+                  : "border-border/60 bg-secondary/40 text-foreground",
+              )}
+            >
+              {inCart ? <Check className="size-5 motion-pop" /> : <ShoppingCart className="size-5" />}
+            </button>
+          )}
 
           {owned ? (
             <Link

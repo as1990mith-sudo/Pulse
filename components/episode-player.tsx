@@ -477,9 +477,10 @@ export function EpisodePlayer({
             isFullscreen
               ? "flex h-screen w-screen cursor-pointer items-center justify-center"
               : minimized
-                ? // Floating mini-player docked bottom-right; the same <video>
-                  // keeps playing so position is preserved. Tap to restore.
-                  "fixed bottom-4 right-4 z-50 aspect-video w-40 cursor-pointer overflow-hidden rounded-xl shadow-floating ring-1 ring-white/15 duration-300 animate-in fade-in zoom-in-95 sm:w-56"
+                ? // Floating mini-player docked bottom-right, above the fixed tab
+                  // bar; the same <video> keeps playing so position is preserved.
+                  // A spring-eased zoom-in makes tapping it restore smoothly.
+                  "fixed right-4 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-50 aspect-video w-40 cursor-pointer overflow-hidden rounded-xl shadow-floating ring-1 ring-white/15 duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] animate-in fade-in zoom-in-95 sm:w-56"
                 : // Full-bleed within the player (the page renders this player
                   // without horizontal padding, so it reaches both screen edges).
                   "aspect-video w-full cursor-pointer overflow-hidden",
