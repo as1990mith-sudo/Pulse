@@ -6,6 +6,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
 import {
+  AlignLeft,
   BookOpen,
   Bookmark,
   ChevronDown,
@@ -17,7 +18,6 @@ import {
   Library as LibraryIcon,
   LifeBuoy,
   LogOut,
-  Menu,
   MessageCircle,
   Moon,
   MoonStar,
@@ -207,7 +207,7 @@ export function AppMenu() {
         aria-expanded={open}
         className="menu-fab tap-scale flex size-10 items-center justify-center rounded-2xl border border-border/60 bg-secondary/40 text-foreground shadow-soft backdrop-blur-md transition-all duration-200 hover:bg-secondary/70"
       >
-        <Menu className="size-[18px]" />
+        <AlignLeft className="size-[19px]" strokeWidth={2.25} />
       </button>
 
       {open &&
