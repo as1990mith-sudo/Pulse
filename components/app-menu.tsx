@@ -35,6 +35,7 @@ import {
 import { authClient } from "@/lib/auth-client"
 import { SKINS, useSkin } from "@/components/skin-provider"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
+import { startMenuFlow } from "@/lib/menu-flow"
 import { cn } from "@/lib/utils"
 
 const themes = [
@@ -128,6 +129,9 @@ export function AppMenu() {
   }, [open, close])
 
   function navigate() {
+    // Record where we came from so the destination page can offer Back/Close
+    // controls that return here (the page shown before the menu was opened).
+    startMenuFlow(window.location.pathname)
     close()
   }
 

@@ -101,20 +101,18 @@ function TabBar({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
           onClick={() => onChange(t)}
           aria-current={tab === t ? "true" : undefined}
           className={cn(
-            "relative flex-1 pb-3 pt-1 text-center text-sm font-semibold capitalize transition-colors sm:flex-none sm:px-8",
+            "relative flex-1 pb-3 pt-1 text-center text-sm font-semibold capitalize transition-colors",
             tab === t ? "text-foreground" : "text-muted-foreground hover:text-foreground",
           )}
         >
           {t}
         </button>
       ))}
-      {/* Sliding underline indicator */}
+      {/* Sliding underline indicator: half-width, translated by its own width so
+          it sits perfectly under whichever equal-width tab is active. */}
       <span
-        className="absolute bottom-0 h-0.5 rounded-full bg-primary transition-transform duration-300 ease-out sm:w-24"
-        style={{
-          width: "min(50%, 6rem)",
-          transform: tab === "books" ? "translateX(0%)" : "translateX(100%)",
-        }}
+        className="pointer-events-none absolute bottom-0 left-0 h-0.5 w-1/2 rounded-full bg-primary transition-transform duration-300 ease-out"
+        style={{ transform: tab === "books" ? "translateX(0%)" : "translateX(100%)" }}
         aria-hidden
       />
     </div>

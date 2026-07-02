@@ -3,15 +3,19 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Radio, Search } from "lucide-react"
+import { ArrowLeft, Radio, Search, X } from "lucide-react"
 import { AppMenu } from "@/components/app-menu"
 import { UserMenu } from "@/components/user-menu"
 import { MessagesBell } from "@/components/messages-bell"
 import { NotificationBell } from "@/components/notification-bell"
+import { useMenuFlow } from "@/lib/menu-flow"
 import { cn } from "@/lib/utils"
 
 export function SiteHeader() {
   const pathname = usePathname()
+  // When the user reached this page via the side menu, offer Back/Close controls
+  // that return to where they were before opening the menu.
+  const { active: inMenuFlow, back, close } = useMenuFlow()
   // Hide the header when scrolling down, reveal it when scrolling back up.
   const [hidden, setHidden] = useState(false)
   const lastY = useRef(0)
@@ -54,9 +58,31 @@ export function SiteHeader() {
       )}
     >
       <div className="relative mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] sm:pl-[max(2rem,env(safe-area-inset-left))] sm:pr-[max(2rem,env(safe-area-inset-right))]">
-        {/* Left: floating hamburger + brand (icon left of text), tightly aligned. */}
+        {/* Left: menu-flow Back/Close controls (when arrived via the side menu),
+            otherwise the hamburger — then the brand. */}
         <div className="flex items-center gap-2.5">
-          <AppMenu />
+          {inMenuFlow ? (
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={back}
+                aria-label="Go back"
+                className="menu-fab tap-scale flex size-10 items-center justify-center rounded-2xl border border-border/60 bg-secondary/40 text-foreground shadow-soft backdrop-blur-md transition-all duration-200 hover:bg-secondary/70"
+              >
+                <ArrowLeft className="size-[18px]" />
+              </button>
+              <button
+                type="button"
+                onClick={close}
+                aria-label="Close and return"
+                className="tap-scale flex size-10 items-center justify-center rounded-2xl text-muted-foreground transition-colors duration-200 hover:bg-secondary/70 hover:text-foreground"
+              >
+                <X className="size-[18px]" />
+              </button>
+            </div>
+          ) : (
+            <AppMenu />
+          )}
           <Link href="/" className="flex items-center gap-2">
             <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <Radio className="size-4" />
