@@ -124,6 +124,7 @@ function ReelItem({
 }) {
   const { post, url } = reel
   const videoRef = useRef<HTMLVideoElement>(null)
+  const backdropRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [active, setActive] = useState(false)
   const [paused, setPaused] = useState(false)
@@ -131,7 +132,8 @@ function ReelItem({
   const [liked, setLiked] = useState(post.liked)
   const [likes, setLikes] = useState(post.likes)
 
-  // Keep the element's mute state in sync with the global toggle.
+  // Keep the element's mute state in sync with the global toggle. The blurred
+  // backdrop copy is always muted.
   useEffect(() => {
     if (videoRef.current) videoRef.current.muted = muted
   }, [muted])
@@ -146,13 +148,19 @@ function ReelItem({
         const isActive = entry.isIntersecting && entry.intersectionRatio >= 0.6
         setActive(isActive)
         const v = videoRef.current
+        const bg = backdropRef.current
         if (!v) return
         if (isActive) {
           setPaused(false)
           v.play().catch(() => {})
+          bg?.play().catch(() => {})
         } else {
           v.pause()
           v.currentTime = 0
+          if (bg) {
+            bg.pause()
+            bg.currentTime = 0
+          }
         }
       },
       { root: root.current, threshold: [0, 0.6, 1] },
@@ -163,12 +171,15 @@ function ReelItem({
 
   function togglePlay() {
     const v = videoRef.current
+    const bg = backdropRef.current
     if (!v) return
     if (v.paused) {
       v.play().catch(() => {})
+      bg?.play().catch(() => {})
       setPaused(false)
     } else {
       v.pause()
+      bg?.pause()
       setPaused(true)
     }
   }
@@ -187,11 +198,26 @@ function ReelItem({
   }
 
   return (
-    <div ref={containerRef} className="relative flex h-full w-full snap-start snap-always items-center justify-center">
+    <div ref={containerRef} className="relative flex h-full w-full snap-start snap-always items-center justify-center overflow-hidden">
+      {/* Blurred backdrop: the same clip stretched to cover the frame so off-ratio
+          videos fill edge-to-edge (no black bars, nothing "hanging"), while the
+          real clip plays contained on top so no content is ever cropped. */}
+      <video
+        ref={backdropRef}
+        src={url}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-2xl"
+        playsInline
+        loop
+        muted
+        preload="metadata"
+        tabIndex={-1}
+      />
+      <div aria-hidden="true" className="absolute inset-0 bg-black/30" />
       <video
         ref={videoRef}
         src={url}
-        className="h-full w-full object-contain"
+        className="relative h-full w-full object-contain"
         playsInline
         loop
         muted={muted}
