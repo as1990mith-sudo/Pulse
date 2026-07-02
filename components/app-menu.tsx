@@ -27,7 +27,6 @@ import {
   ShoppingBag,
   ShoppingCart,
   Sun,
-  User,
   UserPlus,
   Check,
   X,
@@ -303,7 +302,6 @@ export function AppMenu() {
                     onNavigate={navigate}
                     badge={cartItems}
                   />
-                  <DrawerItem href={profileHref} icon={User} label="Profile" onNavigate={navigate} />
                 </Section>
 
                 <Divider />
