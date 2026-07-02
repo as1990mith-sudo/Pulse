@@ -60,7 +60,7 @@ function SearchBar() {
           className="flex flex-1 items-center gap-3 rounded-2xl border border-border/60 bg-secondary/40 px-4 py-3 text-muted-foreground shadow-soft backdrop-blur-md transition-colors hover:bg-secondary/70"
         >
           <Search className="size-5 shrink-0" />
-          <span className="text-sm">Search books, courses, authors…</span>
+          <span className="truncate text-sm">Search resources</span>
         </Link>
         <Link
           href="/store/publish"
