@@ -205,9 +205,9 @@ export function AppMenu() {
         aria-label="Open menu"
         aria-haspopup="dialog"
         aria-expanded={open}
-        className="menu-fab tap-scale flex size-10 items-center justify-center rounded-2xl border border-border/60 bg-secondary/40 text-foreground shadow-soft backdrop-blur-md transition-all duration-200 hover:bg-secondary/70"
+        className="menu-fab tap-scale flex size-11 items-center justify-center rounded-2xl border border-border/60 bg-secondary/40 text-foreground shadow-soft backdrop-blur-md transition-all duration-200 hover:bg-secondary/70"
       >
-        <AlignLeft className="size-[19px]" strokeWidth={2.25} />
+        <AlignLeft className="size-[22px]" strokeWidth={2.25} />
       </button>
 
       {open &&
