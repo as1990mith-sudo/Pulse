@@ -773,34 +773,10 @@
     0 6px 16px -6px oklch(0 0 0 / 0.4);
 }
 
-/* --- Premium floating bottom navigation ----------------------------------- */
-/* Reserve room so page content never sits behind the floating bar. */
+/* --- Instagram-style edge-to-edge bottom navigation ----------------------- */
+/* Reserve room so page content never sits behind the fixed bar (68px bar). */
 body.has-bottom-nav {
-  padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
-}
-
-/* The morphing active capsule: soft orange tint, hairline ring, subtle glow. */
-.bottom-nav-pill {
-  background: color-mix(in oklab, var(--primary) 20%, transparent);
-  box-shadow:
-    inset 0 0 0 1px color-mix(in oklab, var(--primary) 34%, transparent),
-    0 4px 16px -4px color-mix(in oklab, var(--primary) 45%, transparent),
-    0 0 18px -4px color-mix(in oklab, var(--primary) 40%, transparent);
-}
-
-/* Entrance: the whole bar rises gently into place. */
-.bottom-nav-bar {
-  animation: bottom-nav-in 420ms cubic-bezier(0.34, 1.4, 0.5, 1) both;
-}
-@keyframes bottom-nav-in {
-  from {
-    opacity: 0;
-    transform: translateY(14px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  padding-bottom: calc(4.25rem + env(safe-area-inset-bottom));
 }
 
 /* --- Card touch elevation: subtly lift + scale while pressed --------------- */
