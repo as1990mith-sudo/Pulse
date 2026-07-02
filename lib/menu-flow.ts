@@ -14,6 +14,29 @@ import { usePathname, useRouter } from "next/navigation"
  * persisting long-term.
  */
 const MENU_FLOW_KEY = "frequency:menu-origin"
+// Set when the user taps Close on a menu-opened page: it asks the origin page to
+// re-open the side menu drawer as soon as it loads, so Close returns them to the
+// menu rather than just the page they started from.
+const MENU_REOPEN_KEY = "frequency:menu-reopen"
+
+export function requestMenuReopen() {
+  try {
+    sessionStorage.setItem(MENU_REOPEN_KEY, "1")
+  } catch {
+    /* no-op */
+  }
+}
+
+/** Reads and clears the reopen flag, returning whether the menu should reopen. */
+export function consumeMenuReopen(): boolean {
+  try {
+    const flag = sessionStorage.getItem(MENU_REOPEN_KEY)
+    if (flag) sessionStorage.removeItem(MENU_REOPEN_KEY)
+    return !!flag
+  } catch {
+    return false
+  }
+}
 
 export function startMenuFlow(origin: string) {
   try {
