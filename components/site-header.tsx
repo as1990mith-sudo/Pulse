@@ -66,10 +66,12 @@ export function SiteHeader({ collapsible = false }: { collapsible?: boolean } = 
   const bar = (
       <div className="relative mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] sm:pl-[max(2rem,env(safe-area-inset-left))] sm:pr-[max(2rem,env(safe-area-inset-right))]">
         {/* Left: menu-flow Back/Close controls (when arrived via the side menu),
-            otherwise the hamburger — then the brand. */}
+            otherwise the hamburger — then the brand. `min-w-0` lets the brand
+            wordmark truncate on narrow screens so the right-side icons are never
+            pushed off-frame (and clipped by the body's overflow-x guard). */}
         <div className="flex min-w-0 items-center gap-2.5">
           {inMenuFlow ? (
-            <div className="flex items-center gap-1.5">
+            <div className="flex shrink-0 items-center gap-1.5">
               <button
                 type="button"
                 onClick={back}
