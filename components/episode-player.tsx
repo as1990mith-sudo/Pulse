@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Pause, Play, Radio, RotateCcw, RotateCw, Gauge, Maximize, Minimize } from "lucide-react"
+import { Pause, Play, Radio, RotateCcw, RotateCw, Gauge, Maximize, Minimize, ChevronDown } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { cn } from "@/lib/utils"
 import { MarqueeTitle } from "@/components/marquee-title"
@@ -21,8 +21,23 @@ const SPEEDS = [1, 1.25, 1.5, 1.75, 2] as const
  * playback controls live in the page below and, while in fullscreen, in an
  * overlay docked inside the video frame so they stay visible. Audio episodes
  * keep the ambient cover-art card. Tapping the video never pauses it.
+ *
+ * When `onMinimize`/`onRestore` are provided (the watch page), the video shows a
+ * YouTube-style downward-chevron in the upper-left that collapses the player
+ * into a floating mini-player. The SAME `<video>` element stays mounted across
+ * both states, so playback never pauses and the position is preserved.
  */
-export function EpisodePlayer({ show }: { show: Show }) {
+export function EpisodePlayer({
+  show,
+  minimized = false,
+  onMinimize,
+  onRestore,
+}: {
+  show: Show
+  minimized?: boolean
+  onMinimize?: () => void
+  onRestore?: () => void
+}) {
   const mediaRef = useRef<HTMLVideoElement>(null)
   // The video frame is the element we put into fullscreen so our own controls
   // (rendered as an overlay inside it) stay visible, rather than the bare <video>.
@@ -316,6 +331,22 @@ export function EpisodePlayer({ show }: { show: Show }) {
       {/* Legibility scrim, darker at the base where the scrubber sits. */}
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-black/35" />
 
+      {/* Minimize (top-left) — collapses into a floating mini-player, replacing
+          the old page Back button. Playback continues uninterrupted. */}
+      {onMinimize && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onMinimize()
+          }}
+          aria-label="Minimize player"
+          className="absolute left-3 top-3 z-20 flex size-10 items-center justify-center rounded-full bg-black/45 text-white ring-1 ring-white/15 backdrop-blur-md transition-colors hover:bg-black/65 active:scale-90"
+        >
+          <ChevronDown className="size-5" />
+        </button>
+      )}
+
       {/* Fullscreen toggle (top-right). */}
       <button
         type="button"
@@ -411,6 +442,28 @@ export function EpisodePlayer({ show }: { show: Show }) {
     </div>
   )
 
+  // Compact overlay for the floating mini-player: a subtle expand hint plus a
+  // small play/pause. Tapping anywhere else on the frame restores the full player.
+  const renderMiniOverlay = () => (
+    <div className="absolute inset-0 z-10">
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 to-transparent" />
+      <span className="pointer-events-none absolute right-1.5 top-1.5 flex size-6 items-center justify-center rounded-md bg-black/55 text-white backdrop-blur-sm">
+        <Maximize className="size-3.5" />
+      </span>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          toggle()
+        }}
+        aria-label={playing ? "Pause" : "Play"}
+        className="absolute bottom-1.5 left-1.5 flex size-7 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm transition-transform active:scale-90"
+      >
+        {playing ? <Pause className="size-3.5" /> : <Play className="size-3.5 translate-x-px" />}
+      </button>
+    </div>
+  )
+
   return (
     <div className="relative isolate">
       {/* Immersive, edge-to-edge video frame (no card). The cover art is the
@@ -418,14 +471,18 @@ export function EpisodePlayer({ show }: { show: Show }) {
       {isVideo ? (
         <div
           ref={frameRef}
-          onClick={onSurfaceTap}
+          onClick={minimized ? onRestore : onSurfaceTap}
           className={cn(
-            "relative cursor-pointer bg-black",
+            "relative bg-black",
             isFullscreen
-              ? "flex h-screen w-screen items-center justify-center"
-              : // Full-bleed within the player (the page renders this player
-                // without horizontal padding, so it reaches both screen edges).
-                "aspect-video w-full overflow-hidden",
+              ? "flex h-screen w-screen cursor-pointer items-center justify-center"
+              : minimized
+                ? // Floating mini-player docked bottom-right; the same <video>
+                  // keeps playing so position is preserved. Tap to restore.
+                  "fixed bottom-4 right-4 z-50 aspect-video w-40 cursor-pointer overflow-hidden rounded-xl shadow-floating ring-1 ring-white/15 duration-300 animate-in fade-in zoom-in-95 sm:w-56"
+                : // Full-bleed within the player (the page renders this player
+                  // without horizontal padding, so it reaches both screen edges).
+                  "aspect-video w-full cursor-pointer overflow-hidden",
           )}
         >
           <video
@@ -447,8 +504,9 @@ export function EpisodePlayer({ show }: { show: Show }) {
           />
 
           {/* YouTube-style controls overlaid on the video itself (windowed and
-              fullscreen alike); tapping the surface hides/reveals them. */}
-          {hasMedia && renderVideoOverlay()}
+              fullscreen alike); tapping the surface hides/reveals them. The
+              floating mini-player shows a compact overlay instead. */}
+          {hasMedia && (minimized ? renderMiniOverlay() : renderVideoOverlay())}
         </div>
       ) : (
         /* Audio: ambient cover-art card. */
@@ -498,8 +556,9 @@ export function EpisodePlayer({ show }: { show: Show }) {
         </div>
       )}
 
-      {/* Title + windowed controls (hidden behind the frame while fullscreen). */}
-      <div className="flex flex-col items-center gap-5 px-6 pt-6 sm:px-10">
+      {/* Title + windowed controls (hidden behind the frame while fullscreen,
+          and hidden entirely while collapsed into the floating mini-player). */}
+      <div className={cn("flex flex-col items-center gap-5 px-6 pt-6 sm:px-10", minimized && "hidden")}>
         <div className="w-full max-w-full text-center">
           {/* Title stays on a single line; it auto-scrolls right-to-left when
               it can't fit, so the full title is always readable. */}

@@ -4,6 +4,7 @@ import { SiteHeader } from "@/components/site-header"
 import { BackButton } from "@/components/back-button"
 import { EpisodePlayer } from "@/components/episode-player"
 import { EpisodeInteractions } from "@/components/episode-interactions"
+import { EpisodeWatch } from "@/components/episode-watch"
 import { VideoCard } from "@/components/profile/video-card"
 import { getEpisodeComments } from "@/app/actions/episodes"
 import { getEpisodesByUser } from "@/lib/content"
@@ -20,6 +21,13 @@ export async function EpisodePage({ show }: { show: Show }) {
 
   // "Up next" queue: the same creator's other video episodes (excluding this one).
   const queue = creatorEpisodes.filter((ep) => ep.mediaType === "video" && ep.id !== show.id)
+
+  // Video episodes use the immersive, YouTube-style watch layout with a pinned
+  // player + action bar and a single scroll container beneath it. Audio episodes
+  // keep the classic scrolling page.
+  if (show.videoUrl) {
+    return <EpisodeWatch show={show} currentUser={currentUser} initialComments={comments} queue={queue} />
+  }
 
   return (
     <div className="min-h-screen">
