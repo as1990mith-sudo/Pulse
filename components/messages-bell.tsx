@@ -29,11 +29,11 @@ export function MessagesBell() {
       href="/messages"
       aria-label={count > 0 ? `Direct messages, ${count} unread` : "Direct messages"}
       className={cn(
-        "relative flex size-9 items-center justify-center rounded-full outline-none transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring",
+        "relative flex size-11 items-center justify-center rounded-2xl border border-border/50 bg-secondary/40 shadow-soft outline-none backdrop-blur-md transition-all duration-200 hover:bg-secondary/70 active:scale-95 focus-visible:ring-2 focus-visible:ring-ring",
         active ? "text-primary" : "text-muted-foreground hover:text-foreground",
       )}
     >
-      <MessageSquare className="size-[18px]" />
+      <MessageSquare className="size-[22px]" strokeWidth={2} />
       {count > 0 && (
         <span className="absolute right-1 top-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-4 text-primary-foreground">
           {count > 9 ? "9+" : count}

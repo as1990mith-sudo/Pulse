@@ -5,7 +5,6 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { ArrowLeft, Radio, Search, X } from "lucide-react"
 import { AppMenu } from "@/components/app-menu"
-import { UserMenu } from "@/components/user-menu"
 import { MessagesBell } from "@/components/messages-bell"
 import { NotificationBell } from "@/components/notification-bell"
 import { useMenuFlow } from "@/lib/menu-flow"
@@ -99,21 +98,21 @@ export function SiteHeader({ collapsible = false }: { collapsible?: boolean } = 
           </Link>
         </div>
 
-        {/* Right, iOS-aligned: Search · Notifications · Messages · Profile. */}
-        <div className="flex items-center gap-1">
+        {/* Right, iOS-aligned: Messages · Notifications · Search. Larger, premium
+            chip-style icons (profile now lives in the side menu). */}
+        <div className="flex items-center gap-1.5">
+          <MessagesBell />
+          <NotificationBell />
           <Link
             href="/search"
             aria-label="Search"
             className={cn(
-              "relative flex size-9 items-center justify-center rounded-full outline-none transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring",
+              "relative flex size-11 items-center justify-center rounded-2xl border border-border/50 bg-secondary/40 shadow-soft outline-none backdrop-blur-md transition-all duration-200 hover:bg-secondary/70 active:scale-95 focus-visible:ring-2 focus-visible:ring-ring",
               isActive("/search") ? "text-primary" : "text-muted-foreground hover:text-foreground",
             )}
           >
-            <Search className="size-[18px]" />
+            <Search className="size-[22px]" strokeWidth={2} />
           </Link>
-          <NotificationBell />
-          <MessagesBell />
-          <UserMenu />
         </div>
       </div>
   )
