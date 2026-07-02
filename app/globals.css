@@ -779,6 +779,25 @@ body.has-bottom-nav {
   padding-bottom: calc(4.25rem + env(safe-area-inset-bottom));
 }
 
+/* --- Facebook-style left drawer: micro-parallax on the app shell ---------- */
+/* The whole app eases a few px to the right while the drawer is open. Transform
+   is only applied while open, so it never creates a persistent containing
+   block that would trap fixed descendants. */
+.app-shell {
+  transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+body.drawer-open .app-shell {
+  transform: translateX(7px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell {
+    transition: none;
+  }
+  body.drawer-open .app-shell {
+    transform: none;
+  }
+}
+
 /* --- Card touch elevation: subtly lift + scale while pressed --------------- */
 .press-card {
   transition:
