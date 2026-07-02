@@ -9,18 +9,30 @@ import { UserMenu } from "@/components/user-menu"
 import { MessagesBell } from "@/components/messages-bell"
 import { NotificationBell } from "@/components/notification-bell"
 import { useMenuFlow } from "@/lib/menu-flow"
+import { useChatChromeHidden } from "@/lib/chat-chrome"
 import { cn } from "@/lib/utils"
 
-export function SiteHeader() {
+/**
+ * The global app header.
+ *
+ * `collapsible` enables the immersive chat behavior: instead of reacting to the
+ * window scroll, the header listens to the shared chat-chrome store (driven by
+ * the inner conversation scroll container) and smoothly collapses its height to
+ * zero — so the chat area expands to fill the freed space with no blank gap.
+ */
+export function SiteHeader({ collapsible = false }: { collapsible?: boolean } = {}) {
   const pathname = usePathname()
   // When the user reached this page via the side menu, offer Back/Close controls
   // that return to where they were before opening the menu.
   const { active: inMenuFlow, back, close } = useMenuFlow()
   // Hide the header when scrolling down, reveal it when scrolling back up.
-  const [hidden, setHidden] = useState(false)
+  const [windowHidden, setWindowHidden] = useState(false)
+  const chatHidden = useChatChromeHidden()
   const lastY = useRef(0)
 
   useEffect(() => {
+    // In collapsible (chat) mode the window doesn't scroll — the store drives it.
+    if (collapsible) return
     lastY.current = window.scrollY
     let frame = 0
     function onScroll() {
@@ -31,10 +43,10 @@ export function SiteHeader() {
         const delta = y - lastY.current
         // Ignore tiny jitters; always show near the very top.
         if (Math.abs(delta) > 6) {
-          setHidden(delta > 0 && y > 72)
+          setWindowHidden(delta > 0 && y > 72)
           lastY.current = y
         } else if (y <= 72) {
-          setHidden(false)
+          setWindowHidden(false)
         }
       })
     }
@@ -43,20 +55,16 @@ export function SiteHeader() {
       window.removeEventListener("scroll", onScroll)
       if (frame) cancelAnimationFrame(frame)
     }
-  }, [])
+  }, [collapsible])
 
   function isActive(href: string) {
     if (href === "/") return pathname === "/"
     return pathname.startsWith(href)
   }
 
-  return (
-    <header
-      className={cn(
-        "sticky top-0 z-40 border-b border-border/60 bg-background/80 pt-safe backdrop-blur-xl transition-[transform,opacity] duration-300 ease-out",
-        hidden ? "-translate-y-full opacity-0" : "translate-y-0 opacity-100",
-      )}
-    >
+  const hidden = collapsible ? chatHidden : windowHidden
+
+  const bar = (
       <div className="relative mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] sm:pl-[max(2rem,env(safe-area-inset-left))] sm:pr-[max(2rem,env(safe-area-inset-right))]">
         {/* Left: menu-flow Back/Close controls (when arrived via the side menu),
             otherwise the hamburger — then the brand. */}
@@ -108,6 +116,40 @@ export function SiteHeader() {
           <UserMenu />
         </div>
       </div>
+  )
+
+  // Immersive chat variant: collapse the header's height to zero (no blank gap)
+  // while sliding it up, so the conversation expands to full screen.
+  if (collapsible) {
+    return (
+      <div
+        className={cn(
+          "z-40 grid transition-[grid-template-rows] duration-[260ms] ease-out motion-reduce:transition-none",
+          hidden ? "grid-rows-[0fr]" : "grid-rows-[1fr]",
+        )}
+      >
+        <div className="overflow-hidden">
+          <header
+            className={cn(
+              "border-b border-border/60 bg-background/80 pt-safe backdrop-blur-xl transition-[transform,opacity] duration-[260ms] ease-out will-change-transform motion-reduce:transition-none",
+              hidden ? "-translate-y-2 opacity-0" : "translate-y-0 opacity-100",
+            )}
+          >
+            {bar}
+          </header>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <header
+      className={cn(
+        "sticky top-0 z-40 border-b border-border/60 bg-background/80 pt-safe backdrop-blur-xl transition-[transform,opacity] duration-300 ease-out",
+        hidden ? "-translate-y-full opacity-0" : "translate-y-0 opacity-100",
+      )}
+    >
+      {bar}
     </header>
   )
 }

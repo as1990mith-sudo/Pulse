@@ -26,6 +26,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { ShareSheet } from "@/components/share-sheet"
 import type { ShareTarget } from "@/lib/share-types"
 import { linkify } from "@/lib/linkify"
+import { useAutoHideChatChrome } from "@/lib/chat-chrome"
 import { cn } from "@/lib/utils"
 import {
   addCommunityComment,
@@ -580,6 +581,8 @@ export function CommunityHelp({ initialPosts }: { initialPosts: CommunityPostVie
   const [composerOpen, setComposerOpen] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
   const [highlightedQ, setHighlightedQ] = useState<string | null>(null)
+  // Auto-hide the global app header as the feed scrolls (Instagram/Telegram feel).
+  const onFeedScroll = useAutoHideChatChrome()
 
   // Deep link: arriving with ?q=<id> from a shared link scrolls to and briefly
   // highlights that exact question instead of just the top of the feed.
@@ -642,7 +645,7 @@ export function CommunityHelp({ initialPosts }: { initialPosts: CommunityPostVie
       </header>
 
       {/* Immersive smooth-scrolling feed */}
-      <div className="flex-1 overflow-y-auto scroll-smooth overscroll-contain">
+      <div onScroll={onFeedScroll} className="flex-1 overflow-y-auto scroll-smooth overscroll-contain">
         {posts.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 px-6 py-24 text-center">
             <Avatar className="size-16 ring-2 ring-emerald-500/30">

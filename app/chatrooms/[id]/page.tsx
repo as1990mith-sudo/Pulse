@@ -22,7 +22,7 @@ export default async function ChatroomDetailPage({ params }: { params: Promise<{
 
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden">
-      <SiteHeader />
+      <SiteHeader collapsible />
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col overflow-hidden">
         <ChatroomView detail={detail} />
       </main>

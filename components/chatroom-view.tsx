@@ -34,6 +34,7 @@ import { VoiceRecorder } from "@/components/voice-recorder"
 import { AudioMessage } from "@/components/audio-message"
 import { ChatroomCall } from "@/components/chatroom-call"
 import { cn } from "@/lib/utils"
+import { useAutoHideChatChrome } from "@/lib/chat-chrome"
 import { renderMessageBody } from "@/lib/rich-text"
 import { compressImage, uploadMedia } from "@/lib/upload-media"
 import { ActionSheet, type SheetAction } from "@/components/action-sheet"
@@ -83,6 +84,8 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
   const [pending, setPending] = useState<ChatMessageView[]>([])
   const scrollEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Auto-hide the global app header while scrolling the conversation.
+  const onMessagesScroll = useAutoHideChatChrome()
 
   // Poll for new messages every 3s so the room updates in real time without a
   // manual refresh. The server-rendered messages seed the initial data.
@@ -369,7 +372,7 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
       )}
 
       {/* Messages — fills remaining height */}
-      <div className="flex-1 overflow-y-auto bg-card/30">
+      <div onScroll={onMessagesScroll} className="flex-1 overflow-y-auto bg-card/30">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 py-5 sm:px-6">
           {messages.length === 0 && (
             <p className="py-10 text-center text-sm text-muted-foreground">
