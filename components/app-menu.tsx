@@ -5,6 +5,7 @@ import { createPortal } from "react-dom"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
+import useSWR from "swr"
 import {
   AlignLeft,
   BookOpen,
@@ -12,10 +13,8 @@ import {
   ChevronDown,
   ChevronRight,
   Contrast,
-  Download,
   Info,
   Leaf,
-  Library as LibraryIcon,
   LifeBuoy,
   LogOut,
   MessageCircle,
@@ -25,6 +24,7 @@ import {
   Radio,
   Bell,
   ShoppingBag,
+  ShoppingCart,
   Sun,
   User,
   UserPlus,
@@ -33,6 +33,8 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
+import { getUnreadCount } from "@/app/actions/notifications"
+import { useStoreState } from "@/lib/use-store-state"
 import { SKINS, useSkin } from "@/components/skin-provider"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { startMenuFlow } from "@/lib/menu-flow"
@@ -67,6 +69,17 @@ const ANIM_MS = 300
 export function AppMenu() {
   const router = useRouter()
   const { data: session } = authClient.useSession()
+  const signedIn = !!session?.user
+
+  // Live unread-notification count, mirroring the header bell.
+  const { data: unread } = useSWR(signedIn ? "notifications-unread" : null, () => getUnreadCount(), {
+    refreshInterval: 20000,
+  })
+  const notificationCount = unread ?? 0
+
+  // Reactive cart size so the Cart row shows how many items are queued.
+  const { cartCount } = useStoreState()
+  const cartItems = cartCount()
 
   const [mounted, setMounted] = useState(false)
   const [open, setOpen] = useState(false) // portal present (enter + exit)
@@ -281,24 +294,35 @@ export function AppMenu() {
                 <Section>
                   <DrawerItem href="/bible" icon={BookOpen} label="Bible" onNavigate={navigate} />
                   <DrawerItem href="/store" icon={ShoppingBag} label="Store" onNavigate={navigate} />
-                  <DrawerItem href="/library" icon={LibraryIcon} label="Library" onNavigate={navigate} />
+                  <DrawerItem
+                    href="/cart"
+                    icon={ShoppingCart}
+                    label="Cart"
+                    onNavigate={navigate}
+                    badge={cartItems}
+                  />
                   <DrawerItem href={profileHref} icon={User} label="Profile" onNavigate={navigate} />
                 </Section>
 
                 <Divider />
 
                 <Section label="Activity">
-                  <DrawerItem href="/notifications" icon={Bell} label="Notifications" onNavigate={navigate} />
+                  <DrawerItem
+                    href="/notifications"
+                    icon={Bell}
+                    label="Notifications"
+                    onNavigate={navigate}
+                    badge={notificationCount}
+                  />
                   <DrawerItem href="/messages" icon={MessageCircle} label="Messages" onNavigate={navigate} />
-                  <DrawerItem href="/library" icon={Bookmark} label="Saved" onNavigate={navigate} />
-                  <DrawerItem href="/library" icon={Download} label="Downloads" onNavigate={navigate} />
+                  <DrawerItem href="/saved" icon={Bookmark} label="Saved" onNavigate={navigate} />
                 </Section>
 
                 <Divider />
 
                 <Section label="Preferences">
                   <AppearanceItem />
-                  <DrawerItem href="/studio" icon={Radio} label="Creator Studio" onNavigate={navigate} />
+                  <DrawerItem href="/live#go-live" icon={Radio} label="Creator Studio" onNavigate={navigate} />
                 </Section>
 
                 <Divider />
@@ -357,24 +381,36 @@ function IconBubble({ icon: Icon }: { icon: LucideIcon }) {
   )
 }
 
+function CountBadge({ count }: { count: number }) {
+  if (count <= 0) return null
+  return (
+    <span className="flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold leading-5 text-primary-foreground">
+      {count > 99 ? "99+" : count}
+    </span>
+  )
+}
+
 function DrawerItem({
   href,
   icon,
   label,
   onNavigate,
   external,
+  badge = 0,
 }: {
   href: string
   icon: LucideIcon
   label: string
   onNavigate: () => void
   external?: boolean
+  badge?: number
 }) {
   if (external) {
     return (
       <a href={href} onClick={onNavigate} className={itemClasses}>
         <IconBubble icon={icon} />
         <span className="flex-1 text-[15px] font-medium text-foreground">{label}</span>
+        <CountBadge count={badge} />
         <ChevronRight className="size-5 shrink-0 text-muted-foreground/60" />
       </a>
     )
@@ -383,6 +419,7 @@ function DrawerItem({
     <Link href={href} onClick={onNavigate} className={itemClasses}>
       <IconBubble icon={icon} />
       <span className="flex-1 text-[15px] font-medium text-foreground">{label}</span>
+      <CountBadge count={badge} />
       <ChevronRight className="size-5 shrink-0 text-muted-foreground/60" />
     </Link>
   )

@@ -11,6 +11,7 @@ import { useSyncExternalStore } from "react"
 let version = 0
 const wishlist = new Set<string>()
 const library = new Set<string>()
+const cart = new Set<string>()
 const listeners = new Set<() => void>()
 
 function emit() {
@@ -52,8 +53,54 @@ export function libraryIds() {
   return Array.from(library)
 }
 
-/** Subscribe a component to wishlist/library changes. */
+// ---- Cart -----------------------------------------------------------------
+// The cart holds items the user intends to buy before checkout. Owned items
+// never sit in the cart, and checking out moves everything into the library.
+
+export function addToCart(id: string) {
+  if (library.has(id)) return
+  cart.add(id)
+  emit()
+}
+
+export function removeFromCart(id: string) {
+  cart.delete(id)
+  emit()
+}
+
+export function isInCart(id: string) {
+  return cart.has(id)
+}
+
+export function cartIds() {
+  return Array.from(cart)
+}
+
+export function cartCount() {
+  return cart.size
+}
+
+/** Move every cart item into the owned library and empty the cart. */
+export function checkoutCart() {
+  for (const id of cart) library.add(id)
+  cart.clear()
+  emit()
+}
+
+/** Subscribe a component to wishlist/library/cart changes. */
 export function useStoreState() {
   useSyncExternalStore(subscribe, getSnapshot, () => 0)
-  return { isWishlisted, isInLibrary, toggleWishlist, addToLibrary, libraryIds }
+  return {
+    isWishlisted,
+    isInLibrary,
+    toggleWishlist,
+    addToLibrary,
+    libraryIds,
+    addToCart,
+    removeFromCart,
+    isInCart,
+    cartIds,
+    cartCount,
+    checkoutCart,
+  }
 }
