@@ -1,98 +1,106 @@
 "use client"
 
-import { useMemo, useRef, useState, useEffect } from "react"
-import { Search, X } from "lucide-react"
-import { BOOKS, COURSES, BOOK_CATEGORIES } from "@/lib/store-data"
-import { BookGridCard, CourseCard } from "@/components/store/store-cards"
+import { useEffect, useRef, useState } from "react"
+import useSWR from "swr"
+import { Loader2, MessageSquare, Search, Users, X } from "lucide-react"
+import { discoverProfiles } from "@/app/actions/follow"
+import { searchPosts } from "@/app/actions/feed"
+import { FindRow } from "@/components/find-profiles"
+import { PostCard } from "@/components/mind-feed"
+import type { CurrentUser } from "@/lib/session"
 
-export function SearchView() {
+export function SearchView({ currentUser }: { currentUser: CurrentUser | null }) {
   const [query, setQuery] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
+  const q = query.trim()
 
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
 
-  const q = query.trim().toLowerCase()
+  // People: search by name when there's a query, otherwise browse everyone.
+  const { data: people, isLoading: peopleLoading } = useSWR(["search-people", q], () => discoverProfiles(q), {
+    keepPreviousData: true,
+    revalidateOnFocus: false,
+  })
 
-  const { books, courses } = useMemo(() => {
-    if (!q) return { books: [], courses: [] }
-    const match = (s: string) => s.toLowerCase().includes(q)
-    return {
-      books: BOOKS.filter((b) => match(b.title) || match(b.author) || match(b.category) || match(b.subtitle)),
-      courses: COURSES.filter(
-        (c) => match(c.title) || match(c.instructor) || match(c.category) || match(c.subtitle),
-      ),
-    }
-  }, [q])
+  // Posts: only searched once the user types (matches text, #hashtags, author).
+  const { data: posts, isLoading: postsLoading } = useSWR(q ? ["search-posts", q] : null, () => searchPosts(q), {
+    keepPreviousData: true,
+    revalidateOnFocus: false,
+  })
 
-  const hasResults = books.length > 0 || courses.length > 0
+  const profiles = people ?? []
+  const postResults = posts ?? []
+  const searching = q.length > 0
+  const loading = peopleLoading || (searching && postsLoading)
+  const noResults = searching && !loading && profiles.length === 0 && postResults.length === 0
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 pb-16 pt-6 sm:px-6">
+    <div className="mx-auto w-full max-w-2xl pb-16">
       {/* Search field */}
-      <div className="mb-6 flex items-center gap-3 rounded-2xl border border-border/60 bg-secondary/40 px-4 py-3 shadow-soft backdrop-blur-md focus-within:border-primary/50">
-        <Search className="size-5 shrink-0 text-muted-foreground" />
-        <input
-          ref={inputRef}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search books, courses, authors…"
-          className="min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground"
-          aria-label="Search the store"
-        />
-        {query && (
-          <button
-            type="button"
-            onClick={() => setQuery("")}
-            aria-label="Clear search"
-            className="flex size-7 shrink-0 items-center justify-center rounded-full bg-background/60 text-muted-foreground transition-transform active:scale-90"
-          >
-            <X className="size-4" />
-          </button>
-        )}
+      <div className="sticky top-0 z-10 bg-background/80 px-4 py-3 backdrop-blur-md sm:px-5">
+        <div className="flex items-center gap-2 rounded-full border border-border/70 bg-secondary/40 px-4 py-3 focus-within:border-primary/60">
+          <Search className="size-4 shrink-0 text-muted-foreground" />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search people, #hashtags, or posts…"
+            className="w-full bg-transparent text-[15px] outline-none placeholder:text-muted-foreground"
+            aria-label="Search people, hashtags, or posts"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              className="text-muted-foreground transition-colors hover:text-foreground"
+              aria-label="Clear search"
+            >
+              <X className="size-4" />
+            </button>
+          )}
+        </div>
       </div>
 
-      {!q ? (
-        <div>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Browse categories</h2>
-          <div className="flex flex-wrap gap-2">
-            {BOOK_CATEGORIES.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setQuery(c)}
-                className="rounded-full border border-border/60 bg-secondary/40 px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary/70"
-              >
-                {c}
-              </button>
-            ))}
-          </div>
+      {loading && profiles.length === 0 && postResults.length === 0 ? (
+        <div className="flex items-center justify-center py-16 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" />
         </div>
-      ) : !hasResults ? (
-        <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-border/60 bg-secondary/20 px-6 py-20 text-center">
-          <p className="text-sm text-muted-foreground">
-            No results for <span className="font-medium text-foreground">“{query}”</span>
-          </p>
-        </div>
+      ) : noResults ? (
+        <p className="px-4 py-16 text-center text-sm leading-relaxed text-muted-foreground sm:px-5">
+          No people or posts match <span className="font-medium text-foreground">{q}</span>. Try another name,
+          hashtag, or keyword.
+        </p>
       ) : (
-        <div className="space-y-8">
-          {courses.length > 0 && (
+        <div className="space-y-6">
+          {/* People */}
+          {profiles.length > 0 && (
             <section>
-              <h2 className="mb-3 text-lg font-semibold text-foreground">Courses</h2>
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                {courses.map((c) => (
-                  <CourseCard key={c.id} course={c} />
-                ))}
+              <div className="flex items-center gap-2 px-4 pt-4 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:px-5">
+                <Users className="size-3.5" />
+                {searching ? "People" : "Discover people"}
               </div>
+              <ul className="divide-y divide-border/60">
+                {profiles.map((p) => (
+                  <li key={p.id}>
+                    <FindRow profile={p} />
+                  </li>
+                ))}
+              </ul>
             </section>
           )}
-          {books.length > 0 && (
+
+          {/* Posts (only once searching) */}
+          {searching && postResults.length > 0 && (
             <section>
-              <h2 className="mb-3 text-lg font-semibold text-foreground">Books</h2>
-              <div className="grid grid-cols-3 gap-x-3 gap-y-5 sm:grid-cols-4 md:grid-cols-5">
-                {books.map((b, i) => (
-                  <BookGridCard key={b.id} book={b} index={i} />
+              <div className="flex items-center gap-2 px-4 pt-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:px-5">
+                <MessageSquare className="size-3.5" />
+                Posts
+              </div>
+              <div className="space-y-3 px-4 sm:px-5">
+                {postResults.map((post) => (
+                  <PostCard key={post.id} post={post} currentUser={currentUser} variant="card" />
                 ))}
               </div>
             </section>

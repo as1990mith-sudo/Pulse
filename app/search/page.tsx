@@ -1,12 +1,15 @@
 import { SiteHeader } from "@/components/site-header"
 import { SearchView } from "@/components/search-view"
+import { getCurrentUser } from "@/lib/session"
 
-export default function SearchPage() {
+export default async function SearchPage() {
+  const currentUser = await getCurrentUser()
+
   return (
     <div className="min-h-dvh bg-background">
       <SiteHeader />
-      <main className="mx-auto w-full max-w-2xl px-4 pb-24 pt-4">
-        <SearchView />
+      <main className="mx-auto w-full max-w-2xl px-0 pb-24 pt-2">
+        <SearchView currentUser={currentUser} />
       </main>
     </div>
   )

@@ -1,6 +1,6 @@
 "use server"
 
-import { and, asc, desc, eq, inArray } from "drizzle-orm"
+import { and, asc, desc, eq, ilike, inArray, or } from "drizzle-orm"
 import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
@@ -178,6 +178,84 @@ export async function getFeed(): Promise<FeedPostView[]> {
   const ordered = [...posts].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
 
   return ordered.map((p) => ({
+    id: p.id,
+    authorId: p.userId,
+    user: infoMap.get(p.userId)?.name ?? p.authorName,
+    handle: getHandle(infoMap.get(p.userId)?.name ?? p.authorName),
+    initials: getInitials(infoMap.get(p.userId)?.name ?? p.authorName),
+    color: getAvatarColor(p.userId),
+    authorImage: infoMap.get(p.userId)?.image ?? null,
+    postedAt: timeAgo(p.createdAt),
+    createdAtMs: p.createdAt.getTime(),
+    text: p.text,
+    image: p.image,
+    video: p.video,
+    media: toMedia(p),
+    likes: p.likes,
+    liked: likedPostSet.has(p.id),
+    reposts: p.reposts,
+    reposted: repostedSet.has(p.id),
+    saved: savedSet.has(String(p.id)),
+    edited: !!p.editedAt,
+    isFollowing: followingIds.has(p.userId),
+    isSelf: currentUserId === p.userId,
+    comments: comments
+      .filter((c) => c.postId === p.id)
+      .map((c) => toCommentView(c, infoMap, currentUserId, likedCommentSet)),
+  }))
+}
+
+/**
+ * Full-text-ish search over posts for the header search page. Matches the query
+ * against the post body (which includes any #hashtags, since those live inline
+ * in the text) as well as the author's denormalized name, so a search can find
+ * "any correspondence of any post". Returns newest-first, capped for speed.
+ */
+export async function searchPosts(query: string): Promise<FeedPostView[]> {
+  const q = query.trim()
+  if (!q) return []
+
+  const session = await auth.api.getSession({ headers: await headers() })
+  const currentUserId = session?.user?.id ?? null
+
+  const followingIds = currentUserId
+    ? new Set(
+        (
+          await db
+            .select({ followingId: follow.followingId })
+            .from(follow)
+            .where(eq(follow.followerId, currentUserId))
+        ).map((r) => r.followingId),
+      )
+    : new Set<string>()
+
+  const like = `%${q}%`
+  const posts = await db
+    .select()
+    .from(feedPost)
+    .where(or(ilike(feedPost.text, like), ilike(feedPost.authorName, like)))
+    .orderBy(desc(feedPost.createdAt))
+    .limit(50)
+
+  if (posts.length === 0) return []
+
+  const postIds = posts.map((p) => p.id)
+  const comments = await db
+    .select()
+    .from(feedComment)
+    .where(inArray(feedComment.postId, postIds))
+    .orderBy(asc(feedComment.createdAt))
+  const repostedSet = await getRepostedSet(currentUserId)
+  const savedSet = await getSavedPostSet(currentUserId)
+  const likedPostSet = await getLikedSet(currentUserId, "post", postIds)
+  const likedCommentSet = await getLikedSet(currentUserId, "feed_comment", comments.map((c) => c.id))
+
+  const infoMap = await getUserInfoMap([
+    ...posts.map((p) => p.userId),
+    ...comments.map((c) => c.userId),
+  ])
+
+  return posts.map((p) => ({
     id: p.id,
     authorId: p.userId,
     user: infoMap.get(p.userId)?.name ?? p.authorName,
