@@ -3,17 +3,20 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Sparkles, BookOpen, RadioTower, MessageCircle, type LucideIcon } from "lucide-react"
+import { Flame, Compass, Radio, MessagesSquare, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 type Tab = { href: string; label: string; icon: LucideIcon }
 
-// The four core experiences, in order.
+// The four core experiences, in order. Icons are chosen to read clearly at a
+// glance and to look great both outlined (inactive) and filled (active):
+//   Rhema → Flame (the living word)   Feed → Compass (discover)
+//   Live  → Radio (on-air)           Chatroom → MessagesSquare (community)
 const TABS: Tab[] = [
-  { href: "/", label: "Rhema", icon: Sparkles },
-  { href: "/feed", label: "Feed", icon: BookOpen },
-  { href: "/live", label: "Live", icon: RadioTower },
-  { href: "/chatrooms", label: "Chatroom", icon: MessageCircle },
+  { href: "/", label: "Rhema", icon: Flame },
+  { href: "/feed", label: "Feed", icon: Compass },
+  { href: "/live", label: "Live", icon: Radio },
+  { href: "/chatrooms", label: "Chatroom", icon: MessagesSquare },
 ]
 
 /**
@@ -97,7 +100,7 @@ export function BottomNav() {
       )}
     >
       {/* Soft gradient fade where page content meets the navigation bar. */}
-      <div aria-hidden="true" className="h-5 w-full bg-gradient-to-t from-[#0B0B0D] to-transparent" />
+      <div aria-hidden="true" className="h-4 w-full bg-gradient-to-t from-[#0B0B0D] to-transparent" />
       <nav
         aria-label="Primary"
         className="pointer-events-auto flex items-stretch border-t border-white/10 bg-[#0B0B0D]/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-md"
@@ -113,13 +116,13 @@ export function BottomNav() {
               aria-current={active ? "page" : undefined}
               aria-label={tab.label}
               className={cn(
-                "group flex h-[56px] flex-1 items-center justify-center gap-1.5 outline-none transition-colors focus-visible:bg-white/5",
+                "group flex h-[48px] flex-1 items-center justify-center gap-1.5 outline-none transition-colors focus-visible:bg-white/5",
                 active ? "text-primary" : "text-white/75 hover:text-white",
               )}
             >
               <Icon
                 className={cn(
-                  "size-[23px] shrink-0 transition-transform duration-300 ease-out",
+                  "size-[21px] shrink-0 transition-transform duration-300 ease-out",
                   active ? "scale-[1.05] fill-current" : "scale-100",
                 )}
                 strokeWidth={2}
@@ -127,7 +130,7 @@ export function BottomNav() {
               {/* Label lives only in the active tab and slides/fades in. */}
               <span
                 className={cn(
-                  "overflow-hidden whitespace-nowrap text-[13px] font-semibold tracking-tight transition-[max-width,opacity,transform] duration-300 ease-out",
+                  "overflow-hidden whitespace-nowrap text-[12px] font-semibold tracking-tight transition-[max-width,opacity,transform] duration-300 ease-out",
                   active ? "max-w-28 translate-x-0 opacity-100" : "max-w-0 translate-x-[-8px] opacity-0",
                 )}
               >
