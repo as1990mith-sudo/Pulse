@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
 import useSWR from "swr"
 import {
@@ -37,7 +37,7 @@ import { getUnreadCount } from "@/app/actions/notifications"
 import { useStoreState } from "@/lib/use-store-state"
 import { SKINS, useSkin } from "@/components/skin-provider"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
-import { startMenuFlow } from "@/lib/menu-flow"
+import { startMenuFlow, consumeMenuReopen } from "@/lib/menu-flow"
 import { haptic } from "@/lib/haptics"
 import { cn } from "@/lib/utils"
 
@@ -68,6 +68,7 @@ const ANIM_MS = 300
  */
 export function AppMenu() {
   const router = useRouter()
+  const pathname = usePathname()
   const { data: session } = authClient.useSession()
   const signedIn = !!session?.user
 
@@ -120,6 +121,15 @@ export function AppMenu() {
       /* no-op */
     }
   }, [])
+
+  // If the user tapped Close on a menu-opened page, re-open this drawer once we
+  // land back on the origin page so Close returns them to the menu.
+  useEffect(() => {
+    if (!mounted) return
+    if (consumeMenuReopen()) {
+      openDrawer()
+    }
+  }, [mounted, pathname, openDrawer])
 
   // Lock scroll, toggle the page parallax shift, and wire Escape + back button.
   useEffect(() => {

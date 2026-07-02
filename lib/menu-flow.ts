@@ -88,6 +88,9 @@ export function useMenuFlow() {
     const target = getMenuOrigin()
     clearMenuFlow()
     setOrigin(null)
+    // Ask the destination page to re-open the side menu drawer so Close returns
+    // the user to the menu, not just the page the flow started from.
+    requestMenuReopen()
     if (target) router.push(target)
     else router.back()
   }, [router])
