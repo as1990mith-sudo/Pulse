@@ -177,3 +177,46 @@ export function CourseCard({ course, className }: { course: Course; className?: 
 export function CourseRailCard({ course }: { course: Course }) {
   return <CourseCard course={course} className="w-64 shrink-0" />
 }
+
+/**
+ * Portrait grid card for the main Courses grid — mirrors BookGridCard so the
+ * Books and Courses tabs share the same premium 3-column layout. The landscape
+ * thumbnail is cropped to a 2:3 cover with a play affordance, wishlist heart,
+ * price badge, and an optional progress bar.
+ */
+export function CourseGridCard({ course, index = 0 }: { course: Course; index?: number }) {
+  const showProgress = course.progress != null && course.progress > 0
+  return (
+    <Link
+      href={`/store/course/${course.id}`}
+      className="group flex flex-col animate-in fade-in slide-in-from-bottom-3 duration-500 fill-mode-both"
+      style={{ animationDelay: `${Math.min(index, 12) * 45}ms` }}
+    >
+      <div className="relative aspect-[2/3] w-full overflow-hidden rounded-[1.25rem] border border-border/60 bg-muted shadow-elevated transition-transform duration-300 group-active:scale-[0.98]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={course.thumbnail || "/placeholder.svg"}
+          alt={`${course.title} thumbnail`}
+          loading="lazy"
+          className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+        <span className="absolute left-1/2 top-1/2 flex size-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-background/80 text-foreground shadow-floating backdrop-blur-md transition-transform duration-300 group-hover:scale-110">
+          <Play className="size-4 translate-x-0.5 fill-current" />
+        </span>
+        <WishlistButton id={course.id} className="absolute right-2 top-2" />
+        <PriceBadge price={course.price} className="absolute bottom-2 left-2" />
+        {showProgress && (
+          <span className="absolute inset-x-0 bottom-0 h-1 bg-white/20">
+            <span className="block h-full bg-primary" style={{ width: `${Math.round((course.progress || 0) * 100)}%` }} />
+          </span>
+        )}
+      </div>
+      <div className="mt-2 flex flex-col gap-0.5">
+        <Stars rating={course.rating} />
+        <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-foreground">{course.title}</h3>
+        <p className="truncate text-xs text-muted-foreground">{course.instructor}</p>
+      </div>
+    </Link>
+  )
+}

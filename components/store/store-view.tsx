@@ -12,7 +12,7 @@ import {
   coursesByTag,
   type StoreCategory,
 } from "@/lib/store-data"
-import { BookGridCard, BookRailCard, CourseCard, CourseRailCard } from "@/components/store/store-cards"
+import { BookGridCard, BookRailCard, CourseGridCard, CourseRailCard } from "@/components/store/store-cards"
 import { cn } from "@/lib/utils"
 
 type Tab = "books" | "courses"
@@ -194,23 +194,11 @@ function BooksTab({ category }: { category: StoreCategory | "All" }) {
   return (
     <div>
       {category === "All" && (
-        <>
-          <SectionRail title="Featured">
-            {booksByTag("featured").map((b) => (
-              <BookRailCard key={b.id} book={b} />
-            ))}
-          </SectionRail>
-          <SectionRail title="Trending now">
-            {booksByTag("trending").map((b) => (
-              <BookRailCard key={b.id} book={b} />
-            ))}
-          </SectionRail>
-          <SectionRail title="New releases">
-            {booksByTag("new").map((b) => (
-              <BookRailCard key={b.id} book={b} />
-            ))}
-          </SectionRail>
-        </>
+        <SectionRail title="Trending now">
+          {booksByTag("trending").map((b) => (
+            <BookRailCard key={b.id} book={b} />
+          ))}
+        </SectionRail>
       )}
 
       <section>
@@ -240,21 +228,12 @@ function CoursesTab({ category }: { category: StoreCategory | "All" }) {
 
   return (
     <div>
-      {category === "All" && (
-        <>
-          {coursesByTag("continue").length > 0 && (
-            <SectionRail title="Continue learning">
-              {coursesByTag("continue").map((c) => (
-                <CourseRailCard key={c.id} course={c} />
-              ))}
-            </SectionRail>
-          )}
-          <SectionRail title="Featured courses">
-            {coursesByTag("featured").map((c) => (
-              <CourseRailCard key={c.id} course={c} />
-            ))}
-          </SectionRail>
-        </>
+      {category === "All" && coursesByTag("trending").length > 0 && (
+        <SectionRail title="Trending now">
+          {coursesByTag("trending").map((c) => (
+            <CourseRailCard key={c.id} course={c} />
+          ))}
+        </SectionRail>
       )}
 
       <section>
@@ -264,9 +243,9 @@ function CoursesTab({ category }: { category: StoreCategory | "All" }) {
         {filtered.length === 0 ? (
           <EmptyState label="No courses in this category yet." />
         ) : (
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-            {filtered.map((c) => (
-              <CourseCard key={c.id} course={c} />
+          <div className="grid grid-cols-3 gap-x-3 gap-y-5 sm:grid-cols-4 md:grid-cols-5">
+            {filtered.map((c, i) => (
+              <CourseGridCard key={c.id} course={c} index={i} />
             ))}
           </div>
         )}
