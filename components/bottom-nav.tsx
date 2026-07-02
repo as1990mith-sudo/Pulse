@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Sparkles, BookOpen, RadioTower, MessageCircle, type LucideIcon } from "lucide-react"
@@ -43,11 +43,39 @@ export function BottomNav() {
   const hidden = isImmersive(pathname)
   const activeIndex = activeIndexFor(pathname)
 
+  // Hide-on-scroll-down / reveal-on-scroll-up, like Instagram & Safari.
+  const [tucked, setTucked] = useState(false)
+  const lastY = useRef(0)
+
   // Reserve space so page content never hides behind the fixed bar.
   useEffect(() => {
     if (hidden) return
     document.body.classList.add("has-bottom-nav")
     return () => document.body.classList.remove("has-bottom-nav")
+  }, [hidden])
+
+  useEffect(() => {
+    if (hidden) return
+    lastY.current = window.scrollY
+    let ticking = false
+    function onScroll() {
+      if (ticking) return
+      ticking = true
+      requestAnimationFrame(() => {
+        const y = window.scrollY
+        const delta = y - lastY.current
+        // Ignore tiny jitters and iOS rubber-band overscroll near the top.
+        if (Math.abs(delta) > 6 && y > 24) {
+          setTucked(delta > 0)
+        } else if (y <= 24) {
+          setTucked(false)
+        }
+        lastY.current = y
+        ticking = false
+      })
+    }
+    window.addEventListener("scroll", onScroll, { passive: true })
+    return () => window.removeEventListener("scroll", onScroll)
   }, [hidden])
 
   if (hidden) return null
@@ -62,15 +90,17 @@ export function BottomNav() {
   }
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50">
+    <div
+      className={cn(
+        "pointer-events-none fixed inset-x-0 bottom-0 z-50 transition-[transform,opacity] duration-300 ease-out will-change-transform",
+        tucked ? "translate-y-full opacity-0" : "translate-y-0 opacity-100",
+      )}
+    >
       {/* Soft gradient fade where page content meets the navigation bar. */}
-      <div
-        aria-hidden="true"
-        className="h-6 w-full bg-gradient-to-t from-[#0B0B0D] to-transparent"
-      />
+      <div aria-hidden="true" className="h-5 w-full bg-gradient-to-t from-[#0B0B0D] to-transparent" />
       <nav
         aria-label="Primary"
-        className="bottom-nav-bar pointer-events-auto flex items-stretch border-t border-white/10 bg-[#0B0B0D]/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl"
+        className="pointer-events-auto flex items-stretch border-t border-white/10 bg-[#0B0B0D]/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-md"
       >
         {TABS.map((tab, i) => {
           const active = i === activeIndex
@@ -83,21 +113,21 @@ export function BottomNav() {
               aria-current={active ? "page" : undefined}
               aria-label={tab.label}
               className={cn(
-                "group flex h-[68px] flex-1 items-center justify-center gap-2 outline-none transition-colors focus-visible:bg-white/5",
+                "group flex h-[56px] flex-1 items-center justify-center gap-1.5 outline-none transition-colors focus-visible:bg-white/5",
                 active ? "text-primary" : "text-white/75 hover:text-white",
               )}
             >
               <Icon
                 className={cn(
-                  "size-[25px] shrink-0 transition-transform duration-300 ease-out",
-                  active ? "scale-[1.08] fill-current" : "scale-100",
+                  "size-[23px] shrink-0 transition-transform duration-300 ease-out",
+                  active ? "scale-[1.05] fill-current" : "scale-100",
                 )}
-                strokeWidth={active ? 1.8 : 2}
+                strokeWidth={2}
               />
               {/* Label lives only in the active tab and slides/fades in. */}
               <span
                 className={cn(
-                  "overflow-hidden whitespace-nowrap text-[15px] font-semibold tracking-tight transition-[max-width,opacity,transform] duration-300 ease-out",
+                  "overflow-hidden whitespace-nowrap text-[13px] font-semibold tracking-tight transition-[max-width,opacity,transform] duration-300 ease-out",
                   active ? "max-w-28 translate-x-0 opacity-100" : "max-w-0 translate-x-[-8px] opacity-0",
                 )}
               >
