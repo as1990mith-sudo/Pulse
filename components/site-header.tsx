@@ -64,7 +64,7 @@ export function SiteHeader({ collapsible = false }: { collapsible?: boolean } = 
   const hidden = collapsible ? chatHidden : windowHidden
 
   const bar = (
-      <div className="relative mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] sm:pl-[max(2rem,env(safe-area-inset-left))] sm:pr-[max(2rem,env(safe-area-inset-right))]">
+      <div className="relative mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-2 pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] sm:gap-4 sm:pl-[max(2rem,env(safe-area-inset-left))] sm:pr-[max(2rem,env(safe-area-inset-right))]">
         {/* Left: menu-flow Back/Close controls (when arrived via the side menu),
             otherwise the hamburger — then the brand. `min-w-0` lets the brand
             wordmark truncate on narrow screens so the right-side icons are never
@@ -98,8 +98,14 @@ export function SiteHeader({ collapsible = false }: { collapsible?: boolean } = 
             </span>
             {/* Hide the wordmark while in the menu flow: the Back/Close controls
                 already occupy the left slot, and dropping it keeps every header
-                icon on-screen on narrow phones. */}
-            <span className={cn("truncate text-lg font-semibold tracking-tight", inMenuFlow && "hidden")}>
+                icon on-screen on narrow phones. Otherwise keep it whole
+                (no truncation) — it's short enough to always fit. */}
+            <span
+              className={cn(
+                "shrink-0 whitespace-nowrap text-lg font-semibold tracking-tight",
+                inMenuFlow && "hidden",
+              )}
+            >
               Frequency
             </span>
           </Link>
