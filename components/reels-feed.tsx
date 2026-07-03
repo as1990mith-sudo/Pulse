@@ -66,7 +66,10 @@ export function ReelsFeed({ posts, onClose }: { posts: FeedPostView[]; onClose?:
   }, [])
 
   return (
-    <div className="fixed inset-0 z-40 bg-black">
+    // Explicit viewport dimensions (not just `inset-0`) so the overlay fills the
+    // screen even while the page-entry animation briefly makes the wrapper a
+    // containing block — otherwise `inset-0` would resolve against a 0×0 box.
+    <div className="fixed left-0 top-0 z-40 h-[100dvh] w-screen bg-black">
       <div
         ref={scrollerRef}
         className="h-full snap-y snap-mandatory overflow-y-scroll overscroll-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
