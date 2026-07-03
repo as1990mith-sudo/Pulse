@@ -146,11 +146,6 @@ export function AppMenu() {
   // land back on the origin page so Close returns them to the menu.
   useEffect(() => {
     if (!mounted) return
-    let raw = null
-    try {
-      raw = sessionStorage.getItem("frequency:menu-reopen")
-    } catch {}
-    console.log("[v0] reopen check", { pathname, raw })
     if (consumeMenuReopen(pathname)) {
       openDrawer()
     }
@@ -167,7 +162,6 @@ export function AppMenu() {
       if (e.key === "Escape") close()
     }
     function onPop() {
-      console.log("[v0] popstate -> close drawer")
       close()
     }
     window.addEventListener("keydown", onKey)
