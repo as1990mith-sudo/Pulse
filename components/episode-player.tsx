@@ -388,10 +388,10 @@ export function EpisodePlayer({
               toggle()
               revealControls()
             }}
-            className="flex size-16 shrink-0 items-center justify-center rounded-full bg-white text-black shadow-lg shadow-black/30 transition-transform hover:scale-105 active:scale-95"
+            className="flex size-14 shrink-0 items-center justify-center rounded-full bg-white/65 text-black shadow-lg shadow-black/20 backdrop-blur-sm transition-transform hover:scale-105 active:scale-95"
             aria-label={playing ? "Pause episode" : "Play episode"}
           >
-            {playing ? <Pause className="size-7" /> : <Play className="size-7 translate-x-0.5" />}
+            {playing ? <Pause className="size-6" /> : <Play className="size-6 translate-x-0.5" />}
           </button>
           <button
             onClick={(e) => {
