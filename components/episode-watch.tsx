@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Bookmark, ChevronDown, Heart, Loader2, MessageCircle, Send, Share2 } from "lucide-react"
 import type { Show } from "@/lib/data"
 import type { CurrentUser } from "@/lib/session"
@@ -70,6 +71,7 @@ export function EpisodeWatch({
   queue: Show[]
 }) {
   const episodeId = show.episodeId
+  const router = useRouter()
 
   const [minimized, setMinimized] = useState(false)
   const [commentsOpen, setCommentsOpen] = useState(true)
@@ -159,6 +161,12 @@ export function EpisodeWatch({
           minimized={minimized}
           onMinimize={() => setMinimized(true)}
           onRestore={() => setMinimized(false)}
+          onClose={() => {
+            // Exit the watch page — return to wherever the viewer came from,
+            // falling back to the catalog if there's no history entry.
+            if (window.history.length > 1) router.back()
+            else router.push("/catalog")
+          }}
         />
 
         {/* Action bar — hidden while the player is collapsed to a mini-player. */}
