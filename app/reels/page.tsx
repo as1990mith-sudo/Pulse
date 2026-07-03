@@ -1,11 +1,8 @@
-import { ReelsFeed } from "@/components/reels-feed"
-import { getFeed } from "@/app/actions/feed"
+import { redirect } from "next/navigation"
 
-// Reels is now a top-level destination in the footer nav (between Feed and
-// Chatroom). It flattens every video across the feed into a full-screen,
-// vertically-snapping player. No close button here — the footer handles
-// navigating away.
-export default async function ReelsPage() {
-  const posts = await getFeed()
-  return <ReelsFeed posts={posts} />
+// Reels moved from a standalone destination into the Feed as its own tab
+// (For you / Following / Reels). Keep this route working for old links and
+// bookmarks by redirecting to the feed with the reels tab pre-selected.
+export default function ReelsPage() {
+  redirect("/feed?tab=reels")
 }

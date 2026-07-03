@@ -3,21 +3,20 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Flame, SquarePen, SquarePlay, Radio, MessagesSquare, type LucideIcon } from "lucide-react"
+import { Home, SquarePen, Radio, MessagesSquare, type LucideIcon } from "lucide-react"
 import { haptic } from "@/lib/haptics"
 import { cn } from "@/lib/utils"
 
 type Tab = { href: string; label: string; icon: LucideIcon }
 
-// The five core experiences, in order. Icons are chosen to read clearly at a
+// The four core experiences, in order. Icons are chosen to read clearly at a
 // glance and to look great both outlined (inactive) and filled (active):
-//   Rhema → Flame (the living word)   Feed → SquarePen (pen on paper)
-//   Reels → SquarePlay (short video)   Chatroom → MessagesSquare (community)
-//   Live → Radio (on-air)
+//   Home → Home (the homepage / daily devotional)   Feed → SquarePen (pen on paper)
+//   Chatroom → MessagesSquare (community)   Live → Radio (on-air)
+// Reels now lives inside the Feed as its own tab (For you / Following / Reels).
 const TABS: Tab[] = [
-  { href: "/", label: "Rhema", icon: Flame },
+  { href: "/", label: "Home", icon: Home },
   { href: "/feed", label: "Feed", icon: SquarePen },
-  { href: "/reels", label: "Reels", icon: SquarePlay },
   { href: "/chatrooms", label: "Chatroom", icon: MessagesSquare },
   { href: "/live", label: "Live", icon: Radio },
 ]
@@ -95,15 +94,17 @@ export function BottomNav() {
   return (
     <div
       className={cn(
-        "pointer-events-none fixed inset-x-0 bottom-0 z-50 transition-[transform,opacity] duration-300 ease-out will-change-transform",
-        tucked ? "translate-y-full opacity-0" : "translate-y-0 opacity-100",
+        "pointer-events-none fixed inset-x-0 bottom-0 z-50 flex px-3 pb-[max(env(safe-area-inset-bottom),0.5rem)] transition-[transform,opacity] duration-300 ease-out will-change-transform",
+        tucked ? "translate-y-[150%] opacity-0" : "translate-y-0 opacity-100",
       )}
     >
-      {/* Soft gradient fade where page content meets the navigation bar. */}
-      <div aria-hidden="true" className="h-4 w-full bg-gradient-to-t from-background to-transparent" />
+      {/* Floating, glassy pill that hovers just above the very bottom edge.
+          Uses translucent theme tokens + backdrop-blur so it reads as frosted
+          glass in both light and dark themes, with a subtle ring + shadow to
+          lift it off the page for a premium feel. */}
       <nav
         aria-label="Primary"
-        className="pointer-events-auto flex items-stretch border-t border-border bg-background pb-[env(safe-area-inset-bottom)]"
+        className="pointer-events-auto flex w-full items-stretch justify-around gap-1 rounded-full border border-border/60 bg-background/70 p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.12)] ring-1 ring-foreground/5 backdrop-blur-xl supports-[backdrop-filter]:bg-background/55"
       >
         {TABS.map((tab, i) => {
           const active = i === activeIndex
@@ -116,26 +117,19 @@ export function BottomNav() {
               aria-current={active ? "page" : undefined}
               aria-label={tab.label}
               className={cn(
-                "group flex h-[48px] flex-1 items-center justify-center gap-1.5 outline-none transition-colors focus-visible:bg-foreground/5",
-                active ? "text-primary" : "text-muted-foreground hover:text-foreground",
+                "group relative flex size-12 items-center justify-center rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/50",
+                active
+                  ? "bg-primary/15 text-primary"
+                  : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
               )}
             >
               <Icon
                 className={cn(
-                  "size-[21px] shrink-0 transition-transform duration-300 ease-out",
-                  active ? "scale-[1.05] fill-current" : "scale-100",
+                  "size-[22px] shrink-0 transition-transform duration-300 ease-out",
+                  active ? "scale-[1.08] fill-current" : "scale-100",
                 )}
                 strokeWidth={2}
               />
-              {/* Label lives only in the active tab and slides/fades in. */}
-              <span
-                className={cn(
-                  "overflow-hidden whitespace-nowrap text-[12px] font-semibold tracking-tight transition-[max-width,opacity,transform] duration-300 ease-out",
-                  active ? "max-w-28 translate-x-0 opacity-100" : "max-w-0 translate-x-[-8px] opacity-0",
-                )}
-              >
-                {tab.label}
-              </span>
             </Link>
           )
         })}

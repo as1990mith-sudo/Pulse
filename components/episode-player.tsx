@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Pause, Play, Radio, RotateCcw, RotateCw, Gauge, Maximize, Minimize, ChevronDown } from "lucide-react"
+import { Pause, Play, Radio, RotateCcw, RotateCw, Gauge, Maximize, Minimize, ChevronDown, X } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { cn } from "@/lib/utils"
 import { MarqueeTitle } from "@/components/marquee-title"
@@ -32,11 +32,14 @@ export function EpisodePlayer({
   minimized = false,
   onMinimize,
   onRestore,
+  onClose,
 }: {
   show: Show
   minimized?: boolean
   onMinimize?: () => void
   onRestore?: () => void
+  /** Closes/exits the video entirely (top-right ✕). */
+  onClose?: () => void
 }) {
   const mediaRef = useRef<HTMLVideoElement>(null)
   // The video frame is the element we put into fullscreen so our own controls
@@ -331,8 +334,8 @@ export function EpisodePlayer({
       {/* Legibility scrim, darker at the base where the scrubber sits. */}
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-black/35" />
 
-      {/* Minimize (top-left) — collapses into a floating mini-player, replacing
-          the old page Back button. Playback continues uninterrupted. */}
+      {/* Minimize (top-left) — collapses into a YouTube-style floating mini-player.
+          Icon only (no circle/pill); a drop-shadow keeps it legible on video. */}
       {onMinimize && (
         <button
           type="button"
@@ -341,31 +344,32 @@ export function EpisodePlayer({
             onMinimize()
           }}
           aria-label="Minimize player"
-          className="absolute left-3 top-3 z-20 flex size-10 items-center justify-center rounded-full bg-black/45 text-white ring-1 ring-white/15 backdrop-blur-md transition-colors hover:bg-black/65 active:scale-90"
+          className="absolute left-3 top-3 z-20 flex items-center justify-center text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-transform hover:text-white active:scale-90"
         >
-          <ChevronDown className="size-5" />
+          <ChevronDown className="size-7" />
         </button>
       )}
 
-      {/* Fullscreen toggle (top-right). */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation()
-          void toggleFullscreen()
-          revealControls()
-        }}
-        aria-label={isFullscreen ? "Exit fullscreen" : "Expand to fullscreen"}
-        className="absolute right-3 top-3 z-20 flex size-10 items-center justify-center rounded-full bg-black/45 text-white ring-1 ring-white/15 backdrop-blur-md transition-colors hover:bg-black/65 active:scale-90"
-      >
-        {isFullscreen ? <Minimize className="size-5" /> : <Maximize className="size-5" />}
-      </button>
+      {/* Close (top-right) — exits the video entirely. Icon only (no circle/pill). */}
+      {onClose && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onClose()
+          }}
+          aria-label="Close video"
+          className="absolute right-3 top-3 z-20 flex items-center justify-center text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-transform hover:text-white active:scale-90"
+        >
+          <X className="size-7" />
+        </button>
+      )}
 
-      {/* Centered transport cluster (rewind / play / forward) + speed pill. The
-          wrapper spans the whole frame, so it must NOT capture pointer events
-          (otherwise it would sit over the fullscreen button and the surface-tap
-          target); only the actual controls below opt back in. */}
-      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-4">
+      {/* Transport cluster (rewind / play / forward), pinned to the exact center
+          of the video. The wrapper spans the whole frame, so it must NOT capture
+          pointer events (otherwise it would block the surface-tap toggle); only
+          the actual buttons opt back in. */}
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div className="pointer-events-auto flex items-center justify-center gap-8">
           <button
             onClick={(e) => {
@@ -373,7 +377,7 @@ export function EpisodePlayer({
               skip(-15)
               revealControls()
             }}
-            className="flex items-center justify-center text-white/85 transition-colors hover:text-white active:scale-90"
+            className="flex items-center justify-center text-white/85 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-colors hover:text-white active:scale-90"
             aria-label="Rewind 15 seconds"
           >
             <RotateCcw className="size-7" />
@@ -384,10 +388,10 @@ export function EpisodePlayer({
               toggle()
               revealControls()
             }}
-            className="flex size-16 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/40 transition-transform hover:scale-105 active:scale-95"
+            className="flex size-12 shrink-0 items-center justify-center rounded-full bg-white/65 text-black shadow-lg shadow-black/20 backdrop-blur-sm transition-transform hover:scale-105 active:scale-95"
             aria-label={playing ? "Pause episode" : "Play episode"}
           >
-            {playing ? <Pause className="size-7" /> : <Play className="size-7 translate-x-0.5" />}
+            {playing ? <Pause className="size-5" /> : <Play className="size-5 translate-x-0.5" />}
           </button>
           <button
             onClick={(e) => {
@@ -395,28 +399,46 @@ export function EpisodePlayer({
               skip(15)
               revealControls()
             }}
-            className="flex items-center justify-center text-white/85 transition-colors hover:text-white active:scale-90"
+            className="flex items-center justify-center text-white/85 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-colors hover:text-white active:scale-90"
             aria-label="Forward 15 seconds"
           >
             <RotateCw className="size-7" />
           </button>
         </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            cycleSpeed()
-            revealControls()
-          }}
-          className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-black/45 px-3 py-1.5 text-xs font-semibold text-white/90 backdrop-blur-md transition-colors hover:bg-black/65"
-          aria-label="Change playback speed"
-        >
-          <Gauge className="size-3.5" />
-          {SPEEDS[speedIdx]}x
-        </button>
       </div>
 
-      {/* Scrubber docked at the base (YouTube-style). */}
+      {/* Base cluster (YouTube-style): speed pill (left) + expand (right) sit just
+          above the time tracker, which is docked at the very base of the video. */}
       <div className="absolute inset-x-0 bottom-0 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="mb-2 flex items-center justify-between">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              cycleSpeed()
+              revealControls()
+            }}
+            className="inline-flex items-center gap-1.5 rounded-full bg-black/45 px-3 py-1.5 text-xs font-semibold text-white/90 backdrop-blur-md transition-colors hover:bg-black/65"
+            aria-label="Change playback speed"
+          >
+            <Gauge className="size-3.5" />
+            {SPEEDS[speedIdx]}x
+          </button>
+
+          {/* Expand / collapse fullscreen — icon only (no circle/pill). */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              void toggleFullscreen()
+              revealControls()
+            }}
+            aria-label={isFullscreen ? "Exit fullscreen" : "Expand to fullscreen"}
+            className="flex items-center justify-center text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-transform active:scale-90"
+          >
+            {isFullscreen ? <Minimize className="size-6" /> : <Maximize className="size-6" />}
+          </button>
+        </div>
+
         <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium tabular-nums text-white/85">
           <span>{fmt(current)}</span>
           <span>-{fmt(Math.max(0, duration - current))}</span>

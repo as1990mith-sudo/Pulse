@@ -194,6 +194,10 @@ export function BibleReader() {
 
   return (
     <div className="space-y-5">
+      {/* Sticky selector bar — the translation, book/chapter, and highlight
+          selectors stay pinned just below the app header (h-16 + safe area) so
+          they never scroll out of view while reading. */}
+      <div className="sticky top-[calc(env(safe-area-inset-top,0px)+4rem)] z-30 -mx-4 space-y-3 border-b border-border/60 bg-background/90 px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6">
       {/* Translation / interlinear toggle */}
       <div className="flex justify-center">
         <div
@@ -292,6 +296,7 @@ export function BibleReader() {
         </span>
       </div>
       )}
+      </div>
 
       {/* Interlinear reading pane */}
       {mode === "interlinear" && (
