@@ -94,7 +94,7 @@ export function BottomNav() {
   return (
     <div
       className={cn(
-        "pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 pb-[max(env(safe-area-inset-bottom),0.5rem)] transition-[transform,opacity] duration-300 ease-out will-change-transform",
+        "pointer-events-none fixed inset-x-0 bottom-0 z-50 flex px-3 pb-[max(env(safe-area-inset-bottom),0.5rem)] transition-[transform,opacity] duration-300 ease-out will-change-transform",
         tucked ? "translate-y-[150%] opacity-0" : "translate-y-0 opacity-100",
       )}
     >
@@ -104,7 +104,7 @@ export function BottomNav() {
           lift it off the page for a premium feel. */}
       <nav
         aria-label="Primary"
-        className="pointer-events-auto flex items-stretch gap-1 rounded-full border border-border/60 bg-background/70 p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.12)] ring-1 ring-foreground/5 backdrop-blur-xl supports-[backdrop-filter]:bg-background/55"
+        className="pointer-events-auto flex w-full items-stretch justify-around gap-1 rounded-full border border-border/60 bg-background/70 p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.12)] ring-1 ring-foreground/5 backdrop-blur-xl supports-[backdrop-filter]:bg-background/55"
       >
         {TABS.map((tab, i) => {
           const active = i === activeIndex
