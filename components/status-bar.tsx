@@ -69,9 +69,16 @@ function getVideoDuration(file: File): Promise<number> {
 export function StatusBar({
   groups: initialGroups,
   currentUser,
+  variant = "rail",
 }: {
   groups: StatusGroup[]
   currentUser: CurrentUser | null
+  /**
+   * "rail"  — the horizontal, Instagram-style story rail (default).
+   * "list"  — a vertical, WhatsApp-style list ("My status" + recent updates),
+   *           used by the dedicated Status feed tab.
+   */
+  variant?: "rail" | "list"
 }) {
   const router = useRouter()
   // Keep a local copy so viewing a status can flip its ring to "seen" instantly,
@@ -221,8 +228,97 @@ export function StatusBar({
     else setMenuOpen(true)
   }
 
+  const latestTime = (g: StatusGroup) => g.items[g.items.length - 1]?.postedAt ?? ""
+
   return (
-    <section aria-label="Status updates" className="-mx-4 sm:mx-0">
+    <section aria-label="Status updates" className={variant === "list" ? undefined : "-mx-4 sm:mx-0"}>
+      {variant === "list" ? (
+        /* WhatsApp-style vertical list: "My status" row + recent updates. */
+        <div className="flex flex-col">
+          {currentUser ? (
+            <div className="flex items-center gap-3 py-2">
+              <div className="relative shrink-0">
+                <StoryRing gradient={myHasStatus && !myGroup!.allViewed} viewed={myHasStatus && myGroup!.allViewed}>
+                  <button
+                    type="button"
+                    onClick={handleSelfTap}
+                    disabled={uploading}
+                    className="block size-full overflow-hidden rounded-full"
+                    aria-label={myHasStatus ? "View your status" : "Add a status"}
+                  >
+                    <Avatar className="size-full">
+                      {currentUser.image && <AvatarImage src={currentUser.image || "/placeholder.svg"} alt="You" />}
+                      <AvatarFallback className={currentUser.color}>{currentUser.initials}</AvatarFallback>
+                    </Avatar>
+                  </button>
+                </StoryRing>
+                <button
+                  type="button"
+                  onClick={() => setMenuOpen(true)}
+                  disabled={uploading}
+                  className="absolute -bottom-0.5 -right-0.5 flex size-[22px] items-center justify-center rounded-full border-2 border-background bg-foreground text-background transition-opacity hover:opacity-90"
+                  aria-label="Create a new status"
+                >
+                  {uploading ? <Loader2 className="size-3 animate-spin" /> : <Plus className="size-3.5" />}
+                </button>
+              </div>
+              <button type="button" onClick={handleSelfTap} className="flex min-w-0 flex-1 flex-col text-left">
+                <span className="truncate text-sm font-semibold">My status</span>
+                <span className="truncate text-xs text-muted-foreground">
+                  {myHasStatus ? latestTime(myGroup!) : "Tap to add status update"}
+                </span>
+              </button>
+            </div>
+          ) : (
+            <Link href="/sign-in" className="flex items-center gap-3 py-2" aria-label="Sign in to add a status">
+              <span className="flex size-16 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-border text-muted-foreground">
+                <Plus className="size-5" />
+              </span>
+              <div className="flex flex-col">
+                <span className="text-sm font-semibold">Add status</span>
+                <span className="text-xs text-muted-foreground">Sign in to share a status</span>
+              </div>
+            </Link>
+          )}
+
+          {otherGroups.length > 0 && (
+            <>
+              <p className="px-1 pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Recent updates
+              </p>
+              <ul className="flex flex-col">
+                {otherGroups.map((g) => (
+                  <li key={g.userId}>
+                    <button
+                      type="button"
+                      onClick={() => openViewerForUser(g.userId)}
+                      className="flex w-full items-center gap-3 rounded-xl px-1 py-2 text-left transition-colors hover:bg-secondary/50"
+                      aria-label={`View ${g.authorName}'s status`}
+                    >
+                      <StoryRing gradient={!g.allViewed} viewed={g.allViewed}>
+                        <Avatar className="size-full">
+                          {g.authorImage && <AvatarImage src={g.authorImage || "/placeholder.svg"} alt={g.authorName} />}
+                          <AvatarFallback className={g.color}>{g.initials}</AvatarFallback>
+                        </Avatar>
+                      </StoryRing>
+                      <div className="flex min-w-0 flex-1 flex-col">
+                        <span className="truncate text-sm font-semibold">{g.authorName}</span>
+                        <span className="truncate text-xs text-muted-foreground">{latestTime(g)}</span>
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          {currentUser && otherGroups.length === 0 && (
+            <p className="text-pretty py-12 text-center text-sm leading-relaxed text-muted-foreground">
+              No recent updates. When people you follow post a status, it&apos;ll show up here.
+            </p>
+          )}
+        </div>
+      ) : (
       <div className="flex gap-4 overflow-x-auto px-4 pb-1 sm:px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {/* Your story (always first) */}
         {currentUser ? (
@@ -286,6 +382,7 @@ export function StatusBar({
           </button>
         ))}
       </div>
+      )}
 
       {error && <p className="mt-2 px-4 text-xs text-destructive sm:px-1">{error}</p>}
 

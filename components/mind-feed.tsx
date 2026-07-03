@@ -62,6 +62,8 @@ import {
 import { ImageLightbox } from "@/components/image-lightbox"
 import { FeedVideo } from "@/components/feed-video"
 import { ReelsFeed } from "@/components/reels-feed"
+import { StatusBar } from "@/components/status-bar"
+import type { StatusGroup } from "@/app/actions/status"
 import { ShareSheet } from "@/components/share-sheet"
 import { PullToRefresh } from "@/components/pull-to-refresh"
 import type { ShareTarget } from "@/lib/share-types"
@@ -146,7 +148,15 @@ function toThreadComment(c: FeedCommentView): ThreadComment {
   }
 }
 
-export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; currentUser: CurrentUser | null }) {
+export function MindFeed({
+  posts,
+  currentUser,
+  statusGroups = [],
+}: {
+  posts: FeedPostView[]
+  currentUser: CurrentUser | null
+  statusGroups?: StatusGroup[]
+}) {
   const router = useRouter()
   const [draft, setDraft] = useState("")
   const [media, setMedia] = useState<DraftMedia[]>([])
@@ -157,7 +167,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
   // Index currently being dragged in the reorder strip (null when not dragging).
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [isPending, startTransition] = useTransition()
-  const [tab, setTab] = useState<"for-you" | "following" | "reels">("for-you")
+  const [tab, setTab] = useState<"for-you" | "following" | "status" | "reels">("for-you")
   const fileInputRef = useRef<HTMLInputElement>(null)
   // Separate inputs so we can request the device camera directly: one for
   // capturing a photo and one for recording a video. The "capture" attribute
@@ -213,12 +223,14 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
   const followingCount = followingPosts.length
   const visiblePosts = tab === "following" ? followingPosts : forYouPosts
 
-  // Open the Reels tab directly when arriving with ?tab=reels — this backs the
-  // /reels redirect so old links/bookmarks land on the immersive reels view.
+  // Open a specific feed tab directly when arriving with ?tab=<id> — this backs
+  // the /reels redirect (?tab=reels) and lets us deep-link to Status too, so old
+  // links/bookmarks land on the right view.
   useEffect(() => {
     if (typeof window === "undefined") return
-    if (new URLSearchParams(window.location.search).get("tab") === "reels") {
-      setTab("reels")
+    const requested = new URLSearchParams(window.location.search).get("tab")
+    if (requested === "reels" || requested === "status" || requested === "following" || requested === "for-you") {
+      setTab(requested)
     }
     // Run once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -348,6 +360,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
   const TAB_ITEMS = [
     { id: "for-you" as const, label: "For you" },
     { id: "following" as const, label: `Following${followingCount > 0 ? ` (${followingCount})` : ""}` },
+    { id: "status" as const, label: "Status" },
     { id: "reels" as const, label: "Reels" },
   ]
 
@@ -419,6 +432,8 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
 
   return (
     <PullToRefresh onRefresh={refreshFeed}>
+      {/* The post composer is only relevant to the post feeds, not Status. */}
+      {tab !== "status" && (
       <div className="border-y border-border/60 bg-gradient-to-b from-card/60 to-background px-4 py-5 sm:px-5">
         <form onSubmit={publish} className="flex gap-4">
           <Avatar className="size-12 shrink-0 ring-2 ring-border/60">
@@ -604,6 +619,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
           </div>
         </form>
       </div>
+      )}
 
       {/* Sticky segmented tabs that blend into the feed. Reels lives here as the
           third tab (after For you / Following); tapping it opens the immersive
@@ -627,7 +643,11 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
         ))}
       </div>
 
-      {visiblePosts.length > 0 ? (
+      {tab === "status" ? (
+        <div className="px-4 py-3 sm:px-5">
+          <StatusBar variant="list" groups={statusGroups} currentUser={currentUser} />
+        </div>
+      ) : visiblePosts.length > 0 ? (
         <ul className="stagger flex flex-col gap-2 border-b border-border/60 bg-border/40">
           {visiblePosts.map((post) => (
             <li key={post.id}>
