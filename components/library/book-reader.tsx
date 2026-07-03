@@ -2,7 +2,19 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import dynamic from "next/dynamic"
 import { ArrowLeft, BookOpen, Download, ExternalLink, Loader2 } from "lucide-react"
+
+// The PDF viewer pulls in pdf.js, which touches browser-only APIs — load it
+// client-side only so it never runs during SSR.
+const PdfViewer = dynamic(() => import("./pdf-viewer").then((m) => m.PdfViewer), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full items-center justify-center">
+      <Loader2 className="size-6 animate-spin text-muted-foreground" />
+    </div>
+  ),
+})
 
 function isPdf(name: string, url: string): boolean {
   const target = `${name} ${url}`.toLowerCase()
@@ -20,7 +32,7 @@ export function BookReader({
   fileUrl: string
   fileName: string
 }) {
-  const [loaded, setLoaded] = useState(false)
+  const [pdfError, setPdfError] = useState(false)
   const pdf = isPdf(fileName, fileUrl)
 
   return (
@@ -54,20 +66,8 @@ export function BookReader({
       <div className="relative flex-1 overflow-hidden bg-muted/40">
         {!fileUrl ? (
           <ReaderFallback title={title} fileUrl={fileUrl} fileName={fileName} reason="missing" />
-        ) : pdf ? (
-          <>
-            {!loaded && (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Loader2 className="size-6 animate-spin text-muted-foreground" />
-              </div>
-            )}
-            <iframe
-              src={`${fileUrl}#view=FitH`}
-              title={`${title} reader`}
-              className="size-full border-0"
-              onLoad={() => setLoaded(true)}
-            />
-          </>
+        ) : pdf && !pdfError ? (
+          <PdfViewer fileUrl={fileUrl} onError={() => setPdfError(true)} />
         ) : (
           <ReaderFallback title={title} fileUrl={fileUrl} fileName={fileName} reason="format" />
         )}
