@@ -126,7 +126,9 @@ export function AppMenu() {
   // land back on the origin page so Close returns them to the menu.
   useEffect(() => {
     if (!mounted) return
-    if (consumeMenuReopen()) {
+    const flag = consumeMenuReopen()
+    console.log("[v0] reopen effect", { pathname, mounted, flag })
+    if (flag) {
       openDrawer()
     }
   }, [mounted, pathname, openDrawer])
