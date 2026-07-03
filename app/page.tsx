@@ -87,8 +87,8 @@ export default async function DevotionalPage() {
                 key={i}
                 className={
                   i === 0
-                    ? "text-pretty text-[1.0625rem] leading-8 text-foreground/90 first-letter:float-left first-letter:mr-3 first-letter:mt-1 first-letter:text-6xl first-letter:font-bold first-letter:leading-[0.8] first-letter:text-primary sm:text-lg"
-                    : "text-pretty text-[1.0625rem] leading-8 text-foreground/90 sm:text-lg"
+                    ? "text-pretty text-[1.0625rem] leading-8 text-foreground first-letter:float-left first-letter:mr-3 first-letter:mt-1 first-letter:text-6xl first-letter:font-bold first-letter:leading-[0.8] first-letter:text-primary sm:text-lg"
+                    : "text-pretty text-[1.0625rem] leading-8 text-foreground sm:text-lg"
                 }
               >
                 {paragraph}
@@ -101,7 +101,7 @@ export default async function DevotionalPage() {
             <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary">
               <BookHeart className="size-4" /> A prayer for today
             </h2>
-            <p className="mt-3 text-pretty text-[1.0625rem] italic leading-8 text-foreground/90 sm:text-lg">
+            <p className="mt-3 text-pretty text-[1.0625rem] leading-8 text-foreground sm:text-lg">
               {d.prayer}
             </p>
           </div>
