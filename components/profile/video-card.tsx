@@ -7,7 +7,6 @@ import { Clock, Globe, Loader2, Lock, MoreVertical, Play, Trash2 } from "lucide-
 import type { Show } from "@/lib/data"
 import { deleteEpisode, setEpisodePrivacy } from "@/app/actions/shows"
 import { isPlayable, useEpisodePlayer } from "@/components/episode-player-provider"
-import { MarqueeTitle } from "@/components/marquee-title"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -138,11 +137,12 @@ export function VideoCard({ show, owned = false, queue }: { show: Show; owned?: 
           @username (maintained), then views · published date. */}
       <div className="flex min-w-0 flex-1 items-start gap-1 py-0.5">
         <OpenTag {...openProps} className="min-w-0 flex-1 text-left">
-          {/* Title stays on a single line; it auto-scrolls (marquee) when too long. */}
-          <MarqueeTitle
-            text={show.title}
-            className="font-display text-sm font-semibold leading-snug tracking-tight transition-colors group-hover:text-primary"
-          />
+          {/* Title wraps to at most two lines (YouTube-style) and truncates with
+              an ellipsis, so it always fits the column and never runs under the
+              menu button — no matter how long the title is. */}
+          <h3 className="line-clamp-2 font-display text-sm font-semibold leading-snug tracking-tight transition-colors group-hover:text-primary">
+            {show.title}
+          </h3>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">{show.host.handle}</p>
           {meta && <p className="mt-0.5 truncate text-xs text-muted-foreground">{meta}</p>}
         </OpenTag>
