@@ -380,7 +380,7 @@ export function EpisodePlayer({
             className="flex items-center justify-center text-white/85 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-colors hover:text-white active:scale-90"
             aria-label="Rewind 15 seconds"
           >
-            <RotateCcw className="size-8" />
+            <RotateCcw className="size-7" />
           </button>
           <button
             onClick={(e) => {
@@ -388,10 +388,10 @@ export function EpisodePlayer({
               toggle()
               revealControls()
             }}
-            className="flex size-14 shrink-0 items-center justify-center rounded-full bg-white/65 text-black shadow-lg shadow-black/20 backdrop-blur-sm transition-transform hover:scale-105 active:scale-95"
+            className="flex size-12 shrink-0 items-center justify-center rounded-full bg-white/65 text-black shadow-lg shadow-black/20 backdrop-blur-sm transition-transform hover:scale-105 active:scale-95"
             aria-label={playing ? "Pause episode" : "Play episode"}
           >
-            {playing ? <Pause className="size-6" /> : <Play className="size-6 translate-x-0.5" />}
+            {playing ? <Pause className="size-5" /> : <Play className="size-5 translate-x-0.5" />}
           </button>
           <button
             onClick={(e) => {
@@ -402,7 +402,7 @@ export function EpisodePlayer({
             className="flex items-center justify-center text-white/85 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-colors hover:text-white active:scale-90"
             aria-label="Forward 15 seconds"
           >
-            <RotateCw className="size-8" />
+            <RotateCw className="size-7" />
           </button>
         </div>
       </div>
