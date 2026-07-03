@@ -98,11 +98,16 @@ export function useMenuFlow() {
     const target = getMenuOrigin()
     clearMenuFlow()
     setOrigin(null)
-    // Ask the destination page to re-open the side menu drawer so Close returns
-    // the user to the menu, not just the page the flow started from.
-    requestMenuReopen()
-    if (target) router.push(target)
-    else router.back()
+    // Ask the destination page (the origin where the flow started) to re-open
+    // the side menu drawer so Close returns the user to the menu, not just the
+    // page the flow started from. Tagging the flag with the target path ensures
+    // only that page consumes it — not the current page as it unmounts.
+    if (target) {
+      requestMenuReopen(target)
+      router.push(target)
+    } else {
+      router.back()
+    }
   }, [router])
 
   return { active, back, close }
