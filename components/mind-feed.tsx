@@ -61,6 +61,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ImageLightbox } from "@/components/image-lightbox"
 import { FeedVideo } from "@/components/feed-video"
+import { ReelsFeed } from "@/components/reels-feed"
 import { ShareSheet } from "@/components/share-sheet"
 import { PullToRefresh } from "@/components/pull-to-refresh"
 import type { ShareTarget } from "@/lib/share-types"
@@ -156,7 +157,7 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
   // Index currently being dragged in the reorder strip (null when not dragging).
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [isPending, startTransition] = useTransition()
-  const [tab, setTab] = useState<"for-you" | "following">("for-you")
+  const [tab, setTab] = useState<"for-you" | "following" | "reels">("for-you")
   const fileInputRef = useRef<HTMLInputElement>(null)
   // Separate inputs so we can request the device camera directly: one for
   // capturing a photo and one for recording a video. The "capture" attribute
@@ -211,6 +212,17 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
 
   const followingCount = followingPosts.length
   const visiblePosts = tab === "following" ? followingPosts : forYouPosts
+
+  // Open the Reels tab directly when arriving with ?tab=reels — this backs the
+  // /reels redirect so old links/bookmarks land on the immersive reels view.
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (new URLSearchParams(window.location.search).get("tab") === "reels") {
+      setTab("reels")
+    }
+    // Run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Deep link support: when arriving with ?post=<id> (e.g. from a shared link),
   // make sure that post is in view, scroll to it, and briefly highlight it so
@@ -329,6 +341,45 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
         window.scrollTo({ top: 0, behavior: "smooth" })
       }
     })
+  }
+
+  // The three feed tabs, reused by both the sticky in-feed bar and the floating
+  // TikTok-style switcher that sits over the full-screen reels.
+  const TAB_ITEMS = [
+    { id: "for-you" as const, label: "For you" },
+    { id: "following" as const, label: `Following${followingCount > 0 ? ` (${followingCount})` : ""}` },
+    { id: "reels" as const, label: "Reels" },
+  ]
+
+  // Floating switcher shown over the reels: the three tabs "sit" on top of the
+  // video (like TikTok's For You / Following) so switching back is one tap away.
+  const reelsSwitcher = (
+    <div className="flex items-center gap-6">
+      {TAB_ITEMS.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          onClick={() => setTab(t.id)}
+          className={cn(
+            "relative whitespace-nowrap py-1 text-[15px] font-semibold drop-shadow transition-colors",
+            tab === t.id ? "text-white" : "text-white/55 hover:text-white/90",
+          )}
+          aria-pressed={tab === t.id}
+        >
+          {t.label}
+          {tab === t.id && (
+            <span className="absolute inset-x-0 -bottom-1 mx-auto h-0.5 w-6 rounded-full bg-white" />
+          )}
+        </button>
+      ))}
+    </div>
+  )
+
+  // Full-screen, immersive reels tab. Rendered as a fixed overlay so it feels
+  // premium and edge-to-edge (nothing "hanging"), with the tab switcher floating
+  // on top. Available to everyone — no auth gate on watching.
+  if (tab === "reels") {
+    return <ReelsFeed posts={allPosts} header={reelsSwitcher} />
   }
 
   if (!currentUser) {
@@ -554,30 +605,26 @@ export function MindFeed({ posts, currentUser }: { posts: FeedPostView[]; curren
         </form>
       </div>
 
-      {/* Sticky segmented tabs that blend into the feed */}
+      {/* Sticky segmented tabs that blend into the feed. Reels lives here as the
+          third tab (after For you / Following); tapping it opens the immersive
+          full-screen reels experience. */}
       <div className="sticky top-0 z-10 flex items-center border-b border-border/60 bg-background/85 backdrop-blur">
-        <button
-          onClick={() => setTab("for-you")}
-          className={cn(
-            "relative flex-1 px-3 py-4 text-[15px] font-semibold transition-colors",
-            tab === "for-you" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
-          )}
-          aria-pressed={tab === "for-you"}
-        >
-          For you
-          {tab === "for-you" && <span className="absolute inset-x-0 -bottom-px mx-auto h-1 w-14 rounded-full bg-primary" />}
-        </button>
-        <button
-          onClick={() => setTab("following")}
-          className={cn(
-            "relative flex-1 whitespace-nowrap px-3 py-4 text-[15px] font-semibold transition-colors",
-            tab === "following" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
-          )}
-          aria-pressed={tab === "following"}
-        >
-          Following{followingCount > 0 ? ` (${followingCount})` : ""}
-          {tab === "following" && <span className="absolute inset-x-0 -bottom-px mx-auto h-1 w-14 rounded-full bg-primary" />}
-        </button>
+        {TAB_ITEMS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={cn(
+              "relative flex-1 whitespace-nowrap px-3 py-4 text-[15px] font-semibold transition-colors",
+              tab === t.id ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+            )}
+            aria-pressed={tab === t.id}
+          >
+            {t.label}
+            {tab === t.id && (
+              <span className="absolute inset-x-0 -bottom-px mx-auto h-1 w-14 rounded-full bg-primary" />
+            )}
+          </button>
+        ))}
       </div>
 
       {visiblePosts.length > 0 ? (

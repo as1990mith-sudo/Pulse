@@ -21,7 +21,18 @@ type Reel = { post: FeedPostView; url: string; key: string }
  * viewport; scrolling snaps to exactly one neighbour at a time, and the visible
  * clip autoplays while the rest pause — just like Instagram Reels.
  */
-export function ReelsFeed({ posts, onClose }: { posts: FeedPostView[]; onClose?: () => void }) {
+export function ReelsFeed({
+  posts,
+  onClose,
+  header,
+}: {
+  posts: FeedPostView[]
+  onClose?: () => void
+  /** Optional custom top-bar content (e.g. the feed tab switcher). Replaces the
+   *  default "Reels" title so the reels tab can float the For You / Following /
+   *  Reels switcher over the video, TikTok-style. */
+  header?: React.ReactNode
+}) {
   const scrollerRef = useRef<HTMLDivElement>(null)
 
   // One reel per video media item, shuffled once per open so the order feels
@@ -69,7 +80,7 @@ export function ReelsFeed({ posts, onClose }: { posts: FeedPostView[]; onClose?:
     // Explicit viewport dimensions (not just `inset-0`) so the overlay fills the
     // screen even while the page-entry animation briefly makes the wrapper a
     // containing block — otherwise `inset-0` would resolve against a 0×0 box.
-    <div className="fixed left-0 top-0 z-40 h-[100dvh] w-screen bg-black">
+    <div className="fixed left-0 top-0 z-[45] h-[100dvh] w-screen bg-black">
       <div
         ref={scrollerRef}
         className="h-full snap-y snap-mandatory overflow-y-scroll overscroll-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -96,9 +107,16 @@ export function ReelsFeed({ posts, onClose }: { posts: FeedPostView[]; onClose?:
         )}
       </div>
 
+      {/* Legibility scrim so the top bar / tabs read clearly over bright video. */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/50 to-transparent" />
+
       {/* Persistent top bar (outside the scroller so it never scrolls away). */}
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between p-4 pt-[max(env(safe-area-inset-top),1rem)]">
-        <span className="text-lg font-bold text-white drop-shadow">Reels</span>
+        {header ? (
+          <div className="pointer-events-auto flex flex-1 justify-center">{header}</div>
+        ) : (
+          <span className="text-lg font-bold text-white drop-shadow">Reels</span>
+        )}
         {onClose && (
           <button
             type="button"
