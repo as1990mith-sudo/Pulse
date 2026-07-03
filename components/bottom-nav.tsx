@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Flame, SquarePen, Clapperboard, Radio, MessagesSquare, type LucideIcon } from "lucide-react"
+import { Flame, SquarePen, SquarePlay, Radio, MessagesSquare, type LucideIcon } from "lucide-react"
 import { haptic } from "@/lib/haptics"
 import { cn } from "@/lib/utils"
 
@@ -12,12 +12,12 @@ type Tab = { href: string; label: string; icon: LucideIcon }
 // The five core experiences, in order. Icons are chosen to read clearly at a
 // glance and to look great both outlined (inactive) and filled (active):
 //   Rhema → Flame (the living word)   Feed → SquarePen (pen on paper)
-//   Reels → Clapperboard (short video)   Chatroom → MessagesSquare (community)
+//   Reels → SquarePlay (short video)   Chatroom → MessagesSquare (community)
 //   Live → Radio (on-air)
 const TABS: Tab[] = [
   { href: "/", label: "Rhema", icon: Flame },
   { href: "/feed", label: "Feed", icon: SquarePen },
-  { href: "/reels", label: "Reels", icon: Clapperboard },
+  { href: "/reels", label: "Reels", icon: SquarePlay },
   { href: "/chatrooms", label: "Chatroom", icon: MessagesSquare },
   { href: "/live", label: "Live", icon: Radio },
 ]
