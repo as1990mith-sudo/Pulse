@@ -123,7 +123,7 @@ export function ProfileTabs({
       {/* Catalogue opens full-screen, hiding the app/profile header. Only a back
           arrow remains, returning the user to the tab they came from. */}
       {catalogueOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-background animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <div className="fixed left-0 top-0 z-50 flex h-[100dvh] w-screen flex-col bg-background animate-in fade-in slide-in-from-bottom-2 duration-300">
           <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border/60 bg-background/80 px-4 py-3 backdrop-blur-xl">
             <button
               type="button"

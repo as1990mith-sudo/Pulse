@@ -382,7 +382,12 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
       {/* Immersive overlay */}
       {current && (
         <div
-          className="fixed inset-0 z-[58] flex flex-col overscroll-contain bg-background"
+          // Explicit viewport dimensions (not `inset-0`) so the immersive player
+          // always fills the screen even if an ancestor establishes a containing
+          // block (e.g. a transform during a page-transition), which would
+          // otherwise size `inset-0` against a smaller/offset box and push the
+          // player out of frame.
+          className="fixed left-0 top-0 z-[58] flex h-[100dvh] w-screen flex-col overscroll-contain bg-background"
           style={minimized ? { display: "none" } : undefined}
           aria-hidden={minimized}
         >
