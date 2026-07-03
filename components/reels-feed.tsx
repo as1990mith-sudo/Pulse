@@ -66,7 +66,10 @@ export function ReelsFeed({ posts, onClose }: { posts: FeedPostView[]; onClose?:
   }, [])
 
   return (
-    <div className="fixed inset-0 z-40 bg-black">
+    // Explicit viewport dimensions (not just `inset-0`) so the overlay fills the
+    // screen even while the page-entry animation briefly makes the wrapper a
+    // containing block — otherwise `inset-0` would resolve against a 0×0 box.
+    <div className="fixed left-0 top-0 z-40 h-[100dvh] w-screen bg-black">
       <div
         ref={scrollerRef}
         className="h-full snap-y snap-mandatory overflow-y-scroll overscroll-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -131,12 +134,36 @@ function ReelItem({
   const [active, setActive] = useState(false)
   const [paused, setPaused] = useState(false)
 
+  // Robust muted autoplay: mobile browsers only permit autoplay while the video
+  // is *genuinely* muted, and React's `muted` JSX prop is famously unreliable at
+  // setting the DOM property in time. So we always force the muted property on
+  // the element right before play(), and if a play attempt is still rejected we
+  // hard-mute and retry — guaranteeing the clip actually starts.
+  const playVideo = useCallback(
+    (v: HTMLVideoElement | null, forceMuted: boolean) => {
+      if (!v) return
+      v.muted = forceMuted
+      const p = v.play()
+      if (p && typeof p.catch === "function") {
+        p.catch(() => {
+          v.muted = true
+          v.play().catch(() => {})
+        })
+      }
+    },
+    [],
+  )
+
   const [liked, setLiked] = useState(post.liked)
   const [likes, setLikes] = useState(post.likes)
+
+  // Latest muted value readable inside the (non-re-subscribing) observer.
+  const mutedRef = useRef(muted)
 
   // Keep the element's mute state in sync with the global toggle. The blurred
   // backdrop copy is always muted.
   useEffect(() => {
+    mutedRef.current = muted
     if (videoRef.current) videoRef.current.muted = muted
   }, [muted])
 
@@ -154,8 +181,8 @@ function ReelItem({
         if (!v) return
         if (isActive) {
           setPaused(false)
-          v.play().catch(() => {})
-          bg?.play().catch(() => {})
+          playVideo(v, mutedRef.current)
+          playVideo(bg, true)
         } else {
           v.pause()
           v.currentTime = 0
@@ -169,15 +196,15 @@ function ReelItem({
     )
     observer.observe(el)
     return () => observer.disconnect()
-  }, [root])
+  }, [root, playVideo])
 
   function togglePlay() {
     const v = videoRef.current
     const bg = backdropRef.current
     if (!v) return
     if (v.paused) {
-      v.play().catch(() => {})
-      bg?.play().catch(() => {})
+      playVideo(v, mutedRef.current)
+      playVideo(bg, true)
       setPaused(false)
     } else {
       v.pause()

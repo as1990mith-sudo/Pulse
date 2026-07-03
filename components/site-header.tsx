@@ -66,10 +66,12 @@ export function SiteHeader({ collapsible = false }: { collapsible?: boolean } = 
   const bar = (
       <div className="relative mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] sm:pl-[max(2rem,env(safe-area-inset-left))] sm:pr-[max(2rem,env(safe-area-inset-right))]">
         {/* Left: menu-flow Back/Close controls (when arrived via the side menu),
-            otherwise the hamburger — then the brand. */}
-        <div className="flex items-center gap-2.5">
+            otherwise the hamburger — then the brand. `min-w-0` lets the brand
+            wordmark truncate on narrow screens so the right-side icons are never
+            pushed off-frame (and clipped by the body's overflow-x guard). */}
+        <div className="flex min-w-0 items-center gap-2.5">
           {inMenuFlow ? (
-            <div className="flex items-center gap-1.5">
+            <div className="flex shrink-0 items-center gap-1.5">
               <button
                 type="button"
                 onClick={back}
@@ -90,17 +92,22 @@ export function SiteHeader({ collapsible = false }: { collapsible?: boolean } = 
           ) : (
             <AppMenu />
           )}
-          <Link href="/" className="flex items-center gap-2">
-            <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <Link href="/" className="flex min-w-0 items-center gap-2">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <Radio className="size-4" />
             </span>
-            <span className="text-lg font-semibold tracking-tight">Frequency</span>
+            {/* Hide the wordmark while in the menu flow: the Back/Close controls
+                already occupy the left slot, and dropping it keeps every header
+                icon on-screen on narrow phones. */}
+            <span className={cn("truncate text-lg font-semibold tracking-tight", inMenuFlow && "hidden")}>
+              Frequency
+            </span>
           </Link>
         </div>
 
         {/* Right, iOS-aligned: Messages · Notifications · Search. Larger, premium
             chip-style icons (profile now lives in the side menu). */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1.5">
           <MessagesBell />
           <NotificationBell />
           <Link

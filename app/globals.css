@@ -952,7 +952,11 @@ svg.lucide {
 
 .page-enter {
   animation: page-enter var(--motion-slow) var(--ease-emphasized);
-  will-change: opacity, transform;
+  /* NOTE: do NOT set `will-change: transform` here. A persistent will-change of
+     transform makes this wrapper a containing block for `position: fixed`
+     descendants *forever* (even when the transform is none), which traps and
+     collapses full-screen fixed overlays like Reels to 0×0. The one-shot entry
+     animation doesn't need the hint. */
 }
 
 /* Active nav pill: a spring pop when a tab becomes active. */

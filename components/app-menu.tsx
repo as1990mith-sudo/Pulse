@@ -60,6 +60,14 @@ const SKIN_SWATCH: Record<string, string> = {
 const CLOSE_THRESHOLD = 90
 const ANIM_MS = 300
 
+// Module-level open intent. `AppMenu` lives inside the per-page header, so it
+// unmounts/remounts on every navigation — plain component state can't survive
+// the Close-returns-to-menu flow (the instance that reopens the drawer unmounts
+// immediately after). This module variable persists across those remounts
+// (within the same document lifetime) so the freshly mounted instance can
+// restore the drawer. It resets naturally on a full page reload.
+let drawerOpenIntent = false
+
 /**
  * Facebook-style left navigation drawer. The hamburger opens a full-height
  * sheet that slides in from the left edge, covering ~85% of the width and
@@ -95,7 +103,17 @@ export function AppMenu() {
     horizontal: null,
   })
 
-  useEffect(() => setMounted(true), [])
+  useEffect(() => {
+    setMounted(true)
+    // Restore the drawer if it was open before this instance mounted (e.g. the
+    // previous instance opened it then unmounted during navigation). We show it
+    // without pushing a fresh history entry — the original one is still on the
+    // stack from when it first opened.
+    if (drawerOpenIntent) {
+      setOpen(true)
+      requestAnimationFrame(() => requestAnimationFrame(() => setActive(true)))
+    }
+  }, [])
 
   const name = session?.user?.name || "Guest"
   const firstName = name.trim().split(/\s+/)[0]
@@ -103,12 +121,14 @@ export function AppMenu() {
   const avatarColor = getAvatarColor(session?.user?.id || name)
 
   const close = useCallback(() => {
+    drawerOpenIntent = false
     setActive(false)
     setDragX(0)
     window.setTimeout(() => setOpen(false), ANIM_MS)
   }, [])
 
   const openDrawer = useCallback(() => {
+    drawerOpenIntent = true
     // Subtle tactile cue as the navigation drawer opens.
     haptic("light")
     setOpen(true)
@@ -126,7 +146,7 @@ export function AppMenu() {
   // land back on the origin page so Close returns them to the menu.
   useEffect(() => {
     if (!mounted) return
-    if (consumeMenuReopen()) {
+    if (consumeMenuReopen(pathname)) {
       openDrawer()
     }
   }, [mounted, pathname, openDrawer])

@@ -16,23 +16,33 @@ import { usePathname, useRouter } from "next/navigation"
 const MENU_FLOW_KEY = "frequency:menu-origin"
 // Set when the user taps Close on a menu-opened page: it asks the origin page to
 // re-open the side menu drawer as soon as it loads, so Close returns them to the
-// menu rather than just the page they started from.
+// menu rather than just the page they started from. We store the *target* path
+// (where the flow started) so ONLY that page consumes the flag — otherwise the
+// current page can briefly re-mount its menu and eat the flag before the
+// destination ever loads, and the drawer never reopens where it should.
 const MENU_REOPEN_KEY = "frequency:menu-reopen"
 
-export function requestMenuReopen() {
+export function requestMenuReopen(targetPath: string) {
   try {
-    sessionStorage.setItem(MENU_REOPEN_KEY, "1")
+    sessionStorage.setItem(MENU_REOPEN_KEY, targetPath)
   } catch {
     /* no-op */
   }
 }
 
-/** Reads and clears the reopen flag, returning whether the menu should reopen. */
-export function consumeMenuReopen(): boolean {
+/**
+ * If a reopen was requested for `currentPath`, clears the flag and returns true.
+ * Pages whose path doesn't match leave the flag intact so the intended
+ * destination is the one that actually reopens the drawer.
+ */
+export function consumeMenuReopen(currentPath: string): boolean {
   try {
-    const flag = sessionStorage.getItem(MENU_REOPEN_KEY)
-    if (flag) sessionStorage.removeItem(MENU_REOPEN_KEY)
-    return !!flag
+    const target = sessionStorage.getItem(MENU_REOPEN_KEY)
+    if (target && target === currentPath) {
+      sessionStorage.removeItem(MENU_REOPEN_KEY)
+      return true
+    }
+    return false
   } catch {
     return false
   }
@@ -88,11 +98,16 @@ export function useMenuFlow() {
     const target = getMenuOrigin()
     clearMenuFlow()
     setOrigin(null)
-    // Ask the destination page to re-open the side menu drawer so Close returns
-    // the user to the menu, not just the page the flow started from.
-    requestMenuReopen()
-    if (target) router.push(target)
-    else router.back()
+    // Ask the destination page (the origin where the flow started) to re-open
+    // the side menu drawer so Close returns the user to the menu, not just the
+    // page the flow started from. Tagging the flag with the target path ensures
+    // only that page consumes it — not the current page as it unmounts.
+    if (target) {
+      requestMenuReopen(target)
+      router.push(target)
+    } else {
+      router.back()
+    }
   }, [router])
 
   return { active, back, close }
