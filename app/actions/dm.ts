@@ -493,3 +493,16 @@ export async function editDirectMessage(input: { messageId: number; body: string
   revalidatePath(`/messages/${msg.conversationId}`)
   revalidatePath("/messages")
 }
+
+/**
+ * Read-only read-receipt helper: returns the epoch-ms timestamp the OTHER
+ * participant has read up to. Lets a chat UI show "Seen" without changing any
+ * schema. Does not mark anything read itself.
+ */
+export async function getDmReadState(conversationId: number): Promise<{ otherLastReadAtMs: number }> {
+  const user = await requireUser()
+  const conv = await loadConversationForUser(conversationId, user.id)
+  // The current user is A or B; we want the other side's last-read timestamp.
+  const otherLastReadAt = conv.userAId === user.id ? conv.userBLastReadAt : conv.userALastReadAt
+  return { otherLastReadAtMs: new Date(otherLastReadAt).getTime() }
+}

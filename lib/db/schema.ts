@@ -429,6 +429,49 @@ export const liveReaction = pgTable("live_reaction", {
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
+// --- Bible reading fellowship ----------------------------------------------
+// Tracks who is currently reading the Bible and where. One row per user (a
+// person reads a single place at a time), upserted via a heartbeat every few
+// seconds; rows whose lastSeenAt has gone stale are treated as "left". Drives
+// the live reader-presence indicator, the readers bottom sheet, and the global
+// "N believers reading" fallback count.
+export const biblePresence = pgTable(
+  "bible_presence",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("userId").notNull(),
+    userName: text("userName").notNull(),
+    userImage: text("userImage"),
+    // Which book/chapter they're in, and what they're doing right now.
+    book: text("book").notNull(),
+    chapter: integer("chapter").notNull().default(1),
+    // "reading" | "listening" | "highlighting" | "notes" — shown on reader cards.
+    activity: text("activity").notNull().default("reading"),
+    lastSeenAt: timestamp("lastSeenAt").notNull().defaultNow(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    // One presence row per user — heartbeat upserts against this.
+    userUnique: uniqueIndex("bible_presence_user_unique").on(t.userId),
+  }),
+)
+
+// One row per user per calendar day they opened the Bible. Consecutive days
+// power the reading-streak shown on reader cards.
+export const bibleReadingDay = pgTable(
+  "bible_reading_day",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("userId").notNull(),
+    // Local calendar day as YYYY-MM-DD (computed client-side, sent on heartbeat).
+    day: text("day").notNull(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    userDayUnique: uniqueIndex("bible_reading_day_user_day_unique").on(t.userId, t.day),
+  }),
+)
+
 // --- Direct messages -------------------------------------------------------
 // 1:1 private conversations between two users (WhatsApp-style). A conversation
 // row is created the first time either user messages the other. The pair is
