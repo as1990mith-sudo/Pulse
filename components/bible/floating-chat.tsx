@@ -174,7 +174,7 @@ function ChatWindow() {
             aria-label="Minimize chat"
             className="inline-flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           >
-            <Minus className="size-4.5" />
+            <Minus className="size-4" />
           </button>
           <button
             type="button"
@@ -182,7 +182,7 @@ function ChatWindow() {
             aria-label="Close chat"
             className="inline-flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           >
-            <X className="size-4.5" />
+            <X className="size-4" />
           </button>
         </div>
 

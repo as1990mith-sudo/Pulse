@@ -54,3 +54,13 @@ export function useBibleFellowship(): FellowshipContextValue {
   if (!ctx) throw new Error("useBibleFellowship must be used within a BibleFellowshipProvider")
   return ctx
 }
+
+/**
+ * Non-throwing variant for components that may render outside the provider
+ * (e.g. the inline indicator, which is part of the reader tree and still mounts
+ * for signed-out users where no fellowship provider exists). Returns null when
+ * there is no fellowship context.
+ */
+export function useBibleFellowshipOptional(): FellowshipContextValue | null {
+  return useContext(FellowshipContext)
+}

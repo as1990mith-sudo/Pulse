@@ -10,6 +10,21 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { haptic } from "@/lib/haptics"
 import { cn } from "@/lib/utils"
+import { useBibleFellowship } from "./fellowship-context"
+
+/** Context-connected overlay: renders only when a profile is open. */
+export function BibleProfileOverlay() {
+  const { profileUserId, closeProfile, openChat } = useBibleFellowship()
+  if (!profileUserId) return null
+  return (
+    <ProfileOverlayCard
+      key={profileUserId}
+      userId={profileUserId}
+      onClose={closeProfile}
+      onMessage={(reader) => void openChat(reader)}
+    />
+  )
+}
 
 /**
  * A full profile card shown as an overlay above the Bible page. Because it's a
@@ -17,7 +32,7 @@ import { cn } from "@/lib/utils"
  * the exact same chapter and scroll position. "Message" hands off to the
  * floating in-Bible chat rather than navigating to the Messages page.
  */
-export function BibleProfileOverlay({
+function ProfileOverlayCard({
   userId,
   onClose,
   onMessage,

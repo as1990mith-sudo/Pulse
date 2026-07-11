@@ -13,6 +13,7 @@ import {
   Highlighter,
   Languages,
   Loader2,
+  MessageCircle,
   Share2,
   X,
 } from "lucide-react"
@@ -20,6 +21,9 @@ import { BIBLE_BOOKS, getBook } from "@/lib/bible-books"
 import { InterlinearPane } from "@/components/interlinear-pane"
 import { getApiPassage, type ApiTranslation } from "@/app/actions/bible"
 import { cn } from "@/lib/utils"
+import { BibleFellowship } from "@/components/bible/bible-fellowship"
+import { BibleReaderIndicator } from "@/components/bible/reader-indicator"
+import { useBibleFellowshipOptional } from "@/components/bible/fellowship-context"
 
 // Reading translations share one verse-rendering pane; "interlinear" (Strong's)
 // is a separate study view.
@@ -192,7 +196,12 @@ export function BibleReader() {
   const isFirst = bookIndex === 0 && chapter === 1
   const isLast = bookIndex === BIBLE_BOOKS.length - 1 && current ? chapter >= current.chapters : false
 
+  // Derive what the reader is doing right now from existing reading state, so
+  // fellow readers see an honest activity ("Highlighting verses" vs "Reading").
+  const activity = activeColor ? "highlighting" : "reading"
+
   return (
+    <BibleFellowship book={book} chapter={chapter} activity={activity}>
     <div className="space-y-5">
       {/* Sticky selector bar — the translation, book/chapter, and highlight
           selectors stay pinned just below the app header (h-16 + safe area) so
@@ -311,13 +320,16 @@ export function BibleReader() {
       {/* Reading pane — borderless and immersive (KJV / NLT / MSG) */}
       {mode !== "interlinear" && (
       <div className="py-2">
-        <div className="mb-7 flex flex-col gap-1 text-center">
+        <div className="mb-7 flex flex-col items-center gap-2 text-center">
           <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl">
             {book} {chapter}
           </h2>
           <p className="text-xs uppercase tracking-wider text-muted-foreground">
             {TRANSLATION_LABEL[translationKey]}
           </p>
+          {/* Live reader-presence indicator — reads its state from the
+              fellowship provider; renders nothing when signed out. */}
+          <BibleReaderIndicator />
         </div>
 
         {readingLoading && (
@@ -403,6 +415,7 @@ export function BibleReader() {
         </button>
       </div>
     </div>
+    </BibleFellowship>
   )
 }
 
@@ -563,6 +576,11 @@ function VerseActionSheet({
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(null)
   const formatted = `"${text}" — ${reference} (${translationShort})`
 
+  // When a floating fellowship chat is open, offer to share this verse straight
+  // into it (sent as formatted text, so it lands in the real DM thread too).
+  const fellowship = useBibleFellowshipOptional()
+  const canShareToChat = Boolean(fellowship?.hasOpenChat)
+
   // Anchor the popover to the tapped verse, clamped to the viewport and flipped
   // above the verse when there isn't enough room below it.
   useLayoutEffect(() => {
@@ -678,6 +696,19 @@ function VerseActionSheet({
             <Share2 className="size-4" /> Share
           </button>
         </div>
+
+        {canShareToChat && (
+          <button
+            type="button"
+            onClick={() => {
+              fellowship?.shareVerse({ reference, text })
+              onClose()
+            }}
+            className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-4 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/15"
+          >
+            <MessageCircle className="size-4" /> Send to chat
+          </button>
+        )}
 
         <div className="mt-4 flex items-center gap-2">
           <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">

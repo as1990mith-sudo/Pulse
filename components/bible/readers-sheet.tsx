@@ -70,10 +70,11 @@ export function BibleReadersSheet() {
   if (!mounted || !readersOpen) return null
 
   const total = readers.length
+  const globalCount = indicator?.totalReaders ?? total
   const heading =
     scope === "book"
       ? `Reading ${scopeBook}`
-      : `${indicator?.totalReaders ?? total} believers reading the Bible`
+      : `${globalCount} ${globalCount === 1 ? "believer" : "believers"} reading the Bible`
 
   return createPortal(
     <div
