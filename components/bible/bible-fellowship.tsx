@@ -11,9 +11,11 @@ import { useSession } from "@/lib/auth-client"
 import {
   heartbeatBiblePresence,
   getBibleIndicator,
+  getBibleReaderMessagePings,
   leaveBiblePresence,
   type BibleActivity,
   type BibleIndicator,
+  type BibleReaderMessagePing,
 } from "@/app/actions/bible-community"
 import { getOrCreateConversation } from "@/app/actions/dm"
 import { haptic } from "@/lib/haptics"
@@ -27,8 +29,11 @@ import {
 import { BibleReadersSheet } from "./readers-sheet"
 import { BibleProfileOverlay } from "./profile-overlay"
 import { BibleFloatingChat } from "./floating-chat"
+import { BibleMessagePing } from "./message-ping"
 
 const HEARTBEAT_MS = 8000
+// Incoming-message alerts poll a little slower than the presence heartbeat.
+const PING_POLL_MS = 10000
 
 function localDay(): string {
   const d = new Date()
@@ -61,6 +66,7 @@ export function BibleFellowship({
   const [chatMinimized, setChatMinimized] = useState(false)
   const [openingChatFor, setOpeningChatFor] = useState<string | null>(null)
   const [sharedVerse, setSharedVerse] = useState<SharedVerse | null>(null)
+  const [messagePing, setMessagePing] = useState<BibleReaderMessagePing | null>(null)
 
   // Keep the latest reading location in a ref so the heartbeat interval always
   // sends current values without needing to restart the timer.
@@ -68,6 +74,19 @@ export function BibleFellowship({
   useEffect(() => {
     locationRef.current = { book, chapter, activity }
   }, [book, chapter, activity])
+
+  // Refs let the message-alert poll read the latest chat state without
+  // restarting the polling loop.
+  const activeChatRef = useRef(activeChat)
+  const chatMinimizedRef = useRef(chatMinimized)
+  useEffect(() => {
+    activeChatRef.current = activeChat
+    chatMinimizedRef.current = chatMinimized
+  }, [activeChat, chatMinimized])
+  // Only alert for messages that arrive AFTER the page is open — the baseline
+  // captures the newest pre-existing unread so we don't pop old threads on load.
+  const pingBaselineRef = useRef<number>(0)
+  const pingInitializedRef = useRef(false)
 
   // Heartbeat loop — pings presence, records the reading day, and refreshes the
   // indicator. Pauses while the tab is hidden to save battery/requests, and
@@ -112,6 +131,36 @@ export function BibleFellowship({
       refreshInterval: HEARTBEAT_MS,
       revalidateOnFocus: true,
       onSuccess: (data) => data && setIndicator(data),
+    },
+  )
+
+  // Poll for unread messages from fellow readers and surface a gentle alert
+  // when a NEW one arrives. Fellow-reader-only keeps it relevant and reverent.
+  useSWR(
+    signedIn ? ["bible-msg-pings"] : null,
+    getBibleReaderMessagePings,
+    {
+      refreshInterval: PING_POLL_MS,
+      revalidateOnFocus: true,
+      onSuccess: (pings) => {
+        if (!pings || pings.length === 0) return
+        const newestMs = pings[0].createdAtMs
+        // First result just sets the baseline — no alert for existing unread.
+        if (!pingInitializedRef.current) {
+          pingBaselineRef.current = newestMs
+          pingInitializedRef.current = true
+          return
+        }
+        const fresh = pings.find((p) => p.createdAtMs > pingBaselineRef.current)
+        if (!fresh) return
+        pingBaselineRef.current = Math.max(pingBaselineRef.current, newestMs)
+        // Don't interrupt if the reader is already chatting (maximized) with
+        // the sender — they'll see the message in the open thread.
+        const chat = activeChatRef.current
+        if (chat && chat.userId === fresh.userId && !chatMinimizedRef.current) return
+        setMessagePing(fresh)
+        haptic("light")
+      },
     },
   )
 
@@ -176,6 +225,8 @@ export function BibleFellowship({
   }, [])
   const consumeSharedVerse = useCallback(() => setSharedVerse(null), [])
 
+  const dismissMessagePing = useCallback(() => setMessagePing(null), [])
+
   const value = useMemo<FellowshipContextValue>(
     () => ({
       indicator,
@@ -197,6 +248,8 @@ export function BibleFellowship({
       sharedVerse,
       shareVerse,
       consumeSharedVerse,
+      messagePing,
+      dismissMessagePing,
     }),
     [
       indicator,
@@ -217,6 +270,8 @@ export function BibleFellowship({
       sharedVerse,
       shareVerse,
       consumeSharedVerse,
+      messagePing,
+      dismissMessagePing,
     ],
   )
 
@@ -231,6 +286,7 @@ export function BibleFellowship({
       <BibleReadersSheet />
       <BibleProfileOverlay />
       <BibleFloatingChat />
+      <BibleMessagePing />
     </FellowshipContext.Provider>
   )
 }

@@ -6,11 +6,18 @@
 // heartbeat/poll pattern in app/actions/live.ts — no websockets; the client
 // polls the heartbeat every few seconds and animates changes locally.
 
-import { and, asc, desc, eq, gt, inArray } from "drizzle-orm"
+import { and, asc, desc, eq, gt, inArray, or } from "drizzle-orm"
 import { headers } from "next/headers"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { biblePresence, bibleReadingDay, follow, user as userTable } from "@/lib/db/schema"
+import {
+  biblePresence,
+  bibleReadingDay,
+  dmConversation,
+  dmMessage,
+  follow,
+  user as userTable,
+} from "@/lib/db/schema"
 import { getHandle } from "@/lib/identity"
 
 // A reader whose heartbeat hasn't landed in this long is treated as "left".
@@ -235,4 +242,95 @@ export async function leaveBiblePresence(): Promise<void> {
   const u = await getSessionUser()
   if (!u) return
   await db.delete(biblePresence).where(eq(biblePresence.userId, u.id))
+}
+
+// An unread DM from a fellow reader — used to pop a gentle in-Bible alert so the
+// reader knows someone reading alongside them has reached out.
+export type BibleReaderMessagePing = {
+  conversationId: number
+  userId: string
+  name: string
+  image: string | null
+  preview: string
+  // Where the sender is reading right now, for a "reading John 3" subtitle.
+  book: string
+  chapter: number
+  createdAtMs: number
+}
+
+/**
+ * Returns unread incoming DMs whose sender is ALSO currently reading the Bible.
+ * Powers the floating "someone messaged you" bubble on the Bible page. Only
+ * fellow readers qualify, keeping the alert reverent and relevant. Excludes
+ * threads the caller has archived or cleared, and messages already read.
+ */
+export async function getBibleReaderMessagePings(): Promise<BibleReaderMessagePing[]> {
+  const u = await getSessionUser()
+  if (!u) return []
+
+  // Who is reading right now (fresh presence), excluding the caller.
+  const readers = await db
+    .select({
+      userId: biblePresence.userId,
+      userName: biblePresence.userName,
+      userImage: biblePresence.userImage,
+      book: biblePresence.book,
+      chapter: biblePresence.chapter,
+    })
+    .from(biblePresence)
+    .where(gt(biblePresence.lastSeenAt, freshCutoff()))
+  const readerMap = new Map(readers.filter((r) => r.userId !== u.id).map((r) => [r.userId, r]))
+  if (readerMap.size === 0) return []
+
+  // Conversations where the other participant is a fellow reader.
+  const convos = await db
+    .select()
+    .from(dmConversation)
+    .where(or(eq(dmConversation.userAId, u.id), eq(dmConversation.userBId, u.id)))
+    .orderBy(desc(dmConversation.lastMessageAt))
+
+  const pings: BibleReaderMessagePing[] = []
+  for (const conv of convos) {
+    const isUserA = conv.userAId === u.id
+    const otherId = isUserA ? conv.userBId : conv.userAId
+    const reader = readerMap.get(otherId)
+    if (!reader) continue // sender isn't currently reading — skip
+
+    const myLastRead = isUserA ? conv.userALastReadAt : conv.userBLastReadAt
+    const myDeletedAt = isUserA ? conv.userADeletedAt : conv.userBDeletedAt
+    const archived = isUserA ? conv.userAArchived : conv.userBArchived
+    if (archived) continue
+
+    const [last] = await db
+      .select()
+      .from(dmMessage)
+      .where(eq(dmMessage.conversationId, conv.id))
+      .orderBy(desc(dmMessage.createdAt))
+      .limit(1)
+    if (!last) continue
+
+    // Unread, sent by the other reader, and not hidden by a "delete chat".
+    const unread = last.senderId === otherId && last.createdAt > myLastRead
+    const clearedByDelete = Boolean(myDeletedAt && last.createdAt <= myDeletedAt)
+    if (!unread || clearedByDelete) continue
+
+    pings.push({
+      conversationId: conv.id,
+      userId: otherId,
+      name: reader.userName,
+      image: reader.userImage ?? null,
+      preview: last.deleted
+        ? "Message deleted"
+        : last.body?.trim()
+          ? last.body.trim().slice(0, 90)
+          : last.attachmentType
+            ? `Sent ${last.attachmentType === "voice" ? "a voice note" : last.attachmentType === "verse" ? "a verse" : "an image"}`
+            : "New message",
+      book: reader.book,
+      chapter: reader.chapter,
+      createdAtMs: last.createdAt.getTime(),
+    })
+  }
+
+  return pings.sort((a, b) => b.createdAtMs - a.createdAtMs)
 }

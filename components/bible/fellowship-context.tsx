@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useContext } from "react"
-import type { BibleIndicator } from "@/app/actions/bible-community"
+import type { BibleIndicator, BibleReaderMessagePing } from "@/app/actions/bible-community"
 
 // A conversation currently floating over the Bible page. conversationId ties it
 // to the real DM thread in the Messages inbox, so closing the floater never
@@ -45,6 +45,10 @@ export type FellowshipContextValue = {
   sharedVerse: SharedVerse | null
   shareVerse: (verse: { reference: string; text: string }) => void
   consumeSharedVerse: () => void
+
+  // Incoming message alert from a fellow reader (null = nothing to show).
+  messagePing: BibleReaderMessagePing | null
+  dismissMessagePing: () => void
 }
 
 export const FellowshipContext = createContext<FellowshipContextValue | null>(null)
