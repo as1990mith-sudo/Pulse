@@ -1,6 +1,5 @@
 import { SiteHeader } from "@/components/site-header"
 import { MindFeed } from "@/components/mind-feed"
-import { AnnouncementBanner } from "@/components/announcement-banner"
 import { getFeed } from "@/app/actions/feed"
 import { getActiveAnnouncements, getMyAnnouncements, isPlatformAdmin } from "@/app/actions/announcements"
 import { getStatusFeed } from "@/app/actions/status"
@@ -21,17 +20,18 @@ export default async function FeedPage() {
       <SiteHeader />
       <main>
         <div className="mx-auto w-full max-w-2xl pb-8">
-          <div className="pt-4 pb-5">
-            <AnnouncementBanner
-              announcements={announcements}
-              myRequests={myRequests}
-              currentUser={currentUser}
-              isAdmin={isAdmin}
-            />
-          </div>
           {/* Status now lives inside the feed tabs (For you / Following / Status /
-              Reels); the feed runs edge-to-edge for an immersive scroll. */}
-          <MindFeed posts={posts} currentUser={currentUser} statusGroups={statusGroups} />
+              Reels); the feed runs edge-to-edge for an immersive scroll. The
+              Announcements banner renders inside the feed so it can be hidden on
+              the Status tab. */}
+          <MindFeed
+            posts={posts}
+            currentUser={currentUser}
+            statusGroups={statusGroups}
+            announcements={announcements}
+            myRequests={myRequests}
+            isAdmin={isAdmin}
+          />
         </div>
       </main>
     </div>

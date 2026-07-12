@@ -23,6 +23,8 @@ import { getApiPassage, type ApiTranslation } from "@/app/actions/bible"
 import { cn } from "@/lib/utils"
 import { BibleFellowship } from "@/components/bible/bible-fellowship"
 import { BibleReaderIndicator } from "@/components/bible/reader-indicator"
+import { BiblePresenceToggle } from "@/components/bible/presence-toggle"
+import { ReadingMiniBar, useReadingChrome } from "@/components/bible/reading-mini-bar"
 import { useBibleFellowshipOptional } from "@/components/bible/fellowship-context"
 
 // Reading translations share one verse-rendering pane; "interlinear" (Strong's)
@@ -67,6 +69,11 @@ export function BibleReader() {
   const [activeColor, setActiveColor] = useState<HighlightKey | null>(null)
   const [highlights, setHighlights] = useState<Record<string, HighlightKey>>({})
   const [loaded, setLoaded] = useState(false)
+
+  // Sentinel placed just below the tall controls; when it clears the top of the
+  // viewport (and the app header has hidden), the slim static bar fades in.
+  const controlsSentinelRef = useRef<HTMLDivElement>(null)
+  const showMiniBar = useReadingChrome(controlsSentinelRef)
 
   const current = getBook(book)
   const bookIndex = BIBLE_BOOKS.findIndex((b) => b.name === book)
@@ -202,11 +209,23 @@ export function BibleReader() {
 
   return (
     <BibleFellowship book={book} chapter={chapter} activity={activity}>
+    {/* Slim static bar that replaces the app header while reading — it carries
+        the live reader count so presence never scrolls away. */}
+    <ReadingMiniBar
+      visible={showMiniBar}
+      book={book}
+      chapter={chapter}
+      onOpenControls={scrollTop}
+      onPrev={goPrev}
+      onNext={goNext}
+      isFirst={isFirst}
+      isLast={isLast}
+    />
     <div className="space-y-5">
-      {/* Sticky selector bar — the translation, book/chapter, and highlight
-          selectors stay pinned just below the app header (h-16 + safe area) so
-          they never scroll out of view while reading. */}
-      <div className="sticky top-[calc(env(safe-area-inset-top,0px)+4rem)] z-30 -mx-4 space-y-3 border-b border-border/60 bg-background/90 px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6">
+      {/* Selector bar — the translation, book/chapter, and highlight selectors.
+          These scroll away naturally as you read; the slim static bar below the
+          app header takes over (see ReadingMiniBar). */}
+      <div className="-mx-4 space-y-3 border-b border-border/60 bg-background/90 px-4 py-3 sm:-mx-6 sm:px-6">
       {/* Translation / interlinear toggle */}
       <div className="flex justify-center">
         <div
@@ -307,6 +326,9 @@ export function BibleReader() {
       )}
       </div>
 
+      {/* Sentinel: once this clears the top, the slim static bar takes over. */}
+      <div ref={controlsSentinelRef} aria-hidden className="-mt-5 h-px w-full" />
+
       {/* Interlinear reading pane */}
       {mode === "interlinear" && (
         <InterlinearPane
@@ -330,6 +352,8 @@ export function BibleReader() {
           {/* Live reader-presence indicator — reads its state from the
               fellowship provider; renders nothing when signed out. */}
           <BibleReaderIndicator />
+          {/* Public / Private reading-visibility control + explainer. */}
+          <BiblePresenceToggle />
         </div>
 
         {readingLoading && (
@@ -660,7 +684,12 @@ function VerseActionSheet({
         width: Math.min(VERSE_POPOVER_WIDTH, typeof window !== "undefined" ? window.innerWidth - 16 : VERSE_POPOVER_WIDTH),
         visibility: coords ? "visible" : "hidden",
       }}
-      className="z-[70] rounded-2xl border border-border bg-popover-solid p-3 text-popover-foreground shadow-2xl duration-150 animate-in fade-in zoom-in-95"
+      className={cn(
+        "z-[70] rounded-2xl border border-border bg-popover-solid p-3 text-popover-foreground shadow-2xl",
+        // Only run the entrance animation once anchored, so it animates in from
+        // its final position instead of blinking in from the off-screen holder.
+        coords && "duration-150 animate-in fade-in zoom-in-95",
+      )}
     >
         <div className="mb-2.5 flex items-start justify-between gap-3">
           <div className="min-w-0">

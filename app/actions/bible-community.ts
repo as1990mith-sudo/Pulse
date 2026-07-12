@@ -6,12 +6,22 @@
 // heartbeat/poll pattern in app/actions/live.ts — no websockets; the client
 // polls the heartbeat every few seconds and animates changes locally.
 
-import { and, asc, desc, eq, gt, inArray } from "drizzle-orm"
+import { and, asc, desc, eq, gt, inArray, notInArray, or } from "drizzle-orm"
 import { headers } from "next/headers"
+import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { biblePresence, bibleReadingDay, follow, user as userTable } from "@/lib/db/schema"
+import {
+  bibleChatSlot,
+  biblePresence,
+  bibleReadingDay,
+  dmConversation,
+  dmMessage,
+  follow,
+  user as userTable,
+} from "@/lib/db/schema"
 import { getHandle } from "@/lib/identity"
+import { MAX_BIBLE_CHATS } from "@/lib/bible-chat-constants"
 
 // A reader whose heartbeat hasn't landed in this long is treated as "left".
 // Clients ping every ~8s, so this tolerates a couple of missed beats.
@@ -235,4 +245,255 @@ export async function leaveBiblePresence(): Promise<void> {
   const u = await getSessionUser()
   if (!u) return
   await db.delete(biblePresence).where(eq(biblePresence.userId, u.id))
+}
+
+// An unread DM from a fellow reader — used to pop a gentle in-Bible alert so the
+// reader knows someone reading alongside them has reached out.
+export type BibleReaderMessagePing = {
+  conversationId: number
+  userId: string
+  name: string
+  image: string | null
+  preview: string
+  // Where the sender is reading right now, for a "reading John 3" subtitle.
+  book: string
+  chapter: number
+  createdAtMs: number
+}
+
+/**
+ * Returns unread incoming DMs whose sender is ALSO currently reading the Bible.
+ * Powers the floating "someone messaged you" bubble on the Bible page. Only
+ * fellow readers qualify, keeping the alert reverent and relevant. Excludes
+ * threads the caller has archived or cleared, and messages already read.
+ */
+export async function getBibleReaderMessagePings(): Promise<BibleReaderMessagePing[]> {
+  const u = await getSessionUser()
+  if (!u) return []
+
+  // Who is reading right now (fresh presence), excluding the caller.
+  const readers = await db
+    .select({
+      userId: biblePresence.userId,
+      userName: biblePresence.userName,
+      userImage: biblePresence.userImage,
+      book: biblePresence.book,
+      chapter: biblePresence.chapter,
+    })
+    .from(biblePresence)
+    .where(gt(biblePresence.lastSeenAt, freshCutoff()))
+  const readerMap = new Map(readers.filter((r) => r.userId !== u.id).map((r) => [r.userId, r]))
+  if (readerMap.size === 0) return []
+
+  // Conversations where the other participant is a fellow reader.
+  const convos = await db
+    .select()
+    .from(dmConversation)
+    .where(or(eq(dmConversation.userAId, u.id), eq(dmConversation.userBId, u.id)))
+    .orderBy(desc(dmConversation.lastMessageAt))
+
+  const pings: BibleReaderMessagePing[] = []
+  for (const conv of convos) {
+    const isUserA = conv.userAId === u.id
+    const otherId = isUserA ? conv.userBId : conv.userAId
+    const reader = readerMap.get(otherId)
+    if (!reader) continue // sender isn't currently reading — skip
+
+    const myLastRead = isUserA ? conv.userALastReadAt : conv.userBLastReadAt
+    const myDeletedAt = isUserA ? conv.userADeletedAt : conv.userBDeletedAt
+    const archived = isUserA ? conv.userAArchived : conv.userBArchived
+    if (archived) continue
+
+    const [last] = await db
+      .select()
+      .from(dmMessage)
+      .where(eq(dmMessage.conversationId, conv.id))
+      .orderBy(desc(dmMessage.createdAt))
+      .limit(1)
+    if (!last) continue
+
+    // Unread, sent by the other reader, and not hidden by a "delete chat".
+    const unread = last.senderId === otherId && last.createdAt > myLastRead
+    const clearedByDelete = Boolean(myDeletedAt && last.createdAt <= myDeletedAt)
+    if (!unread || clearedByDelete) continue
+
+    pings.push({
+      conversationId: conv.id,
+      userId: otherId,
+      name: reader.userName,
+      image: reader.userImage ?? null,
+      preview: last.deleted
+        ? "Message deleted"
+        : last.body?.trim()
+          ? last.body.trim().slice(0, 90)
+          : last.attachmentType
+            ? `Sent ${last.attachmentType === "voice" ? "a voice note" : last.attachmentType === "verse" ? "a verse" : "an image"}`
+            : "New message",
+      book: reader.book,
+      chapter: reader.chapter,
+      createdAtMs: last.createdAt.getTime(),
+    })
+  }
+
+  return pings.sort((a, b) => b.createdAtMs - a.createdAtMs)
+}
+
+/**
+ * Read-only unread counts for a set of conversations — used by the collapsed
+ * chat bubbles to show a badge WITHOUT marking anything read (unlike
+ * getDmMessages, which marks read as a side effect). Counts incoming messages
+ * newer than the caller's last-read marker, respecting "delete chat".
+ */
+export async function getBibleChatUnread(
+  conversationIds: number[],
+): Promise<Record<number, number>> {
+  const u = await getSessionUser()
+  if (!u || conversationIds.length === 0) return {}
+
+  const convos = await db
+    .select()
+    .from(dmConversation)
+    .where(inArray(dmConversation.id, conversationIds))
+
+  const result: Record<number, number> = {}
+  for (const conv of convos) {
+    if (conv.userAId !== u.id && conv.userBId !== u.id) continue
+    const isUserA = conv.userAId === u.id
+    const myLastRead = isUserA ? conv.userALastReadAt : conv.userBLastReadAt
+    const myDeletedAt = isUserA ? conv.userADeletedAt : conv.userBDeletedAt
+    const otherId = isUserA ? conv.userBId : conv.userAId
+
+    const rows = await db
+      .select({ id: dmMessage.id, createdAt: dmMessage.createdAt })
+      .from(dmMessage)
+      .where(
+        and(
+          eq(dmMessage.conversationId, conv.id),
+          eq(dmMessage.senderId, otherId),
+          gt(dmMessage.createdAt, myLastRead),
+        ),
+      )
+    const count = myDeletedAt ? rows.filter((r) => r.createdAt > myDeletedAt).length : rows.length
+    result[conv.id] = count
+  }
+  return result
+}
+
+// --- Concurrent chat "slots" (max 4 bubbles per reader) --------------------
+
+/**
+ * Heartbeat for the set of chat bubbles the caller currently has open on their
+ * Bible page. Upserts a fresh slot per open conversation and prunes slots for
+ * any conversation that's no longer open. Passing an empty list clears them all
+ * (e.g. when the reader goes private or leaves). Fresh slots are what other
+ * readers' sends are checked against for the "max concurrent chats" rule.
+ */
+export async function syncBibleChatSlots(
+  openConversations: { conversationId: number; partnerId: string }[],
+): Promise<void> {
+  const u = await getSessionUser()
+  if (!u) return
+
+  const ids = openConversations.map((c) => c.conversationId)
+
+  // Prune slots the reader no longer has open.
+  if (ids.length === 0) {
+    await db.delete(bibleChatSlot).where(eq(bibleChatSlot.userId, u.id))
+    return
+  }
+  await db
+    .delete(bibleChatSlot)
+    .where(and(eq(bibleChatSlot.userId, u.id), notInArray(bibleChatSlot.conversationId, ids)))
+
+  // Upsert the currently-open ones, refreshing their heartbeat.
+  const now = new Date()
+  for (const c of openConversations.slice(0, MAX_BIBLE_CHATS)) {
+    await db
+      .insert(bibleChatSlot)
+      .values({
+        userId: u.id,
+        conversationId: c.conversationId,
+        partnerId: c.partnerId,
+        lastSeenAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [bibleChatSlot.userId, bibleChatSlot.conversationId],
+        set: { partnerId: c.partnerId, lastSeenAt: now },
+      })
+  }
+}
+
+export type BibleSendResult =
+  | { ok: true }
+  // The recipient already has the maximum number of concurrent chats open and
+  // can't receive a new one right now.
+  | { ok: false; reason: "full"; recipientName: string }
+
+/**
+ * Sends a message that originates from the in-Bible floating chat, enforcing
+ * the recipient's concurrent-chat capacity. If the recipient already holds
+ * MAX_BIBLE_CHATS fresh slots and this conversation isn't one of them, the send
+ * is refused so the sender can be told the reader is unavailable. Continuing an
+ * already-open chat is always allowed. Delivery itself is identical to a normal
+ * DM (same table + inbox), so history is never lost.
+ */
+export async function sendBibleReaderMessage(input: {
+  conversationId: number
+  body?: string
+  attachmentUrl?: string | null
+  attachmentType?: "image" | "audio" | null
+  attachmentName?: string | null
+}): Promise<BibleSendResult> {
+  const u = await getSessionUser()
+  if (!u) throw new Error("You must be signed in to do that.")
+
+  const [conv] = await db
+    .select()
+    .from(dmConversation)
+    .where(eq(dmConversation.id, input.conversationId))
+    .limit(1)
+  if (!conv) throw new Error("Conversation not found.")
+  if (conv.userAId !== u.id && conv.userBId !== u.id) {
+    throw new Error("You are not part of this conversation.")
+  }
+
+  const recipientId = conv.userAId === u.id ? conv.userBId : conv.userAId
+
+  // Capacity check against the recipient's fresh chat slots.
+  const recipientSlots = await db
+    .select({ conversationId: bibleChatSlot.conversationId })
+    .from(bibleChatSlot)
+    .where(and(eq(bibleChatSlot.userId, recipientId), gt(bibleChatSlot.lastSeenAt, freshCutoff())))
+
+  const alreadyOpenWithMe = recipientSlots.some((s) => s.conversationId === input.conversationId)
+  if (!alreadyOpenWithMe && recipientSlots.length >= MAX_BIBLE_CHATS) {
+    const [recipient] = await db
+      .select({ name: userTable.name })
+      .from(userTable)
+      .where(eq(userTable.id, recipientId))
+      .limit(1)
+    return { ok: false, reason: "full", recipientName: recipient?.name ?? "This reader" }
+  }
+
+  const body = (input.body ?? "").trim()
+  const hasAttachment = Boolean(input.attachmentUrl)
+  if (!body && !hasAttachment) throw new Error("Message cannot be empty.")
+
+  await db.insert(dmMessage).values({
+    conversationId: input.conversationId,
+    senderId: u.id,
+    body: body || null,
+    attachmentUrl: input.attachmentUrl ?? null,
+    attachmentType: hasAttachment ? input.attachmentType ?? "document" : null,
+    attachmentName: input.attachmentName ?? null,
+  })
+
+  await db
+    .update(dmConversation)
+    .set({ lastMessageAt: new Date() })
+    .where(eq(dmConversation.id, input.conversationId))
+
+  revalidatePath(`/messages/${input.conversationId}`)
+  revalidatePath("/messages")
+  return { ok: true }
 }
