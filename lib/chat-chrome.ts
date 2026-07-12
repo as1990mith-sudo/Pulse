@@ -49,6 +49,9 @@ const TOP_ZONE = 8 // always reveal within this many px of the top
  */
 export function useAutoHideChatChrome() {
   const lastY = useRef(0)
+  // Travel direction the anchor (`lastY`) is currently measuring from:
+  // 1 = downward, -1 = upward, 0 = unset / at top.
+  const dir = useRef(0)
   const frame = useRef(0)
 
   // Reveal the header again whenever we leave the chat view.
@@ -65,12 +68,27 @@ export function useAutoHideChatChrome() {
     if (frame.current) return
     frame.current = requestAnimationFrame(() => {
       frame.current = 0
-      const delta = y - lastY.current
 
-      // Near the very top, the header is always shown.
+      // Near the very top, the header is always shown. Re-anchor here so the
+      // next downward travel is measured from the top rather than a stale point.
       if (y <= TOP_ZONE) {
         setChatChromeHidden(false)
         lastY.current = y
+        dir.current = 0
+        return
+      }
+
+      const delta = y - lastY.current
+      const goingDown = delta > 0
+
+      // On a direction reversal, re-anchor to the turning point and wait for
+      // sustained travel the new way before toggling. Without this, a stale
+      // downward anchor makes the first upward frame read as a positive delta
+      // and fire a spurious hide — the "blink" seen when flinging back to the
+      // top. Re-anchoring keeps the reveal a single, smooth transition.
+      if ((goingDown && dir.current < 0) || (!goingDown && dir.current > 0)) {
+        lastY.current = y
+        dir.current = goingDown ? 1 : -1
         return
       }
 
@@ -78,10 +96,12 @@ export function useAutoHideChatChrome() {
         // Scrolling down — slide the global header away.
         setChatChromeHidden(true)
         lastY.current = y
+        dir.current = 1
       } else if (delta < -REVEAL_DELTA) {
         // Scrolling up past the threshold — bring it back.
         setChatChromeHidden(false)
         lastY.current = y
+        dir.current = -1
       }
       // Small jitters within the deadband are ignored to prevent flicker.
     })

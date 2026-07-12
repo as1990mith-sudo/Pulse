@@ -72,6 +72,8 @@ import { haptic } from "@/lib/haptics"
 import { linkify, extractFirstUrl } from "@/lib/linkify"
 import { renderMessageBody } from "@/lib/rich-text"
 import { LinkPreview } from "@/components/link-preview"
+import { AnnouncementBanner } from "@/components/announcement-banner"
+import type { AnnouncementView } from "@/app/actions/announcements"
 
 type DraftMedia = { url: string; type: "image" | "video" }
 
@@ -152,10 +154,16 @@ export function MindFeed({
   posts,
   currentUser,
   statusGroups = [],
+  announcements = [],
+  myRequests = [],
+  isAdmin = false,
 }: {
   posts: FeedPostView[]
   currentUser: CurrentUser | null
   statusGroups?: StatusGroup[]
+  announcements?: AnnouncementView[]
+  myRequests?: AnnouncementView[]
+  isAdmin?: boolean
 }) {
   const router = useRouter()
   const [draft, setDraft] = useState("")
@@ -220,7 +228,6 @@ export function MindFeed({
     [allPosts],
   )
 
-  const followingCount = followingPosts.length
   const visiblePosts = tab === "following" ? followingPosts : forYouPosts
 
   // Open a specific feed tab directly when arriving with ?tab=<id> — this backs
@@ -359,7 +366,7 @@ export function MindFeed({
   // TikTok-style switcher that sits over the full-screen reels.
   const TAB_ITEMS = [
     { id: "for-you" as const, label: "For you" },
-    { id: "following" as const, label: `Following${followingCount > 0 ? ` (${followingCount})` : ""}` },
+    { id: "following" as const, label: "Following" },
     { id: "status" as const, label: "Status" },
     { id: "reels" as const, label: "Reels" },
   ]
@@ -388,6 +395,19 @@ export function MindFeed({
     </div>
   )
 
+  // The promotional Announcements banner. It sits above the feed on every tab
+  // except Status, where it would crowd the story list.
+  const announcementBanner = (
+    <div className="pt-4 pb-5">
+      <AnnouncementBanner
+        announcements={announcements}
+        myRequests={myRequests}
+        currentUser={currentUser}
+        isAdmin={isAdmin}
+      />
+    </div>
+  )
+
   // Full-screen, immersive reels tab. Rendered as a fixed overlay so it feels
   // premium and edge-to-edge (nothing "hanging"), with the tab switcher floating
   // on top. Available to everyone — no auth gate on watching.
@@ -398,6 +418,7 @@ export function MindFeed({
   if (!currentUser) {
     return (
       <div>
+        {announcementBanner}
         <Card className="mx-4 flex flex-col items-center gap-3 p-8 text-center sm:mx-0">
           <p className="text-lg font-semibold">Join the conversation</p>
           <p className="max-w-sm text-pretty text-sm leading-relaxed text-muted-foreground">
@@ -432,6 +453,8 @@ export function MindFeed({
 
   return (
     <PullToRefresh onRefresh={refreshFeed}>
+      {/* Announcements show on every tab except Status. */}
+      {tab !== "status" && announcementBanner}
       {/* The post composer is only relevant to the post feeds, not Status. */}
       {tab !== "status" && (
       <div className="border-y border-border/60 bg-gradient-to-b from-card/60 to-background px-4 py-5 sm:px-5">
