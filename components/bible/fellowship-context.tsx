@@ -40,14 +40,20 @@ export type FellowshipContextValue = {
   openProfile: (userId: string) => void
   closeProfile: () => void
 
-  // Floating chat.
-  activeChat: ActiveChat | null
-  chatMinimized: boolean
+  // Floating chats — up to MAX_BIBLE_CHATS bubbles can be open at once, each a
+  // fellow reader who's messaging (or being messaged by) the current reader.
+  openChats: ActiveChat[]
+  // The conversation currently expanded into a full window (null = all are
+  // collapsed to bubbles). Only one chat is expanded at a time on mobile.
+  expandedChatId: number | null
   openingChatFor: string | null
+  // True when the dock is full and `reader` is not already one of the open
+  // chats — the UI uses this to explain why a new chat can't be started.
+  atChatCapacity: boolean
   openChat: (reader: { userId: string; name: string; image: string | null }) => void
-  closeChat: () => void
+  closeChat: (conversationId: number) => void
+  expandChat: (conversationId: number) => void
   minimizeChat: () => void
-  restoreChat: () => void
 
   // Verse sharing into the open chat.
   hasOpenChat: boolean

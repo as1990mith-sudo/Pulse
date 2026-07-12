@@ -4,12 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { CheckCheck, ImageIcon, Loader2, Mic, Minus, Send, Smile, X } from "lucide-react"
 import useSWR from "swr"
-import {
-  getDmMessages,
-  getDmReadState,
-  sendDirectMessage,
-  type DmMessageView,
-} from "@/app/actions/dm"
+import { getDmMessages, getDmReadState, type DmMessageView } from "@/app/actions/dm"
+import { sendBibleReaderMessage, getBibleChatUnread } from "@/app/actions/bible-community"
 import { compressImage, uploadMedia } from "@/lib/upload-media"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { AudioMessage } from "@/components/audio-message"
@@ -19,26 +15,113 @@ import { getAvatarColor, getInitials } from "@/lib/identity"
 import { haptic } from "@/lib/haptics"
 import { cn } from "@/lib/utils"
 import { useBibleFellowship } from "./fellowship-context"
+import type { ActiveChat } from "./fellowship-context"
 
 const EMOJIS = ["🙏", "❤️", "🕊️", "✨", "🙌", "📖", "🔥", "😊", "😂", "🥰", "👍", "🎉", "🌿", "☀️", "💯", "🍞"]
 
 export function BibleFloatingChat() {
-  const { activeChat, chatMinimized } = useBibleFellowship()
+  const { openChats } = useBibleFellowship()
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
-  if (!mounted || !activeChat) return null
-  return chatMinimized ? <MinimizedBubble /> : <ChatWindow />
+  if (!mounted || openChats.length === 0) return null
+  return createPortal(<ChatDock />, document.body)
 }
 
-function ChatWindow() {
-  const {
-    activeChat,
-    closeChat,
-    minimizeChat,
-    sharedVerse,
-    consumeSharedVerse,
-  } = useBibleFellowship()
-  const chat = activeChat!
+// Renders either the stacked chat bubbles (when nothing is expanded) or the one
+// expanded chat window. Only one chat is expanded at a time; minimizing brings
+// the full stack of bubbles back so the reader can switch between conversations.
+function ChatDock() {
+  const { openChats, expandedChatId, expandChat, closeChat } = useBibleFellowship()
+
+  const ids = openChats.map((c) => c.conversationId)
+  const { data: unreadMap } = useSWR(
+    ids.length ? ["bible-dock-unread", ids.join(",")] : null,
+    () => getBibleChatUnread(ids),
+    { refreshInterval: 4000, revalidateOnFocus: true },
+  )
+
+  const expanded = openChats.find((c) => c.conversationId === expandedChatId) ?? null
+
+  if (expanded) return <ChatWindow chat={expanded} />
+
+  return (
+    <div
+      className="fixed right-3 bottom-[calc(env(safe-area-inset-bottom,0px)+5.5rem)] z-[65] flex flex-col items-end gap-3"
+      role="region"
+      aria-label="Reader chats"
+    >
+      {openChats.map((chat, i) => (
+        <DockBubble
+          key={chat.conversationId}
+          chat={chat}
+          unread={unreadMap?.[chat.conversationId] ?? 0}
+          index={openChats.length - i}
+          onOpen={() => expandChat(chat.conversationId)}
+          onClose={() => {
+            haptic("light")
+            closeChat(chat.conversationId)
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
+function DockBubble({
+  chat,
+  unread,
+  index,
+  onOpen,
+  onClose,
+}: {
+  chat: ActiveChat
+  unread: number
+  index: number
+  onOpen: () => void
+  onClose: () => void
+}) {
+  return (
+    <div
+      className="relative duration-300 animate-in fade-in slide-in-from-right-4"
+      style={{ zIndex: 40 + index }}
+    >
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`Open chat with ${chat.name}${unread ? `, ${unread} unread` : ""}`}
+        className="group relative block size-14 rounded-full shadow-2xl transition-transform active:scale-95"
+      >
+        <Avatar className="size-full ring-2 ring-primary/40 ring-offset-2 ring-offset-background">
+          {chat.image ? <AvatarImage src={chat.image} alt={chat.name} /> : null}
+          <AvatarFallback className={cn("text-base font-semibold", getAvatarColor(chat.userId))}>
+            {getInitials(chat.name)}
+          </AvatarFallback>
+        </Avatar>
+        <span
+          className="absolute bottom-0 right-0 size-3.5 rounded-full border-2 border-background bg-chart-2"
+          aria-hidden
+        />
+        {unread > 0 && (
+          <span className="absolute -left-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full border-2 border-background bg-destructive px-1 text-[11px] font-bold leading-4 text-destructive-foreground">
+            {unread > 9 ? "9+" : unread}
+          </span>
+        )}
+      </button>
+      {/* Dismiss this bubble (frees a chat slot). */}
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label={`Close chat with ${chat.name}`}
+        className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-md transition-colors hover:bg-secondary hover:text-foreground"
+      >
+        <X className="size-3" />
+      </button>
+    </div>
+  )
+}
+
+function ChatWindow({ chat }: { chat: ActiveChat }) {
+  const { closeChat, minimizeChat, sharedVerse, consumeSharedVerse } = useBibleFellowship()
 
   const [draft, setDraft] = useState("")
   const [showEmoji, setShowEmoji] = useState(false)
@@ -47,6 +130,8 @@ function ChatWindow() {
   const [recording, setRecording] = useState(false)
   const [sendingVoice, setSendingVoice] = useState(false)
   const [lightbox, setLightbox] = useState<string | null>(null)
+  // Set when the recipient's chat dock is full and can't take a new message.
+  const [capacityNotice, setCapacityNotice] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -64,21 +149,28 @@ function ChatWindow() {
 
   const list = messages ?? []
 
-  // Autoscroll to the newest message.
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [list.length])
 
+  // Returns true on success; false when the recipient can't receive it (full).
   const doSend = useCallback(
     async (payload: {
       body?: string
       attachmentUrl?: string | null
       attachmentType?: "image" | "audio" | null
       attachmentName?: string | null
-    }) => {
-      await sendDirectMessage({ conversationId: chat.conversationId, ...payload })
+    }): Promise<boolean> => {
+      const res = await sendBibleReaderMessage({ conversationId: chat.conversationId, ...payload })
+      if (!res.ok) {
+        setCapacityNotice(res.recipientName)
+        haptic("error")
+        return false
+      }
+      setCapacityNotice(null)
       await mutate()
       endRef.current?.scrollIntoView({ behavior: "smooth" })
+      return true
     },
     [chat.conversationId, mutate],
   )
@@ -100,7 +192,8 @@ function ChatWindow() {
     setShowEmoji(false)
     haptic("light")
     try {
-      await doSend({ body })
+      const ok = await doSend({ body })
+      if (!ok) setDraft(body) // keep their words so they can retry later
     } catch {
       setDraft(body)
     } finally {
@@ -140,14 +233,12 @@ function ChatWindow() {
     }
   }
 
-  // Newest self message that the other user has already seen → "Seen".
   const lastSelf = [...list].reverse().find((m) => m.isSelf && !m.deleted)
-  const seen =
-    lastSelf && readState ? readState.otherLastReadAtMs >= lastSelf.createdAtMs : false
+  const seen = lastSelf && readState ? readState.otherLastReadAtMs >= lastSelf.createdAtMs : false
 
-  return createPortal(
+  return (
     <div
-      className="fixed inset-x-0 bottom-0 z-[65] flex justify-center px-0 sm:inset-x-auto sm:right-5 sm:bottom-5 sm:justify-end sm:px-0"
+      className="fixed inset-x-0 bottom-0 z-[66] flex justify-center px-0 sm:inset-x-auto sm:right-5 sm:bottom-5 sm:justify-end sm:px-0"
       role="dialog"
       aria-modal="false"
       aria-label={`Chat with ${chat.name}`}
@@ -178,7 +269,7 @@ function ChatWindow() {
           </button>
           <button
             type="button"
-            onClick={closeChat}
+            onClick={() => closeChat(chat.conversationId)}
             aria-label="Close chat"
             className="inline-flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           >
@@ -205,6 +296,15 @@ function ChatWindow() {
           )}
           <div ref={endRef} />
         </div>
+
+        {/* Capacity notice — recipient's chat dock is full right now. */}
+        {capacityNotice && (
+          <div className="mx-3 mb-2 rounded-2xl border border-border/70 bg-secondary/60 px-3 py-2 text-xs text-muted-foreground text-pretty">
+            <span className="font-semibold text-foreground">{capacityNotice}</span> is in several
+            conversations right now and can&apos;t receive new messages. You&apos;ll be able to reach
+            them once they&apos;re free again.
+          </div>
+        )}
 
         {/* Composer */}
         {recording ? (
@@ -286,8 +386,7 @@ function ChatWindow() {
       </div>
 
       {lightbox && <ImageLightbox src={lightbox} alt="Shared image" onClose={() => setLightbox(null)} />}
-    </div>,
-    document.body,
+    </div>
   )
 }
 
@@ -325,107 +424,5 @@ function Bubble({ m, onImage }: { m: DmMessageView; onImage: () => void }) {
         </span>
       </div>
     </div>
-  )
-}
-
-function MinimizedBubble() {
-  const { activeChat, restoreChat } = useBibleFellowship()
-  const chat = activeChat!
-
-  const { data: messages } = useSWR(
-    ["bible-chat", chat.conversationId],
-    () => getDmMessages(chat.conversationId),
-    { refreshInterval: 5000 },
-  )
-  const { data: readState } = useSWR(
-    ["bible-chat-read-min", chat.conversationId],
-    () => getDmReadState(chat.conversationId),
-    { refreshInterval: 6000 },
-  )
-
-  // Unread = messages from the other person newer than the last time WE read.
-  // We approximate "our last read" by the last self message time or our own
-  // read marker; simplest robust proxy: count incoming after our newest self msg.
-  const list = messages ?? []
-  const lastSelfMs = [...list].reverse().find((m) => m.isSelf)?.createdAtMs ?? 0
-  const unread = list.filter((m) => !m.isSelf && m.createdAtMs > lastSelfMs).length
-  void readState
-
-  // Drag + snap-to-edge.
-  const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
-  const draggingRef = useRef(false)
-  const movedRef = useRef(false)
-  const startRef = useRef({ px: 0, py: 0, x: 0, y: 0 })
-  const SIZE = 60
-  const MARGIN = 12
-
-  useEffect(() => {
-    // Default position: bottom-right.
-    if (pos || typeof window === "undefined") return
-    setPos({
-      x: window.innerWidth - SIZE - MARGIN,
-      y: window.innerHeight - SIZE - MARGIN - 72,
-    })
-  }, [pos])
-
-  const onPointerDown = (e: React.PointerEvent) => {
-    draggingRef.current = true
-    movedRef.current = false
-    startRef.current = { px: e.clientX, py: e.clientY, x: pos?.x ?? 0, y: pos?.y ?? 0 }
-    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
-  }
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (!draggingRef.current) return
-    const dx = e.clientX - startRef.current.px
-    const dy = e.clientY - startRef.current.py
-    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) movedRef.current = true
-    const x = Math.min(Math.max(MARGIN, startRef.current.x + dx), window.innerWidth - SIZE - MARGIN)
-    const y = Math.min(Math.max(MARGIN + 56, startRef.current.y + dy), window.innerHeight - SIZE - MARGIN)
-    setPos({ x, y })
-  }
-  const onPointerUp = () => {
-    if (!draggingRef.current) return
-    draggingRef.current = false
-    // Snap to whichever horizontal edge is nearest.
-    setPos((p) => {
-      if (!p) return p
-      const mid = p.x + SIZE / 2
-      const snapX = mid < window.innerWidth / 2 ? MARGIN : window.innerWidth - SIZE - MARGIN
-      return { ...p, x: snapX }
-    })
-    if (!movedRef.current) {
-      haptic("light")
-      restoreChat()
-    }
-  }
-
-  if (!pos) return null
-
-  return createPortal(
-    <button
-      type="button"
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      aria-label={`Open chat with ${chat.name}${unread ? `, ${unread} unread` : ""}`}
-      className="fixed z-[65] touch-none rounded-full shadow-2xl transition-[left] duration-300 ease-out"
-      style={{ left: pos.x, top: pos.y, width: SIZE, height: SIZE }}
-    >
-      <span className="relative block size-full">
-        <Avatar className="size-full ring-2 ring-primary/40">
-          {chat.image ? <AvatarImage src={chat.image} alt={chat.name} /> : null}
-          <AvatarFallback className={cn("text-lg font-semibold", getAvatarColor(chat.userId))}>
-            {getInitials(chat.name)}
-          </AvatarFallback>
-        </Avatar>
-        <span className="absolute bottom-0 right-0 size-4 rounded-full border-2 border-background bg-chart-2" aria-hidden />
-        {unread > 0 && (
-          <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full border-2 border-background bg-destructive px-1 text-[11px] font-bold leading-4 text-destructive-foreground">
-            {unread > 9 ? "9+" : unread}
-          </span>
-        )}
-      </span>
-    </button>,
-    document.body,
   )
 }

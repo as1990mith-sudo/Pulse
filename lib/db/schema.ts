@@ -472,6 +472,28 @@ export const bibleReadingDay = pgTable(
   }),
 )
 
+// One row per chat bubble a reader currently has open on their Bible page, kept
+// alive by a heartbeat (like bible_presence). Powers the "max 4 concurrent
+// chats" rule: when a reader already holds this many fresh slots, a new sender
+// is told the reader can't receive more messages until they're free again.
+export const bibleChatSlot = pgTable(
+  "bible_chat_slot",
+  {
+    id: serial("id").primaryKey(),
+    // The reader who has the chat bubble open (the potential recipient).
+    userId: text("userId").notNull(),
+    conversationId: integer("conversationId").notNull(),
+    // The other participant in that chat (for clarity/debugging).
+    partnerId: text("partnerId").notNull(),
+    lastSeenAt: timestamp("lastSeenAt").notNull().defaultNow(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    // One slot per (reader, conversation) — heartbeat upserts against this.
+    userConvUnique: uniqueIndex("bible_chat_slot_user_conv_unique").on(t.userId, t.conversationId),
+  }),
+)
+
 // --- Direct messages -------------------------------------------------------
 // 1:1 private conversations between two users (WhatsApp-style). A conversation
 // row is created the first time either user messages the other. The pair is
