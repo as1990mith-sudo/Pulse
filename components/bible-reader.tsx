@@ -681,7 +681,12 @@ function VerseActionSheet({
         width: Math.min(VERSE_POPOVER_WIDTH, typeof window !== "undefined" ? window.innerWidth - 16 : VERSE_POPOVER_WIDTH),
         visibility: coords ? "visible" : "hidden",
       }}
-      className="z-[70] rounded-2xl border border-border bg-popover-solid p-3 text-popover-foreground shadow-2xl duration-150 animate-in fade-in zoom-in-95"
+      className={cn(
+        "z-[70] rounded-2xl border border-border bg-popover-solid p-3 text-popover-foreground shadow-2xl",
+        // Only run the entrance animation once anchored, so it animates in from
+        // its final position instead of blinking in from the off-screen holder.
+        coords && "duration-150 animate-in fade-in zoom-in-95",
+      )}
     >
         <div className="mb-2.5 flex items-start justify-between gap-3">
           <div className="min-w-0">
