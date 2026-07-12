@@ -23,6 +23,7 @@ import type { ReactNode } from "react"
 import {
   FellowshipContext,
   type ActiveChat,
+  type BibleVisibility,
   type FellowshipContextValue,
   type SharedVerse,
 } from "./fellowship-context"
@@ -34,6 +35,9 @@ import { BibleMessagePing } from "./message-ping"
 const HEARTBEAT_MS = 8000
 // Incoming-message alerts poll a little slower than the presence heartbeat.
 const PING_POLL_MS = 10000
+// Where the reading-privacy preference is remembered (per device), matching the
+// app's other reading preferences (skin, highlights) which also use localStorage.
+const VISIBILITY_KEY = "frequency-bible-visibility"
 
 function localDay(): string {
   const d = new Date()
@@ -58,6 +62,18 @@ export function BibleFellowship({
   const signedIn = Boolean(session?.user)
 
   const [indicator, setIndicator] = useState<BibleIndicator | null>(null)
+
+  // Reading privacy — hydrated from localStorage after mount (default public).
+  const [visibility, setVisibilityState] = useState<BibleVisibility>("public")
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(VISIBILITY_KEY)
+      if (stored === "private" || stored === "public") setVisibilityState(stored)
+    } catch {
+      /* ignore storage failures */
+    }
+  }, [])
+  const isPublic = visibility === "public"
 
   // Overlay + chat state.
   const [readersOpen, setReadersOpen] = useState(false)
@@ -93,6 +109,14 @@ export function BibleFellowship({
   // fires an immediate beat when the tab becomes visible again.
   useEffect(() => {
     if (!signedIn) return
+    // Private mode: broadcast nothing. Remove any existing presence row so the
+    // reader instantly vanishes from every other reader's view, and clear the
+    // stale indicator so the header switches to the private badge.
+    if (!isPublic) {
+      void leaveBiblePresence()
+      setIndicator(null)
+      return
+    }
     let cancelled = false
     let timer: ReturnType<typeof setInterval> | null = null
 
@@ -120,12 +144,12 @@ export function BibleFellowship({
       if (timer) clearInterval(timer)
       document.removeEventListener("visibilitychange", onVisibility)
     }
-  }, [signedIn])
+  }, [signedIn, isPublic])
 
   // When the book changes and we're between heartbeats, refresh the indicator
   // promptly so the header reflects the new book without waiting a full cycle.
   useSWR(
-    signedIn ? ["bible-indicator", book] : null,
+    signedIn && isPublic ? ["bible-indicator", book] : null,
     () => getBibleIndicator({ book }),
     {
       refreshInterval: HEARTBEAT_MS,
@@ -137,7 +161,8 @@ export function BibleFellowship({
   // Poll for unread messages from fellow readers and surface a gentle alert
   // when a NEW one arrives. Fellow-reader-only keeps it relevant and reverent.
   useSWR(
-    signedIn ? ["bible-msg-pings"] : null,
+    // Private mode is do-not-disturb: no incoming reader alerts at all.
+    signedIn && isPublic ? ["bible-msg-pings"] : null,
     getBibleReaderMessagePings,
     {
       refreshInterval: PING_POLL_MS,
@@ -227,10 +252,30 @@ export function BibleFellowship({
 
   const dismissMessagePing = useCallback(() => setMessagePing(null), [])
 
+  const setVisibility = useCallback((next: BibleVisibility) => {
+    haptic("light")
+    setVisibilityState(next)
+    try {
+      localStorage.setItem(VISIBILITY_KEY, next)
+    } catch {
+      /* ignore storage failures — the choice still applies live */
+    }
+    if (next === "private") {
+      // Going quiet: clear any visible alert immediately.
+      setMessagePing(null)
+    } else {
+      // Returning to public: re-baseline pings so re-enabling doesn't replay
+      // messages that arrived while we were private.
+      pingInitializedRef.current = false
+    }
+  }, [])
+
   const value = useMemo<FellowshipContextValue>(
     () => ({
       indicator,
       book,
+      visibility,
+      setVisibility,
       readersOpen,
       openReaders,
       closeReaders,
@@ -254,6 +299,8 @@ export function BibleFellowship({
     [
       indicator,
       book,
+      visibility,
+      setVisibility,
       readersOpen,
       openReaders,
       closeReaders,

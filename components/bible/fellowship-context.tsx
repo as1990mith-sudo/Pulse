@@ -16,10 +16,19 @@ export type ActiveChat = {
 // A verse queued to be shared into the open floating chat.
 export type SharedVerse = { reference: string; text: string; token: number }
 
+// Reading privacy. "public" = visible to fellow readers and reachable via the
+// in-Bible chat. "private" = invisible (no presence row) and do-not-disturb
+// (no incoming reader chats/alerts) for distraction-free reading.
+export type BibleVisibility = "public" | "private"
+
 export type FellowshipContextValue = {
   // Live header indicator (null while loading or signed out).
   indicator: BibleIndicator | null
   book: string
+
+  // Reading privacy preference (persisted per device).
+  visibility: BibleVisibility
+  setVisibility: (v: BibleVisibility) => void
 
   // Readers discovery sheet.
   readersOpen: boolean

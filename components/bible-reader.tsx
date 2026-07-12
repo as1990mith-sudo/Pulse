@@ -23,6 +23,7 @@ import { getApiPassage, type ApiTranslation } from "@/app/actions/bible"
 import { cn } from "@/lib/utils"
 import { BibleFellowship } from "@/components/bible/bible-fellowship"
 import { BibleReaderIndicator } from "@/components/bible/reader-indicator"
+import { BiblePresenceToggle } from "@/components/bible/presence-toggle"
 import { ReadingMiniBar, useReadingChrome } from "@/components/bible/reading-mini-bar"
 import { useBibleFellowshipOptional } from "@/components/bible/fellowship-context"
 
@@ -351,6 +352,8 @@ export function BibleReader() {
           {/* Live reader-presence indicator — reads its state from the
               fellowship provider; renders nothing when signed out. */}
           <BibleReaderIndicator />
+          {/* Public / Private reading-visibility control + explainer. */}
+          <BiblePresenceToggle />
         </div>
 
         {readingLoading && (

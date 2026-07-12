@@ -7,7 +7,7 @@
 // reading count when nobody else is in the same book.
 
 import { useEffect, useRef, useState } from "react"
-import { Users, Globe } from "lucide-react"
+import { Users, Globe, Lock } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 import { useBibleFellowshipOptional } from "./fellowship-context"
@@ -65,8 +65,44 @@ export function BibleReaderIndicator({
   const target = indicator ? (isBook ? indicator.sameBookOthers : indicator.totalReaders) : 0
   const count = useSpringCount(target)
 
+  if (!fellowship) return null
+
+  // Private mode: show a calm, reassuring badge instead of the social count —
+  // no tappable "see who's reading" affordance, reinforcing distraction-free
+  // reading. This takes priority over (and needs no) live indicator data.
+  if (fellowship.visibility === "private") {
+    if (variant === "compact") {
+      return (
+        <span
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border/50 bg-secondary/40 py-1 pl-1.5 pr-2.5 text-xs text-muted-foreground backdrop-blur-sm"
+          aria-label="You're reading privately."
+        >
+          <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground" aria-hidden>
+            <Lock className="size-3" />
+          </span>
+          <span className="font-medium text-foreground">Private</span>
+        </span>
+      )
+    }
+    return (
+      <div className="flex justify-center">
+        <span
+          className="inline-flex items-center gap-2 rounded-full border border-border/50 bg-secondary/40 px-3 py-1.5 text-sm text-muted-foreground backdrop-blur-sm"
+          aria-label="You're reading privately. No one can see you and you won't be disturbed."
+        >
+          <span className="flex size-5 items-center justify-center rounded-full bg-muted text-muted-foreground" aria-hidden>
+            <Lock className="size-3" />
+          </span>
+          <span>
+            Reading <span className="font-semibold text-foreground">privately</span>
+          </span>
+        </span>
+      </div>
+    )
+  }
+
   // Nothing to show until the first indicator lands (keeps layout calm).
-  if (!fellowship || !indicator) return null
+  if (!indicator) return null
 
   const avatars = indicator.sampleAvatars
   const label = isBook
