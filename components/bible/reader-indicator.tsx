@@ -51,7 +51,12 @@ function useSpringCount(target: number): number {
   return display
 }
 
-export function BibleReaderIndicator() {
+export function BibleReaderIndicator({
+  variant = "default",
+}: {
+  /** "compact" is a slim pill for the sticky reading bar. */
+  variant?: "default" | "compact"
+}) {
   const fellowship = useBibleFellowshipOptional()
   const indicator = fellowship?.indicator ?? null
 
@@ -67,6 +72,42 @@ export function BibleReaderIndicator() {
   const label = isBook
     ? `Reading ${indicator.book} with ${count} ${count === 1 ? "other" : "others"}`
     : `${count.toLocaleString()} ${count === 1 ? "believer is" : "believers are"} reading the Bible`
+
+  // Slim pill for the sticky reading bar — just a live dot, an icon, and the
+  // headline number, so the count stays visible without stealing focus.
+  if (variant === "compact") {
+    return (
+      <button
+        type="button"
+        onClick={fellowship.openReaders}
+        aria-label={
+          isBook
+            ? `${label}. Tap to see who is reading.`
+            : `You're reading ${indicator.book}. ${label}. Tap to see who is reading.`
+        }
+        className={cn(
+          "group inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border/50 bg-secondary/40 py-1 pl-1.5 pr-2.5",
+          "text-xs text-muted-foreground backdrop-blur-sm transition-all duration-300",
+          "hover:border-primary/30 hover:bg-secondary/70 hover:text-foreground active:scale-[0.97]",
+        )}
+      >
+        <span className="relative flex size-2 shrink-0" aria-hidden>
+          <span className="absolute inline-flex size-full animate-ping rounded-full bg-chart-2/70 [animation-duration:2.5s]" />
+          <span className="relative inline-flex size-2 rounded-full bg-chart-2" />
+        </span>
+        <span
+          className="flex size-4 shrink-0 items-center justify-center text-primary"
+          aria-hidden
+        >
+          {isBook ? <Users className="size-3" /> : <Globe className="size-3" />}
+        </span>
+        <span className="tabular-nums font-semibold text-foreground">
+          {count.toLocaleString()}
+        </span>
+        <span>reading</span>
+      </button>
+    )
+  }
 
   return (
     <div className="flex justify-center">
