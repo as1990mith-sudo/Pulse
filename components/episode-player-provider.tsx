@@ -752,8 +752,10 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
             )}
           >
             <div className="mx-auto flex w-full max-w-xl flex-col gap-6">
-              {/* Comments — toggled by the Comment button (and this compact row). */}
-              {commentsExpanded ? (
+              {/* Comments — opened by the Comment button in the action bar. When
+                  collapsed nothing renders here, so "More from…" rises to the top
+                  of the scrollable section. */}
+              {commentsExpanded && (
                 <div className="duration-300 animate-in fade-in slide-in-from-top-1">
                   <div className="mb-3 flex items-center justify-between">
                     <h3 className="text-sm font-semibold">
@@ -775,20 +777,6 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                     <p className="text-sm text-muted-foreground">Comments aren&apos;t available for this item.</p>
                   )}
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setCommentsExpanded(true)}
-                  disabled={!current.episodeId}
-                  aria-expanded={false}
-                  className="flex w-full items-center justify-between rounded-xl border border-border/60 bg-card px-4 py-3 text-sm font-semibold transition-colors hover:bg-secondary/60 disabled:opacity-50"
-                >
-                  <span>
-                    Comments
-                    {commentCount > 0 && <span className="ml-1 text-muted-foreground">({commentCount})</span>}
-                  </span>
-                  <ChevronDown className="size-4 text-muted-foreground" />
-                </button>
               )}
 
               {/* More from… (up next / recommended) — directly beneath comments. */}
