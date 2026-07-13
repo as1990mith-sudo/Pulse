@@ -58,7 +58,6 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
   // Whether the video is currently floating in the OS Picture-in-Picture window.
   // While PiP is active we suppress the in-app docked bar so there's only one
   // mini-player, and returning from PiP brings the immersive view back.
-  const [pipActive, setPipActive] = useState(false)
 
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -94,37 +93,17 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
   }, [])
 
   const expand = useCallback(() => {
-    // Coming back to the immersive view: leave the OS PiP window if we're in it.
-    const doc = document as Document & {
-      pictureInPictureElement?: Element
-      exitPictureInPicture?: () => Promise<void>
-    }
-    if (doc.pictureInPictureElement) doc.exitPictureInPicture?.().catch(() => {})
+    // Restore the immersive view. Playback is uninterrupted because the same
+    // <video> element stays mounted across the mini ↔ full transition.
     setMinimized(false)
   }, [])
 
-  // Pop the <video> into the OS Picture-in-Picture window. Called synchronously
-  // from the minimize tap so the browser still counts it as a user gesture.
-  const enterPiP = useCallback(async () => {
-    const el = mediaRef.current as
-      | (HTMLVideoElement & { requestPictureInPicture?: () => Promise<PictureInPictureWindow> })
-      | null
-    if (!el || !isVideo) return
-    const doc = document as Document & { pictureInPictureEnabled?: boolean; pictureInPictureElement?: Element }
-    if (doc.pictureInPictureElement) return
-    if (doc.pictureInPictureEnabled && typeof el.requestPictureInPicture === "function" && !el.disablePictureInPicture) {
-      try {
-        await el.requestPictureInPicture()
-      } catch {
-        /* denied or unsupported — the in-app docked mini-player is the fallback */
-      }
-    }
-  }, [isVideo])
-
   const minimize = useCallback(() => {
-    // For video, float it into the OS Picture-in-Picture window so the footage
-    // keeps *showing* (not just a still cover) and stays on-screen in frame.
-    if (isVideo) void enterPiP()
+    // Collapse into our own in-app floating mini window. We deliberately do NOT
+    // use the OS Picture-in-Picture window: its "close" and "return to tab"
+    // buttons both dispatch the same `leavepictureinpicture` event, so a reliable
+    // close-vs-maximize is impossible and browsers often pause on exit. Our card
+    // keeps the same element playing and gives us real close/expand controls.
     // Consume the sentinel history entry (pushed when the overlay opened) so the
     // back stack stays balanced; its popstate handler flips `minimized`.
     if (typeof window !== "undefined" && (window.history.state as { __episodeOverlay?: boolean })?.__episodeOverlay) {
@@ -132,7 +111,7 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
     } else {
       setMinimized(true)
     }
-  }, [isVideo, enterPiP])
+  }, [])
 
   const close = useCallback(() => {
     const el = mediaRef.current
@@ -325,26 +304,6 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
     }
   }, [])
 
-  // Keep `pipActive` in sync with the OS Picture-in-Picture window. When the
-  // user dismisses PiP (its "back to tab" button), bring the immersive view
-  // back so the video never disappears silently.
-  useEffect(() => {
-    const el = mediaRef.current
-    if (!el) return
-    const onEnter = () => setPipActive(true)
-    const onLeave = () => {
-      setPipActive(false)
-      // Only restore if the track is still active (not when closing/ending).
-      setMinimized((m) => (m ? false : m))
-    }
-    el.addEventListener("enterpictureinpicture", onEnter)
-    el.addEventListener("leavepictureinpicture", onLeave)
-    return () => {
-      el.removeEventListener("enterpictureinpicture", onEnter)
-      el.removeEventListener("leavepictureinpicture", onLeave)
-    }
-  }, [current?.id])
-
   // Recorded blobs often report Infinity duration until scanned; force it.
   function onMeta(e: React.SyntheticEvent<HTMLVideoElement>) {
     const el = e.currentTarget
@@ -375,12 +334,11 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
   const upNext = current ? queue.slice(queue.findIndex((s) => s.id === current.id) + 1) : []
   const pct = duration > 0 ? (currentTime / duration) * 100 : 0
 
-  // In-app picture-in-picture: when a *video* is minimised but the OS-level PiP
-  // window isn't available (e.g. inside the installed WebView, where
-  // requestPictureInPicture is unsupported), we keep the same <video> element
-  // mounted and shrink the whole immersive overlay into a small floating card so
-  // the footage keeps *playing on screen* instead of collapsing to a blank cover.
-  const videoMini = minimized && isVideo && !pipActive
+  // In-app picture-in-picture: when a *video* is minimised we keep the same
+  // <video> element mounted and shrink the whole immersive overlay into a small
+  // floating card, so the footage keeps *playing on screen* with our own
+  // close/expand controls (no reliance on the ambiguous OS PiP window).
+  const videoMini = minimized && isVideo
 
   return (
     <EpisodePlayerContext.Provider value={{ play, close, minimize, expand, activeId: current?.id ?? null }}>
@@ -439,6 +397,7 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                   src={mediaUrl}
                   poster={current.cover ?? undefined}
                   playsInline
+                  disablePictureInPicture
                   preload="metadata"
                   className="size-full object-contain"
                   onPlay={() => setPlaying(true)}
@@ -499,7 +458,15 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                       (so surface taps still toggle the controls); only the buttons
                       opt back in. */}
                   <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                    <div className="pointer-events-auto flex items-center justify-center gap-8">
+                    {/* Only clickable while the controls are actually visible — a
+                        child with `pointer-events-auto` would otherwise re-enable
+                        clicks through the hidden (pointer-events-none) overlay. */}
+                    <div
+                      className={cn(
+                        "flex items-center justify-center gap-8",
+                        controlsVisible ? "pointer-events-auto" : "pointer-events-none",
+                      )}
+                    >
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
@@ -587,19 +554,6 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                       />
                     </div>
                   </div>
-                </div>
-
-                {/* Slim duration tracking bar flush to the base of the video.
-                    It's the persistent position indicator once the full controls
-                    fade out, so progress is always visible right at the bottom. */}
-                <div
-                  className={cn(
-                    "pointer-events-none absolute inset-x-0 bottom-0 z-10 h-1 transition-opacity duration-200",
-                    videoMini ? "opacity-100" : controlsVisible ? "opacity-0" : "opacity-100",
-                  )}
-                >
-                  <div className="absolute inset-0 bg-white/25" />
-                  <div className="absolute inset-y-0 left-0 bg-primary" style={{ width: `${pct}%` }} />
                 </div>
 
                 {/* Compact controls for the floating mini window: pause/play and
@@ -833,10 +787,9 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
         </div>
       )}
 
-      {/* Docked mini-player while minimised — for AUDIO only. Suppressed when a
-          video is floating in OS Picture-in-Picture, and for video generally
-          (which uses the in-app floating video window / `videoMini` instead). */}
-      {current && minimized && !pipActive && !isVideo && (
+      {/* Docked mini-player while minimised — for AUDIO only. Video uses the
+          in-app floating video window (`videoMini`) instead. */}
+      {current && minimized && !isVideo && (
         <div className="fixed inset-x-0 bottom-0 z-[55] px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
           <div className="mx-auto flex w-full max-w-2xl items-center gap-2 rounded-2xl border border-white/15 bg-zinc-900/95 p-2 text-left shadow-2xl ring-1 ring-black/40 backdrop-blur-xl">
             <button
