@@ -209,18 +209,18 @@ export function EpisodeCatalog({
                     </button>
                   )}
                 </div>
-                <div className="grid grid-cols-1 gap-x-2 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="-mx-4 grid grid-cols-1 gap-y-3 sm:mx-0 sm:grid-cols-2 sm:gap-x-2 lg:grid-cols-3">
                   {section.items.map((show) => (
-                    <VideoCard key={show.id} show={show} owned={owned} queue={queue} />
+                    <VideoCard key={show.id} show={show} owned={owned} queue={queue} flush />
                   ))}
                 </div>
               </section>
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-x-2 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="-mx-4 grid grid-cols-1 gap-y-3 sm:mx-0 sm:grid-cols-2 sm:gap-x-2 lg:grid-cols-3">
             {filtered.map((show) => (
-              <VideoCard key={show.id} show={show} owned={owned} queue={queue} />
+              <VideoCard key={show.id} show={show} owned={owned} queue={queue} flush />
             ))}
           </div>
         )

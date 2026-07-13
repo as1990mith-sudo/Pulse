@@ -25,7 +25,22 @@ import { cn } from "@/lib/utils"
  * present; otherwise fall back to the video's first frame so cards never look
  * empty (a muted <video> seeked to 0.1s via a media fragment).
  */
-export function VideoCard({ show, owned = false, queue }: { show: Show; owned?: boolean; queue?: Show[] }) {
+export function VideoCard({
+  show,
+  owned = false,
+  queue,
+  flush = false,
+}: {
+  show: Show
+  owned?: boolean
+  queue?: Show[]
+  /**
+   * Immersive edge-to-edge presentation: a perfectly rectangular thumbnail with
+   * no rounded corners that runs flush to the left screen border (used by the
+   * mobile catalogue list). Defaults to the padded, rounded card look.
+   */
+  flush?: boolean
+}) {
   const router = useRouter()
   const { play } = useEpisodePlayer()
   const [confirming, setConfirming] = useState(false)
@@ -85,11 +100,22 @@ export function VideoCard({ show, owned = false, queue }: { show: Show; owned?: 
   return (
     // Immersive, borderless horizontal row (mirrors the host-library template):
     // cover-art thumbnail on the left, then title / @username / views · date.
-    <div className="group relative flex items-start gap-2 rounded-xl transition-colors hover:bg-card/60">
+    <div
+      className={cn(
+        "group relative flex items-start gap-2 transition-colors hover:bg-card/60",
+        // Flush rows are full-bleed rectangles; keep the right text off the
+        // screen edge with padding while the thumbnail hugs the left border.
+        flush ? "rounded-none pr-4 sm:rounded-xl sm:pr-0" : "rounded-xl",
+      )}
+    >
       <OpenTag
         {...openProps}
         aria-label={playable ? `Play ${show.title}` : `Watch ${show.title}`}
-        className="relative block aspect-video w-32 shrink-0 overflow-hidden rounded-xl bg-secondary sm:w-40"
+        className={cn(
+          "relative block aspect-video w-32 shrink-0 overflow-hidden bg-secondary sm:w-40",
+          // Perfect rectangle (no rounding) when immersive; rounded card otherwise.
+          flush ? "rounded-none sm:rounded-xl" : "rounded-xl",
+        )}
       >
         {hasCover ? (
           // eslint-disable-next-line @next/next/no-img-element

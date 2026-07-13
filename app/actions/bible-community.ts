@@ -225,11 +225,20 @@ export async function getBibleReaders(input: {
   }
   const today = new Date().toISOString().slice(0, 10)
 
+  // Current profile pictures straight from the user table — the presence row's
+  // `userImage` is only a heartbeat snapshot, so this keeps reader-card and
+  // resulting chat-bubble avatars showing each reader's real, up-to-date photo.
+  const liveImages = await db
+    .select({ id: userTable.id, image: userTable.image })
+    .from(userTable)
+    .where(inArray(userTable.id, ids))
+  const imageById = new Map(liveImages.map((r) => [r.id, r.image ?? null]))
+
   return rows.map((r) => ({
     userId: r.userId,
     name: r.userName,
     handle: getHandle(r.userName),
-    image: r.userImage ?? null,
+    image: imageById.get(r.userId) ?? r.userImage ?? null,
     book: r.book,
     chapter: r.chapter,
     activity: (r.activity as BibleActivity) ?? "reading",
@@ -285,6 +294,16 @@ export async function getBibleReaderMessagePings(): Promise<BibleReaderMessagePi
   const readerMap = new Map(readers.filter((r) => r.userId !== u.id).map((r) => [r.userId, r]))
   if (readerMap.size === 0) return []
 
+  // The presence row's `userImage` is a snapshot taken at heartbeat time, which
+  // can be stale or missing. Pull each reader's CURRENT profile picture straight
+  // from the user table (the app's canonical avatar source) so the chat bubble
+  // always shows the sender's real photo instead of an initials fallback.
+  const liveImages = await db
+    .select({ id: userTable.id, image: userTable.image })
+    .from(userTable)
+    .where(inArray(userTable.id, [...readerMap.keys()]))
+  const imageById = new Map(liveImages.map((r) => [r.id, r.image ?? null]))
+
   // Conversations where the other participant is a fellow reader.
   const convos = await db
     .select()
@@ -321,7 +340,7 @@ export async function getBibleReaderMessagePings(): Promise<BibleReaderMessagePi
       conversationId: conv.id,
       userId: otherId,
       name: reader.userName,
-      image: reader.userImage ?? null,
+      image: imageById.get(otherId) ?? reader.userImage ?? null,
       preview: last.deleted
         ? "Message deleted"
         : last.body?.trim()

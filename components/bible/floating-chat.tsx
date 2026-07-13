@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import { CheckCheck, ImageIcon, Loader2, Mic, Minus, Send, Smile, X } from "lucide-react"
 import useSWR from "swr"
@@ -45,11 +45,7 @@ function ChatDock() {
   if (expanded) return <ChatWindow chat={expanded} />
 
   return (
-    <div
-      className="fixed right-3 bottom-[calc(env(safe-area-inset-bottom,0px)+5.5rem)] z-[65] flex flex-col items-end gap-3"
-      role="region"
-      aria-label="Reader chats"
-    >
+    <DraggableDock>
       {openChats.map((chat, i) => (
         <DockBubble
           key={chat.conversationId}
@@ -63,6 +59,124 @@ function ChatDock() {
           }}
         />
       ))}
+    </DraggableDock>
+  )
+}
+
+const DOCK_POS_KEY = "frequency-bible-dock-pos"
+
+// A free-floating container for the minimized chat bubbles. The reader can grab
+// it anywhere and drag it to any spot on screen; the position persists per
+// device. A movement threshold distinguishes a drag from a tap, so grabbing a
+// bubble to move it never accidentally opens the chat.
+function DraggableDock({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const drag = useRef<{ id: number; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(
+    null,
+  )
+
+  // Restore any saved position (clamped into the current viewport).
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DOCK_POS_KEY)
+      if (!raw) return
+      const saved = JSON.parse(raw) as { x: number; y: number }
+      const el = ref.current
+      const w = el?.offsetWidth ?? 64
+      const h = el?.offsetHeight ?? 64
+      setPos({
+        x: Math.max(8, Math.min(saved.x, window.innerWidth - w - 8)),
+        y: Math.max(8, Math.min(saved.y, window.innerHeight - h - 8)),
+      })
+    } catch {
+      /* ignore malformed storage */
+    }
+  }, [])
+
+  function onPointerDown(e: React.PointerEvent) {
+    const el = ref.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    drag.current = {
+      id: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      originX: rect.left,
+      originY: rect.top,
+      moved: false,
+    }
+    el.setPointerCapture(e.pointerId)
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    const d = drag.current
+    const el = ref.current
+    if (!d || !el || e.pointerId !== d.id) return
+    const dx = e.clientX - d.startX
+    const dy = e.clientY - d.startY
+    if (!d.moved && Math.hypot(dx, dy) < 6) return // below threshold — still a tap
+    d.moved = true
+    if (!dragging) setDragging(true)
+    const w = el.offsetWidth
+    const h = el.offsetHeight
+    setPos({
+      x: Math.max(8, Math.min(d.originX + dx, window.innerWidth - w - 8)),
+      y: Math.max(8, Math.min(d.originY + dy, window.innerHeight - h - 8)),
+    })
+  }
+
+  function endDrag(e: React.PointerEvent) {
+    const d = drag.current
+    if (!d || e.pointerId !== d.id) return
+    ref.current?.releasePointerCapture?.(e.pointerId)
+    if (d.moved) {
+      // Persist and briefly swallow the click so the drop doesn't open a chat.
+      setPos((p) => {
+        if (p) {
+          try {
+            localStorage.setItem(DOCK_POS_KEY, JSON.stringify(p))
+          } catch {
+            /* ignore */
+          }
+        }
+        return p
+      })
+      setTimeout(() => setDragging(false), 0)
+    }
+    drag.current = null
+  }
+
+  return (
+    <div
+      ref={ref}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
+      onClickCapture={(e) => {
+        // If this "click" concluded a drag, cancel it so no bubble opens.
+        if (drag.current?.moved || dragging) {
+          e.preventDefault()
+          e.stopPropagation()
+        }
+      }}
+      style={
+        pos
+          ? { left: pos.x, top: pos.y, right: "auto", bottom: "auto", touchAction: "none" }
+          : { touchAction: "none" }
+      }
+      className={cn(
+        "fixed z-[65] flex touch-none select-none flex-col items-end gap-3",
+        dragging ? "cursor-grabbing" : "cursor-grab",
+        // Default anchor (bottom-right) until the reader drags it elsewhere.
+        !pos && "right-3 bottom-[calc(env(safe-area-inset-bottom,0px)+5.5rem)]",
+      )}
+      role="region"
+      aria-label="Reader chats — drag to move"
+    >
+      {children}
     </div>
   )
 }
