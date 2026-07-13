@@ -375,6 +375,13 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
   const upNext = current ? queue.slice(queue.findIndex((s) => s.id === current.id) + 1) : []
   const pct = duration > 0 ? (currentTime / duration) * 100 : 0
 
+  // In-app picture-in-picture: when a *video* is minimised but the OS-level PiP
+  // window isn't available (e.g. inside the installed WebView, where
+  // requestPictureInPicture is unsupported), we keep the same <video> element
+  // mounted and shrink the whole immersive overlay into a small floating card so
+  // the footage keeps *playing on screen* instead of collapsing to a blank cover.
+  const videoMini = minimized && isVideo && !pipActive
+
   return (
     <EpisodePlayerContext.Provider value={{ play, close, minimize, expand, activeId: current?.id ?? null }}>
       {children}
@@ -386,10 +393,16 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
           // always fills the screen even if an ancestor establishes a containing
           // block (e.g. a transform during a page-transition), which would
           // otherwise size `inset-0` against a smaller/offset box and push the
-          // player out of frame.
-          className="fixed left-0 top-0 z-[58] flex h-[100dvh] w-screen flex-col overscroll-contain bg-background"
-          style={minimized ? { display: "none" } : undefined}
-          aria-hidden={minimized}
+          // player out of frame. When `videoMini`, the very same node is
+          // re-styled into a small floating window (in-app PiP) instead.
+          className={cn(
+            "bg-background",
+            videoMini
+              ? "fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] right-2 z-[57] w-[min(46vw,208px)] overflow-hidden rounded-2xl shadow-2xl ring-1 ring-white/15"
+              : "fixed left-0 top-0 z-[58] flex h-[100dvh] w-screen flex-col overscroll-contain",
+          )}
+          style={minimized && !videoMini ? { display: "none" } : undefined}
+          aria-hidden={minimized && !videoMini}
         >
           {/* Ambient backdrop (audio only — video is edge-to-edge black) */}
           {!isVideo &&
@@ -415,7 +428,7 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                  Tapping the surface shows/hides the controls. */
               <div
                 ref={frameRef}
-                onClick={toggleControls}
+                onClick={videoMini ? expand : toggleControls}
                 className={cn(
                   "group relative bg-black",
                   isFullscreen ? "flex h-screen w-screen items-center justify-center" : "aspect-video w-full",
@@ -442,10 +455,12 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                 {/* YouTube-style overlay: plain icon affordances (no circular/pill
                     backgrounds), transport cluster pinned to the exact center, and
                     the time tracker + scrubber docked at the very base. Fades out
-                    (and ignores taps) when the controls are hidden. */}
+                    (and ignores taps) when the controls are hidden. Hidden entirely
+                    in the floating mini window (its own compact controls take over). */}
                 <div
                   className={cn(
                     "absolute inset-0 z-10 transition-opacity duration-200",
+                    videoMini && "hidden",
                     controlsVisible ? "opacity-100" : "pointer-events-none opacity-0",
                   )}
                 >
@@ -580,12 +595,41 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                 <div
                   className={cn(
                     "pointer-events-none absolute inset-x-0 bottom-0 z-10 h-1 transition-opacity duration-200",
-                    controlsVisible ? "opacity-0" : "opacity-100",
+                    videoMini ? "opacity-100" : controlsVisible ? "opacity-0" : "opacity-100",
                   )}
                 >
                   <div className="absolute inset-0 bg-white/25" />
                   <div className="absolute inset-y-0 left-0 bg-primary" style={{ width: `${pct}%` }} />
                 </div>
+
+                {/* Compact controls for the floating mini window: pause/play and
+                    close, top-right; the rest of the surface taps to expand. */}
+                {videoMini && (
+                  <div className="pointer-events-none absolute inset-0 z-20 flex items-start justify-end gap-1 bg-gradient-to-b from-black/45 to-transparent p-1.5">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        toggle()
+                      }}
+                      aria-label={playing ? "Pause" : "Play"}
+                      className="pointer-events-auto flex size-7 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm transition-transform active:scale-90"
+                    >
+                      {playing ? <Pause className="size-3.5" /> : <Play className="size-3.5 translate-x-px" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        close()
+                      }}
+                      aria-label="Close player"
+                      className="pointer-events-auto flex size-7 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm transition-transform active:scale-90"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               /* Audio: hidden media element + a pinned header (cover, scrubber,
@@ -680,8 +724,9 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
               </div>
             )}
 
-            {/* Title + creator — centered for both video and audio. */}
-            <div className="mx-auto w-full max-w-xl px-4 pt-3 text-center">
+            {/* Title + creator — centered for both video and audio. Hidden in the
+                floating mini window, which shows only the footage. */}
+            <div className={cn("mx-auto w-full max-w-xl px-4 pt-3 text-center", videoMini && "hidden")}>
               <h2 className="text-balance font-display text-lg font-bold leading-tight tracking-tight">
                 {current.title}
               </h2>
@@ -689,7 +734,7 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
             </div>
 
             {/* Action bar: Like, Comment, Save, Share */}
-            <div className="mx-auto w-full max-w-xl border-b border-border/60 px-2 py-2">
+            <div className={cn("mx-auto w-full max-w-xl border-b border-border/60 px-2 py-2", videoMini && "hidden")}>
               <EpisodeNowPlayingActions
                 show={current}
                 commentCount={commentCount}
@@ -700,10 +745,17 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
           </div>
 
           {/* ============ SECTION 2 — SCROLLABLE (starts below the action bar) ============ */}
-          <div className="relative z-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4">
+          <div
+            className={cn(
+              "relative z-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4",
+              videoMini && "hidden",
+            )}
+          >
             <div className="mx-auto flex w-full max-w-xl flex-col gap-6">
-              {/* Comments — toggled by the Comment button (and this compact row). */}
-              {commentsExpanded ? (
+              {/* Comments — opened by the Comment button in the action bar. When
+                  collapsed nothing renders here, so "More from…" rises to the top
+                  of the scrollable section. */}
+              {commentsExpanded && (
                 <div className="duration-300 animate-in fade-in slide-in-from-top-1">
                   <div className="mb-3 flex items-center justify-between">
                     <h3 className="text-sm font-semibold">
@@ -725,20 +777,6 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                     <p className="text-sm text-muted-foreground">Comments aren&apos;t available for this item.</p>
                   )}
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setCommentsExpanded(true)}
-                  disabled={!current.episodeId}
-                  aria-expanded={false}
-                  className="flex w-full items-center justify-between rounded-xl border border-border/60 bg-card px-4 py-3 text-sm font-semibold transition-colors hover:bg-secondary/60 disabled:opacity-50"
-                >
-                  <span>
-                    Comments
-                    {commentCount > 0 && <span className="ml-1 text-muted-foreground">({commentCount})</span>}
-                  </span>
-                  <ChevronDown className="size-4 text-muted-foreground" />
-                </button>
               )}
 
               {/* More from… (up next / recommended) — directly beneath comments. */}
@@ -749,27 +787,40 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                     <h3 className="text-sm font-semibold">More from {current.host.name}</h3>
                     <span className="text-xs text-muted-foreground">· {upNext.length}</span>
                   </div>
-                  <ul className="flex flex-col">
+                  {/* YouTube-style recommendations: a large 16:9 thumbnail per
+                      item, with the title and a metadata line beneath it. */}
+                  <ul className="flex flex-col gap-4">
                     {upNext.map((show) => (
                       <li key={show.id}>
                         <button
                           type="button"
                           onClick={() => play(show, queue)}
-                          className="group flex w-full items-center gap-3 rounded-xl px-1 py-2.5 text-left transition-colors hover:bg-foreground/5 active:bg-foreground/10"
+                          className="group flex w-full flex-col gap-2.5 text-left"
                         >
-                          <span className="relative size-12 shrink-0 overflow-hidden rounded-xl bg-secondary">
+                          <span className="relative block aspect-video w-full overflow-hidden rounded-xl bg-secondary">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={show.cover || "/placeholder.svg"} alt="" className="size-full object-cover" />
+                            <img
+                              src={show.cover || "/placeholder.svg"}
+                              alt=""
+                              className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                            />
+                            {show.duration && (
+                              <span className="absolute bottom-1.5 right-1.5 rounded-md bg-black/80 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white">
+                                {show.duration}
+                              </span>
+                            )}
                           </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-semibold leading-tight">{show.title}</span>
-                            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                              {show.duration ? `${show.duration} · ` : ""}
-                              {show.host.name}
+                          <span className="flex items-start gap-3 px-0.5">
+                            <span className="relative mt-0.5 size-9 shrink-0 overflow-hidden rounded-full bg-secondary">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={show.host.avatar || "/placeholder.svg"} alt="" className="size-full object-cover" />
                             </span>
-                          </span>
-                          <span className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors group-hover:bg-foreground/10 group-hover:text-foreground">
-                            <Play className="size-4 translate-x-px" />
+                            <span className="min-w-0 flex-1">
+                              <span className="line-clamp-2 text-sm font-semibold leading-snug">{show.title}</span>
+                              <span className="mt-1 block truncate text-xs text-muted-foreground">
+                                {[show.host.name, show.publishedAt].filter(Boolean).join(" · ")}
+                              </span>
+                            </span>
                           </span>
                         </button>
                       </li>
@@ -782,9 +833,10 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
         </div>
       )}
 
-      {/* Docked mini-player while minimised — suppressed when the video is
-          floating in the OS Picture-in-Picture window (that IS the mini-player). */}
-      {current && minimized && !pipActive && (
+      {/* Docked mini-player while minimised — for AUDIO only. Suppressed when a
+          video is floating in OS Picture-in-Picture, and for video generally
+          (which uses the in-app floating video window / `videoMini` instead). */}
+      {current && minimized && !pipActive && !isVideo && (
         <div className="fixed inset-x-0 bottom-0 z-[55] px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
           <div className="mx-auto flex w-full max-w-2xl items-center gap-2 rounded-2xl border border-white/15 bg-zinc-900/95 p-2 text-left shadow-2xl ring-1 ring-black/40 backdrop-blur-xl">
             <button
