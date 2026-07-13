@@ -29,6 +29,7 @@ import {
   shareToUsers,
   toggleSaveItem,
 } from "@/app/actions/share"
+import { recordShare } from "@/app/actions/engagement"
 
 type Toast = { id: number; message: string; spinner?: boolean }
 
@@ -36,10 +37,13 @@ export function ShareSheet({
   target,
   open,
   onClose,
+  onShared,
 }: {
   target: ShareTarget
   open: boolean
   onClose: () => void
+  /** Fired whenever a genuine share action completes, so callers can bump a live count. */
+  onShared?: () => void
 }) {
   const [mounted, setMounted] = useState(false)
   const [visible, setVisible] = useState(false)
@@ -126,6 +130,8 @@ export function ShareSheet({
     setSending(true)
     try {
       await shareToUsers({ recipientIds: selected, target })
+      void recordShare({ type: target.type, key: target.key })
+                    onShared?.()
       pushToast(`Sent to ${selected.length} ${selected.length === 1 ? "person" : "people"}`)
       setSelected([])
       onClose()
@@ -139,6 +145,8 @@ export function ShareSheet({
   async function handleCopy() {
     try {
       await navigator.clipboard.writeText(absoluteUrl)
+      void recordShare({ type: target.type, key: target.key })
+                    onShared?.()
       pushToast("Link copied")
     } catch {
       pushToast("Could not copy link")
@@ -158,6 +166,8 @@ export function ShareSheet({
   async function handleAddToStatus() {
     try {
       await addTargetToStatus(target)
+      void recordShare({ type: target.type, key: target.key })
+                    onShared?.()
       pushToast("Added to your status")
     } catch (err) {
       pushToast(err instanceof Error ? err.message : "Could not add to status")
@@ -208,6 +218,8 @@ export function ShareSheet({
     if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
       try {
         await navigator.share({ title: target.title, text: target.subtitle ?? target.title, url: absoluteUrl })
+        void recordShare({ type: target.type, key: target.key })
+                    onShared?.()
       } catch {
         // user dismissed the OS sheet — ignore
       }
@@ -376,7 +388,11 @@ export function ShareSheet({
                   icon={t.icon}
                   label={t.label}
                   iconClassName={t.className}
-                  onClick={() => window.open(t.href, "_blank", "noopener,noreferrer")}
+                  onClick={() => {
+                    void recordShare({ type: target.type, key: target.key })
+                    onShared?.()
+                    window.open(t.href, "_blank", "noopener,noreferrer")
+                  }}
                 />
               ))}
               <QuickAction icon={<MoreHorizontal className="size-5" />} label="More apps" onClick={handleSystemShare} />

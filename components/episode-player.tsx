@@ -5,6 +5,7 @@ import { Pause, Play, Radio, RotateCcw, RotateCw, Gauge, Maximize, Minimize, Che
 import type { Show } from "@/lib/data"
 import { cn } from "@/lib/utils"
 import { MarqueeTitle } from "@/components/marquee-title"
+import { recordEpisodeView } from "@/app/actions/engagement"
 
 function fmt(s: number) {
   if (!isFinite(s) || s < 0) return "0:00"
@@ -50,6 +51,9 @@ export function EpisodePlayer({
   const [duration, setDuration] = useState(0)
   const [speedIdx, setSpeedIdx] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  // View tracking: record one view per play/open once playback passes 5% of the
+  // episode length. Guard resets whenever the episode changes.
+  const viewRecordedRef = useRef(false)
   // YouTube-style overlay controls: visible by default, auto-hidden a few
   // seconds into playback, and toggled when the video surface is tapped.
   const [controlsVisible, setControlsVisible] = useState(true)
@@ -64,6 +68,22 @@ export function EpisodePlayer({
   // cover we let the <video> paint its own first frame as the thumbnail instead
   // of pinning the blank placeholder poster.
   const hasRealCover = Boolean(show.cover) && !show.cover!.includes("/placeholder.svg")
+
+  // Reset the view guard whenever the episode changes so a fresh open can count.
+  useEffect(() => {
+    viewRecordedRef.current = false
+  }, [show.episodeId])
+
+  // Record one view once playback passes 5% of the episode length.
+  useEffect(() => {
+    if (viewRecordedRef.current) return
+    const epId = show.episodeId
+    if (!epId || !duration || duration <= 0) return
+    if (current / duration >= 0.05) {
+      viewRecordedRef.current = true
+      void recordEpisodeView(epId)
+    }
+  }, [current, duration, show.episodeId])
 
   // Reveal the overlay controls and schedule an auto-hide while playing. When
   // paused we keep them up so the surface never looks "dead".

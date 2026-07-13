@@ -852,6 +852,8 @@ export function PostCard({
   const [reposted, setReposted] = useState(post.reposted)
   const [reposts, setReposts] = useState(post.reposts)
   const [saved, setSaved] = useState(post.saved)
+  const [saveCount, setSaveCount] = useState(post.saves)
+  const [shareCount, setShareCount] = useState(post.shares)
   const [saveBurst, setSaveBurst] = useState(false)
   const [expanded, setExpanded] = useState(false)
   // Post tab only: measures whether the caption overflows its line clamp so we
@@ -947,6 +949,7 @@ export function PostCard({
     if (!currentUser) return
     const next = !saved
     setSaved(next) // optimistic
+    setSaveCount((n) => Math.max(0, n + (next ? 1 : -1)))
     if (next) {
       haptic("light")
       setSaveBurst(true) // delightful pop only when saving (not un-saving)
@@ -958,6 +961,7 @@ export function PostCard({
         router.refresh()
       } catch {
         setSaved(!next)
+        setSaveCount((n) => Math.max(0, n + (next ? -1 : 1)))
       }
     })
   }
@@ -1306,7 +1310,8 @@ export function PostCard({
         <button
           onClick={toggleSave}
           className={cn(
-            "ml-auto flex items-center transition-colors hover:text-primary",
+            "ml-auto flex items-center gap-1.5 tabular-nums transition-colors hover:text-primary",
+            feed ? "text-[15px]" : "text-sm",
             saved && "text-primary",
             !currentUser && "cursor-not-allowed opacity-60",
           )}
@@ -1317,6 +1322,7 @@ export function PostCard({
             onAnimationEnd={() => setSaveBurst(false)}
             className={cn(feed ? "size-7" : "size-6", saved && "fill-current", saveBurst && "motion-pop")}
           />
+          {saveCount > 0 && <span>{saveCount}</span>}
         </button>
 
         <button
@@ -1328,6 +1334,7 @@ export function PostCard({
           aria-label="Share"
         >
           <Send className={cn(feed ? "size-7" : "size-6")} />
+          {shareCount > 0 && <span>{shareCount}</span>}
         </button>
       </div>
 
@@ -1373,7 +1380,12 @@ export function PostCard({
         </div>
       )}
 
-      <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
+      <ShareSheet
+        target={shareTarget}
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        onShared={() => setShareCount((n) => n + 1)}
+      />
     </article>
   )
 }
