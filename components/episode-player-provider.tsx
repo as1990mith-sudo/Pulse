@@ -741,45 +741,104 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                     <h3 className="text-sm font-semibold">More from {current.host.name}</h3>
                     <span className="text-xs text-muted-foreground">· {upNext.length}</span>
                   </div>
-                  {/* YouTube-style recommendations: a large 16:9 thumbnail per
-                      item, with the title and a metadata line beneath it. */}
-                  <ul className="flex flex-col gap-4">
-                    {upNext.map((show) => (
-                      <li key={show.id}>
-                        <button
-                          type="button"
-                          onClick={() => play(show, queue)}
-                          className="group flex w-full flex-col gap-2.5 text-left"
-                        >
-                          <span className="relative block aspect-video w-full overflow-hidden rounded-xl bg-secondary">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={show.cover || "/placeholder.svg"}
-                              alt=""
-                              className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-                            />
-                            {show.duration && (
-                              <span className="absolute bottom-1.5 right-1.5 rounded-md bg-black/80 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white">
-                                {show.duration}
+                  {isVideo ? (
+                    /* Video: immersive YouTube-style recommendations — full-bleed
+                       16:9 thumbnails (edge to edge) that show the video's own
+                       first frame when it has no cover art, with the title +
+                       meta beneath. */
+                    <ul className="-mx-4 flex flex-col gap-5">
+                      {upNext.map((show) => {
+                        const hasCover = Boolean(show.cover && show.cover !== "/placeholder.svg")
+                        const frameSrc = show.videoUrl
+                          ? show.videoUrl.includes("#")
+                            ? show.videoUrl
+                            : `${show.videoUrl}#t=0.1`
+                          : undefined
+                        return (
+                          <li key={show.id}>
+                            <button
+                              type="button"
+                              onClick={() => play(show, queue)}
+                              className="group flex w-full flex-col gap-2.5 text-left"
+                            >
+                              <span className="relative block aspect-video w-full overflow-hidden bg-secondary">
+                                {hasCover ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={show.cover || "/placeholder.svg"}
+                                    alt=""
+                                    className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                                  />
+                                ) : frameSrc ? (
+                                  <video
+                                    src={frameSrc}
+                                    muted
+                                    playsInline
+                                    preload="metadata"
+                                    className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                                  />
+                                ) : (
+                                  <span className="flex size-full items-center justify-center text-muted-foreground">
+                                    <Play className="size-8" />
+                                  </span>
+                                )}
+                                {show.duration && (
+                                  <span className="absolute bottom-1.5 right-1.5 rounded-md bg-black/80 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white">
+                                    {show.duration}
+                                  </span>
+                                )}
                               </span>
-                            )}
-                          </span>
-                          <span className="flex items-start gap-3 px-0.5">
-                            <span className="relative mt-0.5 size-9 shrink-0 overflow-hidden rounded-full bg-secondary">
+                              <span className="flex items-start gap-3 px-4">
+                                <span className="relative mt-0.5 size-9 shrink-0 overflow-hidden rounded-full bg-secondary">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={show.host.avatar || "/placeholder.svg"}
+                                    alt=""
+                                    className="size-full object-cover"
+                                  />
+                                </span>
+                                <span className="min-w-0 flex-1">
+                                  <span className="line-clamp-2 text-sm font-semibold leading-snug">{show.title}</span>
+                                  <span className="mt-1 block truncate text-xs text-muted-foreground">
+                                    {[show.host.name, show.publishedAt].filter(Boolean).join(" · ")}
+                                  </span>
+                                </span>
+                              </span>
+                            </button>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  ) : (
+                    /* Audio: compact small-icon list (square cover, title/meta,
+                       play affordance) — the original catalogue player style. */
+                    <ul className="flex flex-col">
+                      {upNext.map((show) => (
+                        <li key={show.id}>
+                          <button
+                            type="button"
+                            onClick={() => play(show, queue)}
+                            className="group flex w-full items-center gap-3 rounded-xl px-1 py-2.5 text-left transition-colors hover:bg-foreground/5 active:bg-foreground/10"
+                          >
+                            <span className="relative size-12 shrink-0 overflow-hidden rounded-xl bg-secondary">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={show.host.avatar || "/placeholder.svg"} alt="" className="size-full object-cover" />
+                              <img src={show.cover || "/placeholder.svg"} alt="" className="size-full object-cover" />
                             </span>
                             <span className="min-w-0 flex-1">
-                              <span className="line-clamp-2 text-sm font-semibold leading-snug">{show.title}</span>
-                              <span className="mt-1 block truncate text-xs text-muted-foreground">
-                                {[show.host.name, show.publishedAt].filter(Boolean).join(" · ")}
+                              <span className="block truncate text-sm font-semibold leading-tight">{show.title}</span>
+                              <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                                {show.duration ? `${show.duration} · ` : ""}
+                                {show.host.name}
                               </span>
                             </span>
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+                            <span className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors group-hover:bg-foreground/10 group-hover:text-foreground">
+                              <Play className="size-4 translate-x-px" />
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
             </div>
