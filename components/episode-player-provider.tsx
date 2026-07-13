@@ -340,6 +340,75 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
   // close/expand controls (no reliance on the ambiguous OS PiP window).
   const videoMini = minimized && isVideo
 
+  // Free-floating position of the mini window. `null` uses the default anchor
+  // (just above the footer, bottom-right); once dragged it becomes explicit
+  // left/top coordinates. Reset whenever we leave the mini state so the next
+  // minimise starts from the tidy default spot.
+  const overlayRef = useRef<HTMLDivElement>(null)
+  const [miniPos, setMiniPos] = useState<{ x: number; y: number } | null>(null)
+  const miniDrag = useRef<{
+    id: number
+    startX: number
+    startY: number
+    originX: number
+    originY: number
+    moved: boolean
+  } | null>(null)
+  // Set true when a drag actually moved the card, so the closing click doesn't
+  // get interpreted as a tap-to-expand.
+  const miniMoved = useRef(false)
+
+  useEffect(() => {
+    if (!videoMini) {
+      setMiniPos(null)
+      miniDrag.current = null
+      miniMoved.current = false
+    }
+  }, [videoMini])
+
+  function onMiniPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (!videoMini) return
+    // Don't start a drag from the pause/close controls — let them click.
+    if ((e.target as HTMLElement).closest("button")) return
+    const el = overlayRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    miniDrag.current = {
+      id: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      originX: rect.left,
+      originY: rect.top,
+      moved: false,
+    }
+    miniMoved.current = false
+    el.setPointerCapture(e.pointerId)
+  }
+
+  function onMiniPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const d = miniDrag.current
+    const el = overlayRef.current
+    if (!d || !el || e.pointerId !== d.id) return
+    const dx = e.clientX - d.startX
+    const dy = e.clientY - d.startY
+    if (!d.moved && Math.hypot(dx, dy) < 6) return // below threshold — still a tap
+    d.moved = true
+    miniMoved.current = true
+    const w = el.offsetWidth
+    const h = el.offsetHeight
+    setMiniPos({
+      x: Math.max(8, Math.min(d.originX + dx, window.innerWidth - w - 8)),
+      y: Math.max(8, Math.min(d.originY + dy, window.innerHeight - h - 8)),
+    })
+  }
+
+  function onMiniPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    const d = miniDrag.current
+    if (!d || e.pointerId !== d.id) return
+    overlayRef.current?.releasePointerCapture?.(e.pointerId)
+    miniDrag.current = null
+  }
+
   return (
     <EpisodePlayerContext.Provider value={{ play, close, minimize, expand, activeId: current?.id ?? null }}>
       {children}
@@ -347,19 +416,37 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
       {/* Immersive overlay */}
       {current && (
         <div
+          ref={overlayRef}
+          onPointerDown={onMiniPointerDown}
+          onPointerMove={onMiniPointerMove}
+          onPointerUp={onMiniPointerUp}
+          onPointerCancel={onMiniPointerUp}
           // Explicit viewport dimensions (not `inset-0`) so the immersive player
           // always fills the screen even if an ancestor establishes a containing
           // block (e.g. a transform during a page-transition), which would
           // otherwise size `inset-0` against a smaller/offset box and push the
           // player out of frame. When `videoMini`, the very same node is
-          // re-styled into a small floating window (in-app PiP) instead.
+          // re-styled into a small floating, draggable window (in-app PiP).
           className={cn(
             "bg-background",
             videoMini
-              ? "fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] right-2 z-[57] w-[min(46vw,208px)] overflow-hidden rounded-2xl shadow-2xl ring-1 ring-white/15"
+              ? cn(
+                  // z-[60] keeps it above the footer nav (z-50) so it sits on top
+                  // of it while being dragged, and the default anchor clears the
+                  // footer pill so it doesn't cover it at rest.
+                  "fixed z-[60] w-[min(46vw,208px)] touch-none select-none overflow-hidden rounded-2xl shadow-2xl ring-1 ring-white/15",
+                  miniDrag.current?.moved ? "cursor-grabbing" : "cursor-grab",
+                  !miniPos && "bottom-[calc(env(safe-area-inset-bottom,0px)+5rem)] right-2",
+                )
               : "fixed left-0 top-0 z-[58] flex h-[100dvh] w-screen flex-col overscroll-contain",
           )}
-          style={minimized && !videoMini ? { display: "none" } : undefined}
+          style={
+            videoMini && miniPos
+              ? { left: miniPos.x, top: miniPos.y, right: "auto", bottom: "auto" }
+              : minimized && !videoMini
+                ? { display: "none" }
+                : undefined
+          }
           aria-hidden={minimized && !videoMini}
         >
           {/* Ambient backdrop (audio only — video is edge-to-edge black) */}
@@ -386,7 +473,19 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                  Tapping the surface shows/hides the controls. */
               <div
                 ref={frameRef}
-                onClick={videoMini ? expand : toggleControls}
+                onClick={() => {
+                  if (videoMini) {
+                    // Suppress the click that concludes a drag so dropping the
+                    // card in place never expands it.
+                    if (miniMoved.current) {
+                      miniMoved.current = false
+                      return
+                    }
+                    expand()
+                  } else {
+                    toggleControls()
+                  }
+                }}
                 className={cn(
                   "group relative bg-black",
                   isFullscreen ? "flex h-screen w-screen items-center justify-center" : "aspect-video w-full",
