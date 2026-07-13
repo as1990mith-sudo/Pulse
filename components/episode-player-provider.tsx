@@ -799,27 +799,40 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                     <h3 className="text-sm font-semibold">More from {current.host.name}</h3>
                     <span className="text-xs text-muted-foreground">· {upNext.length}</span>
                   </div>
-                  <ul className="flex flex-col">
+                  {/* YouTube-style recommendations: a large 16:9 thumbnail per
+                      item, with the title and a metadata line beneath it. */}
+                  <ul className="flex flex-col gap-4">
                     {upNext.map((show) => (
                       <li key={show.id}>
                         <button
                           type="button"
                           onClick={() => play(show, queue)}
-                          className="group flex w-full items-center gap-3 rounded-xl px-1 py-2.5 text-left transition-colors hover:bg-foreground/5 active:bg-foreground/10"
+                          className="group flex w-full flex-col gap-2.5 text-left"
                         >
-                          <span className="relative size-12 shrink-0 overflow-hidden rounded-xl bg-secondary">
+                          <span className="relative block aspect-video w-full overflow-hidden rounded-xl bg-secondary">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={show.cover || "/placeholder.svg"} alt="" className="size-full object-cover" />
+                            <img
+                              src={show.cover || "/placeholder.svg"}
+                              alt=""
+                              className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                            />
+                            {show.duration && (
+                              <span className="absolute bottom-1.5 right-1.5 rounded-md bg-black/80 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white">
+                                {show.duration}
+                              </span>
+                            )}
                           </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-semibold leading-tight">{show.title}</span>
-                            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                              {show.duration ? `${show.duration} · ` : ""}
-                              {show.host.name}
+                          <span className="flex items-start gap-3 px-0.5">
+                            <span className="relative mt-0.5 size-9 shrink-0 overflow-hidden rounded-full bg-secondary">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={show.host.avatar || "/placeholder.svg"} alt="" className="size-full object-cover" />
                             </span>
-                          </span>
-                          <span className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors group-hover:bg-foreground/10 group-hover:text-foreground">
-                            <Play className="size-4 translate-x-px" />
+                            <span className="min-w-0 flex-1">
+                              <span className="line-clamp-2 text-sm font-semibold leading-snug">{show.title}</span>
+                              <span className="mt-1 block truncate text-xs text-muted-foreground">
+                                {[show.host.name, show.publishedAt].filter(Boolean).join(" · ")}
+                              </span>
+                            </span>
                           </span>
                         </button>
                       </li>
