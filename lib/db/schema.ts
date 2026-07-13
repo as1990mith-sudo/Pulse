@@ -663,6 +663,29 @@ export const like = pgTable(
   }),
 )
 
+// --- Content views (episode plays) -----------------------------------------
+// One row per qualifying episode play: a play/open that reached at least 5% of
+// the episode's length. Views are the total number of rows (every play counts,
+// including repeats by the same person). `userId` is null for signed-out plays.
+export const contentView = pgTable("content_view", {
+  id: serial("id").primaryKey(),
+  userId: text("userId"),
+  episodeId: integer("episodeId").notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// --- Shares -----------------------------------------------------------------
+// One row per deliberate share action (send to a chat, copy link, native share,
+// add to status, external app). Backs the denormalized share counts shown on
+// posts and episodes. `userId` is null for signed-out shares (e.g. copy link).
+export const share = pgTable("share", {
+  id: serial("id").primaryKey(),
+  userId: text("userId"),
+  targetType: text("targetType").notNull(), // "post" | "episode"
+  targetKey: text("targetKey").notNull(), // post id or episode id, as a string
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
 // --- Store (creator marketplace) -------------------------------------------
 // A product any signed-in user can publish and sell: a book or a course. Prices
 // are stored in integer cents to avoid floating-point money bugs. The creator

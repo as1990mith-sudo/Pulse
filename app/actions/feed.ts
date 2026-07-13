@@ -1,11 +1,11 @@
 "use server"
 
-import { and, asc, desc, eq, ilike, inArray, or } from "drizzle-orm"
+import { and, asc, count, desc, eq, ilike, inArray, or } from "drizzle-orm"
 import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { feedComment, feedPost, follow, repost, savedItem, user as userTable } from "@/lib/db/schema"
+import { feedComment, feedPost, follow, repost, savedItem, share, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { getLikedSet, setLike } from "@/lib/likes"
 import { notifyUser } from "@/app/actions/notifications"
@@ -67,6 +67,9 @@ export type FeedPostView = {
   reposts: number
   reposted: boolean
   saved: boolean
+  // Total times this post has been bookmarked / shared across all users.
+  saves: number
+  shares: number
   edited: boolean
   isFollowing: boolean
   isSelf: boolean
@@ -88,6 +91,30 @@ async function getSavedPostSet(userId: string | null): Promise<Set<string>> {
     .from(savedItem)
     .where(and(eq(savedItem.userId, userId), eq(savedItem.itemType, "post")))
   return new Set(rows.map((r) => r.key))
+}
+
+/** Total save (bookmark) count per post across all users, for the given ids. */
+async function getPostSaveCounts(postIds: number[]): Promise<Map<number, number>> {
+  if (postIds.length === 0) return new Map()
+  const keys = postIds.map(String)
+  const rows = await db
+    .select({ key: savedItem.itemKey, n: count() })
+    .from(savedItem)
+    .where(and(eq(savedItem.itemType, "post"), inArray(savedItem.itemKey, keys)))
+    .groupBy(savedItem.itemKey)
+  return new Map(rows.map((r) => [Number(r.key), r.n]))
+}
+
+/** Total share count per post across all users, for the given ids. */
+async function getPostShareCounts(postIds: number[]): Promise<Map<number, number>> {
+  if (postIds.length === 0) return new Map()
+  const keys = postIds.map(String)
+  const rows = await db
+    .select({ key: share.targetKey, n: count() })
+    .from(share)
+    .where(and(eq(share.targetType, "post"), inArray(share.targetKey, keys)))
+    .groupBy(share.targetKey)
+  return new Map(rows.map((r) => [Number(r.key), r.n]))
 }
 
 // Maps a feed_comment row to the client view. `currentUserId` decides `isSelf`.
@@ -163,6 +190,8 @@ export async function getFeed(): Promise<FeedPostView[]> {
   const comments = await db.select().from(feedComment).orderBy(asc(feedComment.createdAt))
   const repostedSet = await getRepostedSet(currentUserId)
   const savedSet = await getSavedPostSet(currentUserId)
+  const saveCounts = await getPostSaveCounts(posts.map((p) => p.id))
+  const shareCounts = await getPostShareCounts(posts.map((p) => p.id))
   const likedPostSet = await getLikedSet(currentUserId, "post", posts.map((p) => p.id))
   const likedCommentSet = await getLikedSet(currentUserId, "feed_comment", comments.map((c) => c.id))
 
@@ -247,6 +276,8 @@ export async function searchPosts(query: string): Promise<FeedPostView[]> {
     .orderBy(asc(feedComment.createdAt))
   const repostedSet = await getRepostedSet(currentUserId)
   const savedSet = await getSavedPostSet(currentUserId)
+  const saveCounts = await getPostSaveCounts(postIds)
+  const shareCounts = await getPostShareCounts(postIds)
   const likedPostSet = await getLikedSet(currentUserId, "post", postIds)
   const likedCommentSet = await getLikedSet(currentUserId, "feed_comment", comments.map((c) => c.id))
 
@@ -306,6 +337,8 @@ export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
   const comments = await db.select().from(feedComment).orderBy(asc(feedComment.createdAt))
   const repostedSet = await getRepostedSet(currentUserId)
   const savedSet = await getSavedPostSet(currentUserId)
+  const saveCounts = await getPostSaveCounts(posts.map((p) => p.id))
+  const shareCounts = await getPostShareCounts(posts.map((p) => p.id))
   const likedPostSet = await getLikedSet(currentUserId, "post", posts.map((p) => p.id))
   const likedCommentSet = await getLikedSet(currentUserId, "feed_comment", comments.map((c) => c.id))
 
@@ -364,6 +397,8 @@ export async function getRepostsByUser(userId: string): Promise<FeedPostView[]> 
   const comments = await db.select().from(feedComment).orderBy(asc(feedComment.createdAt))
   const repostedSet = await getRepostedSet(currentUserId)
   const savedSet = await getSavedPostSet(currentUserId)
+  const saveCounts = await getPostSaveCounts(posts.map((p) => p.id))
+  const shareCounts = await getPostShareCounts(posts.map((p) => p.id))
   const likedPostSet = await getLikedSet(currentUserId, "post", posts.map((p) => p.id))
   const likedCommentSet = await getLikedSet(currentUserId, "feed_comment", comments.map((c) => c.id))
 

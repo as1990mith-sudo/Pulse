@@ -3,6 +3,7 @@ import { db } from "@/lib/db"
 import { devotional, episode, user as userTable } from "@/lib/db/schema"
 import type { Devotional, Show, Host, PodcastHost } from "@/lib/data"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
+import { getEpisodeViewCounts } from "@/app/actions/engagement"
 
 function relativeTime(date: Date): string {
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
@@ -30,8 +31,9 @@ function hostFromName(name: string): Host {
   }
 }
 
-/** Maps a DB episode row to the Show shape the catalogue + live pages expect. */
-function episodeToShow(row: typeof episode.$inferSelect): Show {
+/** Maps a DB episode row to the Show shape the catalogue + live pages expect.
+ * `views` is the episode's real play count, shown as "N views" on cards. */
+function episodeToShow(row: typeof episode.$inferSelect, views = 0): Show {
   // When a host published the session themselves, link their profile by userId.
   const host: Host = row.hostUserId
     ? {
@@ -50,7 +52,7 @@ function episodeToShow(row: typeof episode.$inferSelect): Show {
     category: row.category,
     host,
     status: "ended",
-    listeners: 0,
+    listeners: views,
     duration: row.duration || undefined,
     publishedAt: relativeTime(row.createdAt),
     publishedDate: formatPublishedDate(row.createdAt),
@@ -80,7 +82,8 @@ export async function getEpisodesByUser(userId: string, includePrivate = false):
     )
     .orderBy(desc(episode.createdAt))
 
-  return rows.map(episodeToShow)
+  const viewCounts = await getEpisodeViewCounts(rows.map((r) => r.id))
+  return rows.map((r) => episodeToShow(r, viewCounts.get(r.id) ?? 0))
 }
 
 /**
@@ -111,7 +114,8 @@ export async function getCatalogEpisodes(): Promise<Show[]> {
     .from(episode)
     .where(eq(episode.isPrivate, false))
     .orderBy(desc(episode.createdAt))
-  return rows.map(episodeToShow)
+  const viewCounts = await getEpisodeViewCounts(rows.map((r) => r.id))
+  return rows.map((r) => episodeToShow(r, viewCounts.get(r.id) ?? 0))
 }
 
 /**
@@ -164,7 +168,9 @@ export async function getPodcastHosts(): Promise<PodcastHost[]> {
 /** Resolves a published episode by its slug. */
 export async function resolveShow(id: string): Promise<Show | undefined> {
   const [row] = await db.select().from(episode).where(eq(episode.slug, id)).limit(1)
-  return row ? episodeToShow(row) : undefined
+  if (!row) return undefined
+  const viewCounts = await getEpisodeViewCounts([row.id])
+  return episodeToShow(row, viewCounts.get(row.id) ?? 0)
 }
 
 /** All admin-managed rows, for listing/deleting inside the dashboard. */
