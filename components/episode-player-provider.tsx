@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
-import { ChevronDown, ChevronUp, Gauge, ListMusic, Maximize, Minimize, Pause, Play, Radio, RotateCcw, RotateCw, X } from "lucide-react"
+import { ChevronDown, ChevronUp, Gauge, ListMusic, Maximize, Minimize, Pause, Play, Radio, RotateCcw, RotateCw, SkipBack, SkipForward, X } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { cn } from "@/lib/utils"
 import { getEpisodeComments } from "@/app/actions/episodes"
@@ -71,6 +71,12 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
   // Whether the on-video transport controls are shown (tap the video to toggle;
   // they auto-hide a few seconds after playback starts, like YouTube).
   const [controlsVisible, setControlsVisible] = useState(true)
+  // Double-tap-to-seek: a single tap toggles the controls (after a short delay
+  // to disambiguate), while a double tap on the left/right half of the video
+  // seeks backward/forward. `seekFlash` briefly shows the ±15s affordance.
+  const lastTapRef = useRef<{ t: number } | null>(null)
+  const singleTapTimer = useRef<number | null>(null)
+  const [seekFlash, setSeekFlash] = useState<"fwd" | "back" | null>(null)
   // Inline comment section (Section 2): expanded shows composer + thread, else a
   // compact "Comments (n)" row. Count is loaded per track so the badge/row stay
   // accurate whether or not the section is expanded.
@@ -249,6 +255,45 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
     setCurrentTime(t)
   }
 
+  // A tap on the video surface: a lone tap toggles the controls, while a second
+  // tap within the double-tap window seeks by ±15s depending on which half of
+  // the frame was tapped (left = back, right = forward), YouTube-style.
+  function onVideoSurfaceTap(e: React.MouseEvent<HTMLDivElement>) {
+    if (videoMini) {
+      // In the floating mini window a tap expands — unless it concluded a drag.
+      if (miniMoved.current) {
+        miniMoved.current = false
+        return
+      }
+      expand()
+      return
+    }
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const now = Date.now()
+    const prev = lastTapRef.current
+    if (prev && now - prev.t < 300) {
+      // Double tap → cancel the pending control-toggle and seek by side.
+      if (singleTapTimer.current) {
+        window.clearTimeout(singleTapTimer.current)
+        singleTapTimer.current = null
+      }
+      lastTapRef.current = null
+      const forward = x > rect.width / 2
+      skip(forward ? 15 : -15)
+      setSeekFlash(forward ? "fwd" : "back")
+      window.setTimeout(() => setSeekFlash(null), 450)
+      return
+    }
+    // First tap: wait briefly for a possible second tap before toggling.
+    lastTapRef.current = { t: now }
+    singleTapTimer.current = window.setTimeout(() => {
+      toggleControls()
+      singleTapTimer.current = null
+      lastTapRef.current = null
+    }, 260)
+  }
+
   function cycleSpeed() {
     const next = (speedIdx + 1) % SPEEDS.length
     setSpeedIdx(next)
@@ -357,7 +402,16 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
     if (next) play(next, queue)
   }
 
-  const upNext = current ? queue.slice(queue.findIndex((s) => s.id === current.id) + 1) : []
+  const currentIndex = current ? queue.findIndex((s) => s.id === current.id) : -1
+  const upNext = currentIndex >= 0 ? queue.slice(currentIndex + 1) : []
+  const hasPrev = currentIndex > 0
+  const hasNext = currentIndex >= 0 && currentIndex < queue.length - 1
+  const playPrev = () => {
+    if (hasPrev) play(queue[currentIndex - 1], queue)
+  }
+  const playNext = () => {
+    if (hasNext) play(queue[currentIndex + 1], queue)
+  }
   const pct = duration > 0 ? (currentTime / duration) * 100 : 0
 
   // In-app picture-in-picture: when a *video* is minimised we keep the same
@@ -499,19 +553,7 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                  Tapping the surface shows/hides the controls. */
               <div
                 ref={frameRef}
-                onClick={() => {
-                  if (videoMini) {
-                    // Suppress the click that concludes a drag so dropping the
-                    // card in place never expands it.
-                    if (miniMoved.current) {
-                      miniMoved.current = false
-                      return
-                    }
-                    expand()
-                  } else {
-                    toggleControls()
-                  }
-                }}
+                onClick={onVideoSurfaceTap}
                 className={cn(
                   "group relative bg-black",
                   isFullscreen ? "flex h-screen w-screen items-center justify-center" : "aspect-video w-full",
@@ -535,6 +577,22 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                   }}
                   onEnded={handleEnded}
                 />
+
+                {/* Double-tap seek affordance: a brief ±15s badge on the tapped
+                    side. Never intercepts taps. Hidden in the mini window. */}
+                {seekFlash && !videoMini && (
+                  <div
+                    className={cn(
+                      "pointer-events-none absolute inset-y-0 z-10 flex w-2/5 items-center justify-center",
+                      seekFlash === "fwd" ? "right-0" : "left-0",
+                    )}
+                  >
+                    <div className="flex flex-col items-center gap-1 rounded-2xl bg-black/45 px-5 py-4 text-white duration-200 animate-in fade-in zoom-in-95">
+                      {seekFlash === "fwd" ? <RotateCw className="size-7" /> : <RotateCcw className="size-7" />}
+                      <span className="text-xs font-semibold tabular-nums">15s</span>
+                    </div>
+                  </div>
+                )}
 
                 {/* YouTube-style overlay: plain icon affordances (no circular/pill
                     backgrounds), transport cluster pinned to the exact center, and
@@ -578,8 +636,9 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                     <X className="size-7" />
                   </button>
 
-                  {/* Transport cluster (rewind / play / forward), pinned to the exact
-                      center. The full-frame wrapper must NOT capture pointer events
+                  {/* Transport cluster (previous / play / next), pinned to the exact
+                      center. Seeking is handled by double-tapping the video's left or
+                      right half. The full-frame wrapper must NOT capture pointer events
                       (so surface taps still toggle the controls); only the buttons
                       opt back in. */}
                   <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -595,12 +654,13 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          skip(-15)
+                          playPrev()
                         }}
-                        aria-label="Rewind 15 seconds"
-                        className="flex items-center justify-center text-white/85 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-colors hover:text-white active:scale-90"
+                        disabled={!hasPrev}
+                        aria-label="Previous episode"
+                        className="flex items-center justify-center text-white/85 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-colors hover:text-white active:scale-90 disabled:pointer-events-none disabled:opacity-30"
                       >
-                        <RotateCcw className="size-7" />
+                        <SkipBack className="size-7" />
                       </button>
                       <button
                         onClick={(e) => {
@@ -615,12 +675,13 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          skip(15)
+                          playNext()
                         }}
-                        aria-label="Forward 15 seconds"
-                        className="flex items-center justify-center text-white/85 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-colors hover:text-white active:scale-90"
+                        disabled={!hasNext}
+                        aria-label="Next episode"
+                        className="flex items-center justify-center text-white/85 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-colors hover:text-white active:scale-90 disabled:pointer-events-none disabled:opacity-30"
                       >
-                        <RotateCw className="size-7" />
+                        <SkipForward className="size-7" />
                       </button>
                     </div>
                   </div>
@@ -803,9 +864,20 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
               </div>
             )}
 
-            {/* Title + creator — centered for both video and audio. Hidden in the
-                floating mini window, which shows only the footage. */}
-            <div className={cn("mx-auto w-full max-w-xl px-4 pt-3 text-center", videoMini && "hidden")}>
+          </div>
+
+          {/* ============ SECTION 2 — SCROLLABLE ============
+              The title scrolls up out of view while the action bar sticks to the
+              top of this region (just beneath the pinned media) so it stays put
+              while browsing "More from…". */}
+          <div
+            className={cn(
+              "relative z-0 flex-1 overflow-y-auto overscroll-contain pb-[max(1.5rem,env(safe-area-inset-bottom))]",
+              videoMini && "hidden",
+            )}
+          >
+            {/* Title + creator — centered; scrolls up into hiding. */}
+            <div className="mx-auto w-full max-w-xl px-4 pt-3 text-center">
               <h2 className="text-balance font-display text-lg font-bold leading-tight tracking-tight">
                 {current.title}
               </h2>
@@ -833,25 +905,20 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
               )}
             </div>
 
-            {/* Action bar: Like, Comment, Save, Share */}
-            <div className={cn("mx-auto w-full max-w-xl border-b border-border/60 px-2 py-2", videoMini && "hidden")}>
-              <EpisodeNowPlayingActions
-                show={current}
-                commentCount={commentCount}
-                commentsExpanded={commentsExpanded}
-                onToggleComments={() => setCommentsExpanded((v) => !v)}
-              />
+            {/* Action bar: Like, Comment, Save, Share — sticky so it never scrolls
+                out of view (opaque background covers content sliding beneath). */}
+            <div className="sticky top-0 z-20 border-b border-border/60 bg-background">
+              <div className="mx-auto w-full max-w-xl px-2 py-2">
+                <EpisodeNowPlayingActions
+                  show={current}
+                  commentCount={commentCount}
+                  commentsExpanded={commentsExpanded}
+                  onToggleComments={() => setCommentsExpanded((v) => !v)}
+                />
+              </div>
             </div>
-          </div>
 
-          {/* ============ SECTION 2 — SCROLLABLE (starts below the action bar) ============ */}
-          <div
-            className={cn(
-              "relative z-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4",
-              videoMini && "hidden",
-            )}
-          >
-            <div className="mx-auto flex w-full max-w-xl flex-col gap-6">
+            <div className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 pt-4">
               {/* Comments — opened by the Comment button in the action bar. When
                   collapsed nothing renders here, so "More from…" rises to the top
                   of the scrollable section. */}
