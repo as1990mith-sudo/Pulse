@@ -5,6 +5,7 @@ import { ChevronDown, ChevronUp, Gauge, ListMusic, Maximize, Minimize, Pause, Pl
 import type { Show } from "@/lib/data"
 import { cn } from "@/lib/utils"
 import { getEpisodeComments } from "@/app/actions/episodes"
+import { recordEpisodeView, getEpisodeEngagement, type EpisodeEngagement } from "@/app/actions/engagement"
 import { EpisodeNowPlayingActions } from "@/components/episode-now-playing-actions"
 import { EpisodeCommentsInline } from "@/components/episode-comments-inline"
 
@@ -63,6 +64,10 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [speedIdx, setSpeedIdx] = useState(0)
+  // Guards view recording: flips true once the current play/open has passed the
+  // 5% threshold so a single play counts exactly one view (scrubbing back and
+  // forth doesn't inflate it). Reset on every new play/open below.
+  const viewRecordedRef = useRef(false)
   // Whether the on-video transport controls are shown (tap the video to toggle;
   // they auto-hide a few seconds after playback starts, like YouTube).
   const [controlsVisible, setControlsVisible] = useState(true)
@@ -71,6 +76,9 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
   // accurate whether or not the section is expanded.
   const [commentsExpanded, setCommentsExpanded] = useState(false)
   const [commentCount, setCommentCount] = useState(0)
+  // Full engagement summary (views · likes · comments · shares · saves) shown as
+  // a stats line under the title. Loaded when the track opens.
+  const [engagement, setEngagement] = useState<EpisodeEngagement | null>(null)
 
   // The active track's playable source + whether it's a video recording. A
   // single <video> element drives both audio and video episodes (a <video>
@@ -90,7 +98,22 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
     setControlsVisible(true)
     setCommentsExpanded(false)
     setCommentCount(0)
+    setEngagement(null)
+    viewRecordedRef.current = false
   }, [])
+
+  // Record a view once the current play/open reaches at least 5% of the
+  // episode's length. Every qualifying play counts (including repeats), and the
+  // ref guard ensures a single play records exactly one view.
+  useEffect(() => {
+    if (viewRecordedRef.current) return
+    const epId = current?.episodeId
+    if (!epId || !duration || duration <= 0) return
+    if (currentTime / duration >= 0.05) {
+      viewRecordedRef.current = true
+      void recordEpisodeView(epId)
+    }
+  }, [currentTime, duration, current?.episodeId])
 
   const expand = useCallback(() => {
     // Restore the immersive view. Playback is uninterrupted because the same
@@ -152,6 +175,9 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
     let active = true
     getEpisodeComments(episodeId)
       .then((c) => active && setCommentCount(c.length))
+      .catch(() => {})
+    getEpisodeEngagement(episodeId)
+      .then((e) => active && setEngagement(e))
       .catch(() => {})
     return () => {
       active = false
@@ -784,6 +810,27 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                 {current.title}
               </h2>
               <p className="mt-0.5 text-sm text-muted-foreground">{current.host.name}</p>
+              {engagement && (
+                <p className="mt-1.5 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+                  {(
+                    [
+                      ["views", engagement.views],
+                      ["likes", engagement.likes],
+                      ["comments", commentCount],
+                      ["shares", engagement.shares],
+                      ["saves", engagement.saves],
+                    ] as const
+                  ).map(([label, value], i) => (
+                    <span key={label} className="inline-flex items-center gap-1.5">
+                      {i > 0 && <span aria-hidden className="text-muted-foreground/40">·</span>}
+                      <span className="font-semibold tabular-nums text-foreground">
+                        {new Intl.NumberFormat("en", { notation: "compact" }).format(value)}
+                      </span>
+                      {label}
+                    </span>
+                  ))}
+                </p>
+              )}
             </div>
 
             {/* Action bar: Like, Comment, Save, Share */}

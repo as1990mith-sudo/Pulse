@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Clock, Download, Globe, Loader2, Lock, MoreVertical, Play, Trash2 } from "lucide-react"
+import { Clock, Download, Eye, Globe, Loader2, Lock, MoreVertical, Play, Trash2 } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { deleteEpisode, setEpisodePrivacy } from "@/app/actions/shows"
 import { Badge } from "@/components/ui/badge"
@@ -149,6 +149,12 @@ export function EpisodeRow({ show, owned = false, queue }: { show: Show; owned?:
       </OpenTag>
 
       <div className="flex shrink-0 items-center gap-1">
+        {show.status !== "live" && (
+          <span className="mr-1 inline-flex items-center gap-1 text-[11px] tabular-nums text-muted-foreground">
+            <Eye className="size-3" />{" "}
+            {new Intl.NumberFormat("en", { notation: "compact" }).format(show.listeners)}
+          </span>
+        )}
         {show.status !== "live" && show.duration && (
           <span className="mr-1 inline-flex items-center gap-1 text-[11px] tabular-nums text-muted-foreground">
             <Clock className="size-3" /> {show.duration}

@@ -17,6 +17,7 @@ import {
   setEpisodeLike,
 } from "@/app/actions/episodes"
 import { isItemSaved, toggleSaveItem } from "@/app/actions/share"
+import { getEpisodeEngagement, type EpisodeEngagement } from "@/app/actions/engagement"
 import type { ShareTarget } from "@/lib/share-types"
 import { EpisodePlayer } from "@/components/episode-player"
 import { CommentThread, type ThreadComment } from "@/components/comment-thread"
@@ -82,6 +83,7 @@ export function EpisodeWatch({
   const [comments, setComments] = useState<EpisodeCommentView[]>(initialComments)
   const [draft, setDraft] = useState("")
   const [shareOpen, setShareOpen] = useState(false)
+  const [engagement, setEngagement] = useState<EpisodeEngagement | null>(null)
   const [isPending, startTransition] = useTransition()
 
   useEffect(() => {
@@ -101,6 +103,18 @@ export function EpisodeWatch({
       active = false
     }
   }, [currentUser, episodeId])
+
+  // Full engagement summary for the stats line under the player.
+  useEffect(() => {
+    if (!episodeId) return
+    let active = true
+    getEpisodeEngagement(episodeId)
+      .then((e) => active && setEngagement(e))
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [episodeId])
 
   if (!episodeId) return null
 
@@ -172,6 +186,27 @@ export function EpisodeWatch({
         {/* Action bar — hidden while the player is collapsed to a mini-player. */}
         {!minimized && (
           <div className="border-b border-border/60 px-2 py-1.5 sm:px-4">
+            {engagement && (
+              <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 px-2 pb-1.5 pt-0.5 text-xs text-muted-foreground">
+                {(
+                  [
+                    ["views", engagement.views],
+                    ["likes", likes],
+                    ["comments", count],
+                    ["shares", engagement.shares],
+                    ["saves", engagement.saves],
+                  ] as const
+                ).map(([label, value], i) => (
+                  <span key={label} className="inline-flex items-center gap-1.5">
+                    {i > 0 && <span aria-hidden className="text-muted-foreground/40">·</span>}
+                    <span className="font-semibold tabular-nums text-foreground">
+                      {new Intl.NumberFormat("en", { notation: "compact" }).format(value)}
+                    </span>
+                    {label}
+                  </span>
+                ))}
+              </p>
+            )}
             <div className="flex items-center gap-1">
               <button
                 onClick={toggleLike}
@@ -364,7 +399,12 @@ export function EpisodeWatch({
         </div>
       </div>
 
-      <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
+      <ShareSheet
+        target={shareTarget}
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        onShared={() => setEngagement((e) => (e ? { ...e, shares: e.shares + 1 } : e))}
+      />
     </div>
   )
 }
