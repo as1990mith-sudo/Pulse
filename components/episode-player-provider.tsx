@@ -810,56 +810,97 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                     <X className="size-5" />
                   </button>
                 </div>
-                <div className="flex justify-center px-4 pt-2">
-                  {current.cover ? (
-                    <div className="relative aspect-square w-44 overflow-hidden rounded-2xl shadow-2xl ring-1 ring-foreground/10 sm:w-52">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
+
+                {/* Immersive cover: fills the section with slim borders. Tapping
+                    it shows/hides the centered transport controls; the progress
+                    tracker stays docked at the base of the artwork at all times. */}
+                <div className="px-2 pt-2">
+                  <div
+                    onClick={toggleControls}
+                    className="relative aspect-square w-full overflow-hidden rounded-2xl bg-secondary shadow-2xl ring-1 ring-foreground/10"
+                  >
+                    {current.cover ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
                       <img src={current.cover || "/placeholder.svg"} alt={current.title} className="size-full object-cover" />
+                    ) : (
+                      <div className="flex size-full items-center justify-center">
+                        <Radio className="size-20 text-muted-foreground" />
+                      </div>
+                    )}
+
+                    {/* Legibility scrim, stronger at the base behind the scrubber. */}
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/5 to-black/25" />
+
+                    {/* Centered transport (rewind / play / forward) — toggles on tap. */}
+                    <div
+                      className={cn(
+                        "absolute inset-0 flex items-center justify-center gap-8 transition-opacity duration-200",
+                        controlsVisible ? "opacity-100" : "pointer-events-none opacity-0",
+                      )}
+                    >
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          skip(-15)
+                        }}
+                        aria-label="Rewind 15 seconds"
+                        className="flex items-center justify-center text-white/85 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-colors hover:text-white active:scale-90"
+                      >
+                        <RotateCcw className="size-7" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggle()
+                        }}
+                        aria-label={playing ? "Pause episode" : "Play episode"}
+                        className="flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/40 transition-transform hover:scale-105 active:scale-95"
+                      >
+                        {playing ? <Pause className="size-7" /> : <Play className="size-7 translate-x-0.5" />}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          skip(15)
+                        }}
+                        aria-label="Forward 15 seconds"
+                        className="flex items-center justify-center text-white/85 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-colors hover:text-white active:scale-90"
+                      >
+                        <RotateCw className="size-7" />
+                      </button>
                     </div>
-                  ) : (
-                    <div className="relative flex aspect-square w-44 items-center justify-center overflow-hidden rounded-2xl bg-secondary shadow-2xl ring-1 ring-foreground/10 sm:w-52">
-                      <Radio className="size-16 text-muted-foreground" />
+
+                    {/* Progress tracker — perpetually docked at the bottom of the
+                        artwork (never hidden with the transport controls). */}
+                    <div className="absolute inset-x-0 bottom-0 p-3" onClick={(e) => e.stopPropagation()}>
+                      <div className="relative h-1.5 w-full">
+                        <div className="absolute inset-0 rounded-full bg-white/25" />
+                        <div className="absolute inset-y-0 left-0 rounded-full bg-primary" style={{ width: `${pct}%` }} />
+                        <input
+                          type="range"
+                          min={0}
+                          max={duration || 0}
+                          step={0.1}
+                          value={currentTime}
+                          onChange={seek}
+                          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                          aria-label="Seek"
+                        />
+                      </div>
+                      <div className="mt-1.5 flex items-center justify-between text-[11px] font-medium tabular-nums text-white/85">
+                        <span>{fmt(currentTime)}</span>
+                        <span>-{fmt(Math.max(0, duration - currentTime))}</span>
+                      </div>
                     </div>
-                  )}
+                  </div>
                 </div>
-                <div className="mx-auto w-full max-w-xl px-4 pt-4">
-                  <div className="flex flex-col gap-1.5">
-                    <div className="relative h-1.5 w-full">
-                      <div className="absolute inset-0 rounded-full bg-foreground/15" />
-                      <div className="absolute inset-y-0 left-0 rounded-full bg-primary" style={{ width: `${pct}%` }} />
-                      <input
-                        type="range"
-                        min={0}
-                        max={duration || 0}
-                        step={0.1}
-                        value={currentTime}
-                        onChange={seek}
-                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                        aria-label="Seek"
-                      />
-                    </div>
-                    <div className="flex items-center justify-between text-[11px] font-medium tabular-nums text-muted-foreground">
-                      <span>{fmt(currentTime)}</span>
-                      <span>-{fmt(Math.max(0, duration - currentTime))}</span>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex items-center justify-center gap-8">
-                    <button onClick={() => skip(-15)} aria-label="Rewind 15 seconds" className="text-muted-foreground transition-colors hover:text-foreground active:scale-90">
-                      <RotateCcw className="size-6" />
-                    </button>
-                    <button onClick={toggle} aria-label={playing ? "Pause episode" : "Play episode"} className="flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-transform hover:scale-105 active:scale-95">
-                      {playing ? <Pause className="size-6" /> : <Play className="size-6 translate-x-0.5" />}
-                    </button>
-                    <button onClick={() => skip(15)} aria-label="Forward 15 seconds" className="text-muted-foreground transition-colors hover:text-foreground active:scale-90">
-                      <RotateCw className="size-6" />
-                    </button>
-                  </div>
-                  <div className="mt-3 flex items-center justify-center">
-                    <button onClick={cycleSpeed} aria-label="Change playback speed" className="inline-flex items-center gap-1.5 rounded-full bg-foreground/5 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground">
-                      <Gauge className="size-3.5" />
-                      {SPEEDS[speedIdx]}x
-                    </button>
-                  </div>
+
+                {/* Speed button — stays where it is, below the artwork. */}
+                <div className="mt-3 flex items-center justify-center">
+                  <button onClick={cycleSpeed} aria-label="Change playback speed" className="inline-flex items-center gap-1.5 rounded-full bg-foreground/5 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground">
+                    <Gauge className="size-3.5" />
+                    {SPEEDS[speedIdx]}x
+                  </button>
                 </div>
               </div>
             )}
