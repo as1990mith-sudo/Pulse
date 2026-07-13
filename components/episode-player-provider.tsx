@@ -439,53 +439,127 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                   onEnded={handleEnded}
                 />
 
-                {/* Minimize — circular downward chevron, upper-left, on the video. */}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    minimize()
-                  }}
-                  aria-label="Minimize player"
-                  className={cn(
-                    "absolute left-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex size-9 items-center justify-center rounded-full bg-black/50 text-white ring-1 ring-white/15 backdrop-blur-md transition-opacity duration-200 active:scale-90",
-                    controlsVisible ? "opacity-100" : "pointer-events-none opacity-0",
-                  )}
-                >
-                  <ChevronDown className="size-5" />
-                </button>
-
-                {/* Close — upper-right, on the video. */}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    close()
-                  }}
-                  aria-label="Close player"
-                  className={cn(
-                    "absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex size-9 items-center justify-center rounded-full bg-black/50 text-white ring-1 ring-white/15 backdrop-blur-md transition-opacity duration-200 active:scale-90",
-                    controlsVisible ? "opacity-100" : "pointer-events-none opacity-0",
-                  )}
-                >
-                  <X className="size-4" />
-                </button>
-
-                {/* On-video controls: scrubber + transport + speed + fullscreen. */}
+                {/* YouTube-style overlay: plain icon affordances (no circular/pill
+                    backgrounds), transport cluster pinned to the exact center, and
+                    the time tracker + scrubber docked at the very base. Fades out
+                    (and ignores taps) when the controls are hidden. */}
                 <div
-                  onClick={(e) => e.stopPropagation()}
                   className={cn(
-                    "absolute inset-x-0 bottom-0 z-10 flex flex-col gap-2 bg-gradient-to-t from-black/85 via-black/40 to-transparent px-4 pt-16 text-white transition-opacity duration-200",
-                    isFullscreen
-                      ? "mx-auto max-w-3xl pb-[max(1.25rem,env(safe-area-inset-bottom))]"
-                      : "pb-3",
+                    "absolute inset-0 z-10 transition-opacity duration-200",
                     controlsVisible ? "opacity-100" : "pointer-events-none opacity-0",
                   )}
                 >
-                  <div className="flex flex-col gap-1">
-                    <div className="relative h-1.5 w-full">
+                  {/* Legibility scrim, darker at the base where the scrubber sits. */}
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-black/35" />
+
+                  {/* Minimize (top-left) — collapses into the floating PiP player.
+                      Icon only (no circle/pill); a drop-shadow keeps it legible. */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      minimize()
+                    }}
+                    aria-label="Minimize player"
+                    className="absolute left-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex items-center justify-center text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-transform active:scale-90"
+                  >
+                    <ChevronDown className="size-7" />
+                  </button>
+
+                  {/* Close (top-right) — exits the video entirely. Icon only. */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      close()
+                    }}
+                    aria-label="Close player"
+                    className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex items-center justify-center text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-transform active:scale-90"
+                  >
+                    <X className="size-7" />
+                  </button>
+
+                  {/* Transport cluster (rewind / play / forward), pinned to the exact
+                      center. The full-frame wrapper must NOT capture pointer events
+                      (so surface taps still toggle the controls); only the buttons
+                      opt back in. */}
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                    <div className="pointer-events-auto flex items-center justify-center gap-8">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          skip(-15)
+                        }}
+                        aria-label="Rewind 15 seconds"
+                        className="flex items-center justify-center text-white/85 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-colors hover:text-white active:scale-90"
+                      >
+                        <RotateCcw className="size-7" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggle()
+                        }}
+                        aria-label={playing ? "Pause" : "Play"}
+                        className="flex size-12 shrink-0 items-center justify-center rounded-full bg-white/65 text-black shadow-lg shadow-black/20 backdrop-blur-sm transition-transform hover:scale-105 active:scale-95"
+                      >
+                        {playing ? <Pause className="size-5" /> : <Play className="size-5 translate-x-0.5" />}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          skip(15)
+                        }}
+                        aria-label="Forward 15 seconds"
+                        className="flex items-center justify-center text-white/85 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-colors hover:text-white active:scale-90"
+                      >
+                        <RotateCw className="size-7" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Base cluster: speed pill (left) + expand (right) sit just above
+                      the time tracker, which is docked at the very base. */}
+                  <div
+                    className={cn(
+                      "absolute inset-x-0 bottom-0 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+                      isFullscreen && "mx-auto max-w-3xl",
+                    )}
+                  >
+                    <div className="mb-2 flex items-center justify-between">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          cycleSpeed()
+                        }}
+                        aria-label="Change playback speed"
+                        className="inline-flex items-center gap-1.5 rounded-full bg-black/45 px-3 py-1.5 text-xs font-semibold text-white/90 backdrop-blur-md transition-colors hover:bg-black/65"
+                      >
+                        <Gauge className="size-3.5" />
+                        {SPEEDS[speedIdx]}x
+                      </button>
+
+                      {/* Expand / collapse fullscreen — icon only (no circle/pill). */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          void toggleFullscreen()
+                        }}
+                        aria-label={isFullscreen ? "Exit fullscreen" : "Expand to fullscreen"}
+                        className="flex items-center justify-center text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-transform active:scale-90"
+                      >
+                        {isFullscreen ? <Minimize className="size-6" /> : <Maximize className="size-6" />}
+                      </button>
+                    </div>
+
+                    <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium tabular-nums text-white/85">
+                      <span>{fmt(currentTime)}</span>
+                      <span>-{fmt(Math.max(0, duration - currentTime))}</span>
+                    </div>
+                    <div className="relative h-1.5 w-full" onClick={(e) => e.stopPropagation()}>
                       <div className="absolute inset-0 rounded-full bg-white/25" />
-                      <div className="absolute inset-y-0 left-0 rounded-full bg-white" style={{ width: `${pct}%` }} />
+                      <div className="absolute inset-y-0 left-0 rounded-full bg-primary" style={{ width: `${pct}%` }} />
                       <input
                         type="range"
                         min={0}
@@ -497,30 +571,6 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                         aria-label="Seek"
                       />
                     </div>
-                    <div className="flex items-center justify-between text-[11px] font-medium tabular-nums text-white/80">
-                      <span>{fmt(currentTime)}</span>
-                      <span>-{fmt(Math.max(0, duration - currentTime))}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-center gap-8">
-                    <button onClick={() => skip(-15)} aria-label="Rewind 15 seconds" className="text-white/85 transition-colors hover:text-white active:scale-90">
-                      <RotateCcw className="size-6" />
-                    </button>
-                    <button onClick={toggle} aria-label={playing ? "Pause" : "Play"} className="flex size-14 items-center justify-center rounded-full bg-white text-black shadow-lg transition-transform hover:scale-105 active:scale-95">
-                      {playing ? <Pause className="size-6" /> : <Play className="size-6 translate-x-0.5" />}
-                    </button>
-                    <button onClick={() => skip(15)} aria-label="Forward 15 seconds" className="text-white/85 transition-colors hover:text-white active:scale-90">
-                      <RotateCw className="size-6" />
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <button onClick={cycleSpeed} aria-label="Change playback speed" className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-white/90 transition-colors hover:bg-white/25 hover:text-white">
-                      <Gauge className="size-3.5" />
-                      {SPEEDS[speedIdx]}x
-                    </button>
-                    <button onClick={toggleFullscreen} aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"} className="flex size-10 items-center justify-center rounded-full bg-white/15 text-white transition-colors hover:bg-white/25 active:scale-90">
-                      {isFullscreen ? <Minimize className="size-5" /> : <Maximize className="size-5" />}
-                    </button>
                   </div>
                 </div>
 
@@ -630,8 +680,8 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
               </div>
             )}
 
-            {/* Title + creator */}
-            <div className={cn("mx-auto w-full max-w-xl px-4 pt-3", !isVideo && "text-center")}>
+            {/* Title + creator — centered for both video and audio. */}
+            <div className="mx-auto w-full max-w-xl px-4 pt-3 text-center">
               <h2 className="text-balance font-display text-lg font-bold leading-tight tracking-tight">
                 {current.title}
               </h2>
