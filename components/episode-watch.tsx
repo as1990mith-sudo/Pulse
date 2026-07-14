@@ -84,6 +84,10 @@ export function EpisodeWatch({
   const [draft, setDraft] = useState("")
   const [shareOpen, setShareOpen] = useState(false)
   const [engagement, setEngagement] = useState<EpisodeEngagement | null>(null)
+  // Live save/share totals, shown inline next to their icons. Seeded from the
+  // engagement summary once it loads.
+  const [saveCount, setSaveCount] = useState(0)
+  const [shareCount, setShareCount] = useState(0)
   const [isPending, startTransition] = useTransition()
 
   useEffect(() => {
@@ -109,7 +113,12 @@ export function EpisodeWatch({
     if (!episodeId) return
     let active = true
     getEpisodeEngagement(episodeId)
-      .then((e) => active && setEngagement(e))
+      .then((e) => {
+        if (!active) return
+        setEngagement(e)
+        setSaveCount(e.saves)
+        setShareCount(e.shares)
+      })
       .catch(() => {})
     return () => {
       active = false
@@ -141,13 +150,16 @@ export function EpisodeWatch({
 
   function toggleSave() {
     if (!currentUser) return
-    setSaved((s) => !s)
+    const next = !saved
+    setSaved(next)
+    setSaveCount((n) => Math.max(0, n + (next ? 1 : -1)))
     startTransition(async () => {
       try {
         const r = await toggleSaveItem(shareTarget)
         setSaved(r.saved)
       } catch {
-        setSaved((s) => !s)
+        setSaved(!next)
+        setSaveCount((n) => Math.max(0, n + (next ? -1 : 1)))
       }
     })
   }
@@ -187,24 +199,11 @@ export function EpisodeWatch({
         {!minimized && (
           <div className="border-b border-border/60 px-2 py-1.5 sm:px-4">
             {engagement && (
-              <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 px-2 pb-1.5 pt-0.5 text-xs text-muted-foreground">
-                {(
-                  [
-                    ["views", engagement.views],
-                    ["likes", likes],
-                    ["comments", count],
-                    ["shares", engagement.shares],
-                    ["saves", engagement.saves],
-                  ] as const
-                ).map(([label, value], i) => (
-                  <span key={label} className="inline-flex items-center gap-1.5">
-                    {i > 0 && <span aria-hidden className="text-muted-foreground/40">·</span>}
-                    <span className="font-semibold tabular-nums text-foreground">
-                      {new Intl.NumberFormat("en", { notation: "compact" }).format(value)}
-                    </span>
-                    {label}
-                  </span>
-                ))}
+              <p className="px-2 pb-1.5 pt-0.5 text-xs text-muted-foreground">
+                <span className="font-semibold tabular-nums text-foreground">
+                  {new Intl.NumberFormat("en", { notation: "compact" }).format(engagement.views)}
+                </span>{" "}
+                views
               </p>
             )}
             <div className="flex items-center gap-1">
@@ -246,7 +245,7 @@ export function EpisodeWatch({
                 aria-label={saved ? "Unsave episode" : "Save episode"}
               >
                 <Bookmark className={cn("size-5", saved && "fill-current")} />
-                {saved ? "Saved" : "Save"}
+                <span className="tabular-nums">{saveCount > 0 ? saveCount : saved ? "Saved" : "Save"}</span>
               </button>
 
               <button
@@ -255,7 +254,7 @@ export function EpisodeWatch({
                 aria-label="Share episode"
               >
                 <Share2 className="size-5" />
-                Share
+                <span className="tabular-nums">{shareCount > 0 ? shareCount : "Share"}</span>
               </button>
             </div>
           </div>
@@ -403,7 +402,7 @@ export function EpisodeWatch({
         target={shareTarget}
         open={shareOpen}
         onClose={() => setShareOpen(false)}
-        onShared={() => setEngagement((e) => (e ? { ...e, shares: e.shares + 1 } : e))}
+        onShared={() => setShareCount((n) => n + 1)}
       />
     </div>
   )

@@ -922,28 +922,17 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
               <h2 className="text-balance font-display text-lg font-bold leading-tight tracking-tight">
                 {current.title}
               </h2>
-              <p className="mt-0.5 text-sm text-muted-foreground">{current.host.name}</p>
-              {engagement && (
-                <p className="mt-1.5 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
-                  {(
-                    [
-                      ["views", engagement.views],
-                      ["likes", engagement.likes],
-                      ["comments", commentCount],
-                      ["shares", engagement.shares],
-                      ["saves", engagement.saves],
-                    ] as const
-                  ).map(([label, value], i) => (
-                    <span key={label} className="inline-flex items-center gap-1.5">
-                      {i > 0 && <span aria-hidden className="text-muted-foreground/40">·</span>}
-                      <span className="font-semibold tabular-nums text-foreground">
-                        {new Intl.NumberFormat("en", { notation: "compact" }).format(value)}
-                      </span>
-                      {label}
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                {current.host.name}
+                {engagement && (
+                  <>
+                    <span aria-hidden className="mx-1.5 text-muted-foreground/40">·</span>
+                    <span className="tabular-nums">
+                      {new Intl.NumberFormat("en", { notation: "compact" }).format(engagement.views)} views
                     </span>
-                  ))}
-                </p>
-              )}
+                  </>
+                )}
+              </p>
             </div>
 
             {/* Action bar: Like, Comment, Save, Share — sticky so it never scrolls
@@ -955,6 +944,8 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                   commentCount={commentCount}
                   commentsExpanded={commentsExpanded}
                   onToggleComments={() => setCommentsExpanded((v) => !v)}
+                  saveCount={engagement?.saves ?? 0}
+                  shareCount={engagement?.shares ?? 0}
                 />
               </div>
             </div>
