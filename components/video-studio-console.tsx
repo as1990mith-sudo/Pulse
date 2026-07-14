@@ -671,10 +671,15 @@ export function VideoStudioConsole({
           </div>
         )}
 
-        {/* Pre-live setup card */}
+        {/* Pre-live setup card — a fixed, scrollable overlay (like the music
+            panel) so it's centered in the full viewport and never clipped by the
+            camera region's overflow-hidden. When the card is taller than the
+            screen it scrolls, with safe-area padding so the top (stream title)
+            stays clear of the status bar. */}
         {!live && (
-          <div className="absolute inset-0 z-20 flex items-end justify-center px-5 pb-6">
-            <div className="w-full max-w-md space-y-4 rounded-3xl bg-black/40 p-5 ring-1 ring-inset ring-white/10 backdrop-blur-2xl">
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm">
+            <div className="flex min-h-full items-center justify-center px-5 py-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
+              <div className="w-full max-w-md space-y-4 rounded-3xl bg-black/50 p-5 ring-1 ring-inset ring-white/10 backdrop-blur-2xl">
               {/* Header: title + close, so the host can dismiss setup before going live. */}
               <div className="flex items-center justify-between">
                 <h2 className="text-base font-semibold text-white">Set up your live</h2>
@@ -751,6 +756,7 @@ export function VideoStudioConsole({
                   ? "Viewers watch your widescreen video with a live comment feed below."
                   : "Viewers can comment, react, send gifts, and request to join your call-in slots."}
               </p>
+              </div>
             </div>
           </div>
         )}
