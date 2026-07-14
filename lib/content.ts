@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm"
+import { and, desc, eq, inArray } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { devotional, episode, user as userTable } from "@/lib/db/schema"
 import type { Devotional, Show, Host, PodcastHost } from "@/lib/data"
@@ -31,15 +31,30 @@ function hostFromName(name: string): Host {
   }
 }
 
+/**
+ * Fetches the profile images for a set of host user ids in a single query,
+ * returning a map of userId → image URL so episodes can show real avatars.
+ */
+async function getHostImages(rows: (typeof episode.$inferSelect)[]): Promise<Map<string, string | null>> {
+  const ids = [...new Set(rows.map((r) => r.hostUserId).filter((id): id is string => Boolean(id)))]
+  if (ids.length === 0) return new Map()
+  const users = await db
+    .select({ id: userTable.id, image: userTable.image })
+    .from(userTable)
+    .where(inArray(userTable.id, ids))
+  return new Map(users.map((u) => [u.id, u.image]))
+}
+
 /** Maps a DB episode row to the Show shape the catalogue + live pages expect.
- * `views` is the episode's real play count, shown as "N views" on cards. */
-function episodeToShow(row: typeof episode.$inferSelect, views = 0): Show {
+ * `views` is the episode's real play count, shown as "N views" on cards.
+ * `hostImage` is the host's real profile picture when they have one. */
+function episodeToShow(row: typeof episode.$inferSelect, views = 0, hostImage?: string | null): Show {
   // When a host published the session themselves, link their profile by userId.
   const host: Host = row.hostUserId
     ? {
         id: row.hostUserId,
         name: row.hostName,
-        avatar: "/placeholder.svg",
+        avatar: hostImage || "/placeholder.svg",
         handle: row.hostHandle || "@" + row.hostName.toLowerCase().replace(/[^a-z0-9]+/g, ""),
       }
     : hostFromName(row.hostName)
@@ -82,8 +97,11 @@ export async function getEpisodesByUser(userId: string, includePrivate = false):
     )
     .orderBy(desc(episode.createdAt))
 
-  const viewCounts = await getEpisodeViewCounts(rows.map((r) => r.id))
-  return rows.map((r) => episodeToShow(r, viewCounts.get(r.id) ?? 0))
+  const [viewCounts, hostImages] = await Promise.all([
+    getEpisodeViewCounts(rows.map((r) => r.id)),
+    getHostImages(rows),
+  ])
+  return rows.map((r) => episodeToShow(r, viewCounts.get(r.id) ?? 0, r.hostUserId ? hostImages.get(r.hostUserId) : null))
 }
 
 /**
@@ -114,8 +132,11 @@ export async function getCatalogEpisodes(): Promise<Show[]> {
     .from(episode)
     .where(eq(episode.isPrivate, false))
     .orderBy(desc(episode.createdAt))
-  const viewCounts = await getEpisodeViewCounts(rows.map((r) => r.id))
-  return rows.map((r) => episodeToShow(r, viewCounts.get(r.id) ?? 0))
+  const [viewCounts, hostImages] = await Promise.all([
+    getEpisodeViewCounts(rows.map((r) => r.id)),
+    getHostImages(rows),
+  ])
+  return rows.map((r) => episodeToShow(r, viewCounts.get(r.id) ?? 0, r.hostUserId ? hostImages.get(r.hostUserId) : null))
 }
 
 /**
@@ -169,8 +190,8 @@ export async function getPodcastHosts(): Promise<PodcastHost[]> {
 export async function resolveShow(id: string): Promise<Show | undefined> {
   const [row] = await db.select().from(episode).where(eq(episode.slug, id)).limit(1)
   if (!row) return undefined
-  const viewCounts = await getEpisodeViewCounts([row.id])
-  return episodeToShow(row, viewCounts.get(row.id) ?? 0)
+  const [viewCounts, hostImages] = await Promise.all([getEpisodeViewCounts([row.id]), getHostImages([row])])
+  return episodeToShow(row, viewCounts.get(row.id) ?? 0, row.hostUserId ? hostImages.get(row.hostUserId) : null)
 }
 
 /** All admin-managed rows, for listing/deleting inside the dashboard. */

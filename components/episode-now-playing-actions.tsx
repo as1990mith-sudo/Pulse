@@ -21,11 +21,16 @@ export function EpisodeNowPlayingActions({
   commentCount,
   commentsExpanded,
   onToggleComments,
+  saveCount = 0,
+  shareCount = 0,
 }: {
   show: Show
   commentCount: number
   commentsExpanded: boolean
   onToggleComments: () => void
+  /** Total saves/shares across all users, shown inline next to each icon. */
+  saveCount?: number
+  shareCount?: number
 }) {
   const { data: session } = authClient.useSession()
   const signedIn = Boolean(session?.user)
@@ -34,8 +39,19 @@ export function EpisodeNowPlayingActions({
   const [liked, setLiked] = useState(false)
   const [likes, setLikes] = useState(show.likes ?? 0)
   const [saved, setSaved] = useState(false)
+  const [saves, setSaves] = useState(saveCount)
+  const [shares, setShares] = useState(shareCount)
   const [shareOpen, setShareOpen] = useState(false)
   const [, startTransition] = useTransition()
+
+  // Keep the local save/share counters in sync when the parent reloads them
+  // (e.g. after switching tracks).
+  useEffect(() => {
+    setSaves(saveCount)
+  }, [saveCount])
+  useEffect(() => {
+    setShares(shareCount)
+  }, [shareCount])
 
   const shareTarget: ShareTarget = {
     type: "episode",
@@ -90,14 +106,17 @@ export function EpisodeNowPlayingActions({
 
   function toggleSave() {
     if (!signedIn) return
-    setSaved((s) => !s)
+    const next = !saved
+    setSaved(next)
+    setSaves((n) => Math.max(0, n + (next ? 1 : -1)))
     startTransition(async () => {
       try {
         const r = await toggleSaveItem(shareTarget)
         setSaved(r.saved)
       } catch {
         // revert on failure
-        setSaved((s) => !s)
+        setSaved(!next)
+        setSaves((n) => Math.max(0, n + (next ? -1 : 1)))
       }
     })
   }
@@ -141,7 +160,7 @@ export function EpisodeNowPlayingActions({
           className={cn(baseBtn, saved && "text-primary hover:text-primary")}
         >
           <Bookmark className={cn("size-6", saved && "fill-current")} />
-          <span>{saved ? "Saved" : "Save"}</span>
+          <span className="tabular-nums">{saves > 0 ? saves : saved ? "Saved" : "Save"}</span>
         </button>
 
         <button
@@ -151,11 +170,16 @@ export function EpisodeNowPlayingActions({
           className={cn(baseBtn)}
         >
           <Share2 className="size-6" />
-          <span>Share</span>
+          <span className="tabular-nums">{shares > 0 ? shares : "Share"}</span>
         </button>
       </div>
 
-      <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
+      <ShareSheet
+        target={shareTarget}
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        onShared={() => setShares((n) => n + 1)}
+      />
     </>
   )
 }
