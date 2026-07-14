@@ -8,6 +8,13 @@ import { getEpisodeComments } from "@/app/actions/episodes"
 import { recordEpisodeView, getEpisodeEngagement, type EpisodeEngagement } from "@/app/actions/engagement"
 import { EpisodeNowPlayingActions } from "@/components/episode-now-playing-actions"
 import { EpisodeCommentsInline } from "@/components/episode-comments-inline"
+import { MarqueeTitle } from "@/components/marquee-title"
+import { getAvatarColor, getInitials } from "@/lib/identity"
+
+/** Whether a host avatar URL is a real uploaded image (not the blank placeholder). */
+function hasRealAvatar(url?: string): url is string {
+  return Boolean(url && !url.includes("placeholder.svg"))
+}
 
 function fmt(s: number) {
   if (!isFinite(s) || s < 0) return "0:00"
@@ -811,12 +818,13 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                   </button>
                 </div>
 
-                {/* Immersive cover: fills the section with slim borders. Tapping
-                    it shows/hides the centered transport controls; the progress
+                {/* Immersive cover: fills the section with slim borders. A single
+                    tap shows/hides the centered transport controls; a double tap
+                    on the left/right half seeks back/forward 15s. The progress
                     tracker stays docked at the base of the artwork at all times. */}
                 <div className="px-2 pt-2">
                   <div
-                    onClick={toggleControls}
+                    onClick={onVideoSurfaceTap}
                     className="relative aspect-square w-full overflow-hidden rounded-2xl bg-secondary shadow-2xl ring-1 ring-foreground/10"
                   >
                     {current.cover ? (
@@ -831,7 +839,23 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                     {/* Legibility scrim, stronger at the base behind the scrubber. */}
                     <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/5 to-black/25" />
 
-                    {/* Centered transport (rewind / play / forward) — toggles on tap. */}
+                    {/* Double-tap seek affordance: a brief ±15s badge on the tapped side. */}
+                    {seekFlash && (
+                      <div
+                        className={cn(
+                          "pointer-events-none absolute inset-y-0 z-10 flex w-2/5 items-center justify-center",
+                          seekFlash === "fwd" ? "right-0" : "left-0",
+                        )}
+                      >
+                        <div className="flex flex-col items-center gap-1 rounded-2xl bg-black/45 px-5 py-4 text-white duration-200 animate-in fade-in zoom-in-95">
+                          {seekFlash === "fwd" ? <RotateCw className="size-7" /> : <RotateCcw className="size-7" />}
+                          <span className="text-xs font-semibold tabular-nums">15s</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Centered transport (previous / play / next) — toggles on tap.
+                        Seeking now lives on the double-tap gesture above. */}
                     <div
                       className={cn(
                         "absolute inset-0 flex items-center justify-center gap-8 transition-opacity duration-200",
@@ -841,12 +865,13 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          skip(-15)
+                          playPrev()
                         }}
-                        aria-label="Rewind 15 seconds"
-                        className="flex items-center justify-center text-white/85 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-colors hover:text-white active:scale-90"
+                        disabled={!hasPrev}
+                        aria-label="Previous episode"
+                        className="flex items-center justify-center text-white/85 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-colors hover:text-white active:scale-90 disabled:pointer-events-none disabled:opacity-30"
                       >
-                        <RotateCcw className="size-7" />
+                        <SkipBack className="size-7" />
                       </button>
                       <button
                         onClick={(e) => {
@@ -861,12 +886,13 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          skip(15)
+                          playNext()
                         }}
-                        aria-label="Forward 15 seconds"
-                        className="flex items-center justify-center text-white/85 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-colors hover:text-white active:scale-90"
+                        disabled={!hasNext}
+                        aria-label="Next episode"
+                        className="flex items-center justify-center text-white/85 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-colors hover:text-white active:scale-90 disabled:pointer-events-none disabled:opacity-30"
                       >
-                        <RotateCw className="size-7" />
+                        <SkipForward className="size-7" />
                       </button>
                     </div>
 
@@ -917,11 +943,14 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
               videoMini && "hidden",
             )}
           >
-            {/* Title + creator — centered; scrolls up into hiding. */}
+            {/* Title + creator — centered; scrolls up into hiding. The title
+                stays on one line and auto-scrolls right-to-left when it's too
+                long to fit, so the full title is always readable. */}
             <div className="mx-auto w-full max-w-xl px-4 pt-3 text-center">
-              <h2 className="text-balance font-display text-lg font-bold leading-tight tracking-tight">
-                {current.title}
-              </h2>
+              <MarqueeTitle
+                text={current.title}
+                className="text-center font-display text-lg font-bold leading-tight tracking-tight"
+              />
               <p className="mt-0.5 text-sm text-muted-foreground">
                 {current.host.name}
                 {engagement && (
@@ -1034,13 +1063,20 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                                 )}
                               </span>
                               <span className="flex items-start gap-3 px-4">
-                                <span className="relative mt-0.5 size-9 shrink-0 overflow-hidden rounded-full bg-secondary">
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    src={show.host.avatar || "/placeholder.svg"}
-                                    alt=""
-                                    className="size-full object-cover"
-                                  />
+                                <span className="relative mt-0.5 flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-secondary">
+                                  {hasRealAvatar(show.host.avatar) ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={show.host.avatar} alt="" className="size-full object-cover" />
+                                  ) : (
+                                    <span
+                                      className={cn(
+                                        "flex size-full items-center justify-center text-xs font-bold",
+                                        getAvatarColor(show.host.id),
+                                      )}
+                                    >
+                                      {getInitials(show.host.name)}
+                                    </span>
+                                  )}
                                 </span>
                                 <span className="min-w-0 flex-1">
                                   <span className="line-clamp-2 text-sm font-semibold leading-snug">{show.title}</span>
