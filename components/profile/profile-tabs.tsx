@@ -1,13 +1,18 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Mic, MessageSquare, Repeat2, ArrowLeft } from "lucide-react"
+import { Mic, MessageSquare, Repeat2, ArrowLeft, Plus, Info } from "lucide-react"
 import type { Show } from "@/lib/data"
 import type { FeedPostView } from "@/app/actions/feed"
 import type { CurrentUser } from "@/lib/session"
 import { EpisodeCatalog } from "@/components/episode-catalog"
 import { UploadEpisode } from "@/components/upload-episode"
 import { ProfilePostsGrid } from "@/components/profile/profile-posts-grid"
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+} from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
 type TabKey = "posts" | "reposts" | "catalogue"
@@ -39,6 +44,8 @@ export function ProfileTabs({
   // The tab the user was on before opening Catalogue, so the back arrow can
   // return them exactly where they were.
   const [prevTab, setPrevTab] = useState<TabKey>("posts")
+  // Whether the inline upload form is open (triggered from the header + button).
+  const [uploadOpen, setUploadOpen] = useState(false)
   const catalogueOpen = tab === "catalogue"
   const activeIndex = Math.max(
     0,
@@ -133,13 +140,44 @@ export function ProfileTabs({
             >
               <ArrowLeft className="size-5" />
             </button>
-            <h2 className="text-base font-semibold">Catalogue</h2>
+            <h2 className="flex-1 text-base font-semibold">Catalogue</h2>
+
+            {/* Owner tools live top-right, opposite the back arrow: an info
+                popover with the upload hint, and the add (+) trigger. Moving
+                these out of a full card frees vertical room for episodes. */}
+            {isSelf && (
+              <div className="flex items-center gap-1">
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    aria-label="Upload instructions"
+                    className="tap-scale flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
+                  >
+                    <Info className="size-5" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-64 p-3">
+                    <p className="text-sm font-semibold">Upload to catalogue</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Add an audio or video episode from your device.
+                    </p>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <button
+                  type="button"
+                  onClick={() => setUploadOpen(true)}
+                  aria-label="Upload episode"
+                  className="tap-scale flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-transform hover:scale-105"
+                >
+                  <Plus className="size-5" />
+                </button>
+              </div>
+            )}
           </header>
 
           <div data-scroll className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
             <div className="mx-auto w-full max-w-4xl space-y-4">
-              {/* Owners can upload their own audio/video episodes here. */}
-              {isSelf && <UploadEpisode />}
+              {/* Owners can upload their own audio/video episodes here. The
+                  trigger lives in the header; this renders the inline form. */}
+              {isSelf && <UploadEpisode open={uploadOpen} onOpenChange={setUploadOpen} />}
               {episodes.length === 0 ? (
                 <EmptyState
                   icon={<Mic className="size-6" />}
