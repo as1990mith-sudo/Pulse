@@ -964,9 +964,9 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
               </p>
             </div>
 
-            {/* Action bar: Like, Comment, Save, Share — sticky so it never scrolls
-                out of view (opaque background covers content sliding beneath). */}
-            <div className="sticky top-0 z-20 border-b border-border/60 bg-background">
+            {/* Action bar: Like, Comment, Save, Share — scrolls up with the title
+                when browsing "More from…", freeing room for the episode list. */}
+            <div className="border-b border-border/60 bg-background">
               <div className="mx-auto w-full max-w-xl px-2 py-2">
                 <EpisodeNowPlayingActions
                   show={current}
