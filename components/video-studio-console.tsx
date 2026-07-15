@@ -4,8 +4,11 @@ import { useEffect, useRef, useState } from "react"
 import useSWR from "swr"
 import {
   Check,
+  ChevronDown,
   FastForward,
+  Globe,
   Loader2,
+  Lock,
   Mic,
   MicOff,
   MonitorPlay,
@@ -41,7 +44,9 @@ import {
   heartbeatBroadcast,
   type LiveStreamView,
   type LiveOrientation,
+  type LiveVisibility,
 } from "@/app/actions/live"
+import { LIVE_CATEGORIES } from "@/lib/live-categories"
 import { useLiveVideo, isMedianApp, openNativeAppSettings } from "@/lib/use-live-video"
 import { uploadMedia } from "@/lib/upload-media"
 import { ReactionLayer } from "@/components/live-reactions"
@@ -198,6 +203,10 @@ export function VideoStudioConsole({
   // Host-chosen broadcast layout. "portrait" = the original full-bleed vertical
   // design; "landscape" = the Facebook-style 16:9 video + comment feed layout.
   const [orientation, setOrientation] = useState<LiveOrientation>(resumeStream?.orientation ?? "portrait")
+  // Host-chosen discoverability: public (listed in Live) vs private (link-only).
+  const [visibility, setVisibility] = useState<LiveVisibility>(resumeStream?.visibility ?? "public")
+  // Optional topic category for the broadcast (empty = uncategorised).
+  const [category, setCategory] = useState<string>(resumeStream?.category ?? "")
   const [roomName, setRoomName] = useState<string | null>(resumeStream?.roomName ?? null)
   const [creds, setCreds] = useState<{ token: string; serverUrl: string } | null>(null)
   const [starting, setStarting] = useState(false)
@@ -376,6 +385,8 @@ export function VideoStudioConsole({
         title: title.trim() || `${currentUser.name} — live`,
         mode: "video",
         orientation,
+        visibility,
+        category: category || undefined,
       })
       if (!res.ok) {
         setError(res.error)
@@ -770,6 +781,65 @@ export function VideoStudioConsole({
                     )
                   })}
                 </div>
+              </div>
+
+              {/* Category — native select styled as a dropdown so the host can
+                  tag the topic of their live. Optional; "Uncategorised" clears it. */}
+              <div className="space-y-1.5">
+                <label htmlFor="live-category" className="text-xs font-semibold uppercase tracking-wider text-white/60">
+                  Category
+                </label>
+                <div className="relative">
+                  <select
+                    id="live-category"
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="w-full appearance-none rounded-2xl bg-white/10 px-4 py-3 pr-10 text-base font-medium text-white ring-1 ring-inset ring-white/15 focus:outline-none focus:ring-primary [&>option]:bg-neutral-900 [&>option]:text-white"
+                  >
+                    <option value="">Uncategorised</option>
+                    {LIVE_CATEGORIES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-5 -translate-y-1/2 text-white/50" />
+                </div>
+              </div>
+
+              {/* Privacy — public (discoverable in Live) vs private (link-only). */}
+              <div className="space-y-1.5">
+                <span className="text-xs font-semibold uppercase tracking-wider text-white/60">Privacy</span>
+                <div className="grid grid-cols-2 gap-1.5 rounded-2xl bg-white/[0.06] p-1">
+                  {(
+                    [
+                      { value: "public", label: "Public", icon: Globe },
+                      { value: "private", label: "Private", icon: Lock },
+                    ] as const
+                  ).map((opt) => {
+                    const active = visibility === opt.value
+                    const Icon = opt.icon
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setVisibility(opt.value)}
+                        aria-pressed={active}
+                        className={cn(
+                          "flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors",
+                          active ? "bg-primary text-primary-foreground" : "text-white/60 hover:text-white",
+                        )}
+                      >
+                        <Icon className="size-4" /> {opt.label}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="text-[11px] text-white/50">
+                  {visibility === "public"
+                    ? "Listed in Live for everyone to discover and join."
+                    : "Unlisted — only people with the link can join."}
+                </p>
               </div>
 
               {error && <p className="text-sm font-medium text-destructive">{error}</p>}

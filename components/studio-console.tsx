@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import {
   CheckCircle2,
+  ChevronDown,
   Crown,
   Globe,
   Loader2,
@@ -64,6 +65,7 @@ import { LiveStage, MAX_GUESTS, QualityIcon } from "@/components/live-stage"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { useLivePresence } from "@/lib/use-live-presence"
 import { LIVE_THEMES, liveThemeStyle } from "@/lib/live-themes"
+import { LIVE_CATEGORIES } from "@/lib/live-categories"
 import { LiveBadge } from "@/components/live-badge"
 import { ReactionLayer } from "@/components/live-reactions"
 import { BackExitMenu } from "@/components/live-back-menu"
@@ -141,6 +143,8 @@ export function StudioConsole({
   // Host-chosen room privacy (only settable before going live). Public rooms are
   // listed in discovery; private rooms are unlisted and link-only.
   const [visibility, setVisibility] = useState<"public" | "private">(resumeStream?.visibility ?? "public")
+  // Optional topic category for the session (empty = uncategorised).
+  const [category, setCategory] = useState<string>(resumeStream?.category ?? "")
   const [endedSession, setEndedSession] = useState<EndedSession>(null)
   const [roomName, setRoomName] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
@@ -459,7 +463,7 @@ export function StudioConsole({
       setElapsed(0)
     } else {
       setStarting(true)
-      const res = await startBroadcast({ title, cover, visibility })
+      const res = await startBroadcast({ title, cover, visibility, category: category || undefined })
       setStarting(false)
       if (!res.ok) {
         setError(res.error)
@@ -624,6 +628,29 @@ export function StudioConsole({
         {!live && (
           <div className="space-y-4 border-b border-white/[0.07] px-4 py-4 sm:px-6">
             <CoverUpload value={cover} onChange={setCover} label="Cover artwork (optional)" />
+
+            {/* Category — optional topic tag chosen from a dropdown. */}
+            <div className="space-y-2">
+              <label htmlFor="audio-live-category" className="text-sm font-medium text-white">
+                Category
+              </label>
+              <div className="relative">
+                <select
+                  id="audio-live-category"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full appearance-none rounded-xl bg-white/[0.04] px-4 py-2.5 pr-10 text-sm font-medium text-white ring-1 ring-inset ring-white/10 focus:outline-none focus:ring-primary [&>option]:bg-neutral-900 [&>option]:text-white"
+                >
+                  <option value="">Uncategorised</option>
+                  {LIVE_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-white/50" />
+              </div>
+            </div>
 
             {/* Public / Private toggle — segmented control. */}
             <div className="space-y-2">
