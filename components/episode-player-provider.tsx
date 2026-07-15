@@ -411,6 +411,13 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
 
   const currentIndex = current ? queue.findIndex((s) => s.id === current.id) : -1
   const upNext = currentIndex >= 0 ? queue.slice(currentIndex + 1) : []
+  // "More from <creator>" shows every *other* episode by the same creator (not
+  // just the ones queued after this one), so the whole back catalogue is
+  // browsable. Kept separate from `upNext` so next/prev/auto-advance are
+  // unaffected.
+  const moreFromHost = current
+    ? queue.filter((s) => s.id !== current.id && s.host.id === current.host.id)
+    : []
   const hasPrev = currentIndex > 0
   const hasNext = currentIndex >= 0 && currentIndex < queue.length - 1
   const playPrev = () => {
@@ -1007,13 +1014,13 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                 </div>
               )}
 
-              {/* More from… (up next / recommended) — directly beneath comments. */}
-              {upNext.length > 0 && (
+              {/* More from… — every other episode by this creator. */}
+              {moreFromHost.length > 0 && (
                 <div>
                   <div className="mb-2 flex items-center gap-2 px-1">
                     <ListMusic className="size-4 text-muted-foreground" />
                     <h3 className="text-sm font-semibold">More from {current.host.name}</h3>
-                    <span className="text-xs text-muted-foreground">· {upNext.length}</span>
+                    <span className="text-xs text-muted-foreground">· {moreFromHost.length}</span>
                   </div>
                   {isVideo ? (
                     /* Video: immersive YouTube-style recommendations — full-bleed
@@ -1021,7 +1028,7 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                        first frame when it has no cover art, with the title +
                        meta beneath. */
                     <ul className="-mx-4 flex flex-col gap-5">
-                      {upNext.map((show) => {
+                      {moreFromHost.map((show) => {
                         const hasCover = Boolean(show.cover && show.cover !== "/placeholder.svg")
                         const frameSrc = show.videoUrl
                           ? show.videoUrl.includes("#")
@@ -1094,7 +1101,7 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                     /* Audio: compact small-icon list (square cover, title/meta,
                        play affordance) — the original catalogue player style. */
                     <ul className="flex flex-col">
-                      {upNext.map((show) => (
+                      {moreFromHost.map((show) => (
                         <li key={show.id}>
                           <button
                             type="button"
