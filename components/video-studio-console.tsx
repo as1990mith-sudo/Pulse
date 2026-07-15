@@ -22,6 +22,7 @@ import {
   SkipForward,
   Trash2,
   UserPlus,
+  Users,
   Video,
   VideoOff,
   Volume2,
@@ -36,6 +37,7 @@ import {
   getCallState,
   respondToCallRequest,
   removeFromStage,
+  setGuestsEnabled,
   heartbeatBroadcast,
   type LiveStreamView,
   type LiveOrientation,
@@ -346,6 +348,24 @@ export function VideoStudioConsole({
   )
   const pending = callState?.pendingRequests ?? []
 
+  // Guest call-in section toggle (host-controlled). Kept in local state for
+  // instant UI feedback and reconciled with the polled server value.
+  const [guestsEnabled, setGuestsEnabledState] = useState(true)
+  useEffect(() => {
+    if (callState?.guestsEnabled !== undefined) setGuestsEnabledState(callState.guestsEnabled)
+  }, [callState?.guestsEnabled])
+  async function toggleGuests() {
+    if (!roomName) return
+    const next = !guestsEnabled
+    setGuestsEnabledState(next)
+    try {
+      await setGuestsEnabled({ roomName, enabled: next })
+      refreshCalls()
+    } catch {
+      setGuestsEnabledState(!next)
+    }
+  }
+
   async function goLive() {
     setError(null)
     setStarting(true)
@@ -496,8 +516,14 @@ export function VideoStudioConsole({
 
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-neutral-950 text-white [isolation:isolate]">
-      {/* ── Host camera (1.75/4 of the screen) ────────────────────────────── */}
-      <div className="relative flex-[1.75] min-h-0 overflow-hidden">
+      {/* ── Host camera (1.75/4 of the screen; grows to 2.125 when the guest
+          section is off, taking half the freed call-in row) ──────────────── */}
+      <div
+        className={cn(
+          "relative min-h-0 overflow-hidden",
+          orientation !== "landscape" && !guestsEnabled ? "flex-[2.125]" : "flex-[1.75]",
+        )}
+      >
         {/* Full-bleed camera — live publisher feed (mirrored self-view) */}
         <video
           ref={localVideoRef}
@@ -792,6 +818,16 @@ export function VideoStudioConsole({
             >
               {camOn ? <Video className="size-5" /> : <VideoOff className="size-5" />}
             </GlassButton>
+            {orientation !== "landscape" && (
+              <GlassButton
+                label={guestsEnabled ? "Turn off call-ins" : "Turn on call-ins"}
+                onClick={() => void toggleGuests()}
+                active={guestsEnabled}
+                tone={guestsEnabled ? "glass" : "muted"}
+              >
+                <Users className="size-5" />
+              </GlassButton>
+            )}
             <GlassButton
               label="Background music"
               onClick={() => setMusicPanelOpen((o) => !o)}
@@ -1014,16 +1050,23 @@ export function VideoStudioConsole({
 
       {/* ── Two guest call-in slots (0.75/4 of the screen) ─────────────────────
           Landscape lives are host-only broadcasts, so the call-in row is hidden
-          and that space goes to the camera + comment feed instead. */}
-      {orientation !== "landscape" && (
+          and that space goes to the camera + comment feed instead. The host can
+          also hide it in portrait via the guest toggle. */}
+      {orientation !== "landscape" && guestsEnabled && (
         <div className="flex flex-[0.75] min-h-0 gap-2 border-t border-white/10 bg-neutral-950 p-2">
           <GuestSlot peer={guests[0]} registerEl={registerPeerVideoEl} onRemove={live ? dropGuest : undefined} />
           <GuestSlot peer={guests[1]} registerEl={registerPeerVideoEl} onRemove={live ? dropGuest : undefined} />
         </div>
       )}
 
-      {/* ── Live chatroom (remaining 1.5/4 of the screen) ──────────────────── */}
-      <div className="flex-[1.5] min-h-0 border-t border-white/10 bg-neutral-950">
+      {/* ── Live chatroom (1.5/4; grows to 1.875 when the guest section is off,
+          taking the other half of the freed call-in row) ─────────────────── */}
+      <div
+        className={cn(
+          "min-h-0 border-t border-white/10 bg-neutral-950",
+          orientation !== "landscape" && !guestsEnabled ? "flex-[1.875]" : "flex-[1.5]",
+        )}
+      >
         <LiveChat asHost currentUser={currentUser} roomName={live ? roomName! : undefined} immersive />
       </div>
 

@@ -228,6 +228,9 @@ export function LiveVideoViewer({
   )
   const myStatus = callState?.myStatus ?? null
   const locked = callState?.locked ?? false
+  // Host can hide the guest call-in section entirely; when off, viewers see no
+  // call-in slots and the space is split between the host video and chat.
+  const guestsEnabled = callState?.guestsEnabled ?? true
 
   useEffect(() => {
     if (callState?.ended) {
@@ -556,8 +559,9 @@ export function LiveVideoViewer({
 
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-neutral-950 text-white [isolation:isolate]">
-      {/* ── Host camera (1.75/4 of the screen) ────────────────────────────── */}
-      <div className="relative flex-[1.75] min-h-0 overflow-hidden">
+      {/* ── Host camera (1.75/4 of the screen; grows to 2.125 when the host has
+          turned off the guest call-in section) ───────────────────────────── */}
+      <div className={cn("relative min-h-0 overflow-hidden", guestsEnabled ? "flex-[1.75]" : "flex-[2.125]")}>
         <div className="absolute inset-0" onClick={handleTapHeart}>
           {hostPeer ? (
             <video
@@ -754,7 +758,9 @@ export function LiveVideoViewer({
 
       {/* ── Two call-in slots (0.75/4 of the screen) ───────────────────────── */}
       {/* Occupied slots fill left → right, so the left-most empty slot is the
-          next one a viewer can claim by tapping it to request the call-in. */}
+          next one a viewer can claim by tapping it to request the call-in.
+          Hidden entirely when the host turns off the guest section. */}
+      {guestsEnabled && (
       <div className="flex flex-[0.75] min-h-0 gap-2 border-t border-white/10 bg-neutral-950 p-2">
         {[0, 1].map((i) => {
           const slot = slots[i]
@@ -824,9 +830,15 @@ export function LiveVideoViewer({
           return <SlotTile key={i} registerEl={registerPeerVideoEl} />
         })}
       </div>
+      )}
 
-      {/* ── Live chatroom (remaining 1.5/4 of the screen) ──────────────────── */}
-      <div className="flex-[1.5] min-h-0 border-t border-white/10 bg-neutral-950">
+      {/* ── Live chatroom (1.5/4; grows to 1.875 when the guest section is off) ── */}
+      <div
+        className={cn(
+          "min-h-0 border-t border-white/10 bg-neutral-950",
+          guestsEnabled ? "flex-[1.5]" : "flex-[1.875]",
+        )}
+      >
         {canWatch ? (
           <LiveChat currentUser={currentUser} roomName={stream.roomName} immersive />
         ) : (

@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, X, Loader2, Headphones, Video, UploadCloud, CheckCircle2, Clock } from "lucide-react"
+import { X, Loader2, Headphones, Video, UploadCloud, CheckCircle2, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { CoverUpload } from "@/components/admin/cover-upload"
@@ -45,10 +45,13 @@ function formatDuration(secs: number): string {
  * Lets a profile owner upload their own audio or video episode to their
  * catalogue. Media uploads straight to Blob (via uploadMedia), then we publish
  * the episode with publishShow. Shown only on the owner's own profile.
+ *
+ * Controlled by the parent: the trigger (+) and instructions now live in the
+ * Catalogue header, so this component renders nothing until `open` is true and
+ * then shows the inline upload form.
  */
-export function UploadEpisode() {
+export function UploadEpisode({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
 
   const [kind, setKind] = useState<"audio" | "video">("audio")
@@ -72,7 +75,7 @@ export function UploadEpisode() {
 
   function close() {
     reset()
-    setOpen(false)
+    onOpenChange(false)
   }
 
   async function handleMediaPick(e: React.ChangeEvent<HTMLInputElement>) {
@@ -146,23 +149,8 @@ export function UploadEpisode() {
     })
   }
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="group flex w-full items-center gap-3 rounded-2xl border border-dashed border-border/70 bg-card/60 px-4 py-3.5 text-left transition-colors hover:border-primary/70 hover:bg-card"
-      >
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 text-primary-foreground shadow-sm transition-transform group-hover:scale-105">
-          <Plus className="size-5" />
-        </span>
-        <span className="min-w-0">
-          <span className="block text-sm font-semibold">Upload to catalogue</span>
-          <span className="block text-xs text-muted-foreground">Add an audio or video episode from your device</span>
-        </span>
-      </button>
-    )
-  }
+  // The parent renders the trigger; nothing to show until opened.
+  if (!open) return null
 
   const busy = isPending || uploading
 
