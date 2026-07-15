@@ -46,7 +46,19 @@ function activeIndexFor(pathname: string): number {
 
 export function BottomNav() {
   const pathname = usePathname()
-  const hidden = isImmersive(pathname)
+
+  // The reels tab (inside the Feed) dispatches `reels:active` so the nav can
+  // vanish for a fully immersive, edge-to-edge reel experience.
+  const [reelsActive, setReelsActive] = useState(false)
+  useEffect(() => {
+    function onReels(e: Event) {
+      setReelsActive(Boolean((e as CustomEvent).detail))
+    }
+    window.addEventListener("reels:active", onReels as EventListener)
+    return () => window.removeEventListener("reels:active", onReels as EventListener)
+  }, [])
+
+  const hidden = isImmersive(pathname) || reelsActive
   const activeIndex = activeIndexFor(pathname)
 
   // Hide-on-scroll-down / reveal-on-scroll-up, like Instagram & Safari.
