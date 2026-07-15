@@ -371,6 +371,40 @@ export function MindFeed({
     { id: "reels" as const, label: "Reels" },
   ]
 
+  // Move to the sub-tab `dir` steps away (−1 = the tab on the left, +1 = the
+  // tab on the right), clamped to the ends. Backs the horizontal swipe gestures
+  // on both the feed tabs and the full-screen reels.
+  function goToAdjacentTab(dir: -1 | 1) {
+    const idx = TAB_ITEMS.findIndex((t) => t.id === tab)
+    const nextIdx = idx + dir
+    if (idx < 0 || nextIdx < 0 || nextIdx >= TAB_ITEMS.length) return
+    setTab(TAB_ITEMS[nextIdx].id)
+    haptic("select")
+  }
+
+  // Horizontal-swipe detection for the feed sub-tabs (For you / Following /
+  // Status): swipe left → next tab on the right, swipe right → previous tab on
+  // the left. We ignore swipes that begin on an interactive/horizontally-
+  // scrollable element (media carousels, the video scrubber, buttons, links) so
+  // those keep their own gestures.
+  const feedTouch = useRef<{ x: number; y: number; skip: boolean } | null>(null)
+  function onFeedTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0]
+    const el = e.target as HTMLElement
+    const skip = Boolean(el.closest('[data-no-tab-swipe], [role="slider"], video, input, textarea, button, a'))
+    feedTouch.current = { x: t.clientX, y: t.clientY, skip }
+  }
+  function onFeedTouchEnd(e: React.TouchEvent) {
+    const s = feedTouch.current
+    feedTouch.current = null
+    if (!s || s.skip) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - s.x
+    const dy = t.clientY - s.y
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return
+    goToAdjacentTab(dx < 0 ? 1 : -1)
+  }
+
   // Floating switcher shown over the reels: the three tabs "sit" on top of the
   // video (like TikTok's For You / Following) so switching back is one tap away.
   const reelsSwitcher = (
@@ -412,7 +446,14 @@ export function MindFeed({
   // premium and edge-to-edge (nothing "hanging"), with the tab switcher floating
   // on top. Available to everyone — no auth gate on watching.
   if (tab === "reels") {
-    return <ReelsFeed posts={allPosts} header={reelsSwitcher} />
+    return (
+      <ReelsFeed
+        posts={allPosts}
+        header={reelsSwitcher}
+        currentUser={currentUser}
+        onSwipePrevTab={() => goToAdjacentTab(-1)}
+      />
+    )
   }
 
   if (!currentUser) {
@@ -666,31 +707,34 @@ export function MindFeed({
         ))}
       </div>
 
-      {tab === "status" ? (
-        <div className="px-4 py-3 sm:px-5">
-          <StatusBar variant="list" groups={statusGroups} currentUser={currentUser} />
-        </div>
-      ) : visiblePosts.length > 0 ? (
-        <ul className="stagger flex flex-col gap-2 border-b border-border/60 bg-border/40">
-          {visiblePosts.map((post) => (
-            <li key={post.id}>
-              <PostCard
-                post={post}
-                currentUser={currentUser}
-                variant="feed"
-                highlighted={highlightedPost === String(post.id)}
-              />
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <Card className="m-4 p-8 text-center sm:mx-0">
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            You&apos;re not following anyone yet. Tap <span className="font-medium text-foreground">Follow</span> on a
-            post to see their thoughts here, or use the search icon in the header to discover people.
-          </p>
-        </Card>
-      )}
+      {/* Swipe horizontally to move between the feed sub-tabs. */}
+      <div onTouchStart={onFeedTouchStart} onTouchEnd={onFeedTouchEnd}>
+        {tab === "status" ? (
+          <div className="px-4 py-3 sm:px-5">
+            <StatusBar variant="list" groups={statusGroups} currentUser={currentUser} />
+          </div>
+        ) : visiblePosts.length > 0 ? (
+          <ul className="stagger flex flex-col gap-2 border-b border-border/60 bg-border/40">
+            {visiblePosts.map((post) => (
+              <li key={post.id}>
+                <PostCard
+                  post={post}
+                  currentUser={currentUser}
+                  variant="feed"
+                  highlighted={highlightedPost === String(post.id)}
+                />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <Card className="m-4 p-8 text-center sm:mx-0">
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              You&apos;re not following anyone yet. Tap <span className="font-medium text-foreground">Follow</span> on a
+              post to see their thoughts here, or use the search icon in the header to discover people.
+            </p>
+          </Card>
+        )}
+      </div>
     </PullToRefresh>
   )
 }
@@ -743,6 +787,7 @@ function PostMediaCarousel({
       <div
         ref={scrollerRef}
         onScroll={onScroll}
+        data-no-tab-swipe
         className={cn(
           "flex w-full snap-x snap-mandatory overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
           // Allow BOTH axes: horizontal swipes move the carousel, while vertical
