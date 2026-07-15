@@ -639,11 +639,12 @@ async function acceptedGuestCount(roomName: string): Promise<number> {
 /** Listener asks to come on as a guest. */
 export async function requestToJoin(input: { roomName: string }): Promise<{ ok: boolean; error?: string }> {
   const user = await requireUser()
-  // Honor a host-locked stage: no new requests to speak.
+  // Honor a host-locked stage or a disabled guest section: no new requests.
   const [s] = await db
-    .select({ locked: liveStream.locked })
+    .select({ locked: liveStream.locked, guestsEnabled: liveStream.guestsEnabled })
     .from(liveStream)
     .where(eq(liveStream.roomName, input.roomName))
+  if (s && !s.guestsEnabled) return { ok: false, error: "The host has turned off call-ins." }
   if (s?.locked) return { ok: false, error: "The host has locked the stage." }
   // Clear any prior resolved row for this user so they can re-request.
   await db
@@ -798,6 +799,9 @@ export async function getCallState(input: { roomName: string }): Promise<{
   chatBgUrl: string | null
   chatBgEffect: ChatBgEffect
   locked: boolean
+  // Host toggle for the guest call-in section (default true). When false,
+  // viewers see no call-in slots and the space is given to video + chat.
+  guestsEnabled: boolean
   pinnedChatId: number | null
   // Host-chosen studio theme id, polled so listeners restyle live.
   theme: string
@@ -836,6 +840,7 @@ export async function getCallState(input: { roomName: string }): Promise<{
       chatBgEffect: liveStream.chatBgEffect,
       status: liveStream.status,
       locked: liveStream.locked,
+      guestsEnabled: liveStream.guestsEnabled,
       pinnedChatId: liveStream.pinnedChatId,
       theme: liveStream.theme,
       endRequestAt: liveStream.endRequestAt,
@@ -935,6 +940,7 @@ export async function getCallState(input: { roomName: string }): Promise<{
     chatBgUrl: stream?.chatBgUrl ?? null,
     chatBgEffect: (stream?.chatBgEffect as ChatBgEffect) ?? "none",
     locked: stream?.locked ?? false,
+    guestsEnabled: stream?.guestsEnabled ?? true,
     pinnedChatId: stream?.pinnedChatId ?? null,
     theme: stream?.theme ?? "default",
     // No row, or row flipped to "ended", both mean the session is over.
@@ -1168,6 +1174,17 @@ export async function setRoomLock(input: { roomName: string; locked: boolean }):
   const user = await requireUser()
   if ((await getHostId(input.roomName)) !== user.id) throw new Error("Only the host can lock the stage.")
   await db.update(liveStream).set({ locked: input.locked }).where(eq(liveStream.roomName, input.roomName))
+  return { ok: true }
+}
+
+/**
+ * Host turns the guest call-in section on/off. When off, no call-in slots are
+ * shown to viewers and the freed space is split between the host video and chat.
+ */
+export async function setGuestsEnabled(input: { roomName: string; enabled: boolean }): Promise<{ ok: boolean }> {
+  const user = await requireUser()
+  if ((await getHostId(input.roomName)) !== user.id) throw new Error("Only the host can change guest settings.")
+  await db.update(liveStream).set({ guestsEnabled: input.enabled }).where(eq(liveStream.roomName, input.roomName))
   return { ok: true }
 }
 

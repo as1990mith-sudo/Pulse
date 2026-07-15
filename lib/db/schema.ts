@@ -335,6 +335,10 @@ export const liveStream = pgTable("live_stream", {
   // unlisted and reachable only by direct link (host-controlled before going live).
   visibility: text("visibility").notNull().default("public"), // "public" | "private"
   locked: boolean("locked").notNull().default(false), // host locked the stage (no new requests)
+  // Host toggle for the guest call-in section. When true (default) the two
+  // call-in slots are shown and viewers can request to join; when false the
+  // slots are hidden and that space is split between the host video and chat.
+  guestsEnabled: boolean("guestsEnabled").notNull().default(true),
   pinnedChatId: integer("pinnedChatId"), // a host-pinned chat message id
   chatBgUrl: text("chatBgUrl"), // host-uploaded chat background image
   chatBgEffect: text("chatBgEffect").notNull().default("none"), // "none" | "blur" | "dim"
