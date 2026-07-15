@@ -1079,7 +1079,7 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                                   )}
                                 </span>
                                 <span className="min-w-0 flex-1">
-                                  <span className="line-clamp-2 text-sm font-semibold leading-snug">{show.title}</span>
+                                  <span className="block truncate text-sm font-semibold leading-snug">{show.title}</span>
                                   <span className="mt-1 block truncate text-xs text-muted-foreground">
                                     {[show.host.name, show.publishedAt].filter(Boolean).join(" · ")}
                                   </span>
