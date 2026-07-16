@@ -216,42 +216,18 @@ export function ProductView({
         </section>
       )}
 
-      {/* Book delivery — unlocked for owners */}
-      {book && owned && book.fileUrl && (
-        <section className="mb-8">
-          <h2 className="mb-3 text-lg font-semibold text-foreground">Your copy</h2>
-          <a
-            href={book.fileUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card p-4 transition-colors hover:bg-secondary/40"
-          >
-            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
-              <BookOpen className="size-5" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-foreground">Read {product.title}</p>
-              <p className="truncate text-xs text-muted-foreground">{book.fileName || "Open your file"}</p>
-            </div>
-            <Check className="size-5 shrink-0 text-primary" />
-          </a>
-        </section>
-      )}
-
-      {/* Related */}
+      {/* More by the same author — smaller cards than the book in focus. */}
       {related.length > 0 && (
-      <section className="mb-4">
-        <h2 className="mb-3 text-lg font-semibold text-foreground">You may also like</h2>
-        <div data-scroll className="hscroll -mx-4 flex gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
-          {related.map((p) =>
-            p.type === "course" ? (
-              <CourseRailCard key={p.id} course={p} />
-            ) : (
-              <BookRailCard key={p.id} book={p} />
-            ),
-          )}
-        </div>
-      </section>
+        <section className="mb-4">
+          <h2 className="mb-3 text-lg font-semibold text-foreground">
+            More by {course ? course.instructor : book!.author}
+          </h2>
+          <div data-scroll className="hscroll -mx-4 flex gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
+            {related.map((p) =>
+              p.type === "course" ? <CourseRailCard key={p.id} course={p} /> : <BookRailCard key={p.id} book={p} />,
+            )}
+          </div>
+        </section>
       )}
 
       {/* Sticky purchase bar — portaled to <body> so it stays pinned to the
@@ -274,23 +250,6 @@ export function ProductView({
             className="size-12 shrink-0 rounded-2xl border border-border/60 bg-secondary/40"
           />
 
-          {!owned && (
-            <button
-              type="button"
-              onClick={() => (inCart ? removeFromCart(product.id) : addToCart(product.id))}
-              aria-label={inCart ? "Remove from cart" : "Add to cart"}
-              aria-pressed={inCart}
-              className={cn(
-                "flex size-12 shrink-0 items-center justify-center rounded-2xl border transition-transform active:scale-90",
-                inCart
-                  ? "border-primary/50 bg-primary/15 text-primary"
-                  : "border-border/60 bg-secondary/40 text-foreground",
-              )}
-            >
-              {inCart ? <Check className="size-5 motion-pop" /> : <ShoppingCart className="size-5" />}
-            </button>
-          )}
-
           {owned ? (
             <Link
               href="/library"
@@ -300,24 +259,42 @@ export function ProductView({
               In Library
             </Link>
           ) : (
-            <button
-              type="button"
-              onClick={purchase}
-              disabled={status === "processing"}
-              className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-primary text-base font-semibold text-primary-foreground shadow-elevated transition-transform active:scale-[0.98] disabled:opacity-80"
-            >
-              {status === "processing" ? (
-                <>
-                  <Loader2 className="size-5 animate-spin" />
-                  Processing…
-                </>
-              ) : (
-                <>
-                  <ShoppingBag className="size-5" />
-                  {product.price === 0 ? "Get for free" : `Buy · ${formatPrice(product.price)}`}
-                </>
-              )}
-            </button>
+            <>
+              {/* Add to cart — outlined secondary action, toggles to "In cart". */}
+              <button
+                type="button"
+                onClick={() => (inCart ? removeFromCart(product.id) : addToCart(product.id))}
+                aria-pressed={inCart}
+                className={cn(
+                  "flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl border text-sm font-semibold transition-transform active:scale-[0.98]",
+                  inCart
+                    ? "border-primary/50 bg-primary/15 text-primary"
+                    : "border-border/60 bg-secondary/40 text-foreground",
+                )}
+              >
+                {inCart ? <Check className="size-5 motion-pop" /> : <ShoppingCart className="size-5" />}
+                {inCart ? "In cart" : "Add to cart"}
+              </button>
+              {/* Buy — primary action. */}
+              <button
+                type="button"
+                onClick={purchase}
+                disabled={status === "processing"}
+                className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-semibold text-primary-foreground shadow-elevated transition-transform active:scale-[0.98] disabled:opacity-80"
+              >
+                {status === "processing" ? (
+                  <>
+                    <Loader2 className="size-5 animate-spin" />
+                    Processing…
+                  </>
+                ) : (
+                  <>
+                    <ShoppingBag className="size-5" />
+                    {product.price === 0 ? "Get for free" : `Buy · ${formatPrice(product.price)}`}
+                  </>
+                )}
+              </button>
+            </>
           )}
             </div>
           </div>,
