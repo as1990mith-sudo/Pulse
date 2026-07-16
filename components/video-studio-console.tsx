@@ -49,6 +49,7 @@ import {
 import { LIVE_CATEGORIES } from "@/lib/live-categories"
 import { useLiveVideo, isMedianApp, openNativeAppSettings } from "@/lib/use-live-video"
 import { uploadMedia } from "@/lib/upload-media"
+import { publishShow } from "@/app/actions/shows"
 import { ReactionLayer } from "@/components/live-reactions"
 import { LiveChat } from "@/components/live-chat"
 import { BackExitMenu } from "@/components/live-back-menu"
@@ -215,6 +216,8 @@ export function VideoStudioConsole({
   // Confirmation gate before a host ends the live session, so a mis-tap on the
   // back menu can't drop everyone out of the broadcast.
   const [endConfirmOpen, setEndConfirmOpen] = useState(false)
+  // While the finished recording is being saved (uploaded + auto-published).
+  const [saving, setSaving] = useState(false)
   const startedAtRef = useRef<number | null>(null)
 
   // Music state — a small playlist (up to MAX_MUSIC_TRACKS) with the active
@@ -255,6 +258,7 @@ export function VideoStudioConsole({
     musicDuration,
     setMusicEndedHandler,
     stopMusic,
+    stopRecording,
     disconnect,
   } = useLiveVideo({
     token: creds?.token ?? null,
@@ -408,8 +412,42 @@ export function VideoStudioConsole({
   }
 
   async function endLive() {
+    // Grab the session recording before we tear the room down, then upload it to
+    // Blob and auto-publish it as a "live" video episode (files under the
+    // catalogue's Live → Video tab). Failures fall through to a clean exit so a
+    // host is never trapped on the studio screen.
+    setSaving(true)
+    const durationStr = formatElapsed(elapsed)
+    let videoUrl: string | null = null
+    try {
+      const blob = await stopRecording()
+      if (blob && blob.size > 0) {
+        const ext = blob.type.includes("mp4") ? "mp4" : "webm"
+        const file = new File([blob], `live-session.${ext}`, { type: blob.type })
+        const data = await uploadMedia(file, "episodes")
+        videoUrl = data.url
+      }
+    } catch {
+      /* keep going — end the broadcast even if the recording couldn't be saved */
+    }
+
     if (roomName) await endBroadcast({ roomName }).catch(() => {})
+
+    if (videoUrl) {
+      await publishShow({
+        title,
+        tagline: "",
+        category,
+        duration: durationStr,
+        description: "",
+        cover: null,
+        videoUrl,
+        source: "live",
+      }).catch(() => {})
+    }
+
     disconnect()
+    setSaving(false)
     onExit?.()
   }
 
@@ -1175,6 +1213,17 @@ export function VideoStudioConsole({
           >
             <X className="size-4" />
           </button>
+        </div>
+      )}
+
+      {/* Saving overlay while the finished recording uploads + auto-publishes. */}
+      {saving && (
+        <div className="fixed inset-0 z-[70] flex flex-col items-center justify-center gap-3 bg-black/80 backdrop-blur-sm px-6 text-center">
+          <Loader2 className="size-8 animate-spin text-white" />
+          <p className="text-sm font-medium text-white">Saving your live recording…</p>
+          <p className="max-w-xs text-xs text-white/60 text-pretty">
+            Publishing it to your catalogue under Live. This can take a moment for longer sessions.
+          </p>
         </div>
       )}
 

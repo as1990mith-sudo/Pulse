@@ -44,6 +44,10 @@ export async function publishShow(input: {
   audioUrl?: string | null
   videoUrl?: string | null
   playlist?: string | null
+  // "live" when this episode is auto-published from a finished live session,
+  // "upload" (default) when a host manually uploads a file. Keeps the two
+  // apart in the catalogue's separate Live tab.
+  source?: "upload" | "live"
 }): Promise<PublishResult> {
   const user = await requireUser()
 
@@ -75,6 +79,7 @@ export async function publishShow(input: {
     audioUrl: input.audioUrl ?? null,
     videoUrl: input.videoUrl ?? null,
     playlist: input.playlist?.trim() || null,
+    source: input.source === "live" ? "live" : "upload",
   })
 
   revalidatePath("/live")

@@ -79,6 +79,7 @@ function episodeToShow(row: typeof episode.$inferSelect, views = 0, hostImage?: 
     episodeId: row.id,
     likes: row.likes,
     isPrivate: row.isPrivate,
+    source: row.source === "live" ? "live" : "upload",
   }
 }
 

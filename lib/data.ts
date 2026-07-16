@@ -41,6 +41,10 @@ export type Show = {
   episodeId?: number // numeric DB id for published episodes (likes/comments)
   likes?: number // like count for published episodes
   isPrivate?: boolean // hidden from everyone except the host (owner) when true
+  // "live" when the episode is a recording auto-published from a finished live
+  // session, "upload" for a manually uploaded file. Drives the catalogue's
+  // separate Live tab so the two never mix.
+  source?: "upload" | "live"
 }
 
 export type DevotionalComment = {
