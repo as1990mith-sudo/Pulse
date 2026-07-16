@@ -144,9 +144,8 @@ function GuestSlot({
         playsInline
         muted
         className={cn(
-          // Zoomed out from the old cover crop: show the full camera frame,
-          // scaled ~1.25x so the guest still fills most of the slot.
-          "h-full w-full scale-125 object-contain transition-opacity duration-300",
+          // object-cover so the guest feed fills the slot with no black bars.
+          "h-full w-full object-cover transition-opacity duration-300",
           peer.hasVideo ? "opacity-100" : "opacity-0",
         )}
       />
@@ -546,10 +545,9 @@ export function VideoStudioConsole({
           className={cn(
             "absolute inset-0 z-0 h-full w-full transition-opacity duration-500",
             // Landscape broadcasts letterbox the feed so nothing is cropped.
-            // Portrait: object-contain (full wide frame) scaled ~1.5x so it stays
-            // large — a ~2x wider view than the old cover crop. -scale-x keeps
-            // the self-view mirrored.
-            orientation === "landscape" ? "-scale-x-100 object-contain" : "-scale-x-150 scale-y-150 object-contain",
+            // Portrait: object-cover so the feed fills the whole frame with no
+            // black bars on the sides. -scale-x keeps the self-view mirrored.
+            orientation === "landscape" ? "-scale-x-100 object-contain" : "-scale-x-100 object-cover",
             live && camOn && localVideoReady ? "opacity-100" : "opacity-0",
           )}
         />
@@ -562,7 +560,7 @@ export function VideoStudioConsole({
             muted
             className={cn(
               "absolute inset-0 z-0 h-full w-full",
-              orientation === "landscape" ? "-scale-x-100 object-contain" : "-scale-x-150 scale-y-150 object-contain",
+              orientation === "landscape" ? "-scale-x-100 object-contain" : "-scale-x-100 object-cover",
             )}
           />
         )}

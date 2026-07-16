@@ -107,8 +107,8 @@ function SlotTile({
         playsInline
         muted
         className={cn(
-          // Zoomed out from the old cover crop: full camera frame, scaled ~1.25x.
-          "h-full w-full scale-125 object-contain transition-opacity duration-300",
+          // object-cover so the guest feed fills the tile with no black bars.
+          "h-full w-full object-cover transition-opacity duration-300",
           peer.hasVideo ? "opacity-100" : "opacity-0",
         )}
       />
@@ -570,9 +570,9 @@ export function LiveVideoViewer({
               autoPlay
               playsInline
               className={cn(
-                // Zoomed out ~2x from the old cover crop: full wide camera frame
-                // (object-contain) scaled ~1.5x so it stays large in the frame.
-                "h-full w-full scale-150 object-contain transition-opacity duration-500",
+                // object-cover so the portrait feed fills the frame with no
+                // black bars on the sides.
+                "h-full w-full object-cover transition-opacity duration-500",
                 remoteVideoOn ? "opacity-100" : "opacity-0",
               )}
             />
@@ -779,9 +779,9 @@ export function LiveVideoViewer({
                   playsInline
                   muted
                   className={cn(
-                    // Zoomed out from cover; -scale-x keeps the self-view mirrored.
-                    "h-full w-full -scale-x-125 scale-y-125 object-contain transition-opacity duration-300",
-                    camOn ? "opacity-100" : "opacity-0",
+          // object-cover fills the tile; -scale-x keeps the self-view mirrored.
+          "h-full w-full -scale-x-100 object-cover transition-opacity duration-300",
+          camOn ? "opacity-100" : "opacity-0",
                   )}
                 />
                 {!camOn && (
