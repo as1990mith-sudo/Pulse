@@ -105,6 +105,11 @@ export async function startBroadcast(input: {
     return { ok: false, error: "Live is not configured yet. Add your LiveKit credentials to start broadcasting." }
   }
   const mode: LiveMode = input.mode === "video" ? "video" : "audio"
+  // Cover artwork is required for audio live sessions (there's no video feed to
+  // represent the room, so the cover is what listeners see).
+  if (mode === "audio" && !input.cover) {
+    return { ok: false, error: "Cover artwork is required for audio live sessions." }
+  }
   // Orientation only applies to video; audio is always stored as "portrait".
   const orientation: LiveOrientation = mode === "video" && input.orientation === "landscape" ? "landscape" : "portrait"
   const visibility: LiveVisibility = input.visibility === "private" ? "private" : "public"
@@ -157,10 +162,14 @@ export async function startBroadcast(input: {
 /** Host stops broadcasting. */
 export async function endBroadcast(input: { roomName: string }): Promise<void> {
   const user = await requireUser()
+  // The host can always end. In a grid meeting the co-host has full parity and
+  // may end the live for everyone too.
+  const { isController } = await getGridControl(input.roomName, user.id)
+  if (!isController) return
   await db
     .update(liveStream)
     .set({ status: "ended", endedAt: new Date() })
-    .where(and(eq(liveStream.roomName, input.roomName), eq(liveStream.hostId, user.id)))
+    .where(eq(liveStream.roomName, input.roomName))
   revalidatePath("/live")
 }
 
@@ -609,6 +618,25 @@ async function getHostId(roomName: string): Promise<string | null> {
   return s?.hostId ?? null
 }
 
+/**
+ * A "grid controller" is the host OR the grid meeting's co-host. The co-host
+ * mirrors every host power in a video grid meeting (mute, pin, promote, end),
+ * so moderation actions accept either. Returns the resolved host id too so
+ * callers can reason about who the host is.
+ */
+async function getGridControl(
+  roomName: string,
+  userId: string,
+): Promise<{ hostId: string | null; cohostId: string | null; isController: boolean }> {
+  const [s] = await db
+    .select({ hostId: liveStream.hostId, gridCohostId: liveStream.gridCohostId })
+    .from(liveStream)
+    .where(eq(liveStream.roomName, roomName))
+  const hostId = s?.hostId ?? null
+  const cohostId = s?.gridCohostId ?? null
+  return { hostId, cohostId, isController: userId === hostId || userId === cohostId }
+}
+
 function mapRequest(r: typeof liveCallRequest.$inferSelect): CallRequestView {
   return {
     id: r.id,
@@ -790,9 +818,92 @@ export async function muteParticipant(input: {
   userId: string
 }): Promise<{ ok: boolean; error?: string }> {
   const user = await requireUser()
-  if ((await getHostId(input.roomName)) !== user.id) return { ok: false, error: "Only the host can mute participants." }
+  // The host or the grid co-host may mute others.
+  const { isController } = await getGridControl(input.roomName, user.id)
+  if (!isController) return { ok: false, error: "Only the host or co-host can mute participants." }
   if (input.userId === user.id) return { ok: false, error: "You can't mute yourself." }
   await muteParticipantAudio({ roomName: input.roomName, identity: input.userId })
+  return { ok: true }
+}
+
+// --- Grid meeting: co-host + spotlight pin -------------------------------
+// These power the video "landscape" Meet/Zoom grid. Only the host promotes a
+// co-host; the co-host then shares every host power. Either controller can
+// request to spotlight (pin) any participant on page 1 once that person
+// accepts. State lives on live_stream and is polled via getCallState so late
+// joiners and everyone else stay in sync.
+
+/** Host promotes/demotes the single grid co-host. Pass userId "" to clear. */
+export async function setGridCohost(input: {
+  roomName: string
+  userId: string
+}): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser()
+  // Only the host may appoint or remove the co-host.
+  const hostId = await getHostId(input.roomName)
+  if (hostId !== user.id) return { ok: false, error: "Only the host can set a co-host." }
+  const next = input.userId && input.userId !== hostId ? input.userId : null
+  await db.update(liveStream).set({ gridCohostId: next }).where(eq(liveStream.roomName, input.roomName))
+  return { ok: true }
+}
+
+/**
+ * A controller (host or co-host) requests to spotlight a participant on page 1.
+ * Pinning the host returns the spotlight to the default immediately (no accept).
+ * Any other participant must accept via respondGridPin before they're pinned.
+ */
+export async function requestGridPin(input: {
+  roomName: string
+  userId: string
+  userName: string
+}): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser()
+  const { isController, hostId } = await getGridControl(input.roomName, user.id)
+  if (!isController) return { ok: false, error: "Only the host or co-host can pin participants." }
+  // Returning the spotlight to the host is the default state — apply at once.
+  if (input.userId === hostId) {
+    await db
+      .update(liveStream)
+      .set({ gridPinnedId: null, gridPinRequestId: null, gridPinRequestName: null })
+      .where(eq(liveStream.roomName, input.roomName))
+    return { ok: true }
+  }
+  await db
+    .update(liveStream)
+    .set({ gridPinRequestId: input.userId, gridPinRequestName: input.userName })
+    .where(eq(liveStream.roomName, input.roomName))
+  return { ok: true }
+}
+
+/**
+ * Resolves an in-flight pin request. The requested participant accepts (becomes
+ * the spotlight) or declines; a controller may also decline to cancel it.
+ */
+export async function respondGridPin(input: {
+  roomName: string
+  accept: boolean
+}): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser()
+  const [stream] = await db
+    .select({ gridPinRequestId: liveStream.gridPinRequestId })
+    .from(liveStream)
+    .where(eq(liveStream.roomName, input.roomName))
+  if (!stream?.gridPinRequestId) return { ok: false, error: "No pin request pending." }
+  const { isController } = await getGridControl(input.roomName, user.id)
+  const isTarget = stream.gridPinRequestId === user.id
+  if (!isTarget && !isController) return { ok: false, error: "Not authorized." }
+  if (input.accept && isTarget) {
+    // Only the requested person can accept; pinning replaces any previous pin.
+    await db
+      .update(liveStream)
+      .set({ gridPinnedId: user.id, gridPinRequestId: null, gridPinRequestName: null })
+      .where(eq(liveStream.roomName, input.roomName))
+  } else {
+    await db
+      .update(liveStream)
+      .set({ gridPinRequestId: null, gridPinRequestName: null })
+      .where(eq(liveStream.roomName, input.roomName))
+  }
   return { ok: true }
 }
 
@@ -940,6 +1051,15 @@ export async function getCallState(input: { roomName: string }): Promise<{
   // A co-host's pending "end live session" request awaiting the host's answer.
   // Includes who asked and how many ms remain before the live auto-ends.
   endRequest: { byId: string; byName: string; remainingMs: number } | null
+  // --- Grid meeting coordination (video "landscape" Meet/Zoom layout) ---
+  // The room's host id, so grid clients can compute control rights.
+  hostId: string | null
+  // The single grid co-host (mirrors every host power), or null.
+  gridCohostId: string | null
+  // The participant spotlighted on page 1. Null means "default to the host".
+  gridPinnedId: string | null
+  // An in-flight request to pin a participant, awaiting their acceptance.
+  gridPinRequest: { userId: string; userName: string } | null
 }> {
   // Auto-end abandoned streams first so listeners of a vanished host close out.
   await endStaleStreams()
@@ -958,6 +1078,10 @@ export async function getCallState(input: { roomName: string }): Promise<{
       endRequestAt: liveStream.endRequestAt,
       endRequestById: liveStream.endRequestById,
       endRequestByName: liveStream.endRequestByName,
+      gridCohostId: liveStream.gridCohostId,
+      gridPinnedId: liveStream.gridPinnedId,
+      gridPinRequestId: liveStream.gridPinRequestId,
+      gridPinRequestName: liveStream.gridPinRequestName,
     })
     .from(liveStream)
     .where(eq(liveStream.roomName, input.roomName))
@@ -1082,6 +1206,13 @@ export async function getCallState(input: { roomName: string }): Promise<{
     musicControllerId: controller?.userId ?? null,
     musicApprovalRequest: pendingMusic ? mapRequest(pendingMusic) : null,
     endRequest,
+    hostId,
+    gridCohostId: stream?.gridCohostId ?? null,
+    gridPinnedId: stream?.gridPinnedId ?? null,
+    gridPinRequest:
+      stream?.gridPinRequestId
+        ? { userId: stream.gridPinRequestId, userName: stream.gridPinRequestName ?? "A participant" }
+        : null,
   }
 }
 

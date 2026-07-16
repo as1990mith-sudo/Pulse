@@ -365,6 +365,17 @@ export const liveStream = pgTable("live_stream", {
   endRequestAt: timestamp("endRequestAt"),
   endRequestById: text("endRequestById"),
   endRequestByName: text("endRequestByName"),
+  // ── Grid meeting (video + "landscape") coordination ──────────────────────
+  // A single co-host, promoted by the host, who mirrors every host power
+  // (mute, pin, promote, add track, end). Null when there is no co-host.
+  gridCohostId: text("gridCohostId"),
+  // The participant currently spotlighted on page 1. Defaults to the host when
+  // null. Only one person is pinned at a time (pinning replaces the previous).
+  gridPinnedId: text("gridPinnedId"),
+  // An in-flight "request to pin" a participant. The target must accept before
+  // they become gridPinnedId; cleared once resolved.
+  gridPinRequestId: text("gridPinRequestId"),
+  gridPinRequestName: text("gridPinRequestName"),
 })
 
 // Call-in requests (listener -> host) and invites (host -> listener) for a live

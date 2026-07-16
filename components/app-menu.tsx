@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
 import useSWR from "swr"
 import {
@@ -37,7 +37,7 @@ import { getUnreadCount } from "@/app/actions/notifications"
 import { useStoreState } from "@/lib/use-store-state"
 import { SKINS, useSkin } from "@/components/skin-provider"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
-import { startMenuFlow, consumeMenuReopen } from "@/lib/menu-flow"
+import { startMenuFlow } from "@/lib/menu-flow"
 import { haptic } from "@/lib/haptics"
 import { cn } from "@/lib/utils"
 
@@ -76,7 +76,6 @@ let drawerOpenIntent = false
  */
 export function AppMenu() {
   const router = useRouter()
-  const pathname = usePathname()
   const { data: session } = authClient.useSession()
   const signedIn = !!session?.user
 
@@ -142,15 +141,6 @@ export function AppMenu() {
     }
   }, [])
 
-  // If the user tapped Close on a menu-opened page, re-open this drawer once we
-  // land back on the origin page so Close returns them to the menu.
-  useEffect(() => {
-    if (!mounted) return
-    if (consumeMenuReopen(pathname)) {
-      openDrawer()
-    }
-  }, [mounted, pathname, openDrawer])
-
   // Lock scroll, toggle the page parallax shift, and wire Escape + back button.
   useEffect(() => {
     if (!open) return
@@ -175,9 +165,15 @@ export function AppMenu() {
   }, [open, close])
 
   function navigate() {
-    // Record where we came from so the destination page can offer Back/Close
-    // controls that return here (the page shown before the menu was opened).
+    // Record where we came from so the destination page can offer a Back control
+    // that steps back to where the menu was opened.
     startMenuFlow(window.location.pathname)
+    close()
+  }
+
+  function navigateHome() {
+    // The user profile is a home base, not a menu-flow page: don't start a flow,
+    // so it shows the normal hamburger instead of Back/Close controls.
     close()
   }
 
@@ -293,7 +289,7 @@ export function AppMenu() {
 
                 <Link
                   href={profileHref}
-                  onClick={navigate}
+                  onClick={navigateHome}
                   className="tap-scale flex items-center gap-3 rounded-2xl p-2 transition-colors hover:bg-secondary/50"
                 >
                   <span

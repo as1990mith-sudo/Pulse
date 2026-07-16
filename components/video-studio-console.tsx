@@ -586,9 +586,14 @@ export function VideoStudioConsole({
         <div className="absolute inset-0 z-40">
           <MeetingGrid
             roomName={roomName as string}
-            isHost
             self={{ identity: currentUser.id, name: currentUser.name, image: currentUser.image ?? null }}
             peers={peers}
+            currentUser={currentUser}
+            hostId={callState?.hostId ?? currentUser.id}
+            gridCohostId={callState?.gridCohostId ?? null}
+            gridPinnedId={callState?.gridPinnedId ?? null}
+            gridPinRequest={callState?.gridPinRequest ?? null}
+            onRefreshState={() => void refreshCalls()}
             localVideoRef={localVideoRef}
             registerPeerVideoEl={registerPeerVideoEl}
             micOn={micOn}
