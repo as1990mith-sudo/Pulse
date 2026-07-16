@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation"
-import { SiteHeader } from "@/components/site-header"
 import { CommunityHelp } from "@/components/community-help"
 import { getCommunityPosts } from "@/app/actions/community"
 import { getCurrentUser } from "@/lib/session"
@@ -17,7 +16,6 @@ export default async function CommunityHelpPage() {
 
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden">
-      <SiteHeader collapsible />
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-hidden">
         <CommunityHelp initialPosts={initialPosts} />
       </main>
