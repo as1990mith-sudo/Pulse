@@ -49,6 +49,7 @@ import {
 import { LIVE_CATEGORIES } from "@/lib/live-categories"
 import { useLiveVideo, isMedianApp, openNativeAppSettings } from "@/lib/use-live-video"
 import { uploadMedia } from "@/lib/upload-media"
+import { publishShow } from "@/app/actions/shows"
 import { ReactionLayer } from "@/components/live-reactions"
 import { LiveChat } from "@/components/live-chat"
 import { BackExitMenu } from "@/components/live-back-menu"
@@ -212,6 +213,11 @@ export function VideoStudioConsole({
   const [error, setError] = useState<string | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const [shareOpen, setShareOpen] = useState(false)
+  // Confirmation gate before a host ends the live session, so a mis-tap on the
+  // back menu can't drop everyone out of the broadcast.
+  const [endConfirmOpen, setEndConfirmOpen] = useState(false)
+  // While the finished recording is being saved (uploaded + auto-published).
+  const [saving, setSaving] = useState(false)
   const startedAtRef = useRef<number | null>(null)
 
   // Music state — a small playlist (up to MAX_MUSIC_TRACKS) with the active
@@ -252,6 +258,7 @@ export function VideoStudioConsole({
     musicDuration,
     setMusicEndedHandler,
     stopMusic,
+    stopRecording,
     disconnect,
   } = useLiveVideo({
     token: creds?.token ?? null,
@@ -405,8 +412,42 @@ export function VideoStudioConsole({
   }
 
   async function endLive() {
+    // Grab the session recording before we tear the room down, then upload it to
+    // Blob and auto-publish it as a "live" video episode (files under the
+    // catalogue's Live → Video tab). Failures fall through to a clean exit so a
+    // host is never trapped on the studio screen.
+    setSaving(true)
+    const durationStr = formatElapsed(elapsed)
+    let videoUrl: string | null = null
+    try {
+      const blob = await stopRecording()
+      if (blob && blob.size > 0) {
+        const ext = blob.type.includes("mp4") ? "mp4" : "webm"
+        const file = new File([blob], `live-session.${ext}`, { type: blob.type })
+        const data = await uploadMedia(file, "episodes")
+        videoUrl = data.url
+      }
+    } catch {
+      /* keep going — end the broadcast even if the recording couldn't be saved */
+    }
+
     if (roomName) await endBroadcast({ roomName }).catch(() => {})
+
+    if (videoUrl) {
+      await publishShow({
+        title,
+        tagline: "",
+        category,
+        duration: durationStr,
+        description: "",
+        cover: null,
+        videoUrl,
+        source: "live",
+      }).catch(() => {})
+    }
+
     disconnect()
+    setSaving(false)
     onExit?.()
   }
 
@@ -627,7 +668,7 @@ export function VideoStudioConsole({
             <BackExitMenu
               showMenu={live}
               exitLabel="End"
-              onExit={live ? endLive : (onExit ?? (() => {}))}
+              onExit={live ? () => setEndConfirmOpen(true) : (onExit ?? (() => {}))}
               onMinimize={onMinimize ?? (() => {})}
             />
             {live ? (
@@ -909,9 +950,6 @@ export function VideoStudioConsole({
             >
               <Music className="size-5" />
             </GlassButton>
-            <GlassButton label="End broadcast" onClick={endLive} tone="danger" size="lg">
-              <Radio className="size-6" />
-            </GlassButton>
           </div>
         )}
 
@@ -1175,6 +1213,65 @@ export function VideoStudioConsole({
           >
             <X className="size-4" />
           </button>
+        </div>
+      )}
+
+      {/* Saving overlay while the finished recording uploads + auto-publishes. */}
+      {saving && (
+        <div className="fixed inset-0 z-[70] flex flex-col items-center justify-center gap-3 bg-black/80 backdrop-blur-sm px-6 text-center">
+          <Loader2 className="size-8 animate-spin text-white" />
+          <p className="text-sm font-medium text-white">Saving your live recording…</p>
+          <p className="max-w-xs text-xs text-white/60 text-pretty">
+            Publishing it to your catalogue under Live. This can take a moment for longer sessions.
+          </p>
+        </div>
+      )}
+
+      {/* End-session confirmation — a host must confirm before the whole
+          broadcast is torn down for everyone watching. */}
+      {endConfirmOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6">
+          <button
+            type="button"
+            aria-label="Cancel ending the live"
+            onClick={() => setEndConfirmOpen(false)}
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+          />
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="end-live-title"
+            className="relative z-10 w-full max-w-xs rounded-3xl border border-white/10 bg-zinc-900/95 p-6 text-center shadow-2xl backdrop-blur-xl"
+          >
+            <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-destructive/15 text-destructive">
+              <Radio className="size-6" />
+            </div>
+            <h2 id="end-live-title" className="text-lg font-semibold text-white">
+              End this live session?
+            </h2>
+            <p className="mt-1.5 text-sm text-white/60 text-pretty">
+              Your broadcast will stop and everyone watching will be disconnected. This can&apos;t be undone.
+            </p>
+            <div className="mt-5 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setEndConfirmOpen(false)
+                  void endLive()
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-destructive px-5 py-3 text-sm font-semibold text-destructive-foreground transition-opacity hover:opacity-90 active:scale-[0.99]"
+              >
+                End live session
+              </button>
+              <button
+                type="button"
+                onClick={() => setEndConfirmOpen(false)}
+                className="w-full rounded-2xl bg-white/10 px-5 py-3 text-sm font-semibold text-white ring-1 ring-inset ring-white/15 transition-colors hover:bg-white/20"
+              >
+                Keep streaming
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

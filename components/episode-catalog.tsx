@@ -1,18 +1,32 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Headphones, Search, Video } from "lucide-react"
+import { Headphones, Radio, Search, Video } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { EpisodeRow } from "@/components/profile/episode-row"
 import { VideoCard } from "@/components/profile/video-card"
 import { isPlayable } from "@/components/episode-player-provider"
 import { cn } from "@/lib/utils"
 
-type MediaTab = "audio" | "video"
+type MediaTab = "audio" | "video" | "live"
+type LiveKind = "video" | "audio"
+
+/** Media kind of an episode: video when it has a video recording, else audio. */
+function mediaKind(e: Show): "audio" | "video" {
+  return e.mediaType ?? (e.videoUrl ? "video" : "audio")
+}
+
+/** True for recordings auto-published from a finished live session. */
+function isLive(e: Show): boolean {
+  return e.source === "live"
+}
 
 /**
- * The episode list shown on a profile. All episodes show by default; a search
- * box filters by title. Rows are edge-to-edge and separated by divider lines.
+ * The episode list shown on a profile. Three top-level toggles:
+ *  - Audio / Video: manually uploaded episodes (never mixed with live).
+ *  - Live: recordings auto-published from finished live sessions, split into
+ *    Video and Audio subtabs so the two kinds stay separate.
+ * A search box filters the active view by title.
  */
 export function EpisodeCatalog({
   episodes,
@@ -24,38 +38,58 @@ export function EpisodeCatalog({
 }) {
   const [query, setQuery] = useState("")
   const [tab, setTab] = useState<MediaTab>("audio")
-  // Selected playlist filter for the video tab ("all" = show every playlist).
+  // Video / Audio subtab within the Live tab.
+  const [liveKind, setLiveKind] = useState<LiveKind>("video")
+  // Selected playlist filter for the (upload) video tab ("all" = every playlist).
   const [playlist, setPlaylist] = useState<string>("all")
 
-  // Distinct playlist names across this profile's video episodes, in first-seen
-  // order, used to render the YouTube-style playlist filter chips.
+  // Uploaded video episodes only (live recordings are excluded from this tab).
   const videoPlaylists = useMemo(() => {
     const seen: string[] = []
     for (const e of episodes) {
-      const kind = e.mediaType ?? (e.videoUrl ? "video" : "audio")
-      if (kind === "video" && e.playlist && !seen.includes(e.playlist)) seen.push(e.playlist)
+      if (!isLive(e) && mediaKind(e) === "video" && e.playlist && !seen.includes(e.playlist)) seen.push(e.playlist)
     }
     return seen
   }, [episodes])
 
-  // Episode media kind: video when it has a video recording, otherwise audio.
-  const mediaCounts = useMemo(() => {
+  // Counts per top-level tab: uploads split by kind, plus a single Live total.
+  const counts = useMemo(() => {
     let audio = 0
     let video = 0
+    let live = 0
     for (const e of episodes) {
-      if ((e.mediaType ?? (e.videoUrl ? "video" : "audio")) === "video") video++
+      if (isLive(e)) live++
+      else if (mediaKind(e) === "video") video++
       else audio++
     }
-    return { audio, video }
+    return { audio, video, live }
+  }, [episodes])
+
+  // Live recordings split by media kind, for the Live subtab counters.
+  const liveCounts = useMemo(() => {
+    let video = 0
+    let audio = 0
+    for (const e of episodes) {
+      if (!isLive(e)) continue
+      if (mediaKind(e) === "video") video++
+      else audio++
+    }
+    return { video, audio }
   }, [episodes])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return episodes.filter((e) => {
-      const kind = e.mediaType ?? (e.videoUrl ? "video" : "audio")
-      if (kind !== tab) return false
       if (q && !e.title.toLowerCase().includes(q)) return false
-      // Playlist chip only applies on the video tab.
+      if (tab === "live") {
+        // Live tab: only live recordings, split by the chosen subtab kind.
+        if (!isLive(e)) return false
+        return mediaKind(e) === liveKind
+      }
+      // Audio / Video upload tabs: never show live recordings here.
+      if (isLive(e)) return false
+      if (mediaKind(e) !== tab) return false
+      // Playlist chip only applies on the (upload) video tab.
       if (tab === "video" && playlist !== "all") {
         if (playlist === "__none") {
           if (e.playlist) return false
@@ -65,10 +99,9 @@ export function EpisodeCatalog({
       }
       return true
     })
-  }, [episodes, query, tab, playlist])
+  }, [episodes, query, tab, liveKind, playlist])
 
-  // Video episodes grouped into playlist sections (named playlists first, then
-  // an "Other videos" bucket for ungrouped clips) for the YouTube-style "All" view.
+  // Uploaded video episodes grouped into playlist sections for the "All" view.
   const videoSections = useMemo(() => {
     if (tab !== "video") return []
     const groups = new Map<string, Show[]>()
@@ -103,18 +136,25 @@ export function EpisodeCatalog({
     )
   }
 
+  // Whether the active view renders as a video grid: upload Video tab, or the
+  // Live tab with the Video subtab selected.
+  const showsVideoGrid = tab === "video" || (tab === "live" && liveKind === "video")
+  // Search placeholder noun for the active view.
+  const searchNoun = tab === "live" ? `live ${liveKind}` : tab
+
   return (
     <div className="space-y-4">
-      {/* Audio / Video segmented toggle. */}
+      {/* Audio / Video / Live segmented toggle. */}
       <div
         role="tablist"
-        aria-label="Filter episodes by media type"
+        aria-label="Filter episodes by type"
         className="flex items-center gap-1 rounded-full border border-border/60 bg-card p-1"
       >
         {(
           [
-            { key: "audio", label: "Audio", icon: Headphones, count: mediaCounts.audio },
-            { key: "video", label: "Video", icon: Video, count: mediaCounts.video },
+            { key: "audio", label: "Audio", icon: Headphones, count: counts.audio },
+            { key: "video", label: "Video", icon: Video, count: counts.video },
+            { key: "live", label: "Live", icon: Radio, count: counts.live },
           ] as const
         ).map(({ key, label, icon: Icon, count }) => {
           const active = tab === key
@@ -125,7 +165,7 @@ export function EpisodeCatalog({
               role="tab"
               aria-selected={active}
               onClick={() => setTab(key)}
-              className={`flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium transition-colors ${
                 active
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:text-foreground"
@@ -145,20 +185,60 @@ export function EpisodeCatalog({
         })}
       </div>
 
+      {/* Live subtoggle: Video / Audio. Recordings never mix across the two. */}
+      {tab === "live" && (
+        <div
+          role="tablist"
+          aria-label="Filter live recordings by media type"
+          className="flex items-center gap-1 rounded-full bg-secondary p-1"
+        >
+          {(
+            [
+              { key: "video", label: "Video", icon: Video, count: liveCounts.video },
+              { key: "audio", label: "Audio", icon: Headphones, count: liveCounts.audio },
+            ] as const
+          ).map(({ key, label, icon: Icon, count }) => {
+            const active = liveKind === key
+            return (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setLiveKind(key)}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                  active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Icon className="size-4" />
+                {label}
+                <span
+                  className={`rounded-full px-1.5 text-xs ${
+                    active ? "bg-muted text-muted-foreground" : "bg-background/60 text-muted-foreground"
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder={`Search ${tab} episodes by title…`}
+          placeholder={`Search ${searchNoun} episodes by title…`}
           aria-label="Search episodes by title"
           className="w-full rounded-full border border-border/60 bg-card py-2 pl-9 pr-4 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
         />
       </div>
 
-      {/* Playlist filter chips (video tab only), YouTube-style. */}
-      {tab === "video" && (videoPlaylists.length > 0) && (
+      {/* Playlist filter chips (upload video tab only), YouTube-style. */}
+      {tab === "video" && videoPlaylists.length > 0 && (
         <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {[{ key: "all", label: "All" }, ...videoPlaylists.map((p) => ({ key: p, label: p })), { key: "__none", label: "Unsorted" }].map(
             (chip) => {
@@ -185,15 +265,14 @@ export function EpisodeCatalog({
 
       {filtered.length === 0 ? (
         <p className="px-1 py-8 text-center text-sm text-muted-foreground">
-          {query
-            ? `No ${tab} episodes match “${query}”.`
-            : `No ${tab} episodes published yet.`}
+          {query ? `No ${searchNoun} episodes match “${query}”.` : `No ${searchNoun} episodes yet.`}
         </p>
-      ) : tab === "video" ? (
-        // YouTube-style grid of large 16:9 thumbnail cards. When viewing "All"
-        // with multiple playlists, group into labeled sections; otherwise a
-        // single grid.
-        playlist === "all" && videoSections.length > 1 ? (
+      ) : showsVideoGrid ? (
+        // YouTube-style grid of large 16:9 thumbnail cards. VideoCard routes
+        // playback through the immersive video player — the same interface used
+        // for the main live view. Upload Video groups by playlist in "All";
+        // Live Video is always a single grid.
+        tab === "video" && playlist === "all" && videoSections.length > 1 ? (
           <div className="space-y-7">
             {videoSections.map((section) => (
               <section key={section.key} className="space-y-3">

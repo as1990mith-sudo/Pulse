@@ -1507,6 +1507,8 @@ function PublishOverlay({
         // Reuse the live session's cover art for the auto-published episode.
         cover: session.cover,
         audioUrl,
+        // Auto-published from a live session → files under the catalogue's Live tab.
+        source: "live",
       })
       if (res.ok) {
         setSlug(res.slug)

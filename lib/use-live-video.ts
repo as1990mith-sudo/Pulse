@@ -114,6 +114,25 @@ function describeMediaError(err: unknown): string {
   return "We couldn't start your camera. Tap the camera button to try again."
 }
 
+/**
+ * Pick the best MediaRecorder container the browser supports for recording the
+ * host's video session. VP9/VP8 WebM first (Chrome/Android), then MP4 (Safari).
+ * Returns "" to let MediaRecorder choose its own default when none match.
+ */
+function pickVideoRecordingMime(): string {
+  if (typeof MediaRecorder === "undefined") return ""
+  const candidates = [
+    "video/webm;codecs=vp9,opus",
+    "video/webm;codecs=vp8,opus",
+    "video/webm",
+    "video/mp4",
+  ]
+  for (const c of candidates) {
+    if (MediaRecorder.isTypeSupported(c)) return c
+  }
+  return ""
+}
+
 /** A remote participant publishing into the room (the host or an accepted guest). */
 export type RemotePeer = {
   identity: string
@@ -161,6 +180,15 @@ export function useLiveVideo({
   const musicSourceRef = useRef<MediaElementAudioSourceNode | null>(null)
   const musicLoopRef = useRef(false)
   const musicEndedRef = useRef<(() => void) | null>(null)
+
+  // Host-side session recording. We record the self-view <video> (via
+  // captureStream, so it survives front/back camera flips) plus the mic track
+  // into one MediaRecorder, then hand the finished blob to the console for
+  // upload + auto-publish when the broadcast ends.
+  const recorderRef = useRef<MediaRecorder | null>(null)
+  const recordChunksRef = useRef<Blob[]>([])
+  const recordMimeRef = useRef<string>("video/webm")
+  const recordingStartedRef = useRef(false)
 
   const [connected, setConnected] = useState(false)
   const [micOn, setMicOn] = useState(true)
@@ -266,6 +294,14 @@ export function useLiveVideo({
   }
 
   const cleanup = useCallback(() => {
+    // Stop any in-progress recording so the camera/mic tracks are released.
+    if (recorderRef.current && recorderRef.current.state !== "inactive") {
+      try {
+        recorderRef.current.stop()
+      } catch {
+        /* already stopped */
+      }
+    }
     const room = roomRef.current
     if (room) {
       room.disconnect()
@@ -472,13 +508,27 @@ export function useLiveVideo({
     const room = roomRef.current
     if (!room) return
     const next = facingMode === "user" ? "environment" : "user"
+    setLocalVideoReady(false)
     try {
-      await room.localParticipant.setCameraEnabled(true, { facingMode: next })
+      // Restarting the existing camera track with the opposite facingMode is the
+      // reliable way to switch front/back on mobile. Calling setCameraEnabled(true)
+      // again is a no-op when the camera is already on, so the old code never
+      // actually flipped. restartTrack re-acquires the stream with the new
+      // constraint and keeps the same publication (viewers see no interruption).
+      const pub = room.localParticipant.getTrackPublication(Track.Source.Camera)
+      const track = pub?.videoTrack
+      if (track) {
+        await track.restartTrack({ facingMode: next })
+      } else {
+        await room.localParticipant.setCameraEnabled(true, { facingMode: next })
+      }
       setFacingMode(next)
       setCamOn(true)
       attachLocalVideo(room)
     } catch {
-      /* device may not have a second camera — ignore */
+      // Some devices expose only one camera or reject the constraint — restore
+      // the self-view so the frame doesn't stay blank.
+      attachLocalVideo(room)
     }
   }, [facingMode])
 
@@ -592,6 +642,89 @@ export function useLiveVideo({
     if (musicElRef.current) musicElRef.current.pause()
   }, [])
 
+  /**
+   * Begin recording the host's session (idempotent). Captures the self-view
+   * element's stream — which keeps producing frames across camera flips — plus
+   * the live mic track, into a single MediaRecorder. No-op off the host path,
+   * without MediaRecorder support, or if already recording.
+   */
+  const startRecording = useCallback(() => {
+    if (recordingStartedRef.current) return
+    if (typeof MediaRecorder === "undefined") return
+    const room = roomRef.current
+    const videoEl = localVideoRef.current
+    if (!room || !videoEl) return
+
+    let stream: MediaStream
+    try {
+      const capture = (
+        videoEl as HTMLVideoElement & {
+          captureStream?: () => MediaStream
+          mozCaptureStream?: () => MediaStream
+        }
+      )
+      const captured = capture.captureStream?.() ?? capture.mozCaptureStream?.()
+      const tracks: MediaStreamTrack[] = []
+      if (captured) tracks.push(...captured.getVideoTracks())
+      const micTrack = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track?.mediaStreamTrack
+      if (micTrack) tracks.push(micTrack)
+      if (tracks.length === 0) return
+      stream = new MediaStream(tracks)
+    } catch {
+      return
+    }
+
+    const mime = pickVideoRecordingMime()
+    recordMimeRef.current = mime || "video/webm"
+    let rec: MediaRecorder
+    try {
+      rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream)
+    } catch {
+      return
+    }
+    recordChunksRef.current = []
+    rec.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) recordChunksRef.current.push(e.data)
+    }
+    try {
+      rec.start(1000) // gather data in 1s slices so a crash still yields most of the take
+    } catch {
+      return
+    }
+    recorderRef.current = rec
+    recordingStartedRef.current = true
+  }, [])
+
+  /**
+   * Stop recording and resolve the assembled video blob (or null if nothing was
+   * captured). Safe to call multiple times.
+   */
+  const stopRecording = useCallback((): Promise<Blob | null> => {
+    return new Promise((resolve) => {
+      const rec = recorderRef.current
+      const assemble = () =>
+        recordChunksRef.current.length > 0 ? new Blob(recordChunksRef.current, { type: recordMimeRef.current }) : null
+      if (!rec || rec.state === "inactive") {
+        resolve(assemble())
+        return
+      }
+      rec.onstop = () => {
+        recorderRef.current = null
+        resolve(assemble())
+      }
+      try {
+        rec.stop()
+      } catch {
+        resolve(assemble())
+      }
+    })
+  }, [])
+
+  // Kick off recording once the host's camera is live and painting.
+  useEffect(() => {
+    if (isHost && connected && camOn && localVideoReady) startRecording()
+  }, [isHost, connected, camOn, localVideoReady, startRecording])
+
   return {
     localVideoRef,
     connected,
@@ -619,6 +752,7 @@ export function useLiveVideo({
     setMusicLoop,
     setMusicEndedHandler,
     stopMusic,
+    stopRecording,
     disconnect: cleanup,
   }
 }

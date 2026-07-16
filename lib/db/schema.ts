@@ -165,6 +165,11 @@ export const episode = pgTable("episode", {
   // Optional named playlist a video episode belongs to (e.g. "Sunday Sermons").
   // Null means the video is ungrouped. Used to organize the Video catalogue.
   playlist: text("playlist"),
+  // How the episode entered the catalogue: "upload" for a manually uploaded
+  // file, "live" for a recording auto-published from a finished live session.
+  // Drives the catalogue's separate "Live" tab so live recordings never mix
+  // with manual uploads.
+  source: text("source").notNull().default("upload"),
   // Set when a host publishes their own streamed session. Null for episodes
   // added by an admin from the content dashboard.
   hostUserId: text("hostUserId"),
