@@ -180,12 +180,19 @@ export function LiveVideoViewer({
   const [lsFullscreen, setLsFullscreen] = useState(false)
   const [controlsVisible, setControlsVisible] = useState(true)
 
+  // Grid ("landscape") video streams are Meet/Zoom-style meetings: this viewer
+  // auto-publishes their own camera + mic and gets a tile.
+  const isGridMeeting = stream.orientation === "landscape"
+  // Prompt shown when the host asks this viewer to unmute in a grid meeting.
+  const [askedToUnmute, setAskedToUnmute] = useState(false)
+
   const {
     localVideoRef,
     connected,
     canPublish,
     micOn,
     camOn,
+    localVideoReady,
     participants,
     peers,
     error: rtcError,
@@ -201,6 +208,8 @@ export function LiveVideoViewer({
     serverUrl: creds?.serverUrl ?? null,
     isHost: false,
     hostId: stream.hostId,
+    autoPublish: isGridMeeting,
+    onAskUnmute: () => setAskedToUnmute(true),
   })
 
   async function join() {
@@ -413,215 +422,111 @@ export function LiveVideoViewer({
     )
   }
 
-  // ── Landscape (Facebook-style) viewer ─────────────────────────────────────
-  // Letterboxed 16:9 video pinned to the top, then a solid scrolling comment
-  // feed filling the rest. Host-only broadcast: no call-in slots.
-  if (landscape) {
+  // ── Grid meeting viewer ───────────────────────────────────────────────────
+  // Meet/Zoom-style tile grid: this viewer gets their own tile and publishes
+  // camera + mic on join. Everyone in the room appears as a tile.
+  if (isGridMeeting) {
     return (
       <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-neutral-950 text-white [isolation:isolate]">
-        {/* Video pane: full 16:9 letterboxed on black so nothing is cropped.
-            In fullscreen it fills the (landscape-rotated) screen. */}
-        <div
-          ref={videoPaneRef}
-          className={cn(
-            "relative w-full shrink-0 overflow-hidden bg-black",
-            lsFullscreen ? "h-screen" : "aspect-video",
-          )}
-        >
-          {/* Tapping the video toggles the controls overlay (top bar + fullscreen). */}
-          <div className="absolute inset-0" onClick={() => setControlsVisible((v) => !v)}>
-            {hostPeer ? (
-              <video
-                ref={(el) => registerPeerVideoEl(hostPeer.identity, el)}
-                autoPlay
-                playsInline
-                className={cn(
-                  "h-full w-full object-contain transition-opacity duration-500",
-                  remoteVideoOn ? "opacity-100" : "opacity-0",
-                )}
-              />
-            ) : null}
-            {!remoteVideoOn && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/70">
-                {stream.cover && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={stream.cover || "/placeholder.svg"}
-                    alt=""
-                    aria-hidden="true"
-                    className="absolute inset-0 size-full scale-110 object-cover opacity-20 blur-2xl"
-                  />
-                )}
-                <Loader2 className="relative size-7 animate-spin" />
-                <p className="relative text-sm font-medium">
-                  {ended ? error ?? "This stream has ended." : "Connecting to the live…"}
-                </p>
-              </div>
-            )}
-            {bursts.map((b) => (
-              <span
-                key={b.key}
-                className="tap-heart pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 text-4xl"
-                style={{ left: `${b.x}%`, top: `${b.y}%` }}
-                aria-hidden="true"
-              >
-                ❤️
-              </span>
-            ))}
-          </div>
-
-          {/* Floating reactions over the video */}
-          <ReactionLayer roomName={connected ? stream.roomName : undefined} />
-
-          {/* Controls overlay: top bar + fullscreen button. Tap the video to
-              show/hide. */}
-          <div
-            className={cn(
-              "pointer-events-none absolute inset-0 z-20 transition-opacity duration-300",
-              controlsVisible ? "opacity-100" : "opacity-0",
-            )}
-          >
-            {/* Top bar: back menu + LIVE + viewers */}
-            <div className="pointer-events-auto absolute inset-x-0 top-0 flex items-center justify-between gap-2 bg-gradient-to-b from-black/50 to-transparent p-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
-              <BackExitMenu
-                showMenu
-                exitLabel="Leave"
-                onExit={() => {
-                  disconnect()
-                  onExit?.()
-                }}
-                onMinimize={onMinimize ?? (() => {})}
-              />
-              <div className="flex items-center gap-2">
-                <span className="flex items-center gap-1.5 rounded-full bg-live px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-live-foreground shadow-lg">
-                  <span className="relative flex size-2">
-                    <span className="absolute inline-flex size-full animate-ping rounded-full bg-live-foreground/70" />
-                    <span className="relative inline-flex size-2 rounded-full bg-live-foreground" />
-                  </span>
-                  Live
-                </span>
-                <LiveAudienceSheet
-                  count={presenceCount || viewers}
-                  members={presenceMembers}
-                  immersive
-                  className="px-3 py-1.5 text-xs font-medium"
-                />
-              </div>
-            </div>
-
-            {/* Fullscreen / rotate-to-landscape button. */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                void toggleLandscapeFullscreen()
-              }}
-              aria-label={lsFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-              className="pointer-events-auto absolute bottom-3 right-3 flex size-10 items-center justify-center rounded-full bg-black/50 text-white ring-1 ring-inset ring-white/20 backdrop-blur-md transition-colors hover:bg-black/70 active:scale-90"
-            >
-              {lsFullscreen ? <Minimize className="size-5" /> : <Maximize className="size-5" />}
-            </button>
-          </div>
-
-          {/* Tap-to-enable-sound (autoplay unblock) */}
-          {connected && audioBlocked && (
-            <button
-              type="button"
-              onClick={() => void startAudioPlayback()}
-              className="absolute left-1/2 top-1/2 z-30 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full bg-white/15 px-5 py-2.5 text-sm font-semibold text-white ring-1 ring-inset ring-white/20 backdrop-blur-md"
-            >
-              <Volume2 className="size-4" /> Tap to enable sound
-            </button>
-          )}
-        </div>
-
-        {/* Host info + actions bar between the video and the feed. */}
-        <div className="flex items-center gap-2 border-b border-white/10 bg-neutral-950 px-3 py-2">
-          <span
-            className={cn(
-              "flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white",
-              getAvatarColor(stream.hostId),
-            )}
-            aria-hidden="true"
-          >
-            {getInitials(stream.hostName)}
-          </span>
-          <div className="flex min-w-0 flex-1 flex-col leading-tight">
+        {/* Top bar: leave/minimise menu + LIVE + audience count. */}
+        <div className="flex items-center justify-between gap-2 bg-neutral-900 px-3 py-2 pt-[calc(env(safe-area-inset-top)+0.5rem)]">
+          <BackExitMenu
+            showMenu
+            exitLabel="Leave"
+            onExit={() => {
+              disconnect()
+              onExit?.()
+            }}
+            onMinimize={onMinimize ?? (() => {})}
+          />
+          <div className="flex min-w-0 flex-1 flex-col px-1 leading-tight">
             <span className="truncate text-sm font-semibold">{stream.title}</span>
-            <span className="truncate text-[11px] text-white/60">
-              {stream.hostName} · @{stream.hostHandle}
-            </span>
+            <span className="truncate text-[11px] text-white/60">{stream.hostName} · meeting</span>
           </div>
-          {!isSelf && (
-            <InlineFollowButton
-              targetUserId={stream.hostId}
-              targetName={stream.hostName}
-              initialFollowing={initialFollowing}
+          <span className="flex items-center gap-1.5 rounded-full bg-live px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-live-foreground">
+            <span className="relative flex size-2">
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-live-foreground/70" />
+              <span className="relative inline-flex size-2 rounded-full bg-live-foreground" />
+            </span>
+            Live
+          </span>
+          <LiveAudienceSheet
+            count={presenceCount || participants}
+            members={presenceMembers}
+            immersive
+            className="px-3 py-1.5 text-xs font-medium"
+          />
+        </div>
+
+        {!connected ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-white/70">
+            <Loader2 className="size-7 animate-spin" />
+            <p className="text-sm font-medium">{ended ? error ?? "This stream has ended." : "Joining the meeting…"}</p>
+          </div>
+        ) : (
+          <div className="min-h-0 flex-1">
+            <MeetingGrid
+              roomName={stream.roomName}
+              isHost={false}
+              self={{ identity: currentUserId, name: currentUser?.name ?? "You", image: currentUser?.image ?? null }}
+              peers={peers}
+              localVideoRef={localVideoRef}
+              registerPeerVideoEl={registerPeerVideoEl}
+              micOn={micOn}
+              camOn={camOn}
+              localVideoReady={localVideoReady}
+              onToggleMic={() => void toggleMic()}
+              onToggleCam={() => void toggleCam()}
+              onFlipCamera={() => void flipCamera()}
+              onAskUnmute={() => {}}
+              onLeave={() => {
+                disconnect()
+                onExit?.()
+              }}
             />
-          )}
-          <button
-            type="button"
-            onClick={() =>
-              canWatch && void sendLiveReaction({ roomName: stream.roomName, emoji: "❤️", kind: "reaction" }).catch(() => {})
-            }
-            disabled={!canWatch || !connected}
-            aria-label="Send a heart"
-            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-inset ring-white/15 transition-colors hover:bg-white/20 active:scale-90 disabled:opacity-40"
-          >
-            <Heart className="size-4 fill-live text-live" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setShareOpen(true)}
-            aria-label="Share this live"
-            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-inset ring-white/15 transition-colors hover:bg-white/20 active:scale-90"
-          >
-            <Share2 className="size-4" />
-          </button>
-        </div>
-
-        {/* Comment feed fills the remaining height. */}
-        <div className="min-h-0 flex-1 bg-neutral-950">
-          {canWatch ? (
-            <LiveChat currentUser={currentUser} roomName={stream.roomName} immersive />
-          ) : (
-            <div className="flex h-full items-center justify-center p-4 text-center text-sm text-white/70">
-              <p>
-                <Link href="/sign-in" className="font-semibold text-white underline">
-                  Sign in
-                </Link>{" "}
-                to comment and react.
-              </p>
-            </div>
-          )}
-        </div>
-
-        {(rtcError || (error && !ended)) && (
-          <p className="absolute bottom-2 left-1/2 z-40 -translate-x-1/2 rounded-full bg-destructive px-4 py-1.5 text-sm font-medium text-destructive-foreground shadow-lg">
-            {rtcError ?? error}
-          </p>
+          </div>
         )}
 
-        {/* Invite from the host to come on stage as a guest. */}
-        {myInvite && !canPublish && (
-          <div className="absolute inset-x-3 top-16 z-50 flex items-center justify-between gap-3 rounded-2xl border border-live/40 bg-live/15 px-3 py-2.5 shadow-lg backdrop-blur-md">
-            <p className="text-sm font-medium text-pretty text-white">The host invited you to join as a guest.</p>
+        {/* Tap-to-enable-sound (autoplay unblock). */}
+        {connected && audioBlocked && (
+          <button
+            type="button"
+            onClick={() => void startAudioPlayback()}
+            className="absolute left-1/2 top-20 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full bg-white/15 px-5 py-2.5 text-sm font-semibold text-white ring-1 ring-inset ring-white/20 backdrop-blur-md"
+          >
+            <Volume2 className="size-4" /> Tap to enable sound
+          </button>
+        )}
+
+        {/* Host asked this viewer to unmute — they must opt in. */}
+        {askedToUnmute && !micOn && (
+          <div className="absolute inset-x-3 top-20 z-50 flex items-center justify-between gap-3 rounded-2xl border border-live/40 bg-live/15 px-3 py-2.5 shadow-lg backdrop-blur-md">
+            <p className="text-sm font-medium text-pretty text-white">The host asked you to unmute.</p>
             <div className="flex shrink-0 items-center gap-2">
               <button
-                onClick={() => void acceptInvite()}
+                onClick={() => {
+                  setAskedToUnmute(false)
+                  void toggleMic()
+                }}
                 className="flex items-center gap-1 rounded-full bg-live px-3 py-1.5 text-xs font-semibold text-live-foreground"
               >
-                <Check className="size-3.5" /> Join
+                <Mic className="size-3.5" /> Unmute
               </button>
               <button
-                onClick={() => void declineInvite()}
-                aria-label="Decline invite"
+                onClick={() => setAskedToUnmute(false)}
+                aria-label="Dismiss"
                 className="flex size-7 items-center justify-center rounded-full bg-white/10 text-white/70 ring-1 ring-inset ring-white/15"
               >
                 <X className="size-3.5" />
               </button>
             </div>
           </div>
+        )}
+
+        {(rtcError || (error && !ended)) && (
+          <p className="absolute bottom-20 left-1/2 z-40 -translate-x-1/2 rounded-full bg-destructive px-4 py-1.5 text-sm font-medium text-destructive-foreground shadow-lg">
+            {rtcError ?? error}
+          </p>
         )}
 
         <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />

@@ -56,6 +56,7 @@ import { BackExitMenu } from "@/components/live-back-menu"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { useLivePresence } from "@/lib/use-live-presence"
 import { ShareSheet } from "@/components/share-sheet"
+import { MeetingGrid } from "@/components/meeting-grid"
 import type { ShareTarget } from "@/lib/share-types"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { cn } from "@/lib/utils"
@@ -248,6 +249,7 @@ export function VideoStudioConsole({
     clearError: clearRtcError,
     registerPeerVideoEl,
     toggleMic,
+    askUnmute,
     toggleCam,
     flipCamera,
     publishMusic,
@@ -265,7 +267,13 @@ export function VideoStudioConsole({
     serverUrl: creds?.serverUrl ?? null,
     isHost: true,
     hostId: currentUser.id,
+    // Grid ("landscape") streams are meetings — everyone publishes.
+    autoPublish: orientation === "landscape",
   })
+
+  // A live "Grid" stream renders the Meet/Zoom-style meeting grid instead of the
+  // broadcast layout below.
+  const isGridMeeting = orientation === "landscape"
 
   // Resume an existing live video the host owns (reopened after minimising).
   const resumedRef = useRef(false)
@@ -569,6 +577,32 @@ export function VideoStudioConsole({
 
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-neutral-950 text-white [isolation:isolate]">
+      {/* Grid meeting (live): a Meet/Zoom-style tile grid overlays the broadcast
+          layout. Kept as an overlay (not an early return) so the shared music
+          "Add track" panel and end-confirm dialog below still render. The
+          hidden self-view <video> in the layout underneath stays mounted, so
+          MeetingGrid renders its own tile <video> instead. */}
+      {live && isGridMeeting && (
+        <div className="absolute inset-0 z-40">
+          <MeetingGrid
+            roomName={roomName as string}
+            isHost
+            self={{ identity: currentUser.id, name: currentUser.name, image: currentUser.image ?? null }}
+            peers={peers}
+            localVideoRef={localVideoRef}
+            registerPeerVideoEl={registerPeerVideoEl}
+            micOn={micOn}
+            camOn={camOn}
+            localVideoReady={localVideoReady}
+            onToggleMic={() => void toggleMic()}
+            onToggleCam={() => void toggleCam()}
+            onFlipCamera={() => void flipCamera()}
+            onAskUnmute={(id) => void askUnmute(id)}
+            onAddTrack={() => setMusicPanelOpen(true)}
+            onLeave={() => setEndConfirmOpen(true)}
+          />
+        </div>
+      )}
       {/* ── Host camera (1.75/4 of the screen; grows to 2.125 when the guest
           section is off, taking half the freed call-in row) ──────────────── */}
       <div
@@ -577,21 +611,25 @@ export function VideoStudioConsole({
           orientation !== "landscape" && !guestsEnabled ? "flex-[2.125]" : "flex-[1.75]",
         )}
       >
-        {/* Full-bleed camera — live publisher feed (mirrored self-view) */}
-        <video
-          ref={localVideoRef}
-          autoPlay
-          playsInline
-          muted
-          className={cn(
-            "absolute inset-0 z-0 h-full w-full transition-opacity duration-500",
-            // Landscape broadcasts letterbox the feed so nothing is cropped.
-            // Portrait: object-cover so the feed fills the whole frame with no
-            // black bars on the sides. -scale-x keeps the self-view mirrored.
-            orientation === "landscape" ? "-scale-x-100 object-contain" : "-scale-x-100 object-cover",
-            live && camOn && localVideoReady ? "opacity-100" : "opacity-0",
-          )}
-        />
+        {/* Full-bleed camera — live publisher feed (mirrored self-view). In a
+            live grid meeting the MeetingGrid overlay owns localVideoRef, so we
+            skip this element to avoid two <video>s claiming the same ref. */}
+        {!(live && isGridMeeting) && (
+          <video
+            ref={localVideoRef}
+            autoPlay
+            playsInline
+            muted
+            className={cn(
+              "absolute inset-0 z-0 h-full w-full transition-opacity duration-500",
+              // Landscape broadcasts letterbox the feed so nothing is cropped.
+              // Portrait: object-cover so the feed fills the whole frame with no
+              // black bars on the sides. -scale-x keeps the self-view mirrored.
+              orientation === "landscape" ? "-scale-x-100 object-contain" : "-scale-x-100 object-cover",
+              live && camOn && localVideoReady ? "opacity-100" : "opacity-0",
+            )}
+          />
+        )}
         {/* Pre-live preview camera */}
         {!live && (
           <video
@@ -798,8 +836,8 @@ export function VideoStudioConsole({
                 <div className="grid grid-cols-2 gap-2">
                   {(
                     [
-                      { value: "portrait", label: "Portrait", hint: "Full-screen vertical", icon: Smartphone },
-                      { value: "landscape", label: "Landscape", hint: "Video + comments", icon: MonitorPlay },
+                      { value: "portrait", label: "Focused", hint: "Full-screen vertical", icon: Smartphone },
+                      { value: "landscape", label: "Grid", hint: "Meeting with everyone", icon: MonitorPlay },
                     ] as const
                   ).map((opt) => {
                     const active = orientation === opt.value
@@ -897,7 +935,7 @@ export function VideoStudioConsole({
               </button>
               <p className="text-center text-xs text-white/50">
                 {orientation === "landscape"
-                  ? "Viewers watch your widescreen video with a live comment feed below."
+                  ? "Everyone who joins gets a video tile — like a Meet or Zoom meeting."
                   : "Viewers can comment, react, send gifts, and request to join your call-in slots."}
               </p>
               </div>

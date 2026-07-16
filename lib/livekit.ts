@@ -1,5 +1,5 @@
 import "server-only"
-import { AccessToken, RoomServiceClient } from "livekit-server-sdk"
+import { AccessToken, RoomServiceClient, TrackType } from "livekit-server-sdk"
 
 /**
  * Real-time audio is powered by LiveKit (a WebRTC SFU). These three values come
@@ -119,5 +119,31 @@ export async function removeParticipant(opts: {
     await svc.removeParticipant(opts.roomName, opts.identity)
   } catch {
     // Not connected / room gone → nothing to disconnect.
+  }
+}
+
+/**
+ * Server-side force-mute of every audio track a participant is publishing. Used
+ * by a host to silence someone in a grid meeting. There is intentionally no
+ * server-side unmute: privacy rules mean a server can't silently open a mic, so
+ * unmuting is done by asking the participant (via a data message) to re-enable.
+ */
+export async function muteParticipantAudio(opts: {
+  roomName: string
+  identity: string
+}): Promise<void> {
+  if (!isLiveKitConfigured()) return
+  const svc = roomService()
+  try {
+    const participants = await svc.listParticipants(opts.roomName)
+    const target = participants.find((p) => p.identity === opts.identity)
+    if (!target) return
+    await Promise.all(
+      target.tracks
+        .filter((t) => t.type === TrackType.AUDIO && !t.muted)
+        .map((t) => svc.mutePublishedTrack(opts.roomName, opts.identity, t.sid, true)),
+    )
+  } catch {
+    // Participant/track gone → nothing to mute.
   }
 }

@@ -13,6 +13,7 @@ import {
   LIVEKIT_URL,
   setParticipantPublish,
   removeParticipant,
+  muteParticipantAudio,
 } from "@/lib/livekit"
 import { notifyFollowers, notifyUser } from "@/app/actions/notifications"
 
@@ -201,15 +202,22 @@ export async function joinBroadcast(input: { roomName: string }): Promise<JoinRe
       .set({ lastSeenAt: new Date() })
       .where(eq(liveStream.roomName, input.roomName))
   }
+  // Grid video streams are Meet/Zoom-style meetings: every participant gets a
+  // tile and publishes their own camera + mic. Everyone else (audio rooms, or
+  // Focused/portrait video) keeps the broadcast model where only the host (and
+  // invited guests) may publish.
+  const isGridMeeting = stream.mode === "video" && (stream.orientation ?? "portrait") === "landscape"
+  const canPublish = isHost || isGridMeeting
+
   const token = await createAccessToken({
     roomName: input.roomName,
     identity: user.id,
     name: user.name,
-    canPublish: isHost,
+    canPublish,
     metadata: JSON.stringify({ image: user.image ?? null }),
   })
 
-  return { ok: true, token, serverUrl: LIVEKIT_URL, roomName: input.roomName, canPublish: isHost }
+  return { ok: true, token, serverUrl: LIVEKIT_URL, roomName: input.roomName, canPublish }
 }
 
 /** All currently-live streams, newest first. */
@@ -768,6 +776,23 @@ export async function unblockParticipant(input: {
   await db
     .delete(liveBlocked)
     .where(and(eq(liveBlocked.roomName, input.roomName), eq(liveBlocked.userId, input.userId)))
+  return { ok: true }
+}
+
+/**
+ * Host force-mutes a participant's mic in a grid meeting (server-side hard
+ * mute). Host-only; the host can't mute themselves this way. To bring someone
+ * back on, the host sends an "ask to unmute" data message from the client —
+ * a server can't silently reopen a mic.
+ */
+export async function muteParticipant(input: {
+  roomName: string
+  userId: string
+}): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser()
+  if ((await getHostId(input.roomName)) !== user.id) return { ok: false, error: "Only the host can mute participants." }
+  if (input.userId === user.id) return { ok: false, error: "You can't mute yourself." }
+  await muteParticipantAudio({ roomName: input.roomName, identity: input.userId })
   return { ok: true }
 }
 
