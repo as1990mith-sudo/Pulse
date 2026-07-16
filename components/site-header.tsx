@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { ArrowLeft, Radio, Search, X } from "lucide-react"
+import { ArrowLeft, Radio, Search } from "lucide-react"
 import { AppMenu } from "@/components/app-menu"
 import { MessagesBell } from "@/components/messages-bell"
 import { NotificationBell } from "@/components/notification-bell"
@@ -23,7 +23,7 @@ export function SiteHeader({ collapsible = false }: { collapsible?: boolean } = 
   const pathname = usePathname()
   // When the user reached this page via the side menu, offer Back/Close controls
   // that return to where they were before opening the menu.
-  const { active: inMenuFlow, back, close } = useMenuFlow()
+  const { active: inMenuFlow, back } = useMenuFlow()
   // Hide the header when scrolling down, reveal it when scrolling back up.
   const [windowHidden, setWindowHidden] = useState(false)
   const chatHidden = useChatChromeHidden()
@@ -71,24 +71,14 @@ export function SiteHeader({ collapsible = false }: { collapsible?: boolean } = 
             pushed off-frame (and clipped by the body's overflow-x guard). */}
         <div className="flex min-w-0 items-center gap-2.5">
           {inMenuFlow ? (
-            <div className="flex shrink-0 items-center gap-1.5">
-              <button
-                type="button"
-                onClick={back}
-                aria-label="Go back"
-                className="menu-fab tap-scale flex size-10 items-center justify-center rounded-2xl border border-border/60 bg-secondary/40 text-foreground shadow-soft backdrop-blur-md transition-all duration-200 hover:bg-secondary/70"
-              >
-                <ArrowLeft className="size-[18px]" />
-              </button>
-              <button
-                type="button"
-                onClick={close}
-                aria-label="Close and return"
-                className="tap-scale flex size-10 items-center justify-center rounded-2xl text-muted-foreground transition-colors duration-200 hover:bg-secondary/70 hover:text-foreground"
-              >
-                <X className="size-[18px]" />
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={back}
+              aria-label="Go back"
+              className="menu-fab tap-scale flex size-10 shrink-0 items-center justify-center rounded-2xl border border-border/60 bg-secondary/40 text-foreground shadow-soft backdrop-blur-md transition-all duration-200 hover:bg-secondary/70"
+            >
+              <ArrowLeft className="size-[18px]" />
+            </button>
           ) : (
             <AppMenu />
           )}

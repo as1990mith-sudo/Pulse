@@ -204,19 +204,26 @@ export function MindFeed({
   }
 
   // The "For you" shuffle seed is persisted in sessionStorage so the order stays
-  // stable across navigation and remounts within a session (no reshuffle while
-  // browsing), and only reshuffles when the app is fully closed and reopened —
-  // sessionStorage is cleared when the tab/app is closed.
+  // stable across in-app navigation and remounts (no reshuffle while browsing).
+  // It reshuffles on a manual page refresh (reload) and when the app is closed
+  // and reopened (sessionStorage is cleared on close). We detect a reload via the
+  // Navigation Timing API and mint a fresh seed only in that case.
   const [shuffleSeed] = useState(() => {
     if (typeof window === "undefined") return (Math.random() * 0x7fffffff) | 0
+    const newSeed = () => {
+      const seed = (Math.random() * 0x7fffffff) | 0
+      window.sessionStorage.setItem("feed:shuffleSeed", String(seed))
+      return seed
+    }
+    const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined
+    // A manual refresh should produce a brand-new order.
+    if (nav?.type === "reload") return newSeed()
     const stored = window.sessionStorage.getItem("feed:shuffleSeed")
     if (stored !== null) {
       const parsed = Number.parseInt(stored, 10)
       if (Number.isFinite(parsed)) return parsed
     }
-    const seed = (Math.random() * 0x7fffffff) | 0
-    window.sessionStorage.setItem("feed:shuffleSeed", String(seed))
-    return seed
+    return newSeed()
   })
 
   // IDs of posts the user just created this session. They're pinned to the very
