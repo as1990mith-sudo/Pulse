@@ -203,10 +203,21 @@ export function MindFeed({
     )
   }
 
-  // A fresh shuffle seed is created once per mount, so the "For you" order is
-  // randomized every time the app is refreshed or closed and reopened, yet
-  // stays stable while the user keeps scrolling (the 5s SWR polls reuse it).
-  const [shuffleSeed] = useState(() => (Math.random() * 0x7fffffff) | 0)
+  // The "For you" shuffle seed is persisted in sessionStorage so the order stays
+  // stable across navigation and remounts within a session (no reshuffle while
+  // browsing), and only reshuffles when the app is fully closed and reopened —
+  // sessionStorage is cleared when the tab/app is closed.
+  const [shuffleSeed] = useState(() => {
+    if (typeof window === "undefined") return (Math.random() * 0x7fffffff) | 0
+    const stored = window.sessionStorage.getItem("feed:shuffleSeed")
+    if (stored !== null) {
+      const parsed = Number.parseInt(stored, 10)
+      if (Number.isFinite(parsed)) return parsed
+    }
+    const seed = (Math.random() * 0x7fffffff) | 0
+    window.sessionStorage.setItem("feed:shuffleSeed", String(seed))
+    return seed
+  })
 
   // IDs of posts the user just created this session. They're pinned to the very
   // top of "For you" (newest first) so a new post is always seen first, then the
