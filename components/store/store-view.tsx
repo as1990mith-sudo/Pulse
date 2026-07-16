@@ -14,24 +14,9 @@ export function StoreView({ books }: { books: Book[] }) {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pb-16 pt-4 sm:px-6">
-      <Header />
       <SearchBar />
       <CategoryPills categories={BOOK_CATEGORIES} active={category} onChange={setCategory} />
       <BooksGrid books={books} category={category} />
-    </div>
-  )
-}
-
-function Header() {
-  return (
-    <div className="mb-4 flex items-center gap-3">
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary shadow-soft">
-        <Store className="size-5" />
-      </span>
-      <div className="min-w-0">
-        <h1 className="text-xl font-bold leading-tight tracking-tight text-foreground">Book Store</h1>
-        <p className="truncate text-xs text-muted-foreground">Christian books from the Frequency community</p>
-      </div>
     </div>
   )
 }

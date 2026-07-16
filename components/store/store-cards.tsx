@@ -102,10 +102,12 @@ export function BookGridCard({ book, index = 0, href }: { book: Book; index?: nu
           className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
         />
         <WishlistButton id={book.id} className="absolute right-2 top-2" />
-        <PriceBadge price={book.price} className="absolute bottom-2 left-2" />
       </div>
       <div className="mt-2 flex flex-col gap-0.5">
-        <Stars rating={book.rating} />
+        <div className="flex items-center gap-2">
+          <Stars rating={book.rating} />
+          <span className="text-xs font-semibold text-foreground">{formatPrice(book.price)}</span>
+        </div>
         <h3 className="truncate text-sm font-semibold leading-snug text-foreground">{book.title}</h3>
         <p className="truncate text-xs text-muted-foreground">{book.author}</p>
       </div>
