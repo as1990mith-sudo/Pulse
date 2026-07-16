@@ -259,40 +259,40 @@ export function ShareSheet({
         )}
       >
         {/* Grabber + header */}
-        <div className="shrink-0 px-4 pt-2.5">
-          <div className="mx-auto mb-2 h-1.5 w-10 rounded-full bg-muted-foreground/30" />
+        <div className="shrink-0 px-5 pt-3">
+          <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-muted-foreground/25" />
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold">Share</h2>
+            <h2 className="text-lg font-semibold tracking-tight">Share</h2>
             <button
               type="button"
               onClick={onClose}
-              className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary"
+              className="flex size-9 items-center justify-center rounded-full bg-secondary/70 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
               aria-label="Close"
             >
-              <X className="size-5" />
+              <X className="size-[18px]" />
             </button>
           </div>
         </div>
 
         {/* Search */}
-        <div className="shrink-0 px-4 pb-2 pt-2">
+        <div className="shrink-0 px-5 pb-3 pt-3">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-4 top-1/2 size-[18px] -translate-y-1/2 text-muted-foreground" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search people..."
               aria-label="Search people"
-              className="h-11 w-full rounded-full border border-border/60 bg-secondary/60 pl-10 pr-4 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
+              className="h-12 w-full rounded-2xl border border-border/50 bg-secondary/50 pl-11 pr-4 text-sm outline-none transition-all placeholder:text-muted-foreground focus:border-primary/60 focus:bg-secondary/70"
             />
           </div>
         </div>
 
-        {/* People grid — capped to ~two rows (frequently-contacted first); the
-            rest scroll into view. */}
+        {/* People grid — three columns, capped to ~two rows (frequently-contacted
+            first); the rest scroll into view. */}
         <div
           data-scroll
-          className="max-h-[13.25rem] min-h-[6.5rem] flex-1 overflow-y-auto overscroll-contain px-2 pb-1"
+          className="max-h-[15.5rem] min-h-[7rem] flex-1 overflow-y-auto overscroll-contain px-3 pb-1"
         >
           {listLoading && people.length === 0 ? (
             <div className="flex h-28 items-center justify-center text-muted-foreground">
@@ -303,7 +303,7 @@ export function ShareSheet({
               {debounced ? "No people found." : "Follow people to share with them here."}
             </p>
           ) : (
-            <ul className="grid grid-cols-4 gap-0.5">
+            <ul className="grid grid-cols-3 gap-1">
               {people.map((p) => {
                 const isSel = selected.includes(p.id)
                 return (
@@ -311,18 +311,21 @@ export function ShareSheet({
                     <button
                       type="button"
                       onClick={() => toggleSelect(p.id)}
-                      className="tap-scale flex w-full flex-col items-center gap-1.5 rounded-2xl px-1 py-2 transition-colors hover:bg-secondary/50"
+                      className={cn(
+                        "tap-scale flex w-full flex-col items-center gap-2 rounded-2xl px-1 py-3 transition-colors",
+                        isSel ? "bg-primary/10" : "hover:bg-secondary/50",
+                      )}
                       aria-pressed={isSel}
                     >
                       <span className="relative">
                         <Avatar
                           className={cn(
-                            "size-[3.75rem] transition-all duration-200",
+                            "size-[4.25rem] transition-all duration-200",
                             isSel ? "ring-2 ring-primary ring-offset-2 ring-offset-popover" : "",
                           )}
                         >
                           {p.image && <AvatarImage src={p.image || "/placeholder.svg"} alt={p.name} />}
-                          <AvatarFallback className={cn("text-sm font-medium", p.color)}>
+                          <AvatarFallback className={cn("text-base font-semibold", p.color)}>
                             {p.initials}
                           </AvatarFallback>
                         </Avatar>
@@ -332,7 +335,7 @@ export function ShareSheet({
                           </span>
                         )}
                       </span>
-                      <span className="w-full truncate text-center text-[11px] leading-tight text-foreground">
+                      <span className="w-full truncate px-1 text-center text-xs leading-tight text-foreground">
                         {p.name}
                       </span>
                     </button>
@@ -453,7 +456,7 @@ function Row({ children, className }: { children: React.ReactNode; className?: s
   return (
     <div
       data-scroll
-      className={cn("flex gap-2 overflow-x-auto px-3 py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", className)}
+      className={cn("flex gap-3 overflow-x-auto px-5 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", className)}
     >
       {children}
     </div>
@@ -472,16 +475,16 @@ function QuickAction({
   iconClassName?: string
 }) {
   return (
-    <button type="button" onClick={onClick} className="tap-scale flex w-[3.75rem] shrink-0 flex-col items-center gap-1.5">
+    <button type="button" onClick={onClick} className="tap-scale flex w-[3.5rem] shrink-0 flex-col items-center gap-1.5">
       <span
         className={cn(
-          "flex size-12 items-center justify-center rounded-full bg-secondary text-foreground transition-colors hover:bg-secondary/70",
+          "flex size-[3.25rem] items-center justify-center rounded-2xl bg-secondary/70 text-foreground transition-colors hover:bg-secondary",
           iconClassName,
         )}
       >
         {icon}
       </span>
-      <span className="w-full truncate text-center text-[11px] text-muted-foreground">{label}</span>
+      <span className="w-full truncate text-center text-[11px] font-medium text-muted-foreground">{label}</span>
     </button>
   )
 }
