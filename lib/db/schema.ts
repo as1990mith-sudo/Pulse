@@ -225,6 +225,8 @@ export const chatroomMessage = pgTable("chatroom_message", {
   chatroomId: integer("chatroomId").notNull(),
   userId: text("userId").notNull(),
   userName: text("userName").notNull(),
+  // "user" for normal chat, "system" for auto notices like "X joined the room".
+  kind: text("kind").notNull().default("user"),
   body: text("body"), // nullable — a message can be attachment-only
   attachmentUrl: text("attachmentUrl"),
   attachmentType: text("attachmentType"), // "image" | "video" | "audio" | "document"

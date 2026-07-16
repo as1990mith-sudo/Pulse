@@ -165,6 +165,7 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
           initials: detail.currentUserInitials,
           color: detail.currentUserColor,
           image: detail.currentUserImage,
+          kind: "user",
           body: null,
           attachmentUrl: data.url,
           attachmentType: "audio",
@@ -339,7 +340,7 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
       <ChatroomCall chatroomId={detail.id} roomTitle={detail.name} startNonce={callStartNonce} />
 
       {(showMembers || (detail.isAdmin && detail.joinRequests.length > 0)) && (
-        <div className="space-y-3 border-b border-border/60 px-4 py-3 sm:px-6">
+        <div className="max-h-[60vh] space-y-3 overflow-y-auto overscroll-contain border-b border-border/60 px-4 py-3 sm:px-6">
           {showMembers && <MembersPanel detail={detail} onLeave={handleLeave} leaving={isLeaving} />}
           {detail.isAdmin && detail.joinRequests.length > 0 && <JoinRequests detail={detail} />}
         </div>
