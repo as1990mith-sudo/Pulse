@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import {
   ChevronLeft,
   ChevronRight,
@@ -238,16 +238,12 @@ function RemoteTile({
   onMute: () => void
   onAskUnmute: () => void
 }) {
-  const ref = useRef<HTMLVideoElement | null>(null)
-  useEffect(() => {
-    registerPeerVideoEl(peer.identity, ref.current)
-    return () => registerPeerVideoEl(peer.identity, null)
-  }, [peer.identity, registerPeerVideoEl])
-
   return (
     <TileFrame>
       <video
-        ref={ref}
+        // Ref callback matches the codebase pattern (see SlotTile): register the
+        // element with the hook so LiveKit attaches this peer's video track.
+        ref={(el) => registerPeerVideoEl(peer.identity, el)}
         autoPlay
         playsInline
         className={cn("absolute inset-0 size-full object-cover transition-opacity", peer.hasVideo ? "opacity-100" : "opacity-0")}

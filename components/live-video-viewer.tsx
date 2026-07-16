@@ -8,10 +8,8 @@ import {
   Check,
   Heart,
   Loader2,
-  Maximize,
   Mic,
   MicOff,
-  Minimize,
   PhoneOff,
   Radio,
   RefreshCw,
@@ -41,6 +39,7 @@ import { LiveChat } from "@/components/live-chat"
 import { BackExitMenu } from "@/components/live-back-menu"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { ShareSheet } from "@/components/share-sheet"
+import { MeetingGrid } from "@/components/meeting-grid"
 import type { ShareTarget } from "@/lib/share-types"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { cn } from "@/lib/utils"
@@ -174,11 +173,6 @@ export function LiveVideoViewer({
   const [shareOpen, setShareOpen] = useState(false)
   const [bursts, setBursts] = useState<Burst[]>([])
   const [requesting, setRequesting] = useState(false)
-  // Landscape-viewer chrome: the video pane (for fullscreen), whether we're in
-  // fullscreen, and whether the tap-to-toggle controls overlay is showing.
-  const videoPaneRef = useRef<HTMLDivElement>(null)
-  const [lsFullscreen, setLsFullscreen] = useState(false)
-  const [controlsVisible, setControlsVisible] = useState(true)
 
   // Grid ("landscape") video streams are Meet/Zoom-style meetings: this viewer
   // auto-publishes their own camera + mic and gets a tile.
@@ -312,62 +306,6 @@ export function LiveVideoViewer({
     void sendLiveReaction({ roomName: stream.roomName, emoji: "❤️", kind: "reaction" }).catch(() => {})
   }
 
-  // Landscape fullscreen: expand the 16:9 pane and rotate the phone to landscape.
-  async function toggleLandscapeFullscreen() {
-    const fsEl =
-      document.fullscreenElement ??
-      (document as Document & { webkitFullscreenElement?: Element }).webkitFullscreenElement
-    if (fsEl) {
-      try {
-        if (document.exitFullscreen) await document.exitFullscreen()
-        else (document as Document & { webkitExitFullscreen?: () => void }).webkitExitFullscreen?.()
-      } catch {
-        /* ignore */
-      }
-      return
-    }
-    const pane = videoPaneRef.current as
-      | (HTMLDivElement & { webkitRequestFullscreen?: () => Promise<void> | void })
-      | null
-    try {
-      if (pane?.requestFullscreen) await pane.requestFullscreen()
-      else if (pane?.webkitRequestFullscreen) await pane.webkitRequestFullscreen()
-      const orientation = screen.orientation as ScreenOrientation & {
-        lock?: (o: "landscape" | "portrait") => Promise<void>
-      }
-      if (orientation && typeof orientation.lock === "function") {
-        await orientation.lock("landscape").catch(() => {})
-      }
-    } catch {
-      /* user dismissed or the browser blocked the request */
-    }
-  }
-
-  // Track fullscreen state (to swap the icon) and release the orientation lock
-  // when fullscreen is exited.
-  useEffect(() => {
-    const onFsChange = () => {
-      const active = Boolean(
-        document.fullscreenElement ??
-          (document as Document & { webkitFullscreenElement?: Element }).webkitFullscreenElement,
-      )
-      setLsFullscreen(active)
-      if (!active) {
-        try {
-          screen.orientation?.unlock?.()
-        } catch {
-          /* unlock unsupported */
-        }
-      }
-    }
-    document.addEventListener("fullscreenchange", onFsChange)
-    document.addEventListener("webkitfullscreenchange", onFsChange)
-    return () => {
-      document.removeEventListener("fullscreenchange", onFsChange)
-      document.removeEventListener("webkitfullscreenchange", onFsChange)
-    }
-  }, [])
-
   const shareTarget: ShareTarget = {
     type: "live",
     key: stream.roomName,
@@ -391,10 +329,6 @@ export function LiveVideoViewer({
   const { count: presenceCount, members: presenceMembers } = useLivePresence(stream.roomName, canWatch)
   const isSelf = currentUserId === stream.hostId
   const remoteVideoOn = Boolean(hostPeer?.hasVideo)
-  // Landscape = Facebook-style layout: a letterboxed 16:9 video pinned at the
-  // top with a solid scrolling comment feed below. Portrait keeps the original
-  // full-bleed vertical stage with call-in slots.
-  const landscape = stream.orientation === "landscape"
 
   if (blocked) {
     return (
@@ -468,7 +402,7 @@ export function LiveVideoViewer({
             <MeetingGrid
               roomName={stream.roomName}
               isHost={false}
-              self={{ identity: currentUserId, name: currentUser?.name ?? "You", image: currentUser?.image ?? null }}
+              self={{ identity: currentUserId ?? "self", name: currentUser?.name ?? "You", image: currentUser?.image ?? null }}
               peers={peers}
               localVideoRef={localVideoRef}
               registerPeerVideoEl={registerPeerVideoEl}
