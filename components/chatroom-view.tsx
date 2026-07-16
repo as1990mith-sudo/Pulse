@@ -212,6 +212,7 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
         initials: detail.currentUserInitials,
         color: detail.currentUserColor,
         image: detail.currentUserImage,
+        kind: "user",
         body,
         attachmentUrl: sentAttachment?.url ?? null,
         attachmentType: sentAttachment?.type ?? null,
@@ -388,17 +389,26 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
               No messages yet. Say hello to get the conversation started.
             </p>
           )}
-          {messages.map((m) => (
-            <MessageBubble
-              key={m.id}
-              message={m}
-              isAdmin={detail.isAdmin}
-              flashed={flashId === m.id}
-              onDelete={handleDeleteMessage}
-              onTogglePin={handleTogglePin}
-              onEdit={handleEditMessage}
-            />
-          ))}
+          {messages.map((m) =>
+            m.kind === "system" ? (
+              // Centered notice for auto events like "<name> joined the room".
+              <div key={m.id} className="flex justify-center py-1">
+                <span className="rounded-full bg-muted/60 px-3 py-1 text-center text-xs text-muted-foreground">
+                  {m.body}
+                </span>
+              </div>
+            ) : (
+              <MessageBubble
+                key={m.id}
+                message={m}
+                isAdmin={detail.isAdmin}
+                flashed={flashId === m.id}
+                onDelete={handleDeleteMessage}
+                onTogglePin={handleTogglePin}
+                onEdit={handleEditMessage}
+              />
+            ),
+          )}
           <div ref={scrollEndRef} />
         </div>
       </div>
