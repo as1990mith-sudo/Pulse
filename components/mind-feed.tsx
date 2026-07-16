@@ -500,10 +500,18 @@ export function MindFeed({
       {tab !== "status" && (
       <div className="border-y border-border/60 bg-gradient-to-b from-card/60 to-background px-4 py-5 sm:px-5">
         <form onSubmit={publish} className="flex gap-4">
-          <Avatar className="size-12 shrink-0 ring-2 ring-border/60">
-            {currentUser.image && <AvatarImage src={currentUser.image || "/placeholder.svg"} alt={currentUser.name} />}
-            <AvatarFallback className={currentUser.color}>{currentUser.initials}</AvatarFallback>
-          </Avatar>
+          <Link
+            href={`/u/${currentUser.id}`}
+            aria-label="View your profile"
+            className="tap-scale shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <Avatar className="size-12 ring-2 ring-border/60">
+              {currentUser.image && (
+                <AvatarImage src={currentUser.image || "/placeholder.svg"} alt={currentUser.name} />
+              )}
+              <AvatarFallback className={currentUser.color}>{currentUser.initials}</AvatarFallback>
+            </Avatar>
+          </Link>
           <div className="flex-1 space-y-3">
             <FormattedTextarea
               value={draft}
