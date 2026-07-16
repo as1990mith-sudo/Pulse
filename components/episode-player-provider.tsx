@@ -861,7 +861,7 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
 
                 {/* Scrubber — clean track with a draggable knob, elapsed and
                     remaining time beneath, sitting just below the artwork. */}
-                <div className="mx-auto w-full max-w-sm px-6 pt-6">
+                <div className="mx-auto w-full max-w-sm px-6 pt-5">
                   <div className="relative h-1.5 w-full">
                     <div className="absolute inset-0 rounded-full bg-foreground/15" />
                     <div className="absolute inset-y-0 left-0 rounded-full bg-primary" style={{ width: `${pct}%` }} />
@@ -886,30 +886,32 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                   </div>
                 </div>
 
-                {/* Transport — previous / play / next, always visible for audio. */}
-                <div className="mt-5 flex items-center justify-center gap-10">
+                {/* Transport — previous / play / next. Compact, premium controls:
+                    a refined 56px accent play button flanked by smaller filled
+                    skip glyphs, nudged up toward the scrubber. */}
+                <div className="mt-2 flex items-center justify-center gap-9">
                   <button
                     onClick={playPrev}
                     disabled={!hasPrev}
                     aria-label="Previous episode"
-                    className="flex items-center justify-center text-foreground/70 transition-colors hover:text-foreground active:scale-90 disabled:pointer-events-none disabled:opacity-30"
+                    className="flex items-center justify-center text-foreground/60 transition-colors hover:text-foreground active:scale-90 disabled:pointer-events-none disabled:opacity-30"
                   >
-                    <SkipBack className="size-8 fill-current" />
+                    <SkipBack className="size-6 fill-current" />
                   </button>
                   <button
                     onClick={toggle}
                     aria-label={playing ? "Pause episode" : "Play episode"}
-                    className="flex size-[4.5rem] items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xl shadow-primary/40 transition-transform hover:scale-105 active:scale-95"
+                    className="flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/20 transition-transform hover:scale-105 active:scale-95"
                   >
-                    {playing ? <Pause className="size-8 fill-current" /> : <Play className="size-8 translate-x-0.5 fill-current" />}
+                    {playing ? <Pause className="size-6 fill-current" /> : <Play className="size-6 translate-x-0.5 fill-current" />}
                   </button>
                   <button
                     onClick={playNext}
                     disabled={!hasNext}
                     aria-label="Next episode"
-                    className="flex items-center justify-center text-foreground/70 transition-colors hover:text-foreground active:scale-90 disabled:pointer-events-none disabled:opacity-30"
+                    className="flex items-center justify-center text-foreground/60 transition-colors hover:text-foreground active:scale-90 disabled:pointer-events-none disabled:opacity-30"
                   >
-                    <SkipForward className="size-8 fill-current" />
+                    <SkipForward className="size-6 fill-current" />
                   </button>
                 </div>
               </div>
@@ -923,7 +925,10 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
               while browsing "More from…". */}
           <div
             className={cn(
-              "relative z-0 flex-1 overflow-y-auto overscroll-contain pb-[max(1.5rem,env(safe-area-inset-bottom))]",
+              // Solid bg-background so the title strip reads the exact same color
+              // as the header and the Like/Comment/Save/Share action bar (no
+              // ambient cover-blur tint bleeding through).
+              "relative z-0 flex-1 overflow-y-auto overscroll-contain bg-background pb-[max(1.5rem,env(safe-area-inset-bottom))]",
               videoMini && "hidden",
             )}
           >
