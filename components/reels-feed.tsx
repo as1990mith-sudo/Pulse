@@ -16,11 +16,12 @@ import {
   X,
 } from "lucide-react"
 import type { FeedPostView, FeedCommentView } from "@/app/actions/feed"
-import { addPostComment, setPostLike } from "@/app/actions/feed"
+import { addPostComment, setPostLike, setCommentLike, editPostComment, deletePostComment } from "@/app/actions/feed"
 import { toggleSaveItem } from "@/app/actions/share"
 import type { CurrentUser } from "@/lib/session"
 import { haptic } from "@/lib/haptics"
 import { cn } from "@/lib/utils"
+import { CommentThread, type ThreadComment } from "@/components/comment-thread"
 
 // Instagram-style cap: reels may run up to 3 minutes 15 seconds. Anything longer
 // is filtered out client-side once its metadata reveals the true duration.
@@ -581,8 +582,7 @@ function ReelItem({
         <CommentsSheet
           post={post}
           comments={comments}
-          onAdd={(c) => setComments((prev) => [...prev, c])}
-          onRemove={(id) => setComments((prev) => prev.filter((c) => c.id !== id))}
+          setComments={setComments}
           currentUser={currentUser}
           onClose={() => setCommentsOpen(false)}
         />
@@ -591,23 +591,45 @@ function ReelItem({
   )
 }
 
+// Maps a reel's feed comment into the shared CommentThread shape (identical to
+// the "For you" feed), so reels get the same likes + nested replies UI.
+function toThreadComment(c: FeedCommentView): ThreadComment {
+  return {
+    id: c.id,
+    parentId: c.parentId,
+    authorId: c.authorId,
+    isSelf: c.isSelf,
+    name: c.user,
+    handle: c.handle,
+    initials: c.initials,
+    color: c.color,
+    image: c.authorImage,
+    text: c.text,
+    likes: c.likes,
+    liked: c.liked,
+    edited: c.edited,
+    postedAt: c.postedAt,
+    createdAtMs: c.createdAtMs,
+  }
+}
+
 /**
- * Bottom-sheet comments for a reel. Shows the post's existing comments and, for
- * signed-in users, an input to add one (optimistically appended, rolled back on
- * failure). Layered inside the reel item so it feels native to the clip.
+ * Bottom-sheet comments for a reel. Uses the shared CommentThread — the exact
+ * same component the "For you" feed uses — so reels support per-comment likes,
+ * nested replies, and (for the author) edit/delete via long-press. Mutations
+ * update the reel's local comment list optimistically so counts stay in sync
+ * without a full refetch.
  */
 function CommentsSheet({
   post,
   comments,
-  onAdd,
-  onRemove,
+  setComments,
   currentUser,
   onClose,
 }: {
   post: FeedPostView
   comments: FeedCommentView[]
-  onAdd: (c: FeedCommentView) => void
-  onRemove: (id: number) => void
+  setComments: React.Dispatch<React.SetStateAction<FeedCommentView[]>>
   currentUser: CurrentUser | null
   onClose: () => void
 }) {
@@ -619,39 +641,52 @@ function CommentsSheet({
     const text = draft.trim()
     if (!text || !currentUser || sending) return
     setSending(true)
-    const optimistic: FeedCommentView = {
-      id: Date.now(),
-      parentId: null,
-      authorId: currentUser.id,
-      isSelf: true,
-      user: currentUser.name,
-      handle: currentUser.handle,
-      initials: currentUser.initials,
-      color: currentUser.color,
-      authorImage: currentUser.image,
-      text,
-      likes: 0,
-      liked: false,
-      edited: false,
-      postedAt: "Just now",
-      createdAtMs: Date.now(),
-    }
-    onAdd(optimistic)
+    const optimistic = makeOptimistic(currentUser, text, null)
+    setComments((prev) => [...prev, optimistic])
     setDraft("")
     haptic("light")
     try {
       await addPostComment({ postId: Number(post.id), text })
     } catch {
-      onRemove(optimistic.id)
+      setComments((prev) => prev.filter((c) => c.id !== optimistic.id))
     } finally {
       setSending(false)
     }
   }
 
+  function handleLike(commentId: number, liked: boolean) {
+    void setCommentLike({ commentId, liked })
+  }
+
+  async function handleReply(parentId: number, value: string) {
+    if (!currentUser) return
+    const optimistic = makeOptimistic(currentUser, value, parentId)
+    setComments((prev) => [...prev, optimistic])
+    haptic("light")
+    try {
+      await addPostComment({ postId: Number(post.id), text: value, parentId })
+    } catch {
+      setComments((prev) => prev.filter((c) => c.id !== optimistic.id))
+    }
+  }
+
+  async function handleEdit(commentId: number, value: string) {
+    setComments((prev) => prev.map((c) => (c.id === commentId ? { ...c, text: value, edited: true } : c)))
+    await editPostComment({ commentId, text: value }).catch(() => {})
+  }
+
+  async function handleDelete(commentId: number) {
+    // Drop the comment and any of its direct replies from the local list.
+    setComments((prev) => prev.filter((c) => c.id !== commentId && c.parentId !== commentId))
+    await deletePostComment(commentId).catch(() => {})
+  }
+
   return (
     <div className="absolute inset-0 z-20 flex flex-col justify-end" data-no-swipe>
       <button type="button" aria-label="Close comments" onClick={onClose} className="absolute inset-0 bg-black/50" />
-      <div className="relative flex max-h-[72%] flex-col rounded-t-3xl bg-neutral-900 text-white shadow-2xl">
+      {/* Force dark tokens so the shared (token-based) CommentThread always reads
+          correctly on this dark immersive sheet, regardless of app theme. */}
+      <div className="dark relative flex max-h-[72%] flex-col rounded-t-3xl bg-neutral-900 text-white shadow-2xl">
         <header className="flex items-center justify-between border-b border-white/10 px-4 pb-3 pt-3">
           <span className="mx-auto -mb-1 h-1 w-10 rounded-full bg-white/20" aria-hidden="true" />
           <span className="absolute left-4 text-sm font-semibold">
@@ -667,36 +702,22 @@ function CommentsSheet({
           </button>
         </header>
 
-        <ul className="flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 text-foreground">
           {comments.length === 0 ? (
-            <li className="py-10 text-center text-sm text-white/50">No comments yet. Be the first to comment.</li>
+            <p className="py-10 text-center text-sm text-white/50">No comments yet. Be the first to comment.</p>
           ) : (
-            comments.map((c) => (
-              <li key={c.id} className="flex items-start gap-3">
-                <span
-                  className={cn(
-                    "flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-bold",
-                    c.color,
-                  )}
-                >
-                  {c.authorImage ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={c.authorImage || "/placeholder.svg"} alt={c.user} className="size-full object-cover" />
-                  ) : (
-                    c.initials
-                  )}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs text-white/60">
-                    <span className="font-semibold text-white">{c.user}</span>
-                    <span className="ml-2">{c.postedAt}</span>
-                  </p>
-                  <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed">{c.text}</p>
-                </div>
-              </li>
-            ))
+            <CommentThread
+              comments={comments.map(toThreadComment)}
+              canInteract={!!currentUser}
+              showCopy={false}
+              enforceTimeWindows={false}
+              onLike={handleLike}
+              onReply={handleReply}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+            />
           )}
-        </ul>
+        </div>
 
         {currentUser ? (
           <form
@@ -730,4 +751,25 @@ function CommentsSheet({
       </div>
     </div>
   )
+}
+
+// Builds an optimistic comment/reply from the current user for instant display.
+function makeOptimistic(currentUser: CurrentUser, text: string, parentId: number | null): FeedCommentView {
+  return {
+    id: Date.now(),
+    parentId,
+    authorId: currentUser.id,
+    isSelf: true,
+    user: currentUser.name,
+    handle: currentUser.handle,
+    initials: currentUser.initials,
+    color: currentUser.color,
+    authorImage: currentUser.image,
+    text,
+    likes: 0,
+    liked: false,
+    edited: false,
+    postedAt: "Just now",
+    createdAtMs: Date.now(),
+  }
 }
