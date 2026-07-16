@@ -5,13 +5,15 @@ import useSWR from "swr"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import {
-  ArrowLeft,
   Check,
+  ChevronLeft,
   Copy,
+  Crown,
   FileText,
   ImageIcon,
   LogOut,
   Mic,
+  MoreVertical,
   Music,
   Paperclip,
   Pencil,
@@ -19,12 +21,15 @@ import {
   Pin,
   PinOff,
   Send,
+  ShieldMinus,
   Smile,
   Trash2,
+  UserMinus,
+  UserRound,
   Users,
   X,
 } from "lucide-react"
-import { Button, buttonVariants } from "@/components/ui/button"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -46,7 +51,9 @@ import {
   getChatMessages,
   leaveChatroom,
   rejectJoinRequest,
+  removeChatroomMember,
   sendChatMessage,
+  setChatroomMemberRole,
   togglePinMessage,
   updateChatroomImage,
   type ChatAttachmentType,
@@ -280,60 +287,61 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
 
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3 sm:px-6">
-        <div className="flex min-w-0 items-center gap-3">
-          <Link
-            href="/chatrooms"
-            aria-label="Back to chatrooms"
-            className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "shrink-0")}
-          >
-            <ArrowLeft className="size-5" />
-          </Link>
-          <Avatar className="size-10 shrink-0">
+      {/* Header — tap the title block to open group info / members. The Admin
+          badge lives on the subtitle line so it never crowds the room name. */}
+      <div className="flex items-center gap-1.5 border-b border-border/60 bg-background/80 px-2 py-2.5 backdrop-blur sm:px-4">
+        <Link
+          href="/chatrooms"
+          aria-label="Back to chatrooms"
+          className="flex size-10 shrink-0 items-center justify-center rounded-full text-foreground transition-colors hover:bg-secondary"
+        >
+          <ChevronLeft className="size-6" />
+        </Link>
+        <button
+          type="button"
+          onClick={() => setShowMembers((s) => !s)}
+          aria-expanded={showMembers}
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl py-1 pl-1 pr-2 text-left transition-colors hover:bg-secondary/50"
+        >
+          <Avatar className="size-10 shrink-0 ring-1 ring-border/50">
             {detail.image && <AvatarImage src={detail.image || "/placeholder.svg"} alt={detail.name} />}
             <AvatarFallback className="bg-secondary text-sm">
               {detail.name.slice(0, 2).toUpperCase()}
             </AvatarFallback>
           </Avatar>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h1 className="truncate text-lg font-semibold">{detail.name}</h1>
-              {detail.isOwner && <Badge variant="secondary">Admin</Badge>}
-            </div>
-            <button
-              onClick={() => setShowMembers((s) => !s)}
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <Users className="size-3" /> {detail.members.length}{" "}
-              {detail.members.length === 1 ? "member" : "members"}
-            </button>
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => setCallStartNonce((n) => n + 1)}
-            aria-label="Start or join group call"
-          >
-            <Phone className="size-5" />
-          </Button>
-          {!detail.isOwner && (
-            <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={handleLeave} disabled={isLeaving}>
-              <LogOut className="size-4" /> Leave
-            </Button>
-          )}
-        </div>
+          <span className="min-w-0">
+            <span className="block truncate text-[15px] font-semibold leading-tight">{detail.name}</span>
+            <span className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+              {detail.isAdmin && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-1.5 py-0.5 font-medium text-primary">
+                  <Crown className="size-3" /> Admin
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1">
+                <Users className="size-3.5" /> {detail.members.length}{" "}
+                {detail.members.length === 1 ? "member" : "members"}
+              </span>
+            </span>
+          </span>
+        </button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-10 shrink-0 rounded-full"
+          onClick={() => setCallStartNonce((n) => n + 1)}
+          aria-label="Start or join group call"
+        >
+          <Phone className="size-5" />
+        </Button>
       </div>
 
       <ChatroomCall chatroomId={detail.id} roomTitle={detail.name} startNonce={callStartNonce} />
 
-      {(showMembers || (detail.isOwner && detail.joinRequests.length > 0)) && (
+      {(showMembers || (detail.isAdmin && detail.joinRequests.length > 0)) && (
         <div className="space-y-3 border-b border-border/60 px-4 py-3 sm:px-6">
-          {showMembers && <MembersPanel detail={detail} />}
-          {detail.isOwner && detail.joinRequests.length > 0 && <JoinRequests detail={detail} />}
+          {showMembers && <MembersPanel detail={detail} onLeave={handleLeave} leaving={isLeaving} />}
+          {detail.isAdmin && detail.joinRequests.length > 0 && <JoinRequests detail={detail} />}
         </div>
       )}
 
@@ -355,7 +363,7 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
                     {m.body || (m.attachmentType ? `${m.attachmentType} attachment` : "Message")}
                   </span>
                 </button>
-                {detail.isOwner && (
+                {detail.isAdmin && (
                   <button
                     type="button"
                     onClick={() => handleTogglePin(m.id, false)}
@@ -383,7 +391,7 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
             <MessageBubble
               key={m.id}
               message={m}
-              isAdmin={detail.isOwner}
+              isAdmin={detail.isAdmin}
               flashed={flashId === m.id}
               onDelete={handleDeleteMessage}
               onTogglePin={handleTogglePin}
@@ -722,7 +730,15 @@ function MessageBubble({
   )
 }
 
-function MembersPanel({ detail }: { detail: ChatroomDetail }) {
+function MembersPanel({
+  detail,
+  onLeave,
+  leaving,
+}: {
+  detail: ChatroomDetail
+  onLeave: () => void
+  leaving: boolean
+}) {
   const router = useRouter()
   const [copied, setCopied] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -770,10 +786,10 @@ function MembersPanel({ detail }: { detail: ChatroomDetail }) {
   }
 
   return (
-    <div className="space-y-3 rounded-xl border border-border/60 bg-card p-4">
-      {detail.isOwner && (
-        <div className="flex items-center gap-3 border-b border-border/60 pb-3">
-          <Avatar className="size-14">
+    <div className="space-y-4 rounded-2xl border border-border/60 bg-card p-4 shadow-sm">
+      {detail.isAdmin && (
+        <div className="flex items-center gap-3 border-b border-border/60 pb-4">
+          <Avatar className="size-14 ring-1 ring-border/50">
             {detail.image && <AvatarImage src={detail.image || "/placeholder.svg"} alt={detail.name} />}
             <AvatarFallback className="bg-secondary text-base">{detail.name.slice(0, 2).toUpperCase()}</AvatarFallback>
           </Avatar>
@@ -784,7 +800,7 @@ function MembersPanel({ detail }: { detail: ChatroomDetail }) {
               <Button
                 variant="secondary"
                 size="sm"
-                className="gap-1.5"
+                className="gap-1.5 rounded-full"
                 onClick={() => imageInputRef.current?.click()}
                 disabled={uploading || isPending}
               >
@@ -792,7 +808,7 @@ function MembersPanel({ detail }: { detail: ChatroomDetail }) {
                 {uploading ? "Uploading…" : detail.image ? "Change" : "Upload"}
               </Button>
               {detail.image && (
-                <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={removeGroupImage} disabled={isPending}>
+                <Button variant="ghost" size="sm" className="rounded-full text-muted-foreground" onClick={removeGroupImage} disabled={isPending}>
                   Remove
                 </Button>
               )}
@@ -802,30 +818,36 @@ function MembersPanel({ detail }: { detail: ChatroomDetail }) {
       )}
 
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-medium">Members</h2>
-        <Button variant="secondary" size="sm" className="gap-1.5" onClick={copyInvite}>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {detail.members.length} {detail.members.length === 1 ? "member" : "members"}
+        </h2>
+        <Button variant="secondary" size="sm" className="gap-1.5 rounded-full" onClick={copyInvite}>
           {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-          {copied ? "Copied" : "Copy invite link"}
+          {copied ? "Copied" : "Invite link"}
         </Button>
       </div>
-      <div className="flex flex-wrap gap-2">
+
+      <ul className="-mx-1 divide-y divide-border/50">
         {detail.members.map((m) => (
-          <Link
-            key={m.userId}
-            href={`/u/${m.userId}`}
-            className="flex items-center gap-2 rounded-full border border-border/60 py-1 pl-1 pr-3 transition-colors hover:bg-secondary"
-          >
-            <Avatar className="size-6">
-              <AvatarFallback className={cn("text-[10px]", m.color)}>{m.initials}</AvatarFallback>
-            </Avatar>
-            <span className="text-xs font-medium">{m.userName}</span>
-            {m.role === "admin" && <Badge variant="secondary">Admin</Badge>}
-          </Link>
+          <MemberRow key={m.userId} detail={detail} member={m} />
         ))}
-      </div>
+      </ul>
+
       <p className="text-xs text-muted-foreground">
         Invite code: <span className="font-mono font-medium text-foreground">{detail.inviteCode}</span>
       </p>
+
+      {!detail.isOwner && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-center gap-2 rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
+          onClick={onLeave}
+          disabled={leaving}
+        >
+          <LogOut className="size-4" /> Leave group
+        </Button>
+      )}
 
       {groupCropSrc && (
         <ImageCropper
@@ -838,6 +860,112 @@ function MembersPanel({ detail }: { detail: ChatroomDetail }) {
         />
       )}
     </div>
+  )
+}
+
+/**
+ * A single member row with a management menu. Everyone can open a profile;
+ * the owner can promote/demote admins, and any admin can remove members
+ * (only the owner can remove another admin). The room owner is never removable.
+ */
+function MemberRow({
+  detail,
+  member,
+}: {
+  detail: ChatroomDetail
+  member: ChatroomDetail["members"][number]
+}) {
+  const router = useRouter()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [, startTransition] = useTransition()
+
+  const isOwnerMember = member.userId === detail.ownerId
+  const isSelf = member.userId === detail.currentUserId
+  // Owner may promote/demote any non-owner member.
+  const canChangeRole = detail.isOwner && !isOwnerMember
+  // Admins may remove members; only the owner can remove another admin.
+  const canRemove =
+    detail.isAdmin && !isOwnerMember && !isSelf && (detail.isOwner || member.role !== "admin")
+
+  const actions: SheetAction[] = [
+    {
+      label: "View profile",
+      icon: UserRound,
+      onClick: () => router.push(`/u/${member.userId}`),
+    },
+  ]
+  if (canChangeRole) {
+    actions.push(
+      member.role === "admin"
+        ? {
+            label: "Dismiss as admin",
+            icon: ShieldMinus,
+            onClick: () =>
+              startTransition(async () => {
+                await setChatroomMemberRole({ chatroomId: detail.id, userId: member.userId, role: "member" })
+                router.refresh()
+              }),
+          }
+        : {
+            label: "Make admin",
+            icon: Crown,
+            onClick: () =>
+              startTransition(async () => {
+                await setChatroomMemberRole({ chatroomId: detail.id, userId: member.userId, role: "admin" })
+                router.refresh()
+              }),
+          },
+    )
+  }
+  if (canRemove) {
+    actions.push({
+      label: "Remove from group",
+      icon: UserMinus,
+      destructive: true,
+      onClick: () =>
+        startTransition(async () => {
+          await removeChatroomMember({ chatroomId: detail.id, userId: member.userId })
+          router.refresh()
+        }),
+    })
+  }
+
+  return (
+    <li className="flex items-center gap-3 px-1 py-2.5">
+      <Avatar className="size-9 shrink-0">
+        <AvatarFallback className={cn("text-xs", member.color)}>{member.initials}</AvatarFallback>
+      </Avatar>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">
+          {member.userName}
+          {isSelf && <span className="text-muted-foreground"> (You)</span>}
+        </p>
+      </div>
+      {isOwnerMember ? (
+        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary">
+          <Crown className="size-3" /> Owner
+        </span>
+      ) : member.role === "admin" ? (
+        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-foreground">
+          Admin
+        </span>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => setMenuOpen(true)}
+        aria-label={`Manage ${member.userName}`}
+        className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+      >
+        <MoreVertical className="size-[18px]" />
+      </button>
+
+      <ActionSheet
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        title={member.userName}
+        actions={actions}
+      />
+    </li>
   )
 }
 

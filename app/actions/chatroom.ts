@@ -25,6 +25,23 @@ function generateInviteCode(): string {
   return Math.random().toString(36).slice(2, 10)
 }
 
+/**
+ * Loads a room together with the requesting user's role in it. `isAdmin` is
+ * true for the room owner OR any member promoted to the "admin" role, and is
+ * the check used to gate moderation + member-management powers.
+ */
+async function loadRoomWithRole(chatroomId: number, userId: string) {
+  const [room] = await db.select().from(chatroom).where(eq(chatroom.id, chatroomId))
+  if (!room) throw new Error("Chatroom not found.")
+  const [membership] = await db
+    .select()
+    .from(chatroomMember)
+    .where(and(eq(chatroomMember.chatroomId, chatroomId), eq(chatroomMember.userId, userId)))
+  const isOwner = room.ownerId === userId
+  const isAdmin = isOwner || membership?.role === "admin"
+  return { room, membership, isOwner, isAdmin }
+}
+
 export type ChatroomSummary = {
   id: number
   name: string
@@ -88,6 +105,8 @@ export type ChatroomDetail = {
   ownerName: string
   inviteCode: string
   isOwner: boolean
+  /** True for the room owner OR any member promoted to the "admin" role. */
+  isAdmin: boolean
   currentUserId: string
   currentUserInitials: string
   currentUserColor: string
@@ -298,6 +317,8 @@ export async function getChatroomDetail(chatroomId: number): Promise<ChatroomDet
   if (!room) throw new Error("Chatroom not found.")
 
   const isOwner = room.ownerId === user.id
+  // Owner or a member promoted to the "admin" role gets moderation powers.
+  const isAdmin = isOwner || membership.role === "admin"
 
   const members = await db
     .select()
@@ -311,7 +332,7 @@ export async function getChatroomDetail(chatroomId: number): Promise<ChatroomDet
     .where(eq(chatroomMessage.chatroomId, chatroomId))
     .orderBy(asc(chatroomMessage.createdAt))
 
-  const joinRequests = isOwner
+  const joinRequests = isAdmin
     ? await db
         .select()
         .from(chatroomJoinRequest)
@@ -330,6 +351,7 @@ export async function getChatroomDetail(chatroomId: number): Promise<ChatroomDet
     ownerName: room.ownerName,
     inviteCode: room.inviteCode,
     isOwner,
+    isAdmin,
     currentUserId: user.id,
     currentUserInitials: getInitials(user.name),
     currentUserColor: getAvatarColor(user.id),
@@ -411,9 +433,7 @@ export async function deleteChatMessage(messageId: number) {
   const user = await requireUser()
   const [msg] = await db.select().from(chatroomMessage).where(eq(chatroomMessage.id, messageId))
   if (!msg) throw new Error("Message not found.")
-  const [room] = await db.select().from(chatroom).where(eq(chatroom.id, msg.chatroomId))
-  if (!room) throw new Error("Chatroom not found.")
-  const isAdmin = room.ownerId === user.id
+  const { isAdmin } = await loadRoomWithRole(msg.chatroomId, user.id)
   const isAuthor = msg.userId === user.id
   if (!isAdmin && !isAuthor) throw new Error("You can't delete this message.")
   // Authors may only delete within the window; admins can remove anytime.
@@ -430,9 +450,8 @@ export async function togglePinMessage(input: { messageId: number; pinned: boole
   const user = await requireUser()
   const [msg] = await db.select().from(chatroomMessage).where(eq(chatroomMessage.id, input.messageId))
   if (!msg) throw new Error("Message not found.")
-  const [room] = await db.select().from(chatroom).where(eq(chatroom.id, msg.chatroomId))
-  if (!room) throw new Error("Chatroom not found.")
-  if (room.ownerId !== user.id && msg.userId !== user.id) {
+  const { isAdmin } = await loadRoomWithRole(msg.chatroomId, user.id)
+  if (!isAdmin && msg.userId !== user.id) {
     throw new Error("You can only pin your own messages.")
   }
   if (msg.deleted) throw new Error("You can't pin a deleted message.")
@@ -461,9 +480,8 @@ export async function editChatMessage(input: { messageId: number; body: string }
 /** Admin updates (or removes) the chatroom's group profile picture. */
 export async function updateChatroomImage(input: { chatroomId: number; image: string | null }) {
   const user = await requireUser()
-  const [room] = await db.select().from(chatroom).where(eq(chatroom.id, input.chatroomId))
-  if (!room) throw new Error("Chatroom not found.")
-  if (room.ownerId !== user.id) throw new Error("Only the chatroom admin can change the group picture.")
+  const { isAdmin } = await loadRoomWithRole(input.chatroomId, user.id)
+  if (!isAdmin) throw new Error("Only the chatroom admin can change the group picture.")
 
   await db
     .update(chatroom)
@@ -537,8 +555,8 @@ export async function approveJoinRequest(requestId: number) {
   const [req] = await db.select().from(chatroomJoinRequest).where(eq(chatroomJoinRequest.id, requestId))
   if (!req) throw new Error("Request not found.")
 
-  const [room] = await db.select().from(chatroom).where(eq(chatroom.id, req.chatroomId))
-  if (!room || room.ownerId !== user.id) throw new Error("Only the chatroom admin can approve requests.")
+  const { isAdmin } = await loadRoomWithRole(req.chatroomId, user.id)
+  if (!isAdmin) throw new Error("Only the chatroom admin can approve requests.")
 
   const [existing] = await db
     .select()
@@ -563,8 +581,8 @@ export async function rejectJoinRequest(requestId: number) {
   const [req] = await db.select().from(chatroomJoinRequest).where(eq(chatroomJoinRequest.id, requestId))
   if (!req) throw new Error("Request not found.")
 
-  const [room] = await db.select().from(chatroom).where(eq(chatroom.id, req.chatroomId))
-  if (!room || room.ownerId !== user.id) throw new Error("Only the chatroom admin can reject requests.")
+  const { isAdmin } = await loadRoomWithRole(req.chatroomId, user.id)
+  if (!isAdmin) throw new Error("Only the chatroom admin can reject requests.")
 
   await db.update(chatroomJoinRequest).set({ status: "rejected" }).where(eq(chatroomJoinRequest.id, requestId))
   revalidatePath(`/chatrooms/${req.chatroomId}`)
@@ -579,4 +597,58 @@ export async function leaveChatroom(chatroomId: number) {
     .delete(chatroomMember)
     .where(and(eq(chatroomMember.chatroomId, chatroomId), eq(chatroomMember.userId, user.id)))
   revalidatePath("/chatrooms")
+}
+
+/**
+ * Admin removes a member from the room. Owners may remove anyone (other than
+ * themselves); role-admins may remove regular members but not other admins.
+ */
+export async function removeChatroomMember(input: { chatroomId: number; userId: string }) {
+  const user = await requireUser()
+  const { room, isOwner, isAdmin } = await loadRoomWithRole(input.chatroomId, user.id)
+  if (!isAdmin) throw new Error("Only admins can remove members.")
+  if (input.userId === room.ownerId) throw new Error("The room owner can't be removed.")
+  if (input.userId === user.id) throw new Error("Use Leave to exit the room yourself.")
+
+  const [target] = await db
+    .select()
+    .from(chatroomMember)
+    .where(and(eq(chatroomMember.chatroomId, input.chatroomId), eq(chatroomMember.userId, input.userId)))
+  if (!target) throw new Error("That person is not a member.")
+  // Only the owner can remove another admin.
+  if (target.role === "admin" && !isOwner) throw new Error("Only the owner can remove an admin.")
+
+  await db
+    .delete(chatroomMember)
+    .where(and(eq(chatroomMember.chatroomId, input.chatroomId), eq(chatroomMember.userId, input.userId)))
+  // Reset any prior join request so an accurate count / re-request is possible.
+  await db
+    .delete(chatroomJoinRequest)
+    .where(and(eq(chatroomJoinRequest.chatroomId, input.chatroomId), eq(chatroomJoinRequest.userId, input.userId)))
+  revalidatePath(`/chatrooms/${input.chatroomId}`)
+  revalidatePath("/chatrooms")
+}
+
+/** Owner promotes a member to admin, or demotes an admin back to member. */
+export async function setChatroomMemberRole(input: {
+  chatroomId: number
+  userId: string
+  role: "admin" | "member"
+}) {
+  const user = await requireUser()
+  const { room, isOwner } = await loadRoomWithRole(input.chatroomId, user.id)
+  if (!isOwner) throw new Error("Only the room owner can change roles.")
+  if (input.userId === room.ownerId) throw new Error("The owner's role can't be changed.")
+
+  const [target] = await db
+    .select()
+    .from(chatroomMember)
+    .where(and(eq(chatroomMember.chatroomId, input.chatroomId), eq(chatroomMember.userId, input.userId)))
+  if (!target) throw new Error("That person is not a member.")
+
+  await db
+    .update(chatroomMember)
+    .set({ role: input.role })
+    .where(and(eq(chatroomMember.chatroomId, input.chatroomId), eq(chatroomMember.userId, input.userId)))
+  revalidatePath(`/chatrooms/${input.chatroomId}`)
 }

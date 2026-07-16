@@ -323,7 +323,7 @@ export function AppMenu() {
               <div className="mt-2 flex-1 overflow-y-auto overscroll-contain px-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
                 <Section>
                   <DrawerItem href="/bible" icon={BookOpen} label="Bible" onNavigate={navigate} />
-                  <DrawerItem href="/store" icon={ShoppingBag} label="Store" onNavigate={navigate} />
+                  <DrawerItem href="/store" icon={ShoppingBag} label="Book Store" onNavigate={navigate} />
                   <DrawerItem href="/library" icon={LibraryIcon} label="Library" onNavigate={navigate} />
                   <DrawerItem
                     href="/cart"

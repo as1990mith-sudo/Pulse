@@ -426,8 +426,10 @@ function ReelItem({
       {/* Bottom gradient for legibility of the caption/author. */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/80 to-transparent" />
 
-      {/* Right-hand action rail (raised to clear the mute button + scrubber). */}
-      <div className="absolute bottom-32 right-3 flex flex-col items-center gap-5 text-white" data-no-swipe>
+      {/* Right-hand action rail (raised to clear the mute button + scrubber).
+          z-[3] keeps it above the full-width caption block (z-[1]) so its taps
+          aren't swallowed by the caption's invisible box. */}
+      <div className="absolute bottom-32 right-3 z-[3] flex flex-col items-center gap-5 text-white" data-no-swipe>
         <button type="button" onClick={toggleLike} className="flex flex-col items-center gap-1" aria-pressed={liked}>
           <Heart
             className={cn(
@@ -467,14 +469,15 @@ function ReelItem({
         type="button"
         onClick={onToggleMute}
         aria-label={muted ? "Unmute" : "Mute"}
-        className="absolute bottom-16 right-4 flex size-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition-colors hover:bg-black/60"
+        className="absolute bottom-16 right-4 z-[3] flex size-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition-colors hover:bg-black/60"
         data-no-swipe
       >
         {muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
       </button>
 
-      {/* Author + caption, bottom-left. */}
-      <div className="absolute inset-x-0 bottom-0 z-[1] p-4 pb-20 pr-24 text-white">
+      {/* Author + caption, bottom-left. Sits a touch lower (smaller pb) while
+          still clearing the scrubber at the very bottom. */}
+      <div className="absolute inset-x-0 bottom-0 z-[1] p-4 pb-12 pr-24 text-white">
         <Link href={`/u/${post.authorId}`} className="flex items-center gap-2.5">
           <span
             className={cn(

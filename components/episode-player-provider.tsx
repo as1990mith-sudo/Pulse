@@ -825,26 +825,22 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                   </button>
                 </div>
 
-                {/* Immersive cover: fills the section with slim borders. A single
-                    tap shows/hides the centered transport controls; a double tap
-                    on the left/right half seeks back/forward 15s. The progress
-                    tracker stays docked at the base of the artwork at all times. */}
-                <div className="px-2 pt-2">
+                {/* Premium cover — a compact, centered piece of artwork that
+                    leaves the screen room to breathe. Double-tap the left/right
+                    half to seek ±15s; the visible transport sits below the art. */}
+                <div className="flex justify-center px-6 pt-5">
                   <div
                     onClick={onVideoSurfaceTap}
-                    className="relative aspect-square w-full overflow-hidden rounded-2xl bg-secondary shadow-2xl ring-1 ring-foreground/10"
+                    className="relative aspect-square w-full max-w-[15.5rem] overflow-hidden rounded-3xl bg-secondary shadow-2xl shadow-black/50 ring-1 ring-foreground/10"
                   >
                     {current.cover ? (
                       /* eslint-disable-next-line @next/next/no-img-element */
                       <img src={current.cover || "/placeholder.svg"} alt={current.title} className="size-full object-cover" />
                     ) : (
                       <div className="flex size-full items-center justify-center">
-                        <Radio className="size-20 text-muted-foreground" />
+                        <Radio className="size-16 text-muted-foreground" />
                       </div>
                     )}
-
-                    {/* Legibility scrim, stronger at the base behind the scrubber. */}
-                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/5 to-black/25" />
 
                     {/* Double-tap seek affordance: a brief ±15s badge on the tapped side. */}
                     {seekFlash && (
@@ -860,79 +856,60 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                         </div>
                       </div>
                     )}
-
-                    {/* Centered transport (previous / play / next) — toggles on tap.
-                        Seeking now lives on the double-tap gesture above. */}
-                    <div
-                      className={cn(
-                        "absolute inset-0 flex items-center justify-center gap-8 transition-opacity duration-200",
-                        controlsVisible ? "opacity-100" : "pointer-events-none opacity-0",
-                      )}
-                    >
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          playPrev()
-                        }}
-                        disabled={!hasPrev}
-                        aria-label="Previous episode"
-                        className="flex items-center justify-center text-white/85 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-colors hover:text-white active:scale-90 disabled:pointer-events-none disabled:opacity-30"
-                      >
-                        <SkipBack className="size-7" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          toggle()
-                        }}
-                        aria-label={playing ? "Pause episode" : "Play episode"}
-                        className="flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/40 transition-transform hover:scale-105 active:scale-95"
-                      >
-                        {playing ? <Pause className="size-7" /> : <Play className="size-7 translate-x-0.5" />}
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          playNext()
-                        }}
-                        disabled={!hasNext}
-                        aria-label="Next episode"
-                        className="flex items-center justify-center text-white/85 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-colors hover:text-white active:scale-90 disabled:pointer-events-none disabled:opacity-30"
-                      >
-                        <SkipForward className="size-7" />
-                      </button>
-                    </div>
-
-                    {/* Progress tracker — perpetually docked at the bottom of the
-                        artwork (never hidden with the transport controls). */}
-                    <div className="absolute inset-x-0 bottom-0 p-3" onClick={(e) => e.stopPropagation()}>
-                      <div className="relative h-1.5 w-full">
-                        <div className="absolute inset-0 rounded-full bg-white/25" />
-                        <div className="absolute inset-y-0 left-0 rounded-full bg-primary" style={{ width: `${pct}%` }} />
-                        <input
-                          type="range"
-                          min={0}
-                          max={duration || 0}
-                          step={0.1}
-                          value={currentTime}
-                          onChange={seek}
-                          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                          aria-label="Seek"
-                        />
-                      </div>
-                      <div className="mt-1.5 flex items-center justify-between text-[11px] font-medium tabular-nums text-white/85">
-                        <span>{fmt(currentTime)}</span>
-                        <span>-{fmt(Math.max(0, duration - currentTime))}</span>
-                      </div>
-                    </div>
                   </div>
                 </div>
 
-                {/* Speed button — stays where it is, below the artwork. */}
-                <div className="mt-3 flex items-center justify-center">
-                  <button onClick={cycleSpeed} aria-label="Change playback speed" className="inline-flex items-center gap-1.5 rounded-full bg-foreground/5 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground">
-                    <Gauge className="size-3.5" />
-                    {SPEEDS[speedIdx]}x
+                {/* Scrubber — clean track with a draggable knob, elapsed and
+                    remaining time beneath, sitting just below the artwork. */}
+                <div className="mx-auto w-full max-w-sm px-6 pt-6">
+                  <div className="relative h-1.5 w-full">
+                    <div className="absolute inset-0 rounded-full bg-foreground/15" />
+                    <div className="absolute inset-y-0 left-0 rounded-full bg-primary" style={{ width: `${pct}%` }} />
+                    <div
+                      className="pointer-events-none absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary shadow-md shadow-primary/40"
+                      style={{ left: `${pct}%` }}
+                    />
+                    <input
+                      type="range"
+                      min={0}
+                      max={duration || 0}
+                      step={0.1}
+                      value={currentTime}
+                      onChange={seek}
+                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                      aria-label="Seek"
+                    />
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-[11px] font-medium tabular-nums text-muted-foreground">
+                    <span>{fmt(currentTime)}</span>
+                    <span>-{fmt(Math.max(0, duration - currentTime))}</span>
+                  </div>
+                </div>
+
+                {/* Transport — previous / play / next, always visible for audio. */}
+                <div className="mt-5 flex items-center justify-center gap-10">
+                  <button
+                    onClick={playPrev}
+                    disabled={!hasPrev}
+                    aria-label="Previous episode"
+                    className="flex items-center justify-center text-foreground/70 transition-colors hover:text-foreground active:scale-90 disabled:pointer-events-none disabled:opacity-30"
+                  >
+                    <SkipBack className="size-8 fill-current" />
+                  </button>
+                  <button
+                    onClick={toggle}
+                    aria-label={playing ? "Pause episode" : "Play episode"}
+                    className="flex size-[4.5rem] items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xl shadow-primary/40 transition-transform hover:scale-105 active:scale-95"
+                  >
+                    {playing ? <Pause className="size-8 fill-current" /> : <Play className="size-8 translate-x-0.5 fill-current" />}
+                  </button>
+                  <button
+                    onClick={playNext}
+                    disabled={!hasNext}
+                    aria-label="Next episode"
+                    className="flex items-center justify-center text-foreground/70 transition-colors hover:text-foreground active:scale-90 disabled:pointer-events-none disabled:opacity-30"
+                  >
+                    <SkipForward className="size-8 fill-current" />
                   </button>
                 </div>
               </div>
