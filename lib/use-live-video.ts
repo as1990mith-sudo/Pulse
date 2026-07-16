@@ -472,13 +472,27 @@ export function useLiveVideo({
     const room = roomRef.current
     if (!room) return
     const next = facingMode === "user" ? "environment" : "user"
+    setLocalVideoReady(false)
     try {
-      await room.localParticipant.setCameraEnabled(true, { facingMode: next })
+      // Restarting the existing camera track with the opposite facingMode is the
+      // reliable way to switch front/back on mobile. Calling setCameraEnabled(true)
+      // again is a no-op when the camera is already on, so the old code never
+      // actually flipped. restartTrack re-acquires the stream with the new
+      // constraint and keeps the same publication (viewers see no interruption).
+      const pub = room.localParticipant.getTrackPublication(Track.Source.Camera)
+      const track = pub?.videoTrack
+      if (track) {
+        await track.restartTrack({ facingMode: next })
+      } else {
+        await room.localParticipant.setCameraEnabled(true, { facingMode: next })
+      }
       setFacingMode(next)
       setCamOn(true)
       attachLocalVideo(room)
     } catch {
-      /* device may not have a second camera — ignore */
+      // Some devices expose only one camera or reject the constraint — restore
+      // the self-view so the frame doesn't stay blank.
+      attachLocalVideo(room)
     }
   }, [facingMode])
 
