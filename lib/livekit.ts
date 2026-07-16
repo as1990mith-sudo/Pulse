@@ -102,3 +102,22 @@ export async function setParticipantPublish(opts: {
     },
   })
 }
+
+/**
+ * Forcibly removes a participant from a room (a hard kick). Used when a host
+ * blocks someone: LiveKit disconnects their session immediately. Swallows the
+ * "participant/room not found" case so blocking a listener who isn't currently
+ * connected (or has already left) is a safe no-op.
+ */
+export async function removeParticipant(opts: {
+  roomName: string
+  identity: string
+}): Promise<void> {
+  if (!isLiveKitConfigured()) return
+  try {
+    const svc = roomService()
+    await svc.removeParticipant(opts.roomName, opts.identity)
+  } catch {
+    // Not connected / room gone → nothing to disconnect.
+  }
+}

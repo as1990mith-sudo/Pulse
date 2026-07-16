@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
+  Ban,
   Check,
   Loader2,
   Lock,
@@ -127,6 +128,7 @@ export function LiveListener({
   // Set when the host ends the broadcast — shows a "Session ended" splash then
   // bounces the listener back to the Live tab.
   const [hostEnded, setHostEnded] = useState(false)
+  const [blocked, setBlocked] = useState(false)
 
   // Whether the current listener follows the host (drives the follow chip on
   // the host's stage tile). The host can't follow themselves.
@@ -268,6 +270,13 @@ export function LiveListener({
       // Host ended the session: tear down audio, show the splash, then redirect.
       if (s.ended) {
         setHostEnded(true)
+        void disconnect()
+        setTimeout(() => (onExit ? onExit() : router.push("/live")), 2600)
+        return
+      }
+      // Host blocked this listener: disconnect them and show the blocked splash.
+      if (s.blocked) {
+        setBlocked(true)
         void disconnect()
         setTimeout(() => (onExit ? onExit() : router.push("/live")), 2600)
         return
@@ -416,6 +425,19 @@ export function LiveListener({
         }}
         refreshCalls={() => void refreshCallState()}
       />
+    )
+  }
+
+  if (blocked) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 bg-zinc-950 px-6 py-14 text-center text-white">
+        <span className="flex size-14 items-center justify-center rounded-full bg-destructive/15 text-destructive ring-1 ring-inset ring-destructive/25">
+          <Ban className="size-7" strokeWidth={2.5} />
+        </span>
+        <p className="text-lg font-bold">Removed from live</p>
+        <p className="text-sm text-white/60">The host has removed you from this live session. Taking you back to Live…</p>
+        <Loader2 className="size-4 animate-spin text-white/60" />
+      </div>
     )
   }
 

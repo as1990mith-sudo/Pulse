@@ -5,10 +5,16 @@ import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { liveStream, liveChatMessage, liveCallRequest, liveReaction, livePresence } from "@/lib/db/schema"
+import { liveStream, liveChatMessage, liveCallRequest, liveReaction, livePresence, liveBlocked } from "@/lib/db/schema"
 import { getHandle, getAvatarColor, getInitials } from "@/lib/identity"
-import { createAccessToken, isLiveKitConfigured, LIVEKIT_URL, setParticipantPublish } from "@/lib/livekit"
-import { notifyFollowers } from "@/app/actions/notifications"
+import {
+  createAccessToken,
+  isLiveKitConfigured,
+  LIVEKIT_URL,
+  setParticipantPublish,
+  removeParticipant,
+} from "@/lib/livekit"
+import { notifyFollowers, notifyUser } from "@/app/actions/notifications"
 
 // Host + up to 11 guests = 12 on stage.
 const MAX_GUESTS = 11
@@ -175,6 +181,18 @@ export async function joinBroadcast(input: { roomName: string }): Promise<JoinRe
   if (!stream) return { ok: false, error: "This stream has ended." }
 
   const isHost = stream.hostId === user.id
+
+  // Blocked users can't (re)join. The host is never blockable, so this only
+  // affects listeners/guests the host removed.
+  if (!isHost) {
+    const [blocked] = await db
+      .select({ id: liveBlocked.id })
+      .from(liveBlocked)
+      .where(and(eq(liveBlocked.roomName, input.roomName), eq(liveBlocked.userId, user.id)))
+      .limit(1)
+    if (blocked) return { ok: false, error: "You can no longer join this live." }
+  }
+
   // A host rejoining (e.g. recovering from a dropped connection) refreshes the
   // heartbeat right away so the in-flight reconnect isn't swept as stale.
   if (isHost) {
@@ -571,6 +589,13 @@ export type CallRequestView = {
   musicRequestPending: boolean
 }
 
+export type BlockedUserView = {
+  userId: string
+  userName: string
+  initials: string
+  color: string
+}
+
 async function getHostId(roomName: string): Promise<string | null> {
   const [s] = await db.select({ hostId: liveStream.hostId }).from(liveStream).where(eq(liveStream.roomName, roomName))
   return s?.hostId ?? null
@@ -686,6 +711,64 @@ export async function inviteToStage(input: { roomName: string; userId: string; u
     kind: "invite",
     status: "pending",
   })
+  // Real notification so the invited user hears about it even if they're not
+  // looking at the room right now (they still accept/decline in-session).
+  await notifyUser({
+    userId: input.userId,
+    actorId: user.id,
+    actorName: user.name,
+    type: "live",
+    message: "invited you to join the live as a guest",
+    link: `/live/${input.roomName}`,
+  })
+}
+
+/**
+ * Host blocks a participant: they are kicked from the LiveKit room, pulled off
+ * the stage if they were speaking, and prevented from rejoining for the life of
+ * the broadcast. Host-only; the host can't block themselves.
+ */
+export async function blockParticipant(input: {
+  roomName: string
+  userId: string
+  userName: string
+}): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser()
+  if ((await getHostId(input.roomName)) !== user.id) return { ok: false, error: "Only the host can block participants." }
+  if (input.userId === user.id) return { ok: false, error: "You can't block yourself." }
+
+  // Record the block (idempotent — clear any prior row first).
+  await db
+    .delete(liveBlocked)
+    .where(and(eq(liveBlocked.roomName, input.roomName), eq(liveBlocked.userId, input.userId)))
+  await db.insert(liveBlocked).values({
+    roomName: input.roomName,
+    userId: input.userId,
+    userName: input.userName,
+  })
+
+  // If they were on stage, end their speaking rows too so they don't linger.
+  await db
+    .update(liveCallRequest)
+    .set({ status: "ended", updatedAt: new Date() })
+    .where(and(eq(liveCallRequest.roomName, input.roomName), eq(liveCallRequest.userId, input.userId)))
+
+  // Hard-kick them out of the live room immediately.
+  await removeParticipant({ roomName: input.roomName, identity: input.userId })
+  return { ok: true }
+}
+
+/** Host lifts a block, letting the participant rejoin. Host-only. */
+export async function unblockParticipant(input: {
+  roomName: string
+  userId: string
+}): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser()
+  if ((await getHostId(input.roomName)) !== user.id) return { ok: false, error: "Only the host can unblock participants." }
+  await db
+    .delete(liveBlocked)
+    .where(and(eq(liveBlocked.roomName, input.roomName), eq(liveBlocked.userId, input.userId)))
+  return { ok: true }
 }
 
 /** Host accepts a pending request (or listener accepts an invite is handled separately). */
@@ -697,7 +780,7 @@ export async function respondToCallRequest(input: {
   const [req] = await db.select().from(liveCallRequest).where(eq(liveCallRequest.id, input.id))
   if (!req) return { ok: false, error: "Request no longer exists." }
 
-  // Authorization: the host — or a co-host with the Accept Call Requests
+  // Authorization: the host ��� or a co-host with the Accept Call Requests
   // permission — responds to "request"; the invited user responds to "invite".
   if (req.kind === "request" && !(await canManageRequests(req.roomName, user.id)))
     return { ok: false, error: "Not authorized." }
@@ -807,6 +890,10 @@ export async function getCallState(input: { roomName: string }): Promise<{
   theme: string
   // True once the host has ended the broadcast — lets listeners auto-close.
   ended: boolean
+  // True when the caller has been blocked by the host — lets the viewer auto-exit.
+  blocked: boolean
+  // Users the host has blocked from this room (host view: drives the Unblock list).
+  blockedUsers: BlockedUserView[]
   // --- Co-host system (polled so promotions/permissions apply ~instantly) ---
   // The caller's own role + permissions in this room.
   myRole: LiveRole
@@ -883,6 +970,20 @@ export async function getCallState(input: { roomName: string }): Promise<{
     .where(eq(liveCallRequest.roomName, input.roomName))
     .orderBy(asc(liveCallRequest.createdAt))
 
+  // Blocked participants for this room (host list) + whether the caller is one.
+  const blockedRows = await db
+    .select()
+    .from(liveBlocked)
+    .where(eq(liveBlocked.roomName, input.roomName))
+    .orderBy(asc(liveBlocked.createdAt))
+  const blocked = me ? blockedRows.some((b) => b.userId === me) : false
+  const blockedUsers: BlockedUserView[] = blockedRows.map((b) => ({
+    userId: b.userId,
+    userName: b.userName,
+    initials: getInitials(b.userName),
+    color: getAvatarColor(b.userId),
+  }))
+
   const pendingRequests = rows.filter((r) => r.kind === "request" && r.status === "pending").map(mapRequest)
   const acceptedRows = rows.filter((r) => r.status === "accepted")
   const guests = acceptedRows.map(mapRequest)
@@ -945,6 +1046,8 @@ export async function getCallState(input: { roomName: string }): Promise<{
     theme: stream?.theme ?? "default",
     // No row, or row flipped to "ended", both mean the session is over.
     ended: !stream || stream.status !== "live",
+    blocked,
+    blockedUsers,
     myRole,
     myPermissions,
     myMusicApproved: myCoHost?.musicApproved ?? false,

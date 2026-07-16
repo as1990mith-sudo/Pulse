@@ -690,6 +690,10 @@ export function VideoStudioConsole({
                 members={audienceMembers}
                 immersive
                 className="px-3 py-1.5 text-xs font-medium"
+                isHost
+                roomName={roomName ?? undefined}
+                blockedUsers={callState?.blockedUsers ?? []}
+                onChanged={() => void refreshCalls()}
               />
             )}
             {live && (

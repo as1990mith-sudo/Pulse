@@ -600,7 +600,15 @@ export function StudioConsole({
               header). While offline: the Go live action. */}
           {live ? (
             <div className="relative flex shrink-0 flex-col items-end gap-1">
-              <LiveAudienceSheet count={audienceCount} members={audienceMembers} immersive />
+              <LiveAudienceSheet
+                count={audienceCount}
+                members={audienceMembers}
+                immersive
+                isHost
+                roomName={roomName ?? undefined}
+                blockedUsers={callState?.blockedUsers ?? []}
+                onChanged={() => void refreshCalls()}
+              />
               <span className="font-mono text-[11px] tabular-nums text-white/50">{formatTime(elapsed)}</span>
             </div>
           ) : (

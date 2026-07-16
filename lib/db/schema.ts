@@ -438,6 +438,17 @@ export const liveReaction = pgTable("live_reaction", {
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
+// Participants a host has blocked from a live room. A blocked user is kicked
+// from the LiveKit room and prevented from rejoining for the life of the
+// broadcast. Rows are scoped to one room + one user; unblocking deletes the row.
+export const liveBlocked = pgTable("live_blocked", {
+  id: serial("id").primaryKey(),
+  roomName: text("roomName").notNull(),
+  userId: text("userId").notNull(),
+  userName: text("userName").notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
 // --- Bible reading fellowship ----------------------------------------------
 // Tracks who is currently reading the Bible and where. One row per user (a
 // person reads a single place at a time), upserted via a heartbeat every few
