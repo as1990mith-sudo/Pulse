@@ -108,6 +108,12 @@ export function LiveChat({
   // back down. A "jump to latest" pill appears while they're scrolled away.
   const atBottomRef = useRef(true)
   const [showJump, setShowJump] = useState(false)
+  // Identity of the newest message we've already auto-scrolled for. SWR hands
+  // back a brand-new array reference on every 2s poll even when nothing changed,
+  // so keying the auto-scroll off the array itself snapped the viewer to the
+  // exact bottom every tick — the source of the "glitchy" scrolling. We only
+  // stick to the bottom when the newest message actually changes.
+  const lastMessageIdRef = useRef<number | null>(null)
 
   function scrollToBottom(behavior: ScrollBehavior = "auto") {
     const el = scrollRef.current
@@ -124,7 +130,13 @@ export function LiveChat({
   }
 
   useEffect(() => {
-    if (atBottomRef.current) scrollToBottom()
+    const last = messages[messages.length - 1]
+    const lastId = last ? last.id : null
+    const changed = lastId !== lastMessageIdRef.current
+    lastMessageIdRef.current = lastId
+    // Only auto-stick when a genuinely new message arrived — not on every
+    // identical poll — so a viewer near the bottom isn't yanked repeatedly.
+    if (changed && atBottomRef.current) scrollToBottom()
   }, [messages])
 
   const canSend = (asHost || currentUser) && roomName

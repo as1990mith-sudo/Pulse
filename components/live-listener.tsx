@@ -7,7 +7,6 @@ import {
   Check,
   Loader2,
   Lock,
-  Mail,
   MessageSquare,
   Mic,
   MicOff,
@@ -159,6 +158,11 @@ export function LiveListener({
       if (onMinimize) onMinimize(`/messages/${conversationId}`)
       else router.push(`/messages/${conversationId}`)
     } catch {
+      // swallow — the finally clears the loading state
+    } finally {
+      // Always clear the spinner. When the room is minimised (not unmounted)
+      // this component stays alive, so without resetting here the button would
+      // spin forever after a single tap.
       setMessaging(false)
     }
   }
@@ -585,7 +589,7 @@ export function LiveListener({
             </DockButton>
             {currentUser && !isSelfHost && (
               <DockButton label="Message the host" onClick={() => void handleMessageHost()} disabled={messaging}>
-                {messaging ? <Loader2 className="size-5 animate-spin" /> : <Mail className="size-5" />}
+                {messaging ? <Loader2 className="size-5 animate-spin" /> : <MessageSquare className="size-5" />}
               </DockButton>
             )}
           </div>
@@ -602,9 +606,14 @@ export function LiveListener({
                 >
                   {state.micEnabled ? <Mic className="size-5" /> : <MicOff className="size-5" />}
                 </DockButton>
-                <DockButton label="Leave the stage" onClick={() => void leaveStage()} tone="danger">
-                  <PhoneOff className="size-5" />
-                </DockButton>
+                <button
+                  type="button"
+                  onClick={() => void leaveStage()}
+                  aria-label="End call"
+                  className="flex items-center gap-1.5 rounded-full bg-destructive px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-destructive/30 transition-all hover:bg-destructive/90 active:scale-95"
+                >
+                  <PhoneOff className="size-4" strokeWidth={2.5} /> End call
+                </button>
               </>
             ) : (
               <>
@@ -626,7 +635,7 @@ export function LiveListener({
             {/* Privately message the host (keeps audio playing, minimises room). */}
             {currentUser && !isSelfHost && (
               <DockButton label="Message the host" onClick={() => void handleMessageHost()} disabled={messaging}>
-                {messaging ? <Loader2 className="size-5 animate-spin" /> : <Mail className="size-5" />}
+                {messaging ? <Loader2 className="size-5 animate-spin" /> : <MessageSquare className="size-5" />}
               </DockButton>
             )}
 
