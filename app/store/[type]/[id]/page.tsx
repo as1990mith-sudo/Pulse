@@ -25,8 +25,12 @@ export default async function ProductPage({ params }: { params: Promise<Params> 
   if (!product || product.type !== type) notFound()
 
   const [owned, catalog] = await Promise.all([isOwned(id), getStoreCatalog()])
+  // Only surface other titles by the same author/instructor.
+  const authorId = product.type === "course" ? product.instructorId : product.authorId
   const pool = product.type === "course" ? catalog.courses : catalog.books
-  const related = pool.filter((p) => p.id !== product.id).slice(0, 8)
+  const related = pool
+    .filter((p) => p.id !== product.id && (p.type === "course" ? p.instructorId : p.authorId) === authorId)
+    .slice(0, 8)
 
   return (
     <div className="min-h-screen">

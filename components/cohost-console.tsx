@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Mic, MicOff, Music, PhoneCall, Radio, Send, Users, Volume2, VolumeX } from "lucide-react"
+import { Mic, MicOff, Music, PhoneCall, PhoneOff, Send, Users, Volume2, VolumeX } from "lucide-react"
 import { ShareSheet } from "@/components/share-sheet"
 import { BackExitMenu } from "@/components/live-back-menu"
 import { LiveChat } from "@/components/live-chat"
@@ -475,9 +475,14 @@ export function CoHostConsole({
 
           {/* On the call → step off (stay in the room); off the call → call back in. */}
           {onCall ? (
-            <DockButton label="Step off the call" onClick={() => void handleStepOff()} tone="danger">
-              <Radio className="size-5" />
-            </DockButton>
+            <button
+              type="button"
+              onClick={() => void handleStepOff()}
+              aria-label="End call"
+              className="flex items-center gap-1.5 rounded-full bg-destructive px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-destructive/30 transition-all hover:bg-destructive/90 active:scale-95"
+            >
+              <PhoneOff className="size-4" strokeWidth={2.5} /> End call
+            </button>
           ) : (
             <DockButton label="Call in" onClick={() => void handleCallIn()} tone="success">
               <PhoneCall className="size-5" />

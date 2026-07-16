@@ -140,6 +140,8 @@ export type RemotePeer = {
   image: string | null
   isHost: boolean
   hasVideo: boolean
+  // True when this peer's microphone is currently muted (or not publishing audio).
+  micMuted: boolean
 }
 
 /**
@@ -155,6 +157,8 @@ export function useLiveVideo({
   serverUrl,
   isHost,
   hostId = null,
+  autoPublish = false,
+  onAskUnmute,
 }: {
   token: string | null
   serverUrl: string | null
@@ -162,6 +166,12 @@ export function useLiveVideo({
   // Identity of the room host, so remote participants can be split into the
   // headline host tile vs. the guest call-in tiles.
   hostId?: string | null
+  // Grid meetings: every participant (not just the host) publishes their own
+  // camera + mic on connect, like Google Meet / Zoom.
+  autoPublish?: boolean
+  // Fired when the host asks this client to unmute (received over the data
+  // channel). The UI shows a prompt; we never open the mic without consent.
+  onAskUnmute?: () => void
 }) {
   const roomRef = useRef<Room | null>(null)
   const localVideoRef = useRef<HTMLVideoElement>(null)
@@ -207,12 +217,17 @@ export function useLiveVideo({
 
   const hostIdRef = useRef(hostId)
   hostIdRef.current = hostId
+  const autoPublishRef = useRef(autoPublish)
+  autoPublishRef.current = autoPublish
+  const onAskUnmuteRef = useRef(onAskUnmute)
+  onAskUnmuteRef.current = onAskUnmute
 
   function syncParticipants(room: Room) {
     setParticipants(room.remoteParticipants.size + 1)
   }
 
-  // Recomputes the roster of remote publishers and whether each has live video.
+  // Recomputes the roster of remote publishers, whether each has live video, and
+  // whether their mic is muted.
   const refreshPeers = useCallback((room: Room) => {
     const out: RemotePeer[] = []
     room.remoteParticipants.forEach((p) => {
@@ -220,16 +235,20 @@ export function useLiveVideo({
       const hasVideo = pubs.some(
         (pub) => pub.kind === Track.Kind.Video && pub.isSubscribed && Boolean(pub.track),
       )
-      // Only surface participants who can publish (host + accepted guests) so
-      // plain viewers don't show up as empty tiles.
+      const audioPub = pubs.find((pub) => pub.kind === Track.Kind.Audio)
+      // Mic is "muted" if there's no audio publication or the publication is muted.
+      const micMuted = !audioPub || audioPub.isMuted
+      // In a grid meeting every participant gets a tile. Otherwise (broadcast
+      // model) only surface publishers so plain viewers aren't empty tiles.
       const canPub = p.permissions?.canPublish ?? false
-      if (canPub || hasVideo) {
+      if (autoPublishRef.current || canPub || hasVideo) {
         out.push({
           identity: p.identity,
           name: p.name || "Guest",
           image: parseImage(p.metadata),
           isHost: hostIdRef.current != null && p.identity === hostIdRef.current,
           hasVideo,
+          micMuted,
         })
       }
     })
@@ -357,6 +376,18 @@ export function useLiveVideo({
       })
       .on(RoomEvent.TrackPublished, () => refreshPeers(room))
       .on(RoomEvent.TrackUnpublished, () => refreshPeers(room))
+      // Keep the per-tile mic indicator in sync (incl. host force-mutes).
+      .on(RoomEvent.TrackMuted, () => refreshPeers(room))
+      .on(RoomEvent.TrackUnmuted, () => refreshPeers(room))
+      // Host → participant "please unmute" request over the data channel.
+      .on(RoomEvent.DataReceived, (payload: Uint8Array) => {
+        try {
+          const msg = JSON.parse(new TextDecoder().decode(payload)) as { type?: string }
+          if (msg.type === "ask-unmute") onAskUnmuteRef.current?.()
+        } catch {
+          /* ignore malformed data messages */
+        }
+      })
       // Host accepted/dropped this client as a guest: publish or unpublish.
       .on(RoomEvent.ParticipantPermissionsChanged, async () => {
         const canPub = room.localParticipant.permissions?.canPublish ?? false
@@ -418,8 +449,10 @@ export function useLiveVideo({
     }
     setAudioBlocked(!room.canPlaybackAudio)
 
-    // Only the host publishes immediately; guests publish on acceptance above.
-    if (isHost) {
+    // The host always publishes immediately. In a grid meeting every participant
+    // also auto-publishes (Meet/Zoom style). Plain broadcast viewers publish only
+    // when the host accepts their call-in (handled in PermissionsChanged above).
+    if (isHost || autoPublish) {
       try {
         await room.localParticipant.setMicrophoneEnabled(true)
       } catch {
@@ -443,7 +476,7 @@ export function useLiveVideo({
         setError(describeMediaError(lastErr))
       }
     }
-  }, [token, serverUrl, isHost, attachPeerVideo, refreshPeers])
+  }, [token, serverUrl, isHost, autoPublish, attachPeerVideo, refreshPeers])
 
   // Connect on mount once we have credentials; tear down on unmount.
   useEffect(() => {
@@ -479,6 +512,19 @@ export function useLiveVideo({
     await room.localParticipant.setMicrophoneEnabled(next)
     setMicOn(next)
   }, [micOn])
+
+  // Host asks a specific participant to unmute (server can't reopen a mic
+  // silently, so we send a targeted data message and they choose to accept).
+  const askUnmute = useCallback(async (identity: string) => {
+    const room = roomRef.current
+    if (!room) return
+    const data = new TextEncoder().encode(JSON.stringify({ type: "ask-unmute" }))
+    try {
+      await room.localParticipant.publishData(data, { reliable: true, destinationIdentities: [identity] })
+    } catch {
+      /* participant gone */
+    }
+  }, [])
 
   const clearError = useCallback(() => setError(null), [])
 
@@ -742,6 +788,7 @@ export function useLiveVideo({
     musicDuration,
     registerPeerVideoEl,
     toggleMic,
+    askUnmute,
     toggleCam,
     flipCamera,
     startAudioPlayback,

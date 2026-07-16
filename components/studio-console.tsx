@@ -155,6 +155,9 @@ export function StudioConsole({
   const recordedBlobRef = useRef<Blob | null>(null)
   // Which slide-up panel is open. Only one at a time keeps the studio compact.
   const [panel, setPanel] = useState<null | "music" | "people" | "theme" | "cohosts">(null)
+  // Confirmation gate before the host ends the live session, so a mis-tap on the
+  // back menu can't drop everyone out of the broadcast (mirrors the video studio).
+  const [endConfirmOpen, setEndConfirmOpen] = useState(false)
   // Immersive studio theme (persisted server-side, applied live to listeners).
   const [theme, setTheme] = useState(resumeStream?.theme ?? "default")
 
@@ -543,7 +546,7 @@ export function StudioConsole({
           <BackExitMenu
             showMenu={live}
             exitLabel="End"
-            onExit={live ? toggleLive : (onExit ?? (() => {}))}
+            onExit={live ? () => setEndConfirmOpen(true) : (onExit ?? (() => {}))}
             onMinimize={onMinimize ?? (() => {})}
           />
           {/* Compact round cover thumbnail — same footprint as the listener header. */}
@@ -597,7 +600,15 @@ export function StudioConsole({
               header). While offline: the Go live action. */}
           {live ? (
             <div className="relative flex shrink-0 flex-col items-end gap-1">
-              <LiveAudienceSheet count={audienceCount} members={audienceMembers} immersive />
+              <LiveAudienceSheet
+                count={audienceCount}
+                members={audienceMembers}
+                immersive
+                isHost
+                roomName={roomName ?? undefined}
+                blockedUsers={callState?.blockedUsers ?? []}
+                onChanged={() => void refreshCalls()}
+              />
               <span className="font-mono text-[11px] tabular-nums text-white/50">{formatTime(elapsed)}</span>
             </div>
           ) : (
@@ -884,6 +895,54 @@ export function StudioConsole({
             onExit?.()
           }}
         />
+      )}
+
+      {/* End-session confirmation — the host must confirm before the broadcast
+          is torn down for everyone listening (mirrors the video studio). */}
+      {endConfirmOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6">
+          <button
+            type="button"
+            aria-label="Cancel ending the live"
+            onClick={() => setEndConfirmOpen(false)}
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+          />
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="end-audio-live-title"
+            className="relative z-10 w-full max-w-xs rounded-3xl border border-white/10 bg-zinc-900/95 p-6 text-center shadow-2xl backdrop-blur-xl"
+          >
+            <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-destructive/15 text-destructive">
+              <Radio className="size-6" />
+            </div>
+            <h2 id="end-audio-live-title" className="text-lg font-semibold text-white">
+              End this live session?
+            </h2>
+            <p className="mt-1.5 text-sm text-white/60 text-pretty">
+              Your broadcast will stop and everyone listening will be disconnected. This can&apos;t be undone.
+            </p>
+            <div className="mt-5 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setEndConfirmOpen(false)
+                  void toggleLive()
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-destructive px-5 py-3 text-sm font-semibold text-destructive-foreground transition-opacity hover:opacity-90 active:scale-[0.99]"
+              >
+                End live session
+              </button>
+              <button
+                type="button"
+                onClick={() => setEndConfirmOpen(false)}
+                className="w-full rounded-2xl bg-white/10 px-5 py-3 text-sm font-semibold text-white ring-1 ring-inset ring-white/15 transition-colors hover:bg-white/20"
+              >
+                Keep streaming
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

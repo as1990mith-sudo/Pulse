@@ -75,6 +75,8 @@ export type ChatMessageView = {
   initials: string
   color: string
   image: string | null
+  /** "user" for normal messages, "system" for auto notices (e.g. joins). */
+  kind: "user" | "system"
   body: string | null
   attachmentUrl: string | null
   attachmentType: ChatAttachmentType | null
@@ -131,6 +133,7 @@ type ChatMessageRow = {
   id: number
   userId: string
   userName: string
+  kind: string
   body: string | null
   attachmentUrl: string | null
   attachmentType: string | null
@@ -170,6 +173,7 @@ function toMessageView(
     initials: getInitials(m.userName),
     color: getAvatarColor(m.userId),
     image: imageMap.get(m.userId) ?? null,
+    kind: m.kind === "system" ? "system" : "user",
     body: m.deleted ? null : m.body,
     attachmentUrl: m.deleted ? null : m.attachmentUrl,
     attachmentType: m.deleted ? null : (m.attachmentType as ChatAttachmentType | null) ?? null,
@@ -492,6 +496,20 @@ export async function updateChatroomImage(input: { chatroomId: number; image: st
 }
 
 /** Join directly via an invite code (no approval needed). */
+/**
+ * Posts a "<name> joined the room" system message so members see arrivals in
+ * the timeline. Rendered as a centered notice on the client, not a chat bubble.
+ */
+async function postJoinNotice(chatroomId: number, userId: string, userName: string) {
+  await db.insert(chatroomMessage).values({
+    chatroomId,
+    userId,
+    userName,
+    kind: "system",
+    body: `${userName} joined the room`,
+  })
+}
+
 export async function joinByInviteCode(inviteCode: string) {
   const user = await requireUser()
   const code = inviteCode.trim()
@@ -511,6 +529,7 @@ export async function joinByInviteCode(inviteCode: string) {
       userName: user.name,
       role: "member",
     })
+    await postJoinNotice(room.id, user.id, user.name)
   }
   revalidatePath("/chatrooms")
   return room.id
@@ -569,6 +588,7 @@ export async function approveJoinRequest(requestId: number) {
       userName: req.userName,
       role: "member",
     })
+    await postJoinNotice(req.chatroomId, req.userId, req.userName)
   }
   await db.update(chatroomJoinRequest).set({ status: "approved" }).where(eq(chatroomJoinRequest.id, requestId))
   revalidatePath(`/chatrooms/${req.chatroomId}`)

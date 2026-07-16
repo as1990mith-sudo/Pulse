@@ -225,6 +225,8 @@ export const chatroomMessage = pgTable("chatroom_message", {
   chatroomId: integer("chatroomId").notNull(),
   userId: text("userId").notNull(),
   userName: text("userName").notNull(),
+  // "user" for normal chat, "system" for auto notices like "X joined the room".
+  kind: text("kind").notNull().default("user"),
   body: text("body"), // nullable — a message can be attachment-only
   attachmentUrl: text("attachmentUrl"),
   attachmentType: text("attachmentType"), // "image" | "video" | "audio" | "document"
@@ -435,6 +437,17 @@ export const liveReaction = pgTable("live_reaction", {
   kind: text("kind").notNull().default("reaction"), // "reaction" | "gift"
   emoji: text("emoji").notNull(),
   label: text("label"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// Participants a host has blocked from a live room. A blocked user is kicked
+// from the LiveKit room and prevented from rejoining for the life of the
+// broadcast. Rows are scoped to one room + one user; unblocking deletes the row.
+export const liveBlocked = pgTable("live_blocked", {
+  id: serial("id").primaryKey(),
+  roomName: text("roomName").notNull(),
+  userId: text("userId").notNull(),
+  userName: text("userName").notNull(),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 

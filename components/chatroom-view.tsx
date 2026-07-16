@@ -165,6 +165,7 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
           initials: detail.currentUserInitials,
           color: detail.currentUserColor,
           image: detail.currentUserImage,
+          kind: "user",
           body: null,
           attachmentUrl: data.url,
           attachmentType: "audio",
@@ -211,6 +212,7 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
         initials: detail.currentUserInitials,
         color: detail.currentUserColor,
         image: detail.currentUserImage,
+        kind: "user",
         body,
         attachmentUrl: sentAttachment?.url ?? null,
         attachmentType: sentAttachment?.type ?? null,
@@ -339,7 +341,7 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
       <ChatroomCall chatroomId={detail.id} roomTitle={detail.name} startNonce={callStartNonce} />
 
       {(showMembers || (detail.isAdmin && detail.joinRequests.length > 0)) && (
-        <div className="space-y-3 border-b border-border/60 px-4 py-3 sm:px-6">
+        <div className="max-h-[60vh] space-y-3 overflow-y-auto overscroll-contain border-b border-border/60 px-4 py-3 sm:px-6">
           {showMembers && <MembersPanel detail={detail} onLeave={handleLeave} leaving={isLeaving} />}
           {detail.isAdmin && detail.joinRequests.length > 0 && <JoinRequests detail={detail} />}
         </div>
@@ -387,17 +389,26 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
               No messages yet. Say hello to get the conversation started.
             </p>
           )}
-          {messages.map((m) => (
-            <MessageBubble
-              key={m.id}
-              message={m}
-              isAdmin={detail.isAdmin}
-              flashed={flashId === m.id}
-              onDelete={handleDeleteMessage}
-              onTogglePin={handleTogglePin}
-              onEdit={handleEditMessage}
-            />
-          ))}
+          {messages.map((m) =>
+            m.kind === "system" ? (
+              // Centered notice for auto events like "<name> joined the room".
+              <div key={m.id} className="flex justify-center py-1">
+                <span className="rounded-full bg-muted/60 px-3 py-1 text-center text-xs text-muted-foreground">
+                  {m.body}
+                </span>
+              </div>
+            ) : (
+              <MessageBubble
+                key={m.id}
+                message={m}
+                isAdmin={detail.isAdmin}
+                flashed={flashId === m.id}
+                onDelete={handleDeleteMessage}
+                onTogglePin={handleTogglePin}
+                onEdit={handleEditMessage}
+              />
+            ),
+          )}
           <div ref={scrollEndRef} />
         </div>
       </div>

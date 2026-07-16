@@ -1,13 +1,17 @@
 "use client"
 
 import { useEffect, useState, useTransition } from "react"
+import Link from "next/link"
 import { Bookmark, Heart, MessageCircle, Share2 } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
 import type { Show } from "@/lib/data"
 import type { ShareTarget } from "@/lib/share-types"
 import { isEpisodeLiked, setEpisodeLike } from "@/app/actions/episodes"
 import { isItemSaved, toggleSaveItem } from "@/app/actions/share"
+import { getFollowingIds } from "@/app/actions/follow"
 import { ShareSheet } from "@/components/share-sheet"
+import { ProfileFollowButton } from "@/components/profile/profile-follow-button"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 
 /**
@@ -35,6 +39,30 @@ export function EpisodeNowPlayingActions({
   const { data: session } = authClient.useSession()
   const signedIn = Boolean(session?.user)
   const episodeId = show.episodeId
+
+  // Inline follow for the host, shown on the left of the action bar. Only
+  // relevant when signed in and viewing someone else's episode.
+  const hostIsSelf = session?.user?.id === show.host.id
+  const [followKnown, setFollowKnown] = useState(false)
+  const [hostFollowing, setHostFollowing] = useState(false)
+
+  useEffect(() => {
+    if (!signedIn || hostIsSelf) {
+      setFollowKnown(false)
+      return
+    }
+    let active = true
+    getFollowingIds()
+      .then((ids) => {
+        if (!active) return
+        setHostFollowing(ids.includes(show.host.id))
+        setFollowKnown(true)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [signedIn, hostIsSelf, show.host.id])
 
   const [liked, setLiked] = useState(false)
   const [likes, setLikes] = useState(show.likes ?? 0)
@@ -122,11 +150,33 @@ export function EpisodeNowPlayingActions({
   }
 
   const baseBtn =
-    "flex flex-1 flex-col items-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+    "flex flex-col items-center gap-1 rounded-2xl px-3 py-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
 
   return (
     <>
-      <div className="flex items-center justify-between gap-1">
+      <div className="flex items-center gap-1">
+        {/* Left: host avatar (opens the creator's profile) + inline Follow. */}
+        <Link
+          href={`/u/${show.host.id}`}
+          className="tap-scale shrink-0"
+          aria-label={`View ${show.host.name}'s profile`}
+        >
+          <Avatar className="size-9 ring-1 ring-border/60">
+            {show.host.avatar && <AvatarImage src={show.host.avatar || "/placeholder.svg"} alt={show.host.name} />}
+            <AvatarFallback className="text-xs">{show.host.name[0]}</AvatarFallback>
+          </Avatar>
+        </Link>
+        {signedIn && !hostIsSelf && followKnown && (
+          <ProfileFollowButton
+            targetUserId={show.host.id}
+            targetName={show.host.name}
+            initialFollowing={hostFollowing}
+            className="h-8 rounded-full px-3 text-xs"
+          />
+        )}
+
+        {/* Right: engagement actions, pushed to the far edge. */}
+        <div className="ml-auto flex items-center gap-1">
         <button
           type="button"
           onClick={toggleLike}
@@ -172,6 +222,7 @@ export function EpisodeNowPlayingActions({
           <Share2 className="size-6" />
           <span className="tabular-nums">{shares > 0 ? shares : "Share"}</span>
         </button>
+        </div>
       </div>
 
       <ShareSheet

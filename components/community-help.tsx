@@ -70,7 +70,7 @@ const ANON_NAME = "Anonymous"
 /*  Anonymous identity badge (green "?" avatar + fixed name)                  */
 /* -------------------------------------------------------------------------- */
 
-function AnonIdentity({ postedAt }: { postedAt: string }) {
+function AnonIdentity({ postedAt, edited }: { postedAt: string; edited?: boolean }) {
   return (
     <div className="flex items-center gap-3">
       <Avatar className="size-11 shrink-0 ring-2 ring-emerald-500/30">
@@ -78,7 +78,10 @@ function AnonIdentity({ postedAt }: { postedAt: string }) {
         <AvatarFallback className="bg-emerald-600 font-bold text-white">?</AvatarFallback>
       </Avatar>
       <div className="min-w-0">
-        <p className="font-semibold tracking-tight text-foreground">{ANON_NAME}</p>
+        <p className="flex items-center gap-1.5 font-semibold tracking-tight text-foreground">
+          {ANON_NAME}
+          {edited && <span className="text-xs font-normal text-muted-foreground">Edited</span>}
+        </p>
         <p className="text-xs text-muted-foreground">{postedAt}</p>
       </div>
     </div>
@@ -89,7 +92,7 @@ function AnonIdentity({ postedAt }: { postedAt: string }) {
  * Shown to the post's author on their OWN post: their real name + avatar, with
  * a hint that everyone else still sees it anonymously.
  */
-function SelfIdentity({ post }: { post: CommunityPostView }) {
+function SelfIdentity({ post, edited }: { post: CommunityPostView; edited?: boolean }) {
   return (
     <div className="flex items-center gap-3">
       <Avatar className="size-11 shrink-0 ring-2 ring-border">
@@ -99,7 +102,10 @@ function SelfIdentity({ post }: { post: CommunityPostView }) {
         </AvatarFallback>
       </Avatar>
       <div className="min-w-0">
-        <p className="truncate font-semibold tracking-tight">{post.authorName}</p>
+        <p className="flex items-center gap-1.5 truncate font-semibold tracking-tight">
+          {post.authorName}
+          {edited && <span className="text-xs font-normal text-muted-foreground">Edited</span>}
+        </p>
         <p className="text-xs text-muted-foreground">
           {post.postedAt} · <span className="font-medium text-foreground">You are anonymous in this room</span>
         </p>
@@ -301,7 +307,11 @@ function PostItem({
         )}
       >
       <div className="flex items-start justify-between gap-3">
-        {post.isSelf ? <SelfIdentity post={post} /> : <AnonIdentity postedAt={post.postedAt} />}
+        {post.isSelf ? (
+          <SelfIdentity post={post} edited={edited} />
+        ) : (
+          <AnonIdentity postedAt={post.postedAt} edited={edited} />
+        )}
         <div ref={menuRef} className="relative">
           <button
             type="button"
@@ -391,7 +401,6 @@ function PostItem({
       ) : (
         <p className="mt-3 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-pretty">
           {linkify(body)}
-          {edited && <span className="ml-1.5 align-baseline text-xs text-muted-foreground">(edited)</span>}
         </p>
       )}
 
