@@ -18,11 +18,13 @@ import {
 } from "@/app/actions/episodes"
 import { isItemSaved, toggleSaveItem } from "@/app/actions/share"
 import { getEpisodeEngagement, type EpisodeEngagement } from "@/app/actions/engagement"
+import { getFollowingIds } from "@/app/actions/follow"
 import type { ShareTarget } from "@/lib/share-types"
 import { EpisodePlayer } from "@/components/episode-player"
 import { CommentThread, type ThreadComment } from "@/components/comment-thread"
 import { ShareSheet } from "@/components/share-sheet"
 import { VideoCard } from "@/components/profile/video-card"
+import { ProfileFollowButton } from "@/components/profile/profile-follow-button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 
@@ -89,6 +91,30 @@ export function EpisodeWatch({
   const [saveCount, setSaveCount] = useState(0)
   const [shareCount, setShareCount] = useState(0)
   const [isPending, startTransition] = useTransition()
+
+  // Follow state for the episode's host, used to seed the inline Follow button
+  // in the action bar. Only relevant when signed in and viewing someone else.
+  const hostIsSelf = currentUser?.id === show.host.id
+  const [followKnown, setFollowKnown] = useState(false)
+  const [hostFollowing, setHostFollowing] = useState(false)
+
+  useEffect(() => {
+    if (!currentUser || hostIsSelf) {
+      setFollowKnown(false)
+      return
+    }
+    let active = true
+    getFollowingIds()
+      .then((ids) => {
+        if (!active) return
+        setHostFollowing(ids.includes(show.host.id))
+        setFollowKnown(true)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [currentUser, hostIsSelf, show.host.id])
 
   useEffect(() => {
     if (!currentUser || !episodeId) {
@@ -207,55 +233,81 @@ export function EpisodeWatch({
               </p>
             )}
             <div className="flex items-center gap-1">
-              <button
-                onClick={toggleLike}
-                disabled={!currentUser}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors hover:bg-secondary disabled:opacity-50",
-                  liked ? "text-live" : "text-foreground",
-                )}
-                aria-pressed={liked}
-                aria-label="Like episode"
+              {/* Left: host avatar + inline Follow. Tapping the avatar opens the
+                  creator's profile. Follow reuses the shared button so behavior
+                  is unchanged; it only appears when signed in and viewing
+                  someone else. */}
+              <Link
+                href={`/u/${show.host.id}`}
+                className="tap-scale shrink-0"
+                aria-label={`View ${show.host.name}'s profile`}
               >
-                <Heart className={cn("size-5", liked && "fill-current")} />
-                {likes > 0 && <span className="tabular-nums">{likes}</span>}
-              </button>
+                <Avatar className="size-9 ring-1 ring-border/60">
+                  {show.host.avatar && <AvatarImage src={show.host.avatar || "/placeholder.svg"} alt={show.host.name} />}
+                  <AvatarFallback className="text-xs">{show.host.name[0]}</AvatarFallback>
+                </Avatar>
+              </Link>
+              {currentUser && !hostIsSelf && followKnown && (
+                <ProfileFollowButton
+                  targetUserId={show.host.id}
+                  targetName={show.host.name}
+                  initialFollowing={hostFollowing}
+                  className="h-8 rounded-full px-3 text-xs"
+                />
+              )}
 
-              <button
-                onClick={() => setCommentsOpen((o) => !o)}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors hover:bg-secondary",
-                  commentsOpen ? "text-primary" : "text-foreground",
-                )}
-                aria-expanded={commentsOpen}
-                aria-label={commentsOpen ? "Hide comments" : "Show comments"}
-              >
-                <MessageCircle className="size-5" />
-                {count > 0 && <span className="tabular-nums">{count}</span>}
-              </button>
+              {/* Right: engagement actions, pushed to the far edge. */}
+              <div className="ml-auto flex items-center gap-1">
+                <button
+                  onClick={toggleLike}
+                  disabled={!currentUser}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors hover:bg-secondary disabled:opacity-50",
+                    liked ? "text-live" : "text-foreground",
+                  )}
+                  aria-pressed={liked}
+                  aria-label="Like episode"
+                >
+                  <Heart className={cn("size-5", liked && "fill-current")} />
+                  {likes > 0 && <span className="tabular-nums">{likes}</span>}
+                </button>
 
-              <button
-                onClick={toggleSave}
-                disabled={!currentUser}
-                className={cn(
-                  "ml-auto flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors hover:bg-secondary disabled:opacity-50",
-                  saved ? "text-primary" : "text-foreground",
-                )}
-                aria-pressed={saved}
-                aria-label={saved ? "Unsave episode" : "Save episode"}
-              >
-                <Bookmark className={cn("size-5", saved && "fill-current")} />
-                <span className="tabular-nums">{saveCount > 0 ? saveCount : saved ? "Saved" : "Save"}</span>
-              </button>
+                <button
+                  onClick={() => setCommentsOpen((o) => !o)}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors hover:bg-secondary",
+                    commentsOpen ? "text-primary" : "text-foreground",
+                  )}
+                  aria-expanded={commentsOpen}
+                  aria-label={commentsOpen ? "Hide comments" : "Show comments"}
+                >
+                  <MessageCircle className="size-5" />
+                  {count > 0 && <span className="tabular-nums">{count}</span>}
+                </button>
 
-              <button
-                onClick={() => setShareOpen(true)}
-                className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
-                aria-label="Share episode"
-              >
-                <Share2 className="size-5" />
-                <span className="tabular-nums">{shareCount > 0 ? shareCount : "Share"}</span>
-              </button>
+                <button
+                  onClick={toggleSave}
+                  disabled={!currentUser}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors hover:bg-secondary disabled:opacity-50",
+                    saved ? "text-primary" : "text-foreground",
+                  )}
+                  aria-pressed={saved}
+                  aria-label={saved ? "Unsave episode" : "Save episode"}
+                >
+                  <Bookmark className={cn("size-5", saved && "fill-current")} />
+                  <span className="tabular-nums">{saveCount > 0 ? saveCount : saved ? "Saved" : "Save"}</span>
+                </button>
+
+                <button
+                  onClick={() => setShareOpen(true)}
+                  className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+                  aria-label="Share episode"
+                >
+                  <Share2 className="size-5" />
+                  <span className="tabular-nums">{shareCount > 0 ? shareCount : "Share"}</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
