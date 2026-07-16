@@ -105,6 +105,11 @@ export async function startBroadcast(input: {
     return { ok: false, error: "Live is not configured yet. Add your LiveKit credentials to start broadcasting." }
   }
   const mode: LiveMode = input.mode === "video" ? "video" : "audio"
+  // Cover artwork is required for audio live sessions (there's no video feed to
+  // represent the room, so the cover is what listeners see).
+  if (mode === "audio" && !input.cover) {
+    return { ok: false, error: "Cover artwork is required for audio live sessions." }
+  }
   // Orientation only applies to video; audio is always stored as "portrait".
   const orientation: LiveOrientation = mode === "video" && input.orientation === "landscape" ? "landscape" : "portrait"
   const visibility: LiveVisibility = input.visibility === "private" ? "private" : "public"

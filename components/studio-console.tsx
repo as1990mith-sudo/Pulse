@@ -465,6 +465,11 @@ export function StudioConsole({
       setEndedSession({ title, duration, audioBlob, cover })
       setElapsed(0)
     } else {
+      // Cover art is required for audio live sessions.
+      if (!cover) {
+        setError("Please add cover artwork before going live.")
+        return
+      }
       setStarting(true)
       const res = await startBroadcast({ title, cover, visibility, category: category || undefined })
       setStarting(false)
@@ -617,7 +622,8 @@ export function StudioConsole({
               size="sm"
               variant="default"
               className="shrink-0 gap-1.5 rounded-full px-4 font-bold shadow-lg"
-              disabled={starting || state.connecting}
+              // Cover artwork is required before an audio session can go live.
+              disabled={starting || state.connecting || !cover}
             >
               {starting || state.connecting ? (
                 <Loader2 className="size-4 animate-spin" />
@@ -638,7 +644,7 @@ export function StudioConsole({
         {/* Pre-live: pick cover art + room privacy */}
         {!live && (
           <div className="space-y-4 border-b border-white/[0.07] px-4 py-4 sm:px-6">
-            <CoverUpload value={cover} onChange={setCover} label="Cover artwork (optional)" />
+            <CoverUpload value={cover} onChange={setCover} label="Cover artwork (required)" />
 
             {/* Category — optional topic tag chosen from a dropdown. */}
             <div className="space-y-2">

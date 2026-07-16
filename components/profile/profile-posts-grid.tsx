@@ -2,11 +2,10 @@
 
 import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { X, Heart, MessageCircle, Repeat2, Layers, Play } from "lucide-react"
+import { X, Layers, Play } from "lucide-react"
 import type { FeedPostView } from "@/app/actions/feed"
 import type { CurrentUser } from "@/lib/session"
 import { PostCard } from "@/components/mind-feed"
-import { cn } from "@/lib/utils"
 
 /**
  * Profile "Posts" tab: a 2-column grid of post tiles. Tapping a tile opens a
@@ -48,7 +47,6 @@ export function ProfilePostsGrid({
 }
 
 function PostTile({ post, onOpen }: { post: FeedPostView; onOpen: () => void }) {
-  const hasMedia = Boolean(post.image || post.video)
   const multiMedia = (post.media?.length ?? 0) > 1
   return (
     <button
@@ -95,28 +93,6 @@ function PostTile({ post, onOpen }: { post: FeedPostView; onOpen: () => void }) 
           </p>
         </div>
       )}
-
-      {/* Subtle engagement overlay anchored to the bottom of each tile. */}
-      <span
-        className={cn(
-          "pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-3 px-2 py-1.5 text-[11px] font-semibold",
-          hasMedia
-            ? "bg-gradient-to-t from-black/60 to-transparent text-white"
-            : "text-muted-foreground",
-        )}
-      >
-        <span className="flex items-center gap-1">
-          <Heart className="size-3.5" /> {post.likes}
-        </span>
-        <span className="flex items-center gap-1">
-          <MessageCircle className="size-3.5" /> {post.comments.length}
-        </span>
-        {post.reposts > 0 && (
-          <span className="flex items-center gap-1">
-            <Repeat2 className="size-3.5" /> {post.reposts}
-          </span>
-        )}
-      </span>
     </button>
   )
 }
