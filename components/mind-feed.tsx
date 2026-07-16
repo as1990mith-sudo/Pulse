@@ -1138,11 +1138,13 @@ export function PostCard({
             >
               {post.user}
             </Link>
-            <span className={cn("truncate text-muted-foreground", feed ? "text-sm" : "text-xs")}>
-              {post.handle} · {post.postedAt}
-              {/* Modern social style: the edited marker lives in the header
-                  metadata line next to the timestamp for every post type. */}
-              {edited && " · Edited"}
+            {/* Flex row so the handle/time can truncate on long usernames while
+                the "Edited" tag stays fixed (shrink-0) and is never clipped. */}
+            <span className={cn("flex min-w-0 items-center text-muted-foreground", feed ? "text-sm" : "text-xs")}>
+              <span className="truncate">
+                {post.handle} · {post.postedAt}
+              </span>
+              {edited && <span className="shrink-0 whitespace-nowrap">{" · Edited"}</span>}
             </span>
           </div>
         </div>
