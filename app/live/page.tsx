@@ -1,10 +1,8 @@
-import { Library, Radio } from "lucide-react"
+import { Radio } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
 import { LiveStreamCard } from "@/components/live-stream-card"
-import { PodcastLibrary } from "@/components/podcast-library"
 import { LiveBadge } from "@/components/live-badge"
 import { GoLiveToggle } from "@/components/go-live-toggle"
-import { getPodcastHosts } from "@/lib/content"
 import { getLiveStreams } from "@/app/actions/live"
 
 function SectionHeading({
@@ -31,7 +29,7 @@ function SectionHeading({
 }
 
 export default async function LivePage() {
-  const [streams, hosts] = await Promise.all([getLiveStreams(), getPodcastHosts()])
+  const streams = await getLiveStreams()
   const liveCount = streams.length
 
   return (
@@ -66,17 +64,6 @@ export default async function LivePage() {
                 </p>
               </div>
             )}
-          </section>
-
-          {/* Podcast library — host accounts who publish episodes */}
-          <section id="library" className="space-y-6">
-            <SectionHeading
-              eyebrow="On demand"
-              icon={Library}
-              title="Podcast library"
-              description="Browse the hosts publishing on Frequency. Open a host to hear their recorded episodes."
-            />
-            <PodcastLibrary hosts={hosts} />
           </section>
 
           {/* Host CTA — pick audio or video, then open the studio in that mode.
