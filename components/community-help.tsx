@@ -582,8 +582,14 @@ export function CommunityHelp({ initialPosts }: { initialPosts: CommunityPostVie
   const [composerOpen, setComposerOpen] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
   const [highlightedQ, setHighlightedQ] = useState<string | null>(null)
+  // "Community" shows everyone's questions; "My Posts" narrows to the ones the
+  // signed-in user authored so they can track their own threads easily.
+  const [scope, setScope] = useState<"community" | "mine">("community")
   // Auto-hide the global app header as the feed scrolls (Instagram/Telegram feel).
   const onFeedScroll = useAutoHideChatChrome()
+
+  const visiblePosts = scope === "mine" ? posts.filter((p) => p.isSelf) : posts
+  const myCount = posts.filter((p) => p.isSelf).length
 
   // Deep link: arriving with ?q=<id> from a shared link scrolls to and briefly
   // highlights that exact question instead of just the top of the feed.
@@ -645,17 +651,60 @@ export function CommunityHelp({ initialPosts }: { initialPosts: CommunityPostVie
         </div>
       </header>
 
+      {/* Community / My Posts toggle */}
+      <div className="border-b border-border/60 bg-background/95 px-4 py-2.5 backdrop-blur sm:px-6">
+        <div role="tablist" aria-label="Filter questions" className="flex gap-1 rounded-full bg-secondary/60 p-1">
+          {(
+            [
+              { key: "community", label: "Community" },
+              { key: "mine", label: "My Posts", count: myCount },
+            ] as const
+          ).map((t) => {
+            const active = scope === t.key
+            return (
+              <button
+                key={t.key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setScope(t.key)}
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition-colors",
+                  active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t.label}
+                {"count" in t && (
+                  <span
+                    className={cn(
+                      "min-w-5 rounded-full px-1.5 py-0.5 text-xs tabular-nums",
+                      active
+                        ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                        : "bg-secondary text-muted-foreground",
+                    )}
+                  >
+                    {t.count}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
       {/* Immersive smooth-scrolling feed */}
       <div onScroll={onFeedScroll} className="flex-1 overflow-y-auto scroll-smooth overscroll-contain">
-        {posts.length === 0 ? (
+        {visiblePosts.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 px-6 py-24 text-center">
             <Avatar className="size-16 ring-2 ring-emerald-500/30">
               <AvatarImage src={ANON_AVATAR || "/placeholder.svg"} alt="" />
               <AvatarFallback className="bg-emerald-600 text-2xl font-bold text-white">?</AvatarFallback>
             </Avatar>
-            <p className="text-lg font-semibold">No questions yet</p>
+            <p className="text-lg font-semibold">{scope === "mine" ? "You haven't posted yet" : "No questions yet"}</p>
             <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
-              Be the first to ask the community something — totally anonymously.
+              {scope === "mine"
+                ? "Questions you ask will appear here so you can track the replies you get."
+                : "Be the first to ask the community something — totally anonymously."}
             </p>
             <Button onClick={() => setComposerOpen(true)} className="mt-2 gap-2 rounded-full">
               <Plus className="size-4" /> Ask anonymously
@@ -663,7 +712,7 @@ export function CommunityHelp({ initialPosts }: { initialPosts: CommunityPostVie
           </div>
         ) : (
           <div className="divide-y divide-border/60 pb-28">
-            {posts.map((post) => (
+            {visiblePosts.map((post) => (
               <PostItem
                 key={post.id}
                 post={post}

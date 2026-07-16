@@ -1,5 +1,4 @@
 import { notFound, redirect } from "next/navigation"
-import { SiteHeader } from "@/components/site-header"
 import { ChatroomView } from "@/components/chatroom-view"
 import { getChatroomDetail } from "@/app/actions/chatroom"
 import { getCurrentUser } from "@/lib/session"
@@ -22,7 +21,6 @@ export default async function ChatroomDetailPage({ params }: { params: Promise<{
 
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden">
-      <SiteHeader collapsible />
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col overflow-hidden">
         <ChatroomView detail={detail} />
       </main>

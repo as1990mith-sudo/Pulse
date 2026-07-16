@@ -319,12 +319,12 @@
 /* Mid mode — a soft twilight gradient canvas (indigo → blue → teal) that the
    translucent panels float over. */
 .theme-mid body {
-  background-color: oklch(0.22 0.03 265);
+  background-color: oklch(0.19 0.03 265);
   background-image: linear-gradient(
     155deg,
-    oklch(0.4 0.09 285),
-    oklch(0.33 0.08 250) 50%,
-    oklch(0.32 0.07 200)
+    oklch(0.36 0.09 285),
+    oklch(0.29 0.08 250) 50%,
+    oklch(0.28 0.07 200)
   );
   background-attachment: fixed;
 }
@@ -340,12 +340,12 @@
 /* Grass mode — a bright, vibrant green gradient canvas that the translucent
    panels float over, mirroring Mid's treatment with a green lean. */
 .theme-grass body {
-  background-color: oklch(0.24 0.06 150);
+  background-color: oklch(0.21 0.06 150);
   background-image: linear-gradient(
     155deg,
-    oklch(0.46 0.15 150),
-    oklch(0.41 0.16 145) 50%,
-    oklch(0.43 0.14 165)
+    oklch(0.42 0.15 150),
+    oklch(0.37 0.16 145) 50%,
+    oklch(0.39 0.14 165)
   );
   background-attachment: fixed;
 }

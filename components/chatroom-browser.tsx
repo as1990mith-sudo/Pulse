@@ -76,10 +76,11 @@ export function ChatroomBrowser({ rooms }: { rooms: ChatroomSummary[] }) {
         <CommunityHelpEntry />
         <DreamInterpretationEntry />
       </div>
-      {/* Immersive, full-bleed segmented bar: one edge-to-edge strip split into
-          three equal segments. Every segment shares the exact same box, so only
-          the color changes on the active tab — no size-shifting borders. */}
-      <TabsList className="-mx-4 grid h-12 w-[calc(100%+2rem)] grid-cols-3 gap-0 divide-x divide-border/50 rounded-none border-y border-border/60 bg-card/50 p-0 backdrop-blur sm:-mx-6 sm:w-[calc(100%+3rem)]">
+      {/* Luxury segmented control: a floating rounded-full "rail" with a soft
+          hairline border and inner shadow. The active segment lifts on a
+          gold gradient pill with a warm glow, while idle segments stay quiet —
+          giving the switcher a premium, tactile feel. */}
+      <TabsList className="mx-auto grid h-14 w-full max-w-md grid-cols-3 gap-1 rounded-full border border-primary/15 bg-gradient-to-b from-card/80 to-card/40 p-1.5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06),0_8px_24px_-12px_rgba(0,0,0,0.6)] backdrop-blur-xl">
         {[
           { value: "my-rooms", label: "My rooms", icon: Users },
           { value: "discover", label: "Discover", icon: Compass },
@@ -88,9 +89,9 @@ export function ChatroomBrowser({ rooms }: { rooms: ChatroomSummary[] }) {
           <TabsTrigger
             key={value}
             value={value}
-            className="relative flex h-full items-center justify-center gap-2 rounded-none border-0 bg-transparent text-sm font-semibold text-muted-foreground shadow-none transition-colors hover:bg-secondary/40 hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
+            className="group relative flex h-full items-center justify-center gap-1.5 rounded-full border-0 bg-transparent text-[13px] font-medium tracking-wide text-muted-foreground shadow-none transition-all duration-300 hover:text-foreground data-[state=active]:bg-gradient-to-b data-[state=active]:from-primary data-[state=active]:to-primary/85 data-[state=active]:font-semibold data-[state=active]:text-primary-foreground data-[state=active]:shadow-[0_2px_10px_-2px_color-mix(in_oklab,var(--primary)_60%,transparent),inset_0_1px_0_0_rgba(255,255,255,0.25)]"
           >
-            <Icon className="size-[18px]" />
+            <Icon className="size-4 transition-transform duration-300 group-data-[state=active]:scale-110" />
             {label}
           </TabsTrigger>
         ))}

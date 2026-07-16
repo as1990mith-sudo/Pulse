@@ -162,10 +162,14 @@ export function VideoCard({
       {/* Meta column: video title (in place of display name), the uploader's
           @username (maintained), then views · published date. */}
       <div className="flex min-w-0 flex-1 items-start gap-1 py-0.5">
-        <OpenTag {...openProps} className="min-w-0 flex-1 text-left">
+        <OpenTag
+          {...openProps}
+          className="flex min-w-0 flex-1 flex-col overflow-hidden text-left max-h-[72px] sm:max-h-[90px]"
+        >
           {/* Title wraps to at most two lines (YouTube-style) and truncates with
-              an ellipsis, so it always fits the column and never runs under the
-              menu button — no matter how long the title is. */}
+              an ellipsis. The column is capped to the thumbnail's height
+              (aspect-video of w-32/w-40 = 72px/90px) with overflow-hidden, so the
+              title + @username + views·date never grow taller than the thumbnail. */}
           <h3 className="line-clamp-2 font-display text-sm font-semibold leading-snug tracking-tight transition-colors group-hover:text-primary">
             {show.title}
           </h3>

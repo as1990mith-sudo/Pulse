@@ -2,10 +2,23 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { Heart, MessageCircle, Volume2, VolumeX, X, Film, Play } from "lucide-react"
-import type { FeedPostView } from "@/app/actions/feed"
-import { setPostLike } from "@/app/actions/feed"
-import { ShareButton } from "@/components/store/store-cards"
+import {
+  Bookmark,
+  Film,
+  Heart,
+  Loader2,
+  MessageCircle,
+  Play,
+  Send,
+  Share2,
+  Volume2,
+  VolumeX,
+  X,
+} from "lucide-react"
+import type { FeedPostView, FeedCommentView } from "@/app/actions/feed"
+import { addPostComment, setPostLike } from "@/app/actions/feed"
+import { toggleSaveItem } from "@/app/actions/share"
+import type { CurrentUser } from "@/lib/session"
 import { haptic } from "@/lib/haptics"
 import { cn } from "@/lib/utils"
 
@@ -25,6 +38,8 @@ export function ReelsFeed({
   posts,
   onClose,
   header,
+  currentUser = null,
+  onSwipePrevTab,
 }: {
   posts: FeedPostView[]
   onClose?: () => void
@@ -32,6 +47,11 @@ export function ReelsFeed({
    *  default "Reels" title so the reels tab can float the For You / Following /
    *  Reels switcher over the video, TikTok-style. */
   header?: React.ReactNode
+  /** Signed-in user, used for optimistic comment authoring and gating save. */
+  currentUser?: CurrentUser | null
+  /** Called on a horizontal swipe so the parent can switch to the neighbouring
+   *  feed sub-tab on the left (Reels is the last tab, so left is the only way). */
+  onSwipePrevTab?: () => void
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null)
 
@@ -67,20 +87,48 @@ export function ReelsFeed({
   // Instagram. Start muted so autoplay is allowed by the browser.
   const [muted, setMuted] = useState(true)
 
-  // Lock background scroll while the immersive overlay is open.
+  // Lock background scroll while the immersive overlay is open, and signal the
+  // app to hide the bottom nav so the reel is a whole, edge-to-edge experience.
   useEffect(() => {
     const prev = document.body.style.overflow
     document.body.style.overflow = "hidden"
+    window.dispatchEvent(new CustomEvent("reels:active", { detail: true }))
     return () => {
       document.body.style.overflow = prev
+      window.dispatchEvent(new CustomEvent("reels:active", { detail: false }))
     }
   }, [])
+
+  // Horizontal swipe → leave reels to the neighbouring feed tab on the left.
+  // Vertical swipes are reserved for scrolling between reels, so we only act on
+  // a clearly horizontal gesture that didn't begin on an interactive control
+  // (buttons, links, the scrubber, or the comments sheet).
+  const touchStart = useRef<{ x: number; y: number; skip: boolean } | null>(null)
+  function onTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0]
+    const el = e.target as HTMLElement
+    const skip = Boolean(el.closest("input, button, a, [data-no-swipe]"))
+    touchStart.current = { x: t.clientX, y: t.clientY, skip }
+  }
+  function onTouchEnd(e: React.TouchEvent) {
+    const s = touchStart.current
+    touchStart.current = null
+    if (!s || s.skip || !onSwipePrevTab) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - s.x
+    const dy = t.clientY - s.y
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) onSwipePrevTab()
+  }
 
   return (
     // Explicit viewport dimensions (not just `inset-0`) so the overlay fills the
     // screen even while the page-entry animation briefly makes the wrapper a
     // containing block — otherwise `inset-0` would resolve against a 0×0 box.
-    <div className="fixed left-0 top-0 z-[45] h-[100dvh] w-screen bg-black">
+    <div
+      className="fixed left-0 top-0 z-[45] h-[100dvh] w-screen bg-black"
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+    >
       <div
         ref={scrollerRef}
         className="h-full snap-y snap-mandatory overflow-y-scroll overscroll-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -102,6 +150,7 @@ export function ReelsFeed({
               muted={muted}
               onToggleMute={() => setMuted((m) => !m)}
               onTooLong={() => markTooLong(reel.key)}
+              currentUser={currentUser}
             />
           ))
         )}
@@ -138,12 +187,14 @@ function ReelItem({
   muted,
   onToggleMute,
   onTooLong,
+  currentUser,
 }: {
   reel: Reel
   root: React.RefObject<HTMLDivElement | null>
   muted: boolean
   onToggleMute: () => void
   onTooLong: () => void
+  currentUser: CurrentUser | null
 }) {
   const { post, url } = reel
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -157,23 +208,30 @@ function ReelItem({
   // setting the DOM property in time. So we always force the muted property on
   // the element right before play(), and if a play attempt is still rejected we
   // hard-mute and retry — guaranteeing the clip actually starts.
-  const playVideo = useCallback(
-    (v: HTMLVideoElement | null, forceMuted: boolean) => {
-      if (!v) return
-      v.muted = forceMuted
-      const p = v.play()
-      if (p && typeof p.catch === "function") {
-        p.catch(() => {
-          v.muted = true
-          v.play().catch(() => {})
-        })
-      }
-    },
-    [],
-  )
+  const playVideo = useCallback((v: HTMLVideoElement | null, forceMuted: boolean) => {
+    if (!v) return
+    v.muted = forceMuted
+    const p = v.play()
+    if (p && typeof p.catch === "function") {
+      p.catch(() => {
+        v.muted = true
+        v.play().catch(() => {})
+      })
+    }
+  }, [])
 
   const [liked, setLiked] = useState(post.liked)
   const [likes, setLikes] = useState(post.likes)
+  const [saved, setSaved] = useState(post.saved)
+  const [comments, setComments] = useState<FeedCommentView[]>(post.comments)
+  const [commentsOpen, setCommentsOpen] = useState(false)
+
+  // Playback progress (0–100) for the draggable scrubber. `scrubbing` freezes
+  // the timeupdate-driven progress while the user drags the thumb.
+  const [progress, setProgress] = useState(0)
+  const [dragging, setDragging] = useState(false)
+  const scrubbingRef = useRef(false)
+  const seekRef = useRef<HTMLDivElement>(null)
 
   // Latest muted value readable inside the (non-re-subscribing) observer.
   const mutedRef = useRef(muted)
@@ -204,6 +262,7 @@ function ReelItem({
         } else {
           v.pause()
           v.currentTime = 0
+          setProgress(0)
           if (bg) {
             bg.pause()
             bg.currentTime = 0
@@ -244,8 +303,82 @@ function ReelItem({
     }
   }
 
+  // Save the reel's underlying post. It's stored as a "post", so it lands in the
+  // Feed folder of the Saved menu (same folder as posts saved from the feed).
+  function toggleSave() {
+    if (!currentUser) return
+    const next = !saved
+    setSaved(next)
+    haptic(next ? "light" : "select")
+    ;(async () => {
+      try {
+        const res = await toggleSaveItem({
+          type: "post",
+          key: String(post.id),
+          title: `${post.user} on Frequency`,
+          subtitle: post.text ? post.text.slice(0, 120) : null,
+          url: `/feed?post=${post.id}`,
+          image: post.image ?? post.video ?? null,
+          downloadUrl: post.video ?? post.image ?? null,
+          downloadKind: post.video ? "video" : post.image ? "image" : null,
+        })
+        setSaved(res.saved)
+      } catch {
+        setSaved(!next)
+      }
+    })()
+  }
+
+  async function share() {
+    const link = typeof window !== "undefined" ? `${window.location.origin}/feed?post=${post.id}` : ""
+    const title = post.text ? post.text.slice(0, 80) : `${post.user} on Frequency`
+    try {
+      if (typeof navigator !== "undefined" && navigator.share) await navigator.share({ title, url: link })
+      else await navigator.clipboard?.writeText(link)
+    } catch {
+      /* user cancelled */
+    }
+  }
+
+  // Keep the scrubber in sync with playback (unless the user is dragging).
+  function onTimeUpdate() {
+    const v = videoRef.current
+    if (!v || scrubbingRef.current || !v.duration) return
+    setProgress((v.currentTime / v.duration) * 100)
+  }
+
+  // Translate a pointer x-position over the track into a seek time (drag or tap).
+  const seekToClientX = useCallback((clientX: number) => {
+    const v = videoRef.current
+    const bar = seekRef.current
+    if (!v || !bar || !v.duration) return
+    const rect = bar.getBoundingClientRect()
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+    v.currentTime = ratio * v.duration
+    setProgress(ratio * 100)
+  }, [])
+
+  function onSeekPointerDown(e: React.PointerEvent) {
+    e.stopPropagation()
+    ;(e.target as Element).setPointerCapture?.(e.pointerId)
+    scrubbingRef.current = true
+    setDragging(true)
+    seekToClientX(e.clientX)
+  }
+  function onSeekPointerMove(e: React.PointerEvent) {
+    if (!scrubbingRef.current) return
+    seekToClientX(e.clientX)
+  }
+  function onSeekPointerUp() {
+    scrubbingRef.current = false
+    setDragging(false)
+  }
+
   return (
-    <div ref={containerRef} className="relative flex h-full w-full snap-start snap-always items-center justify-center overflow-hidden">
+    <div
+      ref={containerRef}
+      className="relative flex h-full w-full snap-start snap-always items-center justify-center overflow-hidden"
+    >
       {/* Blurred backdrop: the same clip stretched to cover the frame so off-ratio
           videos fill edge-to-edge (no black bars, nothing "hanging"), while the
           real clip plays contained on top so no content is ever cropped. */}
@@ -270,6 +403,7 @@ function ReelItem({
         muted={muted}
         preload="metadata"
         onClick={togglePlay}
+        onTimeUpdate={onTimeUpdate}
         onLoadedMetadata={(e) => {
           if (e.currentTarget.duration > MAX_REEL_SECONDS) onTooLong()
         }}
@@ -292,34 +426,55 @@ function ReelItem({
       {/* Bottom gradient for legibility of the caption/author. */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/80 to-transparent" />
 
-      {/* Mute toggle, top-right under the bar. */}
+      {/* Right-hand action rail (raised to clear the mute button + scrubber). */}
+      <div className="absolute bottom-32 right-3 flex flex-col items-center gap-5 text-white" data-no-swipe>
+        <button type="button" onClick={toggleLike} className="flex flex-col items-center gap-1" aria-pressed={liked}>
+          <Heart
+            className={cn(
+              "size-8 drop-shadow transition-transform active:scale-90",
+              liked && "fill-red-500 text-red-500",
+            )}
+          />
+          <span className="text-xs font-semibold tabular-nums">{likes}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setCommentsOpen(true)}
+          className="flex flex-col items-center gap-1"
+          aria-label="Comments"
+        >
+          <MessageCircle className="size-8 drop-shadow" />
+          <span className="text-xs font-semibold tabular-nums">{comments.length}</span>
+        </button>
+        <button
+          type="button"
+          onClick={toggleSave}
+          className="flex flex-col items-center gap-1"
+          aria-pressed={saved}
+          aria-label={saved ? "Remove from saved" : "Save"}
+        >
+          <Bookmark className={cn("size-8 drop-shadow transition-transform active:scale-90", saved && "fill-white")} />
+          <span className="text-xs font-semibold">{saved ? "Saved" : "Save"}</span>
+        </button>
+        <button type="button" onClick={share} className="flex flex-col items-center gap-1" aria-label="Share">
+          <Share2 className="size-7 drop-shadow transition-transform active:scale-90" />
+          <span className="text-xs font-semibold">Share</span>
+        </button>
+      </div>
+
+      {/* Mute toggle — moved to the bottom-right, just above the scrubber. */}
       <button
         type="button"
         onClick={onToggleMute}
         aria-label={muted ? "Unmute" : "Mute"}
-        className="absolute right-4 top-16 flex size-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition-colors hover:bg-black/60"
+        className="absolute bottom-16 right-4 flex size-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition-colors hover:bg-black/60"
+        data-no-swipe
       >
         {muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
       </button>
 
-      {/* Right-hand action rail. */}
-      <div className="absolute bottom-24 right-3 flex flex-col items-center gap-5 text-white">
-        <button type="button" onClick={toggleLike} className="flex flex-col items-center gap-1" aria-pressed={liked}>
-          <Heart className={cn("size-8 drop-shadow transition-transform active:scale-90", liked && "fill-red-500 text-red-500")} />
-          <span className="text-xs font-semibold tabular-nums">{likes}</span>
-        </button>
-        <Link href={`/feed?post=${post.id}`} className="flex flex-col items-center gap-1" aria-label="Comments">
-          <MessageCircle className="size-8 drop-shadow" />
-          <span className="text-xs font-semibold tabular-nums">{post.comments.length}</span>
-        </Link>
-        <ShareButton
-          title={post.text || `${post.user} on Frequency`}
-          className="size-9 rounded-full border-none bg-transparent text-white hover:bg-white/10"
-        />
-      </div>
-
       {/* Author + caption, bottom-left. */}
-      <div className="absolute inset-x-0 bottom-0 z-[1] p-4 pb-24 pr-20 text-white">
+      <div className="absolute inset-x-0 bottom-0 z-[1] p-4 pb-20 pr-24 text-white">
         <Link href={`/u/${post.authorId}`} className="flex items-center gap-2.5">
           <span
             className={cn(
@@ -340,6 +495,192 @@ function ReelItem({
           </span>
         </Link>
         {post.text && <p className="mt-2.5 line-clamp-2 max-w-md text-sm leading-relaxed drop-shadow">{post.text}</p>}
+      </div>
+
+      {/* Draggable play tracker — full-width at the very bottom. Tap or drag the
+          thumb anywhere along the track to seek to that point in the clip. */}
+      <div
+        className="absolute inset-x-0 bottom-0 z-[2] px-3 pb-[max(env(safe-area-inset-bottom),0.4rem)] pt-3"
+        data-no-swipe
+      >
+        <div
+          ref={seekRef}
+          role="slider"
+          aria-label="Seek"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(progress)}
+          tabIndex={0}
+          onPointerDown={onSeekPointerDown}
+          onPointerMove={onSeekPointerMove}
+          onPointerUp={onSeekPointerUp}
+          onPointerCancel={onSeekPointerUp}
+          className="group relative flex h-6 touch-none items-center"
+        >
+          <span className="block h-1 w-full overflow-hidden rounded-full bg-white/30">
+            <span className="block h-full rounded-full bg-white" style={{ width: `${progress}%` }} />
+          </span>
+          <span
+            className={cn(
+              "absolute size-3 -translate-x-1/2 rounded-full bg-white shadow transition-transform",
+              dragging ? "scale-150" : "scale-100 group-hover:scale-125",
+            )}
+            style={{ left: `${progress}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Comments — a bottom sheet layered over this reel. */}
+      {commentsOpen && (
+        <CommentsSheet
+          post={post}
+          comments={comments}
+          onAdd={(c) => setComments((prev) => [...prev, c])}
+          onRemove={(id) => setComments((prev) => prev.filter((c) => c.id !== id))}
+          currentUser={currentUser}
+          onClose={() => setCommentsOpen(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+/**
+ * Bottom-sheet comments for a reel. Shows the post's existing comments and, for
+ * signed-in users, an input to add one (optimistically appended, rolled back on
+ * failure). Layered inside the reel item so it feels native to the clip.
+ */
+function CommentsSheet({
+  post,
+  comments,
+  onAdd,
+  onRemove,
+  currentUser,
+  onClose,
+}: {
+  post: FeedPostView
+  comments: FeedCommentView[]
+  onAdd: (c: FeedCommentView) => void
+  onRemove: (id: number) => void
+  currentUser: CurrentUser | null
+  onClose: () => void
+}) {
+  const [draft, setDraft] = useState("")
+  const [sending, setSending] = useState(false)
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    const text = draft.trim()
+    if (!text || !currentUser || sending) return
+    setSending(true)
+    const optimistic: FeedCommentView = {
+      id: Date.now(),
+      parentId: null,
+      authorId: currentUser.id,
+      isSelf: true,
+      user: currentUser.name,
+      handle: currentUser.handle,
+      initials: currentUser.initials,
+      color: currentUser.color,
+      authorImage: currentUser.image,
+      text,
+      likes: 0,
+      liked: false,
+      edited: false,
+      postedAt: "Just now",
+      createdAtMs: Date.now(),
+    }
+    onAdd(optimistic)
+    setDraft("")
+    haptic("light")
+    try {
+      await addPostComment({ postId: Number(post.id), text })
+    } catch {
+      onRemove(optimistic.id)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <div className="absolute inset-0 z-20 flex flex-col justify-end" data-no-swipe>
+      <button type="button" aria-label="Close comments" onClick={onClose} className="absolute inset-0 bg-black/50" />
+      <div className="relative flex max-h-[72%] flex-col rounded-t-3xl bg-neutral-900 text-white shadow-2xl">
+        <header className="flex items-center justify-between border-b border-white/10 px-4 pb-3 pt-3">
+          <span className="mx-auto -mb-1 h-1 w-10 rounded-full bg-white/20" aria-hidden="true" />
+          <span className="absolute left-4 text-sm font-semibold">
+            {comments.length} {comments.length === 1 ? "comment" : "comments"}
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="absolute right-3 flex size-8 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <X className="size-5" />
+          </button>
+        </header>
+
+        <ul className="flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4">
+          {comments.length === 0 ? (
+            <li className="py-10 text-center text-sm text-white/50">No comments yet. Be the first to comment.</li>
+          ) : (
+            comments.map((c) => (
+              <li key={c.id} className="flex items-start gap-3">
+                <span
+                  className={cn(
+                    "flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-bold",
+                    c.color,
+                  )}
+                >
+                  {c.authorImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={c.authorImage || "/placeholder.svg"} alt={c.user} className="size-full object-cover" />
+                  ) : (
+                    c.initials
+                  )}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-white/60">
+                    <span className="font-semibold text-white">{c.user}</span>
+                    <span className="ml-2">{c.postedAt}</span>
+                  </p>
+                  <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed">{c.text}</p>
+                </div>
+              </li>
+            ))
+          )}
+        </ul>
+
+        {currentUser ? (
+          <form
+            onSubmit={submit}
+            className="flex items-center gap-2 border-t border-white/10 px-3 py-3 pb-[max(env(safe-area-inset-bottom),0.75rem)]"
+          >
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Add a comment…"
+              aria-label="Add a comment"
+              className="min-w-0 flex-1 rounded-full bg-white/10 px-4 py-2.5 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/30"
+            />
+            <button
+              type="submit"
+              disabled={!draft.trim() || sending}
+              aria-label="Post comment"
+              className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity disabled:opacity-40"
+            >
+              {sending ? <Loader2 className="size-5 animate-spin" /> : <Send className="size-5" />}
+            </button>
+          </form>
+        ) : (
+          <p className="border-t border-white/10 px-4 py-4 text-center text-sm text-white/60">
+            <Link href="/sign-in" className="font-semibold text-white underline">
+              Sign in
+            </Link>{" "}
+            to join the conversation.
+          </p>
+        )}
       </div>
     </div>
   )

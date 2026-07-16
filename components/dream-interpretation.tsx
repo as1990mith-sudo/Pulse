@@ -736,15 +736,22 @@ export function DreamInterpretation({ initialFeed }: { initialFeed: DreamFeed })
   const [infoOpen, setInfoOpen] = useState(false)
   // Interpreter-only: filter the inbox by whether a dream still needs a reply.
   const [statusFilter, setStatusFilter] = useState<"awaiting" | "completed">("awaiting")
+  // Member-only: "Community" shows every dream; "My Dreams" narrows to the ones
+  // the signed-in user shared so they can track their own submissions.
+  const [scope, setScope] = useState<"community" | "mine">("community")
   // Auto-hide the global app header as the feed scrolls (Instagram/Telegram feel).
   const onFeedScroll = useAutoHideChatChrome()
 
   const awaitingCount = dreams.filter((d) => d.replyCount === 0).length
   const completedCount = dreams.length - awaitingCount
-  // Members always see every dream; the interpreter sees the active filter.
+  const myCount = dreams.filter((d) => d.isSelf).length
+  // The interpreter sees the awaiting/completed inbox filter; members see either
+  // the whole community or just their own dreams via the scope toggle.
   const visibleDreams = isAdmin
     ? dreams.filter((d) => (statusFilter === "awaiting" ? d.replyCount === 0 : d.replyCount > 0))
-    : dreams
+    : scope === "mine"
+      ? dreams.filter((d) => d.isSelf)
+      : dreams
 
   // Keep the feed cache's replyCount in sync so a freshly interpreted dream
   // moves from "Awaiting" to "Completed" immediately.
@@ -860,6 +867,48 @@ export function DreamInterpretation({ initialFeed }: { initialFeed: DreamFeed })
         </div>
       )}
 
+      {!isAdmin && (
+        <div className="border-b border-border/60 bg-background/95 px-4 py-2.5 backdrop-blur sm:px-6">
+          <div role="tablist" aria-label="Filter dreams" className="flex gap-1 rounded-full bg-secondary/60 p-1">
+            {(
+              [
+                { key: "community", label: "Community" },
+                { key: "mine", label: "My Dreams", count: myCount },
+              ] as const
+            ).map((t) => {
+              const active = scope === t.key
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setScope(t.key)}
+                  className={cn(
+                    "flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition-colors",
+                    active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {t.label}
+                  {"count" in t && (
+                    <span
+                      className={cn(
+                        "min-w-5 rounded-full px-1.5 py-0.5 text-xs tabular-nums",
+                        active
+                          ? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
+                          : "bg-secondary text-muted-foreground",
+                      )}
+                    >
+                      {t.count}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       <div onScroll={onFeedScroll} className="flex-1 overflow-y-auto scroll-smooth overscroll-contain">
         {visibleDreams.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 px-6 py-24 text-center">
@@ -875,7 +924,9 @@ export function DreamInterpretation({ initialFeed }: { initialFeed: DreamFeed })
                   : statusFilter === "awaiting"
                     ? "All caught up"
                     : "No interpretations yet"
-                : "No dreams shared yet"}
+                : scope === "mine"
+                  ? "You haven't shared a dream yet"
+                  : "No dreams shared yet"}
             </p>
             <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
               {isAdmin
@@ -884,7 +935,9 @@ export function DreamInterpretation({ initialFeed }: { initialFeed: DreamFeed })
                   : statusFilter === "awaiting"
                     ? "Every dream has been interpreted. New dreams will appear here."
                     : "Dreams you interpret will move here."
-                : "Be the first to share a dream — only the interpreter will know it's you."}
+                : scope === "mine"
+                  ? "Dreams you share will appear here so you can track their interpretations."
+                  : "Be the first to share a dream — only the interpreter will know it's you."}
             </p>
             {!isAdmin && (
               <Button onClick={() => setComposerOpen(true)} className="mt-2 gap-2 rounded-full">
