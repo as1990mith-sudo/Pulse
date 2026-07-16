@@ -106,7 +106,7 @@ export function BookGridCard({ book, index = 0, href }: { book: Book; index?: nu
       </div>
       <div className="mt-2 flex flex-col gap-0.5">
         <Stars rating={book.rating} />
-        <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-foreground">{book.title}</h3>
+        <h3 className="truncate text-sm font-semibold leading-snug text-foreground">{book.title}</h3>
         <p className="truncate text-xs text-muted-foreground">{book.author}</p>
       </div>
     </Link>
