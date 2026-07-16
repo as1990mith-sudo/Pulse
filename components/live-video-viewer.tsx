@@ -195,6 +195,7 @@ export function LiveVideoViewer({
     toggleMic,
     toggleCam,
     flipCamera,
+    askUnmute,
     startAudioPlayback,
     disconnect,
   } = useLiveVideo({
@@ -401,9 +402,14 @@ export function LiveVideoViewer({
           <div className="min-h-0 flex-1">
             <MeetingGrid
               roomName={stream.roomName}
-              isHost={false}
               self={{ identity: currentUserId ?? "self", name: currentUser?.name ?? "You", image: currentUser?.image ?? null }}
               peers={peers}
+              currentUser={currentUser}
+              hostId={callState?.hostId ?? stream.hostId}
+              gridCohostId={callState?.gridCohostId ?? null}
+              gridPinnedId={callState?.gridPinnedId ?? null}
+              gridPinRequest={callState?.gridPinRequest ?? null}
+              onRefreshState={() => void refreshCalls()}
               localVideoRef={localVideoRef}
               registerPeerVideoEl={registerPeerVideoEl}
               micOn={micOn}
@@ -412,7 +418,7 @@ export function LiveVideoViewer({
               onToggleMic={() => void toggleMic()}
               onToggleCam={() => void toggleCam()}
               onFlipCamera={() => void flipCamera()}
-              onAskUnmute={() => {}}
+              onAskUnmute={(id) => void askUnmute(id)}
               onLeave={() => {
                 disconnect()
                 onExit?.()
