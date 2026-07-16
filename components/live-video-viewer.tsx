@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import useSWR from "swr"
 import {
+  Ban,
+  Check,
   Heart,
   Loader2,
   Maximize,
@@ -19,15 +21,17 @@ import {
   Video,
   VideoOff,
   Volume2,
+  X,
 } from "lucide-react"
 import type { CurrentUser } from "@/lib/session"
-import type { LiveStreamView } from "@/app/actions/live"
+import type { LiveStreamView, CallRequestView } from "@/app/actions/live"
 import {
   joinBroadcast,
   getCallState,
   sendLiveReaction,
   requestToJoin,
   removeFromStage,
+  respondToCallRequest,
 } from "@/app/actions/live"
 import { toggleFollow } from "@/app/actions/follow"
 import { useLiveVideo } from "@/lib/use-live-video"
@@ -164,6 +168,9 @@ export function LiveVideoViewer({
   const [error, setError] = useState<string | null>(null)
   const [ended, setEnded] = useState(false)
   const [hostEnded, setHostEnded] = useState(false)
+  const [blocked, setBlocked] = useState(false)
+  // A pending "come on stage" invite from the host (accept/decline in-session).
+  const [myInvite, setMyInvite] = useState<CallRequestView | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
   const [bursts, setBursts] = useState<Burst[]>([])
   const [requesting, setRequesting] = useState(false)
@@ -241,6 +248,35 @@ export function LiveVideoViewer({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callState?.ended])
+
+  // Host blocked this viewer: disconnect and show the removed splash.
+  useEffect(() => {
+    if (callState?.blocked) {
+      setBlocked(true)
+      disconnect()
+      setTimeout(() => onExit?.(), 2600)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [callState?.blocked])
+
+  // Surface a pending stage invite from the host.
+  useEffect(() => {
+    setMyInvite(callState?.myInvite ?? null)
+  }, [callState?.myInvite])
+
+  async function acceptInvite() {
+    if (!myInvite) return
+    await respondToCallRequest({ id: myInvite.id, accept: true }).catch(() => {})
+    setMyInvite(null)
+    refreshCalls()
+    // Publish permission elevation arrives via LiveKit; the hook enables cam/mic.
+  }
+  async function declineInvite() {
+    if (!myInvite) return
+    await respondToCallRequest({ id: myInvite.id, accept: false }).catch(() => {})
+    setMyInvite(null)
+    refreshCalls()
+  }
 
   async function requestJoin() {
     setRequesting(true)
@@ -350,6 +386,19 @@ export function LiveVideoViewer({
   // top with a solid scrolling comment feed below. Portrait keeps the original
   // full-bleed vertical stage with call-in slots.
   const landscape = stream.orientation === "landscape"
+
+  if (blocked) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 bg-neutral-950 px-6 text-center text-white">
+        <span className="flex size-12 items-center justify-center rounded-full bg-destructive/15 text-destructive ring-1 ring-inset ring-destructive/25">
+          <Ban className="size-6" />
+        </span>
+        <p className="text-lg font-semibold">Removed from live</p>
+        <p className="text-sm text-white/60">The host has removed you from this live. Taking you back to Live…</p>
+        <Loader2 className="size-4 animate-spin text-white/60" />
+      </div>
+    )
+  }
 
   if (hostEnded) {
     return (
@@ -551,6 +600,28 @@ export function LiveVideoViewer({
           <p className="absolute bottom-2 left-1/2 z-40 -translate-x-1/2 rounded-full bg-destructive px-4 py-1.5 text-sm font-medium text-destructive-foreground shadow-lg">
             {rtcError ?? error}
           </p>
+        )}
+
+        {/* Invite from the host to come on stage as a guest. */}
+        {myInvite && !canPublish && (
+          <div className="absolute inset-x-3 top-16 z-50 flex items-center justify-between gap-3 rounded-2xl border border-live/40 bg-live/15 px-3 py-2.5 shadow-lg backdrop-blur-md">
+            <p className="text-sm font-medium text-pretty text-white">The host invited you to join as a guest.</p>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                onClick={() => void acceptInvite()}
+                className="flex items-center gap-1 rounded-full bg-live px-3 py-1.5 text-xs font-semibold text-live-foreground"
+              >
+                <Check className="size-3.5" /> Join
+              </button>
+              <button
+                onClick={() => void declineInvite()}
+                aria-label="Decline invite"
+                className="flex size-7 items-center justify-center rounded-full bg-white/10 text-white/70 ring-1 ring-inset ring-white/15"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          </div>
         )}
 
         <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
