@@ -87,6 +87,31 @@ export function ReelsFeed({
   // Instagram. Start muted so autoplay is allowed by the browser.
   const [muted, setMuted] = useState(true)
 
+  // Which reel is centered. We "window" video loading around it: only the active
+  // clip and its immediate neighbours mount decoding <video> elements, so the
+  // browser never juggles dozens of simultaneous video decoders — the key to
+  // buttery-smooth snapping between reels. Off-window reels render nothing heavy.
+  const [activeIndex, setActiveIndex] = useState(0)
+  useEffect(() => {
+    const scroller = scrollerRef.current
+    if (!scroller) return
+    let raf = 0
+    const onScroll = () => {
+      if (raf) return
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        const h = scroller.clientHeight
+        if (!h) return
+        setActiveIndex(Math.round(scroller.scrollTop / h))
+      })
+    }
+    scroller.addEventListener("scroll", onScroll, { passive: true })
+    return () => {
+      scroller.removeEventListener("scroll", onScroll)
+      if (raf) cancelAnimationFrame(raf)
+    }
+  }, [])
+
   // Lock background scroll while the immersive overlay is open, and signal the
   // app to hide the bottom nav so the reel is a whole, edge-to-edge experience.
   useEffect(() => {
@@ -142,11 +167,12 @@ export function ReelsFeed({
             </p>
           </div>
         ) : (
-          visible.map((reel) => (
+          visible.map((reel, i) => (
             <ReelItem
               key={reel.key}
               reel={reel}
               root={scrollerRef}
+              near={Math.abs(i - activeIndex) <= 1}
               muted={muted}
               onToggleMute={() => setMuted((m) => !m)}
               onTooLong={() => markTooLong(reel.key)}
@@ -184,6 +210,7 @@ export function ReelsFeed({
 function ReelItem({
   reel,
   root,
+  near,
   muted,
   onToggleMute,
   onTooLong,
@@ -191,6 +218,9 @@ function ReelItem({
 }: {
   reel: Reel
   root: React.RefObject<HTMLDivElement | null>
+  /** True when this reel is the active clip or an immediate neighbour. Only then
+   *  do we mount the decoding <video> elements, so scrolling stays smooth. */
+  near: boolean
   muted: boolean
   onToggleMute: () => void
   onTooLong: () => void
@@ -274,6 +304,17 @@ function ReelItem({
     observer.observe(el)
     return () => observer.disconnect()
   }, [root, playVideo])
+
+  // When windowing mounts this reel's src just as it becomes the active clip,
+  // the IntersectionObserver may have already fired against an empty <video>.
+  // This re-attempts playback once both conditions hold so the clip never
+  // stalls on a blank frame after a fast scroll.
+  useEffect(() => {
+    if (active && near) {
+      playVideo(videoRef.current, mutedRef.current)
+      playVideo(backdropRef.current, true)
+    }
+  }, [active, near, playVideo])
 
   function togglePlay() {
     const v = videoRef.current
@@ -377,31 +418,33 @@ function ReelItem({
   return (
     <div
       ref={containerRef}
-      className="relative flex h-full w-full snap-start snap-always items-center justify-center overflow-hidden"
+      className="relative flex h-full w-full snap-start snap-always items-center justify-center overflow-hidden [contain:layout_paint]"
     >
       {/* Blurred backdrop: the same clip stretched to cover the frame so off-ratio
           videos fill edge-to-edge (no black bars, nothing "hanging"), while the
           real clip plays contained on top so no content is ever cropped. */}
-      <video
-        ref={backdropRef}
-        src={url}
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-2xl"
-        playsInline
-        loop
-        muted
-        preload="metadata"
-        tabIndex={-1}
-      />
+      {near && (
+        <video
+          ref={backdropRef}
+          src={url}
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-2xl"
+          playsInline
+          loop
+          muted
+          preload="metadata"
+          tabIndex={-1}
+        />
+      )}
       <div aria-hidden="true" className="absolute inset-0 bg-black/30" />
       <video
         ref={videoRef}
-        src={url}
+        src={near ? url : undefined}
         className="relative h-full w-full object-contain"
         playsInline
         loop
         muted={muted}
-        preload="metadata"
+        preload={near ? "auto" : "none"}
         onClick={togglePlay}
         onTimeUpdate={onTimeUpdate}
         onLoadedMetadata={(e) => {
