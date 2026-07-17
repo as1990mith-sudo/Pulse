@@ -470,8 +470,13 @@ export function StudioConsole({
         setError("Please add cover artwork before going live.")
         return
       }
+      // A category is mandatory — the host must pick one before going live.
+      if (!category) {
+        setError("Please choose a category before going live.")
+        return
+      }
       setStarting(true)
-      const res = await startBroadcast({ title, cover, visibility, category: category || undefined })
+      const res = await startBroadcast({ title, cover, visibility, category })
       setStarting(false)
       if (!res.ok) {
         setError(res.error)
@@ -622,8 +627,9 @@ export function StudioConsole({
               size="sm"
               variant="default"
               className="shrink-0 gap-1.5 rounded-full px-4 font-bold shadow-lg"
-              // Cover artwork is required before an audio session can go live.
-              disabled={starting || state.connecting || !cover}
+              // Cover artwork and a category are required before an audio
+              // session can go live.
+              disabled={starting || state.connecting || !cover || !category}
             >
               {starting || state.connecting ? (
                 <Loader2 className="size-4 animate-spin" />
@@ -646,10 +652,11 @@ export function StudioConsole({
           <div className="space-y-4 border-b border-white/[0.07] px-4 py-4 sm:px-6">
             <CoverUpload value={cover} onChange={setCover} label="Cover artwork (required)" />
 
-            {/* Category — optional topic tag chosen from a dropdown. */}
+            {/* Category — required. A live session must be tagged with one of
+                the known categories; there is no "Uncategorised" option. */}
             <div className="space-y-2">
               <label htmlFor="audio-live-category" className="text-sm font-medium text-white">
-                Category
+                Category <span className="text-primary">*</span>
               </label>
               <div className="relative">
                 <select
@@ -658,7 +665,9 @@ export function StudioConsole({
                   onChange={(e) => setCategory(e.target.value)}
                   className="w-full appearance-none rounded-xl bg-white/[0.04] px-4 py-2.5 pr-10 text-sm font-medium text-white ring-1 ring-inset ring-white/10 focus:outline-none focus:ring-primary [&>option]:bg-neutral-900 [&>option]:text-white"
                 >
-                  <option value="">Uncategorised</option>
+                  <option value="" disabled>
+                    Choose a category…
+                  </option>
                   {LIVE_CATEGORIES.map((c) => (
                     <option key={c} value={c}>
                       {c}

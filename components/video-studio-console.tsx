@@ -393,6 +393,11 @@ export function VideoStudioConsole({
 
   async function goLive() {
     setError(null)
+    // A category is mandatory — the host must pick one before going live.
+    if (!category) {
+      setError("Please choose a category before going live.")
+      return
+    }
     setStarting(true)
     try {
       const res = await startBroadcast({
@@ -400,7 +405,7 @@ export function VideoStudioConsole({
         mode: "video",
         orientation,
         visibility,
-        category: category || undefined,
+        category,
       })
       if (!res.ok) {
         setError(res.error)
@@ -901,11 +906,11 @@ export function VideoStudioConsole({
                 </div>
               </div>
 
-              {/* Category — native select styled as a dropdown so the host can
-                  tag the topic of their live. Optional; "Uncategorised" clears it. */}
+              {/* Category — required. The host must tag their live with one of
+                  the known categories; there is no "Uncategorised" option. */}
               <div className="space-y-1.5">
                 <label htmlFor="live-category" className="text-xs font-semibold uppercase tracking-wider text-white/60">
-                  Category
+                  Category <span className="text-primary">*</span>
                 </label>
                 <div className="relative">
                   <select
@@ -914,7 +919,9 @@ export function VideoStudioConsole({
                     onChange={(e) => setCategory(e.target.value)}
                     className="w-full appearance-none rounded-2xl bg-white/10 px-4 py-3 pr-10 text-base font-medium text-white ring-1 ring-inset ring-white/15 focus:outline-none focus:ring-primary [&>option]:bg-neutral-900 [&>option]:text-white"
                   >
-                    <option value="">Uncategorised</option>
+                    <option value="" disabled>
+                      Choose a category…
+                    </option>
                     {LIVE_CATEGORIES.map((c) => (
                       <option key={c} value={c}>
                         {c}
@@ -964,7 +971,7 @@ export function VideoStudioConsole({
               <button
                 type="button"
                 onClick={goLive}
-                disabled={starting}
+                disabled={starting || !category}
                 className="flex w-full items-center justify-center gap-2 rounded-2xl bg-live px-6 py-3.5 text-base font-semibold text-live-foreground transition-all hover:opacity-90 active:scale-[0.99] disabled:opacity-60"
               >
                 {starting ? <Loader2 className="size-5 animate-spin" /> : <Radio className="size-5" />}

@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { liveStream, liveChatMessage, liveCallRequest, liveReaction, livePresence, liveBlocked } from "@/lib/db/schema"
 import { getHandle, getAvatarColor, getInitials } from "@/lib/identity"
+import { LIVE_CATEGORIES } from "@/lib/live-categories"
 import {
   createAccessToken,
   isLiveKitConfigured,
@@ -105,6 +106,12 @@ export async function startBroadcast(input: {
     return { ok: false, error: "Live is not configured yet. Add your LiveKit credentials to start broadcasting." }
   }
   const mode: LiveMode = input.mode === "video" ? "video" : "audio"
+  // A category is mandatory for every live session — "Uncategorised" is not an
+  // option. It must be one of the known categories.
+  const category = input.category?.trim()
+  if (!category || !LIVE_CATEGORIES.includes(category as (typeof LIVE_CATEGORIES)[number])) {
+    return { ok: false, error: "Please choose a category before going live." }
+  }
   // Cover artwork is required for audio live sessions (there's no video feed to
   // represent the room, so the cover is what listeners see).
   if (mode === "audio" && !input.cover) {
@@ -130,7 +137,7 @@ export async function startBroadcast(input: {
     hostName: user.name,
     hostHandle: getHandle(user.name),
     title,
-    category: input.category?.trim() || null,
+    category,
     cover: input.cover ?? null,
     mode,
     orientation,
