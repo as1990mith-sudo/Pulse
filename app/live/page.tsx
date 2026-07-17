@@ -48,19 +48,19 @@ function ShowTypeCard({
   return (
     <Link
       href={href}
-      className="group relative flex flex-col justify-between gap-6 overflow-hidden rounded-2xl border border-border/60 bg-card p-6 transition-colors hover:border-border sm:p-7"
+      className="group relative flex flex-col justify-between gap-4 overflow-hidden rounded-2xl border border-border/60 bg-card p-4 transition-colors hover:border-border sm:gap-6 sm:p-7"
     >
       <div className="flex items-start justify-between gap-3">
-        <span className={`flex size-12 items-center justify-center rounded-xl ${accent}`}>
-          <Icon className="size-6" />
+        <span className={`flex size-10 items-center justify-center rounded-xl sm:size-12 ${accent}`}>
+          <Icon className="size-5 sm:size-6" />
         </span>
         {count > 0 && <LiveBadge />}
       </div>
       <div className="space-y-1.5">
-        <h3 className="text-xl font-bold tracking-tight">{label}</h3>
+        <h3 className="text-lg font-bold tracking-tight sm:text-xl">{label}</h3>
         <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
       </div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <span className="text-sm font-medium tabular-nums">
           <span className="text-2xl font-bold">{count}</span>{" "}
           <span className="text-muted-foreground">{count === 1 ? "show live" : "shows live"}</span>
@@ -103,8 +103,9 @@ export default async function LivePage() {
               </Link>
             </div>
 
-            {/* Two entry points into the browse experience — one per show type. */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-5">
+            {/* Two entry points into the browse experience — one per show type,
+                always side by side (even on phones). */}
+            <div className="grid grid-cols-2 gap-3 sm:gap-5">
               <ShowTypeCard
                 href="/live/browse?type=video"
                 label="Video shows"
