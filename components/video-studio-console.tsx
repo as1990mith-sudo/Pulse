@@ -14,6 +14,8 @@ import {
   MonitorPlay,
   Music,
   Pause,
+  Pin,
+  PinOff,
   Play,
   Radio,
   Smartphone,
@@ -41,6 +43,7 @@ import {
   respondToCallRequest,
   removeFromStage,
   setGuestsEnabled,
+  setSpotlightGuest,
   heartbeatBroadcast,
   type LiveStreamView,
   type LiveOrientation,
@@ -120,33 +123,68 @@ function GlassButton({
   )
 }
 
-/** A single guest call-in tile (accepted guest's camera) or an empty slot. */
-function GuestSlot({
+type PeerLike = { identity: string; name: string; image: string | null; hasVideo: boolean }
+
+// ── Call-in rail geometry (portrait focused broadcast) ─────────────────────
+// Two fixed-size call-in slots stacked top→bottom, overlaid on the RIGHT of the
+// host video. Sizes/positions are fixed (not flex) so the host's persistent
+// <video> can be absolutely positioned to overlap slot 1 exactly when a guest is
+// spotlighted — the host element must never remount or its local track detaches.
+const RAIL_SLOT = "h-32 w-24"
+const RAIL_SLOT_POS = [
+  "right-3 top-[calc(env(safe-area-inset-top)+4.5rem)]",
+  "right-3 top-[calc(env(safe-area-inset-top)+13rem)]",
+] as const
+
+/** An open call-in slot placeholder overlaid on the host video. */
+function RailOpenSlot({ posClass }: { posClass: string }) {
+  return (
+    <div
+      className={cn(
+        "absolute z-30 flex flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-white/25 bg-black/30 text-white/55 backdrop-blur-sm",
+        RAIL_SLOT,
+        posClass,
+      )}
+    >
+      <UserPlus className="size-5" />
+      <span className="px-1 text-center text-[10px] font-medium leading-tight">Open call-in slot</span>
+    </div>
+  )
+}
+
+/**
+ * A called-in guest's camera in a rail slot, with host controls to pin
+ * (spotlight) or remove the guest. When `pinned` the pin toggles back off.
+ */
+function RailGuestTile({
   peer,
+  posClass,
+  pinned,
   registerEl,
+  onTogglePin,
   onRemove,
 }: {
-  peer?: { identity: string; name: string; image: string | null; hasVideo: boolean }
+  peer: PeerLike
+  posClass: string
+  pinned: boolean
   registerEl: (identity: string, el: HTMLVideoElement | null) => void
-  onRemove?: (identity: string) => void
+  onTogglePin: (identity: string) => void
+  onRemove: (identity: string) => void
 }) {
-  if (!peer) {
-    return (
-      <div className="relative flex h-full flex-1 flex-col items-center justify-center gap-1.5 rounded-2xl border border-dashed border-white/15 bg-white/[0.03] text-white/40">
-        <UserPlus className="size-5" />
-        <span className="text-[11px] font-medium">Open call-in slot</span>
-      </div>
-    )
-  }
   return (
-    <div className="relative h-full flex-1 overflow-hidden rounded-2xl bg-neutral-900 ring-1 ring-inset ring-white/10">
+    <div
+      className={cn(
+        "absolute z-30 overflow-hidden rounded-2xl bg-neutral-900 ring-1 ring-inset ring-white/15",
+        RAIL_SLOT,
+        posClass,
+      )}
+    >
       <video
         ref={(el) => registerEl(peer.identity, el)}
         autoPlay
         playsInline
         muted
         className={cn(
-          // object-cover so the guest feed fills the slot with no black bars.
           "h-full w-full object-cover transition-opacity duration-300",
           peer.hasVideo ? "opacity-100" : "opacity-0",
         )}
@@ -155,7 +193,7 @@ function GuestSlot({
         <div className="absolute inset-0 flex items-center justify-center">
           <span
             className={cn(
-              "flex size-12 items-center justify-center rounded-full text-sm font-semibold text-white",
+              "flex size-11 items-center justify-center rounded-full text-sm font-semibold text-white",
               getAvatarColor(peer.identity),
             )}
           >
@@ -163,18 +201,31 @@ function GuestSlot({
           </span>
         </div>
       )}
-      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
-        <span className="truncate text-[11px] font-semibold text-white">{peer.name}</span>
-        {onRemove && (
-          <button
-            type="button"
-            onClick={() => onRemove(peer.identity)}
-            aria-label={`Remove ${peer.name}`}
-            className="flex size-5 shrink-0 items-center justify-center rounded-full bg-black/50 text-white/90 transition-colors hover:bg-destructive"
-          >
-            <X className="size-3" />
-          </button>
-        )}
+      {/* Host controls: pin/unpin (spotlight) + remove */}
+      <div className="absolute inset-x-0 top-0 flex items-center justify-between p-1">
+        <button
+          type="button"
+          onClick={() => onTogglePin(peer.identity)}
+          aria-label={pinned ? `Unpin ${peer.name}` : `Pin ${peer.name} to the main view`}
+          aria-pressed={pinned}
+          className={cn(
+            "flex size-6 items-center justify-center rounded-full backdrop-blur-md transition-colors",
+            pinned ? "bg-primary text-primary-foreground" : "bg-black/50 text-white/90 hover:bg-black/70",
+          )}
+        >
+          {pinned ? <PinOff className="size-3" /> : <Pin className="size-3" />}
+        </button>
+        <button
+          type="button"
+          onClick={() => onRemove(peer.identity)}
+          aria-label={`Remove ${peer.name}`}
+          className="flex size-6 items-center justify-center rounded-full bg-black/50 text-white/90 backdrop-blur-md transition-colors hover:bg-destructive"
+        >
+          <X className="size-3" />
+        </button>
+      </div>
+      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
+        <span className="block truncate text-[11px] font-semibold text-white">{peer.name}</span>
       </div>
     </div>
   )

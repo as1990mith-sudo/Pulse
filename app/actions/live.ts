@@ -968,6 +968,34 @@ export async function respondGridPin(input: {
   return { ok: true }
 }
 
+/**
+ * Focused (portrait) broadcast spotlight. Unlike the grid pin, this applies
+ * immediately with no accept flow: the host taps to spotlight a called-in guest
+ * so the guest's video fills the big frame and the host drops to a small slot.
+ * A single guest is spotlighted at a time; passing the currently-pinned guest
+ * (or null) clears it. Reuses the `gridPinnedId` column (portrait broadcasts
+ * never run the grid, so there's no conflict) and is broadcast to everyone via
+ * getCallState so viewers see the same swap.
+ */
+export async function setSpotlightGuest(input: {
+  roomName: string
+  userId: string | null
+}): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser()
+  const { isController } = await getGridControl(input.roomName, user.id)
+  if (!isController) return { ok: false, error: "Only the host can spotlight a guest." }
+  const [stream] = await db
+    .select({ gridPinnedId: liveStream.gridPinnedId })
+    .from(liveStream)
+    .where(eq(liveStream.roomName, input.roomName))
+  const current = parseGridPins(stream?.gridPinnedId)[0] ?? null
+  // Toggle off when re-tapping the pinned guest (or an explicit null); otherwise
+  // spotlight the given guest, replacing any previous one.
+  const next = !input.userId || current === input.userId ? null : input.userId
+  await db.update(liveStream).set({ gridPinnedId: next }).where(eq(liveStream.roomName, input.roomName))
+  return { ok: true }
+}
+
 /** Host accepts a pending request (or listener accepts an invite is handled separately). */
 export async function respondToCallRequest(input: {
   id: number
@@ -1018,6 +1046,19 @@ export async function removeFromStage(input: { roomName: string; userId: string 
         eq(liveCallRequest.status, "accepted"),
       ),
     )
+  // If this guest was the focused-broadcast spotlight (or a grid pin), drop the
+  // pin so the layout falls back cleanly to the host in the big frame.
+  const [pinRow] = await db
+    .select({ gridPinnedId: liveStream.gridPinnedId })
+    .from(liveStream)
+    .where(eq(liveStream.roomName, input.roomName))
+  const remainingPins = parseGridPins(pinRow?.gridPinnedId).filter((id) => id !== input.userId)
+  if ((pinRow?.gridPinnedId ?? null) !== serializeGridPins(remainingPins)) {
+    await db
+      .update(liveStream)
+      .set({ gridPinnedId: serializeGridPins(remainingPins) })
+      .where(eq(liveStream.roomName, input.roomName))
+  }
 }
 
 /**
@@ -1504,7 +1545,12 @@ export async function setRoomLock(input: { roomName: string; locked: boolean }):
 export async function setGuestsEnabled(input: { roomName: string; enabled: boolean }): Promise<{ ok: boolean }> {
   const user = await requireUser()
   if ((await getHostId(input.roomName)) !== user.id) throw new Error("Only the host can change guest settings.")
-  await db.update(liveStream).set({ guestsEnabled: input.enabled }).where(eq(liveStream.roomName, input.roomName))
+  // Turning call-ins off also clears any focused-broadcast spotlight so the host
+  // returns to the big frame.
+  await db
+    .update(liveStream)
+    .set({ guestsEnabled: input.enabled, ...(input.enabled ? {} : { gridPinnedId: null }) })
+    .where(eq(liveStream.roomName, input.roomName))
   return { ok: true }
 }
 
