@@ -583,7 +583,38 @@ export function VideoStudioConsole({
           hidden self-view <video> in the layout underneath stays mounted, so
           MeetingGrid renders its own tile <video> instead. */}
       {live && isGridMeeting && (
-        <div className="absolute inset-0 z-40">
+        <div className="absolute inset-0 z-40 flex flex-col bg-neutral-950">
+          {/* Video Live header — kept visible on the host's grid too. */}
+          <div className="flex items-center justify-between gap-2 bg-neutral-900 px-3 py-2 pt-[calc(env(safe-area-inset-top)+0.5rem)]">
+            <BackExitMenu
+              showMenu
+              exitLabel="End"
+              onExit={() => setEndConfirmOpen(true)}
+              onMinimize={onMinimize ?? (() => {})}
+            />
+            <div className="flex min-w-0 flex-1 flex-col px-1 leading-tight">
+              <span className="truncate text-sm font-semibold">{title}</span>
+              <span className="truncate text-[11px] text-white/60">You&apos;re live · meeting</span>
+            </div>
+            <span className="flex items-center gap-1.5 rounded-full bg-live px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-live-foreground">
+              <span className="relative flex size-2">
+                <span className="absolute inline-flex size-full animate-ping rounded-full bg-live-foreground/70" />
+                <span className="relative inline-flex size-2 rounded-full bg-live-foreground" />
+              </span>
+              Live
+            </span>
+            <LiveAudienceSheet
+              count={audienceCount || viewers}
+              members={audienceMembers}
+              immersive
+              className="px-3 py-1.5 text-xs font-medium"
+              isHost
+              roomName={roomName ?? undefined}
+              blockedUsers={callState?.blockedUsers ?? []}
+              onChanged={() => void refreshCalls()}
+            />
+          </div>
+          <div className="min-h-0 flex-1">
           <MeetingGrid
             roomName={roomName as string}
             self={{ identity: currentUser.id, name: currentUser.name, image: currentUser.image ?? null }}
@@ -606,6 +637,7 @@ export function VideoStudioConsole({
             onAddTrack={() => setMusicPanelOpen(true)}
             onLeave={() => setEndConfirmOpen(true)}
           />
+          </div>
         </div>
       )}
       {/* ── Host camera (1.75/4 of the screen; grows to 2.125 when the guest
