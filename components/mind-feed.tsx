@@ -6,7 +6,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
   Heart,
-  MessageCircle,
+  MessageCircleMore,
   Plus,
   X,
   Send,
@@ -1362,7 +1362,7 @@ export function PostCard({
           )}
           aria-label="Toggle comments"
         >
-          <MessageCircle className={cn(feed ? "size-7" : "size-6")} />
+          <MessageCircleMore className={cn(feed ? "size-7" : "size-6")} />
           {post.comments.length > 0 && <span>{post.comments.length}</span>}
         </button>
 
