@@ -32,7 +32,7 @@ import {
   respondToCallRequest,
 } from "@/app/actions/live"
 import { toggleFollow } from "@/app/actions/follow"
-import { useLiveVideo } from "@/lib/use-live-video"
+import { useLiveVideo, type RemotePeer } from "@/lib/use-live-video"
 import { useLivePresence } from "@/lib/use-live-presence"
 import { ReactionLayer, ReactionPicker } from "@/components/live-reactions"
 import { LiveChat } from "@/components/live-chat"
@@ -87,31 +87,40 @@ function InlineFollowButton({
   )
 }
 
-/** A guest call-in tile or an empty placeholder slot. */
-function SlotTile({
+// ── Call-in rail geometry (portrait focused broadcast) ─────────────────────
+// Two fixed-size call-in slots stacked top→bottom, overlaid on the RIGHT of the
+// host video. Fixed sizes/positions so the viewer's own persistent self <video>
+// can be absolutely positioned to overlap a slot without remounting.
+const RAIL_SLOT = "h-32 w-24"
+const RAIL_SLOT_POS = [
+  "right-3 top-[calc(env(safe-area-inset-top)+4.5rem)]",
+  "right-3 top-[calc(env(safe-area-inset-top)+13rem)]",
+] as const
+
+/** A called-in guest's camera in a rail slot (view-only, no host controls). */
+function RailGuestView({
   peer,
+  posClass,
   registerEl,
 }: {
-  peer?: { identity: string; name: string; image: string | null; hasVideo: boolean }
+  peer: { identity: string; name: string; image: string | null; hasVideo: boolean }
+  posClass: string
   registerEl: (identity: string, el: HTMLVideoElement | null) => void
 }) {
-  if (!peer) {
-    return (
-      <div className="relative flex h-full flex-1 flex-col items-center justify-center gap-1.5 rounded-2xl border border-dashed border-white/15 bg-white/[0.03] text-white/40">
-        <UserPlus className="size-5" />
-        <span className="text-[11px] font-medium">Open call-in slot</span>
-      </div>
-    )
-  }
   return (
-    <div className="relative h-full flex-1 overflow-hidden rounded-2xl bg-neutral-900 ring-1 ring-inset ring-white/10">
+    <div
+      className={cn(
+        "absolute z-30 overflow-hidden rounded-2xl bg-neutral-900 ring-1 ring-inset ring-white/15",
+        RAIL_SLOT,
+        posClass,
+      )}
+    >
       <video
         ref={(el) => registerEl(peer.identity, el)}
         autoPlay
         playsInline
         muted
         className={cn(
-          // object-cover so the guest feed fills the tile with no black bars.
           "h-full w-full object-cover transition-opacity duration-300",
           peer.hasVideo ? "opacity-100" : "opacity-0",
         )}
@@ -120,7 +129,7 @@ function SlotTile({
         <div className="absolute inset-0 flex items-center justify-center">
           <span
             className={cn(
-              "flex size-12 items-center justify-center rounded-full text-sm font-semibold text-white",
+              "flex size-11 items-center justify-center rounded-full text-sm font-semibold text-white",
               getAvatarColor(peer.identity),
             )}
           >
@@ -129,7 +138,7 @@ function SlotTile({
         </div>
       )}
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
-        <span className="truncate text-[11px] font-semibold text-white">{peer.name}</span>
+        <span className="block truncate text-[11px] font-semibold text-white">{peer.name}</span>
       </div>
     </div>
   )
@@ -332,16 +341,31 @@ export function LiveVideoViewer({
 
   const hostPeer = peers.find((p) => p.isHost)
   const guestPeers = peers.filter((p) => !p.isHost)
-  // Build the two call-in tiles: this viewer's own self-view (if promoted) plus
-  // the other guests.
-  const slots: ({ self: true } | { self: false; peer: (typeof guestPeers)[number] })[] = []
-  if (canPublish) slots.push({ self: true })
-  guestPeers.forEach((p) => slots.push({ self: false, peer: p }))
   const viewers = Math.max(0, participants - 1 - peers.length)
   // Presence-backed audience (real names + avatars) for the "who's here" sheet.
   const { count: presenceCount, members: presenceMembers } = useLivePresence(stream.roomName, canWatch)
   const isSelf = currentUserId === stream.hostId
   const remoteVideoOn = Boolean(hostPeer?.hasVideo)
+
+  // ── Focused-broadcast spotlight (mirrors the host console) ────────────────
+  // The host can spotlight one called-in guest: that guest fills the big frame
+  // and the host drops into the top call-in slot. Everyone sees the same swap.
+  const spotlightId = (callState?.gridPinnedIds ?? [])[0] ?? null
+  const spotlightPeer = spotlightId ? guestPeers.find((p) => p.identity === spotlightId) ?? null : null
+  const spotlightIsSelf = !!spotlightId && spotlightId === currentUserId && canPublish
+  const hasSpotlight = !!spotlightPeer || spotlightIsSelf
+  // Whether the big frame currently has a live video (drives the connecting/off
+  // overlays): the spotlighted guest, my own cam, or the host by default.
+  const bigVideoOn = spotlightPeer ? spotlightPeer.hasVideo : spotlightIsSelf ? camOn : remoteVideoOn
+  // Right-side rail occupants (max 2): host first when spotlighting, then me
+  // (if promoted and not the spotlight), then any other called-in guests.
+  const railOccupants: ({ kind: "self" } | { kind: "host" } | { kind: "guest"; peer: RemotePeer })[] = []
+  if (hasSpotlight) railOccupants.push({ kind: "host" })
+  if (canPublish && !spotlightIsSelf) railOccupants.push({ kind: "self" })
+  guestPeers
+    .filter((p) => p.identity !== spotlightPeer?.identity)
+    .forEach((p) => railOccupants.push({ kind: "guest", peer: p }))
+  const selfRailIndex = railOccupants.findIndex((o) => o.kind === "self")
 
   if (blocked) {
     return (
@@ -437,7 +461,7 @@ export function LiveVideoViewer({
               currentUser={currentUser}
               hostId={callState?.hostId ?? stream.hostId}
               gridCohostId={callState?.gridCohostId ?? null}
-              gridPinnedId={callState?.gridPinnedId ?? null}
+              gridPinnedIds={callState?.gridPinnedIds ?? []}
               gridPinRequest={callState?.gridPinRequest ?? null}
               onRefreshState={() => void refreshCalls()}
               localVideoRef={localVideoRef}
@@ -504,24 +528,39 @@ export function LiveVideoViewer({
 
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-neutral-950 text-white [isolation:isolate]">
-      {/* ── Host camera (1.75/4 of the screen; grows to 2.125 when the host has
-          turned off the guest call-in section) ───────────────────────────── */}
-      <div className={cn("relative min-h-0 overflow-hidden", guestsEnabled ? "flex-[1.75]" : "flex-[2.125]")}>
+      {/* ── Host camera — the full stage above the chatroom. Called-in guests
+          overlay on the right; a spotlighted guest swaps into this frame and the
+          host drops to the top call-in slot. ─────────────────────────────── */}
+      <div className="relative min-h-0 flex-[2.5] overflow-hidden">
         <div className="absolute inset-0" onClick={handleTapHeart}>
-          {hostPeer ? (
+          {/* Big frame: the host by default, or a spotlighted remote guest. (My
+              own self-view, when spotlighted, is the persistent element below.) */}
+          {!hasSpotlight && hostPeer ? (
             <video
+              key={`big-host-${hostPeer.identity}`}
               ref={(el) => registerPeerVideoEl(hostPeer.identity, el)}
               autoPlay
               playsInline
               className={cn(
-                // object-cover so the portrait feed fills the frame with no
-                // black bars on the sides.
                 "h-full w-full object-cover transition-opacity duration-500",
                 remoteVideoOn ? "opacity-100" : "opacity-0",
               )}
             />
           ) : null}
-          {!remoteVideoOn && (
+          {spotlightPeer ? (
+            <video
+              key={`big-guest-${spotlightPeer.identity}`}
+              ref={(el) => registerPeerVideoEl(spotlightPeer.identity, el)}
+              autoPlay
+              playsInline
+              muted
+              className={cn(
+                "h-full w-full object-cover transition-opacity duration-500",
+                spotlightPeer.hasVideo ? "opacity-100" : "opacity-0",
+              )}
+            />
+          ) : null}
+          {!bigVideoOn && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/70">
               {stream.cover && (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -532,10 +571,24 @@ export function LiveVideoViewer({
                   className="absolute inset-0 size-full scale-110 object-cover opacity-20 blur-2xl"
                 />
               )}
-              <Loader2 className="relative size-7 animate-spin" />
-              <p className="relative text-sm font-medium">
-                {ended ? error ?? "This stream has ended." : "Connecting to the live…"}
-              </p>
+              {hasSpotlight ? (
+                // Spotlighted person's camera is off — show their avatar.
+                <span
+                  className={cn(
+                    "relative flex size-20 items-center justify-center rounded-full text-2xl font-semibold text-white",
+                    getAvatarColor(spotlightPeer?.identity ?? currentUserId ?? "self"),
+                  )}
+                >
+                  {getInitials(spotlightPeer?.name ?? currentUser?.name ?? "You")}
+                </span>
+              ) : (
+                <>
+                  <Loader2 className="relative size-7 animate-spin" />
+                  <p className="relative text-sm font-medium">
+                    {ended ? error ?? "This stream has ended." : "Connecting to the live…"}
+                  </p>
+                </>
+              )}
             </div>
           )}
           {bursts.map((b) => (
@@ -625,8 +678,9 @@ export function LiveVideoViewer({
           </button>
         )}
 
-        {/* Right action rail */}
-        <div className="absolute bottom-3 right-3 z-20 flex flex-col items-center gap-3">
+        {/* Action rail — anchored bottom-LEFT so it never collides with the
+            call-in rail overlaid on the right. */}
+        <div className="absolute bottom-3 left-3 z-20 flex flex-col items-center gap-3">
           {canPublish ? (
             // Promoted guest controls
             <>
@@ -701,92 +755,153 @@ export function LiveVideoViewer({
           )}
         </div>
 
-      </div>
-
-      {/* ── Two call-in slots (0.75/4 of the screen) ───────────────────────── */}
-      {/* Occupied slots fill left → right, so the left-most empty slot is the
-          next one a viewer can claim by tapping it to request the call-in.
-          Hidden entirely when the host turns off the guest section. */}
-      {guestsEnabled && (
-      <div className="flex flex-[0.75] min-h-0 gap-2 border-t border-white/10 bg-neutral-950 p-2">
-        {[0, 1].map((i) => {
-          const slot = slots[i]
-          if (slot?.self) {
-            return (
-              <div
-                key="self"
-                className="relative h-full flex-1 overflow-hidden rounded-2xl bg-neutral-900 ring-2 ring-inset ring-live"
-              >
-                <video
-                  ref={localVideoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className={cn(
-          // object-cover fills the tile; -scale-x keeps the self-view mirrored.
-          "h-full w-full -scale-x-100 object-cover transition-opacity duration-300",
-          camOn ? "opacity-100" : "opacity-0",
-                  )}
-                />
-                {!camOn && (
-                  <div className="absolute inset-0 flex items-center justify-center text-white/50">
-                    <VideoOff className="size-6" />
+        {/* ── Call-in rail (overlaid on the right of the video) ───────────────
+            Up to two vertical slots stacked top→bottom. When someone is
+            spotlighted the host occupies the top slot. Occupied slots fill
+            top→bottom; the first empty slot is the viewer's tap-to-call-in
+            target. My own self-view uses the persistent localVideoRef element
+            (positioned into its slot) so my camera never detaches on a swap. */}
+        {guestsEnabled && (
+          <>
+            {[0, 1].map((i) => {
+              const posClass = RAIL_SLOT_POS[i]
+              const occ = railOccupants[i]
+              // My own self-view slot — persistent element, never remounted.
+              if (i === selfRailIndex) {
+                return (
+                  <div
+                    key="self"
+                    className={cn(
+                      "absolute z-30 overflow-hidden rounded-2xl bg-neutral-900 ring-2 ring-inset ring-live",
+                      RAIL_SLOT,
+                      posClass,
+                    )}
+                  >
+                    <video
+                      ref={localVideoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className={cn(
+                        "h-full w-full -scale-x-100 object-cover transition-opacity duration-300",
+                        camOn ? "opacity-100" : "opacity-0",
+                      )}
+                    />
+                    {!camOn && (
+                      <div className="absolute inset-0 flex items-center justify-center text-white/50">
+                        <VideoOff className="size-6" />
+                      </div>
+                    )}
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
+                      <span className="text-[11px] font-semibold text-white">You</span>
+                    </div>
                   </div>
-                )}
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
-                  <span className="text-[11px] font-semibold text-white">You</span>
-                </div>
-              </div>
-            )
-          }
-          if (slot && !slot.self) {
-            return <SlotTile key={i} peer={slot.peer} registerEl={registerPeerVideoEl} />
-          }
-          // Empty slot. Only the left-most empty slot is the active call-in
-          // target; further slots stay passive until it's filled.
-          const isNextOpen = i === slots.length
-          if (canWatch && !canPublish && isNextOpen) {
-            if (myStatus === "pending") {
-              return (
-                <div
-                  key={i}
-                  className="relative flex h-full flex-1 flex-col items-center justify-center gap-1.5 rounded-2xl border border-dashed border-live/50 bg-live/10 text-live-foreground"
-                >
-                  <Loader2 className="size-5 animate-spin text-white/80" />
-                  <span className="px-2 text-center text-[11px] font-medium text-white/80">
-                    Waiting for the host…
-                  </span>
-                </div>
-              )
-            }
-            return (
-              <button
-                key={i}
-                type="button"
-                onClick={requestJoin}
-                disabled={requesting || locked}
-                aria-label="Tap to call in"
-                className="relative flex h-full flex-1 flex-col items-center justify-center gap-1.5 rounded-2xl border border-dashed border-white/25 bg-white/[0.04] text-white/70 transition-colors hover:border-live/60 hover:bg-live/10 hover:text-white active:scale-[0.98] disabled:opacity-60"
-              >
-                {requesting ? <Loader2 className="size-5 animate-spin" /> : <UserPlus className="size-5" />}
-                <span className="px-2 text-center text-[11px] font-semibold">
-                  {locked ? "Call-ins paused" : "Tap to call in"}
-                </span>
-              </button>
-            )
-          }
-          return <SlotTile key={i} registerEl={registerPeerVideoEl} />
-        })}
-      </div>
-      )}
-
-      {/* ── Live chatroom (1.5/4; grows to 1.875 when the guest section is off) ── */}
-      <div
-        className={cn(
-          "min-h-0 border-t border-white/10 bg-neutral-950",
-          guestsEnabled ? "flex-[1.5]" : "flex-[1.875]",
+                )
+              }
+              // The host's small slot (only when a guest is spotlighted).
+              if (occ?.kind === "host") {
+                return (
+                  <div
+                    key="host"
+                    className={cn(
+                      "absolute z-30 overflow-hidden rounded-2xl bg-neutral-900 ring-1 ring-inset ring-white/15",
+                      RAIL_SLOT,
+                      posClass,
+                    )}
+                  >
+                    {hostPeer ? (
+                      <video
+                        key={`rail-host-${hostPeer.identity}`}
+                        ref={(el) => registerPeerVideoEl(hostPeer.identity, el)}
+                        autoPlay
+                        playsInline
+                        muted
+                        className={cn(
+                          "h-full w-full object-cover transition-opacity duration-300",
+                          remoteVideoOn ? "opacity-100" : "opacity-0",
+                        )}
+                      />
+                    ) : null}
+                    {!remoteVideoOn && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span
+                          className={cn(
+                            "flex size-11 items-center justify-center rounded-full text-sm font-semibold text-white",
+                            getAvatarColor(stream.hostId),
+                          )}
+                        >
+                          {getInitials(stream.hostName)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
+                      <span className="block truncate text-[11px] font-semibold text-white">
+                        {stream.hostName}
+                      </span>
+                    </div>
+                  </div>
+                )
+              }
+              // Another called-in guest.
+              if (occ?.kind === "guest") {
+                return (
+                  <RailGuestView
+                    key={occ.peer.identity}
+                    peer={occ.peer}
+                    posClass={posClass}
+                    registerEl={registerPeerVideoEl}
+                  />
+                )
+              }
+              // Empty slot — the first empty one is the tap-to-call-in target.
+              const isNextOpen = i === railOccupants.length
+              if (canWatch && !canPublish && isNextOpen) {
+                if (myStatus === "pending") {
+                  return (
+                    <div
+                      key={`open-${i}`}
+                      className={cn(
+                        "absolute z-30 flex flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-live/50 bg-live/10 backdrop-blur-sm",
+                        RAIL_SLOT,
+                        posClass,
+                      )}
+                    >
+                      <Loader2 className="size-5 animate-spin text-white/80" />
+                      <span className="px-1 text-center text-[10px] font-medium leading-tight text-white/80">
+                        Waiting for the host…
+                      </span>
+                    </div>
+                  )
+                }
+                return (
+                  <button
+                    key={`open-${i}`}
+                    type="button"
+                    onClick={requestJoin}
+                    disabled={requesting || locked}
+                    aria-label="Tap to call in"
+                    className={cn(
+                      "absolute z-30 flex flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-white/25 bg-black/30 text-white/70 backdrop-blur-sm transition-colors hover:border-live/60 hover:bg-live/15 hover:text-white active:scale-[0.98] disabled:opacity-60",
+                      RAIL_SLOT,
+                      posClass,
+                    )}
+                  >
+                    {requesting ? <Loader2 className="size-5 animate-spin" /> : <UserPlus className="size-5" />}
+                    <span className="px-1 text-center text-[10px] font-semibold leading-tight">
+                      {locked ? "Call-ins paused" : "Tap to call in"}
+                    </span>
+                  </button>
+                )
+              }
+              return null
+            })}
+          </>
         )}
-      >
+      </div>
+
+      {/* ── Live chatroom. Call-in guests overlay the video above, so the chat
+          keeps a constant share of the screen. ─────────────────────────────── */}
+      <div className="min-h-0 flex-[1.5] border-t border-white/10 bg-neutral-950">
         {canWatch ? (
           <LiveChat currentUser={currentUser} roomName={stream.roomName} immersive />
         ) : (

@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Mic, MessageSquare, Repeat2, ArrowLeft, Plus, Info } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { Mic, Images, AlignLeft, ArrowLeft, Plus, Info } from "lucide-react"
 import type { Show } from "@/lib/data"
 import type { FeedPostView } from "@/app/actions/feed"
 import type { CurrentUser } from "@/lib/session"
@@ -15,35 +15,45 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
-type TabKey = "posts" | "reposts" | "catalogue"
+type TabKey = "media" | "text" | "catalogue"
 
 export function ProfileTabs({
   name,
   isSelf,
   episodes,
   posts,
-  reposts,
   currentUser,
 }: {
   name: string
   isSelf: boolean
   episodes: Show[]
   posts: FeedPostView[]
-  reposts: FeedPostView[]
   currentUser: CurrentUser | null
 }) {
-  // Tab order: Posts, Reposts, Catalogue. Saved bookmarks now live on their own
-  // page reached from the side menu.
+  // Split posts into two feeds: media posts (an image or video attached) and
+  // text-only posts (no media). Reposts are no longer a thing.
+  const { mediaPosts, textPosts } = useMemo(() => {
+    const mediaPosts: FeedPostView[] = []
+    const textPosts: FeedPostView[] = []
+    for (const p of posts) {
+      if (p.media.length > 0) mediaPosts.push(p)
+      else textPosts.push(p)
+    }
+    return { mediaPosts, textPosts }
+  }, [posts])
+
+  // Tab order: Media posts, Text posts, Catalogue. Saved bookmarks live on their
+  // own page reached from the side menu.
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; count: number }[] = [
-    { key: "posts", label: "Posts", icon: <MessageSquare className="size-4" />, count: posts.length },
-    { key: "reposts", label: "Reposts", icon: <Repeat2 className="size-4" />, count: reposts.length },
+    { key: "media", label: "Media", icon: <Images className="size-4" />, count: mediaPosts.length },
+    { key: "text", label: "Text", icon: <AlignLeft className="size-4" />, count: textPosts.length },
     { key: "catalogue", label: "Catalogue", icon: <Mic className="size-4" />, count: episodes.length },
   ]
 
-  const [tab, setTab] = useState<TabKey>("posts")
+  const [tab, setTab] = useState<TabKey>("media")
   // The tab the user was on before opening Catalogue, so the back arrow can
   // return them exactly where they were.
-  const [prevTab, setPrevTab] = useState<TabKey>("posts")
+  const [prevTab, setPrevTab] = useState<TabKey>("media")
   // Whether the inline upload form is open (triggered from the header + button).
   const [uploadOpen, setUploadOpen] = useState(false)
   const catalogueOpen = tab === "catalogue"
@@ -98,32 +108,32 @@ export function ProfileTabs({
       {/* Content with a smooth fade/slide transition between tabs. Catalogue is
           rendered separately as a full-screen overlay below. */}
       <div key={tab} className="animate-in fade-in slide-in-from-bottom-1 duration-300 pt-4">
-        {tab === "catalogue" ? null : tab === "reposts" ? (
-          reposts.length === 0 ? (
+        {tab === "catalogue" ? null : tab === "text" ? (
+          textPosts.length === 0 ? (
             <EmptyState
-              icon={<Repeat2 className="size-6" />}
-              title="No reposts yet"
+              icon={<AlignLeft className="size-6" />}
+              title="No text posts yet"
               message={
                 isSelf
-                  ? "Reposts you make from the feed will show up here for your followers to discover."
-                  : `${name} hasn't reposted anything yet.`
+                  ? "Text-only posts you share from the Post tab will show up here."
+                  : `${name} hasn't shared any text posts yet.`
               }
             />
           ) : (
-            <ProfilePostsGrid posts={reposts} currentUser={currentUser} />
+            <ProfilePostsGrid posts={textPosts} currentUser={currentUser} />
           )
-        ) : posts.length === 0 ? (
+        ) : mediaPosts.length === 0 ? (
           <EmptyState
-            icon={<MessageSquare className="size-6" />}
-            title="No posts yet"
+            icon={<Images className="size-6" />}
+            title="No media posts yet"
             message={
               isSelf
-                ? "Share what's on your mind from the Post tab and your posts will show up here."
-                : `${name} hasn't posted anything yet.`
+                ? "Posts with a photo or video will show up here."
+                : `${name} hasn't shared any photos or videos yet.`
             }
           />
         ) : (
-          <ProfilePostsGrid posts={posts} currentUser={currentUser} />
+          <ProfilePostsGrid posts={mediaPosts} currentUser={currentUser} />
         )}
       </div>
 

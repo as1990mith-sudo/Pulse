@@ -227,6 +227,11 @@ function AdMeta({ a }: { a: AnnouncementView }) {
           <MapPin className="size-3.5" /> {a.location}
         </span>
       )}
+      {/* Free vs ticketed entry. A null price means the event is free. */}
+      <span className="flex items-center gap-1.5 font-semibold text-foreground">
+        <Tag className="size-3.5 text-primary" />
+        {a.price ? `$${a.price}` : "Free"}
+      </span>
     </div>
   )
 }
@@ -567,6 +572,9 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
   const [location, setLocation] = useState("")
   const [eventDate, setEventDate] = useState("")
   const [eventTime, setEventTime] = useState("")
+  // Whether an event is free to attend or ticketed. `price` holds the ticket
+  // amount when paid (and doubles as the product price for product adverts).
+  const [eventPricing, setEventPricing] = useState<"free" | "paid">("free")
   const [price, setPrice] = useState("")
   const [durationHours, setDurationHours] = useState(AD_BLOCK_HOURS)
   const [flyer, setFlyer] = useState<string | null>(null)
@@ -607,9 +615,15 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
       if (!eventDate) return setError("Please pick an event date.")
       if (!eventTime) return setError("Please pick an event time.")
       if (!location.trim()) return setError("Please add the event venue.")
+      if (eventPricing === "paid" && !price.trim()) {
+        return setError("Please add the ticket price, or mark the event as free.")
+      }
     } else if (!price.trim()) {
       return setError("Please add the product price.")
     }
+    // Events: send the ticket price only when paid (free → null). Products
+    // always send their price.
+    const submittedPrice = isEvent ? (eventPricing === "paid" ? price : null) : price
     startTransition(async () => {
       try {
         const res = await createAnnouncement({
@@ -620,7 +634,7 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
           location: isEvent ? location : null,
           eventDate: isEvent ? eventDate : null,
           eventTime: isEvent ? eventTime : null,
-          price: isEvent ? null : price,
+          price: submittedPrice,
           durationHours,
         })
         setResult(res)
@@ -801,6 +815,55 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
                     onChange={(e) => setLocation(e.target.value)}
                     placeholder="e.g. Online, or 123 Main St"
                   />
+                </div>
+
+                {/* Free vs paid entry. Paid reveals a ticket-price field. */}
+                <div className="space-y-2">
+                  <span className="text-sm font-medium">Entry</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEventPricing("free")}
+                      aria-pressed={eventPricing === "free"}
+                      className={cn(
+                        "flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors",
+                        eventPricing === "free"
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border text-muted-foreground hover:bg-secondary",
+                      )}
+                    >
+                      <Check className="size-4" /> Free
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEventPricing("paid")}
+                      aria-pressed={eventPricing === "paid"}
+                      className={cn(
+                        "flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors",
+                        eventPricing === "paid"
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border text-muted-foreground hover:bg-secondary",
+                      )}
+                    >
+                      <Tag className="size-4" /> Paid
+                    </button>
+                  </div>
+                  {eventPricing === "paid" && (
+                    <div className="relative">
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">
+                        $
+                      </span>
+                      <Input
+                        inputMode="decimal"
+                        value={price}
+                        onChange={(e) => setPrice(e.target.value)}
+                        placeholder="Ticket price, e.g. 20"
+                        className="pl-7"
+                        maxLength={20}
+                        aria-label="Ticket price"
+                      />
+                    </div>
+                  )}
                 </div>
               </>
             ) : (

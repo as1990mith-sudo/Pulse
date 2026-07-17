@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation"
 import { getProfile } from "@/lib/profile"
 import { getEpisodesByUser } from "@/lib/content"
-import { getPostsByUser, getRepostsByUser } from "@/app/actions/feed"
+import { getPostsByUser } from "@/app/actions/feed"
 import { getActiveStatusForUser } from "@/app/actions/status"
 import { getCurrentUser } from "@/lib/session"
 import { SiteHeader } from "@/components/site-header"
@@ -18,10 +18,9 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
   const profile = await getProfile(id)
   if (!profile) notFound()
 
-  const [episodes, posts, reposts, currentUser, statusGroup] = await Promise.all([
+  const [episodes, posts, currentUser, statusGroup] = await Promise.all([
     getEpisodesByUser(id, profile.isSelf),
     getPostsByUser(id),
-    getRepostsByUser(id),
     getCurrentUser(),
     getActiveStatusForUser(id),
   ])
@@ -103,7 +102,6 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
           isSelf={profile.isSelf}
           episodes={episodes}
           posts={posts}
-          reposts={reposts}
           currentUser={currentUser}
         />
       </main>

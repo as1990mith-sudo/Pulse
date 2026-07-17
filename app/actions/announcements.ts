@@ -151,6 +151,10 @@ export async function createAnnouncement(input: {
     eventDate = input.eventDate
     eventTime = input.eventTime
     location = input.location.trim()
+    // Events can be free or paid. A blank/absent price means free (null);
+    // otherwise store the ticket price the creator set.
+    const rawTicket = (input.price ?? "").trim().replace(/^\$/, "").trim()
+    price = rawTicket || null
   } else {
     const raw = (input.price ?? "").trim().replace(/^\$/, "").trim()
     if (!raw) throw new Error("Product price is required.")

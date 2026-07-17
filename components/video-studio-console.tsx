@@ -14,6 +14,8 @@ import {
   MonitorPlay,
   Music,
   Pause,
+  Pin,
+  PinOff,
   Play,
   Radio,
   Smartphone,
@@ -41,13 +43,14 @@ import {
   respondToCallRequest,
   removeFromStage,
   setGuestsEnabled,
+  setSpotlightGuest,
   heartbeatBroadcast,
   type LiveStreamView,
   type LiveOrientation,
   type LiveVisibility,
 } from "@/app/actions/live"
 import { LIVE_CATEGORIES } from "@/lib/live-categories"
-import { useLiveVideo, isMedianApp, openNativeAppSettings } from "@/lib/use-live-video"
+import { useLiveVideo, isMedianApp, openNativeAppSettings, type RemotePeer } from "@/lib/use-live-video"
 import { uploadMedia } from "@/lib/upload-media"
 import { publishShow } from "@/app/actions/shows"
 import { ReactionLayer } from "@/components/live-reactions"
@@ -120,33 +123,68 @@ function GlassButton({
   )
 }
 
-/** A single guest call-in tile (accepted guest's camera) or an empty slot. */
-function GuestSlot({
+type PeerLike = { identity: string; name: string; image: string | null; hasVideo: boolean }
+
+// ── Call-in rail geometry (portrait focused broadcast) ─────────────────────
+// Two fixed-size call-in slots stacked top→bottom, overlaid on the RIGHT of the
+// host video. Sizes/positions are fixed (not flex) so the host's persistent
+// <video> can be absolutely positioned to overlap slot 1 exactly when a guest is
+// spotlighted — the host element must never remount or its local track detaches.
+const RAIL_SLOT = "h-32 w-24"
+const RAIL_SLOT_POS = [
+  "right-3 top-[calc(env(safe-area-inset-top)+4.5rem)]",
+  "right-3 top-[calc(env(safe-area-inset-top)+13rem)]",
+] as const
+
+/** An open call-in slot placeholder overlaid on the host video. */
+function RailOpenSlot({ posClass }: { posClass: string }) {
+  return (
+    <div
+      className={cn(
+        "absolute z-30 flex flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-white/25 bg-black/30 text-white/55 backdrop-blur-sm",
+        RAIL_SLOT,
+        posClass,
+      )}
+    >
+      <UserPlus className="size-5" />
+      <span className="px-1 text-center text-[10px] font-medium leading-tight">Open call-in slot</span>
+    </div>
+  )
+}
+
+/**
+ * A called-in guest's camera in a rail slot, with host controls to pin
+ * (spotlight) or remove the guest. When `pinned` the pin toggles back off.
+ */
+function RailGuestTile({
   peer,
+  posClass,
+  pinned,
   registerEl,
+  onTogglePin,
   onRemove,
 }: {
-  peer?: { identity: string; name: string; image: string | null; hasVideo: boolean }
+  peer: PeerLike
+  posClass: string
+  pinned: boolean
   registerEl: (identity: string, el: HTMLVideoElement | null) => void
-  onRemove?: (identity: string) => void
+  onTogglePin: (identity: string) => void
+  onRemove: (identity: string) => void
 }) {
-  if (!peer) {
-    return (
-      <div className="relative flex h-full flex-1 flex-col items-center justify-center gap-1.5 rounded-2xl border border-dashed border-white/15 bg-white/[0.03] text-white/40">
-        <UserPlus className="size-5" />
-        <span className="text-[11px] font-medium">Open call-in slot</span>
-      </div>
-    )
-  }
   return (
-    <div className="relative h-full flex-1 overflow-hidden rounded-2xl bg-neutral-900 ring-1 ring-inset ring-white/10">
+    <div
+      className={cn(
+        "absolute z-30 overflow-hidden rounded-2xl bg-neutral-900 ring-1 ring-inset ring-white/15",
+        RAIL_SLOT,
+        posClass,
+      )}
+    >
       <video
         ref={(el) => registerEl(peer.identity, el)}
         autoPlay
         playsInline
         muted
         className={cn(
-          // object-cover so the guest feed fills the slot with no black bars.
           "h-full w-full object-cover transition-opacity duration-300",
           peer.hasVideo ? "opacity-100" : "opacity-0",
         )}
@@ -155,7 +193,7 @@ function GuestSlot({
         <div className="absolute inset-0 flex items-center justify-center">
           <span
             className={cn(
-              "flex size-12 items-center justify-center rounded-full text-sm font-semibold text-white",
+              "flex size-11 items-center justify-center rounded-full text-sm font-semibold text-white",
               getAvatarColor(peer.identity),
             )}
           >
@@ -163,18 +201,31 @@ function GuestSlot({
           </span>
         </div>
       )}
-      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
-        <span className="truncate text-[11px] font-semibold text-white">{peer.name}</span>
-        {onRemove && (
-          <button
-            type="button"
-            onClick={() => onRemove(peer.identity)}
-            aria-label={`Remove ${peer.name}`}
-            className="flex size-5 shrink-0 items-center justify-center rounded-full bg-black/50 text-white/90 transition-colors hover:bg-destructive"
-          >
-            <X className="size-3" />
-          </button>
-        )}
+      {/* Host controls: pin/unpin (spotlight) + remove */}
+      <div className="absolute inset-x-0 top-0 flex items-center justify-between p-1">
+        <button
+          type="button"
+          onClick={() => onTogglePin(peer.identity)}
+          aria-label={pinned ? `Unpin ${peer.name}` : `Pin ${peer.name} to the main view`}
+          aria-pressed={pinned}
+          className={cn(
+            "flex size-6 items-center justify-center rounded-full backdrop-blur-md transition-colors",
+            pinned ? "bg-primary text-primary-foreground" : "bg-black/50 text-white/90 hover:bg-black/70",
+          )}
+        >
+          {pinned ? <PinOff className="size-3" /> : <Pin className="size-3" />}
+        </button>
+        <button
+          type="button"
+          onClick={() => onRemove(peer.identity)}
+          aria-label={`Remove ${peer.name}`}
+          className="flex size-6 items-center justify-center rounded-full bg-black/50 text-white/90 backdrop-blur-md transition-colors hover:bg-destructive"
+        >
+          <X className="size-3" />
+        </button>
+      </div>
+      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
+        <span className="block truncate text-[11px] font-semibold text-white">{peer.name}</span>
       </div>
     </div>
   )
@@ -480,6 +531,13 @@ export function VideoStudioConsole({
     await removeFromStage({ roomName, userId: identity })
     refreshCalls()
   }
+  async function toggleSpotlight(identity: string) {
+    if (!roomName) return
+    // Toggle: tapping the already-spotlighted guest clears it.
+    const next = spotlightGuestId === identity ? null : identity
+    await setSpotlightGuest({ roomName, userId: next })
+    refreshCalls()
+  }
 
   // ── Music controls ──────────────────────────────────────────────────────
   // Load (publish) a playlist track and start it playing on its own timeline.
@@ -582,6 +640,26 @@ export function VideoStudioConsole({
   // Guests are remote publishers (the host publishes locally, not remotely).
   const guests = peers.slice(0, 2)
 
+  // ── Focused-broadcast spotlight (portrait) ────────────────────────────────
+  // The host can spotlight ONE called-in guest: that guest fills the big frame
+  // and the host drops into a small call-in slot. Spotlight is stored server-side
+  // (gridPinnedId, reused) so viewers see the same swap.
+  const spotlightGuestId = (callState?.gridPinnedIds ?? [])[0] ?? null
+  const spotlightGuest = spotlightGuestId
+    ? guests.find((g) => g.identity === spotlightGuestId) ?? null
+    : null
+  const hostBig = !spotlightGuest
+  // The two right-side rail slots. Without a spotlight: the (up to two) guests.
+  // With a spotlight: the host takes the top slot, any other guest the bottom.
+  const railSlots: ({ kind: "host" } | { kind: "guest"; peer: RemotePeer } | null)[] = spotlightGuest
+    ? [{ kind: "host" }, guests.find((g) => g.identity !== spotlightGuest.identity)
+        ? { kind: "guest", peer: guests.find((g) => g.identity !== spotlightGuest.identity)! }
+        : null]
+    : [
+        guests[0] ? { kind: "guest", peer: guests[0] } : null,
+        guests[1] ? { kind: "guest", peer: guests[1] } : null,
+      ]
+
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-neutral-950 text-white [isolation:isolate]">
       {/* Grid meeting (live): a Meet/Zoom-style tile grid overlays the broadcast
@@ -629,7 +707,7 @@ export function VideoStudioConsole({
             currentUser={currentUser}
             hostId={callState?.hostId ?? currentUser.id}
             gridCohostId={callState?.gridCohostId ?? null}
-            gridPinnedId={callState?.gridPinnedId ?? null}
+            gridPinnedIds={callState?.gridPinnedIds ?? []}
             gridPinRequest={callState?.gridPinRequest ?? null}
             onRefreshState={() => void refreshCalls()}
             localVideoRef={localVideoRef}
@@ -648,17 +726,21 @@ export function VideoStudioConsole({
           </div>
         </div>
       )}
-      {/* ── Host camera (1.75/4 of the screen; grows to 2.125 when the guest
-          section is off, taking half the freed call-in row) ──────────────── */}
+      {/* ── Host camera — the full stage above the chatroom. In a focused
+          (portrait) broadcast, called-in guests overlay on the right and a
+          spotlighted guest swaps into this big frame. ─────────────────────── */}
       <div
         className={cn(
           "relative min-h-0 overflow-hidden",
-          orientation !== "landscape" && !guestsEnabled ? "flex-[2.125]" : "flex-[1.75]",
+          orientation !== "landscape" ? "flex-[2.5]" : "flex-[1.75]",
         )}
       >
         {/* Full-bleed camera — live publisher feed (mirrored self-view). In a
             live grid meeting the MeetingGrid overlay owns localVideoRef, so we
-            skip this element to avoid two <video>s claiming the same ref. */}
+            skip this element to avoid two <video>s claiming the same ref.
+            When a guest is spotlighted the host shrinks into the top call-in
+            slot — we only change this element's className (never remount it) so
+            the local track stays attached. */}
         {!(live && isGridMeeting) && (
           <video
             ref={localVideoRef}
@@ -666,14 +748,51 @@ export function VideoStudioConsole({
             playsInline
             muted
             className={cn(
-              "absolute inset-0 z-0 h-full w-full transition-opacity duration-500",
-              // Landscape broadcasts letterbox the feed so nothing is cropped.
-              // Portrait: object-cover so the feed fills the whole frame with no
-              // black bars on the sides. -scale-x keeps the self-view mirrored.
-              orientation === "landscape" ? "-scale-x-100 object-contain" : "-scale-x-100 object-cover",
+              "absolute transition-all duration-300",
+              orientation === "landscape"
+                ? // Landscape letterboxes the feed so nothing is cropped.
+                  "inset-0 z-0 h-full w-full -scale-x-100 object-contain"
+                : hostBig
+                  ? // Portrait big frame: cover the whole stage, mirrored.
+                    "inset-0 z-0 h-full w-full -scale-x-100 object-cover"
+                  : // Spotlighting a guest: host drops into the top rail slot.
+                    cn(
+                      "z-40 -scale-x-100 rounded-2xl object-cover ring-1 ring-inset ring-white/15",
+                      RAIL_SLOT,
+                      RAIL_SLOT_POS[0],
+                    ),
               live && camOn && localVideoReady ? "opacity-100" : "opacity-0",
             )}
           />
+        )}
+        {/* Spotlighted guest fills the big frame (audio arrives via the shared
+            audio elements, so this tag stays muted to avoid a double feed). */}
+        {live && spotlightGuest && (
+          <>
+            <video
+              key={`spot-${spotlightGuest.identity}`}
+              ref={(el) => registerPeerVideoEl(spotlightGuest.identity, el)}
+              autoPlay
+              playsInline
+              muted
+              className={cn(
+                "absolute inset-0 z-0 h-full w-full object-cover transition-opacity duration-300",
+                spotlightGuest.hasVideo ? "opacity-100" : "opacity-0",
+              )}
+            />
+            {!spotlightGuest.hasVideo && (
+              <div className="absolute inset-0 z-0 flex items-center justify-center bg-neutral-900">
+                <span
+                  className={cn(
+                    "flex size-20 items-center justify-center rounded-full text-2xl font-semibold text-white",
+                    getAvatarColor(spotlightGuest.identity),
+                  )}
+                >
+                  {getInitials(spotlightGuest.name)}
+                </span>
+              </div>
+            )}
+          </>
         )}
         {/* Pre-live preview camera */}
         {!live && (
@@ -700,8 +819,9 @@ export function VideoStudioConsole({
           />
         )}
 
-        {/* Camera-off / connecting wash */}
-        {live && (!camOn || !connected || !localVideoReady) && (
+        {/* Camera-off / connecting wash — only over the big frame when the host
+            occupies it (a spotlighted guest owns the frame otherwise). */}
+        {live && hostBig && (!camOn || !connected || !localVideoReady) && (
           <div className="absolute inset-0 z-30 flex items-center justify-center bg-neutral-950 px-6">
             {!connected ? (
               rtcError ? (
@@ -744,6 +864,61 @@ export function VideoStudioConsole({
 
         {/* Floating reactions + gifts */}
         {live && <ReactionLayer roomName={connected ? roomName! : undefined} />}
+
+        {/* ── Call-in rail (focused/portrait only) ────────────────────────────
+            Two vertical call-in slots overlaid on the right of the host video,
+            stacked top→bottom. The host can pin (spotlight) or remove a guest.
+            When a guest is spotlighted, the host's own <video> (above) drops
+            into the top slot, so here we render only its backing label. */}
+        {live && orientation !== "landscape" && guestsEnabled && (
+          <>
+            {railSlots.map((slot, i) => {
+              const posClass = RAIL_SLOT_POS[i]
+              if (!slot) return <RailOpenSlot key={`open-${i}`} posClass={posClass} />
+              if (slot.kind === "host") {
+                return (
+                  <div
+                    key="host-slot"
+                    className={cn(
+                      "absolute z-30 overflow-hidden rounded-2xl bg-neutral-900 ring-1 ring-inset ring-white/15",
+                      RAIL_SLOT,
+                      posClass,
+                    )}
+                  >
+                    {/* Avatar shows through when the host camera is off (the host
+                        <video> sits above at z-40 and covers this when on). */}
+                    {!camOn && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span
+                          className={cn(
+                            "flex size-11 items-center justify-center rounded-full text-sm font-semibold text-white",
+                            getAvatarColor(currentUser.id),
+                          )}
+                        >
+                          {getInitials(currentUser.name)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="absolute inset-x-0 bottom-0 z-50 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
+                      <span className="block truncate text-[11px] font-semibold text-white">You</span>
+                    </div>
+                  </div>
+                )
+              }
+              return (
+                <RailGuestTile
+                  key={slot.peer.identity}
+                  peer={slot.peer}
+                  posClass={posClass}
+                  pinned={spotlightGuestId === slot.peer.identity}
+                  registerEl={registerPeerVideoEl}
+                  onTogglePin={(id) => void toggleSpotlight(id)}
+                  onRemove={(id) => void dropGuest(id)}
+                />
+              )
+            })}
+          </>
+        )}
 
         {/* Top bar: back menu + LIVE/viewers/timer */}
         <div className="absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-2 p-4 pt-[calc(env(safe-area-inset-top)+1rem)]">
@@ -1249,25 +1424,9 @@ export function VideoStudioConsole({
         )}
       </div>
 
-      {/* ── Two guest call-in slots (0.75/4 of the screen) ─────────────────────
-          Landscape lives are host-only broadcasts, so the call-in row is hidden
-          and that space goes to the camera + comment feed instead. The host can
-          also hide it in portrait via the guest toggle. */}
-      {orientation !== "landscape" && guestsEnabled && (
-        <div className="flex flex-[0.75] min-h-0 gap-2 border-t border-white/10 bg-neutral-950 p-2">
-          <GuestSlot peer={guests[0]} registerEl={registerPeerVideoEl} onRemove={live ? dropGuest : undefined} />
-          <GuestSlot peer={guests[1]} registerEl={registerPeerVideoEl} onRemove={live ? dropGuest : undefined} />
-        </div>
-      )}
-
-      {/* ── Live chatroom (1.5/4; grows to 1.875 when the guest section is off,
-          taking the other half of the freed call-in row) ─────────────────── */}
-      <div
-        className={cn(
-          "min-h-0 border-t border-white/10 bg-neutral-950",
-          orientation !== "landscape" && !guestsEnabled ? "flex-[1.875]" : "flex-[1.5]",
-        )}
-      >
+      {/* ── Live chatroom. Call-in guests now overlay the video above, so the
+          chat keeps a constant share of the screen. ────────────────────────── */}
+      <div className="min-h-0 flex-[1.5] border-t border-white/10 bg-neutral-950">
         <LiveChat asHost currentUser={currentUser} roomName={live ? roomName! : undefined} immersive />
       </div>
 

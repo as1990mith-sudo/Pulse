@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation"
 import {
   Heart,
   MessageCircle,
-  Repeat2,
   Plus,
   X,
   Send,
@@ -38,7 +37,6 @@ import {
   getFeed,
   setCommentLike,
   setPostLike,
-  toggleRepost as toggleRepostAction,
   type FeedCommentView,
   type FeedPostView,
   type PostMedia,
@@ -65,6 +63,7 @@ import { ReelsFeed } from "@/components/reels-feed"
 import { StatusBar } from "@/components/status-bar"
 import type { StatusGroup } from "@/app/actions/status"
 import { ShareSheet } from "@/components/share-sheet"
+import { EngagementSheet } from "@/components/engagement-sheet"
 import { PullToRefresh } from "@/components/pull-to-refresh"
 import type { ShareTarget } from "@/lib/share-types"
 import { cn } from "@/lib/utils"
@@ -175,7 +174,10 @@ export function MindFeed({
   // Index currently being dragged in the reorder strip (null when not dragging).
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [isPending, startTransition] = useTransition()
-  const [tab, setTab] = useState<"for-you" | "following" | "status" | "reels">("for-you")
+  // "status" is kept in the union (still deep-linkable via /status and ?tab=status)
+  // but is intentionally NOT surfaced as a feed sub-tab anymore — "events" takes
+  // its place and hosts the announcements/events feature.
+  const [tab, setTab] = useState<"for-you" | "following" | "status" | "events" | "reels">("for-you")
   const fileInputRef = useRef<HTMLInputElement>(null)
   // Separate inputs so we can request the device camera directly: one for
   // capturing a photo and one for recording a video. The "capture" attribute
@@ -254,7 +256,13 @@ export function MindFeed({
   useEffect(() => {
     if (typeof window === "undefined") return
     const requested = new URLSearchParams(window.location.search).get("tab")
-    if (requested === "reels" || requested === "status" || requested === "following" || requested === "for-you") {
+    if (
+      requested === "reels" ||
+      requested === "status" ||
+      requested === "events" ||
+      requested === "following" ||
+      requested === "for-you"
+    ) {
       setTab(requested)
     }
     // Run once on mount.
@@ -385,7 +393,7 @@ export function MindFeed({
   const TAB_ITEMS = [
     { id: "for-you" as const, label: "For you" },
     { id: "following" as const, label: "Following" },
-    { id: "status" as const, label: "Status" },
+    { id: "events" as const, label: "Events" },
     { id: "reels" as const, label: "Reels" },
   ]
 
@@ -447,8 +455,9 @@ export function MindFeed({
     </div>
   )
 
-  // The promotional Announcements banner. It sits above the feed on every tab
-  // except Status, where it would crowd the story list.
+  // The Events feature (formerly the top-of-feed Announcements banner). It now
+  // lives exclusively inside the "Events" sub-tab, where creators publish and
+  // browse upcoming events. Signed-out users still see it above their feed.
   const announcementBanner = (
     <div className="pt-4 pb-5">
       <AnnouncementBanner
@@ -512,10 +521,9 @@ export function MindFeed({
 
   return (
     <PullToRefresh onRefresh={refreshFeed}>
-      {/* Announcements show on every tab except Status. */}
-      {tab !== "status" && announcementBanner}
-      {/* The post composer is only relevant to the post feeds, not Status. */}
-      {tab !== "status" && (
+      {/* The post composer is only relevant to the scrolling post feeds
+          (For you / Following) — not Events or Status. */}
+      {(tab === "for-you" || tab === "following") && (
       <div className="border-y border-border/60 bg-gradient-to-b from-card/60 to-background px-4 py-5 sm:px-5">
         <form onSubmit={publish} className="flex gap-4">
           <Link
@@ -735,7 +743,9 @@ export function MindFeed({
 
       {/* Swipe horizontally to move between the feed sub-tabs. */}
       <div onTouchStart={onFeedTouchStart} onTouchEnd={onFeedTouchEnd}>
-        {tab === "status" ? (
+        {tab === "events" ? (
+          announcementBanner
+        ) : tab === "status" ? (
           <div className="px-4 py-3 sm:px-5">
             <StatusBar variant="list" groups={statusGroups} currentUser={currentUser} />
           </div>
@@ -920,8 +930,6 @@ export function PostCard({
   const [liked, setLiked] = useState(post.liked)
   const [likes, setLikes] = useState(post.likes)
   const [likeBurst, setLikeBurst] = useState(false)
-  const [reposted, setReposted] = useState(post.reposted)
-  const [reposts, setReposts] = useState(post.reposts)
   const [saved, setSaved] = useState(post.saved)
   const [saveCount, setSaveCount] = useState(post.saves)
   const [shareCount, setShareCount] = useState(post.shares)
@@ -932,6 +940,9 @@ export function PostCard({
   const textWrapRef = useRef<HTMLDivElement>(null)
   const [clampable, setClampable] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
+  // For the author's own post, the like/save buttons open a list of the accounts
+  // that liked / saved it instead of toggling engagement.
+  const [engagementKind, setEngagementKind] = useState<"likes" | "saves" | null>(null)
   const [showComments, setShowComments] = useState(false)
   const [commentDraft, setCommentDraft] = useState("")
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -981,6 +992,11 @@ export function PostCard({
 
   function toggleLike() {
     if (!currentUser) return
+    // You can't like your own post — tapping shows who liked it instead.
+    if (post.isSelf) {
+      setEngagementKind("likes")
+      return
+    }
     const next = !liked
     setLiked(next)
     setLikes((n) => (next ? n + 1 : n - 1))
@@ -996,28 +1012,13 @@ export function PostCard({
     })
   }
 
-  function toggleRepost() {
-    if (!currentUser) return
-    const next = !reposted
-    // Optimistic update, reconciled with the server's authoritative count.
-    setReposted(next)
-    setReposts((n) => (next ? n + 1 : n - 1))
-    startTransition(async () => {
-      try {
-        const res = await toggleRepostAction(post.id)
-        setReposted(res.reposted)
-        setReposts(res.reposts)
-        await globalMutate("feed")
-      } catch {
-        // Roll back on failure.
-        setReposted(!next)
-        setReposts((n) => (next ? n - 1 : n + 1))
-      }
-    })
-  }
-
   function toggleSave() {
     if (!currentUser) return
+    // You can't save your own post — tapping shows who saved it instead.
+    if (post.isSelf) {
+      setEngagementKind("saves")
+      return
+    }
     const next = !saved
     setSaved(next) // optimistic
     setSaveCount((n) => Math.max(0, n + (next ? 1 : -1)))
@@ -1344,7 +1345,7 @@ export function PostCard({
             !currentUser && "cursor-not-allowed opacity-60",
           )}
           aria-pressed={liked}
-          aria-label="Like"
+          aria-label={post.isSelf ? "See who liked this post" : "Like"}
         >
           <Heart
             onAnimationEnd={() => setLikeBurst(false)}
@@ -1366,21 +1367,6 @@ export function PostCard({
         </button>
 
         <button
-          onClick={toggleRepost}
-          className={cn(
-            "flex items-center gap-1.5 tabular-nums transition-colors hover:text-chart-2",
-            feed ? "text-[15px]" : "text-sm",
-            reposted && "text-chart-2",
-            !currentUser && "cursor-not-allowed opacity-60",
-          )}
-          aria-pressed={reposted}
-          aria-label="Repost"
-        >
-          <Repeat2 className={cn(feed ? "size-7" : "size-6")} />
-          {reposts > 0 && <span>{reposts}</span>}
-        </button>
-
-        <button
           onClick={toggleSave}
           className={cn(
             "ml-auto flex items-center gap-1.5 tabular-nums transition-colors hover:text-primary",
@@ -1389,7 +1375,7 @@ export function PostCard({
             !currentUser && "cursor-not-allowed opacity-60",
           )}
           aria-pressed={saved}
-          aria-label={saved ? "Remove bookmark" : "Save post"}
+          aria-label={post.isSelf ? "See who saved this post" : saved ? "Remove bookmark" : "Save post"}
         >
           <Bookmark
             onAnimationEnd={() => setSaveBurst(false)}
@@ -1459,6 +1445,15 @@ export function PostCard({
         onClose={() => setShareOpen(false)}
         onShared={() => setShareCount((n) => n + 1)}
       />
+
+      {post.isSelf && engagementKind && (
+        <EngagementSheet
+          postId={post.id}
+          kind={engagementKind}
+          open
+          onClose={() => setEngagementKind(null)}
+        />
+      )}
     </article>
   )
 }
