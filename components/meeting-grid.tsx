@@ -62,7 +62,7 @@ export function MeetingGrid({
   currentUser,
   hostId,
   gridCohostId,
-  gridPinnedId,
+  gridPinnedIds,
   gridPinRequest,
   onRefreshState,
   localVideoRef,
@@ -86,7 +86,8 @@ export function MeetingGrid({
   currentUser: CurrentUser | null
   hostId: string | null
   gridCohostId: string | null
-  gridPinnedId: string | null
+  // Up to two spotlighted participants (ordered by pin slot). Empty = pure grid.
+  gridPinnedIds: string[]
   gridPinRequest: { userId: string; userName: string } | null
   onRefreshState: () => void
   localVideoRef: React.RefObject<HTMLVideoElement | null>
@@ -114,9 +115,6 @@ export function MeetingGrid({
   const [busy, setBusy] = useState<string | null>(null)
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [controlsOpen, setControlsOpen] = useState(false)
-  // Auto-detected orientation of the pinned participant's video feed. "portrait"
-  // gives the spotlight two rows; "landscape" gives it one.
-  const [spotlightShape, setSpotlightShape] = useState<"landscape" | "portrait">("landscape")
 
   // Who am I? The host and the grid co-host are "controllers" with full powers.
   const amHost = self.identity === hostId
@@ -133,22 +131,30 @@ export function MeetingGrid({
   const orderRank = (id: string) => (id === hostId ? 0 : id === gridCohostId ? 1 : 2)
   const ordered = [...tiles].sort((a, b) => orderRank(a.identity) - orderRank(b.identity))
 
-  // The spotlight is the explicitly pinned participant (if still present). Unlike
-  // before, the host is NOT pinned by default — no pin means a pure grid.
-  const spotlight = gridPinnedId ? ordered.find((t) => t.identity === gridPinnedId) ?? null : null
-  const hasSpotlight = !!spotlight
+  // Up to two spotlighted participants, in pin-slot order but with the host
+  // always floated to the top row (so "host pins himself" gives him row 1 and
+  // the other pinned person row 2). Only present tiles count.
+  const pinnedTiles = gridPinnedIds
+    .map((id) => ordered.find((t) => t.identity === id))
+    .filter((t): t is Tile => !!t)
+    .slice(0, 2)
+    .sort((a, b) => (a.identity === hostId ? 0 : 1) - (b.identity === hostId ? 0 : 1))
+  const pinnedIds = new Set(pinnedTiles.map((t) => t.identity))
+  const spotlightCount = pinnedTiles.length
+  const hasSpotlight = spotlightCount > 0
 
-  // Everyone who isn't the spotlight fills the grid, in the same order.
-  const rest = ordered.filter((t) => t.identity !== spotlight?.identity)
+  // Everyone who isn't pinned fills the grid below, in the same order.
+  const rest = ordered.filter((t) => !pinnedIds.has(t.identity))
 
-  // Page 1 (index 0) reserves rows for the spotlight when one exists, leaving
-  // fewer grid slots on that page. Later pages are full 6-slot grids.
-  const spotlightRows = hasSpotlight ? (spotlightShape === "portrait" ? 2 : 1) : 0
-  const firstPageGridRows = GRID_ROWS - spotlightRows
-  const firstPageSlots = hasSpotlight ? firstPageGridRows * GRID_COLS : TILES_PER_PAGE
+  // Grid rows available on page 1 (each pin eats one full-width row). With two
+  // pins only one grid row is left; otherwise the grid may use two rows. With no
+  // pin the grid is a full 3×2. Later pages are always a full 3×2 grid.
+  const firstPageGridRows = spotlightCount === 2 ? 1 : 2
+  const firstPageSlots = firstPageGridRows * GRID_COLS
+  const laterPageSlots = 2 * GRID_COLS // 3 columns × 2 rows
 
   const overflow = Math.max(0, rest.length - firstPageSlots)
-  const extraPages = Math.ceil(overflow / TILES_PER_PAGE)
+  const extraPages = Math.ceil(overflow / laterPageSlots)
   const pageCount = Math.max(1, 1 + extraPages)
 
   // Clamp the page if participants leave and pages shrink.
@@ -186,10 +192,13 @@ export function MeetingGrid({
     else setPage((p) => Math.max(0, p - 1))
   }
 
-  // A per-tile controller menu (pin / co-host / mute / remove).
+  // A per-tile controller menu (pin / co-host / mute / remove). Shown on the
+  // controller's own tile too, so the host can spotlight (pin) himself — but
+  // there only the pin action applies (co-host/mute/remove hide for self).
   function tileMenu(tile: Tile, peer: RemotePeer | null) {
-    if (!isController || tile.identity === self.identity) return null
-    const isPinned = gridPinnedId === tile.identity
+    if (!isController) return null
+    const isSelf = tile.identity === self.identity
+    const isPinned = gridPinnedIds.includes(tile.identity)
     const isThisCohost = gridCohostId === tile.identity
     const isThisHost = hostId === tile.identity
     const open = menuFor === tile.identity
@@ -208,9 +217,9 @@ export function MeetingGrid({
             <MenuItem
               onClick={() =>
                 run(`pin-${tile.identity}`, () =>
-                  isPinned
-                    ? respondGridPin({ roomName, accept: false })
-                    : requestGridPin({ roomName, userId: tile.identity, userName: tileName(tile, peer) }),
+                  // requestGridPin toggles: pinning an already-pinned person
+                  // unpins them; a controller can spotlight up to two people.
+                  requestGridPin({ roomName, userId: tile.identity, userName: tileName(tile, peer) }),
                 )
               }
             >
