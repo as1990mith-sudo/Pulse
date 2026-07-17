@@ -754,20 +754,24 @@ function VerseActionSheet({
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose()
     }
-    function onDown(e: MouseEvent) {
+    function onDown(e: PointerEvent) {
       if (popRef.current && !popRef.current.contains(e.target as Node)) onClose()
     }
     document.addEventListener("keydown", onKey)
-    document.addEventListener("mousedown", onDown)
+    document.addEventListener("pointerdown", onDown)
     return () => {
       document.removeEventListener("keydown", onKey)
-      document.removeEventListener("mousedown", onDown)
+      document.removeEventListener("pointerdown", onDown)
     }
   }, [onClose])
 
   if (typeof document === "undefined") return null
 
   return createPortal(
+    <>
+    {/* Transparent full-screen backdrop: any tap outside the popover closes it.
+        Works reliably on touch where document mousedown alone does not. */}
+    <div aria-hidden="true" onClick={onClose} className="fixed inset-0 z-[65]" />
     <div
       ref={popRef}
       role="dialog"
@@ -957,8 +961,9 @@ function VerseActionSheet({
               <StickyNote className="size-4" /> Add note
             </button>
           )}
-        </div>
-    </div>,
+  </div>
+  </div>
+  </>,
     document.body,
   )
 }
