@@ -30,13 +30,22 @@ export default async function ChatroomsPage() {
   const rooms = await getMyChatrooms()
 
   return (
-    <div className="min-h-screen">
-      <SiteHeader />
-      <main>
-        <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
-          <ChatroomBrowser rooms={rooms} />
-        </div>
-      </main>
+    // Warm, themed backdrop: a soft amber wash bleeding down from the top plus a
+    // faint glow near the bottom, layered over the base background so the page
+    // feels colorful and alive while staying easy on the eyes.
+    <div className="relative min-h-screen bg-gradient-to-b from-primary/15 via-background to-background">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-80 bg-[radial-gradient(60%_100%_at_50%_0%,color-mix(in_oklab,var(--primary)_22%,transparent),transparent)]"
+      />
+      <div className="relative">
+        <SiteHeader />
+        <main>
+          <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
+            <ChatroomBrowser rooms={rooms} />
+          </div>
+        </main>
+      </div>
     </div>
   )
 }

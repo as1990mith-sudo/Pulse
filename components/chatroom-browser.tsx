@@ -26,19 +26,19 @@ function CommunityHelpEntry() {
   return (
     <Link
       href="/chatrooms/community"
-      className="group flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 transition-colors hover:bg-emerald-500/10 sm:px-5"
+      className="group flex items-center gap-3 rounded-xl border border-emerald-400/30 bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 py-3 shadow-lg shadow-emerald-900/25 transition-all hover:from-emerald-500 hover:to-emerald-400 hover:shadow-emerald-900/35 sm:px-5"
     >
-      <Avatar className="size-12 shrink-0 ring-2 ring-emerald-500/40 transition-transform duration-200 group-hover:scale-105">
+      <Avatar className="size-12 shrink-0 ring-2 ring-white/50 transition-transform duration-200 group-hover:scale-105">
         <AvatarImage src="/community-help-avatar.png" alt="Community Help" />
-        <AvatarFallback className="bg-emerald-600 text-base font-bold text-white">?</AvatarFallback>
+        <AvatarFallback className="bg-emerald-800 text-base font-bold text-white">?</AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-base font-semibold tracking-tight">Community Help</p>
-        <p className="truncate text-sm leading-snug text-muted-foreground">
+        <p className="truncate text-base font-semibold tracking-tight text-white">Community Help</p>
+        <p className="truncate text-sm leading-snug text-emerald-50/85">
           Ask anything anonymously — anyone in the community can help.
         </p>
       </div>
-      <span className="shrink-0 rounded-full bg-emerald-600 px-4 py-1.5 text-sm font-semibold text-white transition-opacity group-hover:opacity-90">
+      <span className="shrink-0 rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-emerald-700 shadow-sm transition-transform group-hover:scale-105">
         Open
       </span>
     </Link>
@@ -49,20 +49,20 @@ function DreamInterpretationEntry() {
   return (
     <Link
       href="/chatrooms/dreams"
-      className="group flex items-center gap-3 rounded-xl border border-blue-500/30 bg-blue-500/5 px-4 py-3 transition-colors hover:bg-blue-500/10 sm:px-5"
+      className="group flex items-center gap-3 rounded-xl border border-indigo-400/30 bg-gradient-to-r from-indigo-600 to-blue-500 px-4 py-3 shadow-lg shadow-indigo-900/25 transition-all hover:from-indigo-500 hover:to-blue-400 hover:shadow-indigo-900/35 sm:px-5"
     >
-      <Avatar className="size-12 shrink-0 ring-2 ring-blue-500/40 transition-transform duration-200 group-hover:scale-105">
-        <AvatarFallback className="bg-blue-600 text-white">
+      <Avatar className="size-12 shrink-0 ring-2 ring-white/50 transition-transform duration-200 group-hover:scale-105">
+        <AvatarFallback className="bg-indigo-800 text-white">
           <MoonStar className="size-6" />
         </AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-base font-semibold tracking-tight">Dream Interpretation</p>
-        <p className="truncate text-sm leading-snug text-muted-foreground">
+        <p className="truncate text-base font-semibold tracking-tight text-white">Dream Interpretation</p>
+        <p className="truncate text-sm leading-snug text-indigo-50/85">
           Share your dreams anonymously — only the interpreter can reply.
         </p>
       </div>
-      <span className="shrink-0 rounded-full bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white transition-opacity group-hover:opacity-90">
+      <span className="shrink-0 rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-indigo-700 shadow-sm transition-transform group-hover:scale-105">
         Open
       </span>
     </Link>
