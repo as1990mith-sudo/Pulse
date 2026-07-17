@@ -51,6 +51,8 @@ export function LiveChat({
   bgUrl = null,
   bgEffect = "none",
   immersive = false,
+  leadingSlot = null,
+  emojiSide = "left",
 }: {
   asHost?: boolean
   currentUser?: CurrentUser | null
@@ -61,6 +63,12 @@ export function LiveChat({
   // When true, the chat renders transparent on a dark room (white text, glass
   // bubbles) so it reads as one with the immersive stage rather than a card.
   immersive?: boolean
+  // Optional element rendered at the far left of the composer row (e.g. the
+  // grid meeting's control menu). Sits where the emoji button normally lives.
+  leadingSlot?: React.ReactNode
+  // Which side the emoji button sits on. "right" places it just left of Send,
+  // freeing the left for `leadingSlot`.
+  emojiSide?: "left" | "right"
 }) {
   const [draft, setDraft] = useState("")
   const [emojiOpen, setEmojiOpen] = useState(false)
@@ -140,6 +148,25 @@ export function LiveChat({
   }, [messages])
 
   const canSend = (asHost || currentUser) && roomName
+
+  // Emoji toggle button — rendered on the left or right of the composer.
+  const emojiButton = (
+    <button
+      type="button"
+      onClick={() => setEmojiOpen((o) => !o)}
+      aria-label="Insert emoji"
+      aria-pressed={emojiOpen}
+      className={cn(
+        "flex size-10 shrink-0 items-center justify-center rounded-full transition-colors",
+        immersive
+          ? "bg-white/10 text-white/70 hover:bg-white/20 hover:text-white"
+          : "bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
+        emojiOpen && (immersive ? "bg-primary/25 text-primary" : "bg-primary/15 text-primary"),
+      )}
+    >
+      <Smile className="size-5" />
+    </button>
+  )
 
   function send(e: React.FormEvent) {
     e.preventDefault()
@@ -365,21 +392,8 @@ export function LiveChat({
             </div>
           )}
           <div className="flex items-end gap-2">
-            <button
-              type="button"
-              onClick={() => setEmojiOpen((o) => !o)}
-              aria-label="Insert emoji"
-              aria-pressed={emojiOpen}
-              className={cn(
-                "flex size-10 shrink-0 items-center justify-center rounded-full transition-colors",
-                immersive
-                  ? "bg-white/10 text-white/70 hover:bg-white/20 hover:text-white"
-                  : "bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
-                emojiOpen && (immersive ? "bg-primary/25 text-primary" : "bg-primary/15 text-primary"),
-              )}
-            >
-              <Smile className="size-5" />
-            </button>
+            {leadingSlot}
+            {emojiSide === "left" && emojiButton}
             <Textarea
               ref={textareaRef}
               value={draft}
@@ -399,6 +413,7 @@ export function LiveChat({
               )}
               aria-label="Chat message"
             />
+            {emojiSide === "right" && emojiButton}
             <Button
               type="submit"
               size="icon"

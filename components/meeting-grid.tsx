@@ -4,12 +4,10 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import {
   ChevronLeft,
   ChevronRight,
-  Crown,
   Mic,
   MicOff,
   MoreVertical,
   Music,
-  PhoneOff,
   Pin,
   PinOff,
   Settings2,
@@ -29,15 +27,14 @@ import {
   setGridCohost,
   requestGridPin,
   respondGridPin,
-  endBroadcast,
 } from "@/app/actions/live"
 import { LiveChat } from "@/components/live-chat"
 import { cn } from "@/lib/utils"
 
-// The grid is a 2-column × 3-row page (the old 4th row is now the static chat).
-const GRID_COLS = 2
+// The grid is a 3-column × 3-row page (the old 4th row is now the static chat).
+const GRID_COLS = 3
 const GRID_ROWS = 3
-const TILES_PER_PAGE = GRID_COLS * GRID_ROWS // 6
+const TILES_PER_PAGE = GRID_COLS * GRID_ROWS // 9
 
 /** One participant in the meeting, unified for local + remote rendering. */
 type Tile =
@@ -73,12 +70,13 @@ export function MeetingGrid({
   micOn,
   camOn,
   localVideoReady,
+  localSpeaking = false,
+  facingMode = "user",
   onToggleMic,
   onToggleCam,
   onFlipCamera,
   onAskUnmute,
   onAddTrack,
-  onLeave,
   chatBgUrl = null,
   chatBgEffect = "none",
 }: {
@@ -96,12 +94,19 @@ export function MeetingGrid({
   micOn: boolean
   camOn: boolean
   localVideoReady: boolean
+  // Whether the local participant is currently an active speaker (tile glow).
+  localSpeaking?: boolean
+  // Front ("user") vs back ("environment") camera — the self-view only mirrors
+  // for the front camera.
+  facingMode?: "user" | "environment"
   onToggleMic: () => void
   onToggleCam: () => void
   onFlipCamera: () => void
   onAskUnmute: (identity: string) => void
   onAddTrack?: () => void
-  onLeave: () => void
+  // Participants leave via the header back button, so there is no in-grid leave
+  // handler; this stays optional for backwards compatibility with callers.
+  onLeave?: () => void
   chatBgUrl?: string | null
   chatBgEffect?: "none" | "blur" | "dim"
 }) {
@@ -262,8 +267,15 @@ export function MeetingGrid({
     const isCohostTile = gridCohostId === tile.identity
     const isHostTile = hostId === tile.identity
     const displayName = tile.identity === self.identity ? `${tileName(tile, peer)} (You)` : tileName(tile, peer)
+    // Glow the tile while this participant is an active speaker.
+    const speaking = tile.kind === "local" ? localSpeaking : !!peer?.isSpeaking
     return (
-      <div className="relative size-full overflow-hidden bg-neutral-800">
+      <div
+        className={cn(
+          "relative size-full overflow-hidden rounded-xl bg-neutral-800 transition-shadow duration-150",
+          speaking && "ring-2 ring-primary shadow-[0_0_0_3px_rgba(0,0,0,0.4),0_0_18px_2px_var(--color-primary)]",
+        )}
+      >
         {tile.kind === "local" ? (
           <>
             <video
@@ -272,7 +284,10 @@ export function MeetingGrid({
               playsInline
               muted
               className={cn(
-                "absolute inset-0 size-full -scale-x-100 object-cover transition-opacity",
+                "absolute inset-0 size-full object-cover transition-opacity",
+                // Mirror only the front camera; the back camera shows the world
+                // as-is, so mirroring it would look wrong.
+                facingMode === "user" && "-scale-x-100",
                 camOn && localVideoReady ? "opacity-100" : "opacity-0",
               )}
             />
@@ -297,9 +312,9 @@ export function MeetingGrid({
           </>
         )}
 
-        {/* Role + mic badges, top-left. */}
+        {/* Role badges, top-left. The host is just a plain "Host" pill (no crown). */}
         <div className="absolute left-1.5 top-1.5 z-10 flex items-center gap-1">
-          {isHostTile && <Badge tone="host" icon={<Crown className="size-3" />} label="Host" />}
+          {isHostTile && <Badge tone="host" label="Host" />}
           {isCohostTile && <Badge tone="cohost" icon={<Star className="size-3" />} label="Co-host" />}
         </div>
 
@@ -307,12 +322,7 @@ export function MeetingGrid({
 
         {/* Name overlaid on the video with only a very faint shadow so it never
             hides the picture. */}
-        <NameOverlay
-          name={displayName}
-          isHost={isHostTile}
-          isCohost={isCohostTile}
-          muted={peer ? peer.micMuted : !micOn}
-        />
+        <NameOverlay name={displayName} isCohost={isCohostTile} muted={peer ? peer.micMuted : !micOn} />
       </div>
     )
   }
@@ -325,9 +335,11 @@ export function MeetingGrid({
     const start = firstPageSlots + (page - 1) * TILES_PER_PAGE
     gridTiles = rest.slice(start, start + TILES_PER_PAGE)
   }
-  // How many grid rows this page uses (page 1 shrinks when a spotlight is shown).
+  // How many grid rows this page may use (page 1 shrinks when a spotlight is shown).
   const gridRowsThisPage = page === 0 && hasSpotlight ? firstPageGridRows : GRID_ROWS
-  const slotsThisPage = gridRowsThisPage * GRID_COLS
+  // Only render as many rows as there are tiles, so a near-empty room doesn't
+  // leave a wall of blank boxes — the present tiles fill the available height.
+  const rowsUsed = Math.max(1, Math.min(gridRowsThisPage, Math.ceil(gridTiles.length / GRID_COLS)))
 
   return (
     <div className="flex h-full flex-col bg-neutral-950">
@@ -340,23 +352,21 @@ export function MeetingGrid({
               {renderTile(spotlight, { big: true })}
             </div>
           )}
-          {/* Grid band — vertical tiles (≈15% narrower than tall). */}
-          {gridRowsThisPage > 0 && (
-            <div className="grid min-h-0 flex-1 grid-cols-2 gap-1.5">
-              {Array.from({ length: slotsThisPage }).map((_, i) => {
-                const tile = gridTiles[i]
-                return (
-                  <div key={tile ? tile.identity : `empty-${i}`} className="flex min-h-0 items-center justify-center">
-                    {tile ? (
-                      <div className="aspect-[17/20] h-full max-w-full overflow-hidden">
-                        <div className="size-full">{renderTile(tile)}</div>
-                      </div>
-                    ) : (
-                      <div className="aspect-[17/20] h-full max-w-full border border-white/5 bg-white/[0.02]" />
-                    )}
-                  </div>
-                )
-              })}
+          {/* Grid band — 3 tiles per row, each filling its cell. Only real
+              participants are rendered (no empty placeholder boxes). */}
+          {gridRowsThisPage > 0 && gridTiles.length > 0 && (
+            <div
+              className="grid min-h-0 flex-1 gap-1.5"
+              style={{
+                gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))`,
+                gridTemplateRows: `repeat(${rowsUsed}, minmax(0, 1fr))`,
+              }}
+            >
+              {gridTiles.map((tile) => (
+                <div key={tile.identity} className="min-h-0">
+                  {renderTile(tile)}
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -427,7 +437,10 @@ export function MeetingGrid({
         )}
       </div>
 
-      {/* ── Static chatroom (occupies the old 4th row; never paginates) ──── */}
+      {/* ── Static chatroom (occupies the old 4th row; never paginates). The
+          meeting controls now live inline at the LEFT of the composer (where the
+          emoji used to be); the emoji moves to the RIGHT next to Send. There is
+          no End/Leave button — everyone leaves via the header back button. ──── */}
       <div className="min-h-0 flex-[1] border-t border-white/10">
         <LiveChat
           asHost={isController}
@@ -436,71 +449,57 @@ export function MeetingGrid({
           bgUrl={chatBgUrl}
           bgEffect={chatBgEffect}
           immersive
-        />
-      </div>
-
-      {/* ── Bottom control dock: a compact toggle + always-visible End ────── */}
-      <div className="relative flex items-center justify-center gap-3 border-t border-white/10 bg-neutral-900 px-4 py-3 pb-[max(env(safe-area-inset-bottom),0.75rem)]">
-        {/* Collapsible controls popover so mic/cam/flip/music don't eat space. */}
-        {controlsOpen && (
-          <>
-            <button
-              type="button"
-              aria-hidden
-              tabIndex={-1}
-              onClick={() => setControlsOpen(false)}
-              className="fixed inset-0 z-10 cursor-default"
-            />
-            <div className="absolute bottom-full left-1/2 z-20 mb-2 flex -translate-x-1/2 items-center gap-3 rounded-2xl border border-white/10 bg-neutral-900/95 px-4 py-3 shadow-2xl backdrop-blur-xl">
-              <DockButton label={micOn ? "Mute mic" : "Unmute mic"} onClick={onToggleMic} active={!micOn}>
-                {micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
-              </DockButton>
-              <DockButton label={camOn ? "Turn camera off" : "Turn camera on"} onClick={onToggleCam} active={!camOn}>
-                {camOn ? <Video className="size-5" /> : <VideoOff className="size-5" />}
-              </DockButton>
-              <DockButton label="Flip camera" onClick={onFlipCamera}>
-                <SwitchCamera className="size-5" />
-              </DockButton>
-              {isController && onAddTrack && (
-                <DockButton label="Add track" onClick={onAddTrack}>
-                  <Music className="size-5" />
-                </DockButton>
+          emojiSide="right"
+          leadingSlot={
+            <div className="relative shrink-0">
+              {/* Collapsible controls popover so mic/cam/flip/music don't eat
+                  space; opens upward from the composer. */}
+              {controlsOpen && (
+                <>
+                  <button
+                    type="button"
+                    aria-hidden
+                    tabIndex={-1}
+                    onClick={() => setControlsOpen(false)}
+                    className="fixed inset-0 z-10 cursor-default"
+                  />
+                  <div className="absolute bottom-full left-0 z-20 mb-2 flex items-center gap-3 rounded-2xl border border-white/10 bg-neutral-900/95 px-4 py-3 shadow-2xl backdrop-blur-xl">
+                    <DockButton label={micOn ? "Mute mic" : "Unmute mic"} onClick={onToggleMic} active={!micOn}>
+                      {micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
+                    </DockButton>
+                    <DockButton
+                      label={camOn ? "Turn camera off" : "Turn camera on"}
+                      onClick={onToggleCam}
+                      active={!camOn}
+                    >
+                      {camOn ? <Video className="size-5" /> : <VideoOff className="size-5" />}
+                    </DockButton>
+                    <DockButton label="Flip camera" onClick={onFlipCamera}>
+                      <SwitchCamera className="size-5" />
+                    </DockButton>
+                    {isController && onAddTrack && (
+                      <DockButton label="Add track" onClick={onAddTrack}>
+                        <Music className="size-5" />
+                      </DockButton>
+                    )}
+                  </div>
+                </>
               )}
+              <button
+                type="button"
+                onClick={() => setControlsOpen((o) => !o)}
+                aria-label={controlsOpen ? "Hide controls" : "Show controls"}
+                aria-expanded={controlsOpen}
+                className={cn(
+                  "relative z-20 flex size-10 items-center justify-center rounded-full text-white transition-colors",
+                  controlsOpen ? "bg-white/20" : "bg-white/10 hover:bg-white/20",
+                )}
+              >
+                {controlsOpen ? <X className="size-5" /> : <Settings2 className="size-5" />}
+              </button>
             </div>
-          </>
-        )}
-
-        <button
-          type="button"
-          onClick={() => setControlsOpen((o) => !o)}
-          aria-label={controlsOpen ? "Hide controls" : "Show controls"}
-          aria-expanded={controlsOpen}
-          className={cn(
-            "relative z-20 flex size-11 items-center justify-center rounded-full text-white transition-colors",
-            controlsOpen ? "bg-white/20" : "bg-white/10 hover:bg-white/20",
-          )}
-        >
-          {controlsOpen ? <X className="size-5" /> : <Settings2 className="size-5" />}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            // A co-host with full parity ends the live for everyone; the host
-            // defers to its own end-confirm (onLeave); others just leave.
-            if (amCohost)
-              void run("end", async () => {
-                await endBroadcast({ roomName })
-                onLeave()
-              })
-            else onLeave()
-          }}
-          aria-label={isController ? "End meeting" : "Leave meeting"}
-          className="relative z-20 flex h-11 items-center gap-2 rounded-full bg-destructive px-5 text-sm font-semibold text-destructive-foreground"
-        >
-          <PhoneOff className="size-5" />
-          {isController ? "End" : "Leave"}
-        </button>
+          }
+        />
       </div>
     </div>
   )
@@ -538,12 +537,10 @@ function tileName(tile: Tile, peer: RemotePeer | null): string {
  */
 function NameOverlay({
   name,
-  isHost,
   isCohost,
   muted,
 }: {
   name: string
-  isHost: boolean
   isCohost: boolean
   muted: boolean
 }) {
@@ -571,8 +568,7 @@ function NameOverlay({
       }}
     >
       {muted && <MicOff className="size-3 shrink-0 text-destructive drop-shadow" />}
-      {isHost && <Crown className="size-3 shrink-0 text-primary drop-shadow" />}
-      {isCohost && !isHost && <Star className="size-3 shrink-0 text-primary drop-shadow" />}
+      {isCohost && <Star className="size-3 shrink-0 text-primary drop-shadow" />}
       <div ref={wrapRef} className="relative min-w-0 flex-1 overflow-hidden">
         {/* Hidden measuring copy — always present so we can re-check on resize. */}
         <span ref={measureRef} className="invisible absolute whitespace-nowrap text-xs" aria-hidden="true">
@@ -624,7 +620,7 @@ function Avatar({ name, image, big }: { name: string; image: string | null; big?
   )
 }
 
-function Badge({ tone, icon, label }: { tone: "host" | "cohost"; icon: React.ReactNode; label: string }) {
+function Badge({ tone, icon, label }: { tone: "host" | "cohost"; icon?: React.ReactNode; label: string }) {
   return (
     <span
       className={cn(

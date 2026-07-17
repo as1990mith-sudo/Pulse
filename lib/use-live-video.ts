@@ -143,6 +143,8 @@ export type RemotePeer = {
   hasVideo: boolean
   // True when this peer's microphone is currently muted (or not publishing audio).
   micMuted: boolean
+  // True while LiveKit reports this peer as an active speaker (drives the tile glow).
+  isSpeaking: boolean
 }
 
 /**
@@ -214,6 +216,8 @@ export function useLiveVideo({
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user")
   const [participants, setParticipants] = useState(0)
   const [peers, setPeers] = useState<RemotePeer[]>([])
+  // True while the local participant is an active speaker (drives own tile glow).
+  const [localSpeaking, setLocalSpeaking] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [audioBlocked, setAudioBlocked] = useState(false)
   // Whether the local participant currently has publish permission. For a guest
@@ -262,6 +266,7 @@ export function useLiveVideo({
           isHost: hostIdRef.current != null && p.identity === hostIdRef.current,
           hasVideo,
           micMuted,
+          isSpeaking: p.isSpeaking,
         })
       }
     })
@@ -426,6 +431,11 @@ export function useLiveVideo({
         refreshPeers(room)
       })
       .on(RoomEvent.AudioPlaybackStatusChanged, () => setAudioBlocked(!room.canPlaybackAudio))
+      // Active speakers → refresh peer glow + track whether we're speaking.
+      .on(RoomEvent.ActiveSpeakersChanged, () => {
+        setLocalSpeaking(room.localParticipant.isSpeaking)
+        refreshPeers(room)
+      })
       .on(RoomEvent.Disconnected, () => setConnected(false))
 
     try {
@@ -581,17 +591,35 @@ export function useLiveVideo({
     const next = facingMode === "user" ? "environment" : "user"
     setLocalVideoReady(false)
     try {
-      // Restarting the existing camera track with the opposite facingMode is the
-      // reliable way to switch front/back on mobile. Calling setCameraEnabled(true)
-      // again is a no-op when the camera is already on, so the old code never
-      // actually flipped. restartTrack re-acquires the stream with the new
-      // constraint and keeps the same publication (viewers see no interruption).
+      // Prefer switching by explicit deviceId: enumerate the video inputs and
+      // pick a different camera than the one in use. This is the most reliable
+      // cross-device flip — plain facingMode constraints are silently ignored by
+      // some mobile browsers once a track is already live, which is why the flip
+      // appeared to do nothing.
       const pub = room.localParticipant.getTrackPublication(Track.Source.Camera)
       const track = pub?.videoTrack
-      if (track) {
-        await track.restartTrack({ facingMode: next })
-      } else {
-        await room.localParticipant.setCameraEnabled(true, { facingMode: next })
+      const currentDeviceId = track?.mediaStreamTrack.getSettings().deviceId
+      let switched = false
+
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices()
+        const cams = devices.filter((d) => d.kind === "videoinput" && d.deviceId)
+        if (cams.length > 1) {
+          const target = cams.find((c) => c.deviceId !== currentDeviceId) ?? cams[0]
+          await room.switchActiveDevice("videoinput", target.deviceId)
+          switched = true
+        }
+      } catch {
+        // enumerateDevices / switchActiveDevice not available — fall through.
+      }
+
+      // Fallback: re-acquire the current track with the opposite facingMode.
+      if (!switched) {
+        if (track) {
+          await track.restartTrack({ facingMode: next })
+        } else {
+          await room.localParticipant.setCameraEnabled(true, { facingMode: next })
+        }
       }
       setFacingMode(next)
       setCamOn(true)
@@ -821,6 +849,7 @@ export function useLiveVideo({
     canPublish,
     participants,
     peers,
+    localSpeaking,
     error,
     clearError,
     audioBlocked,
