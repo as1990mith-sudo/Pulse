@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
+  AudioPresets,
   LocalAudioTrack,
   Room,
   RoomEvent,
@@ -158,6 +159,8 @@ export function useLiveVideo({
   isHost,
   hostId = null,
   autoPublish = false,
+  initialMicOn = true,
+  initialCamOn = true,
   onAskUnmute,
 }: {
   token: string | null
@@ -169,6 +172,10 @@ export function useLiveVideo({
   // Grid meetings: every participant (not just the host) publishes their own
   // camera + mic on connect, like Google Meet / Zoom.
   autoPublish?: boolean
+  // Pre-join choices: whether the mic/camera should be live on connect. Lets a
+  // participant enter a grid meeting muted and/or with their camera off.
+  initialMicOn?: boolean
+  initialCamOn?: boolean
   // Fired when the host asks this client to unmute (received over the data
   // channel). The UI shows a prompt; we never open the mic without consent.
   onAskUnmute?: () => void
@@ -201,8 +208,8 @@ export function useLiveVideo({
   const recordingStartedRef = useRef(false)
 
   const [connected, setConnected] = useState(false)
-  const [micOn, setMicOn] = useState(true)
-  const [camOn, setCamOn] = useState(true)
+  const [micOn, setMicOn] = useState(initialMicOn)
+  const [camOn, setCamOn] = useState(initialCamOn)
   const [localVideoReady, setLocalVideoReady] = useState(false)
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user")
   const [participants, setParticipants] = useState(0)
@@ -219,6 +226,12 @@ export function useLiveVideo({
   hostIdRef.current = hostId
   const autoPublishRef = useRef(autoPublish)
   autoPublishRef.current = autoPublish
+  // Pre-join device choices, held in refs so the connect callback can read the
+  // latest without being torn down and re-run.
+  const initialMicOnRef = useRef(initialMicOn)
+  initialMicOnRef.current = initialMicOn
+  const initialCamOnRef = useRef(initialCamOn)
+  initialCamOnRef.current = initialCamOn
   const onAskUnmuteRef = useRef(onAskUnmute)
   onAskUnmuteRef.current = onAskUnmute
 
@@ -453,27 +466,39 @@ export function useLiveVideo({
     // also auto-publishes (Meet/Zoom style). Plain broadcast viewers publish only
     // when the host accepts their call-in (handled in PermissionsChanged above).
     if (isHost || autoPublish) {
-      try {
-        await room.localParticipant.setMicrophoneEnabled(true)
-      } catch {
+      // Honor the participant's pre-join choices: enter muted / camera-off when
+      // they opted out. The host always goes live with both on.
+      const wantMic = isHost ? true : initialMicOnRef.current
+      const wantCam = isHost ? true : initialCamOnRef.current
+      if (wantMic) {
+        try {
+          await room.localParticipant.setMicrophoneEnabled(true)
+        } catch {
+          setMicOn(false)
+        }
+      } else {
         setMicOn(false)
       }
-      let cameraOk = false
-      let lastErr: unknown = null
-      for (let attempt = 0; attempt < 2 && !cameraOk; attempt++) {
-        try {
-          await withTimeout(room.localParticipant.setCameraEnabled(true), 12000, "Camera start timed out.")
-          cameraOk = true
-        } catch (e) {
-          lastErr = e
-          if (attempt === 0) await new Promise((r) => setTimeout(r, 600))
-        }
-      }
-      if (cameraOk) {
-        attachLocalVideo(room)
-      } else {
+      if (!wantCam) {
         setCamOn(false)
-        setError(describeMediaError(lastErr))
+      } else {
+        let cameraOk = false
+        let lastErr: unknown = null
+        for (let attempt = 0; attempt < 2 && !cameraOk; attempt++) {
+          try {
+            await withTimeout(room.localParticipant.setCameraEnabled(true), 12000, "Camera start timed out.")
+            cameraOk = true
+          } catch (e) {
+            lastErr = e
+            if (attempt === 0) await new Promise((r) => setTimeout(r, 600))
+          }
+        }
+        if (cameraOk) {
+          attachLocalVideo(room)
+        } else {
+          setCamOn(false)
+          setError(describeMediaError(lastErr))
+        }
       }
     }
   }, [token, serverUrl, isHost, autoPublish, attachPeerVideo, refreshPeers])
@@ -599,7 +624,9 @@ export function useLiveVideo({
     const room = roomRef.current
     if (!room) return
 
-    const ctx = musicCtxRef.current ?? new AudioContext()
+    // 48 kHz matches Opus's native rate so the mixed music feed isn't resampled
+    // before publishing — keeps it clean and crisp.
+    const ctx = musicCtxRef.current ?? new AudioContext({ sampleRate: 48000 })
     musicCtxRef.current = ctx
     if (ctx.state === "suspended") await ctx.resume()
 
@@ -624,8 +651,10 @@ export function useLiveVideo({
       gain.gain.value = 0.4
       const bass = ctx.createBiquadFilter()
       bass.type = "lowshelf"
-      bass.frequency.value = 220
-      bass.gain.value = 7
+      // A gentle low-shelf lift keeps warmth without muddying the mids. The old
+      // +7 dB boost smeared sustained music, so keep it subtle.
+      bass.frequency.value = 180
+      bass.gain.value = 2
       source.connect(gain)
       gain.connect(bass)
       bass.connect(ctx.destination)
@@ -642,11 +671,22 @@ export function useLiveVideo({
 
     if (!musicTrackRef.current) {
       const bass = musicBassRef.current!
+      // Two channels so the high-quality stereo preset actually carries stereo.
       const dest = ctx.createMediaStreamDestination()
+      dest.channelCount = 2
       bass.connect(dest)
       const [mediaTrack] = dest.stream.getAudioTracks()
       const localTrack = new LocalAudioTrack(mediaTrack)
-      await room.localParticipant.publishTrack(localTrack, { name: "background-music" })
+      // Publish background music with a high-quality stereo preset so it stays
+      // clear and crisp. DTX (discontinuous transmission) and RED (redundancy)
+      // are meant for speech and muddy sustained music, so disable both, and
+      // keep the browser's speech DSP off since this is a clean mixed feed.
+      await room.localParticipant.publishTrack(localTrack, {
+        name: "background-music",
+        audioPreset: AudioPresets.musicHighQualityStereo,
+        dtx: false,
+        red: false,
+      })
       musicTrackRef.current = localTrack
     }
   }, [])

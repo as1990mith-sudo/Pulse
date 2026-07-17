@@ -770,8 +770,10 @@ export async function blockParticipant(input: {
   userName: string
 }): Promise<{ ok: boolean; error?: string }> {
   const user = await requireUser()
-  if ((await getHostId(input.roomName)) !== user.id) return { ok: false, error: "Only the host can block participants." }
-  if (input.userId === user.id) return { ok: false, error: "You can't block yourself." }
+  // Host or grid co-host may remove/block a participant.
+  const { isController } = await getGridControl(input.roomName, user.id)
+  if (!isController) return { ok: false, error: "Only the host or co-host can remove participants." }
+  if (input.userId === user.id) return { ok: false, error: "You can't remove yourself." }
 
   // Record the block (idempotent — clear any prior row first).
   await db

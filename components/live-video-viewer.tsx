@@ -40,6 +40,7 @@ import { BackExitMenu } from "@/components/live-back-menu"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { ShareSheet } from "@/components/share-sheet"
 import { MeetingGrid } from "@/components/meeting-grid"
+import { GridPrejoin } from "@/components/grid-prejoin"
 import type { ShareTarget } from "@/lib/share-types"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { cn } from "@/lib/utils"
@@ -179,6 +180,10 @@ export function LiveVideoViewer({
   const isGridMeeting = stream.orientation === "landscape"
   // Prompt shown when the host asks this viewer to unmute in a grid meeting.
   const [askedToUnmute, setAskedToUnmute] = useState(false)
+  // Grid meetings show a pre-join preview first. `entered` flips true once the
+  // participant taps "Join meeting"; their device choices seed the hook.
+  const [entered, setEntered] = useState(!isGridMeeting)
+  const [prejoin, setPrejoin] = useState<{ micOn: boolean; camOn: boolean }>({ micOn: true, camOn: true })
 
   const {
     localVideoRef,
@@ -204,6 +209,8 @@ export function LiveVideoViewer({
     isHost: false,
     hostId: stream.hostId,
     autoPublish: isGridMeeting,
+    initialMicOn: prejoin.micOn,
+    initialCamOn: prejoin.camOn,
     onAskUnmute: () => setAskedToUnmute(true),
   })
 
@@ -222,10 +229,13 @@ export function LiveVideoViewer({
   }
 
   useEffect(() => {
+    // Grid meetings hold off connecting until the participant finishes the
+    // pre-join preview; plain broadcasts join immediately.
+    if (!entered) return
     void join()
     return () => disconnect()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [entered])
 
   // Keep the mini-player meta in sync.
   useEffect(() => {
@@ -354,6 +364,24 @@ export function LiveVideoViewer({
         <p className="text-sm text-white/60">The host has ended this live. Taking you back to Live…</p>
         <Loader2 className="size-4 animate-spin text-white/60" />
       </div>
+    )
+  }
+
+  // ── Grid meeting: pre-join preview ────────────────────────────────────────
+  // Before entering, the participant picks camera/mic on/off (still adjustable
+  // inside). Choices seed the RTC hook; only then do we connect.
+  if (isGridMeeting && !entered) {
+    return (
+      <GridPrejoin
+        title={stream.title}
+        hostName={stream.hostName}
+        selfName={currentUser?.name ?? "You"}
+        joining={joining}
+        onEnter={(choices) => {
+          setPrejoin(choices)
+          setEntered(true)
+        }}
+      />
     )
   }
 
