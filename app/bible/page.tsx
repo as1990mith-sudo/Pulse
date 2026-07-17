@@ -16,7 +16,7 @@ export default async function BiblePage() {
     <div className="min-h-screen">
       <SiteHeader />
       <main>
-        <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
+        <div className="mx-auto w-full max-w-3xl px-4 pb-6 sm:px-6 sm:pb-8">
           <BibleReader signedIn={!!currentUser} />
         </div>
       </main>

@@ -434,20 +434,22 @@ export function BibleReader({ signedIn }: { signedIn: boolean }) {
                   key={v.verse}
                   onClick={(e) => onVerseTap(v.verse, e.currentTarget)}
                   className={cn(
-                    "flex cursor-pointer gap-3 rounded-md px-2 py-0.5 text-lg leading-relaxed text-justify [text-justify:inter-word] transition-colors hover:bg-secondary/60",
+                    "cursor-pointer rounded-md px-2 py-0.5 text-lg leading-relaxed text-justify [text-justify:inter-word] transition-colors hover:bg-secondary/60",
                   )}
                   style={color ? { backgroundColor: color.bg } : undefined}
                 >
-                  <span className="flex select-none items-center gap-1 pt-1 text-xs font-semibold text-primary tabular-nums">
+                  {/* Verse number sits inline at the start of the verse so it
+                      shares the first line with the opening words. */}
+                  <span className="mr-2 select-none align-baseline text-xs font-semibold text-primary tabular-nums">
                     {v.verse}
-                    {hasNote && (
-                      <StickyNote
-                        className="size-3 text-primary/80"
-                        aria-label="You have a note on this verse"
-                      />
-                    )}
                   </span>
-                  <span className="flex-1">{v.text}</span>
+                  {hasNote && (
+                    <StickyNote
+                      className="mr-1 inline-block size-3 -translate-y-px align-baseline text-primary/80"
+                      aria-label="You have a note on this verse"
+                    />
+                  )}
+                  <span>{v.text}</span>
                 </li>
               )
             })}
@@ -752,20 +754,24 @@ function VerseActionSheet({
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose()
     }
-    function onDown(e: MouseEvent) {
+    function onDown(e: PointerEvent) {
       if (popRef.current && !popRef.current.contains(e.target as Node)) onClose()
     }
     document.addEventListener("keydown", onKey)
-    document.addEventListener("mousedown", onDown)
+    document.addEventListener("pointerdown", onDown)
     return () => {
       document.removeEventListener("keydown", onKey)
-      document.removeEventListener("mousedown", onDown)
+      document.removeEventListener("pointerdown", onDown)
     }
   }, [onClose])
 
   if (typeof document === "undefined") return null
 
   return createPortal(
+    <>
+    {/* Transparent full-screen backdrop: any tap outside the popover closes it.
+        Works reliably on touch where document mousedown alone does not. */}
+    <div aria-hidden="true" onClick={onClose} className="fixed inset-0 z-[65]" />
     <div
       ref={popRef}
       role="dialog"
@@ -955,8 +961,9 @@ function VerseActionSheet({
               <StickyNote className="size-4" /> Add note
             </button>
           )}
-        </div>
-    </div>,
+  </div>
+  </div>
+  </>,
     document.body,
   )
 }

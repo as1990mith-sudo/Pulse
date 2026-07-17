@@ -1,14 +1,13 @@
 "use client"
 
-import { useEffect, useRef, useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { createPortal } from "react-dom"
 import Image from "next/image"
 import {
   CalendarPlus,
   Check,
   Clock,
-  Eye,
-  EyeOff,
+  Download,
   ImageIcon,
   Loader2,
   MapPin,
@@ -16,7 +15,6 @@ import {
   MessageSquare,
   MoreVertical,
   Plus,
-  Sparkles,
   Tag,
   Trash2,
   X,
@@ -33,18 +31,13 @@ import {
   createAnnouncement,
   deleteAnnouncement,
   interactWithAnnouncement,
-  setAnnouncementHidden,
-  setOwnAnnouncementHidden,
   type AnnouncementView,
 } from "@/app/actions/announcements"
 import { AD_BLOCK_HOURS, AD_MAX_HOURS, priceForHours, type AdType } from "@/lib/ads"
-import { formatEventDate } from "@/lib/calendar"
+import { downloadIcs, formatEventDate, googleCalendarUrl } from "@/lib/calendar"
 import type { CurrentUser } from "@/lib/session"
 import { cn } from "@/lib/utils"
 import { uploadMedia } from "@/lib/upload-media"
-
-/** localStorage key for the collapsed-promo viewer preference. */
-const AD_PROMO_HIDDEN_KEY = "freq:ad-promo-hidden"
 
 export function AnnouncementBanner({
   announcements,
@@ -58,132 +51,302 @@ export function AnnouncementBanner({
   isAdmin?: boolean
 }) {
   const [showForm, setShowForm] = useState(false)
+  // The id of the event whose detail sheet is open (opened by tapping a card).
+  const [openId, setOpenId] = useState<number | null>(null)
 
-  // Hide/unhide only applies to the empty promo (i.e. when no advert is
-  // running). It's a lightweight viewer preference kept in localStorage so the
-  // collapsed state sticks across reloads.
-  const [promoHidden, setPromoHidden] = useState(false)
-  useEffect(() => {
-    try {
-      setPromoHidden(localStorage.getItem(AD_PROMO_HIDDEN_KEY) === "1")
-    } catch {
-      /* localStorage unavailable — fall back to shown */
-    }
-  }, [])
-  function setHidden(hidden: boolean) {
-    setPromoHidden(hidden)
-    try {
-      localStorage.setItem(AD_PROMO_HIDDEN_KEY, hidden ? "1" : "0")
-    } catch {
-      /* ignore */
-    }
-  }
-
-  // Pending/declined requests still worth surfacing to their owner (approved
-  // ones already appear in the public list above).
+  // Pending/declined requests still worth surfacing to their owner.
   const trackable = myRequests.filter((r) => r.status !== "approved")
 
-  // Only one live advert is allowed at a time. When one is already running, the
-  // "Advertise" entry point is hidden so a second cannot be created.
-  const slotTaken = announcements.length > 0
+  // Every approved, unexpired event the viewer hasn't dismissed fills the grid.
+  const events = announcements.filter((a) => !a.hiddenByMe)
 
-  // When there's no advert and the viewer collapsed the promo, show a slim bar
-  // with a control to bring it back.
-  if (!slotTaken && promoHidden) {
-    return (
-      <section aria-label="Announcements" className="space-y-3">
-        <div className="mx-4 flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-card/50 px-4 py-2.5 sm:mx-0">
-          <span className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Megaphone className="size-3.5" /> Announcements hidden
-          </span>
-          <Button size="sm" variant="ghost" className="gap-1.5" onClick={() => setHidden(false)}>
-            <Eye className="size-3.5" /> Show
-          </Button>
-        </div>
-        {trackable.length > 0 && (
-          <div className="space-y-2 px-4 sm:px-0">
-            <p className="text-xs font-medium text-muted-foreground">Your advert requests</p>
-            {trackable.map((r) => (
-              <RequestStatusRow key={r.id} request={r} />
-            ))}
-          </div>
-        )}
-        {showForm && currentUser && <AdvertiseForm onClose={() => setShowForm(false)} />}
-      </section>
-    )
-  }
+  // Resolve the open card against the freshest server data so interactions
+  // (which revalidate the feed) reflect immediately; close it if it's gone.
+  const openEvent = openId != null ? announcements.find((e) => e.id === openId) ?? null : null
 
   return (
-    <section aria-label="Announcements" className="space-y-3">
+    <section aria-label="Events" className="space-y-4 pb-4">
+      {/* Header + publish entry point */}
       <div className="flex items-center justify-between gap-3 px-4 sm:px-0">
         <div className="flex items-center gap-2">
-          <span className="flex size-7 items-center justify-center rounded-md bg-foreground/10 text-foreground">
-            <Megaphone className="size-4" />
+          <span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <CalendarPlus className="size-5" />
           </span>
           <div className="leading-tight">
-            <h2 className="text-sm font-semibold">Announcements</h2>
-            <p className="text-xs text-muted-foreground">Promoted events &amp; products from creators</p>
+            <h2 className="text-base font-semibold">Events</h2>
+            <p className="text-xs text-muted-foreground">Upcoming events from the community</p>
           </div>
         </div>
-        <div className="flex items-center gap-1">
-          {currentUser && !slotTaken && (
-            <Button size="sm" variant="secondary" className="gap-1.5" onClick={() => setShowForm(true)}>
-              <Plus className="size-4" /> Advertise here
-            </Button>
-          )}
-          {!slotTaken && (
-            <Button
-              size="icon"
-              variant="ghost"
-              className="text-muted-foreground"
-              aria-label="Hide announcements"
-              onClick={() => setHidden(true)}
-            >
-              <EyeOff className="size-4" />
-            </Button>
-          )}
-        </div>
+        {currentUser && (
+          <Button size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
+            <Plus className="size-4" /> Publish
+          </Button>
+        )}
       </div>
 
-      {announcements.length > 0 ? (
-        <>
-          <div className="flex flex-col">
-            {announcements.map((a) => (
-              <AnnouncementCard key={a.id} announcement={a} isAdmin={isAdmin} />
-            ))}
-          </div>
-        </>
-      ) : (
-        <Card className="mx-4 flex flex-col items-center gap-3 border-dashed bg-card/50 p-6 text-center sm:mx-0">
-          <Sparkles className="size-6 text-primary" />
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-balance">Promote your event or product to the whole community</p>
-            <p className="text-xs text-muted-foreground text-pretty">
-              Feature your flyer here. Interested listeners can reach out to you directly.
-            </p>
-          </div>
-          {currentUser ? (
-            <Button size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
-              <Megaphone className="size-4" /> Advertise here
-            </Button>
-          ) : (
-            <p className="text-xs text-muted-foreground">Sign in to advertise.</p>
-          )}
-        </Card>
-      )}
-
-      {/* Owner's request tracker: pending + declined */}
+      {/* Owner's request tracker: pending / declined */}
       {trackable.length > 0 && (
         <div className="space-y-2 px-4 sm:px-0">
-          <p className="text-xs font-medium text-muted-foreground">Your advert requests</p>
+          <p className="text-xs font-medium text-muted-foreground">Your event requests</p>
           {trackable.map((r) => (
             <RequestStatusRow key={r.id} request={r} />
           ))}
         </div>
       )}
 
+      {/* Two-column grid of every published event. */}
+      {events.length > 0 ? (
+        <div className="grid grid-cols-2 gap-x-3 gap-y-6 px-4 sm:gap-x-4 sm:px-0">
+          {events.map((a, i) => (
+            <EventGridCard key={a.id} event={a} index={i} onOpen={() => setOpenId(a.id)} />
+          ))}
+        </div>
+      ) : (
+        <Card className="mx-4 flex flex-col items-center gap-3 border-dashed bg-card/50 p-8 text-center sm:mx-0">
+          <span className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <CalendarPlus className="size-6" />
+          </span>
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-balance">No events yet</p>
+            <p className="text-xs text-muted-foreground text-pretty">
+              Be the first to publish an upcoming event for the whole community.
+            </p>
+          </div>
+          {currentUser ? (
+            <Button size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
+              <CalendarPlus className="size-4" /> Publish an event
+            </Button>
+          ) : (
+            <p className="text-xs text-muted-foreground">Sign in to publish an event.</p>
+          )}
+        </Card>
+      )}
+
       {showForm && currentUser && <AdvertiseForm onClose={() => setShowForm(false)} />}
+      {openEvent && <EventDetailSheet event={openEvent} isAdmin={isAdmin} onClose={() => setOpenId(null)} />}
     </section>
+  )
+}
+
+/**
+ * Premium bookstore-style grid card: a portrait flyer/poster with a Free/paid
+ * chip, then the event name and publisher beneath. Tapping opens full details.
+ */
+function EventGridCard({
+  event: a,
+  index = 0,
+  onOpen,
+}: {
+  event: AnnouncementView
+  index?: number
+  onOpen: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="group flex flex-col text-left animate-in fade-in slide-in-from-bottom-3 duration-500 fill-mode-both"
+      style={{ animationDelay: `${Math.min(index, 12) * 45}ms` }}
+    >
+      <div className="relative aspect-[3/4] w-full overflow-hidden rounded-[1.25rem] border border-border/60 bg-muted shadow-elevated transition-transform duration-300 group-active:scale-[0.98]">
+        {a.flyer ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={a.flyer || "/placeholder.svg"}
+            alt={`${a.title} flyer`}
+            loading="lazy"
+            className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+          />
+        ) : (
+          <div className="flex size-full items-center justify-center bg-secondary text-muted-foreground">
+            <CalendarPlus className="size-8" />
+          </div>
+        )}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/45 to-transparent" />
+        <span className="absolute bottom-2 left-2 rounded-full bg-background/85 px-2.5 py-1 text-xs font-semibold text-foreground shadow-soft backdrop-blur-md">
+          {a.price ? `$${a.price}` : "Free"}
+        </span>
+      </div>
+      <div className="mt-2 flex flex-col gap-0.5">
+        <span className="flex items-center gap-1 text-[11px] font-medium text-primary">
+          <CalendarPlus className="size-3" />
+          {formatEventDate(a.eventDate ?? "", a.eventTime)}
+        </span>
+        <h3 className="truncate text-sm font-semibold leading-snug text-foreground">{a.title}</h3>
+        <p className="truncate text-xs text-muted-foreground">{a.creatorName}</p>
+      </div>
+    </button>
+  )
+}
+
+/**
+ * Full-screen detail sheet for a single event: large flyer, all the details,
+ * add-to-calendar shortcuts, and the interest actions (for non-owners).
+ */
+function EventDetailSheet({
+  event: a,
+  isAdmin = false,
+  onClose,
+}: {
+  event: AnnouncementView
+  isAdmin?: boolean
+  onClose: () => void
+}) {
+  const [lightbox, setLightbox] = useState(false)
+  const [isPending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+
+  if (typeof document === "undefined") return null
+
+  function handleInteract(action: "interested" | "not_interested") {
+    setError(null)
+    startTransition(async () => {
+      try {
+        await interactWithAnnouncement({ id: a.id, action })
+        onClose()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Something went wrong.")
+      }
+    })
+  }
+
+  const showInterestButtons = !a.isOwner && a.myAction === null
+  const calEvent = {
+    title: a.title,
+    description: a.description,
+    location: a.location,
+    date: a.eventDate ?? "",
+    time: a.eventTime,
+  }
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={a.title}
+      className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-background/90 p-4 backdrop-blur-sm sm:items-center"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <Card className="relative my-auto w-full max-w-md overflow-hidden p-0" onClick={(e) => e.stopPropagation()}>
+        {/* Flyer */}
+        {a.flyer ? (
+          <button
+            type="button"
+            onClick={() => setLightbox(true)}
+            className="relative block aspect-[3/4] w-full overflow-hidden bg-secondary"
+            aria-label={`View ${a.title} flyer full screen`}
+          >
+            <Image
+              src={a.flyer || "/placeholder.svg"}
+              alt={`${a.title} flyer`}
+              fill
+              className="object-cover"
+              unoptimized={a.flyer.startsWith("data:")}
+              sizes="448px"
+            />
+          </button>
+        ) : (
+          <div className="flex aspect-[3/4] w-full items-center justify-center bg-secondary text-muted-foreground">
+            <CalendarPlus className="size-10" />
+          </div>
+        )}
+
+        {/* Overlay chrome on the flyer */}
+        <Button
+          size="icon"
+          variant="ghost"
+          className="absolute left-3 top-3 bg-background/70 backdrop-blur hover:bg-background"
+          aria-label="Close"
+          onClick={onClose}
+        >
+          <X className="size-4" />
+        </Button>
+        <div className="pointer-events-none absolute left-3 top-14 flex flex-col gap-1.5">
+          <Badge className="w-fit gap-1 bg-background/75 text-foreground backdrop-blur">
+            <CalendarPlus className="size-3" /> Event
+          </Badge>
+          <Badge className="w-fit gap-1 bg-background/75 text-foreground backdrop-blur">
+            <Tag className="size-3" /> {a.price ? `$${a.price}` : "Free"}
+          </Badge>
+        </div>
+
+        <div className="space-y-4 p-5">
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold leading-tight text-balance">{a.title}</h2>
+            <p className="text-sm text-muted-foreground">by {a.creatorName}</p>
+          </div>
+
+          <div className="space-y-2 text-sm">
+            <div className="flex items-center gap-2">
+              <CalendarPlus className="size-4 shrink-0 text-primary" />
+              <span className="font-medium">{formatEventDate(a.eventDate ?? "", a.eventTime)}</span>
+            </div>
+            {a.location && (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <MapPin className="size-4 shrink-0" /> {a.location}
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <Tag className="size-4 shrink-0 text-primary" />
+              <span className="font-medium">{a.price ? `$${a.price} entry` : "Free entry"}</span>
+            </div>
+          </div>
+
+          {a.description && (
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{a.description}</p>
+          )}
+
+          {/* Add to calendar */}
+          {a.eventDate && (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                className="gap-1.5"
+                onClick={() => window.open(googleCalendarUrl(calEvent), "_blank", "noopener,noreferrer")}
+              >
+                <CalendarPlus className="size-4" /> Add to Google
+              </Button>
+              <Button size="sm" variant="secondary" className="gap-1.5" onClick={() => downloadIcs(calEvent)}>
+                <Download className="size-4" /> Save .ics
+              </Button>
+            </div>
+          )}
+
+          {showInterestButtons ? (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                className="flex-1 gap-1.5"
+                disabled={isPending}
+                onClick={() => handleInteract("not_interested")}
+              >
+                <X className="size-4" /> Not interested
+              </Button>
+              <Button className="flex-1 gap-1.5" disabled={isPending} onClick={() => handleInteract("interested")}>
+                {isPending ? <Loader2 className="size-4 animate-spin" /> : <MessageSquare className="size-4" />}
+                Want to know more
+              </Button>
+            </div>
+          ) : (
+            <p className="rounded-lg bg-secondary/60 px-3 py-2 text-center text-xs text-muted-foreground">
+              {a.isOwner ? "This is your event." : "You've already responded to this event."}
+            </p>
+          )}
+          {error && <p className="text-sm text-destructive">{error}</p>}
+        </div>
+
+        {/* Platform-admin three-dot menu (delete / message creator) */}
+        {isAdmin && <AdminMenu announcement={a} />}
+      </Card>
+
+      {lightbox && a.flyer && (
+        <ImageLightbox src={a.flyer} alt={`${a.title} flyer`} onClose={() => setLightbox(false)} />
+      )}
+    </div>,
+    document.body,
   )
 }
 
@@ -202,37 +365,6 @@ function StatusBadge({ status }: { status: AnnouncementView["status"] }) {
     <Badge variant="secondary" className="gap-1">
       <Clock className="size-3" /> Pending
     </Badge>
-  )
-}
-
-/** A short, type-aware summary line (date/venue for events, price for products). */
-function AdMeta({ a }: { a: AnnouncementView }) {
-  if (a.adType === "product") {
-    return (
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5 font-semibold text-foreground">
-          <Tag className="size-3.5 text-primary" />${a.price}
-        </span>
-      </div>
-    )
-  }
-  return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 text-xs text-muted-foreground">
-      <span className="flex items-center gap-1.5 font-medium text-foreground">
-        <CalendarPlus className="size-3.5 text-primary" />
-        {formatEventDate(a.eventDate ?? "", a.eventTime)}
-      </span>
-      {a.location && (
-        <span className="flex items-center gap-1.5">
-          <MapPin className="size-3.5" /> {a.location}
-        </span>
-      )}
-      {/* Free vs ticketed entry. A null price means the event is free. */}
-      <span className="flex items-center gap-1.5 font-semibold text-foreground">
-        <Tag className="size-3.5 text-primary" />
-        {a.price ? `$${a.price}` : "Free"}
-      </span>
-    </div>
   )
 }
 
@@ -282,142 +414,6 @@ function RequestStatusRow({ request: r }: { request: AnnouncementView }) {
         {isPending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
       </Button>
     </Card>
-  )
-}
-
-function AnnouncementCard({ announcement: a, isAdmin = false }: { announcement: AnnouncementView; isAdmin?: boolean }) {
-  const [lightbox, setLightbox] = useState(false)
-  const [isPending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
-
-  // Hidden state: collapsed bar with a control to bring the advert back. The
-  // creator can always toggle their own; a viewer can toggle only after they've
-  // interacted with one of the buttons.
-  if (a.hiddenByMe) {
-    return (
-      <div className="mx-4 flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-card/40 px-5 py-4 sm:mx-0">
-        <span className="flex items-center gap-3 whitespace-nowrap text-base text-muted-foreground">
-          <Megaphone className="size-5 shrink-0" /> Announcements hidden
-        </span>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-auto shrink-0 gap-2 p-0 text-base font-semibold text-foreground hover:bg-transparent"
-          disabled={isPending}
-          onClick={() =>
-            startTransition(async () => {
-              if (a.isOwner) await setOwnAnnouncementHidden({ id: a.id, hidden: false })
-              else await setAnnouncementHidden({ id: a.id, hidden: false })
-            })
-          }
-        >
-          {isPending ? <Loader2 className="size-5 animate-spin" /> : <Eye className="size-5" />} Show
-        </Button>
-      </div>
-    )
-  }
-
-  function handleInteract(action: "interested" | "not_interested") {
-    setError(null)
-    startTransition(async () => {
-      try {
-        await interactWithAnnouncement({ id: a.id, action })
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Something went wrong.")
-      }
-    })
-  }
-
-  function handleHide() {
-    startTransition(async () => {
-      if (a.isOwner) await setOwnAnnouncementHidden({ id: a.id, hidden: true })
-      else await setAnnouncementHidden({ id: a.id, hidden: true })
-    })
-  }
-
-  // The creator never sees the interest buttons. Viewers see them only until
-  // they've interacted; after that (or for the creator) we show a hide toggle.
-  const showInterestButtons = !a.isOwner && a.myAction === null
-
-  return (
-    <div className="relative flex w-full flex-col overflow-hidden border-y border-border/60 bg-card sm:flex-row sm:items-stretch">
-      {/* Flyer */}
-      {a.flyer ? (
-        <button
-          type="button"
-          onClick={() => setLightbox(true)}
-          className="relative aspect-[16/9] w-full shrink-0 overflow-hidden bg-secondary sm:aspect-auto sm:w-56 md:w-64"
-          aria-label={`View ${a.title} flyer full screen`}
-        >
-          <Image
-            src={a.flyer || "/placeholder.svg"}
-            alt={`${a.title} flyer`}
-            fill
-            className="object-cover transition-transform duration-500 hover:scale-105"
-            unoptimized={a.flyer.startsWith("data:")}
-            sizes="256px"
-          />
-          <Badge className="absolute left-2 top-2 gap-1 bg-background/70 text-foreground backdrop-blur">
-            <Megaphone className="size-3" /> {a.adType === "product" ? "Product" : "Event"}
-          </Badge>
-        </button>
-      ) : (
-        <div className="flex aspect-[16/9] w-full shrink-0 items-center justify-center bg-secondary sm:aspect-auto sm:w-56 md:w-64">
-          <Badge className="gap-1">
-            <Megaphone className="size-3" /> {a.adType === "product" ? "Product" : "Event"}
-          </Badge>
-        </div>
-      )}
-
-      {/* Info + actions */}
-      <div className="flex flex-1 flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-        <div className="min-w-0 flex-1 space-y-1">
-          {/* Reserve room so the admin menu never overlaps the title */}
-          <h3 className="font-semibold leading-tight text-balance sm:pr-0 pr-8">{a.title}</h3>
-          {a.description && (
-            <p className="line-clamp-2 text-sm text-muted-foreground leading-relaxed">{a.description}</p>
-          )}
-          <AdMeta a={a} />
-        </div>
-
-        <div className="shrink-0 sm:w-56">
-          {showInterestButtons ? (
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                className="flex-1 gap-1.5"
-                disabled={isPending}
-                onClick={() => handleInteract("not_interested")}
-              >
-                <X className="size-4" /> Not interested
-              </Button>
-              <Button
-                size="sm"
-                className="flex-1 gap-1.5"
-                disabled={isPending}
-                onClick={() => handleInteract("interested")}
-              >
-                {isPending ? <Loader2 className="size-4 animate-spin" /> : <MessageSquare className="size-4" />}
-                Want to know more
-              </Button>
-            </div>
-          ) : (
-            <Button size="sm" variant="secondary" className="w-full gap-1.5" disabled={isPending} onClick={handleHide}>
-              {isPending ? <Loader2 className="size-4 animate-spin" /> : <EyeOff className="size-4" />} Hide advert
-            </Button>
-          )}
-          {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
-        </div>
-      </div>
-
-      {/* Platform-admin three-dot menu (delete / message creator) */}
-      {isAdmin && <AdminMenu announcement={a} />}
-
-      {lightbox && a.flyer && (
-        <ImageLightbox src={a.flyer} alt={`${a.title} flyer`} onClose={() => setLightbox(false)} />
-      )}
-    </div>
   )
 }
 
@@ -566,7 +562,8 @@ function AdminMessageDialog({ announcement: a, onClose }: { announcement: Announ
 const DURATION_OPTIONS = Array.from({ length: AD_MAX_HOURS / AD_BLOCK_HOURS }, (_, i) => (i + 1) * AD_BLOCK_HOURS)
 
 function AdvertiseForm({ onClose }: { onClose: () => void }) {
-  const [adType, setAdType] = useState<AdType>("event")
+  // Product adverts were removed — this form only publishes events.
+  const adType: AdType = "event"
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [location, setLocation] = useState("")
@@ -608,22 +605,17 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
     e.preventDefault()
     setError(null)
     if (!title.trim()) {
-      setError(isEvent ? "Please add an event title." : "Please add a product name.")
+      setError("Please add an event title.")
       return
     }
-    if (isEvent) {
-      if (!eventDate) return setError("Please pick an event date.")
-      if (!eventTime) return setError("Please pick an event time.")
-      if (!location.trim()) return setError("Please add the event venue.")
-      if (eventPricing === "paid" && !price.trim()) {
-        return setError("Please add the ticket price, or mark the event as free.")
-      }
-    } else if (!price.trim()) {
-      return setError("Please add the product price.")
+    if (!eventDate) return setError("Please pick an event date.")
+    if (!eventTime) return setError("Please pick an event time.")
+    if (!location.trim()) return setError("Please add the event venue.")
+    if (eventPricing === "paid" && !price.trim()) {
+      return setError("Please add the ticket price, or mark the event as free.")
     }
-    // Events: send the ticket price only when paid (free → null). Products
-    // always send their price.
-    const submittedPrice = isEvent ? (eventPricing === "paid" ? price : null) : price
+    // Send the ticket price only when the event is paid (free → null).
+    const submittedPrice = eventPricing === "paid" ? price : null
     startTransition(async () => {
       try {
         const res = await createAnnouncement({
@@ -631,15 +623,15 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
           title,
           description,
           flyer,
-          location: isEvent ? location : null,
-          eventDate: isEvent ? eventDate : null,
-          eventTime: isEvent ? eventTime : null,
+          location,
+          eventDate,
+          eventTime,
           price: submittedPrice,
           durationHours,
         })
         setResult(res)
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not submit your advert.")
+        setError(err instanceof Error ? err.message : "Could not publish your event.")
       }
     })
   }
@@ -663,8 +655,8 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
               <Megaphone className="size-4" />
             </span>
             <div className="leading-tight">
-              <h2 className="font-semibold">Create an advert</h2>
-              <p className="text-xs text-muted-foreground">Featured at the top of the feed for everyone</p>
+              <h2 className="font-semibold">Publish an event</h2>
+              <p className="text-xs text-muted-foreground">Listed in the Events tab for everyone</p>
             </div>
           </div>
           <Button size="icon" variant="ghost" className="shrink-0" aria-label="Close" onClick={onClose}>
@@ -676,39 +668,6 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
           <ResultPanel result={result} onClose={onClose} />
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Mandatory advert-type choice */}
-            <div className="space-y-2">
-              <span className="text-sm font-medium">What are you advertising?</span>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAdType("event")}
-                  aria-pressed={isEvent}
-                  className={cn(
-                    "flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors",
-                    isEvent
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border text-muted-foreground hover:bg-secondary",
-                  )}
-                >
-                  <CalendarPlus className="size-4" /> Event
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAdType("product")}
-                  aria-pressed={!isEvent}
-                  className={cn(
-                    "flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors",
-                    !isEvent
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border text-muted-foreground hover:bg-secondary",
-                  )}
-                >
-                  <Tag className="size-4" /> Product
-                </button>
-              </div>
-            </div>
-
             {/* Flyer */}
             <div className="flex items-center gap-4">
               <div className="relative aspect-[16/9] w-32 shrink-0 overflow-hidden rounded-lg border border-border bg-secondary">
@@ -722,7 +681,7 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
                 )}
               </div>
               <div className="space-y-1.5">
-                <p className="text-sm font-medium">{isEvent ? "Event flyer" : "Product image"}</p>
+                <p className="text-sm font-medium">Event flyer</p>
                 <p className="text-xs text-muted-foreground">
                   The box shows a preview; your full flyer is kept and shown when tapped.
                 </p>
@@ -753,13 +712,13 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
 
             <div className="space-y-2">
               <label htmlFor="ann-title" className="text-sm font-medium">
-                {isEvent ? "Event title" : "Product name"}
+                Event title
               </label>
               <Input
                 id="ann-title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder={isEvent ? "e.g. Summer Worship Night" : "e.g. Hand-bound Study Journal"}
+                placeholder="e.g. Summer Worship Night"
                 maxLength={80}
               />
             </div>
@@ -772,19 +731,14 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
                 id="ann-desc"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder={
-                  isEvent
-                    ? "Tell people what to expect, who's hosting, ticket info…"
-                    : "Describe your product, what's included, how to buy…"
-                }
+                placeholder="Tell people what to expect, who's hosting, ticket info…"
                 rows={3}
                 maxLength={400}
               />
             </div>
 
-            {/* Event-only: date, time, venue (all required) */}
-            {isEvent ? (
-              <>
+            {/* Date, time, venue (all required) */}
+            <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <label htmlFor="ann-date" className="text-sm font-medium">
@@ -865,29 +819,7 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
                     </div>
                   )}
                 </div>
-              </>
-            ) : (
-              /* Product-only: price (required) */
-              <div className="space-y-2">
-                <label htmlFor="ann-price" className="text-sm font-medium">
-                  Price
-                </label>
-                <div className="relative">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">
-                    $
-                  </span>
-                  <Input
-                    id="ann-price"
-                    inputMode="decimal"
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value)}
-                    placeholder="49.99"
-                    className="pl-7"
-                    maxLength={20}
-                  />
-                </div>
-              </div>
-            )}
+            </div>
 
             {/* Duration */}
             <div className="space-y-2">
