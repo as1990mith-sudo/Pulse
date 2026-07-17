@@ -53,6 +53,7 @@ export function LiveChat({
   immersive = false,
   leadingSlot = null,
   emojiSide = "left",
+  placeholder,
 }: {
   asHost?: boolean
   currentUser?: CurrentUser | null
@@ -69,6 +70,8 @@ export function LiveChat({
   // Which side the emoji button sits on. "right" places it just left of Send,
   // freeing the left for `leadingSlot`.
   emojiSide?: "left" | "right"
+  // Overrides the composer placeholder. Pass "" to show no placeholder text.
+  placeholder?: string
 }) {
   const [draft, setDraft] = useState("")
   const [emojiOpen, setEmojiOpen] = useState(false)
@@ -404,7 +407,9 @@ export function LiveChat({
                   send(e)
                 }
               }}
-              placeholder={asHost ? "Say something to the room…" : `Chat as ${currentUser?.name}…`}
+              placeholder={
+                placeholder ?? (asHost ? "Say something to the room…" : `Chat as ${currentUser?.name}…`)
+              }
               rows={1}
               className={cn(
                 "max-h-32 min-h-10 flex-1 resize-none py-2.5",
