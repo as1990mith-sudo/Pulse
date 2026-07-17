@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation"
 import {
   Heart,
   MessageCircle,
-  Repeat2,
   Plus,
   X,
   Send,
@@ -38,7 +37,6 @@ import {
   getFeed,
   setCommentLike,
   setPostLike,
-  toggleRepost as toggleRepostAction,
   type FeedCommentView,
   type FeedPostView,
   type PostMedia,
@@ -920,8 +918,6 @@ export function PostCard({
   const [liked, setLiked] = useState(post.liked)
   const [likes, setLikes] = useState(post.likes)
   const [likeBurst, setLikeBurst] = useState(false)
-  const [reposted, setReposted] = useState(post.reposted)
-  const [reposts, setReposts] = useState(post.reposts)
   const [saved, setSaved] = useState(post.saved)
   const [saveCount, setSaveCount] = useState(post.saves)
   const [shareCount, setShareCount] = useState(post.shares)
@@ -993,26 +989,6 @@ export function PostCard({
     }
     startTransition(async () => {
       await setPostLike({ postId: post.id, liked: next })
-    })
-  }
-
-  function toggleRepost() {
-    if (!currentUser) return
-    const next = !reposted
-    // Optimistic update, reconciled with the server's authoritative count.
-    setReposted(next)
-    setReposts((n) => (next ? n + 1 : n - 1))
-    startTransition(async () => {
-      try {
-        const res = await toggleRepostAction(post.id)
-        setReposted(res.reposted)
-        setReposts(res.reposts)
-        await globalMutate("feed")
-      } catch {
-        // Roll back on failure.
-        setReposted(!next)
-        setReposts((n) => (next ? n - 1 : n + 1))
-      }
     })
   }
 
@@ -1363,21 +1339,6 @@ export function PostCard({
         >
           <MessageCircle className={cn(feed ? "size-7" : "size-6")} />
           {post.comments.length > 0 && <span>{post.comments.length}</span>}
-        </button>
-
-        <button
-          onClick={toggleRepost}
-          className={cn(
-            "flex items-center gap-1.5 tabular-nums transition-colors hover:text-chart-2",
-            feed ? "text-[15px]" : "text-sm",
-            reposted && "text-chart-2",
-            !currentUser && "cursor-not-allowed opacity-60",
-          )}
-          aria-pressed={reposted}
-          aria-label="Repost"
-        >
-          <Repeat2 className={cn(feed ? "size-7" : "size-6")} />
-          {reposts > 0 && <span>{reposts}</span>}
         </button>
 
         <button
