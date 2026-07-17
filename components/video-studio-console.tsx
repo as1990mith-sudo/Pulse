@@ -950,8 +950,11 @@ export function VideoStudioConsole({
 
         {/* Control dock — overlaid at the bottom of the camera region. Sits
             above the camera-off / connecting wash (z-30) so the camera and mic
-            controls stay tappable even when the camera is turned off. */}
-        {live && (
+            controls stay tappable even when the camera is turned off. Grid
+            meetings hide this dock entirely: MeetingGrid renders its own bottom
+            dock, and this one would otherwise float in the middle of the screen
+            (the camera region is only the top portion in grid mode). */}
+        {live && !isGridMeeting && (
           <div
             className={cn(
               "absolute inset-x-0 bottom-0 z-40 flex items-center justify-center gap-3 p-3 transition-opacity duration-300",
@@ -979,16 +982,14 @@ export function VideoStudioConsole({
             >
               {camOn ? <Video className="size-5" /> : <VideoOff className="size-5" />}
             </GlassButton>
-            {orientation !== "landscape" && (
-              <GlassButton
-                label={guestsEnabled ? "Turn off call-ins" : "Turn on call-ins"}
-                onClick={() => void toggleGuests()}
-                active={guestsEnabled}
-                tone={guestsEnabled ? "glass" : "muted"}
-              >
-                <Users className="size-5" />
-              </GlassButton>
-            )}
+            <GlassButton
+              label={guestsEnabled ? "Turn off call-ins" : "Turn on call-ins"}
+              onClick={() => void toggleGuests()}
+              active={guestsEnabled}
+              tone={guestsEnabled ? "glass" : "muted"}
+            >
+              <Users className="size-5" />
+            </GlassButton>
             <GlassButton
               label="Background music"
               onClick={() => setMusicPanelOpen((o) => !o)}
