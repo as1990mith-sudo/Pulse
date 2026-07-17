@@ -434,20 +434,22 @@ export function BibleReader({ signedIn }: { signedIn: boolean }) {
                   key={v.verse}
                   onClick={(e) => onVerseTap(v.verse, e.currentTarget)}
                   className={cn(
-                    "flex cursor-pointer gap-3 rounded-md px-2 py-0.5 text-lg leading-relaxed text-justify [text-justify:inter-word] transition-colors hover:bg-secondary/60",
+                    "cursor-pointer rounded-md px-2 py-0.5 text-lg leading-relaxed text-justify [text-justify:inter-word] transition-colors hover:bg-secondary/60",
                   )}
                   style={color ? { backgroundColor: color.bg } : undefined}
                 >
-                  <span className="flex select-none items-center gap-1 pt-1 text-xs font-semibold text-primary tabular-nums">
+                  {/* Verse number sits inline at the start of the verse so it
+                      shares the first line with the opening words. */}
+                  <span className="mr-2 select-none align-baseline text-xs font-semibold text-primary tabular-nums">
                     {v.verse}
-                    {hasNote && (
-                      <StickyNote
-                        className="size-3 text-primary/80"
-                        aria-label="You have a note on this verse"
-                      />
-                    )}
                   </span>
-                  <span className="flex-1">{v.text}</span>
+                  {hasNote && (
+                    <StickyNote
+                      className="mr-1 inline-block size-3 -translate-y-px align-baseline text-primary/80"
+                      aria-label="You have a note on this verse"
+                    />
+                  )}
+                  <span>{v.text}</span>
                 </li>
               )
             })}
