@@ -32,7 +32,7 @@ import {
   respondToCallRequest,
 } from "@/app/actions/live"
 import { toggleFollow } from "@/app/actions/follow"
-import { useLiveVideo } from "@/lib/use-live-video"
+import { useLiveVideo, type RemotePeer } from "@/lib/use-live-video"
 import { useLivePresence } from "@/lib/use-live-presence"
 import { ReactionLayer, ReactionPicker } from "@/components/live-reactions"
 import { LiveChat } from "@/components/live-chat"
@@ -87,31 +87,40 @@ function InlineFollowButton({
   )
 }
 
-/** A guest call-in tile or an empty placeholder slot. */
-function SlotTile({
+// ── Call-in rail geometry (portrait focused broadcast) ─────────────────────
+// Two fixed-size call-in slots stacked top→bottom, overlaid on the RIGHT of the
+// host video. Fixed sizes/positions so the viewer's own persistent self <video>
+// can be absolutely positioned to overlap a slot without remounting.
+const RAIL_SLOT = "h-32 w-24"
+const RAIL_SLOT_POS = [
+  "right-3 top-[calc(env(safe-area-inset-top)+4.5rem)]",
+  "right-3 top-[calc(env(safe-area-inset-top)+13rem)]",
+] as const
+
+/** A called-in guest's camera in a rail slot (view-only, no host controls). */
+function RailGuestView({
   peer,
+  posClass,
   registerEl,
 }: {
-  peer?: { identity: string; name: string; image: string | null; hasVideo: boolean }
+  peer: { identity: string; name: string; image: string | null; hasVideo: boolean }
+  posClass: string
   registerEl: (identity: string, el: HTMLVideoElement | null) => void
 }) {
-  if (!peer) {
-    return (
-      <div className="relative flex h-full flex-1 flex-col items-center justify-center gap-1.5 rounded-2xl border border-dashed border-white/15 bg-white/[0.03] text-white/40">
-        <UserPlus className="size-5" />
-        <span className="text-[11px] font-medium">Open call-in slot</span>
-      </div>
-    )
-  }
   return (
-    <div className="relative h-full flex-1 overflow-hidden rounded-2xl bg-neutral-900 ring-1 ring-inset ring-white/10">
+    <div
+      className={cn(
+        "absolute z-30 overflow-hidden rounded-2xl bg-neutral-900 ring-1 ring-inset ring-white/15",
+        RAIL_SLOT,
+        posClass,
+      )}
+    >
       <video
         ref={(el) => registerEl(peer.identity, el)}
         autoPlay
         playsInline
         muted
         className={cn(
-          // object-cover so the guest feed fills the tile with no black bars.
           "h-full w-full object-cover transition-opacity duration-300",
           peer.hasVideo ? "opacity-100" : "opacity-0",
         )}
@@ -120,7 +129,7 @@ function SlotTile({
         <div className="absolute inset-0 flex items-center justify-center">
           <span
             className={cn(
-              "flex size-12 items-center justify-center rounded-full text-sm font-semibold text-white",
+              "flex size-11 items-center justify-center rounded-full text-sm font-semibold text-white",
               getAvatarColor(peer.identity),
             )}
           >
@@ -129,7 +138,7 @@ function SlotTile({
         </div>
       )}
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
-        <span className="truncate text-[11px] font-semibold text-white">{peer.name}</span>
+        <span className="block truncate text-[11px] font-semibold text-white">{peer.name}</span>
       </div>
     </div>
   )
@@ -343,6 +352,26 @@ export function LiveVideoViewer({
   const isSelf = currentUserId === stream.hostId
   const remoteVideoOn = Boolean(hostPeer?.hasVideo)
 
+  // ── Focused-broadcast spotlight (mirrors the host console) ────────────────
+  // The host can spotlight one called-in guest: that guest fills the big frame
+  // and the host drops into the top call-in slot. Everyone sees the same swap.
+  const spotlightId = (callState?.gridPinnedIds ?? [])[0] ?? null
+  const spotlightPeer = spotlightId ? guestPeers.find((p) => p.identity === spotlightId) ?? null : null
+  const spotlightIsSelf = !!spotlightId && spotlightId === currentUserId && canPublish
+  const hasSpotlight = !!spotlightPeer || spotlightIsSelf
+  // Whether the big frame currently has a live video (drives the connecting/off
+  // overlays): the spotlighted guest, my own cam, or the host by default.
+  const bigVideoOn = spotlightPeer ? spotlightPeer.hasVideo : spotlightIsSelf ? camOn : remoteVideoOn
+  // Right-side rail occupants (max 2): host first when spotlighting, then me
+  // (if promoted and not the spotlight), then any other called-in guests.
+  const railOccupants: ({ kind: "self" } | { kind: "host" } | { kind: "guest"; peer: RemotePeer })[] = []
+  if (hasSpotlight) railOccupants.push({ kind: "host" })
+  if (canPublish && !spotlightIsSelf) railOccupants.push({ kind: "self" })
+  guestPeers
+    .filter((p) => p.identity !== spotlightPeer?.identity)
+    .forEach((p) => railOccupants.push({ kind: "guest", peer: p }))
+  const selfRailIndex = railOccupants.findIndex((o) => o.kind === "self")
+
   if (blocked) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 bg-neutral-950 px-6 text-center text-white">
@@ -504,24 +533,39 @@ export function LiveVideoViewer({
 
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-neutral-950 text-white [isolation:isolate]">
-      {/* ── Host camera (1.75/4 of the screen; grows to 2.125 when the host has
-          turned off the guest call-in section) ───────────────────────────── */}
-      <div className={cn("relative min-h-0 overflow-hidden", guestsEnabled ? "flex-[1.75]" : "flex-[2.125]")}>
+      {/* ── Host camera — the full stage above the chatroom. Called-in guests
+          overlay on the right; a spotlighted guest swaps into this frame and the
+          host drops to the top call-in slot. ─────────────────────────────── */}
+      <div className="relative min-h-0 flex-[2.5] overflow-hidden">
         <div className="absolute inset-0" onClick={handleTapHeart}>
-          {hostPeer ? (
+          {/* Big frame: the host by default, or a spotlighted remote guest. (My
+              own self-view, when spotlighted, is the persistent element below.) */}
+          {!hasSpotlight && hostPeer ? (
             <video
+              key={`big-host-${hostPeer.identity}`}
               ref={(el) => registerPeerVideoEl(hostPeer.identity, el)}
               autoPlay
               playsInline
               className={cn(
-                // object-cover so the portrait feed fills the frame with no
-                // black bars on the sides.
                 "h-full w-full object-cover transition-opacity duration-500",
                 remoteVideoOn ? "opacity-100" : "opacity-0",
               )}
             />
           ) : null}
-          {!remoteVideoOn && (
+          {spotlightPeer ? (
+            <video
+              key={`big-guest-${spotlightPeer.identity}`}
+              ref={(el) => registerPeerVideoEl(spotlightPeer.identity, el)}
+              autoPlay
+              playsInline
+              muted
+              className={cn(
+                "h-full w-full object-cover transition-opacity duration-500",
+                spotlightPeer.hasVideo ? "opacity-100" : "opacity-0",
+              )}
+            />
+          ) : null}
+          {!bigVideoOn && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/70">
               {stream.cover && (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -532,10 +576,24 @@ export function LiveVideoViewer({
                   className="absolute inset-0 size-full scale-110 object-cover opacity-20 blur-2xl"
                 />
               )}
-              <Loader2 className="relative size-7 animate-spin" />
-              <p className="relative text-sm font-medium">
-                {ended ? error ?? "This stream has ended." : "Connecting to the live…"}
-              </p>
+              {hasSpotlight ? (
+                // Spotlighted person's camera is off — show their avatar.
+                <span
+                  className={cn(
+                    "relative flex size-20 items-center justify-center rounded-full text-2xl font-semibold text-white",
+                    getAvatarColor(spotlightPeer?.identity ?? currentUserId ?? "self"),
+                  )}
+                >
+                  {getInitials(spotlightPeer?.name ?? currentUser?.name ?? "You")}
+                </span>
+              ) : (
+                <>
+                  <Loader2 className="relative size-7 animate-spin" />
+                  <p className="relative text-sm font-medium">
+                    {ended ? error ?? "This stream has ended." : "Connecting to the live…"}
+                  </p>
+                </>
+              )}
             </div>
           )}
           {bursts.map((b) => (
