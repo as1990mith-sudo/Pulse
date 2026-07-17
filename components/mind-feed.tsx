@@ -174,7 +174,10 @@ export function MindFeed({
   // Index currently being dragged in the reorder strip (null when not dragging).
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [isPending, startTransition] = useTransition()
-  const [tab, setTab] = useState<"for-you" | "following" | "status" | "reels">("for-you")
+  // "status" is kept in the union (still deep-linkable via /status and ?tab=status)
+  // but is intentionally NOT surfaced as a feed sub-tab anymore — "events" takes
+  // its place and hosts the announcements/events feature.
+  const [tab, setTab] = useState<"for-you" | "following" | "status" | "events" | "reels">("for-you")
   const fileInputRef = useRef<HTMLInputElement>(null)
   // Separate inputs so we can request the device camera directly: one for
   // capturing a photo and one for recording a video. The "capture" attribute
@@ -253,7 +256,13 @@ export function MindFeed({
   useEffect(() => {
     if (typeof window === "undefined") return
     const requested = new URLSearchParams(window.location.search).get("tab")
-    if (requested === "reels" || requested === "status" || requested === "following" || requested === "for-you") {
+    if (
+      requested === "reels" ||
+      requested === "status" ||
+      requested === "events" ||
+      requested === "following" ||
+      requested === "for-you"
+    ) {
       setTab(requested)
     }
     // Run once on mount.
@@ -384,7 +393,7 @@ export function MindFeed({
   const TAB_ITEMS = [
     { id: "for-you" as const, label: "For you" },
     { id: "following" as const, label: "Following" },
-    { id: "status" as const, label: "Status" },
+    { id: "events" as const, label: "Events" },
     { id: "reels" as const, label: "Reels" },
   ]
 
@@ -446,8 +455,9 @@ export function MindFeed({
     </div>
   )
 
-  // The promotional Announcements banner. It sits above the feed on every tab
-  // except Status, where it would crowd the story list.
+  // The Events feature (formerly the top-of-feed Announcements banner). It now
+  // lives exclusively inside the "Events" sub-tab, where creators publish and
+  // browse upcoming events. Signed-out users still see it above their feed.
   const announcementBanner = (
     <div className="pt-4 pb-5">
       <AnnouncementBanner
@@ -511,10 +521,9 @@ export function MindFeed({
 
   return (
     <PullToRefresh onRefresh={refreshFeed}>
-      {/* Announcements show on every tab except Status. */}
-      {tab !== "status" && announcementBanner}
-      {/* The post composer is only relevant to the post feeds, not Status. */}
-      {tab !== "status" && (
+      {/* The post composer is only relevant to the scrolling post feeds
+          (For you / Following) — not Events or Status. */}
+      {(tab === "for-you" || tab === "following") && (
       <div className="border-y border-border/60 bg-gradient-to-b from-card/60 to-background px-4 py-5 sm:px-5">
         <form onSubmit={publish} className="flex gap-4">
           <Link
@@ -734,7 +743,9 @@ export function MindFeed({
 
       {/* Swipe horizontally to move between the feed sub-tabs. */}
       <div onTouchStart={onFeedTouchStart} onTouchEnd={onFeedTouchEnd}>
-        {tab === "status" ? (
+        {tab === "events" ? (
+          announcementBanner
+        ) : tab === "status" ? (
           <div className="px-4 py-3 sm:px-5">
             <StatusBar variant="list" groups={statusGroups} currentUser={currentUser} />
           </div>
