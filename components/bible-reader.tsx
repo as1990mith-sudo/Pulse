@@ -78,7 +78,6 @@ export function BibleReader({ signedIn }: { signedIn: boolean }) {
   const [book, setBook] = useState("John")
   const [chapter, setChapter] = useState(1)
   const [mode, setMode] = useState<ReadMode>("kjv")
-  const [activeColor, setActiveColor] = useState<HighlightKey | null>(null)
   // Highlight colour per verseId and note body per verseId. For signed-in
   // readers these are hydrated from (and saved to) their account; signed-out
   // readers keep highlights in localStorage and can't save notes.
@@ -216,19 +215,6 @@ export function BibleReader({ signedIn }: { signedIn: boolean }) {
     })
   }
 
-  function toggleHighlight(verse: number) {
-    if (!activeColor) return
-    const id = `${bookIndex}:${chapter}:${verse}`
-    const next = highlights[id] === activeColor ? null : activeColor
-    setHighlights((prev) => {
-      const copy = { ...prev }
-      if (next === null) delete copy[id]
-      else copy[id] = next
-      return copy
-    })
-    persistHighlight(id, next)
-  }
-
   // Direct highlight setter used by the per-verse action sheet (null clears it).
   function setVerseHighlight(verse: number, key: HighlightKey | null) {
     const id = `${bookIndex}:${chapter}:${verse}`
@@ -279,22 +265,19 @@ export function BibleReader({ signedIn }: { signedIn: boolean }) {
     })
   }
 
-  // Tapping a verse highlights it when a colour is armed, otherwise opens the
-  // Copy / Share / Highlight popover anchored to the tapped verse.
+  // Tapping a verse opens the Copy / Share / Highlight / Note popover anchored
+  // to the tapped verse.
   function onVerseTap(verse: number, el: HTMLElement) {
-    if (activeColor) toggleHighlight(verse)
-    else {
-      setAnchorRect(el.getBoundingClientRect())
-      setSelectedVerse(verse)
-    }
+    setAnchorRect(el.getBoundingClientRect())
+    setSelectedVerse(verse)
   }
 
   const isFirst = bookIndex === 0 && chapter === 1
   const isLast = bookIndex === BIBLE_BOOKS.length - 1 && current ? chapter >= current.chapters : false
 
-  // Derive what the reader is doing right now from existing reading state, so
-  // fellow readers see an honest activity ("Highlighting verses" vs "Reading").
-  const activity = activeColor ? "highlighting" : "reading"
+  // Highlighting now happens inside the per-verse popover, so presence just
+  // reflects that the reader is reading this chapter.
+  const activity = "reading" as const
 
   return (
     <BibleFellowship book={book} chapter={chapter} activity={activity}>
@@ -358,6 +341,15 @@ export function BibleReader({ signedIn }: { signedIn: boolean }) {
         />
 
         <div className="ml-auto flex items-center gap-1">
+          {/* All of the reader's notes, gathered on their own page. */}
+          <Link
+            href="/bible/notes"
+            className="inline-flex size-9 items-center justify-center rounded-lg border border-border bg-card transition-colors hover:bg-secondary"
+            aria-label="My notes"
+            title="My notes"
+          >
+            <NotebookPen className="size-4" />
+          </Link>
           <button
             type="button"
             onClick={goPrev}
@@ -378,41 +370,6 @@ export function BibleReader({ signedIn }: { signedIn: boolean }) {
           </button>
         </div>
       </div>
-
-      {/* Highlighter toolbar — reading translations only (not Strong's) */}
-      {mode !== "interlinear" && (
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-card px-3 py-2">
-        <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-          <Highlighter className="size-3.5" /> Highlight
-        </span>
-        {HIGHLIGHTS.map((h) => (
-          <button
-            key={h.key}
-            type="button"
-            onClick={() => setActiveColor(activeColor === h.key ? null : h.key)}
-            className={cn(
-              "size-6 rounded-full ring-2 ring-offset-2 ring-offset-card transition-all",
-              activeColor === h.key ? "ring-foreground" : "ring-transparent hover:ring-border",
-            )}
-            style={{ backgroundColor: h.swatch }}
-            aria-label={`${h.label} highlighter`}
-            aria-pressed={activeColor === h.key}
-          />
-        ))}
-        {activeColor && (
-          <button
-            type="button"
-            onClick={() => setActiveColor(null)}
-            className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary"
-          >
-            <X className="size-3.5" /> Done
-          </button>
-        )}
-        <span className={cn("text-xs text-muted-foreground", activeColor ? "w-full sm:w-auto" : "ml-auto")}>
-          {activeColor ? "Tap a verse to highlight it." : "Pick a colour, then tap verses."}
-        </span>
-      </div>
-      )}
       </div>
 
       {/* Sentinel: once this clears the top, the slim static bar takes over. */}

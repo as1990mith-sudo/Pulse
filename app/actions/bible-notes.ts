@@ -22,6 +22,18 @@ export type BibleNoteView = {
   updatedAt: string
 }
 
+// A single note flattened with its parsed verse coordinates, for the notes list
+// page. bookIndex is 0-based (matches BIBLE_BOOKS order) so sorting by
+// [bookIndex, chapter, verse] yields canonical Bible order.
+export type BibleNoteListItem = {
+  verseId: string
+  bookIndex: number
+  chapter: number
+  verse: number
+  body: string
+  updatedAt: string
+}
+
 export type BibleAnnotations = {
   // verseId ("bookIndex:chapter:verse") → highlight colour key.
   highlights: Record<string, string>
@@ -128,6 +140,38 @@ export async function saveBibleNote(
     })
 
   return { ok: true, note: { body: trimmed, updatedAt: now.toISOString() } }
+}
+
+/**
+ * Every note the signed-in reader has made, sorted into canonical Bible order
+ * (book, then chapter, then verse) for the notes page. Malformed verseIds are
+ * skipped defensively. Returns an empty array when signed out.
+ */
+export async function getBibleNotesList(): Promise<BibleNoteListItem[]> {
+  const userId = await getUserId()
+  if (!userId) return []
+
+  const rows = await db
+    .select({ verseId: bibleNote.verseId, body: bibleNote.body, updatedAt: bibleNote.updatedAt })
+    .from(bibleNote)
+    .where(eq(bibleNote.userId, userId))
+
+  const items: BibleNoteListItem[] = []
+  for (const r of rows) {
+    const [b, c, v] = r.verseId.split(":").map(Number)
+    if (![b, c, v].every((n) => Number.isFinite(n))) continue
+    items.push({
+      verseId: r.verseId,
+      bookIndex: b,
+      chapter: c,
+      verse: v,
+      body: r.body,
+      updatedAt: (r.updatedAt ?? new Date()).toISOString(),
+    })
+  }
+
+  items.sort((a, b) => a.bookIndex - b.bookIndex || a.chapter - b.chapter || a.verse - b.verse)
+  return items
 }
 
 /** Delete the reader's note on a verse. */
