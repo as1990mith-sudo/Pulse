@@ -437,7 +437,7 @@ export function LiveVideoViewer({
               currentUser={currentUser}
               hostId={callState?.hostId ?? stream.hostId}
               gridCohostId={callState?.gridCohostId ?? null}
-              gridPinnedId={callState?.gridPinnedId ?? null}
+              gridPinnedIds={callState?.gridPinnedIds ?? []}
               gridPinRequest={callState?.gridPinRequest ?? null}
               onRefreshState={() => void refreshCalls()}
               localVideoRef={localVideoRef}

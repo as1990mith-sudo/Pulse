@@ -856,10 +856,28 @@ export async function setGridCohost(input: {
   return { ok: true }
 }
 
+// Up to two participants may be spotlighted at once. They're stored as a
+// comma-separated list in the `gridPinnedId` text column (no schema change).
+const MAX_GRID_PINS = 2
+function parseGridPins(raw: string | null | undefined): string[] {
+  return (raw ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, MAX_GRID_PINS)
+}
+function serializeGridPins(ids: string[]): string | null {
+  const unique = [...new Set(ids)].slice(0, MAX_GRID_PINS)
+  return unique.length ? unique.join(",") : null
+}
+
 /**
- * A controller (host or co-host) requests to spotlight a participant on page 1.
- * Pinning the host returns the spotlight to the default immediately (no accept).
- * Any other participant must accept via respondGridPin before they're pinned.
+ * A controller (host or co-host) toggles a participant's spotlight on page 1.
+ * Up to two people can be spotlighted at once:
+ *  - Pinning someone already pinned removes them (toggle off), immediately.
+ *  - Pinning the host, or a controller pinning themselves, applies immediately
+ *    (no accept needed) so the host can spotlight himself.
+ *  - Any other participant must accept via respondGridPin before being pinned.
  */
 export async function requestGridPin(input: {
   roomName: string
@@ -869,14 +887,42 @@ export async function requestGridPin(input: {
   const user = await requireUser()
   const { isController, hostId } = await getGridControl(input.roomName, user.id)
   if (!isController) return { ok: false, error: "Only the host or co-host can pin participants." }
-  // Returning the spotlight to the host is the default state — apply at once.
-  if (input.userId === hostId) {
+
+  const [stream] = await db
+    .select({ gridPinnedId: liveStream.gridPinnedId })
+    .from(liveStream)
+    .where(eq(liveStream.roomName, input.roomName))
+  const pins = parseGridPins(stream?.gridPinnedId)
+
+  // Toggle off if already pinned.
+  if (pins.includes(input.userId)) {
     await db
       .update(liveStream)
-      .set({ gridPinnedId: null, gridPinRequestId: null, gridPinRequestName: null })
+      .set({
+        gridPinnedId: serializeGridPins(pins.filter((id) => id !== input.userId)),
+        // Clear any pending request that targeted this same person.
+        gridPinRequestId: null,
+        gridPinRequestName: null,
+      })
       .where(eq(liveStream.roomName, input.roomName))
     return { ok: true }
   }
+
+  // Adding a new pin — enforce the two-person cap.
+  if (pins.length >= MAX_GRID_PINS) {
+    return { ok: false, error: "You can spotlight up to two people. Remove one first." }
+  }
+
+  // The host, or a controller pinning themselves, is applied immediately.
+  if (input.userId === hostId || input.userId === user.id) {
+    await db
+      .update(liveStream)
+      .set({ gridPinnedId: serializeGridPins([...pins, input.userId]) })
+      .where(eq(liveStream.roomName, input.roomName))
+    return { ok: true }
+  }
+
+  // Otherwise the participant must accept the spotlight.
   await db
     .update(liveStream)
     .set({ gridPinRequestId: input.userId, gridPinRequestName: input.userName })
@@ -894,7 +940,7 @@ export async function respondGridPin(input: {
 }): Promise<{ ok: boolean; error?: string }> {
   const user = await requireUser()
   const [stream] = await db
-    .select({ gridPinRequestId: liveStream.gridPinRequestId })
+    .select({ gridPinRequestId: liveStream.gridPinRequestId, gridPinnedId: liveStream.gridPinnedId })
     .from(liveStream)
     .where(eq(liveStream.roomName, input.roomName))
   if (!stream?.gridPinRequestId) return { ok: false, error: "No pin request pending." }
@@ -902,10 +948,16 @@ export async function respondGridPin(input: {
   const isTarget = stream.gridPinRequestId === user.id
   if (!isTarget && !isController) return { ok: false, error: "Not authorized." }
   if (input.accept && isTarget) {
-    // Only the requested person can accept; pinning replaces any previous pin.
+    // Only the requested person can accept; they join the spotlight list (up to
+    // two people) rather than replacing the existing pins.
+    const pins = parseGridPins(stream.gridPinnedId)
     await db
       .update(liveStream)
-      .set({ gridPinnedId: user.id, gridPinRequestId: null, gridPinRequestName: null })
+      .set({
+        gridPinnedId: serializeGridPins([...pins, user.id]),
+        gridPinRequestId: null,
+        gridPinRequestName: null,
+      })
       .where(eq(liveStream.roomName, input.roomName))
   } else {
     await db
@@ -1065,8 +1117,8 @@ export async function getCallState(input: { roomName: string }): Promise<{
   hostId: string | null
   // The single grid co-host (mirrors every host power), or null.
   gridCohostId: string | null
-  // The participant spotlighted on page 1. Null means "default to the host".
-  gridPinnedId: string | null
+  // Up to two participants spotlighted on page 1 (in pin order). Empty = pure grid.
+  gridPinnedIds: string[]
   // An in-flight request to pin a participant, awaiting their acceptance.
   gridPinRequest: { userId: string; userName: string } | null
 }> {
@@ -1217,7 +1269,7 @@ export async function getCallState(input: { roomName: string }): Promise<{
     endRequest,
     hostId,
     gridCohostId: stream?.gridCohostId ?? null,
-    gridPinnedId: stream?.gridPinnedId ?? null,
+    gridPinnedIds: parseGridPins(stream?.gridPinnedId),
     gridPinRequest:
       stream?.gridPinRequestId
         ? { userId: stream.gridPinRequestId, userName: stream.gridPinRequestName ?? "A participant" }
