@@ -348,11 +348,11 @@ export function MeetingGrid({
                 return (
                   <div key={tile ? tile.identity : `empty-${i}`} className="flex min-h-0 items-center justify-center">
                     {tile ? (
-                      <div className="aspect-[17/20] max-h-full w-full self-center overflow-hidden">
+                      <div className="aspect-[17/20] h-full max-w-full overflow-hidden">
                         <div className="size-full">{renderTile(tile)}</div>
                       </div>
                     ) : (
-                      <div className="aspect-[17/20] max-h-full w-full self-center border border-white/5 bg-white/[0.02]" />
+                      <div className="aspect-[17/20] h-full max-w-full border border-white/5 bg-white/[0.02]" />
                     )}
                   </div>
                 )
