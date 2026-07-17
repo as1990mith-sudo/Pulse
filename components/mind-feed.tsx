@@ -63,6 +63,7 @@ import { ReelsFeed } from "@/components/reels-feed"
 import { StatusBar } from "@/components/status-bar"
 import type { StatusGroup } from "@/app/actions/status"
 import { ShareSheet } from "@/components/share-sheet"
+import { EngagementSheet } from "@/components/engagement-sheet"
 import { PullToRefresh } from "@/components/pull-to-refresh"
 import type { ShareTarget } from "@/lib/share-types"
 import { cn } from "@/lib/utils"
@@ -928,6 +929,9 @@ export function PostCard({
   const textWrapRef = useRef<HTMLDivElement>(null)
   const [clampable, setClampable] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
+  // For the author's own post, the like/save buttons open a list of the accounts
+  // that liked / saved it instead of toggling engagement.
+  const [engagementKind, setEngagementKind] = useState<"likes" | "saves" | null>(null)
   const [showComments, setShowComments] = useState(false)
   const [commentDraft, setCommentDraft] = useState("")
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -977,6 +981,11 @@ export function PostCard({
 
   function toggleLike() {
     if (!currentUser) return
+    // You can't like your own post — tapping shows who liked it instead.
+    if (post.isSelf) {
+      setEngagementKind("likes")
+      return
+    }
     const next = !liked
     setLiked(next)
     setLikes((n) => (next ? n + 1 : n - 1))
@@ -994,6 +1003,11 @@ export function PostCard({
 
   function toggleSave() {
     if (!currentUser) return
+    // You can't save your own post — tapping shows who saved it instead.
+    if (post.isSelf) {
+      setEngagementKind("saves")
+      return
+    }
     const next = !saved
     setSaved(next) // optimistic
     setSaveCount((n) => Math.max(0, n + (next ? 1 : -1)))
@@ -1320,7 +1334,7 @@ export function PostCard({
             !currentUser && "cursor-not-allowed opacity-60",
           )}
           aria-pressed={liked}
-          aria-label="Like"
+          aria-label={post.isSelf ? "See who liked this post" : "Like"}
         >
           <Heart
             onAnimationEnd={() => setLikeBurst(false)}
@@ -1350,7 +1364,7 @@ export function PostCard({
             !currentUser && "cursor-not-allowed opacity-60",
           )}
           aria-pressed={saved}
-          aria-label={saved ? "Remove bookmark" : "Save post"}
+          aria-label={post.isSelf ? "See who saved this post" : saved ? "Remove bookmark" : "Save post"}
         >
           <Bookmark
             onAnimationEnd={() => setSaveBurst(false)}
@@ -1420,6 +1434,15 @@ export function PostCard({
         onClose={() => setShareOpen(false)}
         onShared={() => setShareCount((n) => n + 1)}
       />
+
+      {post.isSelf && engagementKind && (
+        <EngagementSheet
+          postId={post.id}
+          kind={engagementKind}
+          open
+          onClose={() => setEngagementKind(null)}
+        />
+      )}
     </article>
   )
 }

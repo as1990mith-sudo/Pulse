@@ -5,7 +5,7 @@ import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { feedComment, feedPost, follow, repost, savedItem, share, user as userTable } from "@/lib/db/schema"
+import { feedComment, feedPost, follow, like, repost, savedItem, share, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { getLikedSet, setLike } from "@/lib/likes"
 import { notifyUser } from "@/app/actions/notifications"
@@ -626,6 +626,9 @@ export async function setPostLike(input: { postId: number; liked: boolean }) {
     .from(feedPost)
     .where(eq(feedPost.id, input.postId))
   if (!row) return
+  // A user can never like their own post — silently ignore any such request
+  // (the UI already hides the action for the author, this is the server guard).
+  if (row.userId === user.id) return
   const { changed } = await setLike(user.id, "post", input.postId, input.liked)
   if (!changed) return
   const next = Math.max(0, row.likes + (input.liked ? 1 : -1))
@@ -644,6 +647,70 @@ export async function setPostLike(input: { postId: number; liked: boolean }) {
   }
 
   revalidatePath("/feed")
+}
+
+/** A single account that engaged (liked or saved) a post, for the author's list. */
+export type PostEngager = {
+  id: string
+  name: string
+  handle: string
+  initials: string
+  color: string
+  image: string | null
+}
+
+// Resolves a set of userIds into display-ready engager rows, preserving the
+// given id order (which callers pass most-recent-first).
+async function toEngagers(userIds: string[]): Promise<PostEngager[]> {
+  if (userIds.length === 0) return []
+  const infoMap = await getUserInfoMap(userIds)
+  return userIds.map((id) => {
+    const name = infoMap.get(id)?.name ?? "Someone"
+    return {
+      id,
+      name,
+      handle: getHandle(name),
+      initials: getInitials(name),
+      color: getAvatarColor(id),
+      image: infoMap.get(id)?.image ?? null,
+    }
+  })
+}
+
+/**
+ * The unique accounts that have liked a post. Restricted to the post's author —
+ * a user can only see who liked their own post. Ordered most-recent-first.
+ */
+export async function getPostLikers(postId: number): Promise<PostEngager[]> {
+  const user = await requireUser()
+  const [post] = await db.select({ userId: feedPost.userId }).from(feedPost).where(eq(feedPost.id, postId))
+  if (!post || post.userId !== user.id) return []
+  const rows = await db
+    .select({ userId: like.userId })
+    .from(like)
+    .where(and(eq(like.targetType, "post"), eq(like.targetId, postId)))
+    .orderBy(desc(like.createdAt))
+  return toEngagers(rows.map((r) => r.userId))
+}
+
+/**
+ * The unique accounts that have saved (bookmarked) a post. Restricted to the
+ * post's author. Ordered most-recent-first.
+ */
+export async function getPostSavers(postId: number): Promise<PostEngager[]> {
+  const user = await requireUser()
+  const [post] = await db.select({ userId: feedPost.userId }).from(feedPost).where(eq(feedPost.id, postId))
+  if (!post || post.userId !== user.id) return []
+  const rows = await db
+    .select({ userId: savedItem.userId })
+    .from(savedItem)
+    .where(and(eq(savedItem.itemType, "post"), eq(savedItem.itemKey, String(postId))))
+    .orderBy(desc(savedItem.createdAt))
+  // savedItem has no unique constraint; de-dupe defensively so the count matches
+  // unique accounts.
+  const seen = new Set<string>()
+  const uniqueIds = rows.map((r) => r.userId).filter((id) => (seen.has(id) ? false : (seen.add(id), true)))
+  return toEngagers(uniqueIds)
 }
 
 /** Toggle a like on a comment. Idempotent — persists per-user state. */

@@ -288,6 +288,20 @@ export async function isItemSaved(itemType: string, itemKey: string): Promise<bo
 /** Saves or unsaves an item for the current user. Returns the new state. */
 export async function toggleSaveItem(target: ShareTarget): Promise<{ saved: boolean }> {
   const user = await requireUser()
+
+  // A user can't save their own post (mirrors the like rule). For posts, the
+  // author instead uses this button to view who saved it, so block the write.
+  if (target.type === "post") {
+    const [post] = await db
+      .select({ userId: feedPost.userId })
+      .from(feedPost)
+      .where(eq(feedPost.id, Number(target.key)))
+      .limit(1)
+    if (post && post.userId === user.id) {
+      throw new Error("You can't save your own post.")
+    }
+  }
+
   const existing = await db
     .select({ id: savedItem.id })
     .from(savedItem)
