@@ -131,9 +131,10 @@ export async function createAnnouncement(input: {
   durationHours: number
 }): Promise<{ status: "approved" | "declined"; declineReason?: string }> {
   const user = await requireUser()
-  const adType: AdType = input.adType === "product" ? "product" : "event"
+  // Only events are supported now — the product option was removed from the UI.
+  const adType: AdType = "event"
   const title = input.title.trim()
-  if (!title) throw new Error(adType === "product" ? "Product name is required." : "Event title is required.")
+  if (!title) throw new Error("Event title is required.")
 
   // Type-specific required fields.
   let eventDate: string | null = null
@@ -163,21 +164,8 @@ export async function createAnnouncement(input: {
 
   const hours = Math.min(AD_MAX_HOURS, Math.max(AD_BLOCK_HOURS, input.durationHours))
 
-  // Singleton: only ONE live advert is allowed at a time. If any approved,
-  // not-yet-expired advert already exists, block the new request entirely.
-  await expireDueAnnouncements()
-  const [taken] = await db
-    .select({ id: announcement.id })
-    .from(announcement)
-    .where(and(eq(announcement.status, "approved"), gt(announcement.expiresAt, new Date())))
-    .limit(1)
-
-  if (taken) {
-    throw new Error(
-      "There's already a live advert running. Only one advert can be active at a time — please try again once the current one expires.",
-    )
-  }
-
+  // Every submitted event is published immediately. Multiple events run at once
+  // and all appear in the Events grid — there's no single-slot restriction.
   const approved = true
   const now = new Date()
   const expiresAt = new Date(now.getTime() + hours * 60 * 60 * 1000)
