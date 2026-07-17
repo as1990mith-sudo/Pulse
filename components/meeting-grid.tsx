@@ -450,6 +450,7 @@ export function MeetingGrid({
           bgEffect={chatBgEffect}
           immersive
           emojiSide="right"
+          placeholder=""
           leadingSlot={
             <div className="relative shrink-0">
               {/* Collapsible controls popover so mic/cam/flip/music don't eat
