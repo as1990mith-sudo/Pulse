@@ -1,7 +1,8 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react"
 import { createPortal } from "react-dom"
+import Link from "next/link"
 import useSWR from "swr"
 import {
   BookOpen,
@@ -13,13 +14,24 @@ import {
   Highlighter,
   Languages,
   Loader2,
+  LogIn,
   MessageCircle,
+  NotebookPen,
+  Pencil,
   Share2,
+  StickyNote,
+  Trash2,
   X,
 } from "lucide-react"
 import { BIBLE_BOOKS, getBook } from "@/lib/bible-books"
 import { InterlinearPane } from "@/components/interlinear-pane"
 import { getApiPassage, type ApiTranslation } from "@/app/actions/bible"
+import {
+  getBibleAnnotations,
+  setBibleHighlight,
+  saveBibleNote,
+  deleteBibleNote,
+} from "@/app/actions/bible-notes"
 import { cn } from "@/lib/utils"
 import { BibleFellowship } from "@/components/bible/bible-fellowship"
 import { BibleReaderIndicator } from "@/components/bible/reader-indicator"
@@ -62,13 +74,18 @@ type HighlightKey = (typeof HIGHLIGHTS)[number]["key"]
 
 const STORAGE_KEY = "frequency-bible-highlights"
 
-export function BibleReader() {
+export function BibleReader({ signedIn }: { signedIn: boolean }) {
   const [book, setBook] = useState("John")
   const [chapter, setChapter] = useState(1)
   const [mode, setMode] = useState<ReadMode>("kjv")
   const [activeColor, setActiveColor] = useState<HighlightKey | null>(null)
+  // Highlight colour per verseId and note body per verseId. For signed-in
+  // readers these are hydrated from (and saved to) their account; signed-out
+  // readers keep highlights in localStorage and can't save notes.
   const [highlights, setHighlights] = useState<Record<string, HighlightKey>>({})
+  const [notes, setNotes] = useState<Record<string, string>>({})
   const [loaded, setLoaded] = useState(false)
+  const [, startPersist] = useTransition()
 
   // Sentinel placed just below the tall controls; when it clears the top of the
   // viewport (and the app header has hidden), the slim static bar fades in.
@@ -78,8 +95,26 @@ export function BibleReader() {
   const current = getBook(book)
   const bookIndex = BIBLE_BOOKS.findIndex((b) => b.name === book)
 
-  // Load saved highlights from the browser once on mount.
+  // Signed-in: pull every saved highlight + note from the account once. SWR
+  // caches it for the session; writes update local state optimistically.
+  const { data: annotations } = useSWR(
+    signedIn ? "bible-annotations" : null,
+    () => getBibleAnnotations(),
+    { revalidateOnFocus: false },
+  )
+
   useEffect(() => {
+    if (!signedIn || !annotations) return
+    setHighlights(annotations.highlights as Record<string, HighlightKey>)
+    const noteMap: Record<string, string> = {}
+    for (const [verseId, note] of Object.entries(annotations.notes)) noteMap[verseId] = note.body
+    setNotes(noteMap)
+    setLoaded(true)
+  }, [signedIn, annotations])
+
+  // Signed-out: load saved highlights from the browser once on mount.
+  useEffect(() => {
+    if (signedIn) return
     try {
       const raw = localStorage.getItem(STORAGE_KEY)
       if (raw) setHighlights(JSON.parse(raw))
@@ -87,17 +122,17 @@ export function BibleReader() {
       // ignore corrupt storage
     }
     setLoaded(true)
-  }, [])
+  }, [signedIn])
 
-  // Persist highlights whenever they change.
+  // Signed-out: persist highlights to the browser whenever they change.
   useEffect(() => {
-    if (!loaded) return
+    if (signedIn || !loaded) return
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(highlights))
     } catch {
       // ignore quota errors
     }
-  }, [highlights, loaded])
+  }, [highlights, loaded, signedIn])
 
   // Bundled, offline KJV: each book ships as a static JSON file in /public/bible.
   const { data, error, isLoading } = useSWR(
@@ -168,15 +203,30 @@ export function BibleReader() {
     scrollTop()
   }
 
+  // Push a highlight change to the account (signed-in only); signed-out changes
+  // ride the localStorage effect above.
+  function persistHighlight(id: string, key: HighlightKey | null) {
+    if (!signedIn) return
+    startPersist(async () => {
+      try {
+        await setBibleHighlight(id, key)
+      } catch {
+        // Best-effort; local state already reflects the change.
+      }
+    })
+  }
+
   function toggleHighlight(verse: number) {
     if (!activeColor) return
     const id = `${bookIndex}:${chapter}:${verse}`
+    const next = highlights[id] === activeColor ? null : activeColor
     setHighlights((prev) => {
-      const next = { ...prev }
-      if (next[id] === activeColor) delete next[id]
-      else next[id] = activeColor
-      return next
+      const copy = { ...prev }
+      if (next === null) delete copy[id]
+      else copy[id] = next
+      return copy
     })
+    persistHighlight(id, next)
   }
 
   // Direct highlight setter used by the per-verse action sheet (null clears it).
@@ -187,6 +237,45 @@ export function BibleReader() {
       if (key === null) delete next[id]
       else next[id] = key
       return next
+    })
+    persistHighlight(id, key)
+  }
+
+  // Save (or, when blank, remove) the reader's note on a verse. Optimistic local
+  // update; the account write is fire-and-forget for signed-in readers.
+  function saveVerseNote(verse: number, body: string) {
+    const id = `${bookIndex}:${chapter}:${verse}`
+    const trimmed = body.trim()
+    setNotes((prev) => {
+      const next = { ...prev }
+      if (!trimmed) delete next[id]
+      else next[id] = trimmed
+      return next
+    })
+    if (!signedIn) return
+    startPersist(async () => {
+      try {
+        await saveBibleNote(id, trimmed)
+      } catch {
+        // Best-effort.
+      }
+    })
+  }
+
+  function removeVerseNote(verse: number) {
+    const id = `${bookIndex}:${chapter}:${verse}`
+    setNotes((prev) => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+    if (!signedIn) return
+    startPersist(async () => {
+      try {
+        await deleteBibleNote(id)
+      } catch {
+        // Best-effort.
+      }
     })
   }
 
@@ -382,6 +471,7 @@ export function BibleReader() {
               const id = `${bookIndex}:${chapter}:${v.verse}`
               const hl = highlights[id]
               const color = HIGHLIGHTS.find((h) => h.key === hl)
+              const hasNote = Boolean(notes[id])
               return (
                 <li
                   key={v.verse}
@@ -391,7 +481,15 @@ export function BibleReader() {
                   )}
                   style={color ? { backgroundColor: color.bg } : undefined}
                 >
-                  <span className="select-none pt-1 text-xs font-semibold text-primary tabular-nums">{v.verse}</span>
+                  <span className="flex select-none items-center gap-1 pt-1 text-xs font-semibold text-primary tabular-nums">
+                    {v.verse}
+                    {hasNote && (
+                      <StickyNote
+                        className="size-3 text-primary/80"
+                        aria-label="You have a note on this verse"
+                      />
+                    )}
+                  </span>
                   <span className="flex-1">{v.text}</span>
                 </li>
               )
@@ -414,6 +512,10 @@ export function BibleReader() {
             anchorRect={anchorRect}
             activeHighlight={highlights[id] ?? null}
             onHighlight={(key) => setVerseHighlight(selectedVerse, key)}
+            note={notes[id] ?? null}
+            canAnnotate={signedIn}
+            onSaveNote={(body) => saveVerseNote(selectedVerse, body)}
+            onDeleteNote={() => removeVerseNote(selectedVerse)}
             onClose={() => setSelectedVerse(null)}
           />
         )
@@ -585,6 +687,10 @@ function VerseActionSheet({
   anchorRect,
   activeHighlight,
   onHighlight,
+  note,
+  canAnnotate,
+  onSaveNote,
+  onDeleteNote,
   onClose,
 }: {
   reference: string
@@ -593,12 +699,24 @@ function VerseActionSheet({
   anchorRect: DOMRect | null
   activeHighlight: HighlightKey | null
   onHighlight: (key: HighlightKey | null) => void
+  note: string | null
+  canAnnotate: boolean
+  onSaveNote: (body: string) => void
+  onDeleteNote: () => void
   onClose: () => void
 }) {
   const [copied, setCopied] = useState(false)
+  const [noteCopied, setNoteCopied] = useState(false)
   const popRef = useRef<HTMLDivElement>(null)
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(null)
+  // Which side of the verse the popover sits on, so it can grow out of the verse
+  // (transform-origin) rather than appearing to blink in from the top.
+  const [placement, setPlacement] = useState<"below" | "above">("below")
   const formatted = `"${text}" — ${reference} (${translationShort})`
+
+  // Note editor state. Opens straight into edit mode when there's no note yet.
+  const [editingNote, setEditingNote] = useState(false)
+  const [draft, setDraft] = useState(note ?? "")
 
   // When a floating fellowship chat is open, offer to share this verse straight
   // into it (sent as formatted text, so it lands in the real DM thread too).
@@ -606,7 +724,8 @@ function VerseActionSheet({
   const canShareToChat = Boolean(fellowship?.hasOpenChat)
 
   // Anchor the popover to the tapped verse, clamped to the viewport and flipped
-  // above the verse when there isn't enough room below it.
+  // above the verse when there isn't enough room below it. Recomputes when the
+  // note editor toggles (which changes the popover's height).
   useLayoutEffect(() => {
     if (!anchorRect) return
     const compute = () => {
@@ -618,10 +737,11 @@ function VerseActionSheet({
       let left = anchorRect.left + anchorRect.width / 2 - width / 2
       left = Math.max(margin, Math.min(left, vw - width - margin))
       const spaceBelow = vh - anchorRect.bottom
-      const top =
-        spaceBelow < height + margin && anchorRect.top > spaceBelow
-          ? Math.max(margin, anchorRect.top - height - 6)
-          : Math.min(anchorRect.bottom + 6, vh - height - margin)
+      const flipAbove = spaceBelow < height + margin && anchorRect.top > spaceBelow
+      const top = flipAbove
+        ? Math.max(margin, anchorRect.top - height - 6)
+        : Math.min(anchorRect.bottom + 6, vh - height - margin)
+      setPlacement(flipAbove ? "above" : "below")
       setCoords({ top, left })
     }
     compute()
@@ -631,7 +751,7 @@ function VerseActionSheet({
       window.removeEventListener("scroll", compute, true)
       window.removeEventListener("resize", compute)
     }
-  }, [anchorRect])
+  }, [anchorRect, editingNote, note])
 
   async function copy() {
     try {
@@ -641,6 +761,22 @@ function VerseActionSheet({
     } catch {
       // Clipboard may be blocked; the share action remains available.
     }
+  }
+
+  async function copyNote() {
+    if (!note) return
+    try {
+      await navigator.clipboard.writeText(note)
+      setNoteCopied(true)
+      setTimeout(() => setNoteCopied(false), 1600)
+    } catch {
+      // Clipboard may be blocked.
+    }
+  }
+
+  function submitNote() {
+    onSaveNote(draft)
+    setEditingNote(false)
   }
 
   async function share() {
@@ -683,11 +819,15 @@ function VerseActionSheet({
         left: coords?.left ?? -9999,
         width: Math.min(VERSE_POPOVER_WIDTH, typeof window !== "undefined" ? window.innerWidth - 16 : VERSE_POPOVER_WIDTH),
         visibility: coords ? "visible" : "hidden",
+        // Grow out of the edge nearest the tapped verse so the popover reads as
+        // emerging from the verse instead of blinking in from the top.
+        transformOrigin: placement === "above" ? "bottom center" : "top center",
       }}
       className={cn(
         "z-[70] rounded-2xl border border-border bg-popover-solid p-3 text-popover-foreground shadow-2xl",
-        // Only run the entrance animation once anchored, so it animates in from
-        // its final position instead of blinking in from the off-screen holder.
+        // Only run the entrance animation once anchored (coords known), so it
+        // animates in from its final position next to the verse rather than
+        // from the off-screen measuring holder.
         coords && "duration-150 animate-in fade-in zoom-in-95",
       )}
     >
@@ -764,6 +904,98 @@ function VerseActionSheet({
               className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary"
             >
               <X className="size-3.5" /> Clear
+            </button>
+          )}
+        </div>
+
+        {/* Notes — signed-in readers can attach a private note to this verse and
+            edit, copy, or delete it later. Signed-out readers get a sign-in nudge. */}
+        <div className="mt-4 border-t border-border/60 pt-3">
+          <span className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <NotebookPen className="size-3.5" /> Note
+          </span>
+
+          {!canAnnotate ? (
+            <Link
+              href="/sign-in"
+              className="flex items-center justify-center gap-2 rounded-xl border border-border bg-secondary px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-secondary/80"
+            >
+              <LogIn className="size-4" /> Sign in to add a note
+            </Link>
+          ) : editingNote ? (
+            <div className="space-y-2">
+              <textarea
+                autoFocus
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="Write a note for this verse…"
+                rows={4}
+                className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm leading-relaxed text-foreground outline-none ring-primary/40 transition-shadow placeholder:text-muted-foreground focus:ring-2"
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={submitNote}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-95"
+                >
+                  <Check className="size-4" /> Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraft(note ?? "")
+                    setEditingNote(false)
+                  }}
+                  className="rounded-xl bg-secondary px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-secondary/80"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : note ? (
+            <div className="space-y-2">
+              <p className="max-h-32 overflow-y-auto whitespace-pre-wrap rounded-xl border border-border/60 bg-secondary/40 px-3 py-2 text-sm leading-relaxed text-foreground">
+                {note}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraft(note)
+                    setEditingNote(true)
+                  }}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-secondary px-3 py-2 text-sm font-semibold transition-colors hover:bg-secondary/80"
+                >
+                  <Pencil className="size-3.5" /> Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void copyNote()}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-secondary px-3 py-2 text-sm font-semibold transition-colors hover:bg-secondary/80"
+                >
+                  {noteCopied ? <Check className="size-3.5 text-primary" /> : <Copy className="size-3.5" />}
+                  {noteCopied ? "Copied" : "Copy"}
+                </button>
+                <button
+                  type="button"
+                  onClick={onDeleteNote}
+                  className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/10"
+                  aria-label="Delete note"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setDraft("")
+                setEditingNote(true)
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-secondary px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-secondary/80"
+            >
+              <StickyNote className="size-4" /> Add note
             </button>
           )}
         </div>

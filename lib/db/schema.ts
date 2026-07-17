@@ -505,6 +505,42 @@ export const bibleReadingDay = pgTable(
   }),
 )
 
+// Per-user verse highlights. verseId is "bookIndex:chapter:verse" (e.g. "42:3:16").
+// One highlight per verse per user (unique index), so re-highlighting updates the
+// colour in place. Replaces the old localStorage-only highlight store so colours
+// survive across sessions and devices.
+export const bibleHighlight = pgTable(
+  "bible_highlight",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("userId").notNull(),
+    verseId: text("verseId").notNull(),
+    color: text("color").notNull(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    userVerseUnique: uniqueIndex("bible_highlight_user_verse_idx").on(t.userId, t.verseId),
+  }),
+)
+
+// Per-user notes attached to a verse. verseId matches bibleHighlight's format.
+// One note per verse per user; saving again overwrites the body (edit in place).
+export const bibleNote = pgTable(
+  "bible_note",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("userId").notNull(),
+    verseId: text("verseId").notNull(),
+    body: text("body").notNull(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    userVerseUnique: uniqueIndex("bible_note_user_verse_idx").on(t.userId, t.verseId),
+  }),
+)
+
 // One row per chat bubble a reader currently has open on their Bible page, kept
 // alive by a heartbeat (like bible_presence). Powers the "max 4 concurrent
 // chats" rule: when a reader already holds this many fresh slots, a new sender
