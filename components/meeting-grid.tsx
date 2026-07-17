@@ -568,7 +568,7 @@ function NameOverlay({
       }}
     >
       {muted && <MicOff className="size-3 shrink-0 text-destructive drop-shadow" />}
-      {isCohost && !isHost && <Star className="size-3 shrink-0 text-primary drop-shadow" />}
+      {isCohost && <Star className="size-3 shrink-0 text-primary drop-shadow" />}
       <div ref={wrapRef} className="relative min-w-0 flex-1 overflow-hidden">
         {/* Hidden measuring copy — always present so we can re-check on resize. */}
         <span ref={measureRef} className="invisible absolute whitespace-nowrap text-xs" aria-hidden="true">
