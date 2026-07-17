@@ -18,7 +18,7 @@ export function LiveBrowse({
 }) {
   const [category, setCategory] = useState<string>(ALL)
 
-  // Count of live streams per category so each rail item can show a tally and
+  // Count of live streams per category so each control can show a tally and
   // empty categories are still selectable (they just render an empty state).
   const counts = useMemo(() => {
     const map = new Map<string, number>()
@@ -35,16 +35,56 @@ export function LiveBrowse({
 
   const Icon = type === "video" ? Video : Mic
   const rail = [ALL, ...LIVE_CATEGORIES]
+  const countFor = (c: string) => (c === ALL ? streams.length : (counts.get(c) ?? 0))
 
   return (
-    <div className="flex gap-4 sm:gap-6">
-      {/* Category rail — vertical, independently scrollable, sticky under the
-          page header so it stays in view while the grid scrolls. */}
-      <aside className="sticky top-20 h-[calc(100vh-6rem)] w-32 shrink-0 overflow-y-auto pb-6 sm:w-44">
+    <div className="lg:flex lg:gap-6">
+      {/* ── Mobile / tablet: horizontal scrolling category chips ─────────────
+          A single edge-to-edge, swipeable row of pills. No wasted half-width
+          rail and no truncated labels — each chip sizes to its full name. */}
+      <div className="-mx-4 mb-5 sm:-mx-6 lg:hidden">
+        <div
+          className="flex gap-2 overflow-x-auto px-4 pb-1 sm:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          role="tablist"
+          aria-label="Live categories"
+        >
+          {rail.map((c) => {
+            const active = category === c
+            const count = countFor(c)
+            return (
+              <button
+                key={c}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setCategory(c)}
+                className={cn(
+                  "flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors",
+                  active
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-secondary text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <span>{c}</span>
+                <span
+                  className={cn(
+                    "min-w-4 rounded-full px-1.5 text-center text-xs tabular-nums",
+                    active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-background/60 text-foreground/70",
+                  )}
+                >
+                  {count}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ── Desktop: vertical, independently scrollable, sticky rail ───────── */}
+      <aside className="sticky top-24 hidden h-[calc(100vh-8rem)] w-52 shrink-0 overflow-y-auto pb-6 lg:block">
         <nav className="flex flex-col gap-1" aria-label="Live categories">
           {rail.map((c) => {
             const active = category === c
-            const count = c === ALL ? streams.length : (counts.get(c) ?? 0)
             return (
               <button
                 key={c}
@@ -65,7 +105,7 @@ export function LiveBrowse({
                     active ? "text-primary-foreground/70" : "text-muted-foreground/60",
                   )}
                 >
-                  {count}
+                  {countFor(c)}
                 </span>
               </button>
             )
@@ -73,29 +113,36 @@ export function LiveBrowse({
         </nav>
       </aside>
 
-      {/* Stream grid — two columns, scrolls with the page down to the last show. */}
+      {/* ── Stream grid — full width on mobile, fills remaining space beside
+          the desktop rail. Columns scale up with viewport width. ─────────── */}
       <div className="min-w-0 flex-1">
-        <div className="mb-4 flex items-center gap-2">
-          <Icon className="size-4 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">
-            {category === ALL ? "All" : category}
-            <span className="ml-2 text-sm font-normal text-muted-foreground tabular-nums">
-              {filtered.length} {filtered.length === 1 ? "live" : "live"}
-            </span>
-          </h2>
+        <div className="mb-4 flex items-center gap-2.5">
+          <span className="flex size-8 items-center justify-center rounded-lg bg-secondary">
+            <Icon className="size-4 text-foreground" />
+          </span>
+          <h2 className="text-lg font-semibold">{category === ALL ? "All shows" : category}</h2>
+          <span className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-muted-foreground tabular-nums">
+            {filtered.length} live
+          </span>
         </div>
 
         {filtered.length > 0 ? (
-          <div className="grid grid-cols-2 gap-3 sm:gap-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-4">
             {filtered.map((stream) => (
               <LiveStreamCard key={stream.id} stream={stream} />
             ))}
           </div>
         ) : (
-          <div className="rounded-2xl border border-dashed border-border/60 p-10 text-center">
-            <p className="text-sm text-muted-foreground">
-              No {type} shows live{category === ALL ? " right now" : ` in ${category}`}.
-            </p>
+          <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border/60 bg-card/40 p-8 text-center">
+            <span className="flex size-14 items-center justify-center rounded-full bg-secondary">
+              <Icon className="size-6 text-muted-foreground" />
+            </span>
+            <div className="space-y-1">
+              <p className="font-medium text-foreground">Nothing live here yet</p>
+              <p className="text-sm text-muted-foreground text-pretty">
+                No {type} shows live{category === ALL ? " right now" : ` in ${category}`}. Check back soon.
+              </p>
+            </div>
           </div>
         )}
       </div>

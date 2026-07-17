@@ -43,7 +43,7 @@ export function LiveStreamCard({ stream }: { stream: LiveStreamView }) {
         </div>
       </div>
       <div className="flex flex-1 flex-col gap-2 p-3">
-        <h3 className="font-semibold leading-tight text-balance transition-colors group-hover:text-live">
+        <h3 className="line-clamp-2 text-sm font-semibold leading-tight text-balance transition-colors group-hover:text-live sm:text-base">
           {stream.title}
         </h3>
         <div className="mt-auto flex items-center gap-2 pt-1">
