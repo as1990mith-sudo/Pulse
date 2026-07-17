@@ -243,6 +243,8 @@ export function VideoStudioConsole({
     micOn,
     camOn,
     localVideoReady,
+    localSpeaking,
+    facingMode,
     participants,
     peers,
     error: rtcError,
@@ -635,12 +637,13 @@ export function VideoStudioConsole({
             micOn={micOn}
             camOn={camOn}
             localVideoReady={localVideoReady}
+            localSpeaking={localSpeaking}
+            facingMode={facingMode}
             onToggleMic={() => void toggleMic()}
             onToggleCam={() => void toggleCam()}
             onFlipCamera={() => void flipCamera()}
             onAskUnmute={(id) => void askUnmute(id)}
             onAddTrack={() => setMusicPanelOpen(true)}
-            onLeave={() => setEndConfirmOpen(true)}
           />
           </div>
         </div>
