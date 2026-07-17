@@ -142,25 +142,19 @@ export async function createAnnouncement(input: {
   let location: string | null = null
   let price: string | null = null
 
-  if (adType === "event") {
-    if (!input.eventDate) throw new Error("Event date is required.")
-    if (!input.eventTime) throw new Error("Event time is required.")
-    if (!input.location?.trim()) throw new Error("Event venue is required.")
-    if (input.eventDate < new Date().toISOString().slice(0, 10)) {
-      throw new Error("The event date must be today or in the future.")
-    }
-    eventDate = input.eventDate
-    eventTime = input.eventTime
-    location = input.location.trim()
-    // Events can be free or paid. A blank/absent price means free (null);
-    // otherwise store the ticket price the creator set.
-    const rawTicket = (input.price ?? "").trim().replace(/^\$/, "").trim()
-    price = rawTicket || null
-  } else {
-    const raw = (input.price ?? "").trim().replace(/^\$/, "").trim()
-    if (!raw) throw new Error("Product price is required.")
-    price = raw
+  if (!input.eventDate) throw new Error("Event date is required.")
+  if (!input.eventTime) throw new Error("Event time is required.")
+  if (!input.location?.trim()) throw new Error("Event venue is required.")
+  if (input.eventDate < new Date().toISOString().slice(0, 10)) {
+    throw new Error("The event date must be today or in the future.")
   }
+  eventDate = input.eventDate
+  eventTime = input.eventTime
+  location = input.location.trim()
+  // Events can be free or paid. A blank/absent price means free (null);
+  // otherwise store the ticket price the creator set.
+  const rawTicket = (input.price ?? "").trim().replace(/^\$/, "").trim()
+  price = rawTicket || null
 
   const hours = Math.min(AD_MAX_HOURS, Math.max(AD_BLOCK_HOURS, input.durationHours))
 

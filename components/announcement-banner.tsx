@@ -1,14 +1,13 @@
 "use client"
 
-import { useEffect, useRef, useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { createPortal } from "react-dom"
 import Image from "next/image"
 import {
   CalendarPlus,
   Check,
   Clock,
-  Eye,
-  EyeOff,
+  Download,
   ImageIcon,
   Loader2,
   MapPin,
@@ -16,7 +15,6 @@ import {
   MessageSquare,
   MoreVertical,
   Plus,
-  Sparkles,
   Tag,
   Trash2,
   X,
@@ -33,12 +31,10 @@ import {
   createAnnouncement,
   deleteAnnouncement,
   interactWithAnnouncement,
-  setAnnouncementHidden,
-  setOwnAnnouncementHidden,
   type AnnouncementView,
 } from "@/app/actions/announcements"
 import { AD_BLOCK_HOURS, AD_MAX_HOURS, priceForHours, type AdType } from "@/lib/ads"
-import { formatEventDate } from "@/lib/calendar"
+import { downloadIcs, formatEventDate, googleCalendarUrl } from "@/lib/calendar"
 import type { CurrentUser } from "@/lib/session"
 import { cn } from "@/lib/utils"
 import { uploadMedia } from "@/lib/upload-media"
@@ -609,22 +605,17 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
     e.preventDefault()
     setError(null)
     if (!title.trim()) {
-      setError(isEvent ? "Please add an event title." : "Please add a product name.")
+      setError("Please add an event title.")
       return
     }
-    if (isEvent) {
-      if (!eventDate) return setError("Please pick an event date.")
-      if (!eventTime) return setError("Please pick an event time.")
-      if (!location.trim()) return setError("Please add the event venue.")
-      if (eventPricing === "paid" && !price.trim()) {
-        return setError("Please add the ticket price, or mark the event as free.")
-      }
-    } else if (!price.trim()) {
-      return setError("Please add the product price.")
+    if (!eventDate) return setError("Please pick an event date.")
+    if (!eventTime) return setError("Please pick an event time.")
+    if (!location.trim()) return setError("Please add the event venue.")
+    if (eventPricing === "paid" && !price.trim()) {
+      return setError("Please add the ticket price, or mark the event as free.")
     }
-    // Events: send the ticket price only when paid (free → null). Products
-    // always send their price.
-    const submittedPrice = isEvent ? (eventPricing === "paid" ? price : null) : price
+    // Send the ticket price only when the event is paid (free → null).
+    const submittedPrice = eventPricing === "paid" ? price : null
     startTransition(async () => {
       try {
         const res = await createAnnouncement({
@@ -632,15 +623,15 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
           title,
           description,
           flyer,
-          location: isEvent ? location : null,
-          eventDate: isEvent ? eventDate : null,
-          eventTime: isEvent ? eventTime : null,
+          location,
+          eventDate,
+          eventTime,
           price: submittedPrice,
           durationHours,
         })
         setResult(res)
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not submit your advert.")
+        setError(err instanceof Error ? err.message : "Could not publish your event.")
       }
     })
   }
@@ -690,7 +681,7 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
                 )}
               </div>
               <div className="space-y-1.5">
-                <p className="text-sm font-medium">{isEvent ? "Event flyer" : "Product image"}</p>
+                <p className="text-sm font-medium">Event flyer</p>
                 <p className="text-xs text-muted-foreground">
                   The box shows a preview; your full flyer is kept and shown when tapped.
                 </p>
@@ -721,13 +712,13 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
 
             <div className="space-y-2">
               <label htmlFor="ann-title" className="text-sm font-medium">
-                {isEvent ? "Event title" : "Product name"}
+                Event title
               </label>
               <Input
                 id="ann-title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder={isEvent ? "e.g. Summer Worship Night" : "e.g. Hand-bound Study Journal"}
+                placeholder="e.g. Summer Worship Night"
                 maxLength={80}
               />
             </div>
@@ -740,19 +731,14 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
                 id="ann-desc"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder={
-                  isEvent
-                    ? "Tell people what to expect, who's hosting, ticket info…"
-                    : "Describe your product, what's included, how to buy…"
-                }
+                placeholder="Tell people what to expect, who's hosting, ticket info…"
                 rows={3}
                 maxLength={400}
               />
             </div>
 
-            {/* Event-only: date, time, venue (all required) */}
-            {isEvent ? (
-              <>
+            {/* Date, time, venue (all required) */}
+            <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <label htmlFor="ann-date" className="text-sm font-medium">
@@ -833,29 +819,7 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
                     </div>
                   )}
                 </div>
-              </>
-            ) : (
-              /* Product-only: price (required) */
-              <div className="space-y-2">
-                <label htmlFor="ann-price" className="text-sm font-medium">
-                  Price
-                </label>
-                <div className="relative">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">
-                    $
-                  </span>
-                  <Input
-                    id="ann-price"
-                    inputMode="decimal"
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value)}
-                    placeholder="49.99"
-                    className="pl-7"
-                    maxLength={20}
-                  />
-                </div>
-              </div>
-            )}
+            </div>
 
             {/* Duration */}
             <div className="space-y-2">
