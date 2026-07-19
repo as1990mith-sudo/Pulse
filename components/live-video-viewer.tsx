@@ -894,7 +894,7 @@ export function LiveVideoViewer({
           keeps a constant share of the screen. ─────────────────────────────── */}
       <div className="min-h-0 flex-[1.5] border-t border-white/10 bg-neutral-950">
         {canWatch ? (
-          <LiveChat currentUser={currentUser} roomName={stream.roomName} immersive />
+          <LiveChat currentUser={currentUser} roomName={stream.roomName} immersive showResourceButton />
         ) : (
           <div className="flex h-full items-center justify-center p-4 text-center text-sm text-white/70">
             <p>

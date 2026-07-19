@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import useSWR from "swr"
-import { ChevronDown, Pin, PinOff, Send, Smile } from "lucide-react"
+import { BookOpen, ChevronDown, Pin, PinOff, Send, Smile } from "lucide-react"
 import type { CurrentUser } from "@/lib/session"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import {
@@ -55,6 +55,7 @@ export function LiveChat({
   leadingSlot = null,
   emojiSide = "left",
   placeholder,
+  showResourceButton = false,
 }: {
   asHost?: boolean
   currentUser?: CurrentUser | null
@@ -73,6 +74,10 @@ export function LiveChat({
   emojiSide?: "left" | "right"
   // Overrides the composer placeholder. Pass "" to show no placeholder text.
   placeholder?: string
+  // When true, renders the study-resources trigger in the composer, just left of
+  // the Send button. Used by the audio podcast interfaces, which have no control
+  // dock — the resource icon lives inline next to the message box instead.
+  showResourceButton?: boolean
 }) {
   const [draft, setDraft] = useState("")
   const [emojiOpen, setEmojiOpen] = useState(false)
@@ -447,6 +452,21 @@ export function LiveChat({
               aria-label="Chat message"
             />
             {emojiSide === "right" && emojiButton}
+            {showResourceButton && resources && (
+              <button
+                type="button"
+                onClick={() => resources.openDrawer()}
+                aria-label="Open study resources"
+                className={cn(
+                  "flex size-10 shrink-0 items-center justify-center rounded-full transition-colors",
+                  immersive
+                    ? "bg-white/10 text-white/70 hover:bg-white/20 hover:text-white"
+                    : "bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
+                )}
+              >
+                <BookOpen className="size-5" />
+              </button>
+            )}
             <Button
               type="submit"
               size="icon"

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import { AnimatePresence, motion } from "motion/react"
 import {
+  BookOpen,
   ChevronDown,
   Globe,
   HandHeart,
@@ -37,6 +38,7 @@ import { ParticipantGrid, type GridParticipant } from "@/components/conversation
 import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
 import { FloatingMessages } from "@/components/conversation/floating-messages"
 import { MusicPanel, type Track } from "@/components/studio-console"
+import { useLiveResourcesOptional } from "@/components/live/resource/resource-context"
 import { ConversationThemeSheet } from "@/components/conversation/conversation-theme-sheet"
 import { useLiveAudio } from "@/lib/use-live-audio"
 import { useLivePresence } from "@/lib/use-live-presence"
@@ -459,6 +461,9 @@ export function ConversationRoom({
   // ── Host per-participant actions ─────────────────────────────────────────
   const [actionTarget, setActionTarget] = useState<GridParticipant | null>(null)
   const [chatOpen, setChatOpen] = useState(false)
+  // Study-resources drawer opener (present on every live). Sits in the dock
+  // just before the chat button.
+  const resources = useLiveResourcesOptional()
 
   function handleTapParticipant(p: GridParticipant) {
     if (!isHost || p.identity === hostId) return
@@ -956,6 +961,12 @@ export function ConversationRoom({
             active={hostMenuOpen || prayerActive || musicPlaying || locked}
           >
             <Settings2 />
+          </DockButton>
+        )}
+
+        {resources && (
+          <DockButton label="Study resources" onClick={() => resources.openDrawer()}>
+            <BookOpen />
           </DockButton>
         )}
 

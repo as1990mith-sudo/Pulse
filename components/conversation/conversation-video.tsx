@@ -5,6 +5,7 @@ import useSWR from "swr"
 import { AnimatePresence, motion, type Variants } from "motion/react"
 import {
   AlertTriangle,
+  BookOpen,
   ChevronLeft,
   ChevronRight,
   Grid2x2,
@@ -32,6 +33,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ImageLightbox } from "@/components/image-lightbox"
 import { LiveChat } from "@/components/live-chat"
+import { useLiveResourcesOptional } from "@/components/live/resource/resource-context"
 import { FloatingMessages } from "@/components/conversation/floating-messages"
 import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
 import {
@@ -207,6 +209,9 @@ export function ConversationVideo(props: ConversationVideoProps) {
   const [controlsOpen, setControlsOpen] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
+  // Study-resources drawer opener (present on every live). Sits in the dock
+  // just before the chat button.
+  const resources = useLiveResourcesOptional()
 
   // ── Chat polling for floating messages (when the panel is closed) ─────────
   const { data: chatMessages = [] } = useSWR<LiveChatMessageView[]>(
@@ -828,6 +833,11 @@ export function ConversationVideo(props: ConversationVideoProps) {
         <DockButton label="Flip camera" onClick={onFlipCamera}>
           <SwitchCamera />
         </DockButton>
+        {resources && (
+          <DockButton label="Study resources" onClick={() => resources.openDrawer()}>
+            <BookOpen />
+          </DockButton>
+        )}
         <DockButton label={chatOpen ? "Close chat" : "Open chat"} active={chatOpen} onClick={() => setChatOpen((v) => !v)}>
           <MessageSquare />
         </DockButton>

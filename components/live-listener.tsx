@@ -694,6 +694,7 @@ export function LiveListener({
         <div className="min-h-0 flex-1">
           <LiveChat
             immersive
+            showResourceButton
             currentUser={currentUser}
             roomName={stream.roomName}
             bgUrl={stream.chatBgUrl ?? null}
