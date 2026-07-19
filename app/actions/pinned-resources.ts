@@ -12,10 +12,10 @@ import { db } from "@/lib/db"
 import { liveStream, pinnedResource } from "@/lib/db/schema"
 import { PIN_KINDS, type PinKind, type PinnedResourceView } from "@/lib/pinned-resources"
 
-// Types may be re-exported from a "use server" file (they're erased at runtime).
-// Runtime values like PIN_KINDS must NOT be re-exported here — import those
-// directly from "@/lib/pinned-resources".
-export type { PinKind, PinnedResourceView }
+// NOTE: A "use server" file may only export async functions. Do NOT re-export
+// types here — the compiler emits type re-exports as runtime exports, which
+// crashes the server actions loader. Import PinKind/PinnedResourceView directly
+// from "@/lib/pinned-resources" instead.
 
 async function getUserId(): Promise<string | null> {
   const session = await auth.api.getSession({ headers: await headers() })
