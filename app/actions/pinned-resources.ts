@@ -10,20 +10,12 @@ import { headers } from "next/headers"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { liveStream, pinnedResource } from "@/lib/db/schema"
+import { PIN_KINDS, type PinKind, type PinnedResourceView } from "@/lib/pinned-resources"
 
-export const PIN_KINDS = ["verse", "pdf", "book", "devotional", "link", "session"] as const
-export type PinKind = (typeof PIN_KINDS)[number]
-
-export type PinnedResourceView = {
-  id: number
-  kind: PinKind
-  title: string
-  subtitle: string | null
-  url: string | null
-  refId: string | null
-  meta: Record<string, unknown> | null
-  createdAt: string
-}
+// Types may be re-exported from a "use server" file (they're erased at runtime).
+// Runtime values like PIN_KINDS must NOT be re-exported here — import those
+// directly from "@/lib/pinned-resources".
+export type { PinKind, PinnedResourceView }
 
 async function getUserId(): Promise<string | null> {
   const session = await auth.api.getSession({ headers: await headers() })

@@ -12,7 +12,8 @@ import {
   X,
 } from "lucide-react"
 import { useLiveResources } from "@/components/live/resource/resource-context"
-import { getPinnedResources, unpinResource, type PinKind, type PinnedResourceView } from "@/app/actions/pinned-resources"
+import { getPinnedResources, unpinResource } from "@/app/actions/pinned-resources"
+import type { PinKind, PinnedResourceView } from "@/lib/pinned-resources"
 
 const KIND_META: Record<PinKind, { icon: typeof FileText; tint: string }> = {
   verse: { icon: BookMarked, tint: "bg-amber-500/20 text-amber-300" },
