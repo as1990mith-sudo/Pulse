@@ -893,6 +893,29 @@ export async function setGridCohost(input: {
   return { ok: true }
 }
 
+/**
+ * The host (or co-host) sets the Conversation video layout for the whole room.
+ * Synced via the `gridLayout` column so every participant sees the same tiling.
+ */
+const GRID_LAYOUTS = ["compact", "balanced", "focus"] as const
+export type GridLayout = (typeof GRID_LAYOUTS)[number]
+export async function setGridLayout(input: {
+  roomName: string
+  layout: GridLayout
+}): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser()
+  const hostId = await getHostId(input.roomName)
+  const [row] = await db
+    .select({ cohost: liveStream.gridCohostId })
+    .from(liveStream)
+    .where(eq(liveStream.roomName, input.roomName))
+  const isController = hostId === user.id || (!!row?.cohost && row.cohost === user.id)
+  if (!isController) return { ok: false, error: "Only the host can change the layout." }
+  const layout = GRID_LAYOUTS.includes(input.layout) ? input.layout : "balanced"
+  await db.update(liveStream).set({ gridLayout: layout }).where(eq(liveStream.roomName, input.roomName))
+  return { ok: true }
+}
+
 // Up to two participants may be spotlighted at once. They're stored as a
 // comma-separated list in the `gridPinnedId` text column (no schema change).
 const MAX_GRID_PINS = 2
@@ -1199,6 +1222,8 @@ export async function getCallState(input: { roomName: string }): Promise<{
   gridPinnedIds: string[]
   // An in-flight request to pin a participant, awaiting their acceptance.
   gridPinRequest: { userId: string; userName: string } | null
+  // Host-selected Conversation video layout, synced to everyone.
+  gridLayout: GridLayout
 }> {
   // Auto-end abandoned streams first so listeners of a vanished host close out.
   await endStaleStreams()
@@ -1221,6 +1246,8 @@ export async function getCallState(input: { roomName: string }): Promise<{
       gridPinnedId: liveStream.gridPinnedId,
       gridPinRequestId: liveStream.gridPinRequestId,
       gridPinRequestName: liveStream.gridPinRequestName,
+      gridLayout: liveStream.gridLayout,
+      prayerStartedAt: liveStream.prayerStartedAt,
     })
     .from(liveStream)
     .where(eq(liveStream.roomName, input.roomName))
@@ -1352,6 +1379,7 @@ export async function getCallState(input: { roomName: string }): Promise<{
       stream?.gridPinRequestId
         ? { userId: stream.gridPinRequestId, userName: stream.gridPinRequestName ?? "A participant" }
         : null,
+    gridLayout: ((stream?.gridLayout as GridLayout | undefined) ?? "balanced") as GridLayout,
   }
 }
 
