@@ -146,6 +146,8 @@ export function StudioConsole({
   const [visibility, setVisibility] = useState<"public" | "private">(resumeStream?.visibility ?? "public")
   // Optional topic category for the session (empty = uncategorised).
   const [category, setCategory] = useState<string>(resumeStream?.category ?? "")
+  // Optional free-text room topic (e.g. "Faith & finance"). Not required.
+  const [roomTopic, setRoomTopic] = useState<string>(resumeStream?.topic ?? "")
   const [endedSession, setEndedSession] = useState<EndedSession>(null)
   const [roomName, setRoomName] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
@@ -477,7 +479,7 @@ export function StudioConsole({
         return
       }
       setStarting(true)
-      const res = await startBroadcast({ title, cover, visibility, category })
+      const res = await startBroadcast({ title, cover, visibility, category, topic: roomTopic.trim() || null })
       setStarting(false)
       if (!res.ok) {
         setError(res.error)
@@ -657,8 +659,11 @@ export function StudioConsole({
 
             {/* Category — required. A live session must be tagged with one of
                 the known categories; there is no "Uncategorised" option. */}
-            <div className="space-y-2">
-              <label htmlFor="audio-live-category" className="text-sm font-medium text-white">
+            <div className="space-y-1.5">
+              <label
+                htmlFor="audio-live-category"
+                className="text-xs font-semibold uppercase tracking-wider text-white/60"
+              >
                 Category <span className="text-primary">*</span>
               </label>
               <div className="relative">
@@ -681,9 +686,28 @@ export function StudioConsole({
               </div>
             </div>
 
+            {/* Room topic — optional free-text label for what the session is
+                about (e.g. "Faith & finance"). Shown to listeners as a subtitle. */}
+            <div className="space-y-1.5">
+              <label
+                htmlFor="audio-room-topic"
+                className="text-xs font-semibold uppercase tracking-wider text-white/60"
+              >
+                Room topic <span className="font-medium normal-case tracking-normal text-white/40">(optional)</span>
+              </label>
+              <input
+                id="audio-room-topic"
+                value={roomTopic}
+                onChange={(e) => setRoomTopic(e.target.value)}
+                maxLength={80}
+                placeholder="What's this room about?"
+                className="w-full rounded-xl bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white ring-1 ring-inset ring-white/10 placeholder:text-white/40 focus:outline-none focus:ring-primary"
+              />
+            </div>
+
             {/* Public / Private toggle — segmented control. */}
-            <div className="space-y-2">
-              <span className="text-sm font-medium text-white">Who can find this session</span>
+            <div className="space-y-1.5">
+              <span className="text-xs font-semibold uppercase tracking-wider text-white/60">Privacy</span>
               <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-white/[0.04] p-1">
                 <button
                   type="button"

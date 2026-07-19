@@ -156,7 +156,9 @@ export async function startBroadcast(input: {
     mode,
     orientation,
     layout,
-    topic: layout === "conversation" ? (input.topic?.trim() || null) : null,
+    // Optional room topic applies to all audio live sessions (podcast &
+    // conversation); video streams don't carry a topic.
+    topic: mode === "audio" ? (input.topic?.trim() || null) : null,
     visibility,
     status: "live",
   })

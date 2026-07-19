@@ -12,25 +12,26 @@ const OPTIONS = [
     value: "podcast" as const,
     label: "Podcast",
     icon: Mic,
-    description: "Host-led broadcast with guests and a listening audience. A professional audio studio.",
+    hint: "Host-led broadcast",
   },
   {
     value: "conversation" as const,
     label: "Conversation",
     icon: Users,
-    description: "Everyone can participate together. A community discussion room.",
+    hint: "Everyone joins in",
   },
 ]
 
 /**
- * Format chooser shown at the top of the Audio Live setup screen. Podcast and
+ * Layout chooser shown at the top of the Audio Live setup screen. Podcast and
  * Conversation are two different live *experiences* (not a setting), so each is
- * a large selectable card — mirroring the Video Live "Focused / Grid" selector.
+ * a selectable card — mirroring the Video Live "Focused / Grid" selector exactly
+ * (compact, side-by-side, icon-over-label with a short hint).
  *
  * The two experiences render from separate consoles (StudioConsole vs
- * ConversationRoom), so picking the other format navigates to that console's
+ * ConversationRoom), so picking the other layout navigates to that console's
  * setup at `/studio?mode=audio&layout=<format>`. The active card carries the
- * glowing red border / tint; the inactive one is a calm glass card.
+ * primary tint / ring; the inactive one is a calm glass card.
  */
 export function AudioFormatSelector({ active }: { active: AudioFormat }) {
   const router = useRouter()
@@ -42,9 +43,9 @@ export function AudioFormatSelector({ active }: { active: AudioFormat }) {
   }
 
   return (
-    <div className="space-y-2">
-      <span className="text-sm font-medium text-white">Format</span>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+    <div className="space-y-1.5">
+      <span className="text-xs font-semibold uppercase tracking-wider text-white/60">Layout</span>
+      <div className="grid grid-cols-2 gap-2">
         {OPTIONS.map((opt) => {
           const isActive = active === opt.value
           const Icon = opt.icon
@@ -55,22 +56,15 @@ export function AudioFormatSelector({ active }: { active: AudioFormat }) {
               onClick={() => choose(opt.value)}
               aria-pressed={isActive}
               className={cn(
-                "flex flex-col items-start gap-2.5 rounded-2xl p-4 text-left ring-1 ring-inset transition-all active:scale-[0.99]",
+                "flex flex-col items-center gap-1.5 rounded-2xl px-3 py-3 text-center ring-1 ring-inset transition-colors",
                 isActive
-                  ? "bg-primary/15 text-white shadow-lg shadow-primary/30 ring-2 ring-primary"
-                  : "bg-white/[0.04] text-white/70 ring-white/10 hover:bg-white/[0.08]",
+                  ? "bg-primary/20 text-white ring-primary"
+                  : "bg-white/5 text-white/70 ring-white/15 hover:bg-white/10",
               )}
             >
-              <span
-                className={cn(
-                  "flex size-10 shrink-0 items-center justify-center rounded-xl transition-colors",
-                  isActive ? "bg-primary text-primary-foreground" : "bg-white/10 text-white/60",
-                )}
-              >
-                <Icon className="size-5" strokeWidth={2.25} />
-              </span>
-              <span className="text-sm font-bold leading-none text-white">{opt.label}</span>
-              <span className="text-pretty text-xs leading-relaxed text-white/55">{opt.description}</span>
+              <Icon className="size-5" />
+              <span className="text-sm font-semibold leading-none">{opt.label}</span>
+              <span className="text-[11px] leading-none text-white/50">{opt.hint}</span>
             </button>
           )
         })}
