@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import useSWR, { useSWRConfig } from "swr"
-import { Bell, Heart, MessageCircle, Radio, UserPlus, Megaphone, Repeat2, Trash2, X, CheckCircle2, Circle } from "lucide-react"
+import { Bell, Heart, Radio, UserPlus, Megaphone, Repeat2, Trash2, X, CheckCircle2, Circle } from "lucide-react"
+import { CommentIcon } from "@/components/comment-icon"
 import {
   getNotifications,
   markNotificationsRead,
@@ -14,9 +15,9 @@ import {
 import { haptic } from "@/lib/haptics"
 import { cn } from "@/lib/utils"
 
-const ICONS: Record<NotificationType, typeof Bell> = {
+const ICONS: Record<NotificationType, React.ComponentType<{ className?: string }>> = {
   like: Heart,
-  comment: MessageCircle,
+  comment: CommentIcon,
   live: Radio,
   post: Megaphone,
   follow: UserPlus,

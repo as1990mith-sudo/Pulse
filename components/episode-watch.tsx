@@ -3,7 +3,8 @@
 import { useEffect, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Bookmark, ChevronDown, Heart, Loader2, MessageCircle, Send, Share2 } from "lucide-react"
+import { Bookmark, ChevronDown, Heart, Loader2, Send, Share2 } from "lucide-react"
+import { CommentIcon } from "@/components/comment-icon"
 import type { Show } from "@/lib/data"
 import type { CurrentUser } from "@/lib/session"
 import type { EpisodeCommentView } from "@/app/actions/episodes"
@@ -281,7 +282,7 @@ export function EpisodeWatch({
                   aria-expanded={commentsOpen}
                   aria-label={commentsOpen ? "Hide comments" : "Show comments"}
                 >
-                  <MessageCircle className="size-5" />
+                  <CommentIcon className="size-5" />
                   {count > 0 && <span className="tabular-nums">{count}</span>}
                 </button>
 

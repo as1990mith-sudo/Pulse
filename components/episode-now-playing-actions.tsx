@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useTransition } from "react"
 import Link from "next/link"
-import { Bookmark, Heart, MessageSquare, Share2 } from "lucide-react"
+import { Bookmark, Heart, Share2 } from "lucide-react"
+import { CommentIcon } from "@/components/comment-icon"
 import { authClient } from "@/lib/auth-client"
 import type { Show } from "@/lib/data"
 import type { ShareTarget } from "@/lib/share-types"
@@ -197,7 +198,7 @@ export function EpisodeNowPlayingActions({
           aria-label={commentsExpanded ? "Hide comments" : "Show comments"}
           className={cn(baseBtn, commentsExpanded && "text-primary hover:text-primary")}
         >
-          <MessageSquare className="size-6" />
+          <CommentIcon className="size-6" />
           <span className="tabular-nums">{commentCount > 0 ? commentCount : "Comment"}</span>
         </button>
 

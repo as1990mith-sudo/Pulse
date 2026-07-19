@@ -70,6 +70,7 @@ import { LiveBadge } from "@/components/live-badge"
 import { ReactionLayer } from "@/components/live-reactions"
 import { BackExitMenu } from "@/components/live-back-menu"
 import { CoverUpload } from "@/components/admin/cover-upload"
+import { AudioFormatSelector } from "@/components/audio-format-selector"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -647,9 +648,11 @@ export function StudioConsole({
           </div>
         )}
 
-        {/* Pre-live: pick cover art + room privacy */}
+        {/* Pre-live: pick the format (Podcast vs Conversation), cover art, category + privacy */}
         {!live && (
           <div className="space-y-4 border-b border-white/[0.07] px-4 py-4 sm:px-6">
+            <AudioFormatSelector active="podcast" />
+
             <CoverUpload value={cover} onChange={setCover} label="Cover artwork (required)" />
 
             {/* Category — required. A live session must be tagged with one of

@@ -10,7 +10,6 @@ import {
   Copy,
   Info,
   Loader2,
-  MessageSquare,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -20,6 +19,7 @@ import {
   Trash2,
   X,
 } from "lucide-react"
+import { CommentIcon } from "@/components/comment-icon"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -414,7 +414,7 @@ function PostItem({
           )}
           aria-expanded={open}
         >
-          <MessageSquare className="size-4" />
+          <CommentIcon className="size-4" />
           {count > 0 ? `${count} ${count === 1 ? "reply" : "replies"}` : "Reply"}
         </button>
         <button
@@ -547,7 +547,7 @@ function InfoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
             </p>
           </div>
           <div className="flex gap-3">
-            <MessageSquare className="mt-0.5 size-7 shrink-0 text-primary" />
+            <CommentIcon className="mt-0.5 size-7 shrink-0 text-primary" />
             <p>
               <span className="font-semibold text-foreground">Replies are public.</span> When you help someone by replying,
               your real profile picture and name are shown and link to your profile — so be kind and constructive.

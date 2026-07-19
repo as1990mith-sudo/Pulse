@@ -6,7 +6,6 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
   Heart,
-  MessageSquare,
   Plus,
   X,
   Send,
@@ -27,6 +26,7 @@ import {
   Images,
   GripVertical,
 } from "lucide-react"
+import { CommentIcon } from "@/components/comment-icon"
 import {
   addPostComment,
   createPost,
@@ -1362,7 +1362,7 @@ export function PostCard({
           )}
           aria-label="Toggle comments"
         >
-          <MessageSquare className={cn(feed ? "size-7" : "size-6")} />
+          <CommentIcon className={cn(feed ? "size-7" : "size-6")} />
           {post.comments.length > 0 && <span>{post.comments.length}</span>}
         </button>
 

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import { AnimatePresence, motion } from "motion/react"
 import {
+  Globe,
   HandHeart,
   Loader2,
   Lock,
@@ -13,27 +14,33 @@ import {
   Mic,
   MicOff,
   Music,
+  Palette,
   Radio,
+  Settings2,
   Sparkles,
   UserMinus,
+  UserPlus,
   Pin,
   PinOff,
   Volume2,
-  VolumeX,
   X,
 } from "lucide-react"
 import { BackExitMenu } from "@/components/live-back-menu"
 import { LiveChat } from "@/components/live-chat"
 import { ActionSheet, type SheetAction } from "@/components/action-sheet"
+import { ImageLightbox } from "@/components/image-lightbox"
 import { CoverUpload } from "@/components/admin/cover-upload"
+import { AudioFormatSelector } from "@/components/audio-format-selector"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { ParticipantGrid, type GridParticipant } from "@/components/conversation/participant-grid"
 import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
 import { FloatingMessages } from "@/components/conversation/floating-messages"
 import { ConversationMusicPanel, type MusicState } from "@/components/conversation/conversation-music-panel"
+import { ConversationThemeSheet } from "@/components/conversation/conversation-theme-sheet"
 import { useLiveAudio } from "@/lib/use-live-audio"
 import { useLivePresence } from "@/lib/use-live-presence"
 import { getAvatarColor } from "@/lib/identity"
+import { liveThemeStyle } from "@/lib/live-themes"
 import { CONVERSATION_CATEGORIES } from "@/lib/live-categories"
 import {
   startBroadcast,
@@ -44,6 +51,7 @@ import {
   setPrayerMode,
   setPinnedParticipant,
   setRoomLock,
+  setLiveTheme,
   muteParticipant,
   removeFromStage,
   type LiveStreamView,
@@ -150,6 +158,7 @@ export function ConversationRoom({
   const [setupTopic, setSetupTopic] = useState("")
   const [setupCover, setSetupCover] = useState<string | null>(null)
   const [setupCategory, setSetupCategory] = useState<string>(CONVERSATION_CATEGORIES[0])
+  const [setupVisibility, setSetupVisibility] = useState<"public" | "private">("public")
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -170,6 +179,14 @@ export function ConversationRoom({
   const startedRef = useRef(false)
   const [connecting, setConnecting] = useState(false)
   const [arrived, setArrived] = useState(false)
+  // As people settle into the room, the tall header collapses into a compact
+  // sticky bar to hand more space to the participant grid.
+  const [autoCompact, setAutoCompact] = useState(false)
+  useEffect(() => {
+    if (!arrived) return
+    const t = setTimeout(() => setAutoCompact(true), 5000)
+    return () => clearTimeout(t)
+  }, [arrived])
 
   // Participant / resume: join an existing room immediately.
   useEffect(() => {
@@ -220,6 +237,7 @@ export function ConversationRoom({
       mode: "audio",
       layout: "conversation",
       topic: setupTopic.trim() || null,
+      visibility: setupVisibility,
     })
     setStarting(false)
     if (!res.ok) {
@@ -237,10 +255,16 @@ export function ConversationRoom({
   const [prayerStartedAt, setPrayerStartedAt] = useState<string | null>(streamData?.prayerStartedAt ?? null)
   const [pinnedId, setPinnedId] = useState<string | null>(streamData?.gridPinnedId ?? null)
   const [locked, setLocked] = useState<boolean>(streamData?.locked ?? false)
+  const [theme, setThemeState] = useState<string>(streamData?.theme ?? "default")
   const [ended, setEnded] = useState(false)
   const [hostEnded, setHostEnded] = useState(false)
   const [prayerEndedAt, setPrayerEndedAt] = useState<number | null>(null)
   const prevPrayer = useRef<string | null>(prayerStartedAt)
+
+  // Host-only UI: consolidated host-controls menu, theme picker, cover lightbox.
+  const [hostMenuOpen, setHostMenuOpen] = useState(false)
+  const [themeOpen, setThemeOpen] = useState(false)
+  const [coverOpen, setCoverOpen] = useState(false)
 
   useEffect(() => {
     if (!roomName || !live) return
@@ -263,6 +287,9 @@ export function ConversationRoom({
         setPrayerStartedAt(s.prayerStartedAt)
         setPinnedId(s.pinnedId)
         setLocked(s.locked)
+        // Participants follow the host's theme; the host keeps their own local
+        // (snappy) value so a stale poll never reverts a just-made change.
+        if (!isHost) setThemeState(s.theme)
       } catch {
         // transient — next tick retries
       }
@@ -404,7 +431,29 @@ export function ConversationRoom({
     ]
   }, [actionTarget, roomName, pinnedId])
 
-  // ── Host room controls ───────────────────────────────────────────────────
+  // ── Host room controls ─────────────────────────────────────────────���─────
+  // Consolidated host-only controls, shown in a single clean menu.
+  const hostControlActions: SheetAction[] = useMemo(() => {
+    if (!isHost) return []
+    return [
+      { label: "Invite people", icon: UserPlus, onClick: () => void inviteToRoom() },
+      { label: "Background music", icon: Music, onClick: () => setMusicOpen(true) },
+      { label: "Room theme", icon: Palette, onClick: () => setThemeOpen(true) },
+      {
+        label: prayerActive ? "End Prayer Mode" : "Start Prayer Mode",
+        icon: HandHeart,
+        onClick: () => togglePrayer(),
+      },
+      {
+        label: locked ? "Unlock room" : "Lock room",
+        icon: locked ? Lock : LockOpen,
+        hint: locked ? "New people can't join" : "Anyone can join",
+        onClick: () => toggleLock(),
+      },
+    ]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost, prayerActive, locked])
+
   function togglePrayer() {
     if (!roomName) return
     const next = !prayerActive
@@ -417,6 +466,27 @@ export function ConversationRoom({
     const next = !locked
     setLocked(next)
     void setRoomLock({ roomName, locked: next })
+  }
+  // Apply a theme locally at once (snappy), then persist so every participant
+  // picks it up on their next poll.
+  function changeTheme(id: string) {
+    setThemeState(id)
+    if (roomName) void setLiveTheme({ roomName, theme: id }).catch(() => {})
+  }
+  // Invite: share the room link via the native share sheet, falling back to
+  // copying it to the clipboard.
+  async function inviteToRoom() {
+    if (!roomName) return
+    const url = `${window.location.origin}/live/${roomName}`
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, text: `Join "${title}" on Frequency`, url })
+      } else {
+        await navigator.clipboard.writeText(url)
+      }
+    } catch {
+      /* user dismissed the share sheet — no-op */
+    }
   }
 
   function leaveRoom() {
@@ -488,6 +558,8 @@ export function ConversationRoom({
           </div>
 
           <div className="space-y-5">
+            <AudioFormatSelector active="conversation" />
+
             <CoverUpload value={setupCover} onChange={setSetupCover} label="Room cover" />
 
             <label className="block space-y-1.5">
@@ -533,6 +605,41 @@ export function ConversationRoom({
               </div>
             </div>
 
+            {/* Privacy — public (discoverable in Live) vs private (invite-only). */}
+            <div className="space-y-2">
+              <span className="text-sm font-medium">Privacy</span>
+              <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-white/[0.04] p-1">
+                {(
+                  [
+                    { value: "public", label: "Public", icon: Globe },
+                    { value: "private", label: "Private", icon: Lock },
+                  ] as const
+                ).map((opt) => {
+                  const isActive = setupVisibility === opt.value
+                  const Icon = opt.icon
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setSetupVisibility(opt.value)}
+                      aria-pressed={isActive}
+                      className={cn(
+                        "flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors",
+                        isActive ? "bg-primary text-primary-foreground" : "text-white/60 hover:text-white",
+                      )}
+                    >
+                      <Icon className="size-4" /> {opt.label}
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="text-xs text-white/50">
+                {setupVisibility === "public"
+                  ? "Listed in Live for everyone to discover and join."
+                  : "Only invited users can join."}
+              </p>
+            </div>
+
             {error && <p className="text-sm text-destructive">{error}</p>}
 
             <button
@@ -551,8 +658,12 @@ export function ConversationRoom({
   }
 
   // ── The live room ────────────────────────────────────────────────────────
+  const headerCompact = autoCompact || chatOpen
   return (
-    <div className="relative flex h-full flex-col overflow-hidden bg-zinc-950 text-white">
+    <div
+      className="relative flex h-full flex-col overflow-hidden bg-zinc-950 text-white"
+      style={liveThemeStyle(theme)}
+    >
       {/* Ambient warm backdrop */}
       <div
         aria-hidden="true"
@@ -575,40 +686,91 @@ export function ConversationRoom({
         </>
       )}
 
-      {/* Header */}
-      <header className="relative z-30 flex items-center gap-3 border-b border-white/10 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+1rem)] backdrop-blur-xl">
-        <BackExitMenu
-          showMenu={state.connected}
-          exitLabel={isHost ? "End gathering" : "Leave"}
-          onExit={isHost ? () => void endRoom() : leaveRoom}
-          onMinimize={onMinimize ?? (() => {})}
-        />
-        {cover && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={cover || "/placeholder.svg"} alt="" className="size-11 shrink-0 rounded-xl object-cover ring-1 ring-white/10" />
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <span className="flex items-center gap-1 rounded-full bg-live px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-live-foreground">
-              <span className="size-1.5 animate-pulse rounded-full bg-current" /> Live
+      {/* Header — expands with centered cover art, then collapses into a
+          compact sticky bar to maximise room space. */}
+      <header className="relative z-30 border-b border-white/10 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] backdrop-blur-xl">
+        {/* Top row: back / more-options, live badge, audience + clock */}
+        <div className="flex items-center gap-2.5">
+          <BackExitMenu
+            showMenu={state.connected}
+            exitLabel={isHost ? "End gathering" : "Leave"}
+            onExit={isHost ? () => void endRoom() : leaveRoom}
+            onMinimize={onMinimize ?? (() => {})}
+          />
+          <span className="flex items-center gap-1 rounded-full bg-live px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-live-foreground">
+            <span className="size-1.5 animate-pulse rounded-full bg-current" /> Live
+          </span>
+          {category && (
+            <span className="truncate rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-white/70">
+              {category}
             </span>
-            {category && (
-              <span className="truncate rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-white/70">
-                {category}
-              </span>
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            <LiveAudienceSheet count={presenceCount || state.listeners} members={presenceMembers} immersive />
+            {state.connected && (
+              <span className="font-mono text-[11px] tabular-nums text-white/45">{formatElapsed(elapsed)}</span>
             )}
           </div>
-          <h1 className="mt-0.5 truncate text-base font-bold leading-tight tracking-tight">{title}</h1>
-          <p className="truncate text-xs font-medium text-white/60">
-            {topic ? topic : `Hosted by ${hostName}`}
-          </p>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          <LiveAudienceSheet count={presenceCount || state.listeners} members={presenceMembers} immersive />
-          {state.connected && (
-            <span className="font-mono text-[11px] tabular-nums text-white/45">{formatElapsed(elapsed)}</span>
+
+        <AnimatePresence initial={false} mode="wait">
+          {headerCompact ? (
+            <motion.div
+              key="compact"
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.22 }}
+              className="mt-2 flex items-center gap-2.5"
+            >
+              {cover && (
+                <button
+                  type="button"
+                  onClick={() => setCoverOpen(true)}
+                  aria-label="View room cover"
+                  className="shrink-0"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={cover || "/placeholder.svg"} alt="" className="size-9 rounded-lg object-cover ring-1 ring-white/15" />
+                </button>
+              )}
+              <h1 className="min-w-0 flex-1 truncate text-sm font-bold leading-tight tracking-tight">{title}</h1>
+              <span className="shrink-0 text-xs font-medium text-white/50">
+                {gridParticipants.length} here
+              </span>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="full"
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.22 }}
+              className="mt-3 flex flex-col items-center text-center"
+            >
+              {cover && (
+                <motion.button
+                  layoutId="conv-cover"
+                  type="button"
+                  onClick={() => setCoverOpen(true)}
+                  aria-label="View room cover"
+                  className="mb-3 overflow-hidden rounded-2xl shadow-xl shadow-black/40 ring-1 ring-white/15 transition-transform active:scale-95"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={cover || "/placeholder.svg"} alt={`${title} cover`} className="size-24 object-cover" />
+                </motion.button>
+              )}
+              <h1 className="max-w-full truncate text-lg font-bold leading-tight tracking-tight text-balance">{title}</h1>
+              <p className="mt-0.5 text-xs font-medium text-white/60">Hosted by {hostName}</p>
+              {topic && (
+                <div className="mt-2 rounded-full bg-white/[0.06] px-3 py-1 ring-1 ring-inset ring-white/10">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-primary">Today&apos;s discussion</span>
+                  <span className="ml-1.5 text-xs font-medium text-white/80">{topic}</span>
+                </div>
+              )}
+            </motion.div>
           )}
-        </div>
+        </AnimatePresence>
       </header>
 
       {/* Speaking status line */}
@@ -683,50 +845,19 @@ export function ConversationRoom({
         </button>
       )}
 
-      {/* Bottom control dock */}
-      <div className="relative z-30 flex items-center justify-center gap-3 border-t border-white/10 px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 backdrop-blur-xl">
-        <DockButton
-          label={micOn ? "Mute yourself" : "Unmute yourself"}
-          onClick={() => void toggleMic()}
-          active={micOn}
-        >
-          {micOn ? <Mic /> : <MicOff />}
-        </DockButton>
-
-        {isHost && (
-          <>
-            <DockButton label="Background music" onClick={() => setMusicOpen(true)} active={music.playing}>
-              <Music />
-            </DockButton>
-            <DockButton label={prayerActive ? "End prayer" : "Start prayer"} onClick={togglePrayer} active={prayerActive}>
-              <HandHeart />
-            </DockButton>
-            <DockButton label={locked ? "Unlock room" : "Lock room"} onClick={toggleLock} active={locked}>
-              {locked ? <Lock /> : <LockOpen />}
-            </DockButton>
-          </>
-        )}
-
-        <DockButton label="Chat" onClick={() => setChatOpen(true)} active={chatOpen}>
-          <MessageSquare />
-        </DockButton>
-      </div>
-
-      {/* Prayer overlay + toast */}
-      <PrayerOverlay active={prayerActive} endedAt={prayerEndedAt} />
-      <PrayerEndedToast endedAt={prayerEndedAt} />
-
-      {/* Chat panel */}
-      <AnimatePresence>
+      {/* Chat panel — slides up to ~40% of the screen; the participant grid
+          above smoothly shrinks to make room (never overlapping). */}
+      <AnimatePresence initial={false}>
         {chatOpen && (
-          <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", stiffness: 320, damping: 34 }}
-            className="absolute inset-x-0 bottom-0 top-24 z-50 flex flex-col overflow-hidden rounded-t-3xl border-t border-white/10 bg-zinc-950/95 backdrop-blur-xl"
+          <motion.section
+            key="conv-chat"
+            initial={{ height: "0vh", opacity: 0 }}
+            animate={{ height: "40vh", opacity: 1 }}
+            exit={{ height: "0vh", opacity: 0 }}
+            transition={{ type: "spring", stiffness: 320, damping: 36 }}
+            className="relative z-40 flex min-h-0 shrink-0 flex-col overflow-hidden border-t border-white/10 bg-black/40 backdrop-blur-xl"
           >
-            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-2.5">
               <h2 className="text-sm font-bold">Chat</h2>
               <button
                 type="button"
@@ -740,9 +871,38 @@ export function ConversationRoom({
             <div className="min-h-0 flex-1">
               <LiveChat asHost={isHost} currentUser={currentUser} roomName={roomName ?? undefined} immersive />
             </div>
-          </motion.div>
+          </motion.section>
         )}
       </AnimatePresence>
+
+      {/* Bottom control dock */}
+      <div className="relative z-30 flex items-center justify-center gap-3 border-t border-white/10 px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 backdrop-blur-xl">
+        <DockButton
+          label={micOn ? "Mute yourself" : "Unmute yourself"}
+          onClick={() => void toggleMic()}
+          active={micOn}
+        >
+          {micOn ? <Mic /> : <MicOff />}
+        </DockButton>
+
+        {isHost && (
+          <DockButton
+            label="Host controls"
+            onClick={() => setHostMenuOpen(true)}
+            active={hostMenuOpen || prayerActive || music.playing || locked}
+          >
+            <Settings2 />
+          </DockButton>
+        )}
+
+        <DockButton label="Chat" onClick={() => setChatOpen((v) => !v)} active={chatOpen}>
+          <MessageSquare />
+        </DockButton>
+      </div>
+
+      {/* Prayer overlay + toast */}
+      <PrayerOverlay active={prayerActive} endedAt={prayerEndedAt} />
+      <PrayerEndedToast endedAt={prayerEndedAt} />
 
       {/* Host music panel */}
       {isHost && (
@@ -757,6 +917,29 @@ export function ConversationRoom({
         />
       )}
 
+      {/* Host controls menu (consolidated) */}
+      {isHost && (
+        <ActionSheet
+          open={hostMenuOpen}
+          onClose={() => setHostMenuOpen(false)}
+          title="Host controls"
+          actions={hostControlActions}
+        />
+      )}
+
+      {/* Host theme picker */}
+      {isHost && (
+        <ConversationThemeSheet
+          open={themeOpen}
+          current={theme}
+          onSelect={(id) => {
+            changeTheme(id)
+            setThemeOpen(false)
+          }}
+          onClose={() => setThemeOpen(false)}
+        />
+      )}
+
       {/* Host per-participant actions */}
       <ActionSheet
         open={Boolean(actionTarget)}
@@ -764,6 +947,11 @@ export function ConversationRoom({
         title={actionTarget ? actionTarget.name : undefined}
         actions={participantActions}
       />
+
+      {/* Full-screen cover art viewer */}
+      {coverOpen && cover && (
+        <ImageLightbox src={cover} alt={`${title} cover`} onClose={() => setCoverOpen(false)} />
+      )}
     </div>
   )
 }
