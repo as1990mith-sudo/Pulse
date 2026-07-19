@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { SiteHeader } from "@/components/site-header"
-import { HostStudioLauncher, HostVideoStudioLauncher } from "@/components/live-session"
+import { HostStudioLauncher, HostVideoStudioLauncher, HostConversationLauncher } from "@/components/live-session"
 import { getCurrentUser } from "@/lib/session"
 import { getMyActiveStream, getMyActiveVideoStream } from "@/app/actions/live"
 import { Button } from "@/components/ui/button"
@@ -9,11 +9,12 @@ import { Card } from "@/components/ui/card"
 export default async function StudioPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mode?: string }>
+  searchParams: Promise<{ mode?: string; layout?: string }>
 }) {
   const currentUser = await getCurrentUser()
-  const { mode } = await searchParams
+  const { mode, layout } = await searchParams
   const isVideo = mode === "video"
+  const isConversation = mode !== "video" && layout === "conversation"
 
   // When signed in, the console owns the full viewport below the header so the
   // studio is compact and only the chat scrolls.
@@ -31,6 +32,11 @@ export default async function StudioPage({
     // playing. If the host already has a stream live (e.g. reopened the studio
     // after signing back in), resume it instead of showing the offline setup.
     const activeStream = await getMyActiveStream()
+    // Conversation is a distinct Audio-Live layout (community gathering) with
+    // its own host setup + room UI. Resume a live conversation if one exists.
+    if (isConversation || activeStream?.layout === "conversation") {
+      return <HostConversationLauncher currentUser={currentUser} resumeStream={activeStream} />
+    }
     return <HostStudioLauncher currentUser={currentUser} resumeStream={activeStream} />
   }
 

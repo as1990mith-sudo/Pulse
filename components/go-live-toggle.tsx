@@ -2,11 +2,12 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowRight, Mic, Video } from "lucide-react"
+import { ArrowRight, Mic, Radio, Users, Video } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { haptic } from "@/lib/haptics"
 
 type Mode = "audio" | "video"
+type AudioLayout = "podcast" | "conversation"
 
 /**
  * Immersive "Go live" entry point for the Live tab. A glassy segmented control
@@ -17,6 +18,14 @@ type Mode = "audio" | "video"
 export function GoLiveToggle() {
   const router = useRouter()
   const [mode, setMode] = useState<Mode>("video")
+  const [audioLayout, setAudioLayout] = useState<AudioLayout>("podcast")
+
+  const openStudio = () => {
+    haptic("medium")
+    const params = new URLSearchParams({ mode })
+    if (mode === "audio") params.set("layout", audioLayout)
+    router.push(`/studio?${params.toString()}`)
+  }
 
   return (
     <section className="relative overflow-hidden rounded-3xl border border-border/60 bg-card">
@@ -79,17 +88,80 @@ export function GoLiveToggle() {
 
           <button
             type="button"
-            onClick={() => {
-              haptic("medium")
-              router.push(`/studio?mode=${mode}`)
-            }}
+            onClick={openStudio}
             className="group inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-live px-6 py-3 font-semibold text-live-foreground transition-all hover:opacity-90 active:scale-[0.98]"
           >
             {mode === "video" ? <Video className="size-4 shrink-0" /> : <Mic className="size-4 shrink-0" />}
-            <span className="whitespace-nowrap">Open the {mode} studio</span>
+            <span className="whitespace-nowrap">
+              {mode === "video" ? "Open the video studio" : `Start ${audioLayout === "podcast" ? "a podcast" : "a conversation"}`}
+            </span>
             <ArrowRight className="size-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
           </button>
         </div>
+
+        {/* Audio Live sub-choice: Podcast vs Conversation. Only shown for audio. */}
+        {mode === "audio" && (
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Choose your format</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                aria-pressed={audioLayout === "podcast"}
+                onClick={() => setAudioLayout("podcast")}
+                className={cn(
+                  "flex items-start gap-3 rounded-2xl border p-4 text-left transition-all active:scale-[0.99]",
+                  audioLayout === "podcast"
+                    ? "border-live/60 bg-live/10 ring-1 ring-live/40"
+                    : "border-border/60 bg-secondary/40 hover:border-border",
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex size-10 shrink-0 items-center justify-center rounded-xl",
+                    audioLayout === "podcast" ? "bg-live text-live-foreground" : "bg-secondary text-muted-foreground",
+                  )}
+                >
+                  <Radio className="size-5" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold">Podcast</span>
+                  <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground text-pretty">
+                    You host, with guests and a listening audience. A broadcast studio.
+                  </span>
+                </span>
+              </button>
+
+              <button
+                type="button"
+                aria-pressed={audioLayout === "conversation"}
+                onClick={() => setAudioLayout("conversation")}
+                className={cn(
+                  "flex items-start gap-3 rounded-2xl border p-4 text-left transition-all active:scale-[0.99]",
+                  audioLayout === "conversation"
+                    ? "border-live/60 bg-live/10 ring-1 ring-live/40"
+                    : "border-border/60 bg-secondary/40 hover:border-border",
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex size-10 shrink-0 items-center justify-center rounded-xl",
+                    audioLayout === "conversation"
+                      ? "bg-live text-live-foreground"
+                      : "bg-secondary text-muted-foreground",
+                  )}
+                >
+                  <Users className="size-5" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold">Conversation</span>
+                  <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground text-pretty">
+                    Everyone can speak together. A calm community gathering.
+                  </span>
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </section>
   )

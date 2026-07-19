@@ -7,6 +7,7 @@ import { StudioConsole } from "@/components/studio-console"
 import { LiveListener } from "@/components/live-listener"
 import { VideoStudioConsole } from "@/components/video-studio-console"
 import { LiveVideoViewer } from "@/components/live-video-viewer"
+import { ConversationRoom } from "@/components/conversation-room"
 import { StudioErrorBoundary } from "@/components/studio-error-boundary"
 import type { CurrentUser } from "@/lib/session"
 import type { LiveStreamView } from "@/app/actions/live"
@@ -48,7 +49,29 @@ type ViewerVideoSession = {
   currentUserId: string | null
   initialFollowing: boolean
 }
-type Session = HostSession | ListenerSession | HostVideoSession | ViewerVideoSession
+// Conversation (community-gathering) audio room. One unified room component
+// serves both the host and speaking participants; role is derived from ids.
+type ConversationHostSession = {
+  kind: "conversation-host"
+  key: string
+  currentUser: CurrentUser
+  resumeStream?: LiveStreamView | null
+}
+type ConversationParticipantSession = {
+  kind: "conversation-participant"
+  key: string
+  stream: LiveStreamView
+  canJoin: boolean
+  currentUser: CurrentUser | null
+  currentUserId: string | null
+}
+type Session =
+  | HostSession
+  | ListenerSession
+  | HostVideoSession
+  | ViewerVideoSession
+  | ConversationHostSession
+  | ConversationParticipantSession
 
 export type LiveMeta = { title: string; cover: string | null; live: boolean; subtitle?: string }
 
@@ -188,6 +211,32 @@ export function LiveSessionProvider({ children }: { children: React.ReactNode })
                 currentUser={session.currentUser}
                 currentUserId={session.currentUserId}
                 initialFollowing={session.initialFollowing}
+                onMinimize={minimize}
+                onExit={close}
+                onMeta={setMeta}
+              />
+            </div>
+          ) : session.kind === "conversation-host" ? (
+            <StudioErrorBoundary>
+              <div className="h-dvh">
+                <ConversationRoom
+                  mode="host"
+                  currentUser={session.currentUser}
+                  resumeStream={session.resumeStream}
+                  onMinimize={minimize}
+                  onExit={close}
+                  onMeta={setMeta}
+                />
+              </div>
+            </StudioErrorBoundary>
+          ) : session.kind === "conversation-participant" ? (
+            <div className="h-dvh">
+              <ConversationRoom
+                mode="participant"
+                stream={session.stream}
+                canJoin={session.canJoin}
+                currentUser={session.currentUser}
+                currentUserId={session.currentUserId}
                 onMinimize={minimize}
                 onExit={close}
                 onMeta={setMeta}
@@ -333,6 +382,50 @@ export function VideoViewerLauncher({
       currentUser,
       currentUserId,
       initialFollowing,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stream.roomName])
+  return null
+}
+
+/** Mounts a Conversation room as the host into the app-level provider. */
+export function HostConversationLauncher({
+  currentUser,
+  resumeStream,
+}: {
+  currentUser: CurrentUser
+  resumeStream?: LiveStreamView | null
+}) {
+  const { open } = useLiveSession()
+  useEffect(() => {
+    const key = resumeStream ? `conversation-host:${resumeStream.roomName}` : "conversation-host"
+    open({ kind: "conversation-host", key, currentUser, resumeStream })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeStream?.roomName])
+  return null
+}
+
+/** Mounts a Conversation room as a speaking participant into the provider. */
+export function ConversationParticipantLauncher({
+  stream,
+  canJoin,
+  currentUser,
+  currentUserId,
+}: {
+  stream: LiveStreamView
+  canJoin: boolean
+  currentUser: CurrentUser | null
+  currentUserId: string | null
+}) {
+  const { open } = useLiveSession()
+  useEffect(() => {
+    open({
+      kind: "conversation-participant",
+      key: `conversation-participant:${stream.roomName}`,
+      stream,
+      canJoin,
+      currentUser,
+      currentUserId,
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stream.roomName])

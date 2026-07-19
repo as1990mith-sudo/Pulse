@@ -7,7 +7,7 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { liveStream, liveChatMessage, liveCallRequest, liveReaction, livePresence, liveBlocked } from "@/lib/db/schema"
 import { getHandle, getAvatarColor, getInitials } from "@/lib/identity"
-import { LIVE_CATEGORIES } from "@/lib/live-categories"
+import { LIVE_CATEGORIES, CONVERSATION_CATEGORIES } from "@/lib/live-categories"
 import {
   createAccessToken,
   isLiveKitConfigured,
@@ -63,6 +63,9 @@ export type LiveMode = "audio" | "video"
 export type LiveVisibility = "public" | "private"
 // Video layout the host broadcasts in. Only meaningful when mode === "video".
 export type LiveOrientation = "portrait" | "landscape"
+// Audio-Live layout. "podcast" = original broadcast studio; "conversation" =
+// community room where every participant can speak. Only meaningful for audio.
+export type LiveLayout = "podcast" | "conversation"
 
 export type LiveStreamView = {
   id: number
@@ -75,6 +78,10 @@ export type LiveStreamView = {
   cover: string | null
   mode: LiveMode
   orientation: LiveOrientation
+  layout: LiveLayout
+  topic?: string | null
+  prayerStartedAt?: string | null
+  gridPinnedId?: string | null
   visibility: LiveVisibility
   locked?: boolean
   pinnedChatId?: number | null
@@ -99,6 +106,8 @@ export async function startBroadcast(input: {
   cover?: string | null
   mode?: LiveMode
   orientation?: LiveOrientation
+  layout?: LiveLayout
+  topic?: string | null
   visibility?: LiveVisibility
 }): Promise<GoLiveResult> {
   const user = await requireUser()
@@ -106,10 +115,15 @@ export async function startBroadcast(input: {
     return { ok: false, error: "Live is not configured yet. Add your LiveKit credentials to start broadcasting." }
   }
   const mode: LiveMode = input.mode === "video" ? "video" : "audio"
+  // Conversation layout only applies to audio rooms; video/podcast stays "podcast".
+  const layout: LiveLayout = mode === "audio" && input.layout === "conversation" ? "conversation" : "podcast"
   // A category is mandatory for every live session — "Uncategorised" is not an
-  // option. It must be one of the known categories.
+  // option. Conversation rooms use their own gathering-style category list;
+  // everything else uses the standard live categories.
   const category = input.category?.trim()
-  if (!category || !LIVE_CATEGORIES.includes(category as (typeof LIVE_CATEGORIES)[number])) {
+  const allowedCategories: readonly string[] =
+    layout === "conversation" ? CONVERSATION_CATEGORIES : LIVE_CATEGORIES
+  if (!category || !allowedCategories.includes(category)) {
     return { ok: false, error: "Please choose a category before going live." }
   }
   // Cover artwork is required for audio live sessions (there's no video feed to
@@ -141,6 +155,8 @@ export async function startBroadcast(input: {
     cover: input.cover ?? null,
     mode,
     orientation,
+    layout,
+    topic: layout === "conversation" ? (input.topic?.trim() || null) : null,
     visibility,
     status: "live",
   })
@@ -223,7 +239,10 @@ export async function joinBroadcast(input: { roomName: string }): Promise<JoinRe
   // Focused/portrait video) keeps the broadcast model where only the host (and
   // invited guests) may publish.
   const isGridMeeting = stream.mode === "video" && (stream.orientation ?? "portrait") === "landscape"
-  const canPublish = isHost || isGridMeeting
+  // Conversation audio rooms let every participant speak — they get a publish
+  // token on join (the client starts them muted; they tap Unmute to speak).
+  const isConversation = stream.mode === "audio" && (stream.layout ?? "podcast") === "conversation"
+  const canPublish = isHost || isGridMeeting || isConversation
 
   const token = await createAccessToken({
     roomName: input.roomName,
@@ -257,6 +276,10 @@ export async function getLiveStreams(): Promise<LiveStreamView[]> {
     cover: r.cover,
     mode: (r.mode as LiveMode) ?? "audio",
     orientation: (r.orientation as LiveOrientation) ?? "portrait",
+    layout: (r.layout as LiveLayout) ?? "podcast",
+    topic: r.topic ?? null,
+    prayerStartedAt: r.prayerStartedAt ? r.prayerStartedAt.toISOString() : null,
+    gridPinnedId: r.gridPinnedId ?? null,
     visibility: (r.visibility as LiveVisibility) ?? "public",
     startedAt: r.startedAt.toISOString(),
   }))
@@ -509,6 +532,10 @@ export async function getMyActiveStream(): Promise<LiveStreamView | null> {
     cover: r.cover,
     mode: (r.mode as LiveMode) ?? "audio",
     orientation: (r.orientation as LiveOrientation) ?? "portrait",
+    layout: (r.layout as LiveLayout) ?? "podcast",
+    topic: r.topic ?? null,
+    prayerStartedAt: r.prayerStartedAt ? r.prayerStartedAt.toISOString() : null,
+    gridPinnedId: r.gridPinnedId ?? null,
     visibility: (r.visibility as LiveVisibility) ?? "public",
     locked: r.locked ?? false,
     pinnedChatId: r.pinnedChatId ?? null,
@@ -545,6 +572,10 @@ export async function getMyActiveVideoStream(): Promise<LiveStreamView | null> {
     cover: r.cover,
     mode: (r.mode as LiveMode) ?? "video",
     orientation: (r.orientation as LiveOrientation) ?? "portrait",
+    layout: (r.layout as LiveLayout) ?? "podcast",
+    topic: r.topic ?? null,
+    prayerStartedAt: r.prayerStartedAt ? r.prayerStartedAt.toISOString() : null,
+    gridPinnedId: r.gridPinnedId ?? null,
     visibility: (r.visibility as LiveVisibility) ?? "public",
     locked: r.locked ?? false,
     pinnedChatId: r.pinnedChatId ?? null,
@@ -574,6 +605,10 @@ export async function getLiveStream(roomName: string): Promise<LiveStreamView | 
     cover: r.cover,
     mode: (r.mode as LiveMode) ?? "audio",
     orientation: (r.orientation as LiveOrientation) ?? "portrait",
+    layout: (r.layout as LiveLayout) ?? "podcast",
+    topic: r.topic ?? null,
+    prayerStartedAt: r.prayerStartedAt ? r.prayerStartedAt.toISOString() : null,
+    gridPinnedId: r.gridPinnedId ?? null,
     visibility: (r.visibility as LiveVisibility) ?? "public",
     locked: r.locked ?? false,
     pinnedChatId: r.pinnedChatId ?? null,
@@ -1568,4 +1603,70 @@ export async function pinLiveChat(input: { roomName: string; chatId: number | nu
   if ((await getHostId(input.roomName)) !== user.id) throw new Error("Only the host can pin a comment.")
   await db.update(liveStream).set({ pinnedChatId: input.chatId }).where(eq(liveStream.roomName, input.roomName))
   return { ok: true }
+}
+
+// --- Conversation layout: prayer mode, pinned participant, shared state ------
+
+/**
+ * Host toggles Prayer Mode for a Conversation room. When on, `prayerStartedAt`
+ * is set (drives the shared overlay for everyone + disables music ducking). No
+ * one is muted — the whole room prays together.
+ */
+export async function setPrayerMode(input: { roomName: string; on: boolean }): Promise<{ ok: boolean }> {
+  const user = await requireUser()
+  if ((await getHostId(input.roomName)) !== user.id) throw new Error("Only the host can control Prayer Mode.")
+  await db
+    .update(liveStream)
+    .set({ prayerStartedAt: input.on ? new Date() : null })
+    .where(eq(liveStream.roomName, input.roomName))
+  return { ok: true }
+}
+
+/**
+ * Host pins (or unpins, with userId=null) a single participant in a Conversation
+ * room. Stored in `gridPinnedId` as a single id (conversation rooms are audio,
+ * so they never collide with the video grid's multi-pin serialization).
+ */
+export async function setPinnedParticipant(input: {
+  roomName: string
+  userId: string | null
+}): Promise<{ ok: boolean }> {
+  const user = await requireUser()
+  if ((await getHostId(input.roomName)) !== user.id) throw new Error("Only the host can pin a participant.")
+  await db
+    .update(liveStream)
+    .set({ gridPinnedId: input.userId || null })
+    .where(eq(liveStream.roomName, input.roomName))
+  return { ok: true }
+}
+
+export type ConversationState = {
+  prayerStartedAt: string | null
+  pinnedId: string | null
+  locked: boolean
+  ended: boolean
+}
+
+/**
+ * Lightweight poll for every client in a Conversation room: prayer mode, pinned
+ * participant, lock state, and whether the room has ended.
+ */
+export async function getConversationState(input: { roomName: string }): Promise<ConversationState> {
+  const [r] = await db
+    .select({
+      prayerStartedAt: liveStream.prayerStartedAt,
+      gridPinnedId: liveStream.gridPinnedId,
+      locked: liveStream.locked,
+      status: liveStream.status,
+    })
+    .from(liveStream)
+    .where(eq(liveStream.roomName, input.roomName))
+    .limit(1)
+  if (!r) return { prayerStartedAt: null, pinnedId: null, locked: false, ended: true }
+  return {
+    prayerStartedAt: r.prayerStartedAt ? r.prayerStartedAt.toISOString() : null,
+    pinnedId: r.gridPinnedId ?? null,
+    locked: r.locked ?? false,
+    ended: r.status !== "live",
+  }
 }

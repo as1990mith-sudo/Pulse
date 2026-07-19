@@ -8,6 +8,8 @@ import {
   HostStudioLauncher,
   HostVideoStudioLauncher,
   VideoViewerLauncher,
+  HostConversationLauncher,
+  ConversationParticipantLauncher,
 } from "@/components/live-session"
 import { EpisodePage } from "@/components/episode-page"
 
@@ -44,6 +46,23 @@ export default async function LiveStreamPage({ params }: { params: Promise<{ id:
         currentUser={currentUser}
         currentUserId={currentUser?.id ?? null}
         initialFollowing={followingIds.includes(stream.hostId)}
+      />
+    )
+  }
+
+  // Conversation audio rooms: everyone (host + participants) shares the same
+  // community-gathering room UI, with host-only controls gated by role. The
+  // host resumes as the room owner; others join as speaking participants.
+  if (stream.layout === "conversation") {
+    if (currentUser && currentUser.id === stream.hostId) {
+      return <HostConversationLauncher currentUser={currentUser} resumeStream={stream} />
+    }
+    return (
+      <ConversationParticipantLauncher
+        stream={stream}
+        canJoin={Boolean(currentUser)}
+        currentUser={currentUser}
+        currentUserId={currentUser?.id ?? null}
       />
     )
   }

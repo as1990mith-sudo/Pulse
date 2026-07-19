@@ -7,7 +7,7 @@ import {
   Film,
   Heart,
   Loader2,
-  MessageCircle,
+  MessageSquare,
   Play,
   Send,
   Share2,
@@ -21,6 +21,7 @@ import { toggleSaveItem } from "@/app/actions/share"
 import type { CurrentUser } from "@/lib/session"
 import { haptic } from "@/lib/haptics"
 import { cn } from "@/lib/utils"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { CommentThread, type ThreadComment } from "@/components/comment-thread"
 
 // Instagram-style cap: reels may run up to 3 minutes 15 seconds. Anything longer
@@ -489,7 +490,7 @@ function ReelItem({
           className="flex flex-col items-center gap-1"
           aria-label="Comments"
         >
-          <MessageCircle className="size-8 drop-shadow" />
+          <MessageSquare className="size-8 drop-shadow" />
           <span className="text-xs font-semibold tabular-nums">{comments.length}</span>
         </button>
         <button
@@ -683,28 +684,54 @@ function CommentsSheet({
 
   return (
     <div className="absolute inset-0 z-20 flex flex-col justify-end" data-no-swipe>
-      <button type="button" aria-label="Close comments" onClick={onClose} className="absolute inset-0 bg-black/50" />
+      <button
+        type="button"
+        aria-label="Close comments"
+        onClick={onClose}
+        className="absolute inset-0 bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-200"
+      />
       {/* Force dark tokens so the shared (token-based) CommentThread always reads
           correctly on this dark immersive sheet, regardless of app theme. */}
-      <div className="dark relative flex max-h-[72%] flex-col rounded-t-3xl bg-neutral-900 text-white shadow-2xl">
-        <header className="flex items-center justify-between border-b border-white/10 px-4 pb-3 pt-3">
-          <span className="mx-auto -mb-1 h-1 w-10 rounded-full bg-white/20" aria-hidden="true" />
-          <span className="absolute left-4 text-sm font-semibold">
-            {comments.length} {comments.length === 1 ? "comment" : "comments"}
-          </span>
-          <button
-            type="button"
+      <div className="dark relative flex max-h-[82%] min-h-[52%] flex-col rounded-t-[1.75rem] border-t border-white/10 bg-neutral-950 text-white shadow-2xl animate-in slide-in-from-bottom duration-300 ease-out">
+        {/* Grabber + title row */}
+        <header className="relative shrink-0 px-4 pt-2.5">
+          <span
+            className="mx-auto mb-2.5 block h-1 w-9 rounded-full bg-white/25"
+            aria-hidden="true"
             onClick={onClose}
-            aria-label="Close"
-            className="absolute right-3 flex size-8 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white"
-          >
-            <X className="size-5" />
-          </button>
+          />
+          <div className="flex items-center justify-center pb-3">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="size-[18px] text-white/70" />
+              <h2 className="text-[15px] font-semibold tracking-tight">
+                {comments.length > 0
+                  ? `${comments.length} ${comments.length === 1 ? "comment" : "comments"}`
+                  : "Comments"}
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-full bg-white/5 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <X className="size-[18px]" />
+            </button>
+          </div>
+          <div className="h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent" />
         </header>
 
         <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 text-foreground">
           {comments.length === 0 ? (
-            <p className="py-10 text-center text-sm text-white/50">No comments yet. Be the first to comment.</p>
+            <div className="flex flex-col items-center justify-center gap-3 py-14 text-center">
+              <span className="flex size-14 items-center justify-center rounded-full bg-white/5">
+                <MessageSquare className="size-7 text-white/40" />
+              </span>
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium text-white/80">No comments yet</p>
+                <p className="text-xs text-white/45">Start the conversation.</p>
+              </div>
+            </div>
           ) : (
             <CommentThread
               comments={comments.map(toThreadComment)}
@@ -722,26 +749,32 @@ function CommentsSheet({
         {currentUser ? (
           <form
             onSubmit={submit}
-            className="flex items-center gap-2 border-t border-white/10 px-3 py-3 pb-[max(env(safe-area-inset-bottom),0.75rem)]"
+            className="flex shrink-0 items-center gap-2.5 border-t border-white/10 bg-neutral-950/95 px-3.5 py-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] backdrop-blur"
           >
-            <input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="Add a comment…"
-              aria-label="Add a comment"
-              className="min-w-0 flex-1 rounded-full bg-white/10 px-4 py-2.5 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/30"
-            />
-            <button
-              type="submit"
-              disabled={!draft.trim() || sending}
-              aria-label="Post comment"
-              className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity disabled:opacity-40"
-            >
-              {sending ? <Loader2 className="size-5 animate-spin" /> : <Send className="size-5" />}
-            </button>
+            <Avatar className="size-8 shrink-0 ring-1 ring-white/10">
+              {currentUser.image && <AvatarImage src={currentUser.image || "/placeholder.svg"} alt={currentUser.name} />}
+              <AvatarFallback className={cn("text-[11px]", currentUser.color)}>{currentUser.initials}</AvatarFallback>
+            </Avatar>
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-full bg-white/[0.08] pl-4 pr-1.5 ring-1 ring-inset ring-white/10 transition focus-within:ring-white/25">
+              <input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="Add a comment…"
+                aria-label="Add a comment"
+                className="min-w-0 flex-1 bg-transparent py-2.5 text-sm text-white placeholder:text-white/40 focus:outline-none"
+              />
+              <button
+                type="submit"
+                disabled={!draft.trim() || sending}
+                aria-label="Post comment"
+                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-all hover:opacity-90 disabled:scale-90 disabled:bg-white/10 disabled:text-white/40"
+              >
+                {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+              </button>
+            </div>
           </form>
         ) : (
-          <p className="border-t border-white/10 px-4 py-4 text-center text-sm text-white/60">
+          <p className="shrink-0 border-t border-white/10 px-4 py-4 text-center text-sm text-white/60">
             <Link href="/sign-in" className="font-semibold text-white underline">
               Sign in
             </Link>{" "}

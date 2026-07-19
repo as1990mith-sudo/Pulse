@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import Link from "next/link"
-import { Heart, MessageCircle, MoreHorizontal, Copy, Pencil, Trash2, Send, X } from "lucide-react"
+import { Heart, MessageSquare, MoreHorizontal, Copy, Pencil, Trash2, Send, X } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -379,7 +379,7 @@ function CommentItem({
               className="flex items-center gap-1 transition-colors hover:text-foreground"
               aria-label="Reply to comment"
             >
-              <MessageCircle className="size-4" /> Reply
+              <MessageSquare className="size-4" /> Reply
             </button>
           )}
           {hasMenu && (

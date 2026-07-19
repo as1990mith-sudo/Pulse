@@ -13,7 +13,7 @@ import {
   Info,
   Loader2,
   Lock,
-  MessageCircle,
+  MessageSquare,
   MoonStar,
   MoreHorizontal,
   Pencil,
@@ -532,7 +532,7 @@ function DreamItem({
         )}
         aria-expanded={open}
       >
-        <MessageCircle className="size-4" />
+        <MessageSquare className="size-4" />
         {showInbox
           ? // Admin can collapse the thread after interpreting to make room for newer dreams.
             open
