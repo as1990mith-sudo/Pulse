@@ -36,7 +36,7 @@ import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { ParticipantGrid, type GridParticipant } from "@/components/conversation/participant-grid"
 import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
 import { FloatingMessages } from "@/components/conversation/floating-messages"
-import { ConversationMusicPanel, type MusicState } from "@/components/conversation/conversation-music-panel"
+import { MusicPanel, type Track } from "@/components/studio-console"
 import { ConversationThemeSheet } from "@/components/conversation/conversation-theme-sheet"
 import { useLiveAudio } from "@/lib/use-live-audio"
 import { useLivePresence } from "@/lib/use-live-presence"
@@ -150,6 +150,8 @@ export function ConversationRoom({
     setMusicVolume,
     setMusicPlaying,
     setMusicLoop,
+    seekMusic,
+    setMusicEndedHandler,
     duckMusic,
     stopMusic,
   } = useLiveAudio()
@@ -337,37 +339,96 @@ export function ConversationRoom({
     onMeta?.({ title, cover: cover ?? null, live: true, subtitle: `Conversation · ${hostName}`, roomName })
   }, [live, title, cover, hostName, onMeta, roomName])
 
-  // ── Music (host only) + speech ducking ───────────────────────────────────
-  const [music, setMusic] = useState<MusicState>({ url: null, name: null, playing: false, volume: 0.5 })
+  // ── Background music playlist (host only) + speech ducking ─────────────────
+  // Uses the exact same rich playlist panel as podcast studio mode (MusicPanel):
+  // a queue of up to a handful of tracks with transport, scrubber, loop and
+  // volume, all mixed into the broadcast and auto-ducked under active speakers.
+  const [musicTracks, setMusicTracks] = useState<Track[]>([])
+  const [musicActiveIndex, setMusicActiveIndex] = useState<number | null>(null)
+  const [musicPlaying, setMusicPlayingState] = useState(false)
+  const [musicVolume, setMusicVolumeState] = useState(0.5)
+  const [musicMixing, setMusicMixing] = useState(false)
+  const [musicLoop, setMusicLoopState] = useState(false)
+  const [musicError, setMusicError] = useState<string | null>(null)
   const [musicOpen, setMusicOpen] = useState(false)
   const anyoneSpeaking = speakers.some((s) => s.isSpeaking)
 
+  // Duck the music under active speakers (a calm ambient bed during prayer).
   useEffect(() => {
-    if (!music.url || !music.playing) return
-    // During prayer the music stays as a calm ambient bed (no ducking).
+    if (musicActiveIndex === null || !musicPlaying) return
     duckMusic(prayerActive ? false : anyoneSpeaking)
-  }, [anyoneSpeaking, music.url, music.playing, prayerActive, duckMusic])
+  }, [anyoneSpeaking, musicActiveIndex, musicPlaying, prayerActive, duckMusic])
 
-  async function playMusicUrl(url: string, name: string) {
-    await publishMusic(url)
-    setMusicLoop(true)
-    setMusicVolume(music.volume)
-    setMusicPlaying(true)
-    setMusic({ url, name, playing: true, volume: music.volume })
+  // Mix a playlist track into the broadcast and mark it now-playing.
+  async function playMusicTrack(index: number) {
+    const track = musicTracks[index]
+    if (!track) return
+    setMusicError(null)
+    setMusicMixing(true)
+    try {
+      await publishMusic(track.url)
+      setMusicVolume(musicVolume)
+      setMusicActiveIndex(index)
+      setMusicPlayingState(true)
+    } catch (err) {
+      setMusicError(err instanceof Error ? err.message : "Could not mix the track in.")
+    } finally {
+      setMusicMixing(false)
+    }
   }
-  function toggleMusic() {
-    const next = !music.playing
+  function toggleMusicPlay() {
+    if (musicActiveIndex === null) return
+    const next = !musicPlaying
     setMusicPlaying(next)
-    setMusic((m) => ({ ...m, playing: next }))
+    setMusicPlayingState(next)
   }
-  function changeMusicVolume(v: number) {
-    setMusicVolume(v)
-    setMusic((m) => ({ ...m, volume: v }))
+  function changeMusicVolume(value: number) {
+    setMusicVolumeState(value)
+    setMusicVolume(value)
   }
-  async function stopMusicTrack() {
-    await stopMusic()
-    setMusic({ url: null, name: null, playing: false, volume: music.volume })
+  function toggleMusicLoop() {
+    const next = !musicLoop
+    setMusicLoopState(next)
+    setMusicLoop(next)
   }
+  // Step to another track, wrapping around at the ends.
+  function skipMusic(delta: number) {
+    if (musicTracks.length === 0) return
+    const from = musicActiveIndex ?? (delta > 0 ? -1 : 0)
+    const next = (from + delta + musicTracks.length) % musicTracks.length
+    void playMusicTrack(next)
+  }
+  function removeMusicTrack(index: number) {
+    setMusicTracks((arr) => arr.filter((_, i) => i !== index))
+    setMusicActiveIndex((cur) => {
+      if (cur === null) return cur
+      if (index === cur) return null
+      return index < cur ? cur - 1 : cur
+    })
+  }
+
+  // Auto-advance to the next track when one finishes (unless it's looping).
+  useEffect(() => {
+    setMusicEndedHandler(() => {
+      setMusicActiveIndex((cur) => {
+        if (cur === null || musicTracks.length === 0) return cur
+        const next = (cur + 1) % musicTracks.length
+        void playMusicTrack(next)
+        return cur
+      })
+    })
+    return () => setMusicEndedHandler(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [musicTracks, setMusicEndedHandler])
+
+  // Tear music down cleanly if the room stops being live.
+  useEffect(() => {
+    if (!live && musicActiveIndex !== null) {
+      setMusicActiveIndex(null)
+      setMusicPlayingState(false)
+      void stopMusic()
+    }
+  }, [live, musicActiveIndex, stopMusic])
 
   // ── Self mic + listener mute ─────────────────────────────────────────────
   const me = speakers.find((s) => s.isLocal)
@@ -892,7 +953,7 @@ export function ConversationRoom({
           <DockButton
             label="Host controls"
             onClick={() => setHostMenuOpen(true)}
-            active={hostMenuOpen || prayerActive || music.playing || locked}
+            active={hostMenuOpen || prayerActive || musicPlaying || locked}
           >
             <Settings2 />
           </DockButton>
@@ -907,16 +968,30 @@ export function ConversationRoom({
       <PrayerOverlay active={prayerActive} endedAt={prayerEndedAt} />
       <PrayerEndedToast endedAt={prayerEndedAt} />
 
-      {/* Host music panel */}
-      {isHost && (
-        <ConversationMusicPanel
-          open={musicOpen}
-          onClose={() => setMusicOpen(false)}
-          music={music}
-          onPlayUrl={(url, name) => void playMusicUrl(url, name)}
-          onTogglePlay={toggleMusic}
+      {/* Host music panel — the same playlist panel used in podcast studio mode */}
+      {isHost && musicOpen && (
+        <MusicPanel
+          live={live}
+          position={state.musicPosition}
+          duration={state.musicDuration}
+          tracks={musicTracks}
+          activeIndex={musicActiveIndex}
+          playing={musicPlaying}
+          volume={musicVolume}
+          mixing={musicMixing}
+          loop={musicLoop}
+          error={musicError}
+          onAddTracks={(added) => setMusicTracks((t) => [...t, ...added])}
+          onPlayTrack={(i) => void playMusicTrack(i)}
+          onTogglePlay={toggleMusicPlay}
+          onNext={() => skipMusic(1)}
+          onPrev={() => skipMusic(-1)}
+          onToggleLoop={toggleMusicLoop}
           onVolume={changeMusicVolume}
-          onStop={() => void stopMusicTrack()}
+          onSeek={seekMusic}
+          onRemoveTrack={removeMusicTrack}
+          onError={setMusicError}
+          onClose={() => setMusicOpen(false)}
         />
       )}
 
