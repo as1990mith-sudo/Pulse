@@ -10,8 +10,6 @@ import {
   Grid2x2,
   Grid3x3,
   LayoutGrid,
-  Columns2,
-  Square,
   Lock,
   LockOpen,
   MessageSquare,
@@ -60,12 +58,8 @@ type Tile =
   | { kind: "local"; identity: string; name: string; image: string | null }
   | { kind: "remote"; identity: string; peer: RemotePeer }
 
-/** Per-layout geometry. Every participant shares the host-selected layout.
- *  "host" and "interview" are special single-purpose views (handled separately
- *  from the paged grid); their cols/perPage are unused. */
+/** Per-layout geometry. Every participant shares the host-selected layout. */
 const LAYOUTS: Record<GridLayout, { cols: number; perPage: number; label: string; icon: typeof Grid2x2 }> = {
-  host: { cols: 1, perPage: 1, label: "Host only", icon: Square },
-  interview: { cols: 1, perPage: 2, label: "Interview", icon: Columns2 },
   compact: { cols: 3, perPage: 9, label: "Compact", icon: Grid3x3 },
   balanced: { cols: 2, perPage: 6, label: "Balanced", icon: LayoutGrid },
   focus: { cols: 2, perPage: 4, label: "Focus", icon: Grid2x2 },
@@ -89,7 +83,9 @@ export type ConversationVideoProps = {
   gridPinRequest: { userId: string; userName: string } | null
   onRefreshState: () => void
   // Live media plumbing (owned by the parent hook).
-  localVideoRef: React.RefObject<HTMLVideoElement | null>
+  // Callback ref for the self-view <video>; re-attaches the camera track on every
+  // mount so the local camera survives tile remounts (object refs don't).
+  registerLocalVideoEl: (el: HTMLVideoElement | null) => void
   registerPeerVideoEl: (identity: string, el: HTMLVideoElement | null) => void
   micOn: boolean
   camOn: boolean
@@ -136,7 +132,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
     gridPinnedIds,
     gridPinRequest,
     onRefreshState,
-    localVideoRef,
+    registerLocalVideoEl,
     registerPeerVideoEl,
     micOn,
     camOn,
@@ -180,9 +176,6 @@ export function ConversationVideo(props: ConversationVideoProps) {
   const prayerActive = !!roomState?.prayerStartedAt
   const locked = !!roomState?.locked
   const layout = LAYOUTS[gridLayout] ?? LAYOUTS.balanced
-  // Special single-purpose views rendered outside the paged grid.
-  const isHostOnly = gridLayout === "host"
-  const isInterview = gridLayout === "interview"
 
   // When a controller changes shared state, refresh both this poll and the
   // parent's call-state poll so the whole room converges quickly.
@@ -243,19 +236,6 @@ export function ConversationVideo(props: ConversationVideoProps) {
       return (rankRef.current.get(a.identity) ?? 0) - (rankRef.current.get(b.identity) ?? 0)
     })
   }, [self.identity, self.name, self.image, peers, hostId, gridCohostId])
-
-  // "Host only": the host's tile fills the whole stage. "Interview": the two
-  // headline participants (host + co-host, or the first two people present).
-  const hostTile = tiles.find((t) => t.identity === hostId) ?? tiles[0] ?? null
-  const interviewTiles = (() => {
-    if (tiles.length <= 2) return tiles
-    const first = tiles.find((t) => t.identity === hostId) ?? tiles[0]
-    const second =
-      tiles.find((t) => t.identity === gridCohostId && t.identity !== first?.identity) ??
-      tiles.find((t) => t.identity !== first?.identity) ??
-      null
-    return [first, second].filter((t): t is Tile => !!t)
-  })()
 
   // Spotlight: up to two pinned participants floated out of the grid flow.
   const pinnedSet = new Set(gridPinnedIds)
@@ -405,7 +385,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
             cam on/off toggles. */}
         {tile.kind === "local" ? (
           <video
-            ref={localVideoRef}
+            ref={registerLocalVideoEl}
             autoPlay
             playsInline
             muted
@@ -621,38 +601,8 @@ export function ConversationVideo(props: ConversationVideoProps) {
 
       {/* ── Participant area ─────────────────────────────────────────────────── */}
       <motion.div layout className="relative min-h-0 flex-1">
-        {/* Host only — the host's video fills the entire stage. */}
-        {isHostOnly && (
-          <div className="absolute inset-0 p-2">
-            {hostTile ? (
-              <VideoTile tile={hostTile} big />
-            ) : (
-              <div className="flex size-full items-center justify-center rounded-3xl bg-neutral-800/60 text-sm text-white/50">
-                Waiting for the host…
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Interview — two people, split top/bottom on portrait screens and
-            side-by-side on wider ones. */}
-        {isInterview && (
-          <div className="absolute inset-0 grid grid-cols-1 gap-2 p-2 landscape:grid-cols-2 sm:grid-cols-2">
-            {interviewTiles.map((tile) => (
-              <div key={tile.identity} className="min-h-0">
-                <VideoTile tile={tile} big />
-              </div>
-            ))}
-            {interviewTiles.length < 2 && (
-              <div className="flex min-h-0 items-center justify-center rounded-3xl bg-neutral-800/60 text-sm text-white/50">
-                Waiting for a second guest…
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Spotlight band (grid layouts only) */}
-        {!isHostOnly && !isInterview && hasSpotlight && (
+        {/* Spotlight band */}
+        {hasSpotlight && (
           <div className="flex flex-col gap-2 p-2 pb-0">
             <div className={cn("grid gap-2", spotlight.length > 1 ? "grid-cols-2" : "grid-cols-1")}>
               {spotlight.map((tile) => (
@@ -664,8 +614,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
           </div>
         )}
 
-        {/* Paged grid of the remaining participants (grid layouts only) */}
-        {!isHostOnly && !isInterview && (
+        {/* Paged grid of the remaining participants */}
         <div className="absolute inset-0 flex flex-col" style={hasSpotlight ? { top: "38%" } : undefined}>
           <div className="relative min-h-0 flex-1 overflow-hidden">
             <AnimatePresence initial={false} custom={dir} mode="popLayout">
@@ -747,7 +696,6 @@ export function ConversationVideo(props: ConversationVideoProps) {
             </div>
           )}
         </div>
-        )}
 
         {/* Floating chat messages (only when the panel is closed) */}
         <FloatingMessages messages={chatMessages} active={!chatOpen} />

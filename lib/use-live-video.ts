@@ -290,6 +290,21 @@ export function useLiveVideo({
     return false
   }
 
+  // Callback ref for the self-view <video>. Because tile components can remount
+  // (e.g. when their parent re-renders), the underlying <video> node is replaced
+  // and the camera track detaches — the object ref alone never re-attaches, so
+  // the self-view silently goes blank. Re-attaching on every mount (exactly like
+  // the remote tiles do) keeps the local camera painting across remounts.
+  const registerLocalVideoEl = useCallback((el: HTMLVideoElement | null) => {
+    localVideoRef.current = el
+    if (!el) {
+      setLocalVideoReady(false)
+      return
+    }
+    const room = roomRef.current
+    if (room) attachLocalVideo(room)
+  }, [])
+
   // Attaches a specific remote participant's video to its registered tile.
   const attachPeerVideo = useCallback((identity: string): boolean => {
     const room = roomRef.current
@@ -856,6 +871,7 @@ export function useLiveVideo({
     musicPosition,
     musicDuration,
     registerPeerVideoEl,
+    registerLocalVideoEl,
     toggleMic,
     askUnmute,
     toggleCam,

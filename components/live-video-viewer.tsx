@@ -196,6 +196,7 @@ export function LiveVideoViewer({
 
   const {
     localVideoRef,
+    registerLocalVideoEl,
     connected,
     canPublish,
     micOn,
@@ -429,7 +430,7 @@ export function LiveVideoViewer({
           gridPinnedIds={callState?.gridPinnedIds ?? []}
           gridPinRequest={callState?.gridPinRequest ?? null}
           onRefreshState={() => void refreshCalls()}
-          localVideoRef={localVideoRef}
+          registerLocalVideoEl={registerLocalVideoEl}
           registerPeerVideoEl={registerPeerVideoEl}
           micOn={micOn}
           camOn={camOn}

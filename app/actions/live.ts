@@ -898,7 +898,7 @@ export async function setGridCohost(input: {
  * The host (or co-host) sets the Conversation video layout for the whole room.
  * Synced via the `gridLayout` column so every participant sees the same tiling.
  */
-const GRID_LAYOUTS = ["host", "interview", "compact", "balanced", "focus"] as const
+const GRID_LAYOUTS = ["compact", "balanced", "focus"] as const
 export type GridLayout = (typeof GRID_LAYOUTS)[number]
 export async function setGridLayout(input: {
   roomName: string

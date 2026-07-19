@@ -277,6 +277,7 @@ export function VideoStudioConsole({
 
   const {
     localVideoRef,
+    registerLocalVideoEl,
     connected,
     micOn,
     camOn,
@@ -648,7 +649,7 @@ export function VideoStudioConsole({
             gridPinnedIds={callState?.gridPinnedIds ?? []}
             gridPinRequest={callState?.gridPinRequest ?? null}
             onRefreshState={() => void refreshCalls()}
-            localVideoRef={localVideoRef}
+            registerLocalVideoEl={registerLocalVideoEl}
             registerPeerVideoEl={registerPeerVideoEl}
             micOn={micOn}
             camOn={camOn}
