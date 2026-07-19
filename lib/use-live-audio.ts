@@ -34,6 +34,9 @@ export type LiveParticipant = {
   name: string
   isLocal: boolean
   isSpeaking: boolean
+  // Whether the participant currently has an unmuted, live microphone track.
+  // Drives the mic on/off indicator on Conversation participant cards.
+  micOn: boolean
   // Profile image URL (from participant metadata) for real stage avatars.
   image: string | null
   // Real-time connection quality from LiveKit (drives the signal indicator).
@@ -187,6 +190,9 @@ export function useLiveAudio() {
   // Background-music mixing graph (host side).
   const musicCtxRef = useRef<AudioContext | null>(null)
   const musicGainRef = useRef<GainNode | null>(null)
+  // The host's intended (non-ducked) music volume. Ducking ramps the live gain
+  // down toward a fraction of this while someone speaks, then back up to it.
+  const musicBaseVolumeRef = useRef(0.4)
   // Low-shelf EQ that lifts the low end so the broadcast music has more bass.
   const musicBassRef = useRef<BiquadFilterNode | null>(null)
   const musicElRef = useRef<HTMLAudioElement | null>(null)
@@ -262,11 +268,15 @@ export function useLiveAudio() {
             image = null
           }
         }
+        // Mic is "on" when a microphone track is published and not muted.
+        const micPub = p.getTrackPublication(Track.Source.Microphone)
+        const micOn = !!micPub && !micPub.isMuted
         out.push({
           identity: p.identity,
           name: p.name || "Guest",
           isLocal,
           isSpeaking: p.isSpeaking,
+          micOn,
           image,
           quality: normalizeQuality(p.connectionQuality),
         })
@@ -372,6 +382,10 @@ export function useLiveAudio() {
           })
           .on(RoomEvent.TrackPublished, () => refreshSpeakers(room))
           .on(RoomEvent.TrackUnpublished, () => refreshSpeakers(room))
+          // Keep the per-participant mic indicator in sync when anyone mutes /
+          // unmutes (including the local participant).
+          .on(RoomEvent.TrackMuted, () => refreshSpeakers(room))
+          .on(RoomEvent.TrackUnmuted, () => refreshSpeakers(room))
           .on(RoomEvent.ConnectionQualityChanged, (quality, participant) => {
             // Surface the local participant's quality, and refresh the roster so
             // each speaker tile shows its own up-to-date signal indicator.
@@ -510,7 +524,7 @@ export function useLiveAudio() {
     if (!musicSourceRef.current) {
       const source = ctx.createMediaElementSource(el)
       const gain = ctx.createGain()
-      gain.gain.value = 0.4
+      gain.gain.value = musicBaseVolumeRef.current
       // Low-shelf filter boosts everything below ~220Hz for a warmer, bassier
       // sound. Sits after the volume gain so the whole chain (monitor + the
       // published/recorded stream) is fed the same bass-enhanced signal.
@@ -560,10 +574,76 @@ export function useLiveAudio() {
     }
   }, [update])
 
-  /** Adjusts the live background-music volume (0–1). */
+  /** Adjusts the live background-music volume (0–1). Records it as the new base. */
   const setMusicVolume = useCallback((value: number) => {
-    if (musicGainRef.current) musicGainRef.current.gain.value = value
+    musicBaseVolumeRef.current = value
+    const gain = musicGainRef.current
+    if (gain) {
+      const ctx = musicCtxRef.current
+      if (ctx) {
+        // Small smoothing ramp so slider drags don't zipper.
+        gain.gain.cancelScheduledValues(ctx.currentTime)
+        gain.gain.setTargetAtTime(value, ctx.currentTime, 0.05)
+      } else {
+        gain.gain.value = value
+      }
+    }
   }, [])
+
+  /**
+   * Smoothly ramps the live music gain toward `target` over `ms` without
+   * changing the host's chosen base volume. Used for speech ducking: ramp down
+   * to a fraction while someone speaks, then back up to the base afterward.
+   */
+  const rampMusicVolume = useCallback((target: number, ms: number) => {
+    const gain = musicGainRef.current
+    const ctx = musicCtxRef.current
+    if (!gain) return
+    if (ctx) {
+      const now = ctx.currentTime
+      gain.gain.cancelScheduledValues(now)
+      gain.gain.setValueAtTime(gain.gain.value, now)
+      gain.gain.linearRampToValueAtTime(Math.max(0.0001, target), now + Math.max(0.01, ms / 1000))
+    } else {
+      gain.gain.value = target
+    }
+  }, [])
+
+  /**
+   * Ducks (or restores) the background music around live speech. When `ducked`
+   * is true the gain fades to 18% of the host's base volume; otherwise it fades
+   * back up to the full base. Fades are smooth (no sudden jumps).
+   */
+  const duckMusic = useCallback(
+    (ducked: boolean, ms = 320) => {
+      const base = musicBaseVolumeRef.current
+      rampMusicVolume(ducked ? base * 0.18 : base, ms)
+    },
+    [rampMusicVolume],
+  )
+
+  /** The host's current intended (non-ducked) music volume. */
+  const getMusicBaseVolume = useCallback(() => musicBaseVolumeRef.current, [])
+
+  /**
+   * Switches the backing track with a smooth crossfade: fade the current track
+   * down, swap the source (via publishMusic, which reuses the same published
+   * stream), then fade back up to the host's base volume. No abrupt cut.
+   */
+  const crossfadeMusic = useCallback(
+    async (url: string, ms = 700) => {
+      const half = Math.max(120, ms / 2)
+      // Fade out the current track (only if something is already playing).
+      if (musicElRef.current && musicGainRef.current) {
+        rampMusicVolume(0.0001, half)
+        await new Promise((r) => setTimeout(r, half))
+      }
+      await publishMusic(url)
+      // Fade back up to the host's chosen volume.
+      rampMusicVolume(musicBaseVolumeRef.current, half)
+    },
+    [publishMusic, rampMusicVolume],
+  )
 
   /** Pause/resume the backing track without unpublishing it. */
   const setMusicPlaying = useCallback((playing: boolean) => {
@@ -758,7 +838,11 @@ export function useLiveAudio() {
     setListenerMuted,
     startAudioPlayback,
     publishMusic,
+    crossfadeMusic,
     setMusicVolume,
+    rampMusicVolume,
+    duckMusic,
+    getMusicBaseVolume,
     setMusicPlaying,
     seekMusic,
     setMusicLoop,

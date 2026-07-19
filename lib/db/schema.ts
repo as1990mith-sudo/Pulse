@@ -333,6 +333,15 @@ export const liveStream = pgTable("live_stream", {
   category: text("category"),
   cover: text("cover"),
   mode: text("mode").notNull().default("audio"), // "audio" | "video"
+  // Audio-Live layout. "podcast" is the original one-host broadcast studio;
+  // "conversation" is the community-gathering room where everyone can speak.
+  // Only meaningful when mode === "audio".
+  layout: text("layout").notNull().default("podcast"), // "podcast" | "conversation"
+  // Conversation-only: the "Today's Discussion" topic line under the title.
+  topic: text("topic"),
+  // Conversation-only: when non-null, Prayer Mode is active. Drives the shared
+  // prayer overlay for everyone and disables music ducking while set.
+  prayerStartedAt: timestamp("prayerStartedAt"),
   // For video streams, the layout the host chose to broadcast in:
   // "portrait" (full-bleed vertical, overlaid controls) or "landscape"
   // (Facebook-style: letterboxed 16:9 video on top, scrolling comment feed below).
