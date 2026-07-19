@@ -1645,11 +1645,12 @@ export type ConversationState = {
   pinnedId: string | null
   locked: boolean
   ended: boolean
+  theme: string
 }
 
 /**
  * Lightweight poll for every client in a Conversation room: prayer mode, pinned
- * participant, lock state, and whether the room has ended.
+ * participant, lock state, the room theme, and whether the room has ended.
  */
 export async function getConversationState(input: { roomName: string }): Promise<ConversationState> {
   const [r] = await db
@@ -1658,15 +1659,17 @@ export async function getConversationState(input: { roomName: string }): Promise
       gridPinnedId: liveStream.gridPinnedId,
       locked: liveStream.locked,
       status: liveStream.status,
+      theme: liveStream.theme,
     })
     .from(liveStream)
     .where(eq(liveStream.roomName, input.roomName))
     .limit(1)
-  if (!r) return { prayerStartedAt: null, pinnedId: null, locked: false, ended: true }
+  if (!r) return { prayerStartedAt: null, pinnedId: null, locked: false, ended: true, theme: "default" }
   return {
     prayerStartedAt: r.prayerStartedAt ? r.prayerStartedAt.toISOString() : null,
     pinnedId: r.gridPinnedId ?? null,
     locked: r.locked ?? false,
     ended: r.status !== "live",
+    theme: r.theme ?? "default",
   }
 }
