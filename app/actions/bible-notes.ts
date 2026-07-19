@@ -6,11 +6,11 @@
 // by userId — there is no RLS on Neon, so the eq(userId) in each where clause is
 // what keeps one reader's notes and highlights private to them.
 
-import { and, eq } from "drizzle-orm"
+import { and, desc, eq } from "drizzle-orm"
 import { headers } from "next/headers"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { bibleHighlight, bibleNote } from "@/lib/db/schema"
+import { bibleBookmark, bibleHighlight, bibleNote } from "@/lib/db/schema"
 
 // Colours the client understands. Anything else is rejected so a bad request
 // can't write junk into the highlight column.
@@ -183,4 +183,66 @@ export async function deleteBibleNote(verseId: string): Promise<{ ok: boolean }>
     .delete(bibleNote)
     .where(and(eq(bibleNote.userId, userId), eq(bibleNote.verseId, verseId)))
   return { ok: true }
+}
+
+// --- Verse bookmarks (mini-Bible panel) ------------------------------------
+
+export type BibleBookmarkView = {
+  verseId: string
+  reference: string
+  createdAt: string
+}
+
+/**
+ * Toggle a verse bookmark on/off. Returns the resulting bookmarked state so the
+ * caller can update its UI optimistically. Idempotent via the (userId, verseId)
+ * unique index.
+ */
+export async function toggleBibleBookmark(
+  verseId: string,
+  reference: string,
+): Promise<{ ok: boolean; bookmarked: boolean }> {
+  const userId = await getUserId()
+  if (!userId) return { ok: false, bookmarked: false }
+
+  const [existing] = await db
+    .select({ id: bibleBookmark.id })
+    .from(bibleBookmark)
+    .where(and(eq(bibleBookmark.userId, userId), eq(bibleBookmark.verseId, verseId)))
+    .limit(1)
+
+  if (existing) {
+    await db
+      .delete(bibleBookmark)
+      .where(and(eq(bibleBookmark.userId, userId), eq(bibleBookmark.verseId, verseId)))
+    return { ok: true, bookmarked: false }
+  }
+
+  await db
+    .insert(bibleBookmark)
+    .values({ userId, verseId, reference: reference.slice(0, 120) })
+    .onConflictDoNothing({ target: [bibleBookmark.userId, bibleBookmark.verseId] })
+  return { ok: true, bookmarked: true }
+}
+
+/** Every verse the signed-in reader has bookmarked, newest first. */
+export async function getBibleBookmarks(): Promise<BibleBookmarkView[]> {
+  const userId = await getUserId()
+  if (!userId) return []
+
+  const rows = await db
+    .select({
+      verseId: bibleBookmark.verseId,
+      reference: bibleBookmark.reference,
+      createdAt: bibleBookmark.createdAt,
+    })
+    .from(bibleBookmark)
+    .where(eq(bibleBookmark.userId, userId))
+    .orderBy(desc(bibleBookmark.createdAt))
+
+  return rows.map((r) => ({
+    verseId: r.verseId,
+    reference: r.reference,
+    createdAt: (r.createdAt ?? new Date()).toISOString(),
+  }))
 }

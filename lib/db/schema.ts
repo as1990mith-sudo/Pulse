@@ -820,3 +820,84 @@ export const storePurchase = pgTable(
     uniq: uniqueIndex("store_purchase_user_product_unique").on(t.userId, t.productId),
   }),
 )
+
+// --- Shared Live Experience System -----------------------------------------
+// Powers the universal resource drawer + floating mini-panels that overlay any
+// of the four live formats (broadcast video, conversation video, podcast audio,
+// conversation audio) without ever navigating the user away from the live.
+
+// Private, per-user notes captured while inside a live. Every note is tagged
+// with the session's host/topic/date so the main-app "Live Notes" section can
+// group them Host → Topic → Date. roomName ties the note to the live session it
+// was taken in (nullable so a note can outlive the stream row). Scoped by userId
+// (no RLS on Neon).
+export const liveNote = pgTable(
+  "live_note",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("userId").notNull(),
+    // The LiveKit room key of the session this note was taken in (matches
+    // live_chat_message.roomName). Null once decoupled from a live.
+    roomName: text("roomName"),
+    streamId: integer("streamId"), // liveStream.id snapshot, for linking back
+    hostId: text("hostId"),
+    hostName: text("hostName"),
+    topic: text("topic"), // session topic / title line used for grouping
+    sessionTitle: text("sessionTitle"),
+    mode: text("mode"), // "audio" | "video" snapshot of the live format
+    body: text("body").notNull().default(""),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    userIdx: uniqueIndex("live_note_id_user_idx").on(t.id, t.userId),
+  }),
+)
+
+// Host-pinned resources for a live room. Participants read them from the
+// resource drawer. kind ∈ verse|pdf|book|devotional|link|session. meta carries
+// kind-specific payload (e.g. a verseId, productId, or episode slug).
+export const pinnedResource = pgTable("pinned_resource", {
+  id: serial("id").primaryKey(),
+  roomName: text("roomName").notNull(),
+  pinnedBy: text("pinnedBy").notNull(),
+  kind: text("kind").notNull(),
+  title: text("title").notNull(),
+  subtitle: text("subtitle"),
+  url: text("url"),
+  refId: text("refId"),
+  meta: jsonb("meta"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// Prayer requests submitted by participants inside a live. userId is nullable so
+// signed-out viewers can still post (as authorName / anonymous). prayedCount is
+// a simple "I prayed" tally.
+export const prayerRequest = pgTable("prayer_request", {
+  id: serial("id").primaryKey(),
+  roomName: text("roomName").notNull(),
+  userId: text("userId"),
+  authorName: text("authorName").notNull(),
+  body: text("body").notNull(),
+  isAnonymous: boolean("isAnonymous").notNull().default(false),
+  prayedCount: integer("prayedCount").notNull().default(0),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// Per-user verse bookmarks from the mini-Bible panel. verseId matches
+// bibleHighlight/bibleNote's "bookIndex:chapter:verse" format; reference is the
+// human label (e.g. "John 3:16") cached for list display. One bookmark per verse
+// per user (unique index) so toggling is idempotent.
+export const bibleBookmark = pgTable(
+  "bible_bookmark",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("userId").notNull(),
+    verseId: text("verseId").notNull(),
+    reference: text("reference").notNull(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    userVerseUnique: uniqueIndex("bible_bookmark_user_verse_idx").on(t.userId, t.verseId),
+  }),
+)
