@@ -39,7 +39,7 @@ import { LiveChat } from "@/components/live-chat"
 import { BackExitMenu } from "@/components/live-back-menu"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { ShareSheet } from "@/components/share-sheet"
-import { MeetingGrid } from "@/components/meeting-grid"
+import { ConversationVideo } from "@/components/conversation/conversation-video"
 import { GridPrejoin } from "@/components/grid-prejoin"
 import type { ShareTarget } from "@/lib/share-types"
 import { getAvatarColor, getInitials } from "@/lib/identity"
@@ -411,80 +411,67 @@ export function LiveVideoViewer({
     )
   }
 
-  // ── Grid meeting viewer ───────────────────────────────────────────────────
-  // Meet/Zoom-style tile grid: this viewer gets their own tile and publishes
-  // camera + mic on join. Everyone in the room appears as a tile.
+  // ── Conversation video viewer ────────────────────────────────────────────
+  // The premium community gathering: this viewer gets their own tile and
+  // publishes camera + mic on join. ConversationVideo owns the header, tiles,
+  // paging, host controls, prayer, music ducking, chat and floating messages.
   if (isGridMeeting) {
     return (
       <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-neutral-950 text-white [isolation:isolate]">
-        {/* Top bar: leave/minimise menu + LIVE + audience count. */}
-        <div className="flex items-center justify-between gap-2 bg-neutral-900 px-3 py-2 pt-[calc(env(safe-area-inset-top)+0.5rem)]">
-          <BackExitMenu
-            showMenu
-            exitLabel="Leave"
-            onExit={() => {
-              disconnect()
-              onExit?.()
-            }}
-            onMinimize={onMinimize ?? (() => {})}
-          />
-          <div className="flex min-w-0 flex-1 flex-col px-1 leading-tight">
-            <span className="truncate text-sm font-semibold">{stream.title}</span>
-            <span className="truncate text-[11px] text-white/60">{stream.hostName} · meeting</span>
-          </div>
-          <span className="flex items-center gap-1.5 rounded-full bg-live px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-live-foreground">
-            <span className="relative flex size-2">
-              <span className="absolute inline-flex size-full animate-ping rounded-full bg-live-foreground/70" />
-              <span className="relative inline-flex size-2 rounded-full bg-live-foreground" />
-            </span>
-            Live
-          </span>
-          <LiveAudienceSheet
-            count={presenceCount || participants}
-            members={presenceMembers}
-            immersive
-            className="px-3 py-1.5 text-xs font-medium"
-          />
-        </div>
-
-        {!connected ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-white/70">
-            <Loader2 className="size-7 animate-spin" />
-            <p className="text-sm font-medium">{ended ? error ?? "This stream has ended." : "Joining the meeting…"}</p>
-          </div>
-        ) : (
-          <div className="min-h-0 flex-1">
-            <MeetingGrid
-              roomName={stream.roomName}
-              self={{ identity: currentUserId ?? "self", name: currentUser?.name ?? "You", image: currentUser?.image ?? null }}
-              peers={peers}
-              currentUser={currentUser}
-              hostId={callState?.hostId ?? stream.hostId}
-              gridCohostId={callState?.gridCohostId ?? null}
-              gridPinnedIds={callState?.gridPinnedIds ?? []}
-              gridPinRequest={callState?.gridPinRequest ?? null}
-              onRefreshState={() => void refreshCalls()}
-              localVideoRef={localVideoRef}
-              registerPeerVideoEl={registerPeerVideoEl}
-              micOn={micOn}
-              camOn={camOn}
-              localVideoReady={localVideoReady}
-              localSpeaking={localSpeaking}
-              facingMode={facingMode}
-              onToggleMic={() => void toggleMic()}
-              onToggleCam={() => void toggleCam()}
-              onFlipCamera={() => void flipCamera()}
-              onAskUnmute={(id) => void askUnmute(id)}
+        <ConversationVideo
+          roomName={stream.roomName}
+          self={{ identity: currentUserId ?? "self", name: currentUser?.name ?? "You", image: currentUser?.image ?? null }}
+          peers={peers}
+          currentUser={currentUser}
+          hostId={callState?.hostId ?? stream.hostId}
+          gridCohostId={callState?.gridCohostId ?? null}
+          gridPinnedIds={callState?.gridPinnedIds ?? []}
+          gridPinRequest={callState?.gridPinRequest ?? null}
+          onRefreshState={() => void refreshCalls()}
+          localVideoRef={localVideoRef}
+          registerPeerVideoEl={registerPeerVideoEl}
+          micOn={micOn}
+          camOn={camOn}
+          localVideoReady={localVideoReady}
+          localSpeaking={localSpeaking}
+          facingMode={facingMode}
+          onToggleMic={() => void toggleMic()}
+          onToggleCam={() => void toggleCam()}
+          onFlipCamera={() => void flipCamera()}
+          onAskUnmute={(id) => void askUnmute(id)}
+          connected={connected}
+          title={stream.title}
+          cover={stream.cover ?? null}
+          hostName={stream.hostName}
+          category={stream.category}
+          topic={stream.topic}
+          backSlot={
+            <BackExitMenu
+              showMenu
+              exitLabel="Leave"
+              onExit={() => {
+                disconnect()
+                onExit?.()
+              }}
+              onMinimize={onMinimize ?? (() => {})}
             />
-          </div>
-        )}
+          }
+          moreSlot={
+            <LiveAudienceSheet
+              count={presenceCount || participants}
+              members={presenceMembers}
+              immersive
+              className="px-3 py-1.5 text-xs font-medium"
+            />
+          }
+        />
 
         {/* Tap-to-enable-sound (autoplay unblock). */}
         {connected && audioBlocked && (
           <button
             type="button"
             onClick={() => void startAudioPlayback()}
-            className="absolute left-1/2 top-20 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full bg-white/15 px-5 py-2.5 text-sm font-semibold text-white ring-1 ring-inset ring-white/20 backdrop-blur-md"
+            className="absolute left-1/2 top-24 z-[55] flex -translate-x-1/2 items-center gap-2 rounded-full bg-white/15 px-5 py-2.5 text-sm font-semibold text-white ring-1 ring-inset ring-white/20 backdrop-blur-md"
           >
             <Volume2 className="size-4" /> Tap to enable sound
           </button>
@@ -492,7 +479,7 @@ export function LiveVideoViewer({
 
         {/* Host asked this viewer to unmute — they must opt in. */}
         {askedToUnmute && !micOn && (
-          <div className="absolute inset-x-3 top-20 z-50 flex items-center justify-between gap-3 rounded-2xl border border-live/40 bg-live/15 px-3 py-2.5 shadow-lg backdrop-blur-md">
+          <div className="absolute inset-x-3 top-24 z-[55] flex items-center justify-between gap-3 rounded-2xl border border-live/40 bg-live/15 px-3 py-2.5 shadow-lg backdrop-blur-md">
             <p className="text-sm font-medium text-pretty text-white">The host asked you to unmute.</p>
             <div className="flex shrink-0 items-center gap-2">
               <button
@@ -516,7 +503,7 @@ export function LiveVideoViewer({
         )}
 
         {(rtcError || (error && !ended)) && (
-          <p className="absolute bottom-20 left-1/2 z-40 -translate-x-1/2 rounded-full bg-destructive px-4 py-1.5 text-sm font-medium text-destructive-foreground shadow-lg">
+          <p className="absolute bottom-20 left-1/2 z-[55] -translate-x-1/2 rounded-full bg-destructive px-4 py-1.5 text-sm font-medium text-destructive-foreground shadow-lg">
             {rtcError ?? error}
           </p>
         )}

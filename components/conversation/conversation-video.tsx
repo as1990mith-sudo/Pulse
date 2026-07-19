@@ -35,6 +35,7 @@ import { FloatingMessages } from "@/components/conversation/floating-messages"
 import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
 import {
   blockParticipant,
+  getConversationState,
   getLiveChat,
   muteParticipant,
   requestGridPin,
@@ -79,9 +80,6 @@ export type ConversationVideoProps = {
   gridCohostId: string | null
   gridPinnedIds: string[]
   gridPinRequest: { userId: string; userName: string } | null
-  gridLayout: GridLayout
-  prayerActive: boolean
-  locked: boolean
   onRefreshState: () => void
   // Live media plumbing (owned by the parent hook).
   localVideoRef: React.RefObject<HTMLVideoElement | null>
@@ -125,9 +123,6 @@ export function ConversationVideo(props: ConversationVideoProps) {
     gridCohostId,
     gridPinnedIds,
     gridPinRequest,
-    gridLayout,
-    prayerActive,
-    locked,
     onRefreshState,
     localVideoRef,
     registerPeerVideoEl,
@@ -160,7 +155,24 @@ export function ConversationVideo(props: ConversationVideoProps) {
   const amCohost = !!gridCohostId && self.identity === gridCohostId && !amHost
   const isController = amHost || amCohost
 
+  // ── Synced room state (prayer / lock / layout). One lightweight poll shared
+  //    by every client so the host's choices apply to everyone in real time. ──
+  const { data: roomState, mutate: mutateRoomState } = useSWR(
+    roomName && connected ? ["conv-video-state", roomName] : null,
+    () => getConversationState({ roomName }),
+    { refreshInterval: 2000, revalidateOnFocus: false },
+  )
+  const gridLayout: GridLayout = roomState?.gridLayout ?? "balanced"
+  const prayerActive = !!roomState?.prayerStartedAt
+  const locked = !!roomState?.locked
   const layout = LAYOUTS[gridLayout] ?? LAYOUTS.balanced
+
+  // When a controller changes shared state, refresh both this poll and the
+  // parent's call-state poll so the whole room converges quickly.
+  const refreshAll = useCallback(() => {
+    void mutateRoomState()
+    onRefreshState()
+  }, [mutateRoomState, onRefreshState])
 
   // ── Arrival experience — a one-second branded transition into the room ────
   const [arrived, setArrived] = useState(false)
@@ -255,7 +267,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
     } finally {
       setBusy(null)
       setMenuFor(null)
-      onRefreshState()
+      refreshAll()
     }
   }
 
@@ -760,7 +772,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
         )}
       </AnimatePresence>
 
-      {/* ── Host controls sheet ──────────────────────────────────────────────── */}
+      {/* ── Host controls sheet ────────────────────────────────���─────────────── */}
       <AnimatePresence>
         {hostSheet && isController && (
           <>

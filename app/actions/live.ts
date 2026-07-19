@@ -156,9 +156,10 @@ export async function startBroadcast(input: {
     mode,
     orientation,
     layout,
-    // Optional room topic applies to all audio live sessions (podcast &
-    // conversation); video streams don't carry a topic.
-    topic: mode === "audio" ? (input.topic?.trim() || null) : null,
+    // Optional room topic. Applies to audio live sessions (podcast &
+    // conversation) and to Conversation (landscape) video gatherings, where it
+    // is shown as "Today's Discussion" in the room header.
+    topic: input.topic?.trim() || null,
     visibility,
     status: "live",
   })
@@ -1247,7 +1248,6 @@ export async function getCallState(input: { roomName: string }): Promise<{
       gridPinRequestId: liveStream.gridPinRequestId,
       gridPinRequestName: liveStream.gridPinRequestName,
       gridLayout: liveStream.gridLayout,
-      prayerStartedAt: liveStream.prayerStartedAt,
     })
     .from(liveStream)
     .where(eq(liveStream.roomName, input.roomName))
@@ -1676,6 +1676,8 @@ export type ConversationState = {
   locked: boolean
   ended: boolean
   theme: string
+  // Host-selected Conversation video layout, synced to every participant.
+  gridLayout: GridLayout
 }
 
 /**
@@ -1690,16 +1692,19 @@ export async function getConversationState(input: { roomName: string }): Promise
       locked: liveStream.locked,
       status: liveStream.status,
       theme: liveStream.theme,
+      gridLayout: liveStream.gridLayout,
     })
     .from(liveStream)
     .where(eq(liveStream.roomName, input.roomName))
     .limit(1)
-  if (!r) return { prayerStartedAt: null, pinnedId: null, locked: false, ended: true, theme: "default" }
+  if (!r)
+    return { prayerStartedAt: null, pinnedId: null, locked: false, ended: true, theme: "default", gridLayout: "balanced" }
   return {
     prayerStartedAt: r.prayerStartedAt ? r.prayerStartedAt.toISOString() : null,
     pinnedId: r.gridPinnedId ?? null,
     locked: r.locked ?? false,
     ended: r.status !== "live",
     theme: r.theme ?? "default",
+    gridLayout: ((r.gridLayout as GridLayout | undefined) ?? "balanced") as GridLayout,
   }
 }
