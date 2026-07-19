@@ -129,7 +129,9 @@ export function StudioConsole({
   // so a transient network blip never flips the host back to the offline setup
   // screen (which is what made it feel like the app "signed you out" of a live).
   // The actual transport status lives in state.connected / state.reconnecting.
-  const [onAir, setOnAir] = useState(false)
+  // When resuming an already-live broadcast we start on-air immediately so the
+  // host lands in the live console (never a flash of the setup screen).
+  const [onAir, setOnAir] = useState(!!resumeStream)
   const live = onAir
   // True while we have the intent to broadcast but the transport isn't fully up.
   const reconnecting = onAir && (state.reconnecting || !state.connected)
@@ -517,6 +519,151 @@ export function StudioConsole({
     refreshCalls()
   }
 
+  // ── Host setup screen (brand-new broadcast) ──────────────────────────────
+  // Mirrors the Conversation "Start a gathering" setup exactly so both audio
+  // formats share one interface. Only the category control differs in source
+  // (LIVE_CATEGORIES vs the conversation list) — the control itself is the same
+  // dropdown. Skipped when resuming/ended so the on-air + summary views show.
+  if (!live && !endedSession) {
+    return (
+      <div className="relative flex h-full flex-col overflow-y-auto bg-zinc-950 text-white">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 opacity-70"
+          style={{
+            background:
+              "radial-gradient(70% 55% at 20% 0%, color-mix(in oklch, var(--primary) 40%, transparent), transparent 60%), radial-gradient(70% 55% at 90% 15%, color-mix(in oklch, var(--live-accent) 26%, transparent), transparent 55%)",
+          }}
+        />
+        <div className="relative mx-auto w-full max-w-md px-5 pb-10 pt-[calc(env(safe-area-inset-top)+1.25rem)]">
+          <button
+            type="button"
+            onClick={() => onExit?.()}
+            className="mb-6 flex size-10 items-center justify-center rounded-full bg-white/15 ring-1 ring-inset ring-white/15 hover:bg-white/25"
+            aria-label="Back"
+          >
+            <X className="size-5" strokeWidth={2.5} />
+          </button>
+
+          <div className="mb-6 space-y-1">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-2.5 py-1 text-xs font-semibold text-primary">
+              <Mic className="size-3.5" /> Podcast
+            </span>
+            <h1 className="text-2xl font-bold tracking-tight text-balance">Start a broadcast</h1>
+            <p className="text-sm leading-relaxed text-white/60">
+              A host-led room where you hold the mic. Set the scene, choose a category, and open the doors.
+            </p>
+          </div>
+
+          <div className="space-y-5">
+            <AudioFormatSelector active="podcast" />
+
+            <CoverUpload value={cover} onChange={setCover} label="Cover artwork (required)" />
+
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium">Room name</span>
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={`${currentUser.name} — live session`}
+                maxLength={80}
+                className="w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-white/35 focus:border-primary/60 focus:outline-none"
+              />
+            </label>
+
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium">
+                Topic <span className="text-white/40">(optional)</span>
+              </span>
+              <input
+                value={roomTopic}
+                onChange={(e) => setRoomTopic(e.target.value)}
+                placeholder="What's this room about?"
+                maxLength={120}
+                className="w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-white/35 focus:border-primary/60 focus:outline-none"
+              />
+            </label>
+
+            {/* Category — the same dropdown selector used across both formats. */}
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium">
+                Category <span className="text-white/40">(required)</span>
+              </span>
+              <div className="relative">
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full appearance-none rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 pr-10 text-sm text-white focus:border-primary/60 focus:outline-none [&>option]:bg-neutral-900 [&>option]:text-white"
+                >
+                  <option value="" disabled>
+                    Choose a category…
+                  </option>
+                  {LIVE_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-white/50" />
+              </div>
+            </label>
+
+            {/* Privacy — public (discoverable in Live) vs private (invite-only). */}
+            <div className="space-y-2">
+              <span className="text-sm font-medium">Privacy</span>
+              <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-white/[0.04] p-1">
+                {(
+                  [
+                    { value: "public", label: "Public", icon: Globe },
+                    { value: "private", label: "Private", icon: Lock },
+                  ] as const
+                ).map((opt) => {
+                  const isActive = visibility === opt.value
+                  const Icon = opt.icon
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setVisibility(opt.value)}
+                      aria-pressed={isActive}
+                      className={cn(
+                        "flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors",
+                        isActive ? "bg-primary text-primary-foreground" : "text-white/60 hover:text-white",
+                      )}
+                    >
+                      <Icon className="size-4" /> {opt.label}
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="text-xs text-white/50">
+                {visibility === "public"
+                  ? "Listed in Live for everyone to discover and join."
+                  : "Unlisted — only people with the link can join."}
+              </p>
+            </div>
+
+            {error && <p className="text-sm text-destructive">{error}</p>}
+
+            <button
+              type="button"
+              onClick={toggleLive}
+              disabled={starting || state.connecting}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-3.5 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-[0.99] disabled:opacity-60"
+            >
+              {starting || state.connecting ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Radio className="size-4" strokeWidth={2.5} />
+              )}
+              {starting || state.connecting ? "Opening the room…" : "Go live"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-zinc-950 text-white transition-[background] duration-700"
@@ -647,101 +794,6 @@ export function StudioConsole({
         {error && (
           <div className="mx-4 mt-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground sm:mx-6">
             {error}
-          </div>
-        )}
-
-        {/* Pre-live: pick the format (Podcast vs Conversation), cover art, category + privacy */}
-        {!live && (
-          <div className="space-y-4 border-b border-white/[0.07] px-4 py-4 sm:px-6">
-            <AudioFormatSelector active="podcast" />
-
-            <CoverUpload value={cover} onChange={setCover} label="Cover artwork (required)" />
-
-            {/* Category — required. A live session must be tagged with one of
-                the known categories; there is no "Uncategorised" option. */}
-            <div className="space-y-1.5">
-              <label
-                htmlFor="audio-live-category"
-                className="text-xs font-semibold uppercase tracking-wider text-white/60"
-              >
-                Category <span className="text-primary">*</span>
-              </label>
-              <div className="relative">
-                <select
-                  id="audio-live-category"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full appearance-none rounded-xl bg-white/[0.04] px-4 py-2.5 pr-10 text-sm font-medium text-white ring-1 ring-inset ring-white/10 focus:outline-none focus:ring-primary [&>option]:bg-neutral-900 [&>option]:text-white"
-                >
-                  <option value="" disabled>
-                    Choose a category…
-                  </option>
-                  {LIVE_CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-white/50" />
-              </div>
-            </div>
-
-            {/* Room topic — optional free-text label for what the session is
-                about (e.g. "Faith & finance"). Shown to listeners as a subtitle. */}
-            <div className="space-y-1.5">
-              <label
-                htmlFor="audio-room-topic"
-                className="text-xs font-semibold uppercase tracking-wider text-white/60"
-              >
-                Room topic <span className="font-medium normal-case tracking-normal text-white/40">(optional)</span>
-              </label>
-              <input
-                id="audio-room-topic"
-                value={roomTopic}
-                onChange={(e) => setRoomTopic(e.target.value)}
-                maxLength={80}
-                placeholder="What's this room about?"
-                className="w-full rounded-xl bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white ring-1 ring-inset ring-white/10 placeholder:text-white/40 focus:outline-none focus:ring-primary"
-              />
-            </div>
-
-            {/* Public / Private toggle — segmented control. */}
-            <div className="space-y-1.5">
-              <span className="text-xs font-semibold uppercase tracking-wider text-white/60">Privacy</span>
-              <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-white/[0.04] p-1">
-                <button
-                  type="button"
-                  onClick={() => setVisibility("public")}
-                  aria-pressed={visibility === "public"}
-                  className={cn(
-                    "flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors",
-                    visibility === "public"
-                      ? "bg-primary text-primary-foreground"
-                      : "text-white/60 hover:text-white",
-                  )}
-                >
-                  <Globe className="size-4" /> Public
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setVisibility("private")}
-                  aria-pressed={visibility === "private"}
-                  className={cn(
-                    "flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors",
-                    visibility === "private"
-                      ? "bg-primary text-primary-foreground"
-                      : "text-white/60 hover:text-white",
-                  )}
-                >
-                  <Lock className="size-4" /> Private
-                </button>
-              </div>
-              <p className="text-xs text-white/50">
-                {visibility === "public"
-                  ? "Listed in Live for everyone to discover and join."
-                  : "Unlisted — only people with the link can join."}
-              </p>
-            </div>
           </div>
         )}
 
