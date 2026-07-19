@@ -71,8 +71,8 @@ export function LiveResourceLayer() {
 
   return (
     <div ref={constraintsRef} className="pointer-events-none fixed inset-0 z-[60]">
-      {/* Floating button (hidden while a panel is open) */}
-      <LiveResourceButton />
+      {/* Floating, drag-to-reposition button (hidden while a panel is open) */}
+      <LiveResourceButton constraintsRef={constraintsRef} />
 
       {/* Resource drawer */}
       <LiveResourceDrawer />

@@ -824,7 +824,11 @@ export function ConversationRoom({
             </AnimatePresence>
 
             <div className="min-h-0 flex-1">
-              <ParticipantGrid participants={rest} onTapParticipant={handleTapParticipant} />
+              <ParticipantGrid
+                participants={rest}
+                onTapParticipant={handleTapParticipant}
+                perPage={chatOpen ? 6 : 12}
+              />
             </div>
           </>
         )}
