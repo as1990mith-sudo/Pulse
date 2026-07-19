@@ -19,6 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ProfilePreview } from "@/components/profile-preview"
 import { cn } from "@/lib/utils"
 import { renderMessageBody } from "@/lib/rich-text"
+import { useLiveResourcesOptional } from "@/components/live/resource/resource-context"
 
 // A compact, curated set of emojis for the inline chat picker.
 const CHAT_EMOJIS = [
@@ -151,6 +152,33 @@ export function LiveChat({
   }, [messages])
 
   const canSend = (asHost || currentUser) && roomName
+
+  // Expose a "post to chat" function to the Live Resource system so mini panels
+  // (e.g. the mini-Bible) can share a verse straight into this live's chat
+  // without leaving the live. Only registered while the viewer can actually send.
+  const resources = useLiveResourcesOptional()
+  const registerChatSender = resources?.registerChatSender
+  useEffect(() => {
+    if (!registerChatSender || !canSend || !roomName) return
+    const unregister = registerChatSender(async (text: string) => {
+      const body = text.trim()
+      if (!body) return
+      const optimistic: LiveChatMessageView = {
+        id: -Date.now(),
+        userId: currentUser?.id ?? "me",
+        userName: asHost ? `${currentUser?.name ?? "Host"}` : (currentUser?.name ?? "You"),
+        userImage: currentUser?.image ?? null,
+        isHost: asHost,
+        kind: "message",
+        body,
+      }
+      atBottomRef.current = true
+      mutate([...messages, optimistic], { revalidate: false })
+      await sendLiveChat({ roomName, body })
+      mutate()
+    })
+    return unregister
+  }, [registerChatSender, canSend, roomName, asHost, currentUser, messages, mutate])
 
   // Emoji toggle button — rendered on the left or right of the composer.
   const emojiButton = (

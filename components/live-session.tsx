@@ -12,6 +12,8 @@ import { StudioErrorBoundary } from "@/components/studio-error-boundary"
 import type { CurrentUser } from "@/lib/session"
 import type { LiveStreamView } from "@/app/actions/live"
 import { cn } from "@/lib/utils"
+import { ResourceProvider, type LiveDescriptor } from "@/components/live/resource/resource-context"
+import { LiveResourceLayer } from "@/components/live/resource/live-resource-layer"
 
 /**
  * A live audio session is hosted at the app level (above the router) so that
@@ -172,8 +174,12 @@ export function LiveSessionProvider({ children }: { children: React.ReactNode })
       {children}
 
       {/* The live room lives here, above the router. Hidden (but kept mounted)
-          when minimised so the audio connection — and playback — survive. */}
+          when minimised so the audio connection — and playback — survive.
+          Wrapped in ResourceProvider so the universal resource drawer + floating
+          mini panels (Bible, Notes, PDFs, Books, Pinned, Prayer) overlay every
+          live format without ever navigating away. */}
       {session && (
+        <ResourceProvider descriptor={deriveDescriptor(session, meta)}>
         <div
           className="fixed inset-0 z-[60] overscroll-contain"
           style={minimized ? { display: "none" } : undefined}
@@ -255,12 +261,57 @@ export function LiveSessionProvider({ children }: { children: React.ReactNode })
               />
             </div>
           )}
+
+          {/* Universal resource layer: floating button, drawer, and the single
+              active mini panel. Lives inside the fullscreen region so panels can
+              be dragged within the live and the live keeps running behind them. */}
+          <LiveResourceLayer />
         </div>
+        </ResourceProvider>
       )}
 
       {session && minimized && meta && <MiniPlayer meta={meta} onExpand={expand} />}
     </LiveSessionContext.Provider>
   )
+}
+
+/**
+ * Build the descriptor the resource system uses to tag notes/pins/prayers and to
+ * decide whether the current user is the host. Viewer/listener sessions carry the
+ * full stream; host sessions carry an optional resumeStream (a brand-new
+ * broadcast has no room yet, so we return null and the resource button stays
+ * hidden until the room is live and meta is set). `meta.title` (set once the room
+ * connects) is preferred for the session title when available.
+ */
+function deriveDescriptor(session: Session, meta: LiveMeta | null): LiveDescriptor {
+  const stream =
+    "stream" in session
+      ? session.stream
+      : "resumeStream" in session
+        ? (session.resumeStream ?? null)
+        : null
+
+  const currentUser = session.currentUser ?? null
+  const viewerId = "currentUserId" in session ? session.currentUserId : (currentUser?.id ?? null)
+  const isHost =
+    session.kind === "host" ||
+    session.kind === "host-video" ||
+    session.kind === "conversation-host" ||
+    (viewerId != null && stream != null && viewerId === stream.hostId)
+
+  return {
+    // Null until the room is known (a brand-new host broadcast). The resource
+    // button stays hidden while roomName is null.
+    roomName: stream?.roomName ?? null,
+    streamId: stream?.id ?? null,
+    hostId: stream?.hostId ?? null,
+    hostName: stream?.hostName ?? null,
+    topic: stream?.topic ?? null,
+    sessionTitle: meta?.title ?? stream?.title ?? null,
+    mode: stream?.mode ?? null,
+    isHost,
+    currentUser,
+  }
 }
 
 /** Persistent bar pinned to the bottom while a session is minimised. */

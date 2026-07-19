@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import { AnimatePresence, motion } from "motion/react"
 import {
+  ChevronDown,
   Globe,
   HandHeart,
   Loader2,
@@ -584,26 +585,24 @@ export function ConversationRoom({
               />
             </label>
 
-            <div className="space-y-2">
+            {/* Category — a dropdown selector (matching the Podcast setup). */}
+            <label className="block space-y-1.5">
               <span className="text-sm font-medium">Category</span>
-              <div className="flex flex-wrap gap-2">
-                {CONVERSATION_CATEGORIES.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setSetupCategory(c)}
-                    className={cn(
-                      "rounded-full px-3 py-1.5 text-sm font-medium ring-1 ring-inset transition-colors",
-                      setupCategory === c
-                        ? "bg-primary text-primary-foreground ring-primary"
-                        : "bg-white/5 text-white/70 ring-white/15 hover:bg-white/10",
-                    )}
-                  >
-                    {c}
-                  </button>
-                ))}
+              <div className="relative">
+                <select
+                  value={setupCategory}
+                  onChange={(e) => setSetupCategory(e.target.value)}
+                  className="w-full appearance-none rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 pr-10 text-sm text-white focus:border-primary/60 focus:outline-none [&>option]:bg-neutral-900 [&>option]:text-white"
+                >
+                  {CONVERSATION_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-white/50" />
               </div>
-            </div>
+            </label>
 
             {/* Privacy — public (discoverable in Live) vs private (invite-only). */}
             <div className="space-y-2">
