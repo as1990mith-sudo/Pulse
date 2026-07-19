@@ -55,6 +55,7 @@ import { ConversationVideo } from "@/components/conversation/conversation-video"
 import { CoverUpload } from "@/components/admin/cover-upload"
 import type { ShareTarget } from "@/lib/share-types"
 import { getAvatarColor, getInitials } from "@/lib/identity"
+import { broadcastStageRects, stageRectStyle, type StageRect } from "@/lib/broadcast-stage"
 import { cn } from "@/lib/utils"
 
 function formatElapsed(totalSeconds: number): string {
@@ -108,47 +109,24 @@ function GlassButton({
 
 type PeerLike = { identity: string; name: string; image: string | null; hasVideo: boolean }
 
-// ── Call-in rail geometry (portrait focused broadcast) ─────────────────────
-// Two fixed-size call-in slots stacked top→bottom, overlaid on the RIGHT of the
-// host video. Sizes/positions are fixed (not flex) so the host's persistent
-// <video> can be absolutely positioned to overlap slot 1 exactly when a guest is
-// spotlighted — the host element must never remount or its local track detaches.
-const RAIL_SLOT = "h-32 w-24"
-const RAIL_SLOT_POS = [
-  "right-3 top-[calc(env(safe-area-inset-top)+4.5rem)]",
-  "right-3 top-[calc(env(safe-area-inset-top)+13rem)]",
-] as const
-
-/** An open call-in slot placeholder overlaid on the host video. */
-function RailOpenSlot({ posClass }: { posClass: string }) {
-  return (
-    <div
-      className={cn(
-        "absolute z-30 flex flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-white/25 bg-black/30 text-white/55 backdrop-blur-sm",
-        RAIL_SLOT,
-        posClass,
-      )}
-    >
-      <UserPlus className="size-5" />
-      <span className="px-1 text-center text-[10px] font-medium leading-tight">Open call-in slot</span>
-    </div>
-  )
-}
-
 /**
- * A called-in guest's camera in a rail slot, with host controls to pin
- * (spotlight) or remove the guest. When `pinned` the pin toggles back off.
+ * A guest's camera tile on the dynamic Broadcast stage, absolutely positioned
+ * via a percentage rect so it animates smoothly (CSS transition) as the layout
+ * reflows between the 1/2/3/4-person arrangements. Includes host controls to
+ * spotlight (pin) or remove the guest. `primary` styles the large primary slot.
  */
-function RailGuestTile({
+function StageGuestTile({
   peer,
-  posClass,
+  rect,
+  primary,
   pinned,
   registerEl,
   onTogglePin,
   onRemove,
 }: {
   peer: PeerLike
-  posClass: string
+  rect: StageRect
+  primary: boolean
   pinned: boolean
   registerEl: (identity: string, el: HTMLVideoElement | null) => void
   onTogglePin: (identity: string) => void
@@ -156,11 +134,8 @@ function RailGuestTile({
 }) {
   return (
     <div
-      className={cn(
-        "absolute z-30 overflow-hidden rounded-2xl bg-neutral-900 ring-1 ring-inset ring-white/15",
-        RAIL_SLOT,
-        posClass,
-      )}
+      style={stageRectStyle(rect)}
+      className="z-20 overflow-hidden rounded-2xl bg-neutral-900 ring-1 ring-inset ring-white/10 transition-[top,left,width,height] duration-500 ease-out"
     >
       <video
         ref={(el) => registerEl(peer.identity, el)}
@@ -176,7 +151,8 @@ function RailGuestTile({
         <div className="absolute inset-0 flex items-center justify-center">
           <span
             className={cn(
-              "flex size-11 items-center justify-center rounded-full text-sm font-semibold text-white",
+              "flex items-center justify-center rounded-full font-semibold text-white",
+              primary ? "size-20 text-2xl" : "size-11 text-sm",
               getAvatarColor(peer.identity),
             )}
           >
@@ -185,31 +161,44 @@ function RailGuestTile({
         </div>
       )}
       {/* Host controls: pin/unpin (spotlight) + remove */}
-      <div className="absolute inset-x-0 top-0 flex items-center justify-between p-1">
+      <div className="absolute inset-x-0 top-0 flex items-center justify-between p-1.5">
         <button
           type="button"
           onClick={() => onTogglePin(peer.identity)}
-          aria-label={pinned ? `Unpin ${peer.name}` : `Pin ${peer.name} to the main view`}
+          aria-label={pinned ? `Unpin ${peer.name}` : `Spotlight ${peer.name}`}
           aria-pressed={pinned}
           className={cn(
-            "flex size-6 items-center justify-center rounded-full backdrop-blur-md transition-colors",
+            "flex size-7 items-center justify-center rounded-full backdrop-blur-md transition-colors",
             pinned ? "bg-primary text-primary-foreground" : "bg-black/50 text-white/90 hover:bg-black/70",
           )}
         >
-          {pinned ? <PinOff className="size-3" /> : <Pin className="size-3" />}
+          {pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
         </button>
         <button
           type="button"
           onClick={() => onRemove(peer.identity)}
           aria-label={`Remove ${peer.name}`}
-          className="flex size-6 items-center justify-center rounded-full bg-black/50 text-white/90 backdrop-blur-md transition-colors hover:bg-destructive"
+          className="flex size-7 items-center justify-center rounded-full bg-black/50 text-white/90 backdrop-blur-md transition-colors hover:bg-destructive"
         >
-          <X className="size-3" />
+          <X className="size-3.5" />
         </button>
       </div>
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
         <span className="block truncate text-[11px] font-semibold text-white">{peer.name}</span>
       </div>
+    </div>
+  )
+}
+
+/** An open call-in slot placeholder on the Broadcast stage. */
+function StageOpenSlot({ rect }: { rect: StageRect }) {
+  return (
+    <div
+      style={stageRectStyle(rect)}
+      className="z-10 flex flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-white/25 bg-black/30 text-white/55 backdrop-blur-sm transition-[top,left,width,height] duration-500 ease-out"
+    >
+      <UserPlus className="size-5" />
+      <span className="px-1 text-center text-[10px] font-medium leading-tight">Open call-in slot</span>
     </div>
   )
 }
@@ -242,8 +231,9 @@ export function VideoStudioConsole({
   const [visibility, setVisibility] = useState<LiveVisibility>(resumeStream?.visibility ?? "public")
   // Optional topic category for the broadcast (empty = uncategorised).
   const [category, setCategory] = useState<string>(resumeStream?.category ?? "")
-  // Conversation (landscape) rooms carry a cover artwork (the room's identity,
-  // shown in the header + lightbox) and an optional discussion topic.
+  // Both Broadcast (portrait) and Conversation (landscape) rooms carry a cover
+  // artwork (the room's identity, shown in the header + opened in the lightbox).
+  // Conversation additionally carries an optional discussion topic.
   const [cover, setCover] = useState<string | null>(resumeStream?.cover ?? null)
   const [roomTopic, setRoomTopic] = useState<string>(resumeStream?.topic ?? "")
   const [roomName, setRoomName] = useState<string | null>(resumeStream?.roomName ?? null)
@@ -407,7 +397,7 @@ export function VideoStudioConsole({
     // Surface the Conversation cover art on the minimised continue-watching pill.
     onMeta?.({
       title,
-      cover: orientation === "landscape" ? cover : null,
+      cover,
       live,
       subtitle: live ? "You're live · video" : "Setting up",
       roomName,
@@ -455,8 +445,9 @@ export function VideoStudioConsole({
         orientation,
         visibility,
         category,
-        // Cover + discussion topic only apply to Conversation (landscape) rooms.
-        cover: orientation === "landscape" ? cover : null,
+        // Cover applies to both Broadcast and Conversation; the discussion topic
+        // is Conversation-only.
+        cover,
         topic: orientation === "landscape" ? roomTopic.trim() || null : null,
       })
       if (!res.ok) {
@@ -608,27 +599,39 @@ export function VideoStudioConsole({
   // Presence-backed audience (real names + avatars) for the "who's here" sheet.
   const { count: audienceCount, members: audienceMembers } = useLivePresence(roomName, live)
   // Guests are remote publishers (the host publishes locally, not remotely).
-  const guests = peers.slice(0, 2)
+  // Broadcast caps the stage at 3 guests (host + 3 = 4 tiles total).
+  const guests = peers.slice(0, 3)
 
-  // ── Focused-broadcast spotlight (portrait) ────────────────────────────────
-  // The host can spotlight ONE called-in guest: that guest fills the big frame
-  // and the host drops into a small call-in slot. Spotlight is stored server-side
-  // (gridPinnedId, reused) so viewers see the same swap.
+  // ── Broadcast spotlight (portrait) ────────────────────────────────────────
+  // The host can spotlight ONE called-in guest: that guest moves into the
+  // primary slot and the host drops into a secondary slot. Spotlight is stored
+  // server-side (gridPinnedId, reused) so viewers see the same swap.
   const spotlightGuestId = (callState?.gridPinnedIds ?? [])[0] ?? null
   const spotlightGuest = spotlightGuestId
     ? guests.find((g) => g.identity === spotlightGuestId) ?? null
     : null
-  const hostBig = !spotlightGuest
-  // The two right-side rail slots. Without a spotlight: the (up to two) guests.
-  // With a spotlight: the host takes the top slot, any other guest the bottom.
-  const railSlots: ({ kind: "host" } | { kind: "guest"; peer: RemotePeer } | null)[] = spotlightGuest
-    ? [{ kind: "host" }, guests.find((g) => g.identity !== spotlightGuest.identity)
-        ? { kind: "guest", peer: guests.find((g) => g.identity !== spotlightGuest.identity)! }
-        : null]
-    : [
-        guests[0] ? { kind: "guest", peer: guests[0] } : null,
-        guests[1] ? { kind: "guest", peer: guests[1] } : null,
+
+  // Ordered stage tiles. The primary slot (index 0) holds the spotlighted guest
+  // if any, otherwise the host. The host always appears exactly once. The stage
+  // reflows through the shared 1/2/3/4-person layouts as guests come and go.
+  type StageTile = { kind: "host" } | { kind: "guest"; peer: RemotePeer }
+  const stageTiles: StageTile[] = spotlightGuest
+    ? [
+        { kind: "guest", peer: spotlightGuest },
+        { kind: "host" },
+        ...guests
+          .filter((g) => g.identity !== spotlightGuest.identity)
+          .map((peer) => ({ kind: "guest" as const, peer })),
       ]
+    : [{ kind: "host" }, ...guests.map((peer) => ({ kind: "guest" as const, peer }))]
+  const stageRects = broadcastStageRects(stageTiles.length)
+  const hostIndex = stageTiles.findIndex((t) => t.kind === "host")
+  const hostRect = stageRects[hostIndex] ?? stageRects[0]
+  const hostBig = hostIndex === 0
+  // Guest tiles paired with their resolved rect.
+  const guestTiles = stageTiles
+    .map((t, i) => ({ tile: t, rect: stageRects[i] }))
+    .filter((x): x is { tile: { kind: "guest"; peer: RemotePeer }; rect: StageRect } => x.tile.kind === "guest")
 
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-neutral-950 text-white [isolation:isolate]">
@@ -700,64 +703,32 @@ export function VideoStudioConsole({
           orientation !== "landscape" ? "flex-[2.5]" : "flex-[1.75]",
         )}
       >
-        {/* Full-bleed camera — live publisher feed (mirrored self-view). In a
-            live Conversation the ConversationVideo overlay owns localVideoRef, so
-            we skip this element to avoid two <video>s claiming the same ref.
-            When a guest is spotlighted the host shrinks into the top call-in
-            slot — we only change this element's className (never remount it) so
-            the local track stays attached. */}
+        {/* Persistent host camera — the live publisher feed (mirrored self-view).
+            In a live Conversation the ConversationVideo overlay owns localVideoRef,
+            so we skip this element. This single <video> is NEVER remounted; only
+            its rect (inline style) changes as the stage reflows between the
+            1/2/3/4-person layouts, so the local camera track stays attached. A
+            spotlighted guest simply pushes the host into a secondary slot. */}
         {!(live && isGridMeeting) && (
           <video
             ref={localVideoRef}
             autoPlay
             playsInline
             muted
+            style={live && orientation !== "landscape" ? stageRectStyle(hostRect) : undefined}
             className={cn(
-              "absolute transition-all duration-300",
+              "-scale-x-100 transition-[top,left,width,height,opacity] duration-500 ease-out",
               orientation === "landscape"
                 ? // Landscape letterboxes the feed so nothing is cropped.
-                  "inset-0 z-0 h-full w-full -scale-x-100 object-contain"
-                : hostBig
-                  ? // Portrait big frame: cover the whole stage, mirrored.
-                    "inset-0 z-0 h-full w-full -scale-x-100 object-cover"
-                  : // Spotlighting a guest: host drops into the top rail slot.
-                    cn(
-                      "z-40 -scale-x-100 rounded-2xl object-cover ring-1 ring-inset ring-white/15",
-                      RAIL_SLOT,
-                      RAIL_SLOT_POS[0],
-                    ),
+                  "absolute inset-0 z-0 h-full w-full object-contain"
+                : live
+                  ? // Portrait Broadcast: positioned via hostRect; rounded when sharing the stage.
+                    cn("z-20 object-cover", stageTiles.length > 1 && "rounded-2xl ring-1 ring-inset ring-white/10")
+                  : // Pre-live: full-bleed (the preview element also renders below).
+                    "absolute inset-0 z-0 h-full w-full object-cover",
               live && camOn && localVideoReady ? "opacity-100" : "opacity-0",
             )}
           />
-        )}
-        {/* Spotlighted guest fills the big frame (audio arrives via the shared
-            audio elements, so this tag stays muted to avoid a double feed). */}
-        {live && spotlightGuest && (
-          <>
-            <video
-              key={`spot-${spotlightGuest.identity}`}
-              ref={(el) => registerPeerVideoEl(spotlightGuest.identity, el)}
-              autoPlay
-              playsInline
-              muted
-              className={cn(
-                "absolute inset-0 z-0 h-full w-full object-cover transition-opacity duration-300",
-                spotlightGuest.hasVideo ? "opacity-100" : "opacity-0",
-              )}
-            />
-            {!spotlightGuest.hasVideo && (
-              <div className="absolute inset-0 z-0 flex items-center justify-center bg-neutral-900">
-                <span
-                  className={cn(
-                    "flex size-20 items-center justify-center rounded-full text-2xl font-semibold text-white",
-                    getAvatarColor(spotlightGuest.identity),
-                  )}
-                >
-                  {getInitials(spotlightGuest.name)}
-                </span>
-              </div>
-            )}
-          </>
         )}
         {/* Pre-live preview camera */}
         {!live && (
@@ -784,10 +755,42 @@ export function VideoStudioConsole({
           />
         )}
 
-        {/* Camera-off / connecting wash — only over the big frame when the host
-            occupies it (a spotlighted guest owns the frame otherwise). */}
+        {/* Host secondary-slot overlay — shown when a spotlighted guest has
+            pushed the host out of the primary slot: a name tag plus (when the
+            camera is off) an avatar, positioned on the host's rect. */}
+        {live && orientation !== "landscape" && !hostBig && (
+          <div
+            style={stageRectStyle(hostRect)}
+            className="pointer-events-none z-30 overflow-hidden rounded-2xl transition-[top,left,width,height] duration-500 ease-out"
+          >
+            {!camOn && (
+              <div className="absolute inset-0 flex items-center justify-center bg-neutral-900">
+                <span
+                  className={cn(
+                    "flex size-11 items-center justify-center rounded-full text-sm font-semibold text-white",
+                    getAvatarColor(currentUser.id),
+                  )}
+                >
+                  {getInitials(currentUser.name)}
+                </span>
+              </div>
+            )}
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
+              <span className="block truncate text-[11px] font-semibold text-white">You</span>
+            </div>
+          </div>
+        )}
+
+        {/* Camera-off / connecting wash — over the host's slot (the primary frame
+            when the host holds it; a spotlighted guest owns that frame otherwise). */}
         {live && hostBig && (!camOn || !connected || !localVideoReady) && (
-          <div className="absolute inset-0 z-30 flex items-center justify-center bg-neutral-950 px-6">
+          <div
+            style={orientation !== "landscape" ? stageRectStyle(hostRect) : undefined}
+            className={cn(
+              "z-30 flex items-center justify-center bg-neutral-950 px-4 text-center transition-[top,left,width,height] duration-500 ease-out",
+              orientation === "landscape" ? "absolute inset-0" : "overflow-hidden rounded-2xl",
+            )}
+          >
             {!connected ? (
               rtcError ? (
                 <div className="flex max-w-sm flex-col items-center gap-3 text-center text-white/80">
@@ -830,60 +833,24 @@ export function VideoStudioConsole({
         {/* Floating reactions + gifts */}
         {live && <ReactionLayer roomName={connected ? roomName! : undefined} />}
 
-        {/* ── Call-in rail (focused/portrait only) ────────────────────────────
-            Two vertical call-in slots overlaid on the right of the host video,
-            stacked top→bottom. The host can pin (spotlight) or remove a guest.
-            When a guest is spotlighted, the host's own <video> (above) drops
-            into the top slot, so here we render only its backing label. */}
-        {live && orientation !== "landscape" && guestsEnabled && (
-          <>
-            {railSlots.map((slot, i) => {
-              const posClass = RAIL_SLOT_POS[i]
-              if (!slot) return <RailOpenSlot key={`open-${i}`} posClass={posClass} />
-              if (slot.kind === "host") {
-                return (
-                  <div
-                    key="host-slot"
-                    className={cn(
-                      "absolute z-30 overflow-hidden rounded-2xl bg-neutral-900 ring-1 ring-inset ring-white/15",
-                      RAIL_SLOT,
-                      posClass,
-                    )}
-                  >
-                    {/* Avatar shows through when the host camera is off (the host
-                        <video> sits above at z-40 and covers this when on). */}
-                    {!camOn && (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span
-                          className={cn(
-                            "flex size-11 items-center justify-center rounded-full text-sm font-semibold text-white",
-                            getAvatarColor(currentUser.id),
-                          )}
-                        >
-                          {getInitials(currentUser.name)}
-                        </span>
-                      </div>
-                    )}
-                    <div className="absolute inset-x-0 bottom-0 z-50 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
-                      <span className="block truncate text-[11px] font-semibold text-white">You</span>
-                    </div>
-                  </div>
-                )
-              }
-              return (
-                <RailGuestTile
-                  key={slot.peer.identity}
-                  peer={slot.peer}
-                  posClass={posClass}
-                  pinned={spotlightGuestId === slot.peer.identity}
-                  registerEl={registerPeerVideoEl}
-                  onTogglePin={(id) => void toggleSpotlight(id)}
-                  onRemove={(id) => void dropGuest(id)}
-                />
-              )
-            })}
-          </>
-        )}
+        {/* ── Broadcast stage guests ───────────────────────────────────────────
+            Each called-in guest occupies a slot in the dynamic layout. Tiles
+            animate their rect as guests join/leave. The host can spotlight (pin)
+            a guest — moving them into the primary slot — or remove them. */}
+        {live &&
+          orientation !== "landscape" &&
+          guestTiles.map(({ tile, rect }) => (
+            <StageGuestTile
+              key={tile.peer.identity}
+              peer={tile.peer}
+              rect={rect}
+              primary={!!spotlightGuest && tile.peer.identity === spotlightGuest.identity}
+              pinned={spotlightGuestId === tile.peer.identity}
+              registerEl={registerPeerVideoEl}
+              onTogglePin={(id) => void toggleSpotlight(id)}
+              onRemove={(id) => void dropGuest(id)}
+            />
+          ))}
 
         {/* Top bar: back menu + LIVE/viewers/timer */}
         <div className="absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-2 p-4 pt-[calc(env(safe-area-inset-top)+1rem)]">
@@ -1021,8 +988,8 @@ export function VideoStudioConsole({
                 <div className="grid grid-cols-2 gap-2">
                   {(
                     [
-                      { value: "portrait", label: "Focused", hint: "Full-screen vertical", icon: Smartphone },
-                      { value: "landscape", label: "Conversation", hint: "A community gathering", icon: MonitorPlay },
+              { value: "portrait", label: "Broadcast", hint: "Stage, teaching & preaching", icon: Radio },
+              { value: "landscape", label: "Conversation", hint: "A community gathering", icon: MonitorPlay },
                     ] as const
                   ).map((opt) => {
                     const active = orientation === opt.value
@@ -1049,25 +1016,30 @@ export function VideoStudioConsole({
                 </div>
               </div>
 
-              {/* Cover artwork + discussion topic — Conversation rooms only. The
-                  cover is the room's identity (shown in the header + lightbox). */}
+              {/* Cover artwork — both Broadcast and Conversation carry a cover
+                  (the room's identity, shown in the header + opened in the
+                  full-screen lightbox when tapped). */}
+              <CoverUpload
+                value={cover}
+                onChange={setCover}
+                label={orientation === "landscape" ? "Room cover" : "Broadcast cover"}
+              />
+
+              {/* Discussion topic — Conversation rooms only. */}
               {orientation === "landscape" && (
-                <>
-                  <CoverUpload value={cover} onChange={setCover} label="Room cover" />
-                  <div className="space-y-1.5">
-                    <label htmlFor="live-topic" className="text-xs font-semibold uppercase tracking-wider text-white/60">
-                      Today&apos;s Discussion <span className="font-medium normal-case tracking-normal text-white/40">(optional)</span>
-                    </label>
-                    <input
-                      id="live-topic"
-                      value={roomTopic}
-                      onChange={(e) => setRoomTopic(e.target.value)}
-                      maxLength={80}
-                      placeholder="What are we gathering around?"
-                      className="w-full rounded-2xl bg-white/10 px-4 py-3 text-base font-medium text-white ring-1 ring-inset ring-white/15 placeholder:text-white/40 focus:outline-none focus:ring-primary"
-                    />
-                  </div>
-                </>
+                <div className="space-y-1.5">
+                  <label htmlFor="live-topic" className="text-xs font-semibold uppercase tracking-wider text-white/60">
+                    Today&apos;s Discussion <span className="font-medium normal-case tracking-normal text-white/40">(optional)</span>
+                  </label>
+                  <input
+                    id="live-topic"
+                    value={roomTopic}
+                    onChange={(e) => setRoomTopic(e.target.value)}
+                    maxLength={80}
+                    placeholder="What are we gathering around?"
+                    className="w-full rounded-2xl bg-white/10 px-4 py-3 text-base font-medium text-white ring-1 ring-inset ring-white/15 placeholder:text-white/40 focus:outline-none focus:ring-primary"
+                  />
+                </div>
               )}
 
               {/* Category — required. The host must tag their live with one of

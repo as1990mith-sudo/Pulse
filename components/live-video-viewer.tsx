@@ -43,6 +43,7 @@ import { ConversationVideo } from "@/components/conversation/conversation-video"
 import { GridPrejoin } from "@/components/grid-prejoin"
 import type { ShareTarget } from "@/lib/share-types"
 import { getAvatarColor, getInitials } from "@/lib/identity"
+import { broadcastStageRects, stageRectStyle, type StageRect } from "@/lib/broadcast-stage"
 import { cn } from "@/lib/utils"
 
 /** Compact glass follow button for the host info pill. */
@@ -87,39 +88,38 @@ function InlineFollowButton({
   )
 }
 
-// ── Call-in rail geometry (portrait focused broadcast) ─────────────────────
-// Two fixed-size call-in slots stacked top→bottom, overlaid on the RIGHT of the
-// host video. Fixed sizes/positions so the viewer's own persistent self <video>
-// can be absolutely positioned to overlap a slot without remounting.
-const RAIL_SLOT = "h-32 w-24"
-const RAIL_SLOT_POS = [
-  "right-3 top-[calc(env(safe-area-inset-top)+4.5rem)]",
-  "right-3 top-[calc(env(safe-area-inset-top)+13rem)]",
-] as const
-
-/** A called-in guest's camera in a rail slot (view-only, no host controls). */
-function RailGuestView({
+/**
+ * A remote stage participant (host or called-in guest) positioned on the
+ * dynamic Broadcast stage via a percentage rect (view-only, no host controls).
+ * Animates its rect as the stage reflows; the <video> is remount-safe because
+ * `registerEl` reattaches the track on mount.
+ */
+function StagePeerView({
   peer,
-  posClass,
+  rect,
+  primary,
   registerEl,
+  muted = true,
 }: {
   peer: { identity: string; name: string; image: string | null; hasVideo: boolean }
-  posClass: string
+  rect: StageRect
+  primary: boolean
   registerEl: (identity: string, el: HTMLVideoElement | null) => void
+  muted?: boolean
 }) {
   return (
     <div
+      style={stageRectStyle(rect)}
       className={cn(
-        "absolute z-30 overflow-hidden rounded-2xl bg-neutral-900 ring-1 ring-inset ring-white/15",
-        RAIL_SLOT,
-        posClass,
+        "z-10 overflow-hidden bg-neutral-900 transition-[top,left,width,height] duration-500 ease-out",
+        primary ? "rounded-none" : "rounded-2xl ring-1 ring-inset ring-white/10",
       )}
     >
       <video
         ref={(el) => registerEl(peer.identity, el)}
         autoPlay
         playsInline
-        muted
+        muted={muted}
         className={cn(
           "h-full w-full object-cover transition-opacity duration-300",
           peer.hasVideo ? "opacity-100" : "opacity-0",
@@ -129,7 +129,8 @@ function RailGuestView({
         <div className="absolute inset-0 flex items-center justify-center">
           <span
             className={cn(
-              "flex size-11 items-center justify-center rounded-full text-sm font-semibold text-white",
+              "flex items-center justify-center rounded-full font-semibold text-white",
+              primary ? "size-20 text-2xl" : "size-11 text-sm",
               getAvatarColor(peer.identity),
             )}
           >
@@ -137,9 +138,11 @@ function RailGuestView({
           </span>
         </div>
       )}
-      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
-        <span className="block truncate text-[11px] font-semibold text-white">{peer.name}</span>
-      </div>
+      {!primary && (
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
+          <span className="block truncate text-[11px] font-semibold text-white">{peer.name}</span>
+        </div>
+      )}
     </div>
   )
 }
@@ -349,25 +352,38 @@ export function LiveVideoViewer({
   const isSelf = currentUserId === stream.hostId
   const remoteVideoOn = Boolean(hostPeer?.hasVideo)
 
-  // ── Focused-broadcast spotlight (mirrors the host console) ────────────────
-  // The host can spotlight one called-in guest: that guest fills the big frame
-  // and the host drops into the top call-in slot. Everyone sees the same swap.
+  // ── Broadcast dynamic stage (mirrors the host console) ────────────────────
+  // The host can spotlight one called-in guest (or a promoted viewer): that
+  // person takes the primary slot and everyone else reflows around them. The
+  // spotlight id is stored server-side (gridPinnedIds, reused) so every client
+  // renders the same arrangement.
   const spotlightId = (callState?.gridPinnedIds ?? [])[0] ?? null
   const spotlightPeer = spotlightId ? guestPeers.find((p) => p.identity === spotlightId) ?? null : null
   const spotlightIsSelf = !!spotlightId && spotlightId === currentUserId && canPublish
   const hasSpotlight = !!spotlightPeer || spotlightIsSelf
-  // Whether the big frame currently has a live video (drives the connecting/off
-  // overlays): the spotlighted guest, my own cam, or the host by default.
-  const bigVideoOn = spotlightPeer ? spotlightPeer.hasVideo : spotlightIsSelf ? camOn : remoteVideoOn
-  // Right-side rail occupants (max 2): host first when spotlighting, then me
-  // (if promoted and not the spotlight), then any other called-in guests.
-  const railOccupants: ({ kind: "self" } | { kind: "host" } | { kind: "guest"; peer: RemotePeer })[] = []
-  if (hasSpotlight) railOccupants.push({ kind: "host" })
-  if (canPublish && !spotlightIsSelf) railOccupants.push({ kind: "self" })
+
+  // Ordered stage tiles: [primary, ...rest]. Primary is the spotlighted person
+  // (guest or self), otherwise the host. The host always appears exactly once;
+  // this viewer's own "self" tile appears only when promoted (canPublish).
+  type VStageTile = { kind: "host" } | { kind: "self" } | { kind: "guest"; peer: RemotePeer }
+  const stageTiles: VStageTile[] = []
+  if (spotlightPeer) stageTiles.push({ kind: "guest", peer: spotlightPeer })
+  else if (spotlightIsSelf) stageTiles.push({ kind: "self" })
+  stageTiles.push({ kind: "host" })
   guestPeers
     .filter((p) => p.identity !== spotlightPeer?.identity)
-    .forEach((p) => railOccupants.push({ kind: "guest", peer: p }))
-  const selfRailIndex = railOccupants.findIndex((o) => o.kind === "self")
+    .forEach((p) => stageTiles.push({ kind: "guest", peer: p }))
+  if (canPublish && !spotlightIsSelf) stageTiles.push({ kind: "self" })
+  const stageRects = broadcastStageRects(stageTiles.length)
+  const hostIndex = stageTiles.findIndex((t) => t.kind === "host")
+  const hostRect = stageRects[hostIndex] ?? stageRects[0]
+  const hostIsPrimary = hostIndex === 0
+  const selfIndex = stageTiles.findIndex((t) => t.kind === "self")
+  const selfRect = selfIndex >= 0 ? stageRects[selfIndex] : null
+  const selfIsPrimary = selfIndex === 0
+  // Whether the primary frame currently shows a live video (drives the
+  // connecting/off overlays): the spotlighted guest, my own cam, or the host.
+  const bigVideoOn = spotlightPeer ? spotlightPeer.hasVideo : spotlightIsSelf ? camOn : remoteVideoOn
 
   if (blocked) {
     return (

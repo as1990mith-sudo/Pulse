@@ -742,6 +742,21 @@ async function acceptedGuestCount(roomName: string): Promise<number> {
   return rows.length
 }
 
+// Broadcast (portrait video) is a presenter-focused stage capped at 3 guests
+// (host + 3 = 4 on stage) so the dynamic 1/2/3/4-person layouts stay premium.
+// Every other format keeps the general MAX_GUESTS cap.
+const BROADCAST_MAX_GUESTS = 3
+
+/** Resolves the on-stage guest cap for a room based on its format. */
+async function stageCapFor(roomName: string): Promise<number> {
+  const [s] = await db
+    .select({ mode: liveStream.mode, orientation: liveStream.orientation })
+    .from(liveStream)
+    .where(eq(liveStream.roomName, roomName))
+  const isBroadcast = s?.mode === "video" && (s?.orientation ?? "portrait") === "portrait"
+  return isBroadcast ? BROADCAST_MAX_GUESTS : MAX_GUESTS
+}
+
 /** Listener asks to come on as a guest. */
 export async function requestToJoin(input: { roomName: string }): Promise<{ ok: boolean; error?: string }> {
   const user = await requireUser()
@@ -1073,8 +1088,9 @@ export async function respondToCallRequest(input: {
   if (req.kind === "invite" && req.userId !== user.id) return { ok: false, error: "Not authorized." }
 
   if (input.accept) {
-    if ((await acceptedGuestCount(req.roomName)) >= MAX_GUESTS) {
-      return { ok: false, error: `All ${MAX_GUESTS} guest spots are full.` }
+    const cap = await stageCapFor(req.roomName)
+    if ((await acceptedGuestCount(req.roomName)) >= cap) {
+      return { ok: false, error: `All ${cap} guest spots are full.` }
     }
     await setParticipantPublish({ roomName: req.roomName, identity: req.userId, canPublish: true })
     await db
@@ -1157,8 +1173,9 @@ export async function callIn(input: { roomName: string }): Promise<{ ok: boolean
   const row = await getCoHostRow(input.roomName, user.id)
   if (!row) return { ok: false, error: "You're not a co-host of this session." }
   if (row.status !== "accepted") {
-    if ((await acceptedGuestCount(input.roomName)) >= MAX_GUESTS) {
-      return { ok: false, error: `All ${MAX_GUESTS} stage spots are full.` }
+    const cap = await stageCapFor(input.roomName)
+    if ((await acceptedGuestCount(input.roomName)) >= cap) {
+      return { ok: false, error: `All ${cap} stage spots are full.` }
     }
   }
   await setParticipantPublish({ roomName: input.roomName, identity: user.id, canPublish: true })
