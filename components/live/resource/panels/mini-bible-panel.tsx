@@ -17,8 +17,7 @@ import {
   toggleBibleBookmark,
 } from "@/app/actions/bible-notes"
 import { cn } from "@/lib/utils"
-import { MiniPanelShell } from "../mini-panel-shell"
-import { useLiveResources, type PanelPayload } from "../resource-context"
+import { useLiveResources } from "../resource-context"
 
 type Verse = { verse: number; text: string }
 type ChapterFile = { chapters: Record<string, Verse[]> }
@@ -48,8 +47,8 @@ function parseReference(q: string): { bookIndex: number; chapter: number; verse?
   return { bookIndex: idx, chapter, verse }
 }
 
-export function MiniBiblePanel({ constraintsRef }: { constraintsRef: React.RefObject<HTMLDivElement | null> }) {
-  const { descriptor, shareToChat, canShareToChat, payload } = useLiveResources()
+export function MiniBiblePanel() {
+  const { shareToChat, canShareToChat, payload } = useLiveResources()
   const biblePayload = payload?.kind === "bible" ? payload : null
 
   const [book, setBook] = useState(biblePayload?.book ?? "John")
@@ -132,13 +131,7 @@ export function MiniBiblePanel({ constraintsRef }: { constraintsRef: React.RefOb
   const selectedVerse = selected != null ? verses.find((v) => v.verse === selected) : null
 
   return (
-    <MiniPanelShell
-      title="Bible"
-      subtitle={`${book} ${chapter} · KJV`}
-      icon={BIBLE_ICON}
-      constraintsRef={constraintsRef}
-    >
-      <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col">
         {/* Book / chapter pickers + search */}
         <div className="flex flex-col gap-2 border-b border-white/8 px-3 py-2.5">
           <div className="flex items-center gap-2">
@@ -286,10 +279,6 @@ export function MiniBiblePanel({ constraintsRef }: { constraintsRef: React.RefOb
             </div>
           </div>
         )}
-      </div>
-    </MiniPanelShell>
+    </div>
   )
 }
-
-// Small inline icon so the shell header shows a book glyph without another import here.
-import { BookOpen as BIBLE_ICON } from "lucide-react"

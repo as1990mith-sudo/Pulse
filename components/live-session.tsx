@@ -12,6 +12,8 @@ import { StudioErrorBoundary } from "@/components/studio-error-boundary"
 import type { CurrentUser } from "@/lib/session"
 import type { LiveStreamView } from "@/app/actions/live"
 import { cn } from "@/lib/utils"
+import { ResourceProvider, type LiveDescriptor } from "@/components/live/resource/resource-context"
+import { LiveResourceLayer } from "@/components/live/resource/live-resource-layer"
 
 /**
  * A live audio session is hosted at the app level (above the router) so that
