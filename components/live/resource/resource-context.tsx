@@ -10,7 +10,7 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react"
 import type { CurrentUser } from "@/lib/session"
 
-export type ResourcePanelId = "bible" | "notes" | "pdf" | "books" | "pinned" | "prayer"
+export type ResourcePanelId = "bible" | "notes" | "pdf" | "books" | "pinned"
 
 // Optional payload handed to a panel when it opens (e.g. open the PDF panel on a
 // specific document, or the Bible panel on a specific verse).

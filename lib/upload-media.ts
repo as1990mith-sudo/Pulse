@@ -69,7 +69,7 @@ export async function compressImage(file: File, maxEdge = 1600, quality = 0.82):
  *
  * `folder` becomes the blob key prefix and must be one of the allow-listed
  * prefixes in the token route (chat, status, covers, avatars, live-music,
- * episodes, dm).
+ * episodes, dm, store, pinned).
  */
 // Files at or above this size upload in parallel chunks (multipart). This is
 // the single biggest win for video upload speed: instead of one long serial
@@ -79,7 +79,7 @@ const MULTIPART_THRESHOLD = 5 * 1024 * 1024 // 5 MB
 
 export async function uploadMedia(
   file: File | Blob,
-  folder: "chat" | "status" | "covers" | "avatars" | "live-music" | "episodes" | "dm" | "store",
+  folder: "chat" | "status" | "covers" | "avatars" | "live-music" | "episodes" | "dm" | "store" | "pinned",
   fileName?: string,
   onProgress?: (percentage: number) => void,
 ): Promise<UploadedMedia> {

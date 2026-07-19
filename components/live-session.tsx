@@ -75,7 +75,16 @@ type Session =
   | ConversationHostSession
   | ConversationParticipantSession
 
-export type LiveMeta = { title: string; cover: string | null; live: boolean; subtitle?: string }
+export type LiveMeta = {
+  title: string
+  cover: string | null
+  live: boolean
+  subtitle?: string
+  // The live room name, surfaced once the room actually connects. Fresh host
+  // sessions have no stream yet, so this is how the resource system learns the
+  // room to scope to (and thus when to show the floating resource button).
+  roomName?: string | null
+}
 
 type Ctx = {
   open: (s: Session) => void
@@ -300,9 +309,10 @@ function deriveDescriptor(session: Session, meta: LiveMeta | null): LiveDescript
     (viewerId != null && stream != null && viewerId === stream.hostId)
 
   return {
-    // Null until the room is known (a brand-new host broadcast). The resource
-    // button stays hidden while roomName is null.
-    roomName: stream?.roomName ?? null,
+    // Prefer the live room name reported by the room once it connects (a fresh
+    // host broadcast has no stream yet), falling back to the stream. Stays null
+    // only until the room is live, keeping the resource button hidden until then.
+    roomName: meta?.roomName ?? stream?.roomName ?? null,
     streamId: stream?.id ?? null,
     hostId: stream?.hostId ?? null,
     hostName: stream?.hostName ?? null,

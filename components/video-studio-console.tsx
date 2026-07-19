@@ -250,7 +250,7 @@ export function VideoStudioConsole({
   resumeStream?: LiveStreamView | null
   onMinimize?: () => void
   onExit?: () => void
-  onMeta?: (m: { title: string; cover: string | null; live: boolean; subtitle?: string }) => void
+  onMeta?: (m: { title: string; cover: string | null; live: boolean; subtitle?: string; roomName?: string | null }) => void
 }) {
   const [title, setTitle] = useState(resumeStream?.title ?? `${currentUser.name} — live`)
   // Host-chosen broadcast layout. "portrait" = the original full-bleed vertical
@@ -426,8 +426,9 @@ export function VideoStudioConsole({
       cover: orientation === "landscape" ? cover : null,
       live,
       subtitle: live ? "You're live · video" : "Setting up",
+      roomName,
     })
-  }, [title, live, onMeta, orientation, cover])
+  }, [title, live, onMeta, orientation, cover, roomName])
 
   // Host polls the call-in queue to surface pending guest requests + guests.
   const { data: callState, mutate: refreshCalls } = useSWR(

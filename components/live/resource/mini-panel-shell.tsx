@@ -13,7 +13,6 @@ import {
   BookOpen,
   FileText,
   GripHorizontal,
-  HandHeart,
   Minus,
   NotebookPen,
   Pin,
@@ -29,7 +28,6 @@ const SWITCHER: { id: ResourcePanelId; icon: LucideIcon; label: string }[] = [
   { id: "pdf", icon: FileText, label: "PDFs" },
   { id: "books", icon: BookMarked, label: "Books" },
   { id: "pinned", icon: Pin, label: "Pinned" },
-  { id: "prayer", icon: HandHeart, label: "Prayer" },
 ]
 
 export function MiniPanelShell({

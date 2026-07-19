@@ -9,7 +9,7 @@
 import { useRef } from "react"
 import dynamic from "next/dynamic"
 import { AnimatePresence } from "motion/react"
-import { BookOpen, BookMarked, FileText, HandHeart, Loader2, NotebookPen, Pin } from "lucide-react"
+import { BookOpen, BookMarked, FileText, Loader2, NotebookPen, Pin } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useLiveResources, type ResourcePanelId } from "./resource-context"
 import { LiveResourceButton } from "./live-resource-button"
@@ -18,7 +18,6 @@ import { MiniPanelShell } from "./mini-panel-shell"
 import { MiniBiblePanel } from "./panels/mini-bible-panel"
 import { MiniNotesPanel } from "./panels/mini-notes-panel"
 import { MiniPinnedPanel } from "./panels/mini-pinned-panel"
-import { MiniPrayerPanel } from "./panels/mini-prayer-panel"
 
 // The PDF and Books panels pull in pdf.js, which touches browser-only globals
 // (DOMMatrix) at module load. Import them client-side only so they never enter
@@ -43,7 +42,6 @@ const PANEL_META: Record<ResourcePanelId, { title: string; icon: LucideIcon }> =
   pdf: { title: "Documents", icon: FileText },
   books: { title: "Books", icon: BookMarked },
   pinned: { title: "Pinned", icon: Pin },
-  prayer: { title: "Prayer Requests", icon: HandHeart },
 }
 
 function PanelBody({ id }: { id: ResourcePanelId }) {
@@ -58,8 +56,6 @@ function PanelBody({ id }: { id: ResourcePanelId }) {
       return <MiniBooksPanel />
     case "pinned":
       return <MiniPinnedPanel />
-    case "prayer":
-      return <MiniPrayerPanel />
   }
 }
 
