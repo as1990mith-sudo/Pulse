@@ -659,6 +659,8 @@ export function VideoStudioConsole({
             onToggleCam={() => void toggleCam()}
             onFlipCamera={() => void flipCamera()}
             onAskUnmute={(id) => void askUnmute(id)}
+            rtcError={rtcError}
+            onClearError={clearRtcError}
             onOpenMusic={() => setMusicPanelOpen(true)}
             title={title}
             cover={cover}
