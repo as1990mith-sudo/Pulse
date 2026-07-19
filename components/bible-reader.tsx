@@ -331,8 +331,9 @@ export function BibleReader({ signedIn }: { signedIn: boolean }) {
         </div>
       </div>
 
-      {/* Controls */}
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Controls — kept on a single row (no wrapping) so the book/chapter
+          pickers and the note/prev/next controls always share one line. */}
+      <div className="flex items-center gap-2">
         <BookPicker book={book} onSelect={(name) => { setBook(name); setChapter(1); scrollTop() }} />
         <ChapterPicker
           chapter={chapter}
@@ -340,7 +341,7 @@ export function BibleReader({ signedIn }: { signedIn: boolean }) {
           onSelect={(n) => { setChapter(n); scrollTop() }}
         />
 
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex shrink-0 items-center gap-1">
           {/* All of the reader's notes, gathered on their own page. */}
           <Link
             href="/bible/notes"

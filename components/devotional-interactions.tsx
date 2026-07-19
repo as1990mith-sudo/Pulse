@@ -2,8 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react"
 import useSWR from "swr"
-import Link from "next/link"
-import { Heart, Share2, Send } from "lucide-react"
+import { Heart, Share2 } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import {
   addDevotionalComment,
@@ -19,9 +18,8 @@ import { ShareSheet } from "@/components/share-sheet"
 import type { ShareTarget } from "@/lib/share-types"
 import type { CurrentUser } from "@/lib/session"
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Separator } from "@/components/ui/separator"
-import { CommentThread, type ThreadComment } from "@/components/comment-thread"
+import { type ThreadComment } from "@/components/comment-thread"
+import { CommentSheet } from "@/components/comment-sheet"
 import { cn } from "@/lib/utils"
 
 function toThreadComment(c: DevotionalCommentView): ThreadComment {
@@ -70,8 +68,8 @@ export function DevotionalInteractions({
   const [liked, setLiked] = useState(false)
   const [likes, setLikes] = useState(initialLikes)
   const [shareOpen, setShareOpen] = useState(false)
-  const [draft, setDraft] = useState("")
-  const [isPending, startTransition] = useTransition()
+  const [commentsOpen, setCommentsOpen] = useState(false)
+  const [, startTransition] = useTransition()
 
   // Load the persisted like count + this user's liked state so a daily like
   // survives refresh and can't be re-counted.
@@ -116,15 +114,10 @@ export function DevotionalInteractions({
     })
   }
 
-  function submitComment(e: React.FormEvent) {
-    e.preventDefault()
-    const text = draft.trim()
-    if (!text || !currentUser) return
-    startTransition(async () => {
-      await addDevotionalComment({ devotionalDate, text })
-      setDraft("")
-      await mutateComments()
-    })
+  async function submitComment(text: string) {
+    if (!currentUser) return
+    await addDevotionalComment({ devotionalDate, text })
+    await mutateComments()
   }
 
   return (
@@ -140,61 +133,39 @@ export function DevotionalInteractions({
           Share
         </Button>
 
-        <div className="ml-auto flex items-center gap-1.5 text-sm text-muted-foreground">
+        <button
+          type="button"
+          onClick={() => setCommentsOpen(true)}
+          className="ml-auto flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          aria-label="View comments"
+        >
           <CommentIcon className="size-4" />
           {comments.length}
-        </div>
+        </button>
       </div>
 
-      <Separator />
-
-      <div className="space-y-5">
-        <h2 className="text-lg font-semibold tracking-tight">
-          Comments <span className="text-muted-foreground">({comments.length})</span>
-        </h2>
-
-        {currentUser ? (
-          <form onSubmit={submitComment} className="space-y-3">
-            <Textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="Share a reflection, prayer, or encouragement..."
-              className="min-h-24 resize-none"
-              aria-label="Write a comment"
-            />
-            <div className="flex justify-end">
-              <Button type="submit" disabled={isPending || !draft.trim()} className="gap-2">
-                <Send className="size-4" /> {isPending ? "Posting…" : "Post comment"}
-              </Button>
-            </div>
-          </form>
-        ) : (
-          <div className="rounded-xl border border-border/60 bg-card p-4 text-sm text-muted-foreground">
-            <Link href="/sign-in" className="font-medium text-primary hover:underline">
-              Sign in
-            </Link>{" "}
-            to share a reflection. Your name will appear with your comment.
-          </div>
-        )}
-
-        <CommentThread
-          comments={comments.map(toThreadComment)}
-          canInteract={Boolean(currentUser)}
-          onLike={(commentId, liked) => void setDevotionalCommentLike({ commentId, liked })}
-          onReply={async (parentId, value) => {
-            await addDevotionalComment({ devotionalDate, text: value, parentId })
-            await mutateComments()
-          }}
-          onEdit={async (commentId, value) => {
-            await editDevotionalComment({ commentId, text: value })
-            await mutateComments()
-          }}
-          onDelete={async (commentId) => {
-            await deleteDevotionalComment(commentId)
-            await mutateComments()
-          }}
-        />
-      </div>
+      <CommentSheet
+        open={commentsOpen}
+        onClose={() => setCommentsOpen(false)}
+        comments={comments.map(toThreadComment)}
+        currentUser={currentUser}
+        placeholder="Share a reflection, prayer, or encouragement…"
+        emptyHint="Share a reflection to start the conversation."
+        onSubmit={submitComment}
+        onLike={(commentId, liked) => void setDevotionalCommentLike({ commentId, liked })}
+        onReply={async (parentId, value) => {
+          await addDevotionalComment({ devotionalDate, text: value, parentId })
+          await mutateComments()
+        }}
+        onEdit={async (commentId, value) => {
+          await editDevotionalComment({ commentId, text: value })
+          await mutateComments()
+        }}
+        onDelete={async (commentId) => {
+          await deleteDevotionalComment(commentId)
+          await mutateComments()
+        }}
+      />
 
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
     </div>

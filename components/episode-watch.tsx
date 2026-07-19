@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Bookmark, ChevronDown, Heart, Loader2, Send, Share2 } from "lucide-react"
+import { Bookmark, Heart, Share2 } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import type { Show } from "@/lib/data"
 import type { CurrentUser } from "@/lib/session"
@@ -22,7 +22,8 @@ import { getEpisodeEngagement, type EpisodeEngagement } from "@/app/actions/enga
 import { getFollowingIds } from "@/app/actions/follow"
 import type { ShareTarget } from "@/lib/share-types"
 import { EpisodePlayer } from "@/components/episode-player"
-import { CommentThread, type ThreadComment } from "@/components/comment-thread"
+import { type ThreadComment } from "@/components/comment-thread"
+import { CommentSheet } from "@/components/comment-sheet"
 import { ShareSheet } from "@/components/share-sheet"
 import { VideoCard } from "@/components/profile/video-card"
 import { ProfileFollowButton } from "@/components/profile/profile-follow-button"
@@ -78,20 +79,19 @@ export function EpisodeWatch({
   const router = useRouter()
 
   const [minimized, setMinimized] = useState(false)
-  const [commentsOpen, setCommentsOpen] = useState(true)
+  const [commentsOpen, setCommentsOpen] = useState(false)
 
   const [liked, setLiked] = useState(false)
   const [likes, setLikes] = useState(show.likes ?? 0)
   const [saved, setSaved] = useState(false)
   const [comments, setComments] = useState<EpisodeCommentView[]>(initialComments)
-  const [draft, setDraft] = useState("")
   const [shareOpen, setShareOpen] = useState(false)
   const [engagement, setEngagement] = useState<EpisodeEngagement | null>(null)
   // Live save/share totals, shown inline next to their icons. Seeded from the
   // engagement summary once it loads.
   const [saveCount, setSaveCount] = useState(0)
   const [shareCount, setShareCount] = useState(0)
-  const [isPending, startTransition] = useTransition()
+  const [, startTransition] = useTransition()
 
   // Follow state for the episode's host, used to seed the inline Follow button
   // in the action bar. Only relevant when signed in and viewing someone else.
@@ -191,15 +191,10 @@ export function EpisodeWatch({
     })
   }
 
-  function submitComment(e: React.FormEvent) {
-    e.preventDefault()
-    const text = draft.trim()
-    if (!text || !currentUser) return
-    setDraft("")
-    startTransition(async () => {
-      await addEpisodeComment({ episodeId: episodeId!, text })
-      setComments(await getEpisodeComments(episodeId!))
-    })
+  async function submitComment(text: string) {
+    if (!currentUser) return
+    await addEpisodeComment({ episodeId: episodeId!, text })
+    setComments(await getEpisodeComments(episodeId!))
   }
 
   const count = comments.length
@@ -274,13 +269,9 @@ export function EpisodeWatch({
                 </button>
 
                 <button
-                  onClick={() => setCommentsOpen((o) => !o)}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors hover:bg-secondary",
-                    commentsOpen ? "text-primary" : "text-foreground",
-                  )}
-                  aria-expanded={commentsOpen}
-                  aria-label={commentsOpen ? "Hide comments" : "Show comments"}
+                  onClick={() => setCommentsOpen(true)}
+                  className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+                  aria-label="View comments"
                 >
                   <CommentIcon className="size-5" />
                   {count > 0 && <span className="tabular-nums">{count}</span>}
@@ -317,108 +308,8 @@ export function EpisodeWatch({
       {/* ========================= SECTION 2 — scrollable ==================== */}
       <div className="flex-1 overflow-y-auto overscroll-contain">
         <div className="space-y-6 px-4 py-4 pb-16 sm:px-6">
-          {/* Comment toggle group — the compact row and the collapsible section are
-              grouped so that when collapsed there's no stray gap before "More
-              from…", which must sit directly beneath the compact row. */}
-          <div>
-            {/* Compact comments row — shown only while collapsed. Tapping it (or the
-                Comment button above) re-expands the comments. */}
-            {!commentsOpen && (
-              <button
-                type="button"
-                onClick={() => setCommentsOpen(true)}
-                className="flex w-full items-center justify-between rounded-xl border border-border/60 bg-card px-4 py-3 text-sm font-semibold transition-colors hover:bg-secondary/60"
-                aria-expanded={false}
-              >
-                <span>Comments{count > 0 && <span className="ml-1 text-muted-foreground">({count})</span>}</span>
-                <ChevronDown className="size-4 text-muted-foreground" />
-              </button>
-            )}
-
-            {/* Collapsible comment section (composer + thread). Animates height via
-                grid-template-rows so there are no layout jumps. */}
-            <div
-              className={cn(
-                "grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none",
-                commentsOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-              )}
-            >
-            <div className={cn("min-h-0 overflow-hidden", commentsOpen ? "opacity-100" : "opacity-0")}>
-              <div className="space-y-4 rounded-xl border border-border/60 bg-card p-4">
-                {/* Header with a collapse affordance. */}
-                <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-semibold">
-                    Comments{count > 0 && <span className="ml-1 text-muted-foreground">({count})</span>}
-                  </h2>
-                  <button
-                    type="button"
-                    onClick={() => setCommentsOpen(false)}
-                    className="tap-scale flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                    aria-label="Hide comments"
-                  >
-                    <ChevronDown className="size-4" />
-                  </button>
-                </div>
-
-                {/* Composer */}
-                {currentUser ? (
-                  <form onSubmit={submitComment} className="flex items-center gap-2">
-                    <Avatar className="size-8">
-                      <AvatarImage src={currentUser.image || undefined} alt="" />
-                      <AvatarFallback style={{ backgroundColor: currentUser.color }} className="text-xs text-white">
-                        {currentUser.initials}
-                      </AvatarFallback>
-                    </Avatar>
-                    <input
-                      value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
-                      placeholder="Add a comment…"
-                      className="h-9 flex-1 rounded-full border border-border/60 bg-background px-4 text-sm outline-none focus:border-primary"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!draft.trim() || isPending}
-                      className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
-                      aria-label="Post comment"
-                    >
-                      {isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                    </button>
-                  </form>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    <Link href="/sign-in" className="font-medium text-primary hover:underline">
-                      Sign in
-                    </Link>{" "}
-                    to like and comment.
-                  </p>
-                )}
-
-                {/* Comments + replies */}
-                <CommentThread
-                  comments={comments.map(toThreadComment)}
-                  canInteract={Boolean(currentUser)}
-                  onLike={(commentId, liked) => void setEpisodeCommentLike({ commentId, liked })}
-                  onReply={async (parentId, value) => {
-                    await addEpisodeComment({ episodeId: episodeId!, text: value, parentId })
-                    setComments(await getEpisodeComments(episodeId!))
-                  }}
-                  onEdit={async (commentId, value) => {
-                    await editEpisodeComment({ commentId, text: value })
-                    setComments(await getEpisodeComments(episodeId!))
-                  }}
-                  onDelete={async (commentId) => {
-                    await deleteEpisodeComment(commentId)
-                    setComments(await getEpisodeComments(episodeId!))
-                  }}
-                />
-              </div>
-            </div>
-            </div>
-          </div>
-
-          {/* More from… (next / recommended videos) — sits directly beneath the
-              comments (expanded) or the compact comments row (collapsed), per the
-              spec. Everything else (creator card, About) follows below it. */}
+          {/* More from… (next / recommended videos) leads Section 2; comments now
+              open in the shared bottom sheet from the Comment button above. */}
           {queue.length > 0 && (
             <section className="space-y-3">
               <h2 className="text-sm font-semibold">More from {show.host.name}</h2>
@@ -450,6 +341,27 @@ export function EpisodeWatch({
           )}
         </div>
       </div>
+
+      <CommentSheet
+        open={commentsOpen}
+        onClose={() => setCommentsOpen(false)}
+        comments={comments.map(toThreadComment)}
+        currentUser={currentUser}
+        onSubmit={submitComment}
+        onLike={(commentId, liked) => void setEpisodeCommentLike({ commentId, liked })}
+        onReply={async (parentId, value) => {
+          await addEpisodeComment({ episodeId: episodeId!, text: value, parentId })
+          setComments(await getEpisodeComments(episodeId!))
+        }}
+        onEdit={async (commentId, value) => {
+          await editEpisodeComment({ commentId, text: value })
+          setComments(await getEpisodeComments(episodeId!))
+        }}
+        onDelete={async (commentId) => {
+          await deleteEpisodeComment(commentId)
+          setComments(await getEpisodeComments(episodeId!))
+        }}
+      />
 
       <ShareSheet
         target={shareTarget}

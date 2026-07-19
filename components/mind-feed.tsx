@@ -42,7 +42,8 @@ import {
   type PostMedia,
 } from "@/app/actions/feed"
 import { toggleSaveItem } from "@/app/actions/share"
-import { CommentThread, type ThreadComment } from "@/components/comment-thread"
+import { type ThreadComment } from "@/components/comment-thread"
+import { CommentSheet } from "@/components/comment-sheet"
 import { toggleFollow } from "@/app/actions/follow"
 import type { CurrentUser } from "@/lib/session"
 import { uploadMedia } from "@/lib/upload-media"
@@ -50,7 +51,6 @@ import { Button } from "@/components/ui/button"
 import { FormattedTextarea } from "@/components/formatted-textarea"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -944,7 +944,6 @@ export function PostCard({
   // that liked / saved it instead of toggling engagement.
   const [engagementKind, setEngagementKind] = useState<"likes" | "saves" | null>(null)
   const [showComments, setShowComments] = useState(false)
-  const [commentDraft, setCommentDraft] = useState("")
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleted, setDeleted] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
@@ -1049,19 +1048,13 @@ export function PostCard({
     downloadKind: post.image ? "image" : post.video ? "video" : null,
   }
 
-  function submitComment(e: React.FormEvent) {
-    e.preventDefault()
-    const text = commentDraft.trim()
-    if (!text || !currentUser) return
-    startTransition(async () => {
-      await addPostComment({ postId: post.id, text })
-      setCommentDraft("")
-      setShowComments(true)
-      // Refresh the polled feed (used on the Tweet tab) and the server tree
-      // (used on profile pages where the feed isn't polled).
-      await globalMutate("feed")
-      router.refresh()
-    })
+  async function submitComment(text: string) {
+    if (!currentUser) return
+    await addPostComment({ postId: post.id, text })
+    // Refresh the polled feed (used on the Tweet tab) and the server tree
+    // (used on profile pages where the feed isn't polled).
+    await globalMutate("feed")
+    router.refresh()
   }
 
   function handleCommentLike(commentId: number, liked: boolean) {
@@ -1397,47 +1390,19 @@ export function PostCard({
         </button>
       </div>
 
-      {showComments && (
-        <div className="space-y-4 px-3 pb-4">
-          <Separator />
-
-          {currentUser ? (
-            <form onSubmit={submitComment} className="flex items-start gap-2">
-              <Avatar className="size-8 shrink-0">
-                <AvatarFallback className={cn("text-xs", currentUser.color)}>{currentUser.initials}</AvatarFallback>
-              </Avatar>
-              <FormattedTextarea
-                value={commentDraft}
-                onChange={(e) => setCommentDraft(e.target.value)}
-                placeholder="Add a comment..."
-                className="min-h-10 resize-none"
-                aria-label="Write a reply"
-              />
-              <Button type="submit" size="icon" disabled={isPending || !commentDraft.trim()} aria-label="Send reply">
-                <Send className="size-4" />
-              </Button>
-            </form>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              <Link href="/sign-in" className="font-medium text-primary hover:underline">
-                Sign in
-              </Link>{" "}
-              to reply.
-            </p>
-          )}
-
-          <CommentThread
-            comments={post.comments.map(toThreadComment)}
-            canInteract={!!currentUser}
-            showCopy={false}
-            enforceTimeWindows={false}
-            onLike={handleCommentLike}
-            onReply={handleCommentReply}
-            onEdit={handleCommentEdit}
-            onDelete={handleCommentDelete}
-          />
-        </div>
-      )}
+      <CommentSheet
+        open={showComments}
+        onClose={() => setShowComments(false)}
+        comments={post.comments.map(toThreadComment)}
+        currentUser={currentUser}
+        showCopy={false}
+        enforceTimeWindows={false}
+        onSubmit={submitComment}
+        onLike={handleCommentLike}
+        onReply={handleCommentReply}
+        onEdit={handleCommentEdit}
+        onDelete={handleCommentDelete}
+      />
 
       <ShareSheet
         target={shareTarget}

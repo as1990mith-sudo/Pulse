@@ -24,6 +24,7 @@ import {
   X,
 } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
+import { CommentSheet } from "@/components/comment-sheet"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -326,7 +327,7 @@ function DreamReplies({
   }
 
   return (
-    <div className="mt-3 space-y-4 border-t border-border/60 pt-3">
+    <div className="space-y-4">
       {isLoading ? (
         <div className="flex justify-center py-3">
           <Loader2 className="size-4 animate-spin text-muted-foreground" />
@@ -550,7 +551,16 @@ function DreamItem({
         <ChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} />
       </button>
 
-      {open && (
+      <CommentSheet
+        open={open}
+        onClose={() => setOpen(false)}
+        count={count}
+        title={
+          count > 0
+            ? `${count} ${count === 1 ? "interpretation" : "interpretations"}`
+            : "Interpretation"
+        }
+      >
         <DreamReplies
           dreamId={dream.id}
           isAdmin={isAdmin}
@@ -560,7 +570,7 @@ function DreamItem({
             onReplyCountChange?.(dream.id, d)
           }}
         />
-      )}
+      </CommentSheet>
     </article>
   )
 }
