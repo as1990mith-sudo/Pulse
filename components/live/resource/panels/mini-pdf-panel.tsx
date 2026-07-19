@@ -102,20 +102,20 @@ export function MiniPdfPanel() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* Host-only: upload a PDF that instantly becomes visible to participants. */}
+      {/* Host-only: a compact "Add PDF" control. Uploaded PDFs become visible to
+          every participant instantly. */}
       {isHost && (
-        <div className="border-b border-white/10 px-3 py-3">
+        <div className="flex items-center justify-between gap-2 border-b border-white/10 px-3 py-2">
+          <span className="text-xs font-medium text-white/50">Documents</span>
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
             disabled={uploading}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-transform active:scale-[0.99] disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-transform active:scale-95 disabled:opacity-60"
           >
-            {uploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-            {uploading ? "Sharing…" : "Upload a PDF"}
+            {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
+            {uploading ? "Sharing…" : "Add PDF"}
           </button>
-          <p className="mt-1.5 text-center text-xs text-white/40">Shared with everyone in the room</p>
-          {error && <p className="mt-1.5 text-center text-xs text-destructive">{error}</p>}
           <input
             ref={inputRef}
             type="file"
@@ -129,6 +129,7 @@ export function MiniPdfPanel() {
           />
         </div>
       )}
+      {isHost && error && <p className="px-3 pt-2 text-xs text-destructive">{error}</p>}
 
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
         {isLoading ? (

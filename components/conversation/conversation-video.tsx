@@ -9,6 +9,8 @@ import {
   Grid2x2,
   Grid3x3,
   LayoutGrid,
+  Columns2,
+  Square,
   Lock,
   LockOpen,
   MessageSquare,
@@ -57,8 +59,12 @@ type Tile =
   | { kind: "local"; identity: string; name: string; image: string | null }
   | { kind: "remote"; identity: string; peer: RemotePeer }
 
-/** Per-layout geometry. Every participant shares the host-selected layout. */
+/** Per-layout geometry. Every participant shares the host-selected layout.
+ *  "host" and "interview" are special single-purpose views (handled separately
+ *  from the paged grid); their cols/perPage are unused. */
 const LAYOUTS: Record<GridLayout, { cols: number; perPage: number; label: string; icon: typeof Grid2x2 }> = {
+  host: { cols: 1, perPage: 1, label: "Host only", icon: Square },
+  interview: { cols: 1, perPage: 2, label: "Interview", icon: Columns2 },
   compact: { cols: 3, perPage: 9, label: "Compact", icon: Grid3x3 },
   balanced: { cols: 2, perPage: 6, label: "Balanced", icon: LayoutGrid },
   focus: { cols: 2, perPage: 4, label: "Focus", icon: Grid2x2 },
@@ -166,6 +172,9 @@ export function ConversationVideo(props: ConversationVideoProps) {
   const prayerActive = !!roomState?.prayerStartedAt
   const locked = !!roomState?.locked
   const layout = LAYOUTS[gridLayout] ?? LAYOUTS.balanced
+  // Special single-purpose views rendered outside the paged grid.
+  const isHostOnly = gridLayout === "host"
+  const isInterview = gridLayout === "interview"
 
   // When a controller changes shared state, refresh both this poll and the
   // parent's call-state poll so the whole room converges quickly.
@@ -226,6 +235,19 @@ export function ConversationVideo(props: ConversationVideoProps) {
       return (rankRef.current.get(a.identity) ?? 0) - (rankRef.current.get(b.identity) ?? 0)
     })
   }, [self.identity, self.name, self.image, peers, hostId, gridCohostId])
+
+  // "Host only": the host's tile fills the whole stage. "Interview": the two
+  // headline participants (host + co-host, or the first two people present).
+  const hostTile = tiles.find((t) => t.identity === hostId) ?? tiles[0] ?? null
+  const interviewTiles = (() => {
+    if (tiles.length <= 2) return tiles
+    const first = tiles.find((t) => t.identity === hostId) ?? tiles[0]
+    const second =
+      tiles.find((t) => t.identity === gridCohostId && t.identity !== first?.identity) ??
+      tiles.find((t) => t.identity !== first?.identity) ??
+      null
+    return [first, second].filter((t): t is Tile => !!t)
+  })()
 
   // Spotlight: up to two pinned participants floated out of the grid flow.
   const pinnedSet = new Set(gridPinnedIds)
@@ -366,43 +388,42 @@ export function ConversationVideo(props: ConversationVideoProps) {
           speaking && "ring-2 ring-primary shadow-[0_0_22px_2px_color-mix(in_oklch,var(--primary)_45%,transparent)]",
         )}
       >
-        {camActive ? (
-          tile.kind === "local" ? (
-            <video
-              ref={localVideoRef}
-              autoPlay
-              playsInline
-              muted
-              className={cn("absolute inset-0 size-full object-cover", facingMode === "user" && "-scale-x-100")}
-            />
-          ) : (
-            <video
-              ref={(el) => registerPeerVideoEl(tile.identity, el)}
-              autoPlay
-              playsInline
-              className="absolute inset-0 size-full object-cover"
-            />
-          )
-        ) : (
-          <>
-            {/* Keep the remote <video> mounted (hidden) so it attaches when cam returns. */}
-            {tile.kind === "remote" && (
-              <video
-                ref={(el) => registerPeerVideoEl(tile.identity, el)}
-                autoPlay
-                playsInline
-                className="absolute inset-0 size-full object-cover opacity-0"
-              />
+        {/* The <video> element is ALWAYS mounted (only hidden when the camera is
+            off). This avoids a chicken-and-egg deadlock: the hook needs the
+            element to exist before it can attach the track and flip
+            localVideoReady, but the element used to be conditionally rendered on
+            localVideoReady — so the host's camera never appeared. Keeping it
+            mounted lets the track attach immediately and stay attached across
+            cam on/off toggles. */}
+        {tile.kind === "local" ? (
+          <video
+            ref={localVideoRef}
+            autoPlay
+            playsInline
+            muted
+            className={cn(
+              "absolute inset-0 size-full object-cover",
+              facingMode === "user" && "-scale-x-100",
+              !camActive && "opacity-0",
             )}
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-gradient-to-b from-neutral-800 to-neutral-900">
-              <Avatar className={cn("ring-2 ring-white/10", big ? "size-24" : "size-14 sm:size-16")}>
-                {image && <AvatarImage src={image || "/placeholder.svg"} alt={name} />}
-                <AvatarFallback className={cn("font-semibold text-white", getAvatarColor(tile.identity))}>
-                  {getInitials(tile.kind === "local" ? tile.name : peer!.name)}
-                </AvatarFallback>
-              </Avatar>
-            </div>
-          </>
+          />
+        ) : (
+          <video
+            ref={(el) => registerPeerVideoEl(tile.identity, el)}
+            autoPlay
+            playsInline
+            className={cn("absolute inset-0 size-full object-cover", !camActive && "opacity-0")}
+          />
+        )}
+        {!camActive && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-gradient-to-b from-neutral-800 to-neutral-900">
+            <Avatar className={cn("ring-2 ring-white/10", big ? "size-24" : "size-14 sm:size-16")}>
+              {image && <AvatarImage src={image || "/placeholder.svg"} alt={name} />}
+              <AvatarFallback className={cn("font-semibold text-white", getAvatarColor(tile.identity))}>
+                {getInitials(tile.kind === "local" ? tile.name : peer!.name)}
+              </AvatarFallback>
+            </Avatar>
+          </div>
         )}
 
         {/* Badges */}
@@ -592,8 +613,38 @@ export function ConversationVideo(props: ConversationVideoProps) {
 
       {/* ── Participant area ─────────────────────────────────────────────────── */}
       <motion.div layout className="relative min-h-0 flex-1">
-        {/* Spotlight band */}
-        {hasSpotlight && (
+        {/* Host only — the host's video fills the entire stage. */}
+        {isHostOnly && (
+          <div className="absolute inset-0 p-2">
+            {hostTile ? (
+              <VideoTile tile={hostTile} big />
+            ) : (
+              <div className="flex size-full items-center justify-center rounded-3xl bg-neutral-800/60 text-sm text-white/50">
+                Waiting for the host…
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Interview — two people, split top/bottom on portrait screens and
+            side-by-side on wider ones. */}
+        {isInterview && (
+          <div className="absolute inset-0 grid grid-cols-1 gap-2 p-2 landscape:grid-cols-2 sm:grid-cols-2">
+            {interviewTiles.map((tile) => (
+              <div key={tile.identity} className="min-h-0">
+                <VideoTile tile={tile} big />
+              </div>
+            ))}
+            {interviewTiles.length < 2 && (
+              <div className="flex min-h-0 items-center justify-center rounded-3xl bg-neutral-800/60 text-sm text-white/50">
+                Waiting for a second guest…
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Spotlight band (grid layouts only) */}
+        {!isHostOnly && !isInterview && hasSpotlight && (
           <div className="flex flex-col gap-2 p-2 pb-0">
             <div className={cn("grid gap-2", spotlight.length > 1 ? "grid-cols-2" : "grid-cols-1")}>
               {spotlight.map((tile) => (
@@ -605,7 +656,8 @@ export function ConversationVideo(props: ConversationVideoProps) {
           </div>
         )}
 
-        {/* Paged grid of the remaining participants */}
+        {/* Paged grid of the remaining participants (grid layouts only) */}
+        {!isHostOnly && !isInterview && (
         <div className="absolute inset-0 flex flex-col" style={hasSpotlight ? { top: "38%" } : undefined}>
           <div className="relative min-h-0 flex-1 overflow-hidden">
             <AnimatePresence initial={false} custom={dir} mode="popLayout">
@@ -687,6 +739,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
             </div>
           )}
         </div>
+        )}
 
         {/* Floating chat messages (only when the panel is closed) */}
         <FloatingMessages messages={chatMessages} active={!chatOpen} />
@@ -798,7 +851,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
               {/* Layout switcher */}
               <div>
                 <p className="mb-2 text-xs font-medium uppercase tracking-wide text-white/45">Layout</p>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   {(Object.keys(LAYOUTS) as GridLayout[]).map((key) => {
                     const L = LAYOUTS[key]
                     const Icon = L.icon
@@ -809,14 +862,14 @@ export function ConversationVideo(props: ConversationVideoProps) {
                         type="button"
                         onClick={() => run(`layout-${key}`, () => setGridLayout({ roomName, layout: key }))}
                         className={cn(
-                          "flex flex-col items-center gap-1.5 rounded-2xl border p-3 text-xs font-medium transition-colors",
+                          "flex w-[76px] shrink-0 flex-col items-center gap-1.5 rounded-2xl border p-3 text-xs font-medium transition-colors",
                           active
                             ? "border-primary bg-primary/15 text-white"
                             : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10",
                         )}
                       >
                         <Icon className="size-5" />
-                        {L.label}
+                        <span className="text-center leading-tight text-pretty">{L.label}</span>
                       </button>
                     )
                   })}
