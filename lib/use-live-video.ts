@@ -193,6 +193,8 @@ export function useLiveVideo({
   // Background-music mixing graph (host side).
   const musicCtxRef = useRef<AudioContext | null>(null)
   const musicGainRef = useRef<GainNode | null>(null)
+  // The host's intended (non-ducked) music volume, so ducking can restore it.
+  const musicBaseVolumeRef = useRef(0.8)
   const musicBassRef = useRef<BiquadFilterNode | null>(null)
   const musicElRef = useRef<HTMLAudioElement | null>(null)
   const musicTrackRef = useRef<LocalAudioTrack | null>(null)
@@ -734,9 +736,43 @@ export function useLiveVideo({
     }
   }, [])
 
-  const setMusicVolume = useCallback((value: number) => {
-    if (musicGainRef.current) musicGainRef.current.gain.value = value
+  /** Smoothly ramps the music gain (no sudden jumps). */
+  const rampMusicVolume = useCallback((target: number, ms = 300) => {
+    const gain = musicGainRef.current
+    const ctx = musicCtxRef.current
+    if (!gain) return
+    if (ctx) {
+      const now = ctx.currentTime
+      gain.gain.cancelScheduledValues(now)
+      gain.gain.setValueAtTime(gain.gain.value, now)
+      gain.gain.linearRampToValueAtTime(Math.max(0.0001, target), now + Math.max(0.01, ms / 1000))
+    } else {
+      gain.gain.value = target
+    }
   }, [])
+
+  const setMusicVolume = useCallback(
+    (value: number) => {
+      // Remember the host's chosen level so ducking can restore to it.
+      musicBaseVolumeRef.current = value
+      rampMusicVolume(value, 120)
+    },
+    [rampMusicVolume],
+  )
+
+  /**
+   * Ducks (or restores) background music around live speech. When `ducked`, the
+   * gain fades to 18% of the host's base volume; otherwise it fades back to the
+   * full base. Prayer Mode passes `ducked = false` so worship music keeps
+   * playing naturally. Fades are smooth.
+   */
+  const duckMusic = useCallback(
+    (ducked: boolean, ms = 320) => {
+      const base = musicBaseVolumeRef.current
+      rampMusicVolume(ducked ? base * 0.18 : base, ms)
+    },
+    [rampMusicVolume],
+  )
 
   const setMusicPlaying = useCallback((playing: boolean) => {
     const el = musicElRef.current
@@ -879,6 +915,7 @@ export function useLiveVideo({
     startAudioPlayback,
     publishMusic,
     setMusicVolume,
+    duckMusic,
     setMusicPlaying,
     seekMusic,
     setMusicLoop,

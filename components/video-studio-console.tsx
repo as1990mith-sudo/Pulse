@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   Globe,
+  HandHeart,
   Loader2,
   Lock,
   Mic,
@@ -35,6 +36,7 @@ import {
   removeFromStage,
   setGuestsEnabled,
   setSpotlightGuest,
+  setPrayerMode,
   heartbeatBroadcast,
   type LiveStreamView,
   type LiveOrientation,
@@ -54,6 +56,7 @@ import { ShareSheet } from "@/components/share-sheet"
 import { ConversationVideo } from "@/components/conversation/conversation-video"
 import { CoverUpload } from "@/components/admin/cover-upload"
 import { ImageLightbox } from "@/components/image-lightbox"
+import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
 import type { ShareTarget } from "@/lib/share-types"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { broadcastStageRects, stageRectStyle, type StageRect } from "@/lib/broadcast-stage"
@@ -258,6 +261,10 @@ export function VideoStudioConsole({
   const [controlsVisible, setControlsVisible] = useState(true)
   // Full-screen cover artwork viewer (opened from the Broadcast header).
   const [coverOpen, setCoverOpen] = useState(false)
+  // Shared Prayer Mode: locally optimistic + reconciled with polled call state.
+  const [prayerStartedAt, setPrayerStartedAt] = useState<string | null>(null)
+  const [prayerEndedAt, setPrayerEndedAt] = useState<number | null>(null)
+  const prevPrayerRef = useRef<string | null>(null)
   const [musicTracks, setMusicTracks] = useState<Track[]>([])
   const [musicActiveIndex, setMusicActiveIndex] = useState<number | null>(null)
   const [musicPlaying, setMusicPlayingState] = useState(false)
@@ -288,6 +295,7 @@ export function VideoStudioConsole({
     flipCamera,
     publishMusic,
     setMusicVolume,
+    duckMusic,
     setMusicPlaying,
     setMusicLoop,
     seekMusic,
@@ -432,6 +440,37 @@ export function VideoStudioConsole({
       setGuestsEnabledState(!next)
     }
   }
+
+  // ── Shared Prayer Mode ──────────────────────────────────────────────────
+  // Reconcile prayer state from the polled call state; flash a toast when it
+  // turns off. The host toggles it; everyone in the room sees the overlay.
+  useEffect(() => {
+    if (callState?.prayerStartedAt === undefined) return
+    const next = callState.prayerStartedAt
+    if (prevPrayerRef.current && !next) setPrayerEndedAt(Date.now())
+    prevPrayerRef.current = next
+    setPrayerStartedAt(next)
+  }, [callState?.prayerStartedAt])
+  const prayerActive = prayerStartedAt != null
+  async function togglePrayer() {
+    if (!roomName) return
+    const next = !prayerActive
+    setPrayerStartedAt(next ? new Date().toISOString() : null)
+    if (!next) setPrayerEndedAt(Date.now())
+    try {
+      await setPrayerMode({ roomName, on: next })
+      refreshCalls()
+    } catch {
+      setPrayerStartedAt(next ? null : new Date().toISOString())
+    }
+  }
+
+  // Duck the background music under the host's own speech — but never during
+  // Prayer Mode, so worship/instrumental music keeps playing naturally.
+  useEffect(() => {
+    if (musicActiveIndex === null || !musicPlaying) return
+    duckMusic(prayerActive ? false : localSpeaking)
+  }, [localSpeaking, musicActiveIndex, musicPlaying, prayerActive, duckMusic])
 
   async function goLive() {
     setError(null)
@@ -1202,6 +1241,14 @@ export function VideoStudioConsole({
             >
               <Music className="size-5" />
             </GlassButton>
+            <GlassButton
+              label={prayerActive ? "End Prayer Mode" : "Start Prayer Mode"}
+              onClick={() => void togglePrayer()}
+              active={prayerActive}
+              tone={prayerActive ? "muted" : "glass"}
+            >
+              <HandHeart className="size-5" />
+            </GlassButton>
           </div>
         )}
 
@@ -1232,6 +1279,9 @@ export function VideoStudioConsole({
             onClose={() => setMusicPanelOpen(false)}
           />
         )}
+        {/* Shared Prayer Mode overlay + "ended" toast over the video stage. */}
+        <PrayerOverlay active={prayerActive} endedAt={prayerEndedAt} />
+        <PrayerEndedToast endedAt={prayerEndedAt} />
       </div>
 
       {/* ── Live chatroom. Call-in guests now overlay the video above, so the

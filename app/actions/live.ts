@@ -1242,6 +1242,9 @@ export async function getCallState(input: { roomName: string }): Promise<{
   gridPinRequest: { userId: string; userName: string } | null
   // Host-selected Conversation video layout, synced to everyone.
   gridLayout: GridLayout
+  // Shared Prayer Mode: ISO timestamp when the host started prayer, else null.
+  // Synced to everyone so all live formats can show the prayer overlay together.
+  prayerStartedAt: string | null
 }> {
   // Auto-end abandoned streams first so listeners of a vanished host close out.
   await endStaleStreams()
@@ -1265,6 +1268,7 @@ export async function getCallState(input: { roomName: string }): Promise<{
       gridPinRequestId: liveStream.gridPinRequestId,
       gridPinRequestName: liveStream.gridPinRequestName,
       gridLayout: liveStream.gridLayout,
+      prayerStartedAt: liveStream.prayerStartedAt,
     })
     .from(liveStream)
     .where(eq(liveStream.roomName, input.roomName))
@@ -1397,6 +1401,7 @@ export async function getCallState(input: { roomName: string }): Promise<{
         ? { userId: stream.gridPinRequestId, userName: stream.gridPinRequestName ?? "A participant" }
         : null,
     gridLayout: ((stream?.gridLayout as GridLayout | undefined) ?? "balanced") as GridLayout,
+    prayerStartedAt: stream?.prayerStartedAt ? stream.prayerStartedAt.toISOString() : null,
   }
 }
 
@@ -1652,12 +1657,13 @@ export async function pinLiveChat(input: { roomName: string; chatId: number | nu
   return { ok: true }
 }
 
-// --- Conversation layout: prayer mode, pinned participant, shared state ------
+// --- Shared live state: prayer mode, pinned participant, room state ----------
 
 /**
- * Host toggles Prayer Mode for a Conversation room. When on, `prayerStartedAt`
- * is set (drives the shared overlay for everyone + disables music ducking). No
- * one is muted — the whole room prays together.
+ * Host toggles Prayer Mode for any live room (Broadcast, Conversation video, or
+ * audio). When on, `prayerStartedAt` is set — driving the shared prayer overlay
+ * for everyone and disabling music ducking. No one is muted; the whole room
+ * prays together and worship/instrumental music keeps playing naturally.
  */
 export async function setPrayerMode(input: { roomName: string; on: boolean }): Promise<{ ok: boolean }> {
   const user = await requireUser()
