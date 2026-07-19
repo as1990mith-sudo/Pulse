@@ -7,7 +7,7 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { liveStream, liveChatMessage, liveCallRequest, liveReaction, livePresence, liveBlocked } from "@/lib/db/schema"
 import { getHandle, getAvatarColor, getInitials } from "@/lib/identity"
-import { LIVE_CATEGORIES } from "@/lib/live-categories"
+import { LIVE_CATEGORIES, CONVERSATION_CATEGORIES } from "@/lib/live-categories"
 import {
   createAccessToken,
   isLiveKitConfigured,
@@ -118,9 +118,12 @@ export async function startBroadcast(input: {
   // Conversation layout only applies to audio rooms; video/podcast stays "podcast".
   const layout: LiveLayout = mode === "audio" && input.layout === "conversation" ? "conversation" : "podcast"
   // A category is mandatory for every live session — "Uncategorised" is not an
-  // option. It must be one of the known categories.
+  // option. Conversation rooms use their own gathering-style category list;
+  // everything else uses the standard live categories.
   const category = input.category?.trim()
-  if (!category || !LIVE_CATEGORIES.includes(category as (typeof LIVE_CATEGORIES)[number])) {
+  const allowedCategories: readonly string[] =
+    layout === "conversation" ? CONVERSATION_CATEGORIES : LIVE_CATEGORIES
+  if (!category || !allowedCategories.includes(category)) {
     return { ok: false, error: "Please choose a category before going live." }
   }
   // Cover artwork is required for audio live sessions (there's no video feed to
