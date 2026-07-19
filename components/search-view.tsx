@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import useSWR from "swr"
-import { Loader2, MessageCircleMore, Search, Users, X } from "lucide-react"
+import { Loader2, MessageSquare, Search, Users, X } from "lucide-react"
 import { discoverProfiles } from "@/app/actions/follow"
 import { searchPosts } from "@/app/actions/feed"
 import { FindRow } from "@/components/find-profiles"
@@ -95,7 +95,7 @@ export function SearchView({ currentUser }: { currentUser: CurrentUser | null })
           {searching && postResults.length > 0 && (
             <section>
               <div className="flex items-center gap-2 px-4 pt-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:px-5">
-                <MessageCircleMore className="size-3.5" />
+                <MessageSquare className="size-3.5" />
                 Posts
               </div>
               <div className="space-y-3 px-4 sm:px-5">

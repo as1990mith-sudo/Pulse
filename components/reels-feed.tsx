@@ -7,7 +7,7 @@ import {
   Film,
   Heart,
   Loader2,
-  MessageCircleMore,
+  MessageSquare,
   Play,
   Send,
   Share2,
@@ -490,7 +490,7 @@ function ReelItem({
           className="flex flex-col items-center gap-1"
           aria-label="Comments"
         >
-          <MessageCircleMore className="size-8 drop-shadow" />
+          <MessageSquare className="size-8 drop-shadow" />
           <span className="text-xs font-semibold tabular-nums">{comments.length}</span>
         </button>
         <button
@@ -702,7 +702,7 @@ function CommentsSheet({
           />
           <div className="flex items-center justify-center pb-3">
             <div className="flex items-center gap-2">
-              <MessageCircleMore className="size-[18px] text-white/70" />
+              <MessageSquare className="size-[18px] text-white/70" />
               <h2 className="text-[15px] font-semibold tracking-tight">
                 {comments.length > 0
                   ? `${comments.length} ${comments.length === 1 ? "comment" : "comments"}`
@@ -725,7 +725,7 @@ function CommentsSheet({
           {comments.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-14 text-center">
               <span className="flex size-14 items-center justify-center rounded-full bg-white/5">
-                <MessageCircleMore className="size-7 text-white/40" />
+                <MessageSquare className="size-7 text-white/40" />
               </span>
               <div className="space-y-0.5">
                 <p className="text-sm font-medium text-white/80">No comments yet</p>

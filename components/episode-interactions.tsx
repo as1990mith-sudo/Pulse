@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react"
 import Link from "next/link"
-import { Bookmark, Heart, MessageCircleMore, Share2, Send, Loader2 } from "lucide-react"
+import { Bookmark, Heart, MessageSquare, Share2, Send, Loader2 } from "lucide-react"
 import { ShareSheet } from "@/components/share-sheet"
 import { isItemSaved, toggleSaveItem } from "@/app/actions/share"
 import type { ShareTarget } from "@/lib/share-types"
@@ -147,7 +147,7 @@ export function EpisodeInteractions({
         </button>
 
         <span className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium text-foreground">
-          <MessageCircleMore className="size-5" />
+          <MessageSquare className="size-5" />
           {comments.length > 0 && <span className="tabular-nums">{comments.length}</span>}
         </span>
 

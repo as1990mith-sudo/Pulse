@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react"
 import useSWR from "swr"
 import Link from "next/link"
-import { Heart, Share2, MessageCircleMore, Send } from "lucide-react"
+import { Heart, Share2, MessageSquare, Send } from "lucide-react"
 import {
   addDevotionalComment,
   getDevotionalComments,
@@ -140,7 +140,7 @@ export function DevotionalInteractions({
         </Button>
 
         <div className="ml-auto flex items-center gap-1.5 text-sm text-muted-foreground">
-          <MessageCircleMore className="size-4" />
+          <MessageSquare className="size-4" />
           {comments.length}
         </div>
       </div>
