@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react"
 import Link from "next/link"
-import { Bookmark, Heart, MessageCircle, Share2 } from "lucide-react"
+import { Bookmark, Heart, MessageCircleMore, Share2 } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
 import type { Show } from "@/lib/data"
 import type { ShareTarget } from "@/lib/share-types"
@@ -197,7 +197,7 @@ export function EpisodeNowPlayingActions({
           aria-label={commentsExpanded ? "Hide comments" : "Show comments"}
           className={cn(baseBtn, commentsExpanded && "text-primary hover:text-primary")}
         >
-          <MessageCircle className="size-6" />
+          <MessageCircleMore className="size-6" />
           <span className="tabular-nums">{commentCount > 0 ? commentCount : "Comment"}</span>
         </button>
 
