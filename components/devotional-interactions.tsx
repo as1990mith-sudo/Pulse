@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useTransition } from "react"
 import useSWR from "swr"
-import Link from "next/link"
 import { Heart, Share2 } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import {

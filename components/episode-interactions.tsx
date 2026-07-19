@@ -1,8 +1,7 @@
 "use client"
 
 import { useEffect, useState, useTransition } from "react"
-import Link from "next/link"
-import { Bookmark, Heart, Share2, Send, Loader2 } from "lucide-react"
+import { Bookmark, Heart, Share2 } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import { ShareSheet } from "@/components/share-sheet"
 import { isItemSaved, toggleSaveItem } from "@/app/actions/share"
@@ -19,8 +18,8 @@ import {
   deleteEpisodeComment,
   getEpisodeComments,
 } from "@/app/actions/episodes"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { CommentThread, type ThreadComment } from "@/components/comment-thread"
+import { type ThreadComment } from "@/components/comment-thread"
+import { CommentSheet } from "@/components/comment-sheet"
 import { cn } from "@/lib/utils"
 
 function toThreadComment(c: EpisodeCommentView): ThreadComment {
@@ -57,9 +56,9 @@ export function EpisodeInteractions({
   const [likes, setLikes] = useState(show.likes ?? 0)
   const [saved, setSaved] = useState(false)
   const [comments, setComments] = useState<EpisodeCommentView[]>(initialComments)
-  const [draft, setDraft] = useState("")
+  const [commentsOpen, setCommentsOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
-  const [isPending, startTransition] = useTransition()
+  const [, startTransition] = useTransition()
 
   // Load whether this episode is already saved / liked by the current user, so
   // the state persists across refreshes and a like can't be re-counted.
@@ -118,15 +117,10 @@ export function EpisodeInteractions({
     })
   }
 
-  function submitComment(e: React.FormEvent) {
-    e.preventDefault()
-    const text = draft.trim()
-    if (!text || !currentUser) return
-    setDraft("")
-    startTransition(async () => {
-      await addEpisodeComment({ episodeId: episodeId!, text })
-      setComments(await getEpisodeComments(episodeId!))
-    })
+  async function submitComment(text: string) {
+    if (!currentUser) return
+    await addEpisodeComment({ episodeId: episodeId!, text })
+    setComments(await getEpisodeComments(episodeId!))
   }
 
   return (
@@ -147,10 +141,14 @@ export function EpisodeInteractions({
           {likes > 0 && <span className="tabular-nums">{likes}</span>}
         </button>
 
-        <span className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium text-foreground">
+        <button
+          onClick={() => setCommentsOpen(true)}
+          className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+          aria-label="View comments"
+        >
           <CommentIcon className="size-5" />
           {comments.length > 0 && <span className="tabular-nums">{comments.length}</span>}
-        </span>
+        </button>
 
         <button
           onClick={toggleSave}
@@ -176,59 +174,26 @@ export function EpisodeInteractions({
         </button>
       </div>
 
-      {/* Composer */}
-      {currentUser ? (
-        <form onSubmit={submitComment} className="flex items-center gap-2">
-          <Avatar className="size-8">
-            <AvatarImage src={currentUser.image || undefined} alt="" />
-            <AvatarFallback style={{ backgroundColor: currentUser.color }} className="text-xs text-white">
-              {currentUser.initials}
-            </AvatarFallback>
-          </Avatar>
-          <input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="Add a comment…"
-            className="h-9 flex-1 rounded-full border border-border/60 bg-background px-4 text-sm outline-none focus:border-primary"
-          />
-          <button
-            type="submit"
-            disabled={!draft.trim() || isPending}
-            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
-            aria-label="Post comment"
-          >
-            {isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-          </button>
-        </form>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          <Link href="/sign-in" className="font-medium text-primary hover:underline">
-            Sign in
-          </Link>{" "}
-          to like and comment.
-        </p>
-      )}
-
-      {/* Comments */}
-      <div className="pt-1">
-        <CommentThread
-          comments={comments.map(toThreadComment)}
-          canInteract={Boolean(currentUser)}
-          onLike={(commentId, liked) => void setEpisodeCommentLike({ commentId, liked })}
-          onReply={async (parentId, value) => {
-            await addEpisodeComment({ episodeId: episodeId!, text: value, parentId })
-            setComments(await getEpisodeComments(episodeId!))
-          }}
-          onEdit={async (commentId, value) => {
-            await editEpisodeComment({ commentId, text: value })
-            setComments(await getEpisodeComments(episodeId!))
-          }}
-          onDelete={async (commentId) => {
-            await deleteEpisodeComment(commentId)
-            setComments(await getEpisodeComments(episodeId!))
-          }}
-        />
-      </div>
+      <CommentSheet
+        open={commentsOpen}
+        onClose={() => setCommentsOpen(false)}
+        comments={comments.map(toThreadComment)}
+        currentUser={currentUser}
+        onSubmit={submitComment}
+        onLike={(commentId, liked) => void setEpisodeCommentLike({ commentId, liked })}
+        onReply={async (parentId, value) => {
+          await addEpisodeComment({ episodeId: episodeId!, text: value, parentId })
+          setComments(await getEpisodeComments(episodeId!))
+        }}
+        onEdit={async (commentId, value) => {
+          await editEpisodeComment({ commentId, text: value })
+          setComments(await getEpisodeComments(episodeId!))
+        }}
+        onDelete={async (commentId) => {
+          await deleteEpisodeComment(commentId)
+          setComments(await getEpisodeComments(episodeId!))
+        }}
+      />
 
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
     </div>

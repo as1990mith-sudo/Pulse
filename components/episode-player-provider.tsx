@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
-import { ChevronDown, ChevronUp, Gauge, ListMusic, Maximize, Minimize, Pause, Play, Radio, RotateCcw, RotateCw, SkipBack, SkipForward, X } from "lucide-react"
+import { ChevronDown, Gauge, ListMusic, Maximize, Minimize, Pause, Play, Radio, RotateCcw, RotateCw, SkipBack, SkipForward, X } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { cn } from "@/lib/utils"
 import { getEpisodeComments } from "@/app/actions/episodes"
@@ -968,34 +968,18 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
               </div>
             </div>
 
-            <div className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 pt-4">
-              {/* Comments — opened by the Comment button in the action bar. When
-                  collapsed nothing renders here, so "More from…" rises to the top
-                  of the scrollable section. */}
-              {commentsExpanded && (
-                <div className="duration-300 animate-in fade-in slide-in-from-top-1">
-                  <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold">
-                      Comments
-                      {commentCount > 0 && <span className="ml-1 text-muted-foreground">({commentCount})</span>}
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={() => setCommentsExpanded(false)}
-                      aria-label="Collapse comments"
-                      className="flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      Hide <ChevronUp className="size-4" />
-                    </button>
-                  </div>
-                  {current.episodeId ? (
-                    <EpisodeCommentsInline episodeId={current.episodeId} onCountChange={setCommentCount} />
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Comments aren&apos;t available for this item.</p>
-                  )}
-                </div>
-              )}
+            {/* Comments — opened by the Comment button in the action bar as the
+                shared Reels-style bottom sheet. */}
+            {current.episodeId && (
+              <EpisodeCommentsInline
+                episodeId={current.episodeId}
+                open={commentsExpanded}
+                onClose={() => setCommentsExpanded(false)}
+                onCountChange={setCommentCount}
+              />
+            )}
 
+            <div className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 pt-4">
               {/* More from… — every other episode by this creator. */}
               {moreFromHost.length > 0 && (
                 <div>
