@@ -385,6 +385,10 @@ export const liveStream = pgTable("live_stream", {
   // they become gridPinnedId; cleared once resolved.
   gridPinRequestId: text("gridPinRequestId"),
   gridPinRequestName: text("gridPinRequestName"),
+  // Host-selected Conversation video layout, synced to every participant so the
+  // whole room shares the same tiling: "compact" (3×3, 9), "balanced" (2×3, 6),
+  // or "focus" (2×2, 4). Only meaningful for "landscape" (Conversation) video.
+  gridLayout: text("gridLayout").notNull().default("balanced"), // "compact" | "balanced" | "focus"
 })
 
 // Call-in requests (listener -> host) and invites (host -> listener) for a live

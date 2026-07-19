@@ -107,7 +107,7 @@ export function StudioConsole({
   resumeStream?: LiveStreamView | null
   onMinimize?: () => void
   onExit?: () => void
-  onMeta?: (m: { title: string; cover: string | null; live: boolean; subtitle?: string }) => void
+  onMeta?: (m: { title: string; cover: string | null; live: boolean; subtitle?: string; roomName?: string | null }) => void
 }) {
   const {
     state,
@@ -349,8 +349,8 @@ export function StudioConsole({
 
   // Keep the app-level mini-player's "now playing" info in sync.
   useEffect(() => {
-    onMeta?.({ title, cover, live, subtitle: live ? "You're live" : "Setting up" })
-  }, [title, cover, live, onMeta])
+    onMeta?.({ title, cover, live, subtitle: live ? "You're live" : "Setting up", roomName })
+  }, [title, cover, live, onMeta, roomName])
 
   // Guard against an accidental refresh / tab close while broadcasting — it
   // would silently drop the live stream. The browser shows its native prompt.

@@ -59,7 +59,8 @@ import { BackExitMenu } from "@/components/live-back-menu"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { useLivePresence } from "@/lib/use-live-presence"
 import { ShareSheet } from "@/components/share-sheet"
-import { MeetingGrid } from "@/components/meeting-grid"
+import { ConversationVideo } from "@/components/conversation/conversation-video"
+import { CoverUpload } from "@/components/admin/cover-upload"
 import type { ShareTarget } from "@/lib/share-types"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { cn } from "@/lib/utils"
@@ -249,7 +250,7 @@ export function VideoStudioConsole({
   resumeStream?: LiveStreamView | null
   onMinimize?: () => void
   onExit?: () => void
-  onMeta?: (m: { title: string; cover: string | null; live: boolean; subtitle?: string }) => void
+  onMeta?: (m: { title: string; cover: string | null; live: boolean; subtitle?: string; roomName?: string | null }) => void
 }) {
   const [title, setTitle] = useState(resumeStream?.title ?? `${currentUser.name} — live`)
   // Host-chosen broadcast layout. "portrait" = the original full-bleed vertical
@@ -259,6 +260,10 @@ export function VideoStudioConsole({
   const [visibility, setVisibility] = useState<LiveVisibility>(resumeStream?.visibility ?? "public")
   // Optional topic category for the broadcast (empty = uncategorised).
   const [category, setCategory] = useState<string>(resumeStream?.category ?? "")
+  // Conversation (landscape) rooms carry a cover artwork (the room's identity,
+  // shown in the header + lightbox) and an optional discussion topic.
+  const [cover, setCover] = useState<string | null>(resumeStream?.cover ?? null)
+  const [roomTopic, setRoomTopic] = useState<string>(resumeStream?.topic ?? "")
   const [roomName, setRoomName] = useState<string | null>(resumeStream?.roomName ?? null)
   const [creds, setCreds] = useState<{ token: string; serverUrl: string } | null>(null)
   const [starting, setStarting] = useState(false)
@@ -415,8 +420,15 @@ export function VideoStudioConsole({
 
   // Keep the app-level mini-player's "now playing" info in sync.
   useEffect(() => {
-    onMeta?.({ title, cover: null, live, subtitle: live ? "You're live · video" : "Setting up" })
-  }, [title, live, onMeta])
+    // Surface the Conversation cover art on the minimised continue-watching pill.
+    onMeta?.({
+      title,
+      cover: orientation === "landscape" ? cover : null,
+      live,
+      subtitle: live ? "You're live · video" : "Setting up",
+      roomName,
+    })
+  }, [title, live, onMeta, orientation, cover, roomName])
 
   // Host polls the call-in queue to surface pending guest requests + guests.
   const { data: callState, mutate: refreshCalls } = useSWR(
@@ -459,6 +471,9 @@ export function VideoStudioConsole({
         orientation,
         visibility,
         category,
+        // Cover + discussion topic only apply to Conversation (landscape) rooms.
+        cover: orientation === "landscape" ? cover : null,
+        topic: orientation === "landscape" ? roomTopic.trim() || null : null,
       })
       if (!res.ok) {
         setError(res.error)
@@ -662,45 +677,14 @@ export function VideoStudioConsole({
 
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-neutral-950 text-white [isolation:isolate]">
-      {/* Grid meeting (live): a Meet/Zoom-style tile grid overlays the broadcast
-          layout. Kept as an overlay (not an early return) so the shared music
-          "Add track" panel and end-confirm dialog below still render. The
-          hidden self-view <video> in the layout underneath stays mounted, so
-          MeetingGrid renders its own tile <video> instead. */}
+      {/* Conversation (live): the premium community video gathering overlays the
+          broadcast layout. Kept as an overlay (not an early return) so the shared
+          music "Add track" panel and end-confirm dialog below still render. The
+          hidden self-view <video> underneath stays mounted; ConversationVideo
+          renders its own tile <video> via localVideoRef. */}
       {live && isGridMeeting && (
-        <div className="absolute inset-0 z-40 flex flex-col bg-neutral-950">
-          {/* Video Live header — kept visible on the host's grid too. */}
-          <div className="flex items-center justify-between gap-2 bg-neutral-900 px-3 py-2 pt-[calc(env(safe-area-inset-top)+0.5rem)]">
-            <BackExitMenu
-              showMenu
-              exitLabel="End"
-              onExit={() => setEndConfirmOpen(true)}
-              onMinimize={onMinimize ?? (() => {})}
-            />
-            <div className="flex min-w-0 flex-1 flex-col px-1 leading-tight">
-              <span className="truncate text-sm font-semibold">{title}</span>
-              <span className="truncate text-[11px] text-white/60">You&apos;re live · meeting</span>
-            </div>
-            <span className="flex items-center gap-1.5 rounded-full bg-live px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-live-foreground">
-              <span className="relative flex size-2">
-                <span className="absolute inline-flex size-full animate-ping rounded-full bg-live-foreground/70" />
-                <span className="relative inline-flex size-2 rounded-full bg-live-foreground" />
-              </span>
-              Live
-            </span>
-            <LiveAudienceSheet
-              count={audienceCount || viewers}
-              members={audienceMembers}
-              immersive
-              className="px-3 py-1.5 text-xs font-medium"
-              isHost
-              roomName={roomName ?? undefined}
-              blockedUsers={callState?.blockedUsers ?? []}
-              onChanged={() => void refreshCalls()}
-            />
-          </div>
-          <div className="min-h-0 flex-1">
-          <MeetingGrid
+        <div className="absolute inset-0 z-40 bg-neutral-950">
+          <ConversationVideo
             roomName={roomName as string}
             self={{ identity: currentUser.id, name: currentUser.name, image: currentUser.image ?? null }}
             peers={peers}
@@ -721,9 +705,33 @@ export function VideoStudioConsole({
             onToggleCam={() => void toggleCam()}
             onFlipCamera={() => void flipCamera()}
             onAskUnmute={(id) => void askUnmute(id)}
-            onAddTrack={() => setMusicPanelOpen(true)}
+            onOpenMusic={() => setMusicPanelOpen(true)}
+            title={title}
+            cover={cover}
+            hostName={currentUser.name}
+            category={category}
+            topic={roomTopic || null}
+            backSlot={
+              <BackExitMenu
+                showMenu
+                exitLabel="End"
+                onExit={() => setEndConfirmOpen(true)}
+                onMinimize={onMinimize ?? (() => {})}
+              />
+            }
+            moreSlot={
+              <LiveAudienceSheet
+                count={audienceCount || viewers}
+                members={audienceMembers}
+                immersive
+                className="px-3 py-1.5 text-xs font-medium"
+                isHost
+                roomName={roomName ?? undefined}
+                blockedUsers={callState?.blockedUsers ?? []}
+                onChanged={() => void refreshCalls()}
+              />
+            }
           />
-          </div>
         </div>
       )}
       {/* ── Host camera — the full stage above the chatroom. In a focused
@@ -736,8 +744,8 @@ export function VideoStudioConsole({
         )}
       >
         {/* Full-bleed camera — live publisher feed (mirrored self-view). In a
-            live grid meeting the MeetingGrid overlay owns localVideoRef, so we
-            skip this element to avoid two <video>s claiming the same ref.
+            live Conversation the ConversationVideo overlay owns localVideoRef, so
+            we skip this element to avoid two <video>s claiming the same ref.
             When a guest is spotlighted the host shrinks into the top call-in
             slot — we only change this element's className (never remount it) so
             the local track stays attached. */}
@@ -1057,7 +1065,7 @@ export function VideoStudioConsole({
                   {(
                     [
                       { value: "portrait", label: "Focused", hint: "Full-screen vertical", icon: Smartphone },
-                      { value: "landscape", label: "Grid", hint: "Meeting with everyone", icon: MonitorPlay },
+                      { value: "landscape", label: "Conversation", hint: "A community gathering", icon: MonitorPlay },
                     ] as const
                   ).map((opt) => {
                     const active = orientation === opt.value
@@ -1083,6 +1091,27 @@ export function VideoStudioConsole({
                   })}
                 </div>
               </div>
+
+              {/* Cover artwork + discussion topic — Conversation rooms only. The
+                  cover is the room's identity (shown in the header + lightbox). */}
+              {orientation === "landscape" && (
+                <>
+                  <CoverUpload value={cover} onChange={setCover} label="Room cover" />
+                  <div className="space-y-1.5">
+                    <label htmlFor="live-topic" className="text-xs font-semibold uppercase tracking-wider text-white/60">
+                      Today&apos;s Discussion <span className="font-medium normal-case tracking-normal text-white/40">(optional)</span>
+                    </label>
+                    <input
+                      id="live-topic"
+                      value={roomTopic}
+                      onChange={(e) => setRoomTopic(e.target.value)}
+                      maxLength={80}
+                      placeholder="What are we gathering around?"
+                      className="w-full rounded-2xl bg-white/10 px-4 py-3 text-base font-medium text-white ring-1 ring-inset ring-white/15 placeholder:text-white/40 focus:outline-none focus:ring-primary"
+                    />
+                  </div>
+                </>
+              )}
 
               {/* Category — required. The host must tag their live with one of
                   the known categories; there is no "Uncategorised" option. */}
@@ -1167,10 +1196,10 @@ export function VideoStudioConsole({
 
         {/* Control dock — overlaid at the bottom of the camera region. Sits
             above the camera-off / connecting wash (z-30) so the camera and mic
-            controls stay tappable even when the camera is turned off. Grid
-            meetings hide this dock entirely: MeetingGrid renders its own bottom
-            dock, and this one would otherwise float in the middle of the screen
-            (the camera region is only the top portion in grid mode). */}
+            controls stay tappable even when the camera is turned off. Live
+            Conversations hide this dock entirely: ConversationVideo renders its
+            own bottom dock, and this one would otherwise float in the middle of
+            the screen (the camera region is only the top portion in grid mode). */}
         {live && !isGridMeeting && (
           <div
             className={cn(

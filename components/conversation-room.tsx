@@ -61,7 +61,7 @@ import {
 import type { CurrentUser } from "@/lib/session"
 import { cn } from "@/lib/utils"
 
-type Meta = { title: string; cover: string | null; live: boolean; subtitle?: string }
+type Meta = { title: string; cover: string | null; live: boolean; subtitle?: string; roomName?: string | null }
 
 /** Elapsed clock formatting (M:SS / H:MM:SS). */
 function formatElapsed(totalSeconds: number): string {
@@ -334,8 +334,8 @@ export function ConversationRoom({
   // ── Meta sync for the mini-player ────────────────────────────────────────
   useEffect(() => {
     if (!live) return
-    onMeta?.({ title, cover: cover ?? null, live: true, subtitle: `Conversation · ${hostName}` })
-  }, [live, title, cover, hostName, onMeta])
+    onMeta?.({ title, cover: cover ?? null, live: true, subtitle: `Conversation · ${hostName}`, roomName })
+  }, [live, title, cover, hostName, onMeta, roomName])
 
   // ── Music (host only) + speech ducking ───────────────────────────────────
   const [music, setMusic] = useState<MusicState>({ url: null, name: null, playing: false, volume: 0.5 })

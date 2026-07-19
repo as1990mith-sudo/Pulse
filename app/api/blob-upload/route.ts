@@ -13,10 +13,11 @@ import { auth } from "@/lib/auth"
 // client requests is used as the blob key prefix, so we validate it against an
 // allow-list and only let signed-in users upload.
 
-const ALLOWED_PREFIXES = ["chat/", "status/", "covers/", "avatars/", "live-music/", "episodes/", "dm/", "store/"] as const
+const ALLOWED_PREFIXES = ["chat/", "status/", "covers/", "avatars/", "live-music/", "episodes/", "dm/", "store/", "pinned/"] as const
 
-// Store product files (book PDFs/EPUBs) are documents; everything else is media.
-const STORE_CONTENT_TYPES = [
+// Document buckets (store product files, host-pinned live documents) accept
+// PDFs/EPUBs in addition to media; everything else is media only.
+const DOCUMENT_CONTENT_TYPES = [
   "image/*",
   "video/*",
   "audio/*",
@@ -24,6 +25,7 @@ const STORE_CONTENT_TYPES = [
   "application/epub+zip",
   "application/octet-stream",
 ]
+const DOCUMENT_PREFIXES = ["store/", "pinned/"]
 
 // Generous ceilings per kind. Videos/audio are large; images are small.
 const MAX_BYTES = 200 * 1024 * 1024 // 200 MB
@@ -48,8 +50,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         }
 
         return {
-          allowedContentTypes: pathname.startsWith("store/")
-            ? STORE_CONTENT_TYPES
+          allowedContentTypes: DOCUMENT_PREFIXES.some((p) => pathname.startsWith(p))
+            ? DOCUMENT_CONTENT_TYPES
             : ["image/*", "video/*", "audio/*"],
           addRandomSuffix: true,
           maximumSizeInBytes: MAX_BYTES,
