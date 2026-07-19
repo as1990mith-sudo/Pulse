@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import useSWR from "swr"
 import { AnimatePresence, motion, type Variants } from "motion/react"
 import {
+  AlertTriangle,
   ChevronLeft,
   ChevronRight,
   Grid2x2,
@@ -49,7 +50,7 @@ import {
   type GridLayout,
   type LiveChatMessageView,
 } from "@/app/actions/live"
-import type { RemotePeer } from "@/lib/use-live-video"
+import { isMedianApp, openNativeAppSettings, type RemotePeer } from "@/lib/use-live-video"
 import type { CurrentUser } from "@/lib/session"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { cn } from "@/lib/utils"
@@ -99,6 +100,11 @@ export type ConversationVideoProps = {
   onToggleCam: () => void
   onFlipCamera: () => void
   onAskUnmute: (identity: string) => void
+  // Camera/mic error surfaced from the live hook (e.g. blocked permission), plus
+  // a dismiss handler. Without this, a failed camera start is silent and the
+  // host just keeps tapping the camera button with no explanation.
+  rtcError?: string | null
+  onClearError?: () => void
   onAddTrack?: () => void
   chatBgUrl?: string | null
   chatBgEffect?: "none" | "blur" | "dim"
@@ -141,6 +147,8 @@ export function ConversationVideo(props: ConversationVideoProps) {
     onToggleCam,
     onFlipCamera,
     onAskUnmute,
+    rtcError = null,
+    onClearError,
     onAddTrack,
     chatBgUrl = null,
     chatBgEffect = "none",
@@ -804,6 +812,60 @@ export function ConversationVideo(props: ConversationVideoProps) {
               />
             </div>
           </motion.section>
+        )}
+      </AnimatePresence>
+
+      {/* ── Camera / mic error banner ────────────────────────────────────────
+          Surfaces a failed camera start (blocked permission, camera in use,
+          timeout) so the host isn't left tapping the camera button with no
+          feedback. Offers an inline retry and — inside the in-app WebView, where
+          a denied OS permission can't be re-prompted from the page — a shortcut
+          to the native app settings. */}
+      <AnimatePresence>
+        {rtcError && (
+          <motion.div
+            key="rtc-error"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 320, damping: 36 }}
+            className="z-30 shrink-0 overflow-hidden border-t border-destructive/40 bg-destructive/15"
+          >
+            <div className="flex items-start gap-3 px-4 py-3">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
+              <div className="min-w-0 flex-1">
+                <p className="text-pretty text-sm leading-relaxed text-white">{rtcError}</p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={onToggleCam}
+                    className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-neutral-900 transition-transform active:scale-95"
+                  >
+                    Try again
+                  </button>
+                  {isMedianApp() && (
+                    <button
+                      type="button"
+                      onClick={() => openNativeAppSettings()}
+                      className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-white/25"
+                    >
+                      Open settings
+                    </button>
+                  )}
+                </div>
+              </div>
+              {onClearError && (
+                <button
+                  type="button"
+                  onClick={onClearError}
+                  aria-label="Dismiss"
+                  className="flex size-7 shrink-0 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+                >
+                  <X className="size-4" />
+                </button>
+              )}
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 

@@ -206,6 +206,7 @@ export function LiveVideoViewer({
     participants,
     peers,
     error: rtcError,
+    clearError: clearRtcError,
     audioBlocked,
     registerPeerVideoEl,
     toggleMic,
@@ -439,6 +440,8 @@ export function LiveVideoViewer({
           onToggleCam={() => void toggleCam()}
           onFlipCamera={() => void flipCamera()}
           onAskUnmute={(id) => void askUnmute(id)}
+          rtcError={rtcError}
+          onClearError={clearRtcError}
           connected={connected}
           title={stream.title}
           cover={stream.cover ?? null}
