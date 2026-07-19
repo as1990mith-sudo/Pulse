@@ -768,37 +768,19 @@ export function ConversationVideo(props: ConversationVideoProps) {
         )}
       </motion.div>
 
-      {/* ── Bottom dock ──────────────────────────────────────────────────────── */}
-      <div className="z-30 flex shrink-0 items-center justify-center gap-3 border-t border-white/5 bg-neutral-950/80 px-4 py-3 backdrop-blur-xl">
-        <DockButton label={micOn ? "Mute" : "Unmute"} active={micOn} onClick={onToggleMic}>
-          {micOn ? <Mic /> : <MicOff />}
-        </DockButton>
-        <DockButton label={camOn ? "Turn camera off" : "Turn camera on"} active={camOn} onClick={onToggleCam}>
-          {camOn ? <Video /> : <VideoOff />}
-        </DockButton>
-        <DockButton label="Flip camera" onClick={onFlipCamera}>
-          <SwitchCamera />
-        </DockButton>
-        <DockButton label="Open chat" onClick={() => setChatOpen(true)}>
-          <MessageSquare />
-        </DockButton>
-        {isController && (
-          <DockButton label="Host controls" onClick={() => setHostSheet(true)}>
-            <Settings2 />
-          </DockButton>
-        )}
-      </div>
-
-      {/* ── Chat slide-up panel ──────────────────────────────────────────────── */}
-      <AnimatePresence>
+      {/* ── Chat panel ───────────────────────────────────────────────────────
+          In-flow (not an overlay): it grows from the bottom and the participant
+          area above smoothly shrinks/reflows so an open chat never covers a
+          single participant. */}
+      <AnimatePresence initial={false}>
         {chatOpen && (
-          <motion.div
+          <motion.section
             key="chat"
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", stiffness: 320, damping: 34 }}
-            className="absolute inset-x-0 bottom-0 z-40 flex h-[55%] flex-col overflow-hidden rounded-t-3xl border-t border-white/10 bg-neutral-950 shadow-2xl"
+            initial={{ height: "0vh", opacity: 0 }}
+            animate={{ height: "45vh", opacity: 1 }}
+            exit={{ height: "0vh", opacity: 0 }}
+            transition={{ type: "spring", stiffness: 320, damping: 36 }}
+            className="relative z-40 flex min-h-0 shrink-0 flex-col overflow-hidden border-t border-white/10 bg-neutral-950"
           >
             <div className="flex items-center justify-between px-4 py-2.5">
               <span className="text-sm font-semibold">Live Chat</span>
@@ -821,9 +803,30 @@ export function ConversationVideo(props: ConversationVideoProps) {
                 immersive
               />
             </div>
-          </motion.div>
+          </motion.section>
         )}
       </AnimatePresence>
+
+      {/* ── Bottom dock ──────────────────────────────────────────────────────── */}
+      <div className="z-30 flex shrink-0 items-center justify-center gap-3 border-t border-white/5 bg-neutral-950/80 px-4 py-3 backdrop-blur-xl">
+        <DockButton label={micOn ? "Mute" : "Unmute"} active={micOn} onClick={onToggleMic}>
+          {micOn ? <Mic /> : <MicOff />}
+        </DockButton>
+        <DockButton label={camOn ? "Turn camera off" : "Turn camera on"} active={camOn} onClick={onToggleCam}>
+          {camOn ? <Video /> : <VideoOff />}
+        </DockButton>
+        <DockButton label="Flip camera" onClick={onFlipCamera}>
+          <SwitchCamera />
+        </DockButton>
+        <DockButton label={chatOpen ? "Close chat" : "Open chat"} active={chatOpen} onClick={() => setChatOpen((v) => !v)}>
+          <MessageSquare />
+        </DockButton>
+        {isController && (
+          <DockButton label="Host controls" onClick={() => setHostSheet(true)}>
+            <Settings2 />
+          </DockButton>
+        )}
+      </div>
 
       {/* ── Host controls sheet ────────────────────────────────���─────────────── */}
       <AnimatePresence>

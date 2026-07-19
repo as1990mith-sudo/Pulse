@@ -19,7 +19,7 @@ export type GridParticipant = {
   pinned: boolean
 }
 
-const PER_PAGE = 12
+const DEFAULT_PER_PAGE = 12
 
 // Horizontal page transition. `custom` carries the swipe direction (1 = forward,
 // -1 = back) so incoming/outgoing pages slide the natural way.
@@ -119,11 +119,15 @@ function ParticipantCard({ p, onTap }: { p: GridParticipant; onTap?: (p: GridPar
 export function ParticipantGrid({
   participants,
   onTapParticipant,
+  perPage = DEFAULT_PER_PAGE,
 }: {
   participants: GridParticipant[]
   onTapParticipant?: (p: GridParticipant) => void
+  // How many participants fit on a page. Rooms pass a smaller value when the
+  // chat is open so the grid pages instead of clipping people behind the chat.
+  perPage?: number
 }) {
-  const pages = chunk(participants, PER_PAGE)
+  const pages = chunk(participants, perPage)
   const [page, setPage] = useState(0)
   const [dir, setDir] = useState(0)
   const clamped = Math.min(page, pages.length - 1)
