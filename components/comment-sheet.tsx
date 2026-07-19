@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { createPortal } from "react-dom"
 import Link from "next/link"
 import { Loader2, Send, X } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
@@ -80,6 +81,15 @@ export function CommentSheet({
 }: CommentSheetProps) {
   const [draft, setDraft] = useState("")
   const [sending, setSending] = useState(false)
+  // Portals need the DOM; only render into document.body after mount (SSR-safe).
+  const [mounted, setMounted] = useState(false)
+  // Height (px) the on-screen keyboard currently occupies. Used to lift the whole
+  // sheet — composer included — above the keyboard so the text box is never hidden.
+  const [keyboardInset, setKeyboardInset] = useState(0)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Lock body scroll while the sheet is open so only the list scrolls.
   useEffect(() => {
@@ -88,6 +98,29 @@ export function CommentSheet({
     document.body.style.overflow = "hidden"
     return () => {
       document.body.style.overflow = prev
+    }
+  }, [open])
+
+  // Track the software keyboard via the VisualViewport API. When the keyboard
+  // opens the visual viewport shrinks while the layout viewport (what `fixed`
+  // elements anchor to) does not, so a bottom-anchored composer ends up behind
+  // the keyboard. We measure the difference and lift the sheet by that amount.
+  useEffect(() => {
+    if (!open) return
+    const vv = typeof window !== "undefined" ? window.visualViewport : null
+    if (!vv) return
+    const update = () => {
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
+      // Ignore tiny insets (browser chrome jitter) to avoid needless reflow.
+      setKeyboardInset(inset > 80 ? inset : 0)
+    }
+    update()
+    vv.addEventListener("resize", update)
+    vv.addEventListener("scroll", update)
+    return () => {
+      vv.removeEventListener("resize", update)
+      vv.removeEventListener("scroll", update)
+      setKeyboardInset(0)
     }
   }, [open])
 
@@ -101,7 +134,7 @@ export function CommentSheet({
     return () => window.removeEventListener("keydown", onKey)
   }, [open, onClose])
 
-  if (!open) return null
+  if (!open || !mounted) return null
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -120,8 +153,16 @@ export function CommentSheet({
   const headerTitle = title ?? (count > 0 ? `${count} ${count === 1 ? "comment" : "comments"}` : "Comments")
   const showComposer = !children && (canComment ?? !!currentUser)
 
-  return (
-    <div className="fixed inset-0 z-[60] flex flex-col justify-end" data-no-swipe>
+  return createPortal(
+    // Portaled to <body> so `fixed` always anchors to the viewport (never a
+    // transformed post/carousel ancestor) and slides up from the bottom of the
+    // page. z-[70] keeps it above the episode player (z-58 fullscreen / z-60
+    // docked mini). `bottom` is lifted by the keyboard height when one is open.
+    <div
+      className="fixed inset-x-0 top-0 z-[70] flex flex-col justify-end"
+      style={{ bottom: keyboardInset }}
+      data-no-swipe
+    >
       <button
         type="button"
         aria-label="Close comments"
@@ -220,6 +261,7 @@ export function CommentSheet({
           </p>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
