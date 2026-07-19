@@ -5,7 +5,6 @@ import useSWR from "swr"
 import {
   Check,
   ChevronDown,
-  FastForward,
   Globe,
   Loader2,
   Lock,
@@ -13,25 +12,17 @@ import {
   MicOff,
   MonitorPlay,
   Music,
-  Pause,
   Pin,
   PinOff,
-  Play,
   Radio,
   Smartphone,
   RefreshCw,
-  Rewind,
   Send,
   Settings,
-  SkipBack,
-  SkipForward,
-  Trash2,
   UserPlus,
   Users,
   Video,
   VideoOff,
-  Volume2,
-  VolumeX,
   X,
 } from "lucide-react"
 import type { CurrentUser } from "@/lib/session"
@@ -55,6 +46,7 @@ import { uploadMedia } from "@/lib/upload-media"
 import { publishShow } from "@/app/actions/shows"
 import { ReactionLayer } from "@/components/live-reactions"
 import { LiveChat } from "@/components/live-chat"
+import { MusicPanel, type Track } from "@/components/studio-console"
 import { BackExitMenu } from "@/components/live-back-menu"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { useLivePresence } from "@/lib/use-live-presence"
@@ -64,16 +56,6 @@ import { CoverUpload } from "@/components/admin/cover-upload"
 import type { ShareTarget } from "@/lib/share-types"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { cn } from "@/lib/utils"
-
-function formatTime(s: number) {
-  const total = Math.max(0, Math.floor(s))
-  const m = Math.floor(total / 60)
-  const sec = total % 60
-  return `${m}:${sec.toString().padStart(2, "0")}`
-}
-
-/** How many backing tracks the host can keep loaded at once. */
-const MAX_MUSIC_TRACKS = 4
 
 function formatElapsed(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds))
@@ -277,19 +259,19 @@ export function VideoStudioConsole({
   const [saving, setSaving] = useState(false)
   const startedAtRef = useRef<number | null>(null)
 
-  // Music state — a small playlist (up to MAX_MUSIC_TRACKS) with the active
-  // track scrubbable on its own timeline, mirroring the audio studio.
+  // Background music playlist — the exact same rich panel used in podcast studio
+  // mode (MusicPanel): a queue with transport, scrubber, loop and volume.
   const [musicPanelOpen, setMusicPanelOpen] = useState(false)
   // Tap the camera surface to show/hide the bottom control dock (mic, camera,
   // music, etc.), so the host can preview a clean frame.
   const [controlsVisible, setControlsVisible] = useState(true)
-  const [musicTracks, setMusicTracks] = useState<{ url: string; name: string }[]>([])
+  const [musicTracks, setMusicTracks] = useState<Track[]>([])
   const [musicActiveIndex, setMusicActiveIndex] = useState<number | null>(null)
   const [musicPlaying, setMusicPlayingState] = useState(false)
   const [musicVolume, setMusicVolumeState] = useState(0.4)
-  const [musicUploading, setMusicUploading] = useState(false)
+  const [musicMixing, setMusicMixing] = useState(false)
+  const [musicLoop, setMusicLoopState] = useState(false)
   const [musicError, setMusicError] = useState<string | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const live = Boolean(roomName && creds)
 
@@ -313,6 +295,7 @@ export function VideoStudioConsole({
     publishMusic,
     setMusicVolume,
     setMusicPlaying,
+    setMusicLoop,
     seekMusic,
     musicPosition,
     musicDuration,
@@ -560,6 +543,7 @@ export function VideoStudioConsole({
     const track = musicTracks[index]
     if (!track) return
     setMusicError(null)
+    setMusicMixing(true)
     try {
       await publishMusic(track.url)
       setMusicVolume(musicVolume)
@@ -567,37 +551,8 @@ export function VideoStudioConsole({
       setMusicPlayingState(true)
     } catch {
       setMusicError("Could not play that track. Try a different audio file.")
-    }
-  }
-  async function onPickMusic(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? [])
-    e.target.value = ""
-    if (files.length === 0) return
-    setMusicError(null)
-    setMusicUploading(true)
-    try {
-      const room = MAX_MUSIC_TRACKS - musicTracks.length
-      const added: { url: string; name: string }[] = []
-      for (const file of files.slice(0, room)) {
-        if (!file.type.startsWith("audio/")) continue
-        const { url } = await uploadMedia(file, "live-music")
-        added.push({ url, name: file.name.replace(/\.[^.]+$/, "") })
-      }
-      if (added.length) {
-        const startWasEmpty = musicTracks.length === 0
-        setMusicTracks((prev) => [...prev, ...added].slice(0, MAX_MUSIC_TRACKS))
-        // Auto-play the first track if nothing is loaded yet.
-        if (startWasEmpty) {
-          await publishMusic(added[0].url)
-          setMusicVolume(musicVolume)
-          setMusicActiveIndex(0)
-          setMusicPlayingState(true)
-        }
-      }
-    } catch {
-      setMusicError("Could not add that track. Try a different audio file.")
     } finally {
-      setMusicUploading(false)
+      setMusicMixing(false)
     }
   }
   function toggleMusicPlay() {
@@ -605,6 +560,11 @@ export function VideoStudioConsole({
     const next = !musicPlaying
     setMusicPlaying(next)
     setMusicPlayingState(next)
+  }
+  function toggleMusicLoop() {
+    const next = !musicLoop
+    setMusicLoopState(next)
+    setMusicLoop(next)
   }
   function nextTrack() {
     if (musicTracks.length < 2 || musicActiveIndex === null) return
@@ -628,12 +588,6 @@ export function VideoStudioConsole({
       setMusicActiveIndex(musicActiveIndex - 1)
     }
     setMusicTracks((prev) => prev.filter((_, i) => i !== index))
-  }
-  async function stopMusicTrack() {
-    await stopMusic()
-    setMusicTracks([])
-    setMusicActiveIndex(null)
-    setMusicPlayingState(false)
   }
 
   // Auto-advance to the next track when the current one ends (when 2 are loaded).
@@ -1247,209 +1201,32 @@ export function VideoStudioConsole({
           </div>
         )}
 
-        {/* Music panel — a fixed, centered overlay so it's never clipped by the
-            camera region's overflow-hidden (which previously hid the top of the
-            panel, including the upload button, "up in the frame"). It scrolls
-            internally if it ever exceeds the viewport height. */}
-        {live && musicPanelOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <button
-              type="button"
-              aria-label="Close music panel"
-              onClick={() => setMusicPanelOpen(false)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            />
-            <div className="relative z-10 max-h-[80vh] w-72 overflow-y-auto rounded-2xl border border-white/10 bg-zinc-900/95 p-4 shadow-2xl backdrop-blur-xl">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-sm font-semibold">Background music</p>
-              <button
-                type="button"
-                onClick={() => setMusicPanelOpen(false)}
-                aria-label="Close music panel"
-                className="text-white/50 hover:text-white"
-              >
-                <X className="size-4" />
-              </button>
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="audio/*"
-              multiple
-              onChange={onPickMusic}
-              className="hidden"
-            />
-            <div className="space-y-3">
-              {/* Now playing: scrubbable timeline + transport */}
-              {musicActiveIndex !== null && musicTracks[musicActiveIndex] && (
-                <div className="space-y-2.5 rounded-xl bg-white/5 p-3 ring-1 ring-inset ring-white/10">
-                  <p className="truncate text-sm font-semibold">{musicTracks[musicActiveIndex].name}</p>
-
-                  {/* Timeline scrubber */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => seekMusic(Math.max(0, musicPosition - 15))}
-                      aria-label="Back 15 seconds"
-                      className="text-white/60 transition-colors hover:text-white"
-                    >
-                      <Rewind className="size-4" />
-                    </button>
-                    <input
-                      type="range"
-                      min={0}
-                      max={musicDuration || 0}
-                      step={1}
-                      value={Math.min(musicPosition, musicDuration || 0)}
-                      onChange={(e) => seekMusic(Number(e.target.value))}
-                      aria-label="Seek background music"
-                      className="h-1.5 w-full cursor-pointer accent-primary"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => seekMusic(musicPosition + 15)}
-                      aria-label="Forward 15 seconds"
-                      className="text-white/60 transition-colors hover:text-white"
-                    >
-                      <FastForward className="size-4" />
-                    </button>
-                  </div>
-                  <div className="flex justify-between font-mono text-[10px] tabular-nums text-white/50">
-                    <span>{formatTime(musicPosition)}</span>
-                    <span>{formatTime(musicDuration || 0)}</span>
-                  </div>
-
-                  {/* Transport */}
-                  <div className="flex items-center justify-center gap-5">
-                    <button
-                      type="button"
-                      onClick={prevTrack}
-                      disabled={musicTracks.length < 2}
-                      aria-label="Previous track"
-                      className="text-white/80 transition-colors hover:text-white disabled:opacity-40"
-                    >
-                      <SkipBack className="size-4 fill-current" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={toggleMusicPlay}
-                      aria-label={musicPlaying ? "Pause music" : "Play music"}
-                      className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground"
-                    >
-                      {musicPlaying ? <Pause className="size-4" /> : <Play className="size-4 translate-x-px" />}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={nextTrack}
-                      disabled={musicTracks.length < 2}
-                      aria-label="Next track"
-                      className="text-white/80 transition-colors hover:text-white disabled:opacity-40"
-                    >
-                      <SkipForward className="size-4 fill-current" />
-                    </button>
-                  </div>
-
-                  {/* Volume */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => changeMusicVolume(musicVolume === 0 ? 0.4 : 0)}
-                      aria-label={musicVolume === 0 ? "Unmute music" : "Mute music"}
-                      className="text-white/60 transition-colors hover:text-white"
-                    >
-                      {musicVolume === 0 ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
-                    </button>
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      value={musicVolume}
-                      onChange={(e) => changeMusicVolume(Number(e.target.value))}
-                      aria-label="Music volume"
-                      className="h-1.5 w-full cursor-pointer accent-primary"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Playlist (up to MAX_MUSIC_TRACKS) */}
-              {musicTracks.length > 0 && (
-                <ul className="space-y-1.5">
-                  {musicTracks.map((t, i) => {
-                    const isActive = i === musicActiveIndex
-                    return (
-                      <li
-                        key={t.url}
-                        className={cn(
-                          "flex items-center gap-2 rounded-xl p-1.5 ring-1 ring-inset transition-colors",
-                          isActive ? "bg-primary/15 ring-primary/30" : "bg-white/5 ring-white/10",
-                        )}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => void playTrack(i)}
-                          className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                        >
-                          <span
-                            className={cn(
-                              "flex size-7 shrink-0 items-center justify-center rounded-full",
-                              isActive && musicPlaying
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-white/10 text-white",
-                            )}
-                          >
-                            {isActive && musicPlaying ? (
-                              <Pause className="size-3.5" />
-                            ) : (
-                              <Play className="size-3.5 translate-x-px" />
-                            )}
-                          </span>
-                          <span className="min-w-0 flex-1 truncate text-xs font-medium">{t.name}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void removeTrack(i)}
-                          aria-label={`Remove ${t.name}`}
-                          className="flex size-7 shrink-0 items-center justify-center rounded-full text-white/50 hover:bg-white/10 hover:text-white"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
-                      </li>
-                    )
-                  })}
-                </ul>
-              )}
-
-              {/* Add / upload tracks */}
-              {musicTracks.length < MAX_MUSIC_TRACKS && (
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={musicUploading}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-white ring-1 ring-inset ring-white/15 transition-colors hover:bg-white/20 disabled:opacity-60"
-                >
-                  {musicUploading ? <Loader2 className="size-4 animate-spin" /> : <Music className="size-4" />}
-                  {musicUploading
-                    ? "Uploading…"
-                    : musicTracks.length === 0
-                      ? "Upload tracks (up to 2)"
-                      : "Add another track"}
-                </button>
-              )}
-              {musicTracks.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => void stopMusicTrack()}
-                  className="w-full rounded-xl bg-white/5 px-3 py-2 text-xs font-semibold text-white/70 ring-1 ring-inset ring-white/10 hover:bg-white/10"
-                >
-                  Clear all
-                </button>
-              )}
-            </div>
-            {musicError && <p className="mt-2 text-xs text-destructive">{musicError}</p>}
-            </div>
-          </div>
+        {/* Background music — the exact same playlist panel used in podcast
+            studio mode. */}
+        {musicPanelOpen && (
+          <MusicPanel
+            live={live}
+            position={musicPosition}
+            duration={musicDuration}
+            tracks={musicTracks}
+            activeIndex={musicActiveIndex}
+            playing={musicPlaying}
+            volume={musicVolume}
+            mixing={musicMixing}
+            loop={musicLoop}
+            error={musicError}
+            onAddTracks={(added) => setMusicTracks((t) => [...t, ...added])}
+            onPlayTrack={(i) => void playTrack(i)}
+            onTogglePlay={toggleMusicPlay}
+            onNext={nextTrack}
+            onPrev={prevTrack}
+            onToggleLoop={toggleMusicLoop}
+            onVolume={changeMusicVolume}
+            onSeek={seekMusic}
+            onRemoveTrack={(i) => void removeTrack(i)}
+            onError={setMusicError}
+            onClose={() => setMusicPanelOpen(false)}
+          />
         )}
       </div>
 
