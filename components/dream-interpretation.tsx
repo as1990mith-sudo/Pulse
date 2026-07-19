@@ -550,7 +550,16 @@ function DreamItem({
         <ChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} />
       </button>
 
-      {open && (
+      <CommentSheet
+        open={open}
+        onClose={() => setOpen(false)}
+        count={count}
+        title={
+          count > 0
+            ? `${count} ${count === 1 ? "interpretation" : "interpretations"}`
+            : "Interpretation"
+        }
+      >
         <DreamReplies
           dreamId={dream.id}
           isAdmin={isAdmin}
@@ -560,7 +569,7 @@ function DreamItem({
             onReplyCountChange?.(dream.id, d)
           }}
         />
-      )}
+      </CommentSheet>
     </article>
   )
 }

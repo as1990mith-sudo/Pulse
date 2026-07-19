@@ -41,7 +41,8 @@ import {
   type CommunityCommentView,
   type CommunityPostView,
 } from "@/app/actions/community"
-import { CommentThread, type ThreadComment } from "@/components/comment-thread"
+import { type ThreadComment } from "@/components/comment-thread"
+import { CommentSheet } from "@/components/comment-sheet"
 
 function toThreadComment(c: CommunityCommentView): ThreadComment {
   return {
@@ -120,85 +121,51 @@ function SelfIdentity({ post, edited }: { post: CommunityPostView; edited?: bool
 
 function CommentSection({
   postId,
+  open,
+  onClose,
   onCountChange,
 }: {
   postId: number
+  open: boolean
+  onClose: () => void
   onCountChange: (delta: number) => void
 }) {
-  const { data, isLoading, mutate } = useSWR(["community-comments", postId], () => getCommunityComments(postId))
-  const [body, setBody] = useState("")
-  const [isPending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    const text = body.trim()
-    if (!text) return
-    setError(null)
-    startTransition(async () => {
-      try {
-        const created = await addCommunityComment({ postId, body: text })
-        setBody("")
-        onCountChange(1)
-        await mutate((prev) => [...(prev ?? []), created], { revalidate: false })
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not post your reply.")
-      }
-    })
-  }
+  // Only fetch once the sheet is opened, so closed posts don't fetch eagerly.
+  const { data = [], mutate } = useSWR(open ? ["community-comments", postId] : null, () =>
+    getCommunityComments(postId),
+  )
 
   return (
-    <div className="mt-3 border-t border-border/60 pt-3">
-      {isLoading ? (
-        <div className="flex justify-center py-3">
-          <Loader2 className="size-4 animate-spin text-muted-foreground" />
-        </div>
-      ) : data && data.length > 0 ? (
-        <CommentThread
-          comments={data.map(toThreadComment)}
-          canInteract
-          onLike={(commentId, liked) => void setCommunityCommentLike({ commentId, liked })}
-          onReply={async (parentId, value) => {
-            const created = await addCommunityComment({ postId, body: value, parentId })
-            onCountChange(1)
-            await mutate((prev) => [...(prev ?? []), created], { revalidate: false })
-          }}
-          onEdit={async (commentId, value) => {
-            await editCommunityComment({ commentId, body: value })
-            await mutate()
-          }}
-          onDelete={async (commentId) => {
-            await deleteCommunityComment(commentId)
-            onCountChange(-1)
-            await mutate((prev) => (prev ?? []).filter((c) => c.id !== commentId), { revalidate: false })
-          }}
-        />
-      ) : (
-        <p className="py-1 text-center text-sm text-muted-foreground">Be the first to help out.</p>
-      )}
-
-      <form onSubmit={handleSubmit} className="mt-3 flex items-end gap-2">
-        <Textarea
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          placeholder="Offer your help…"
-          rows={1}
-          maxLength={1000}
-          className="min-h-[40px] resize-none rounded-2xl"
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault()
-              handleSubmit(e)
-            }
-          }}
-        />
-        <Button type="submit" size="icon" className="size-10 shrink-0 rounded-full" disabled={isPending || !body.trim()}>
-          {isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-          <span className="sr-only">Send reply</span>
-        </Button>
-      </form>
-      {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
-    </div>
+    <CommentSheet
+      open={open}
+      onClose={onClose}
+      comments={data.map(toThreadComment)}
+      currentUser={null}
+      canComment
+      placeholder="Offer your help…"
+      emptyText="No replies yet"
+      emptyHint="Be the first to help out."
+      onSubmit={async (text) => {
+        const created = await addCommunityComment({ postId, body: text })
+        onCountChange(1)
+        await mutate((prev) => [...(prev ?? []), created], { revalidate: false })
+      }}
+      onLike={(commentId, liked) => void setCommunityCommentLike({ commentId, liked })}
+      onReply={async (parentId, value) => {
+        const created = await addCommunityComment({ postId, body: value, parentId })
+        onCountChange(1)
+        await mutate((prev) => [...(prev ?? []), created], { revalidate: false })
+      }}
+      onEdit={async (commentId, value) => {
+        await editCommunityComment({ commentId, body: value })
+        await mutate()
+      }}
+      onDelete={async (commentId) => {
+        await deleteCommunityComment(commentId)
+        onCountChange(-1)
+        await mutate((prev) => (prev ?? []).filter((c) => c.id !== commentId), { revalidate: false })
+      }}
+    />
   )
 }
 
@@ -432,9 +399,12 @@ function PostItem({
         )}
       </div>
 
-      {open && (
-        <CommentSection postId={post.id} onCountChange={(d) => setCount((c) => Math.max(0, c + d))} />
-      )}
+      <CommentSection
+        postId={post.id}
+        open={open}
+        onClose={() => setOpen(false)}
+        onCountChange={(d) => setCount((c) => Math.max(0, c + d))}
+      />
 
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
     </article>
