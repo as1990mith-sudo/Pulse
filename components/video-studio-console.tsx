@@ -277,6 +277,7 @@ export function VideoStudioConsole({
 
   const {
     localVideoRef,
+    registerLocalVideoEl,
     connected,
     micOn,
     camOn,
@@ -648,7 +649,7 @@ export function VideoStudioConsole({
             gridPinnedIds={callState?.gridPinnedIds ?? []}
             gridPinRequest={callState?.gridPinRequest ?? null}
             onRefreshState={() => void refreshCalls()}
-            localVideoRef={localVideoRef}
+            registerLocalVideoEl={registerLocalVideoEl}
             registerPeerVideoEl={registerPeerVideoEl}
             micOn={micOn}
             camOn={camOn}
@@ -1235,7 +1236,7 @@ export function VideoStudioConsole({
       {/* ── Live chatroom. Call-in guests now overlay the video above, so the
           chat keeps a constant share of the screen. ────────────────────────── */}
       <div className="min-h-0 flex-[1.5] border-t border-white/10 bg-neutral-950">
-        <LiveChat asHost currentUser={currentUser} roomName={live ? roomName! : undefined} immersive />
+        <LiveChat asHost showResourceButton currentUser={currentUser} roomName={live ? roomName! : undefined} immersive />
       </div>
 
       {rtcError && live && connected && (

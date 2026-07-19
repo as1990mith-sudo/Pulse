@@ -12,7 +12,6 @@ import { AnimatePresence } from "motion/react"
 import { BookOpen, BookMarked, FileText, Loader2, NotebookPen, Pin } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useLiveResources, type ResourcePanelId } from "./resource-context"
-import { LiveResourceButton } from "./live-resource-button"
 import { LiveResourceDrawer } from "./live-resource-drawer"
 import { MiniPanelShell } from "./mini-panel-shell"
 import { MiniBiblePanel } from "./panels/mini-bible-panel"
@@ -71,8 +70,10 @@ export function LiveResourceLayer() {
 
   return (
     <div ref={constraintsRef} className="pointer-events-none fixed inset-0 z-[60]">
-      {/* Floating, drag-to-reposition button (hidden while a panel is open) */}
-      <LiveResourceButton constraintsRef={constraintsRef} />
+      {/* The resource trigger now lives inline in each live interface (in the
+          control dock, just before the chat button — or, on the audio podcast,
+          in the chat composer beside Send). This layer only hosts the drawer
+          and the active mini-panel. */}
 
       {/* Resource drawer */}
       <LiveResourceDrawer />
