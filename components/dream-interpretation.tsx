@@ -13,7 +13,6 @@ import {
   Info,
   Loader2,
   Lock,
-  MessageSquare,
   MoonStar,
   MoreHorizontal,
   Pencil,
@@ -24,6 +23,7 @@ import {
   Trash2,
   X,
 } from "lucide-react"
+import { CommentIcon } from "@/components/comment-icon"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -532,7 +532,7 @@ function DreamItem({
         )}
         aria-expanded={open}
       >
-        <MessageSquare className="size-4" />
+        <CommentIcon className="size-4" />
         {showInbox
           ? // Admin can collapse the thread after interpreting to make room for newer dreams.
             open
