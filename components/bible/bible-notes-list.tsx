@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react"
 import Link from "next/link"
-import { BookOpen, Check, ChevronRight, Copy, LogIn, NotebookPen, Pencil, Trash2, X } from "lucide-react"
+import { BookOpen, Check, ChevronRight, Copy, Eye, EyeOff, LogIn, NotebookPen, Pencil, Trash2, X } from "lucide-react"
 import { BIBLE_BOOKS } from "@/lib/bible-books"
 import { saveBibleNote, deleteBibleNote, type BibleNoteListItem } from "@/app/actions/bible-notes"
 import { cn } from "@/lib/utils"
@@ -20,6 +20,9 @@ export function BibleNotesList({
   signedIn: boolean
 }) {
   const [notes, setNotes] = useState<BibleNoteListItem[]>(initialNotes)
+  // Books whose notes are hidden. Keyed by bookIndex so collapse state survives
+  // note edits/deletes that re-derive the groups.
+  const [collapsedBooks, setCollapsedBooks] = useState<Set<number>>(new Set())
   const [openId, setOpenId] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState("")
@@ -37,6 +40,15 @@ export function BibleNotesList({
     }
     return out
   }, [notes])
+
+  function toggleBook(bookIndex: number) {
+    setCollapsedBooks((prev) => {
+      const next = new Set(prev)
+      if (next.has(bookIndex)) next.delete(bookIndex)
+      else next.add(bookIndex)
+      return next
+    })
+  }
 
   function toggle(item: BibleNoteListItem) {
     if (openId === item.verseId) {
@@ -137,11 +149,26 @@ export function BibleNotesList({
 
   return (
     <div className="space-y-6">
-      {groups.map((group) => (
+      {groups.map((group) => {
+        const collapsed = collapsedBooks.has(group.bookIndex)
+        return (
         <section key={group.bookIndex}>
-          <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {group.name}
-          </h2>
+          <button
+            type="button"
+            onClick={() => toggleBook(group.bookIndex)}
+            className="mb-2 flex w-full items-center gap-2 px-1 text-left"
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? `Show ${group.name} notes` : `Hide ${group.name} notes`}
+          >
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.name}</h2>
+            <span className="text-[11px] font-medium text-muted-foreground/70">{group.items.length}</span>
+            {collapsed ? (
+              <Eye className="ml-auto size-4 text-muted-foreground" />
+            ) : (
+              <EyeOff className="ml-auto size-4 text-muted-foreground" />
+            )}
+          </button>
+          {!collapsed && (
           <ul className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border bg-card">
             {group.items.map((item) => {
               const open = openId === item.verseId
@@ -246,8 +273,10 @@ export function BibleNotesList({
               )
             })}
           </ul>
+          )}
         </section>
-      ))}
+        )
+      })}
     </div>
   )
 }
