@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import { AnimatePresence, motion } from "motion/react"
 import {
+  Globe,
   HandHeart,
   Loader2,
   Lock,
@@ -26,6 +27,7 @@ import { BackExitMenu } from "@/components/live-back-menu"
 import { LiveChat } from "@/components/live-chat"
 import { ActionSheet, type SheetAction } from "@/components/action-sheet"
 import { CoverUpload } from "@/components/admin/cover-upload"
+import { AudioFormatSelector } from "@/components/audio-format-selector"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { ParticipantGrid, type GridParticipant } from "@/components/conversation/participant-grid"
 import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
@@ -150,6 +152,7 @@ export function ConversationRoom({
   const [setupTopic, setSetupTopic] = useState("")
   const [setupCover, setSetupCover] = useState<string | null>(null)
   const [setupCategory, setSetupCategory] = useState<string>(CONVERSATION_CATEGORIES[0])
+  const [setupVisibility, setSetupVisibility] = useState<"public" | "private">("public")
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -220,6 +223,7 @@ export function ConversationRoom({
       mode: "audio",
       layout: "conversation",
       topic: setupTopic.trim() || null,
+      visibility: setupVisibility,
     })
     setStarting(false)
     if (!res.ok) {
@@ -404,7 +408,7 @@ export function ConversationRoom({
     ]
   }, [actionTarget, roomName, pinnedId])
 
-  // ── Host room controls ───────────────────────────────────────────────────
+  // ── Host room controls ─────────────────────────────────────────────���─────
   function togglePrayer() {
     if (!roomName) return
     const next = !prayerActive
@@ -488,6 +492,8 @@ export function ConversationRoom({
           </div>
 
           <div className="space-y-5">
+            <AudioFormatSelector active="conversation" />
+
             <CoverUpload value={setupCover} onChange={setSetupCover} label="Room cover" />
 
             <label className="block space-y-1.5">
@@ -531,6 +537,41 @@ export function ConversationRoom({
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Privacy — public (discoverable in Live) vs private (invite-only). */}
+            <div className="space-y-2">
+              <span className="text-sm font-medium">Privacy</span>
+              <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-white/[0.04] p-1">
+                {(
+                  [
+                    { value: "public", label: "Public", icon: Globe },
+                    { value: "private", label: "Private", icon: Lock },
+                  ] as const
+                ).map((opt) => {
+                  const isActive = setupVisibility === opt.value
+                  const Icon = opt.icon
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setSetupVisibility(opt.value)}
+                      aria-pressed={isActive}
+                      className={cn(
+                        "flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors",
+                        isActive ? "bg-primary text-primary-foreground" : "text-white/60 hover:text-white",
+                      )}
+                    >
+                      <Icon className="size-4" /> {opt.label}
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="text-xs text-white/50">
+                {setupVisibility === "public"
+                  ? "Listed in Live for everyone to discover and join."
+                  : "Only invited users can join."}
+              </p>
             </div>
 
             {error && <p className="text-sm text-destructive">{error}</p>}
