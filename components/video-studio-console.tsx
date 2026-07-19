@@ -53,6 +53,7 @@ import { useLivePresence } from "@/lib/use-live-presence"
 import { ShareSheet } from "@/components/share-sheet"
 import { ConversationVideo } from "@/components/conversation/conversation-video"
 import { CoverUpload } from "@/components/admin/cover-upload"
+import { ImageLightbox } from "@/components/image-lightbox"
 import type { ShareTarget } from "@/lib/share-types"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { broadcastStageRects, stageRectStyle, type StageRect } from "@/lib/broadcast-stage"
@@ -255,6 +256,8 @@ export function VideoStudioConsole({
   // Tap the camera surface to show/hide the bottom control dock (mic, camera,
   // music, etc.), so the host can preview a clean frame.
   const [controlsVisible, setControlsVisible] = useState(true)
+  // Full-screen cover artwork viewer (opened from the Broadcast header).
+  const [coverOpen, setCoverOpen] = useState(false)
   const [musicTracks, setMusicTracks] = useState<Track[]>([])
   const [musicActiveIndex, setMusicActiveIndex] = useState<number | null>(null)
   const [musicPlaying, setMusicPlayingState] = useState(false)
@@ -852,8 +855,15 @@ export function VideoStudioConsole({
             />
           ))}
 
-        {/* Top bar: back menu + LIVE/viewers/timer */}
-        <div className="absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-2 p-4 pt-[calc(env(safe-area-inset-top)+1rem)]">
+        {/* Premium Broadcast header — back • cover • title/host • LIVE • viewers
+            • timer • more. Collapses (fades/slides up) while the host interacts
+            with the live so the stage gets maximum space. */}
+        <div
+          className={cn(
+            "absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-2 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] transition-all duration-300",
+            live && !controlsVisible ? "pointer-events-none -translate-y-2 opacity-0" : "translate-y-0 opacity-100",
+          )}
+        >
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             <BackExitMenu
               showMenu={live}
@@ -861,6 +871,25 @@ export function VideoStudioConsole({
               onExit={live ? () => setEndConfirmOpen(true) : (onExit ?? (() => {}))}
               onMinimize={onMinimize ?? (() => {})}
             />
+            {/* Clickable cover artwork — opens the full-screen viewer. */}
+            {live && orientation !== "landscape" && cover && (
+              <button
+                type="button"
+                onClick={() => setCoverOpen(true)}
+                aria-label="View cover artwork"
+                className="shrink-0 overflow-hidden rounded-xl ring-1 ring-inset ring-white/20 transition-transform active:scale-95"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={cover || "/placeholder.svg"} alt="Broadcast cover" className="size-10 object-cover" />
+              </button>
+            )}
+            {/* Room title + host name. */}
+            {live && orientation !== "landscape" && (
+              <div className="flex min-w-0 max-w-[11rem] flex-col justify-center rounded-2xl bg-black/35 px-3 py-1 ring-1 ring-inset ring-white/10 backdrop-blur-md">
+                <span className="truncate text-sm font-semibold leading-tight text-white">{title}</span>
+                <span className="truncate text-[11px] leading-tight text-white/60">{currentUser.name}</span>
+              </div>
+            )}
             {live ? (
               <span className="flex items-center gap-1.5 rounded-full bg-live px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-live-foreground shadow-lg">
                 <span className="relative flex size-2">
@@ -1322,6 +1351,10 @@ export function VideoStudioConsole({
           open={shareOpen}
           onClose={() => setShareOpen(false)}
         />
+      )}
+
+      {coverOpen && cover && (
+        <ImageLightbox src={cover} alt={`${title} cover artwork`} onClose={() => setCoverOpen(false)} />
       )}
     </div>
   )
