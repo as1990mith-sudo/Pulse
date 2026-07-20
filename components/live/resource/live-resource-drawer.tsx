@@ -6,7 +6,7 @@
 // (rounded top, soft backdrop blur, calm spring motion), not a full takeover.
 
 import { AnimatePresence, motion } from "motion/react"
-import { BookMarked, BookOpen, FileText, NotebookPen, Pin, X } from "lucide-react"
+import { BookOpen, FileText, NotebookPen, Pin, X } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useLiveResources, type ResourcePanelId } from "./resource-context"
 
@@ -21,7 +21,6 @@ const ENTRIES: Entry[] = [
   { id: "bible", label: "Bible", description: "Read & search scripture", icon: BookOpen },
   { id: "notes", label: "Live Notes", description: "Capture what you're learning", icon: NotebookPen },
   { id: "pdf", label: "PDFs & Documents", description: "Study handouts & guides", icon: FileText },
-  { id: "books", label: "Books", description: "Open from your library", icon: BookMarked },
   { id: "pinned", label: "Pinned Resources", description: "Shared by the host", icon: Pin },
 ]
 

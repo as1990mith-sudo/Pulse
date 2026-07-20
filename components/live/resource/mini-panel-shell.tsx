@@ -9,7 +9,6 @@
 import { useRef } from "react"
 import { motion, useDragControls } from "motion/react"
 import {
-  BookMarked,
   BookOpen,
   FileText,
   GripHorizontal,
@@ -26,7 +25,6 @@ const SWITCHER: { id: ResourcePanelId; icon: LucideIcon; label: string }[] = [
   { id: "bible", icon: BookOpen, label: "Bible" },
   { id: "notes", icon: NotebookPen, label: "Notes" },
   { id: "pdf", icon: FileText, label: "PDFs" },
-  { id: "books", icon: BookMarked, label: "Books" },
   { id: "pinned", icon: Pin, label: "Pinned" },
 ]
 
@@ -66,18 +64,17 @@ export function MiniPanelShell({
       {/* Drag handle + header */}
       <div
         onPointerDown={(e) => dragControls.start(e)}
-        className="flex cursor-grab touch-none flex-col gap-2 border-b border-white/8 bg-white/[0.03] px-4 pb-3 pt-2.5 active:cursor-grabbing"
+        className="flex cursor-grab touch-none flex-col gap-1.5 border-b border-white/8 bg-white/[0.03] px-4 pb-2 pt-1.5 active:cursor-grabbing"
       >
         <div className="mx-auto flex items-center text-white/25">
           <GripHorizontal className="size-4" />
         </div>
-        <div className="flex items-center gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
-            <Icon className="size-5" strokeWidth={2.1} />
+        <div className="flex items-center gap-2.5">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+            <Icon className="size-[18px]" strokeWidth={2.1} />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-[15px] font-bold text-white">{title}</h2>
-            {subtitle && <p className="truncate text-xs text-white/45">{subtitle}</p>}
+            <h2 className="truncate text-[15px] font-bold leading-tight text-white">{title}</h2>
           </div>
           <button
             type="button"
