@@ -4,8 +4,8 @@
 // transition smoothly between four layouts as people join/leave the stage:
 //
 //   1 tile  (host only)      → one large frame
-//   2 tiles (host + 1)       → stacked halves (the portrait "side-by-side")
-//   3 tiles (host + 2)       → primary on top, two panels below
+//   2 tiles (host + 1)       → side-by-side halves (two portrait columns)
+//   3 tiles (host + 2)       → tall primary on top, two panels below
 //   4 tiles (host + 3)       → balanced 2×2
 //
 // Positions are returned as percentage rects so both the host console and the
@@ -20,13 +20,13 @@ export type StageRect = { top: number; left: number; width: number; height: numb
 const LAYOUTS: Record<number, StageRect[]> = {
   1: [{ top: 0, left: 0, width: 100, height: 100 }],
   2: [
-    { top: 0, left: 0, width: 100, height: 50 },
-    { top: 50, left: 0, width: 100, height: 50 },
+    { top: 0, left: 0, width: 50, height: 100 },
+    { top: 0, left: 50, width: 50, height: 100 },
   ],
   3: [
-    { top: 0, left: 0, width: 100, height: 60 },
-    { top: 60, left: 0, width: 50, height: 40 },
-    { top: 60, left: 50, width: 50, height: 40 },
+    { top: 0, left: 0, width: 100, height: 66 },
+    { top: 66, left: 0, width: 50, height: 34 },
+    { top: 66, left: 50, width: 50, height: 34 },
   ],
   4: [
     { top: 0, left: 0, width: 50, height: 50 },
