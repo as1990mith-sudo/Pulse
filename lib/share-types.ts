@@ -1,7 +1,7 @@
 // Shared, client-safe types for the Instagram-style share sheet. Kept out of
 // the "use server" action file so both server and client can import them.
 
-export type ShareItemType = "post" | "episode" | "devotional" | "status" | "live" | "community"
+export type ShareItemType = "post" | "episode" | "devotional" | "status" | "live" | "community" | "article"
 
 /**
  * A shareable piece of content. `url` is an app-relative path (e.g. "/feed");
