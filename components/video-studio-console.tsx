@@ -145,7 +145,10 @@ function StageGuestTile({
   return (
     <div
       style={stageRectStyle(rect)}
-      className="z-20 overflow-hidden rounded-2xl bg-neutral-900 ring-1 ring-inset ring-white/10 transition-[top,left,width,height] duration-500 ease-out"
+      // Container passes taps through to the tap-capture layer (so tapping a
+      // guest video toggles the controls); only the control buttons re-enable
+      // pointer events.
+      className="pointer-events-none z-20 overflow-hidden rounded-2xl bg-neutral-900 ring-1 ring-inset ring-white/10 transition-[top,left,width,height] duration-500 ease-out"
     >
       <video
         ref={videoRef}
@@ -171,7 +174,7 @@ function StageGuestTile({
         </div>
       )}
       {/* Host controls: pin/unpin (spotlight) + remove */}
-      <div className="absolute inset-x-0 top-0 flex items-center justify-between p-1.5">
+      <div className="pointer-events-auto absolute inset-x-0 top-0 flex items-center justify-between p-1.5">
         <button
           type="button"
           onClick={() => onTogglePin(peer.identity)}
@@ -768,7 +771,9 @@ export function VideoStudioConsole({
             muted
             style={live && orientation !== "landscape" ? stageRectStyle(hostRect) : undefined}
             className={cn(
-              "-scale-x-100 transition-[top,left,width,height,opacity] duration-500 ease-out",
+              // Display surface only — let taps fall through to the tap-capture
+              // layer below so tapping the video toggles the controls.
+              "pointer-events-none -scale-x-100 transition-[top,left,width,height,opacity] duration-500 ease-out",
               orientation === "landscape"
                 ? // Landscape letterboxes the feed so nothing is cropped.
                   "absolute inset-0 z-0 h-full w-full object-contain"

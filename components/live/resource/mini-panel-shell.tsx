@@ -9,7 +9,6 @@
 import { useRef } from "react"
 import { motion, useDragControls } from "motion/react"
 import {
-  BookMarked,
   BookOpen,
   FileText,
   GripHorizontal,
@@ -26,7 +25,6 @@ const SWITCHER: { id: ResourcePanelId; icon: LucideIcon; label: string }[] = [
   { id: "bible", icon: BookOpen, label: "Bible" },
   { id: "notes", icon: NotebookPen, label: "Notes" },
   { id: "pdf", icon: FileText, label: "PDFs" },
-  { id: "books", icon: BookMarked, label: "Books" },
   { id: "pinned", icon: Pin, label: "Pinned" },
 ]
 

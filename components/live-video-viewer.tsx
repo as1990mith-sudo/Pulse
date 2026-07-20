@@ -119,8 +119,10 @@ function StagePeerView({
   return (
     <div
       style={stageRectStyle(rect)}
+      // Display surface only — taps fall through to the stage tap handler so
+      // tapping a tile toggles the on-screen controls.
       className={cn(
-        "z-10 overflow-hidden bg-neutral-900 transition-[top,left,width,height] duration-500 ease-out",
+        "pointer-events-none z-10 overflow-hidden bg-neutral-900 transition-[top,left,width,height] duration-500 ease-out",
         primary ? "rounded-none" : "rounded-2xl ring-1 ring-inset ring-white/10",
       )}
     >
@@ -620,7 +622,7 @@ export function LiveVideoViewer({
             <div
               style={stageRectStyle(selfRect)}
               className={cn(
-                "z-20 overflow-hidden bg-neutral-900 ring-2 ring-inset ring-live transition-[top,left,width,height] duration-500 ease-out",
+                "pointer-events-none z-20 overflow-hidden bg-neutral-900 ring-2 ring-inset ring-live transition-[top,left,width,height] duration-500 ease-out",
                 selfIsPrimary ? "rounded-none" : "rounded-2xl",
               )}
             >
