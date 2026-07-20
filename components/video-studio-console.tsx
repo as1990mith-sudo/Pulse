@@ -680,6 +680,9 @@ export function VideoStudioConsole({
   const guestTiles = stageTiles
     .map((t, i) => ({ tile: t, rect: stageRects[i] }))
     .filter((x): x is { tile: { kind: "guest"; peer: RemotePeer }; rect: StageRect } => x.tile.kind === "guest")
+  // With 3+ people on a portrait Broadcast, give the stage more vertical room
+  // (and shrink the chat a touch) so the top host tile reads taller/portrait.
+  const tallStage = live && orientation !== "landscape" && stageTiles.length >= 3
 
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-neutral-950 text-white [isolation:isolate]">
@@ -747,8 +750,8 @@ export function VideoStudioConsole({
           spotlighted guest swaps into this big frame. ─────────────────────── */}
       <div
         className={cn(
-          "relative min-h-0 overflow-hidden",
-          orientation !== "landscape" ? "flex-[2.5]" : "flex-[1.75]",
+          "relative min-h-0 overflow-hidden transition-[flex-grow] duration-500 ease-out",
+          orientation === "landscape" ? "flex-[1.75]" : tallStage ? "flex-[3.3]" : "flex-[2.5]",
         )}
       >
         {/* Persistent host camera — the live publisher feed (mirrored self-view).
@@ -1291,9 +1294,21 @@ export function VideoStudioConsole({
       </div>
 
       {/* ── Live chatroom. Call-in guests now overlay the video above, so the
-          chat keeps a constant share of the screen. ────────────────────────── */}
-      <div className="min-h-0 flex-[1.5] border-t border-white/10 bg-neutral-950">
-        <LiveChat asHost showResourceButton currentUser={currentUser} roomName={live ? roomName! : undefined} immersive />
+          chat keeps a constant share of the screen. ─────────────���──────────── */}
+      <div
+        className={cn(
+          "min-h-0 border-t border-white/10 bg-neutral-950 transition-[flex-grow] duration-500 ease-out",
+          tallStage ? "flex-[1.1]" : "flex-[1.5]",
+        )}
+      >
+        <LiveChat
+          asHost
+          showResourceButton
+          currentUser={currentUser}
+          roomName={live ? roomName! : undefined}
+          immersive
+          placeholder=""
+        />
       </div>
 
       {rtcError && live && connected && (

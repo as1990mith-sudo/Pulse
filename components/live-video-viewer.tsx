@@ -196,6 +196,8 @@ export function LiveVideoViewer({
   // Full-screen cover artwork viewer (opened from the Broadcast header).
   const [coverOpen, setCoverOpen] = useState(false)
   const [bursts, setBursts] = useState<Burst[]>([])
+  // Tap the stage to hide/reveal the header + on-screen controls (immersive).
+  const [controlsVisible, setControlsVisible] = useState(true)
   const [requesting, setRequesting] = useState(false)
 
   // Grid ("landscape") video streams are Meet/Zoom-style meetings: this viewer
@@ -389,6 +391,9 @@ export function LiveVideoViewer({
   const selfIndex = stageTiles.findIndex((t) => t.kind === "self")
   const selfRect = selfIndex >= 0 ? stageRects[selfIndex] : null
   const selfIsPrimary = selfIndex === 0
+  // With 3+ people on stage, give the video more vertical room (and shrink the
+  // chat a touch) so the top host tile reads taller/portrait — mirrors host.
+  const tallStage = stageTiles.length >= 3
   // Whether the primary frame currently shows a live video (drives the
   // connecting/off overlays): the spotlighted guest, my own cam, or the host.
   const bigVideoOn = spotlightPeer ? spotlightPeer.hasVideo : spotlightIsSelf ? camOn : remoteVideoOn
@@ -559,8 +564,17 @@ export function LiveVideoViewer({
       {/* ── Broadcast stage — host + up to 3 guests above the chatroom. Tiles
           reflow smoothly through the 1/2/3/4-person layouts; a spotlighted guest
           (or a promoted viewer) takes the primary slot. ──────────────────── */}
-      <div className="relative min-h-0 flex-[2.5] overflow-hidden">
-        <div className="absolute inset-0" onClick={handleTapHeart}>
+      <div
+        className={cn(
+          "relative min-h-0 overflow-hidden transition-[flex-grow] duration-500 ease-out",
+          tallStage ? "flex-[3.3]" : "flex-[2.5]",
+        )}
+      >
+        <div
+          className="absolute inset-0"
+          onClick={() => setControlsVisible((v) => !v)}
+          onDoubleClick={handleTapHeart}
+        >
           {/* Cover ambiance while the primary video is off. */}
           {!bigVideoOn && stream.cover && (
             // eslint-disable-next-line @next/next/no-img-element
@@ -668,7 +682,12 @@ export function LiveVideoViewer({
         <ReactionLayer roomName={connected ? stream.roomName : undefined} />
 
         {/* Premium Broadcast header: back • cover • title/host • LIVE • viewers */}
-        <div className="absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-2 p-4 pt-[calc(env(safe-area-inset-top)+1rem)]">
+        <div
+          className={cn(
+            "absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-2 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] transition-all duration-300",
+            controlsVisible ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-2 opacity-0",
+          )}
+        >
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <BackExitMenu
               showMenu
@@ -749,7 +768,12 @@ export function LiveVideoViewer({
 
         {/* Action rail — anchored bottom-LEFT so it never collides with the
             call-in rail overlaid on the right. */}
-        <div className="absolute bottom-3 left-3 z-20 flex flex-col items-center gap-3">
+        <div
+          className={cn(
+            "absolute bottom-3 left-3 z-20 flex flex-col items-center gap-3 transition-all duration-300",
+            controlsVisible ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-2 opacity-0",
+          )}
+        >
           {canPublish ? (
             // Promoted guest controls
             <>
@@ -828,7 +852,12 @@ export function LiveVideoViewer({
             A floating tap-to-call-in control for signed-in viewers not yet on
             stage. Promoted guests appear as stage tiles above. */}
         {guestsEnabled && canWatch && !canPublish && (
-          <div className="absolute bottom-3 right-3 z-30">
+          <div
+            className={cn(
+              "absolute bottom-3 right-3 z-30 transition-all duration-300",
+              controlsVisible ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-2 opacity-0",
+            )}
+          >
             {myStatus === "pending" ? (
               <div className="flex items-center gap-2 rounded-full border border-dashed border-live/50 bg-live/10 px-3.5 py-2 backdrop-blur-md">
                 <Loader2 className="size-4 animate-spin text-white/80" />
@@ -856,9 +885,14 @@ export function LiveVideoViewer({
 
       {/* ── Live chatroom. Call-in guests overlay the video above, so the chat
           keeps a constant share of the screen. ─────────────────────────────── */}
-      <div className="min-h-0 flex-[1.5] border-t border-white/10 bg-neutral-950">
+      <div
+        className={cn(
+          "min-h-0 border-t border-white/10 bg-neutral-950 transition-[flex-grow] duration-500 ease-out",
+          tallStage ? "flex-[1.1]" : "flex-[1.5]",
+        )}
+      >
         {canWatch ? (
-          <LiveChat currentUser={currentUser} roomName={stream.roomName} immersive showResourceButton />
+          <LiveChat currentUser={currentUser} roomName={stream.roomName} immersive showResourceButton placeholder="" />
         ) : (
           <div className="flex h-full items-center justify-center p-4 text-center text-sm text-white/70">
             <p>
