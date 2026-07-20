@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, useTransition } from "react"
+import { useCallback, useEffect, useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import useSWR from "swr"
 import {
@@ -109,6 +109,13 @@ function StagePeerView({
   registerEl: (identity: string, el: HTMLVideoElement | null) => void
   muted?: boolean
 }) {
+  // Stable ref callback: an inline arrow would get a new identity each render,
+  // making React re-run it (null → element) and re-attach the track — which
+  // visibly restarts the video. Keyed on the (stable) identity + registrar.
+  const videoRef = useCallback(
+    (el: HTMLVideoElement | null) => registerEl(peer.identity, el),
+    [registerEl, peer.identity],
+  )
   return (
     <div
       style={stageRectStyle(rect)}
@@ -118,7 +125,7 @@ function StagePeerView({
       )}
     >
       <video
-        ref={(el) => registerEl(peer.identity, el)}
+        ref={videoRef}
         autoPlay
         playsInline
         muted={muted}

@@ -298,6 +298,10 @@ export function useLiveVideo({
   // the self-view silently goes blank. Re-attaching on every mount (exactly like
   // the remote tiles do) keeps the local camera painting across remounts.
   const registerLocalVideoEl = useCallback((el: HTMLVideoElement | null) => {
+    // Skip if this exact element is already registered — a re-run of the ref
+    // callback for an unchanged element must not re-attach (which restarts the
+    // camera preview and flickers).
+    if (el && localVideoRef.current === el) return
     localVideoRef.current = el
     if (!el) {
       setLocalVideoReady(false)
@@ -331,6 +335,10 @@ export function useLiveVideo({
   const registerPeerVideoEl = useCallback(
     (identity: string, el: HTMLVideoElement | null) => {
       if (el) {
+        // Skip if this exact element is already registered — prevents a track
+        // re-attach (which restarts playback / flickers) when a ref callback
+        // re-runs for an unchanged element.
+        if (remoteVideoEls.current.get(identity) === el) return
         remoteVideoEls.current.set(identity, el)
         attachPeerVideo(identity)
       } else {
