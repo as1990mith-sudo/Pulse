@@ -856,6 +856,9 @@ export function StudioConsole({
             onTapSpeaker={openSpeakerMenu}
           />
           {live && roomName && <ReactionLayer roomName={roomName} />}
+          {/* Shared Prayer Mode overlay + "ended" toast. */}
+          <PrayerOverlay active={prayerActive} endedAt={prayerEndedAt} />
+          <PrayerEndedToast endedAt={prayerEndedAt} />
         </div>
 
         {/* Host control dock ��� compact essentials, sits right under the stage row */}
