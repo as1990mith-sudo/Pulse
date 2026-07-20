@@ -25,7 +25,7 @@ const OPTIONS = [
 /**
  * Layout chooser shown at the top of the Audio Live setup screen. Podcast and
  * Conversation are two different live *experiences* (not a setting), so each is
- * a selectable card — mirroring the Video Live "Focused / Grid" selector exactly
+ * a selectable card — mirroring the Video Live "Broadcast / Conversation" selector exactly
  * (compact, side-by-side, icon-over-label with a short hint).
  *
  * The two experiences render from separate consoles (StudioConsole vs

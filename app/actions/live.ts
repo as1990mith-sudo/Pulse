@@ -742,6 +742,21 @@ async function acceptedGuestCount(roomName: string): Promise<number> {
   return rows.length
 }
 
+// Broadcast (portrait video) is a presenter-focused stage capped at 3 guests
+// (host + 3 = 4 on stage) so the dynamic 1/2/3/4-person layouts stay premium.
+// Every other format keeps the general MAX_GUESTS cap.
+const BROADCAST_MAX_GUESTS = 3
+
+/** Resolves the on-stage guest cap for a room based on its format. */
+async function stageCapFor(roomName: string): Promise<number> {
+  const [s] = await db
+    .select({ mode: liveStream.mode, orientation: liveStream.orientation })
+    .from(liveStream)
+    .where(eq(liveStream.roomName, roomName))
+  const isBroadcast = s?.mode === "video" && (s?.orientation ?? "portrait") === "portrait"
+  return isBroadcast ? BROADCAST_MAX_GUESTS : MAX_GUESTS
+}
+
 /** Listener asks to come on as a guest. */
 export async function requestToJoin(input: { roomName: string }): Promise<{ ok: boolean; error?: string }> {
   const user = await requireUser()
@@ -1073,8 +1088,9 @@ export async function respondToCallRequest(input: {
   if (req.kind === "invite" && req.userId !== user.id) return { ok: false, error: "Not authorized." }
 
   if (input.accept) {
-    if ((await acceptedGuestCount(req.roomName)) >= MAX_GUESTS) {
-      return { ok: false, error: `All ${MAX_GUESTS} guest spots are full.` }
+    const cap = await stageCapFor(req.roomName)
+    if ((await acceptedGuestCount(req.roomName)) >= cap) {
+      return { ok: false, error: `All ${cap} guest spots are full.` }
     }
     await setParticipantPublish({ roomName: req.roomName, identity: req.userId, canPublish: true })
     await db
@@ -1157,8 +1173,9 @@ export async function callIn(input: { roomName: string }): Promise<{ ok: boolean
   const row = await getCoHostRow(input.roomName, user.id)
   if (!row) return { ok: false, error: "You're not a co-host of this session." }
   if (row.status !== "accepted") {
-    if ((await acceptedGuestCount(input.roomName)) >= MAX_GUESTS) {
-      return { ok: false, error: `All ${MAX_GUESTS} stage spots are full.` }
+    const cap = await stageCapFor(input.roomName)
+    if ((await acceptedGuestCount(input.roomName)) >= cap) {
+      return { ok: false, error: `All ${cap} stage spots are full.` }
     }
   }
   await setParticipantPublish({ roomName: input.roomName, identity: user.id, canPublish: true })
@@ -1225,6 +1242,9 @@ export async function getCallState(input: { roomName: string }): Promise<{
   gridPinRequest: { userId: string; userName: string } | null
   // Host-selected Conversation video layout, synced to everyone.
   gridLayout: GridLayout
+  // Shared Prayer Mode: ISO timestamp when the host started prayer, else null.
+  // Synced to everyone so all live formats can show the prayer overlay together.
+  prayerStartedAt: string | null
 }> {
   // Auto-end abandoned streams first so listeners of a vanished host close out.
   await endStaleStreams()
@@ -1248,6 +1268,7 @@ export async function getCallState(input: { roomName: string }): Promise<{
       gridPinRequestId: liveStream.gridPinRequestId,
       gridPinRequestName: liveStream.gridPinRequestName,
       gridLayout: liveStream.gridLayout,
+      prayerStartedAt: liveStream.prayerStartedAt,
     })
     .from(liveStream)
     .where(eq(liveStream.roomName, input.roomName))
@@ -1380,6 +1401,7 @@ export async function getCallState(input: { roomName: string }): Promise<{
         ? { userId: stream.gridPinRequestId, userName: stream.gridPinRequestName ?? "A participant" }
         : null,
     gridLayout: ((stream?.gridLayout as GridLayout | undefined) ?? "balanced") as GridLayout,
+    prayerStartedAt: stream?.prayerStartedAt ? stream.prayerStartedAt.toISOString() : null,
   }
 }
 
@@ -1635,12 +1657,13 @@ export async function pinLiveChat(input: { roomName: string; chatId: number | nu
   return { ok: true }
 }
 
-// --- Conversation layout: prayer mode, pinned participant, shared state ------
+// --- Shared live state: prayer mode, pinned participant, room state ----------
 
 /**
- * Host toggles Prayer Mode for a Conversation room. When on, `prayerStartedAt`
- * is set (drives the shared overlay for everyone + disables music ducking). No
- * one is muted — the whole room prays together.
+ * Host toggles Prayer Mode for any live room (Broadcast, Conversation video, or
+ * audio). When on, `prayerStartedAt` is set — driving the shared prayer overlay
+ * for everyone and disabling music ducking. No one is muted; the whole room
+ * prays together and worship/instrumental music keeps playing naturally.
  */
 export async function setPrayerMode(input: { roomName: string; on: boolean }): Promise<{ ok: boolean }> {
   const user = await requireUser()
