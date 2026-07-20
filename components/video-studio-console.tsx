@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import useSWR from "swr"
 import {
   Check,
@@ -136,13 +136,19 @@ function StageGuestTile({
   onTogglePin: (identity: string) => void
   onRemove: (identity: string) => void
 }) {
+  // Stable ref callback so React doesn't re-run it (null → element) every render
+  // and re-attach the peer track, which would visibly restart the video.
+  const videoRef = useCallback(
+    (el: HTMLVideoElement | null) => registerEl(peer.identity, el),
+    [registerEl, peer.identity],
+  )
   return (
     <div
       style={stageRectStyle(rect)}
       className="z-20 overflow-hidden rounded-2xl bg-neutral-900 ring-1 ring-inset ring-white/10 transition-[top,left,width,height] duration-500 ease-out"
     >
       <video
-        ref={(el) => registerEl(peer.identity, el)}
+        ref={videoRef}
         autoPlay
         playsInline
         muted

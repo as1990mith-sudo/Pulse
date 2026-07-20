@@ -186,6 +186,25 @@ export function ConversationVideo(props: ConversationVideoProps) {
     onRefreshState()
   }, [mutateRoomState, onRefreshState])
 
+  // ── Stable per-identity <video> ref callbacks ────────────────────────────
+  // An inline `ref={(el) => registerPeerVideoEl(id, el)}` gets a new identity on
+  // every render, so React re-runs it (null → element) each time and the peer
+  // track re-attaches — the video visibly restarts. Caching one callback per
+  // identity keeps the ref stable, so React only runs it on real mount/unmount.
+  const peerRefCbs = useRef<Map<string, (el: HTMLVideoElement | null) => void>>(new Map())
+  const getPeerRef = useCallback(
+    (identity: string) => {
+      const map = peerRefCbs.current
+      let cb = map.get(identity)
+      if (!cb) {
+        cb = (el: HTMLVideoElement | null) => registerPeerVideoEl(identity, el)
+        map.set(identity, cb)
+      }
+      return cb
+    },
+    [registerPeerVideoEl],
+  )
+
   // ── Arrival experience — a one-second branded transition into the room ────
   const [arrived, setArrived] = useState(false)
   useEffect(() => {
@@ -370,6 +389,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
     const isCohostTile = gridCohostId === tile.identity
     return (
       <motion.div
+        key={tile.identity}
         layout
         layoutId={tile.identity}
         initial={{ opacity: 0, scale: 0.7 }}
@@ -402,7 +422,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
           />
         ) : (
           <video
-            ref={(el) => registerPeerVideoEl(tile.identity, el)}
+            ref={getPeerRef(tile.identity)}
             autoPlay
             playsInline
             className={cn("absolute inset-0 size-full object-cover", !camActive && "opacity-0")}
@@ -433,7 +453,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
           )}
         </div>
 
-        <TileMenu tile={tile} />
+        {TileMenu({ tile })}
 
         {/* Speaking indicator — fades into the corner. */}
         <AnimatePresence>
@@ -612,7 +632,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
             <div className={cn("grid gap-2", spotlight.length > 1 ? "grid-cols-2" : "grid-cols-1")}>
               {spotlight.map((tile) => (
                 <div key={tile.identity} className="aspect-video">
-                  <VideoTile tile={tile} big />
+                  {VideoTile({ tile, big: true })}
                 </div>
               ))}
             </div>
@@ -648,9 +668,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
                   }}
                 >
                   <AnimatePresence mode="popLayout">
-                    {pageTiles.map((tile) => (
-                      <VideoTile key={tile.identity} tile={tile} />
-                    ))}
+                    {pageTiles.map((tile) => VideoTile({ tile }))}
                   </AnimatePresence>
                 </div>
               </motion.div>
