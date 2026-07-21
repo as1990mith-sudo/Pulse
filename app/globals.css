@@ -1102,6 +1102,8 @@ svg.lucide {
    preview. Editorial rhythm: generous measure, comfortable leading, and a
    display face for headings. Everything themes off the design tokens so it
    works across every skin/appearance.
+   These are intentionally element-targeting rules scoped under .article-prose
+   so sanitized article HTML renders with editorial styling.
    =========================================================================== */
 .article-prose {
   font-size: 1.075rem;
