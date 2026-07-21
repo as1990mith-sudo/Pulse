@@ -49,6 +49,7 @@ import {
   startBroadcast,
   joinBroadcast,
   endBroadcast,
+  heartbeatBroadcast,
   getConversationState,
   getLiveChat,
   setPrayerMode,
@@ -270,6 +271,28 @@ export function ConversationRoom({
   const [hostMenuOpen, setHostMenuOpen] = useState(false)
   const [themeOpen, setThemeOpen] = useState(false)
   const [coverOpen, setCoverOpen] = useState(false)
+
+  // Host heartbeat: while the room is live, the host pings every 20s so the
+  // stream's lastSeenAt stays fresh and the 60s stale-stream sweep never
+  // auto-ends a conversation the host didn't end himself (which previously
+  // kicked every participant out abruptly). Only the host pings —
+  // heartbeatBroadcast only refreshes the host's own row — and we deliberately
+  // do NOT act on a transient `ended` response so the host is never silently
+  // dropped; the next ping re-marks the stream live.
+  useEffect(() => {
+    if (!isHost || !roomName || !live) return
+    let cancelled = false
+    const ping = () => {
+      if (cancelled) return
+      void heartbeatBroadcast({ roomName }).catch(() => null)
+    }
+    ping()
+    const t = setInterval(ping, 20000)
+    return () => {
+      cancelled = true
+      clearInterval(t)
+    }
+  }, [isHost, roomName, live])
 
   useEffect(() => {
     if (!roomName || !live) return
