@@ -352,20 +352,6 @@ export function LiveChat({
                         Host
                       </span>
                     )}
-                    {/* Host can pin any real (already-persisted) message. */}
-                    {asHost && m.id > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => void togglePin(m.id)}
-                        aria-label={pinnedChatId === m.id ? "Unpin comment" : "Pin comment"}
-                        className={cn(
-                          "rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground sm:opacity-0 sm:group-hover:opacity-100",
-                          pinnedChatId === m.id && "text-primary sm:opacity-100",
-                        )}
-                      >
-                        <Pin className="size-3" />
-                      </button>
-                    )}
                   </div>
                   <p
                     className={cn(

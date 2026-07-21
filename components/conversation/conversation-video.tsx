@@ -23,6 +23,7 @@ import {
   Radio,
   Settings2,
   SwitchCamera,
+  UserCheck,
   UserPlus,
   UserX,
   Video,
@@ -50,6 +51,7 @@ import {
   type GridLayout,
   type LiveChatMessageView,
 } from "@/app/actions/live"
+import { toggleFollow, getFollowingIds } from "@/app/actions/follow"
 import { isMedianApp, openNativeAppSettings, type RemotePeer } from "@/lib/use-live-video"
 import type { CurrentUser } from "@/lib/session"
 import { getAvatarColor, getInitials } from "@/lib/identity"
@@ -166,6 +168,36 @@ export function ConversationVideo(props: ConversationVideoProps) {
   const amHost = self.identity === hostId
   const amCohost = !!gridCohostId && self.identity === gridCohostId && !amHost
   const isController = amHost || amCohost
+
+  // ── Follow the host from the header ───────────────────────────────────────
+  // Participants (never the host themselves) can follow the host straight from
+  // the LIVE row. Initial follow state is fetched once on mount.
+  const canFollowHost = Boolean(currentUser) && !!hostId && !amHost
+  const [following, setFollowing] = useState(false)
+  const [followPending, setFollowPending] = useState(false)
+  useEffect(() => {
+    if (!canFollowHost || !hostId) return
+    let cancelled = false
+    getFollowingIds()
+      .then((ids) => !cancelled && setFollowing(ids.includes(hostId)))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [canFollowHost, hostId])
+  async function handleToggleFollowHost() {
+    if (!hostId || followPending) return
+    const next = !following
+    setFollowing(next)
+    setFollowPending(true)
+    try {
+      await toggleFollow({ targetUserId: hostId, follow: next })
+    } catch {
+      setFollowing(!next)
+    } finally {
+      setFollowPending(false)
+    }
+  }
 
   // ── Synced room state (prayer / lock / layout). One lightweight poll shared
   //    by every client so the host's choices apply to everyone in real time. ──
@@ -543,6 +575,23 @@ export function ConversationVideo(props: ConversationVideoProps) {
             <span className="flex items-center gap-1.5 rounded-full bg-live/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-live">
               <span className="size-1.5 animate-pulse rounded-full bg-live" /> Live
             </span>
+            {canFollowHost && (
+              <button
+                type="button"
+                onClick={() => void handleToggleFollowHost()}
+                disabled={followPending}
+                aria-label={following ? `Unfollow ${hostName}` : `Follow ${hostName}`}
+                className={cn(
+                  "flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors disabled:opacity-60",
+                  following
+                    ? "bg-white/10 text-white/80 ring-1 ring-inset ring-white/15"
+                    : "bg-live text-live-foreground",
+                )}
+              >
+                {following ? <UserCheck className="size-3" /> : <UserPlus className="size-3" />}
+                {following ? "Following" : "Follow"}
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {pinnedCount > 0 && (
@@ -753,7 +802,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
         )}
       </motion.div>
 
-      {/* ── Chat panel ───────────────────────────────────────────────────────
+      {/* ── Chat panel ────────────────────────────���──────────────────────────
           In-flow (not an overlay): it grows from the bottom and the participant
           area above smoothly shrinks/reflows so an open chat never covers a
           single participant. */}

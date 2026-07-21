@@ -15,6 +15,8 @@ import {
   Play,
   Radio,
   Send,
+  UserCheck,
+  UserPlus,
   Volume2,
   VolumeX,
   X,
@@ -507,7 +509,28 @@ export function LiveListener({
 
         <div className="relative min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <LiveBadge />
+            {/* Podcast Audio: a listener follows the host straight from the header,
+                so the LIVE pill is replaced by a compact follow toggle. The host
+                previewing their own session can't follow themselves, so they keep
+                the LIVE badge. */}
+            {currentUser && !isSelfHost ? (
+              <button
+                type="button"
+                onClick={() => void handleToggleFollow()}
+                disabled={followPending}
+                aria-label={following ? `Unfollow ${stream.hostName}` : `Follow ${stream.hostName}`}
+                className={cn(
+                  "inline-flex size-7 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-60",
+                  following
+                    ? "bg-white/10 text-white/80 ring-1 ring-inset ring-white/15"
+                    : "bg-live text-live-foreground",
+                )}
+              >
+                {following ? <UserCheck className="size-4" /> : <UserPlus className="size-4" />}
+              </button>
+            ) : (
+              <LiveBadge />
+            )}
             {state.connected && (
               <span className="flex items-center gap-1 text-[11px] font-medium text-white/60">
                 <QualityIcon quality={state.connectionQuality} />

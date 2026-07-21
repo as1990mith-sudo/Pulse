@@ -121,8 +121,8 @@ function StagePeerView({
       // Display surface only — taps fall through to the stage tap handler so
       // tapping a tile toggles the on-screen controls.
       className={cn(
-        "pointer-events-none z-10 overflow-hidden bg-neutral-900 transition-[top,left,width,height] duration-500 ease-out",
-        primary ? "rounded-none" : "rounded-2xl ring-1 ring-inset ring-white/10",
+        "pointer-events-none z-10 overflow-hidden rounded-2xl bg-neutral-900 transition-[top,left,width,height] duration-500 ease-out",
+        !primary && "ring-1 ring-inset ring-white/10",
       )}
     >
       <video
@@ -568,7 +568,7 @@ export function LiveVideoViewer({
       <div
         className={cn(
           "relative min-h-0 overflow-hidden transition-[flex-grow] duration-500 ease-out",
-          tallStage ? "flex-[3.3]" : "flex-[2.5]",
+          tallStage ? "flex-[2.9]" : "flex-[2.5]",
         )}
       >
         <div
@@ -621,8 +621,7 @@ export function LiveVideoViewer({
             <div
               style={stageRectStyle(selfRect)}
               className={cn(
-                "pointer-events-none z-20 overflow-hidden bg-neutral-900 ring-2 ring-inset ring-live transition-[top,left,width,height] duration-500 ease-out",
-                selfIsPrimary ? "rounded-none" : "rounded-2xl",
+                "pointer-events-none z-20 overflow-hidden rounded-2xl bg-neutral-900 ring-2 ring-inset ring-live transition-[top,left,width,height] duration-500 ease-out",
               )}
             >
               <video
@@ -681,6 +680,14 @@ export function LiveVideoViewer({
 
         {/* Floating reactions + gifts */}
         <ReactionLayer roomName={connected ? stream.roomName : undefined} />
+
+        {/* Dedicated header scrim: a translucent top-down gradient (never a solid
+            bar) so the back button, host pill, LIVE and count stay legible even
+            when the video behind them is bright/white. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 z-10 h-36 bg-gradient-to-b from-black/75 via-black/35 to-transparent"
+        />
 
         {/* Broadcast header — always visible. Tapping the stage only hides the
             on-screen controls, never this header, so viewers can always see who
@@ -761,11 +768,11 @@ export function LiveVideoViewer({
           </button>
         )}
 
-        {/* Action rail — anchored bottom-LEFT so it never collides with the
-            call-in rail overlaid on the right. */}
+        {/* Action rail — anchored bottom-RIGHT. The call-in affordance moves to
+            the bottom-left so the two never collide. */}
         <div
           className={cn(
-            "absolute bottom-3 left-3 z-20 flex flex-col items-center gap-3 transition-all duration-300",
+            "absolute bottom-3 right-3 z-20 flex flex-col items-center gap-3 transition-all duration-300",
             controlsVisible ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-2 opacity-0",
           )}
         >
@@ -849,7 +856,7 @@ export function LiveVideoViewer({
         {guestsEnabled && canWatch && !canPublish && (
           <div
             className={cn(
-              "absolute bottom-3 right-3 z-30 transition-all duration-300",
+              "absolute bottom-3 left-3 z-30 transition-all duration-300",
               controlsVisible ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-2 opacity-0",
             )}
           >
@@ -882,8 +889,7 @@ export function LiveVideoViewer({
           keeps a constant share of the screen. ─────────────────────────────── */}
       <div
         className={cn(
-          "min-h-0 border-t border-white/10 bg-neutral-950 transition-[flex-grow] duration-500 ease-out",
-          tallStage ? "flex-[1.1]" : "flex-[1.5]",
+          "min-h-0 flex-[1.5] border-t border-white/10 bg-neutral-950 transition-[flex-grow] duration-500 ease-out",
         )}
       >
         {canWatch ? (
