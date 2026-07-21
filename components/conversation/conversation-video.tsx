@@ -653,7 +653,15 @@ export function ConversationVideo(props: ConversationVideoProps) {
                   </div>
                 )}
               </motion.button>
-              <div className="max-w-full">
+              {/* Tapping the title/details collapses the header back to the
+                  compact bar (the compact bar re-expands it), giving a clear
+                  two-way toggle. The cover art keeps its own lightbox action. */}
+              <button
+                type="button"
+                onClick={() => setCollapsed(true)}
+                aria-label="Collapse room details"
+                className="max-w-full"
+              >
                 <h1 className="text-balance text-base font-semibold leading-tight">{title}</h1>
                 {topic && (
                   <p className="mt-1 text-pretty text-sm text-white/75">
@@ -673,7 +681,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
                     </span>
                   )}
                 </p>
-              </div>
+              </button>
             </motion.div>
           )}
         </AnimatePresence>

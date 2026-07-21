@@ -3,11 +3,10 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { ArrowLeft, Radio, Search } from "lucide-react"
+import { Radio, Search } from "lucide-react"
 import { AppMenu } from "@/components/app-menu"
 import { MessagesBell } from "@/components/messages-bell"
 import { NotificationBell } from "@/components/notification-bell"
-import { useMenuFlow } from "@/lib/menu-flow"
 import { useChatChromeHidden } from "@/lib/chat-chrome"
 import { cn } from "@/lib/utils"
 
@@ -21,9 +20,6 @@ import { cn } from "@/lib/utils"
  */
 export function SiteHeader({ collapsible = false }: { collapsible?: boolean } = {}) {
   const pathname = usePathname()
-  // When the user reached this page via the side menu, offer Back/Close controls
-  // that return to where they were before opening the menu.
-  const { active: inMenuFlow, back } = useMenuFlow()
   // Hide the header when scrolling down, reveal it when scrolling back up.
   const [windowHidden, setWindowHidden] = useState(false)
   const chatHidden = useChatChromeHidden()
@@ -70,34 +66,15 @@ export function SiteHeader({ collapsible = false }: { collapsible?: boolean } = 
             wordmark truncate on narrow screens so the right-side icons are never
             pushed off-frame (and clipped by the body's overflow-x guard). */}
         <div className="flex min-w-0 items-center gap-2.5">
-          {inMenuFlow ? (
-            <button
-              type="button"
-              onClick={back}
-              aria-label="Go back"
-              className="menu-fab tap-scale flex size-10 shrink-0 items-center justify-center rounded-2xl border border-border/60 bg-secondary/40 text-foreground shadow-soft backdrop-blur-md transition-all duration-200 hover:bg-secondary/70"
-            >
-              <ArrowLeft className="size-[18px]" />
-            </button>
-          ) : (
-            <AppMenu />
-          )}
+          {/* The hamburger menu is always the left-most control — even on pages
+              reached via the side menu. The device/browser back gesture handles
+              returning, so we never swap in an in-app back arrow here. */}
+          <AppMenu />
           <Link href="/" className="flex min-w-0 items-center gap-2">
             <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <Radio className="size-4" />
             </span>
-            {/* Hide the wordmark while in the menu flow: the Back/Close controls
-                already occupy the left slot, and dropping it keeps every header
-                icon on-screen on narrow phones. Otherwise keep it whole
-                (no truncation) — it's short enough to always fit. */}
-            <span
-              className={cn(
-                "shrink-0 whitespace-nowrap text-lg font-semibold tracking-tight",
-                inMenuFlow && "hidden",
-              )}
-            >
-              Frequency
-            </span>
+            <span className="shrink-0 whitespace-nowrap text-lg font-semibold tracking-tight">Frequency</span>
           </Link>
         </div>
 

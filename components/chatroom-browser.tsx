@@ -26,7 +26,7 @@ function CommunityHelpEntry() {
   return (
     <Link
       href="/chatrooms/community"
-      className="group flex items-center gap-3 rounded-xl border border-emerald-400/30 bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 py-3 shadow-lg shadow-emerald-900/25 transition-all hover:from-emerald-500 hover:to-emerald-400 hover:shadow-emerald-900/35 sm:px-5"
+      className="group flex items-center gap-3 rounded-xl border border-emerald-300/20 bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-700 px-4 py-3 shadow-lg shadow-emerald-950/40 transition-all hover:from-emerald-800 hover:via-emerald-700 hover:to-teal-600 hover:shadow-emerald-950/50 sm:px-5"
     >
       <Avatar className="size-12 shrink-0 ring-2 ring-white/50 transition-transform duration-200 group-hover:scale-105">
         <AvatarImage src="/community-help-avatar.png" alt="Community Help" />
@@ -38,7 +38,7 @@ function CommunityHelpEntry() {
           Ask anything anonymously — anyone in the community can help.
         </p>
       </div>
-      <span className="shrink-0 rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-emerald-700 shadow-sm transition-transform group-hover:scale-105">
+      <span className="shrink-0 rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-emerald-800 shadow-sm transition-transform group-hover:scale-105">
         Open
       </span>
     </Link>
@@ -49,7 +49,7 @@ function DreamInterpretationEntry() {
   return (
     <Link
       href="/chatrooms/dreams"
-      className="group flex items-center gap-3 rounded-xl border border-indigo-400/30 bg-gradient-to-r from-indigo-600 to-blue-500 px-4 py-3 shadow-lg shadow-indigo-900/25 transition-all hover:from-indigo-500 hover:to-blue-400 hover:shadow-indigo-900/35 sm:px-5"
+      className="group flex items-center gap-3 rounded-xl border border-indigo-300/20 bg-gradient-to-br from-indigo-950 via-indigo-800 to-blue-800 px-4 py-3 shadow-lg shadow-indigo-950/40 transition-all hover:from-indigo-900 hover:via-indigo-700 hover:to-blue-700 hover:shadow-indigo-950/50 sm:px-5"
     >
       <Avatar className="size-12 shrink-0 ring-2 ring-white/50 transition-transform duration-200 group-hover:scale-105">
         <AvatarFallback className="bg-indigo-800 text-white">
@@ -62,7 +62,7 @@ function DreamInterpretationEntry() {
           Share your dreams anonymously — only the interpreter can reply.
         </p>
       </div>
-      <span className="shrink-0 rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-indigo-700 shadow-sm transition-transform group-hover:scale-105">
+      <span className="shrink-0 rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-indigo-800 shadow-sm transition-transform group-hover:scale-105">
         Open
       </span>
     </Link>
