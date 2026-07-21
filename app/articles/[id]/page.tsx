@@ -48,7 +48,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
           comments={comments}
           moreFromAuthor={moreFromAuthor}
           related={related}
-          signedIn={Boolean(currentUser)}
+          currentUser={currentUser}
         />
       </main>
     </div>

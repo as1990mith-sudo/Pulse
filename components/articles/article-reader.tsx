@@ -13,8 +13,9 @@ import {
   Share2,
 } from "lucide-react"
 import type { ArticleCard, ArticleCommentView, ArticleDetail } from "@/lib/article-types"
+import type { CurrentUser } from "@/lib/session"
 import { recordArticleView, setArticleLike } from "@/app/actions/articles"
-import { ArticleComments } from "@/components/articles/article-comments"
+import { ArticleComments, countComments } from "@/components/articles/article-comments"
 import { ArticleRow } from "@/components/articles/article-card"
 import { AuthorAvatar } from "@/components/articles/author-avatar"
 import { WriterFollowButton } from "@/components/articles/writer-follow-button"
@@ -28,20 +29,24 @@ export function ArticleReader({
   comments,
   moreFromAuthor,
   related,
-  signedIn,
+  currentUser,
 }: {
   article: ArticleDetail
   comments: ArticleCommentView[]
   moreFromAuthor: ArticleCard[]
   related: ArticleCard[]
-  signedIn: boolean
+  currentUser: CurrentUser | null
 }) {
   const router = useRouter()
+  const signedIn = Boolean(currentUser)
   const [liked, setLiked] = useState(article.liked)
   const [likes, setLikes] = useState(article.likeCount)
   const [saved, setSaved] = useState(article.saved)
   const [shareOpen, setShareOpen] = useState(false)
+  const [showComments, setShowComments] = useState(false)
   const [, startTransition] = useTransition()
+
+  const commentCount = countComments(comments)
 
   // Count a read once per mount (server dedupes rapid re-counts per viewer).
   useEffect(() => {
@@ -197,13 +202,14 @@ export function ArticleReader({
           <Heart className={cn("size-5", liked && "fill-current")} />
           {likes > 0 && likes}
         </button>
-        <a
-          href="#comments"
+        <button
+          onClick={() => setShowComments(true)}
           className="flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-muted"
+          aria-label="View comments"
         >
           <MessageCircle className="size-5" />
-          {article.commentCount > 0 && article.commentCount}
-        </a>
+          {commentCount > 0 && commentCount}
+        </button>
         <div className="flex items-center gap-1.5 px-2 text-sm text-muted-foreground">
           <Eye className="size-5" />
           {article.viewCount}
@@ -228,9 +234,6 @@ export function ArticleReader({
           </button>
         </div>
       </div>
-
-      {/* Comments */}
-      <ArticleComments articleId={article.id} initialComments={comments} signedIn={signedIn} />
 
       {/* More from author */}
       {moreFromAuthor.length > 0 && (
@@ -259,6 +262,14 @@ export function ArticleReader({
       )}
 
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
+
+      <ArticleComments
+        open={showComments}
+        onClose={() => setShowComments(false)}
+        articleId={article.id}
+        comments={comments}
+        currentUser={currentUser}
+      />
     </article>
   )
 }

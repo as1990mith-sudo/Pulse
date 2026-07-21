@@ -1,315 +1,124 @@
 "use client"
 
-import { useMemo, useRef, useState, useTransition } from "react"
-import { Heart, MessageCircle, MoreHorizontal, Send, Trash2, Flag, Pencil } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { type ThreadComment } from "@/components/comment-thread"
+import { CommentSheet, type CommentSheetUser } from "@/components/comment-sheet"
 import {
   addArticleComment,
   deleteArticleComment,
   editArticleComment,
-  reportArticleComment,
   setArticleCommentLike,
 } from "@/app/actions/articles"
 import type { ArticleCommentView } from "@/lib/article-types"
-import { AuthorAvatar } from "@/components/articles/author-avatar"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { cn } from "@/lib/utils"
 
-export function ArticleComments({
-  articleId,
-  initialComments,
-  signedIn,
-}: {
-  articleId: string
-  initialComments: ArticleCommentView[]
-  signedIn: boolean
-}) {
-  const [comments, setComments] = useState<ArticleCommentView[]>(initialComments)
-  const [body, setBody] = useState("")
-  const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null)
-  const [pending, startTransition] = useTransition()
-  const inputRef = useRef<HTMLTextAreaElement>(null)
-
-  const total = useMemo(
-    () => comments.reduce((n, c) => n + 1 + c.replies.length, 0),
-    [comments],
-  )
-
-  function focusInput() {
-    inputRef.current?.focus()
+/**
+ * Flattens the server's nested article comments into the flat ThreadComment
+ * list the shared CommentThread expects (it re-nests by parentId). Deleted
+ * comments are omitted, and their replies are reparented to the nearest
+ * surviving ancestor so the conversation stays intact — matching how the feed
+ * comment sheet renders its thread.
+ */
+function flattenComments(comments: ArticleCommentView[]): ThreadComment[] {
+  const out: ThreadComment[] = []
+  const walk = (c: ArticleCommentView, parentId: number | null) => {
+    const alive = !c.deleted
+    if (alive) {
+      out.push({
+        id: Number(c.id),
+        parentId,
+        authorId: c.author.id,
+        isSelf: c.isMine,
+        name: c.author.name,
+        handle: c.author.handle,
+        initials: c.author.initials,
+        color: c.author.color,
+        image: c.author.image,
+        text: c.body,
+        likes: c.likes,
+        liked: c.liked,
+        edited: Boolean(c.editedAt),
+        postedAt: c.timeAgo,
+        createdAtMs: new Date(c.createdAt).getTime(),
+      })
+    }
+    const nextParent = alive ? Number(c.id) : parentId
+    for (const r of c.replies) walk(r, nextParent)
   }
-
-  function submit() {
-    const text = body.trim()
-    if (!text || pending) return
-    setBody("")
-    const parentId = replyTo?.id ?? null
-    setReplyTo(null)
-    startTransition(async () => {
-      try {
-        const created = await addArticleComment({ articleId, body: text, parentId })
-        setComments((prev) => {
-          if (!parentId) return [created, ...prev]
-          return prev.map((c) =>
-            c.id === parentId ? { ...c, replies: [...c.replies, created] } : c,
-          )
-        })
-      } catch {
-        setBody(text)
-      }
-    })
-  }
-
-  return (
-    <section className="mt-10" id="comments">
-      <h2 className="mb-4 font-display text-lg font-bold text-foreground">
-        {total > 0 ? `${total} Comment${total === 1 ? "" : "s"}` : "Comments"}
-      </h2>
-
-      {signedIn ? (
-        <div className="mb-6 flex flex-col gap-2 rounded-2xl border border-border bg-card p-3">
-          {replyTo && (
-            <div className="flex items-center justify-between rounded-lg bg-muted px-3 py-1.5 text-xs text-muted-foreground">
-              <span>
-                Replying to <span className="font-medium text-foreground">{replyTo.name}</span>
-              </span>
-              <button onClick={() => setReplyTo(null)} className="font-medium hover:text-foreground">
-                Cancel
-              </button>
-            </div>
-          )}
-          <div className="flex items-end gap-2">
-            <textarea
-              ref={inputRef}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
-                  e.preventDefault()
-                  submit()
-                }
-              }}
-              rows={1}
-              placeholder="Share your thoughts…"
-              className="max-h-32 min-h-[2.5rem] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
-            />
-            <button
-              onClick={submit}
-              disabled={!body.trim() || pending}
-              className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition disabled:opacity-40"
-              aria-label="Post comment"
-            >
-              <Send className="size-4" />
-            </button>
-          </div>
-        </div>
-      ) : (
-        <p className="mb-6 rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">
-          Sign in to join the conversation.
-        </p>
-      )}
-
-      <div className="flex flex-col gap-5">
-        {comments.length === 0 && (
-          <p className="py-6 text-center text-sm text-muted-foreground">
-            No comments yet. Be the first to respond.
-          </p>
-        )}
-        {comments.map((c) => (
-          <CommentNode
-            key={c.id}
-            comment={c}
-            signedIn={signedIn}
-            onReply={(name) => {
-              setReplyTo({ id: c.id, name })
-              focusInput()
-            }}
-            onMutate={setComments}
-          />
-        ))}
-      </div>
-    </section>
-  )
+  for (const c of comments) walk(c, null)
+  return out
 }
 
-function CommentNode({
-  comment,
-  signedIn,
-  onReply,
-  onMutate,
-  isReply = false,
+/** Total number of non-deleted comments (top-level + replies). */
+export function countComments(comments: ArticleCommentView[]): number {
+  let n = 0
+  const walk = (c: ArticleCommentView) => {
+    if (!c.deleted) n += 1
+    c.replies.forEach(walk)
+  }
+  comments.forEach(walk)
+  return n
+}
+
+/**
+ * Article comments, presented through the exact same experience as the feed:
+ * the shared bottom-sheet CommentSheet + CommentThread. This component is
+ * controlled by the reader (open/onClose) and mirrors the feed's handler
+ * pattern — call the server action, then refresh the route so the RSC re-reads
+ * the thread.
+ */
+export function ArticleComments({
+  open,
+  onClose,
+  articleId,
+  comments,
+  currentUser,
 }: {
-  comment: ArticleCommentView
-  signedIn: boolean
-  onReply: (name: string) => void
-  onMutate: React.Dispatch<React.SetStateAction<ArticleCommentView[]>>
-  isReply?: boolean
+  open: boolean
+  onClose: () => void
+  articleId: string
+  comments: ArticleCommentView[]
+  currentUser: CommentSheetUser
 }) {
-  const [liked, setLiked] = useState(comment.liked)
-  const [likes, setLikes] = useState(comment.likes)
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(comment.body)
-  const [deleted, setDeleted] = useState(comment.deleted)
-  const [bodyText, setBodyText] = useState(comment.body)
-  const [, startTransition] = useTransition()
+  const router = useRouter()
 
-  function toggleLike() {
-    if (!signedIn) return
-    const next = !liked
-    setLiked(next)
-    setLikes((n) => n + (next ? 1 : -1))
-    startTransition(async () => {
-      try {
-        await setArticleCommentLike({ commentId: comment.id, liked: next })
-      } catch {
-        setLiked(!next)
-        setLikes((n) => n + (next ? -1 : 1))
-      }
-    })
+  async function onSubmit(text: string) {
+    if (!currentUser) return
+    await addArticleComment({ articleId, body: text })
+    router.refresh()
   }
 
-  function saveEdit() {
-    const text = draft.trim()
-    if (!text) return
-    setBodyText(text)
-    setEditing(false)
-    startTransition(async () => {
-      try {
-        await editArticleComment({ commentId: comment.id, body: text })
-      } catch {
-        /* keep optimistic */
-      }
-    })
+  function onLike(commentId: number, liked: boolean) {
+    void setArticleCommentLike({ commentId: String(commentId), liked })
   }
 
-  function remove() {
-    setDeleted(true)
-    startTransition(async () => {
-      try {
-        await deleteArticleComment(comment.id)
-      } catch {
-        setDeleted(false)
-      }
-    })
+  async function onReply(parentId: number, text: string) {
+    await addArticleComment({ articleId, body: text, parentId: String(parentId) })
+    router.refresh()
   }
 
-  function report() {
-    startTransition(async () => {
-      try {
-        await reportArticleComment({ commentId: comment.id })
-      } catch {
-        /* ignore */
-      }
-    })
+  async function onEdit(commentId: number, text: string) {
+    await editArticleComment({ commentId: String(commentId), body: text })
+    router.refresh()
+  }
+
+  async function onDelete(commentId: number) {
+    await deleteArticleComment(String(commentId))
+    router.refresh()
   }
 
   return (
-    <div className={cn("flex gap-3", isReply && "ml-9")}>
-      <AuthorAvatar author={comment.author} size={isReply ? 28 : 34} />
-      <div className="min-w-0 flex-1">
-        <div className="rounded-2xl bg-card px-3.5 py-2.5">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-baseline gap-2">
-              <span className="text-sm font-semibold text-foreground">{comment.author.name}</span>
-              <span className="text-xs text-muted-foreground">{comment.timeAgo}</span>
-              {comment.editedAt && !deleted && (
-                <span className="text-[10px] text-muted-foreground">edited</span>
-              )}
-            </div>
-            {!deleted && signedIn && (
-              <DropdownMenu>
-                <DropdownMenuTrigger className="text-muted-foreground transition hover:text-foreground">
-                  <MoreHorizontal className="size-4" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {comment.isMine ? (
-                    <>
-                      <DropdownMenuItem onClick={() => setEditing(true)}>
-                        <Pencil className="mr-2 size-4" /> Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={remove} className="text-destructive">
-                        <Trash2 className="mr-2 size-4" /> Delete
-                      </DropdownMenuItem>
-                    </>
-                  ) : (
-                    <DropdownMenuItem onClick={report}>
-                      <Flag className="mr-2 size-4" /> Report
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-          </div>
-
-          {deleted ? (
-            <p className="mt-1 text-sm italic text-muted-foreground">This comment was deleted.</p>
-          ) : editing ? (
-            <div className="mt-1.5 flex flex-col gap-2">
-              <textarea
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                rows={2}
-                className="w-full resize-none rounded-lg bg-muted px-3 py-2 text-sm text-foreground outline-none"
-              />
-              <div className="flex justify-end gap-2 text-xs">
-                <button onClick={() => setEditing(false)} className="text-muted-foreground">
-                  Cancel
-                </button>
-                <button onClick={saveEdit} className="font-semibold text-primary">
-                  Save
-                </button>
-              </div>
-            </div>
-          ) : (
-            <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
-              {bodyText}
-            </p>
-          )}
-        </div>
-
-        {!deleted && (
-          <div className="mt-1 flex items-center gap-4 pl-1">
-            <button
-              onClick={toggleLike}
-              className={cn(
-                "flex items-center gap-1 text-xs font-medium transition",
-                liked ? "text-live" : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <Heart className={cn("size-3.5", liked && "fill-current")} />
-              {likes > 0 && likes}
-            </button>
-            {!isReply && (
-              <button
-                onClick={() => onReply(comment.author.name)}
-                className="flex items-center gap-1 text-xs font-medium text-muted-foreground transition hover:text-foreground"
-              >
-                <MessageCircle className="size-3.5" />
-                Reply
-              </button>
-            )}
-          </div>
-        )}
-
-        {comment.replies.length > 0 && (
-          <div className="mt-3 flex flex-col gap-3">
-            {comment.replies.map((r) => (
-              <CommentNode
-                key={r.id}
-                comment={r}
-                signedIn={signedIn}
-                onReply={onReply}
-                onMutate={onMutate}
-                isReply
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+    <CommentSheet
+      open={open}
+      onClose={onClose}
+      comments={flattenComments(comments)}
+      currentUser={currentUser}
+      showCopy={false}
+      enforceTimeWindows={false}
+      onSubmit={onSubmit}
+      onLike={onLike}
+      onReply={onReply}
+      onEdit={onEdit}
+      onDelete={onDelete}
+    />
   )
 }
