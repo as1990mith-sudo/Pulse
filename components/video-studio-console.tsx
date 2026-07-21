@@ -1312,6 +1312,7 @@ export function VideoStudioConsole({
           currentUser={currentUser}
           roomName={live ? roomName! : undefined}
           immersive
+          flatText
           placeholder=""
         />
       </div>
