@@ -908,52 +908,63 @@ export function VideoStudioConsole({
             />
           ))}
 
-        {/* Premium Broadcast header — back • cover • title/host • LIVE • viewers
-            • timer • more. Collapses (fades/slides up) while the host interacts
-            with the live so the stage gets maximum space. */}
-        <div
-          className={cn(
-            "absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-2 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] transition-all duration-300",
-            live && !controlsVisible ? "pointer-events-none -translate-y-2 opacity-0" : "translate-y-0 opacity-100",
-          )}
-        >
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+        {/* Broadcast header — always visible. Tapping the stage only toggles the
+            bottom control dock, never this header, so the host always sees their
+            identity + LIVE status. One compact host pill (cover • name / title)
+            on the left, then LIVE • viewers • timer • share on the right. */}
+        <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-2 p-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <BackExitMenu
               showMenu={live}
               exitLabel="End"
               onExit={live ? () => setEndConfirmOpen(true) : (onExit ?? (() => {}))}
               onMinimize={onMinimize ?? (() => {})}
             />
-            {/* Clickable cover artwork — opens the full-screen viewer. */}
-            {live && orientation !== "landscape" && cover && (
-              <button
-                type="button"
-                onClick={() => setCoverOpen(true)}
-                aria-label="View cover artwork"
-                className="shrink-0 overflow-hidden rounded-xl ring-1 ring-inset ring-white/20 transition-transform active:scale-95"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={cover || "/placeholder.svg"} alt="Broadcast cover" className="size-10 object-cover" />
-              </button>
-            )}
-            {/* Room title + host name. */}
-            {live && orientation !== "landscape" && (
-              <div className="flex min-w-0 max-w-[11rem] flex-col justify-center rounded-2xl bg-black/35 px-3 py-1 ring-1 ring-inset ring-white/10 backdrop-blur-md">
-                <span className="truncate text-sm font-semibold leading-tight text-white">{title}</span>
-                <span className="truncate text-[11px] leading-tight text-white/60">{currentUser.name}</span>
+            {/* Host identity pill: cover thumb + host name (clear) / title. */}
+            {live && orientation !== "landscape" ? (
+              <div className="flex min-w-0 items-center gap-2 rounded-full bg-black/40 py-1 pl-1 pr-2.5 ring-1 ring-inset ring-white/10 backdrop-blur-md">
+                {cover ? (
+                  <button
+                    type="button"
+                    onClick={() => setCoverOpen(true)}
+                    aria-label="View cover artwork"
+                    className="size-8 shrink-0 overflow-hidden rounded-full ring-1 ring-inset ring-white/20 transition-transform active:scale-95"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={cover || "/placeholder.svg"} alt="Broadcast cover" className="size-full object-cover" />
+                  </button>
+                ) : (
+                  <span
+                    className={cn(
+                      "flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white",
+                      getAvatarColor(currentUser.id),
+                    )}
+                    aria-hidden="true"
+                  >
+                    {getInitials(currentUser.name)}
+                  </span>
+                )}
+                <div className="flex min-w-0 flex-col leading-tight">
+                  <span className="truncate text-sm font-semibold text-white">{currentUser.name}</span>
+                  <span className="truncate text-[11px] text-white/60">{title}</span>
+                </div>
               </div>
-            )}
-            {live ? (
-              <span className="flex items-center gap-1.5 rounded-full bg-live px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-live-foreground shadow-lg">
-                <span className="relative flex size-2">
-                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-live-foreground/70" />
-                  <span className="relative inline-flex size-2 rounded-full bg-live-foreground" />
-                </span>
-                Live
-              </span>
-            ) : (
+            ) : !live ? (
               <span className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/80 ring-1 ring-inset ring-white/15 backdrop-blur-md">
                 <Video className="size-3.5" /> Video studio
+              </span>
+            ) : null}
+          </div>
+
+          {/* Right cluster: LIVE • viewers • timer • share. */}
+          <div className="flex shrink-0 items-center gap-1.5">
+            {live && (
+              <span className="flex items-center gap-1.5 rounded-full bg-live px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-live-foreground shadow-lg">
+                <span className="relative flex size-1.5">
+                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-live-foreground/70" />
+                  <span className="relative inline-flex size-1.5 rounded-full bg-live-foreground" />
+                </span>
+                Live
               </span>
             )}
             {live && (
@@ -961,7 +972,7 @@ export function VideoStudioConsole({
                 count={audienceCount || viewers}
                 members={audienceMembers}
                 immersive
-                className="px-3 py-1.5 text-xs font-medium"
+                className="px-2.5 py-1 text-[11px] font-medium"
                 isHost
                 roomName={roomName ?? undefined}
                 blockedUsers={callState?.blockedUsers ?? []}
@@ -969,23 +980,21 @@ export function VideoStudioConsole({
               />
             )}
             {live && (
-              <span className="rounded-full bg-black/35 px-3 py-1.5 font-mono text-xs tabular-nums text-white/90 ring-1 ring-inset ring-white/10 backdrop-blur-md">
+              <span className="rounded-full bg-black/35 px-2.5 py-1 font-mono text-[11px] tabular-nums text-white/90 ring-1 ring-inset ring-white/10 backdrop-blur-md">
                 {formatElapsed(elapsed)}
               </span>
             )}
+            {live && roomName && (
+              <button
+                type="button"
+                onClick={() => setShareOpen(true)}
+                aria-label="Share this live"
+                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-black/35 text-white ring-1 ring-inset ring-white/15 backdrop-blur-md transition-colors hover:bg-black/50 active:scale-90"
+              >
+                <Send className="size-4" />
+              </button>
+            )}
           </div>
-
-          {/* Share the live (host) */}
-          {live && roomName && (
-            <button
-              type="button"
-              onClick={() => setShareOpen(true)}
-              aria-label="Share this live"
-              className="flex size-10 shrink-0 items-center justify-center rounded-full bg-black/35 text-white ring-1 ring-inset ring-white/15 backdrop-blur-md transition-colors hover:bg-black/50 active:scale-90"
-            >
-              <Send className="size-5" />
-            </button>
-          )}
         </div>
 
         {/* Pending call-in requests (host) — not offered in landscape lives. */}
