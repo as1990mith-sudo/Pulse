@@ -21,8 +21,10 @@ import {
   MessageCircle,
   Moon,
   MoonStar,
+  Newspaper,
   NotebookPen,
   Palette,
+  PenSquare,
   Radio,
   Bell,
   ShoppingBag,
@@ -321,6 +323,8 @@ export function AppMenu() {
                 <Section>
                   <DrawerItem href="/bible" icon={BookOpen} label="Bible" onNavigate={navigate} />
                   <DrawerItem href="/live-notes" icon={NotebookPen} label="Live Notes" onNavigate={navigate} />
+                  <DrawerItem href="/articles" icon={Newspaper} label="Articles" onNavigate={navigate} />
+                  <DrawerItem href="/articles/mine" icon={PenSquare} label="My Articles" onNavigate={navigate} />
                   <DrawerItem href="/store" icon={ShoppingBag} label="Book Store" onNavigate={navigate} />
                   <DrawerItem href="/library" icon={LibraryIcon} label="Library" onNavigate={navigate} />
                   <DrawerItem

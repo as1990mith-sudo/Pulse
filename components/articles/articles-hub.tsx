@@ -169,7 +169,7 @@ export function ArticlesHub({
                     {w.articleCount} article{w.articleCount === 1 ? "" : "s"}
                   </p>
                 </div>
-                {w.author.isSelf ? null : (
+                {w.isSelf ? null : (
                   <WriterFollowButton writerId={w.author.id} initialFollowing={w.followingWriter} size="sm" />
                 )}
               </div>

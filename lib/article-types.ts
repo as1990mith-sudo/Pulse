@@ -94,4 +94,6 @@ export type FeaturedWriter = {
   articleCount: number
   followerCount: number
   followingWriter: boolean
+  /** True when the current viewer is this writer (hides the follow button). */
+  isSelf: boolean
 }

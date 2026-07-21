@@ -372,6 +372,7 @@ export async function getFeaturedWriters(limit = 10): Promise<FeaturedWriter[]> 
   if (rows.length === 0) return []
 
   const ids = rows.map((r) => r.authorId)
+  const viewer = await getSessionUser()
   const [authors, followerRows, viewerFollows] = await Promise.all([
     resolveAuthors(ids),
     db
@@ -380,7 +381,6 @@ export async function getFeaturedWriters(limit = 10): Promise<FeaturedWriter[]> 
       .where(inArray(articleFollow.writerId, ids))
       .groupBy(articleFollow.writerId),
     (async () => {
-      const viewer = await getSessionUser()
       if (!viewer) return new Set<string>()
       const fr = await db
         .select({ writerId: articleFollow.writerId })
@@ -396,6 +396,7 @@ export async function getFeaturedWriters(limit = 10): Promise<FeaturedWriter[]> 
     articleCount: Number(r.articleCount),
     followerCount: followerBy.get(r.authorId) ?? 0,
     followingWriter: viewerFollows.has(r.authorId),
+    isSelf: viewer?.id === r.authorId,
   }))
 }
 
@@ -640,7 +641,7 @@ export async function addArticleComment(input: {
   articleId: string
   parentId?: string | null
   body: string
-}): Promise<void> {
+}): Promise<ArticleCommentView> {
   const user = await requireUser()
   const numId = Number(input.articleId)
   const body = input.body.trim()
@@ -654,14 +655,17 @@ export async function addArticleComment(input: {
   if (!row) throw new Error("Article not found.")
 
   const parentId = input.parentId ? Number(input.parentId) : null
-  await db.insert(articleComment).values({
-    articleId: numId,
-    parentId: parentId && Number.isFinite(parentId) ? parentId : null,
-    userId: user.id,
-    userName: user.name,
-    userImage: user.image ?? null,
-    body,
-  })
+  const [inserted] = await db
+    .insert(articleComment)
+    .values({
+      articleId: numId,
+      parentId: parentId && Number.isFinite(parentId) ? parentId : null,
+      userId: user.id,
+      userName: user.name,
+      userImage: user.image ?? null,
+      body,
+    })
+    .returning()
   await db.update(article).set({ commentCount: sql`${article.commentCount} + 1` }).where(eq(article.id, numId))
   if (row.authorId !== user.id) {
     await db.insert(notification).values({
@@ -674,6 +678,35 @@ export async function addArticleComment(input: {
     })
   }
   revalidateArticle(numId, row.authorId)
+
+  // Build the client view of the just-created comment so the UI can insert it
+  // optimistically without a refetch.
+  const info =
+    (await resolveAuthors([user.id], new Map([[user.id, { name: user.name, image: user.image ?? null }]]))).get(
+      user.id,
+    ) ??
+    ({
+      id: user.id,
+      name: user.name,
+      handle: getHandle(user.name),
+      initials: getInitials(user.name),
+      color: getAvatarColor(user.id),
+      image: user.image ?? null,
+    } satisfies ArticleAuthor)
+  return {
+    id: String(inserted.id),
+    parentId: inserted.parentId ? String(inserted.parentId) : null,
+    body: inserted.body,
+    likes: 0,
+    liked: false,
+    deleted: false,
+    createdAt: inserted.createdAt.toISOString(),
+    editedAt: null,
+    timeAgo: "now",
+    isMine: true,
+    author: info,
+    replies: [],
+  }
 }
 
 /** Edits one of the current user's own comments. */
