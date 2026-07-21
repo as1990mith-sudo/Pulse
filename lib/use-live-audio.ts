@@ -224,6 +224,13 @@ export function useLiveAudio() {
   // drop, and a callback fired only on the latter so the host can auto-recover.
   const intentionalDisconnectRef = useRef(false)
   const onDisconnectedRef = useRef<(() => void) | null>(null)
+  // Tracks the last known publish permission so the permissions handler can tell
+  // a genuine grant (cannot-publish → can-publish, i.e. an accepted call-in)
+  // apart from a redundant permissions event. LiveKit re-emits
+  // ParticipantPermissionsChanged when the roster changes (someone joins), and
+  // without this guard we'd re-enable the mic every time — silently unmuting
+  // anyone who had deliberately muted themselves.
+  const prevCanPublishRef = useRef(false)
   const [state, setState] = useState<LiveAudioState>({
     connected: false,
     connecting: false,
@@ -365,8 +372,14 @@ export function useLiveAudio() {
           // the guest immediately goes live without any extra tap.
           .on(RoomEvent.ParticipantPermissionsChanged, async () => {
             const canPub = room.localParticipant.permissions?.canPublish ?? false
+            const justGranted = canPub && !prevCanPublishRef.current
+            prevCanPublishRef.current = canPub
             update({ canPublish: canPub })
-            if (canPub && !room.localParticipant.isMicrophoneEnabled) {
+            // Only auto-open the mic on a real grant (call-in accepted). We must
+            // NOT re-enable just because canPub is still true and the mic is off,
+            // since that off state is often a deliberate self-mute — doing so
+            // unmuted people whenever another participant joined.
+            if (justGranted && !room.localParticipant.isMicrophoneEnabled) {
               try {
                 await room.localParticipant.setMicrophoneEnabled(true)
                 update({ micEnabled: true })
@@ -407,6 +420,7 @@ export function useLiveAudio() {
           .on(RoomEvent.Disconnected, () => {
             const intentional = intentionalDisconnectRef.current
             intentionalDisconnectRef.current = false
+            prevCanPublishRef.current = false
             cleanupRoomMedia()
             roomRef.current = null
             update({ connected: false, reconnecting: false, micEnabled: false, listeners: 0, speaking: false })
@@ -418,6 +432,10 @@ export function useLiveAudio() {
           })
 
         await room.connect(opts.serverUrl, opts.token)
+
+        // Seed the publish-permission baseline so the permissions handler only
+        // treats a later cannot-publish → can-publish change as a fresh grant.
+        prevCanPublishRef.current = room.localParticipant.permissions?.canPublish ?? opts.publish
 
         if (opts.publish) {
           await room.localParticipant.setMicrophoneEnabled(true)

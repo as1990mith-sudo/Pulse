@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { Plus, Search, ShoppingCart, Store } from "lucide-react"
+import { Plus, Search, ShoppingCart, Tag } from "lucide-react"
 import { BOOK_CATEGORIES, type Book, type StoreCategory } from "@/lib/store-data"
 import { BookGridCard } from "@/components/store/store-cards"
 import { useStoreState } from "@/lib/use-store-state"
@@ -50,7 +50,7 @@ function SearchBar() {
           aria-label="Your listings"
           className="tap-scale flex size-[42px] shrink-0 items-center justify-center rounded-2xl border border-border/60 bg-secondary/40 text-muted-foreground shadow-soft transition-colors hover:text-foreground"
         >
-          <Store className="size-4" />
+          <Tag className="size-4" />
         </Link>
         <Link
           href="/cart"
