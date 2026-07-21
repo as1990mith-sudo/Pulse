@@ -1,9 +1,9 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import useSWR from "swr"
 import Link from "next/link"
-import { ArrowLeft, Copy, CornerUpLeft, FileText, Mic, Music, Paperclip, Pencil, Phone, Pin, PinOff, Send, Smile, Trash2, Video, X } from "lucide-react"
+import { ArrowLeft, Ban, ChevronDown, ChevronUp, Copy, CornerUpLeft, FileText, Flag, ImageIcon, Mic, MoreVertical, Music, Paperclip, Pencil, Phone, Pin, PinOff, Search, Send, Shield, Smile, Trash2, Video, X } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -30,6 +30,10 @@ import {
 import { DM_DELETE_WINDOW_MS, DM_EDIT_WINDOW_MS } from "@/lib/dm-constants"
 import { ActionSheet, type SheetAction } from "@/components/action-sheet"
 import { getActiveCall, startCall, type CallMode, type DmCallView } from "@/app/actions/dm-call"
+import { ChatBackgroundSheet } from "@/components/chat-background-sheet"
+import { chatBackgroundStorageKey, chatBackgroundStyle, getChatBackground } from "@/lib/chat-backgrounds"
+
+const REPORT_REASONS = ["Spam", "Harassment", "Impersonation", "Inappropriate content", "Other"] as const
 
 const EMOJIS = [
   "😀", "😂", "🥰", "😎", "🤔", "😴", "😭", "😡",
@@ -51,6 +55,42 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
   const [sendingVoice, setSendingVoice] = useState(false)
   const scrollEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Header overflow menu + its features.
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [activeMatch, setActiveMatch] = useState(0)
+  const [bgSheetOpen, setBgSheetOpen] = useState(false)
+  const [bgId, setBgId] = useState("default")
+  const [reportOpen, setReportOpen] = useState(false)
+  const [reportReason, setReportReason] = useState<(typeof REPORT_REASONS)[number] | null>(null)
+  const [reportDone, setReportDone] = useState(false)
+  const [blockConfirmOpen, setBlockConfirmOpen] = useState(false)
+  const [blocked, setBlocked] = useState(false)
+  const [flashId, setFlashId] = useState<number | null>(null)
+
+  // Chat background is scoped to this conversation only (persisted per id).
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(chatBackgroundStorageKey(detail.id))
+      if (saved) setBgId(saved)
+    } catch {
+      // ignore storage access errors
+    }
+  }, [detail.id])
+
+  function selectBackground(id: string) {
+    setBgId(id)
+    try {
+      localStorage.setItem(chatBackgroundStorageKey(detail.id), id)
+    } catch {
+      // ignore storage access errors
+    }
+  }
+
+  const background = getChatBackground(bgId)
+  const hasWallpaper = background.kind !== "default"
 
   const { data: liveMessages, mutate: mutateMessages } = useSWR(
     ["dm-messages", detail.id],
@@ -93,6 +133,49 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
   useEffect(() => {
     scrollEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages.length])
+
+  // In-chat search: ids of messages whose text contains the query, in order.
+  const matchIds = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return [] as number[]
+    return messages.filter((m) => !m.deleted && m.body && m.body.toLowerCase().includes(q)).map((m) => m.id)
+  }, [searchQuery, messages])
+
+  const matchSet = useMemo(() => new Set(matchIds), [matchIds])
+
+  function jumpToMatch(index: number) {
+    const id = matchIds[index]
+    if (id == null) return
+    const el = document.getElementById(`dm-msg-${id}`)
+    if (!el) return
+    el.scrollIntoView({ behavior: "smooth", block: "center" })
+    setFlashId(id)
+    window.setTimeout(() => setFlashId((cur) => (cur === id ? null : cur)), 1600)
+  }
+
+  // Reset to the first match whenever the result set changes, and reveal it.
+  useEffect(() => {
+    if (matchIds.length === 0) {
+      setActiveMatch(0)
+      return
+    }
+    setActiveMatch(0)
+    const id = matchIds[0]
+    const el = document.getElementById(`dm-msg-${id}`)
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" })
+      setFlashId(id)
+      window.setTimeout(() => setFlashId((cur) => (cur === id ? null : cur)), 1600)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchIds.join(",")])
+
+  function stepMatch(dir: 1 | -1) {
+    if (matchIds.length === 0) return
+    const next = (activeMatch + dir + matchIds.length) % matchIds.length
+    setActiveMatch(next)
+    jumpToMatch(next)
+  }
 
   async function handleFilePick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -264,7 +347,7 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
             <p className="truncate text-xs text-muted-foreground">{detail.otherUserHandle}</p>
           </div>
         </Link>
-        <div className="ml-auto flex shrink-0 items-center gap-1">
+        <div className="ml-auto flex shrink-0 items-center">
           <Button
             type="button"
             variant="ghost"
@@ -285,8 +368,139 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
           >
             <Video className="size-5" />
           </Button>
+          {/* Overflow menu sits to the right of the call icons. */}
+          <div className="relative ml-0.5">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => setMenuOpen((o) => !o)}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              aria-label="More options"
+            >
+              <MoreVertical className="size-5" />
+            </Button>
+            {menuOpen && (
+              <>
+                <button
+                  type="button"
+                  aria-label="Close menu"
+                  className="fixed inset-0 z-40 cursor-default"
+                  onClick={() => setMenuOpen(false)}
+                />
+                <div
+                  role="menu"
+                  className="absolute right-0 top-full z-50 mt-1 w-52 overflow-hidden rounded-2xl border border-border/70 bg-popover p-1.5 text-popover-foreground shadow-xl"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false)
+                      setSearchOpen(true)
+                    }}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors hover:bg-secondary"
+                  >
+                    <Search className="size-4 shrink-0 text-muted-foreground" /> Search
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false)
+                      setBgSheetOpen(true)
+                    }}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors hover:bg-secondary"
+                  >
+                    <ImageIcon className="size-4 shrink-0 text-muted-foreground" /> Change chat background
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false)
+                      setReportDone(false)
+                      setReportReason(null)
+                      setReportOpen(true)
+                    }}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors hover:bg-secondary"
+                  >
+                    <Flag className="size-4 shrink-0 text-muted-foreground" /> Report user
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false)
+                      if (blocked) setBlocked(false)
+                      else setBlockConfirmOpen(true)
+                    }}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-destructive transition-colors hover:bg-destructive/10"
+                  >
+                    <Ban className="size-4 shrink-0" /> {blocked ? "Unblock user" : "Block user"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* In-chat search overlay */}
+      {searchOpen && (
+        <div className="flex items-center gap-2 border-b border-border/60 bg-background px-3 py-2 sm:px-4">
+          <Search className="size-4 shrink-0 text-muted-foreground" />
+          <input
+            autoFocus
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search this conversation"
+            aria-label="Search messages"
+            className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+          />
+          <span className="shrink-0 tabular-nums text-xs text-muted-foreground">
+            {matchIds.length > 0 ? `${activeMatch + 1} of ${matchIds.length}` : searchQuery.trim() ? "No matches" : ""}
+          </span>
+          <div className="flex shrink-0 items-center">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              onClick={() => stepMatch(-1)}
+              disabled={matchIds.length === 0}
+              aria-label="Previous match"
+            >
+              <ChevronUp className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              onClick={() => stepMatch(1)}
+              disabled={matchIds.length === 0}
+              aria-label="Next match"
+            >
+              <ChevronDown className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              onClick={() => {
+                setSearchOpen(false)
+                setSearchQuery("")
+              }}
+              aria-label="Close search"
+            >
+              <X className="size-4" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       {liveCall && (
         <DmCall
@@ -305,8 +519,13 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto bg-card/30">
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 py-5 sm:px-6">
+      <div
+        className={cn("relative flex-1 overflow-y-auto", !hasWallpaper && "bg-card/30")}
+        style={chatBackgroundStyle(bgId)}
+      >
+        {/* Legibility scrim over photo/gradient wallpapers. */}
+        {hasWallpaper && <div className="pointer-events-none absolute inset-0 z-0 bg-background/45" aria-hidden />}
+        <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 py-5 sm:px-6">
           {messages.length === 0 && (
             <p className="py-10 text-center text-sm text-muted-foreground">
               No messages yet. Say hello to {detail.otherUserName}.
@@ -320,6 +539,8 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
               initials={m.isSelf ? detail.currentUserInitials : detail.initials}
               image={m.isSelf ? detail.currentUserImage : detail.image}
               name={m.isSelf ? "You" : detail.otherUserName}
+              highlighted={matchSet.has(m.id)}
+              flashed={flashId === m.id}
               onDelete={handleDeleteMessage}
               onTogglePin={handleTogglePin}
               onEdit={handleEditMessage}
@@ -329,7 +550,27 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
         </div>
       </div>
 
-      {/* Composer */}
+      {/* Composer — replaced by a blocked notice while this user is blocked */}
+      {blocked ? (
+        <div className="border-t border-border/60 bg-background px-4 py-4 pb-safe-2 pl-safe pr-safe sm:px-6">
+          <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-2 rounded-2xl bg-secondary/60 px-4 py-4 text-center">
+            <span className="flex size-10 items-center justify-center rounded-full bg-destructive/15 text-destructive">
+              <Ban className="size-5" />
+            </span>
+            <p className="text-sm font-medium">You&apos;ve blocked this user</p>
+            <p className="text-xs text-muted-foreground">
+              You can&apos;t send messages in this chat. Unblock to start messaging again.
+            </p>
+            <button
+              type="button"
+              onClick={() => setBlocked(false)}
+              className="mt-1 rounded-full bg-secondary px-4 py-1.5 text-sm font-medium transition-colors hover:bg-secondary/80"
+            >
+              Unblock
+            </button>
+          </div>
+        </div>
+      ) : (
       <div className="border-t border-border/60 bg-background px-4 py-3 pb-safe-2 pl-safe pr-safe sm:px-6">
         <div className="mx-auto w-full max-w-3xl space-y-3">
           {attachment && (
@@ -439,6 +680,148 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
           )}
         </div>
       </div>
+      )}
+
+      {/* Chat background picker (scoped to this conversation) */}
+      <ChatBackgroundSheet
+        open={bgSheetOpen}
+        current={bgId}
+        onSelect={selectBackground}
+        onClose={() => setBgSheetOpen(false)}
+      />
+
+      {/* Report user modal */}
+      {reportOpen && (
+        <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            aria-label="Close report dialog"
+            onClick={() => setReportOpen(false)}
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          />
+          <div className="relative z-10 m-3 w-full max-w-sm overflow-hidden rounded-3xl border border-border/70 bg-card p-5 shadow-2xl">
+            {reportDone ? (
+              <div className="flex flex-col items-center gap-3 py-4 text-center">
+                <span className="flex size-11 items-center justify-center rounded-full bg-primary/15 text-primary">
+                  <Shield className="size-6" />
+                </span>
+                <h3 className="text-base font-bold">Report submitted</h3>
+                <p className="text-sm text-muted-foreground">
+                  Thanks for letting us know. Our team will review {detail.otherUserName}.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setReportOpen(false)}
+                  className="mt-1 rounded-full bg-secondary px-5 py-2 text-sm font-medium transition-colors hover:bg-secondary/80"
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="mb-4 flex items-center gap-2">
+                  <span className="flex size-9 items-center justify-center rounded-xl bg-destructive/15 text-destructive">
+                    <Flag className="size-[18px]" />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-bold">Report {detail.otherUserName}</h3>
+                    <p className="text-xs text-muted-foreground">Choose a reason</p>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  {REPORT_REASONS.map((reason) => {
+                    const active = reportReason === reason
+                    return (
+                      <button
+                        key={reason}
+                        type="button"
+                        onClick={() => setReportReason(reason)}
+                        aria-pressed={active}
+                        className={cn(
+                          "flex w-full items-center justify-between rounded-xl border px-3.5 py-2.5 text-left text-sm transition-colors",
+                          active
+                            ? "border-primary bg-primary/10 font-medium"
+                            : "border-border/70 hover:bg-secondary",
+                        )}
+                      >
+                        {reason}
+                        <span
+                          className={cn(
+                            "size-4 rounded-full border-2 transition-colors",
+                            active ? "border-primary bg-primary" : "border-muted-foreground/50",
+                          )}
+                        />
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="mt-5 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setReportOpen(false)}
+                    className="flex-1 rounded-full bg-secondary px-4 py-2.5 text-sm font-medium transition-colors hover:bg-secondary/80"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!reportReason}
+                    onClick={() => {
+                      haptic("light")
+                      setReportDone(true)
+                    }}
+                    className="flex-1 rounded-full bg-destructive px-4 py-2.5 text-sm font-medium text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:opacity-50"
+                  >
+                    Submit report
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Block user confirmation */}
+      {blockConfirmOpen && (
+        <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            aria-label="Cancel block"
+            onClick={() => setBlockConfirmOpen(false)}
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          />
+          <div className="relative z-10 m-3 w-full max-w-sm overflow-hidden rounded-3xl border border-border/70 bg-card p-5 text-center shadow-2xl">
+            <span className="mx-auto mb-3 flex size-11 items-center justify-center rounded-full bg-destructive/15 text-destructive">
+              <Ban className="size-6" />
+            </span>
+            <h3 className="text-base font-bold">Block {detail.otherUserName}?</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              They won&apos;t be able to message you, and you won&apos;t be able to send messages in this chat until you
+              unblock them.
+            </p>
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setBlockConfirmOpen(false)}
+                className="flex-1 rounded-full bg-secondary px-4 py-2.5 text-sm font-medium transition-colors hover:bg-secondary/80"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  haptic("warning")
+                  setBlocked(true)
+                  setBlockConfirmOpen(false)
+                }}
+                className="flex-1 rounded-full bg-destructive px-4 py-2.5 text-sm font-medium text-destructive-foreground transition-colors hover:bg-destructive/90"
+              >
+                Block
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -449,6 +832,8 @@ function DmBubble({
   initials,
   image,
   name,
+  highlighted = false,
+  flashed = false,
   onDelete,
   onTogglePin,
   onEdit,
@@ -458,6 +843,8 @@ function DmBubble({
   initials: string
   image: string | null
   name: string
+  highlighted?: boolean
+  flashed?: boolean
   onDelete: (id: number) => void
   onTogglePin: (id: number, pinned: boolean) => void
   onEdit: (id: number, body: string) => void
@@ -507,7 +894,7 @@ function DmBubble({
   // Deleted messages keep their slot but show a tombstone instead of content.
   if (m.deleted) {
     return (
-      <div className={cn("flex gap-3", m.isSelf && "flex-row-reverse")}>
+      <div id={`dm-msg-${m.id}`} className={cn("flex scroll-mt-24 gap-3", m.isSelf && "flex-row-reverse")}>
         <Avatar className="size-7 shrink-0">
           {image && <AvatarImage src={image || "/placeholder.svg"} alt={name} />}
           <AvatarFallback className={cn("text-[10px]", color)}>{initials}</AvatarFallback>
@@ -528,7 +915,15 @@ function DmBubble({
   }
 
   return (
-    <div className={cn("flex gap-3", m.isSelf && "flex-row-reverse")}>
+    <div
+      id={`dm-msg-${m.id}`}
+      className={cn(
+        "flex scroll-mt-24 gap-3 rounded-2xl transition-colors",
+        m.isSelf && "flex-row-reverse",
+        flashed ? "bg-primary/15 ring-2 ring-primary/60" : highlighted && "ring-1 ring-primary/40",
+        (flashed || highlighted) && "p-1.5",
+      )}
+    >
       <Avatar className="size-7 shrink-0">
         {image && <AvatarImage src={image || "/placeholder.svg"} alt={name} />}
         <AvatarFallback className={cn("text-[10px]", color)}>{initials}</AvatarFallback>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Play, Pause } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -11,11 +11,40 @@ function fmt(secs: number) {
   return `${m}:${s.toString().padStart(2, "0")}`
 }
 
+// Deterministic waveform bar heights derived from the src, so a given clip always
+// renders the same shape (no layout jitter between renders).
+function useWaveform(src: string, bars = 34) {
+  return useMemo(() => {
+    let h = 2166136261
+    for (let i = 0; i < src.length; i++) {
+      h ^= src.charCodeAt(i)
+      h = Math.imul(h, 16777619)
+    }
+    const heights: number[] = []
+    let state = h >>> 0
+    for (let i = 0; i < bars; i++) {
+      // xorshift for a stable pseudo-random sequence.
+      state ^= state << 13
+      state ^= state >>> 17
+      state ^= state << 5
+      state >>>= 0
+      const r = state / 0xffffffff
+      // Bias toward mid heights with a gentle envelope for a natural look.
+      const envelope = Math.sin((i / (bars - 1)) * Math.PI) * 0.5 + 0.5
+      heights.push(0.28 + r * 0.72 * (0.55 + envelope * 0.45))
+    }
+    return heights
+  }, [src, bars])
+}
+
+const SPEEDS = [1, 1.5, 2, 0.5] as const
+
 /**
- * A compact voice-note / audio player for chat bubbles with a fully draggable
- * scrubber. The progress bar can be tapped or dragged (pointer + keyboard) to
- * scrub to any position. Colors adapt to the bubble: `mine` renders on the
- * primary bubble (light controls), otherwise on the secondary bubble.
+ * A compact voice-note / audio player for chat bubbles, styled to match the
+ * group chatroom bubbles: play/pause button, a tappable/draggable waveform,
+ * a duration timer, and a playback-speed toggle (1x → 1.5x → 2x → 0.5x).
+ * Colors adapt to the bubble: `mine` renders on the primary bubble (light
+ * controls), otherwise on the secondary bubble.
  */
 export function AudioMessage({
   src,
@@ -32,14 +61,24 @@ export function AudioMessage({
   const [current, setCurrent] = useState(0)
   const [duration, setDuration] = useState(0)
   const [dragging, setDragging] = useState(false)
+  const [speedIndex, setSpeedIndex] = useState(0)
 
-  const progress = duration > 0 ? (current / duration) * 100 : 0
+  const waveform = useWaveform(src)
+  const progress = duration > 0 ? current / duration : 0
+  const speed = SPEEDS[speedIndex]
 
   function togglePlay() {
     const el = audioRef.current
     if (!el) return
     if (el.paused) void el.play()
     else el.pause()
+  }
+
+  function cycleSpeed() {
+    const next = (speedIndex + 1) % SPEEDS.length
+    setSpeedIndex(next)
+    const el = audioRef.current
+    if (el) el.playbackRate = SPEEDS[next]
   }
 
   // Map a clientX to a time and (optionally) commit it to the media element.
@@ -98,6 +137,7 @@ export function AudioMessage({
         onLoadedMetadata={(e) => {
           const d = e.currentTarget.duration
           if (Number.isFinite(d)) setDuration(d)
+          e.currentTarget.playbackRate = speed
         }}
         onTimeUpdate={(e) => {
           if (!dragging) setCurrent(e.currentTarget.currentTime)
@@ -116,7 +156,8 @@ export function AudioMessage({
         {playing ? <Pause className="size-4 fill-current" /> : <Play className="size-4 translate-x-px fill-current" />}
       </button>
 
-      <div className="flex min-w-[140px] flex-1 flex-col gap-1">
+      <div className="flex min-w-[150px] flex-1 flex-col gap-1">
+        {/* Waveform doubles as the seek track. */}
         <div
           ref={trackRef}
           role="slider"
@@ -131,31 +172,52 @@ export function AudioMessage({
             seekToClientX(e.clientX, true)
           }}
           onKeyDown={onKeyDown}
-          className="group relative flex h-4 cursor-pointer touch-none items-center"
+          className="flex h-8 cursor-pointer touch-none items-center gap-[2px]"
         >
-          <span className={cn("h-1 w-full rounded-full", mine ? "bg-primary-foreground/30" : "bg-foreground/20")}>
-            <span
-              className={cn("block h-full rounded-full", mine ? "bg-primary-foreground" : "bg-primary")}
-              style={{ width: `${progress}%` }}
-            />
-          </span>
+          {waveform.map((height, i) => {
+            const filled = i / waveform.length <= progress
+            return (
+              <span
+                key={i}
+                className={cn(
+                  "flex-1 rounded-full transition-colors",
+                  mine
+                    ? filled
+                      ? "bg-primary-foreground"
+                      : "bg-primary-foreground/30"
+                    : filled
+                      ? "bg-primary"
+                      : "bg-foreground/25",
+                )}
+                style={{ height: `${Math.round(height * 100)}%` }}
+              />
+            )
+          })}
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
           <span
             className={cn(
-              "absolute size-3 -translate-x-1/2 rounded-full shadow transition-opacity",
-              mine ? "bg-primary-foreground" : "bg-primary",
-              dragging ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+              "select-none text-[11px] font-medium tabular-nums",
+              mine ? "text-primary-foreground/80" : "text-muted-foreground",
             )}
-            style={{ left: `${progress}%` }}
-          />
+          >
+            {fmt(current)} / {fmt(duration)}
+          </span>
+          <button
+            type="button"
+            onClick={cycleSpeed}
+            aria-label={`Playback speed ${speed}x`}
+            className={cn(
+              "select-none rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums transition-colors",
+              mine
+                ? "bg-primary-foreground/20 text-primary-foreground hover:bg-primary-foreground/30"
+                : "bg-foreground/10 text-foreground hover:bg-foreground/20",
+            )}
+          >
+            {speed}x
+          </button>
         </div>
-        <span
-          className={cn(
-            "select-none text-[11px] font-medium tabular-nums",
-            mine ? "text-primary-foreground/80" : "text-muted-foreground",
-          )}
-        >
-          {fmt(current)} / {fmt(duration)}
-        </span>
       </div>
     </div>
   )

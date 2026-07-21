@@ -55,7 +55,7 @@ import { useLivePresence } from "@/lib/use-live-presence"
 import { ShareSheet } from "@/components/share-sheet"
 import { ConversationVideo } from "@/components/conversation/conversation-video"
 import { CoverUpload } from "@/components/admin/cover-upload"
-import { ImageLightbox } from "@/components/image-lightbox"
+import { CoverArt } from "@/components/cover-art"
 import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
 import type { ShareTarget } from "@/lib/share-types"
 import { getAvatarColor, getInitials } from "@/lib/identity"
@@ -269,7 +269,6 @@ export function VideoStudioConsole({
   // music, etc.), so the host can preview a clean frame.
   const [controlsVisible, setControlsVisible] = useState(true)
   // Full-screen cover artwork viewer (opened from the Broadcast header).
-  const [coverOpen, setCoverOpen] = useState(false)
   // Shared Prayer Mode: locally optimistic + reconciled with polled call state.
   const [prayerStartedAt, setPrayerStartedAt] = useState<string | null>(null)
   const [prayerEndedAt, setPrayerEndedAt] = useState<number | null>(null)
@@ -924,15 +923,7 @@ export function VideoStudioConsole({
             {live && orientation !== "landscape" ? (
               <div className="flex min-w-0 items-center gap-2 rounded-full bg-black/40 py-1 pl-1 pr-2.5 ring-1 ring-inset ring-white/10 backdrop-blur-md">
                 {cover ? (
-                  <button
-                    type="button"
-                    onClick={() => setCoverOpen(true)}
-                    aria-label="View cover artwork"
-                    className="size-8 shrink-0 overflow-hidden rounded-full ring-1 ring-inset ring-white/20 transition-transform active:scale-95"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={cover || "/placeholder.svg"} alt="Broadcast cover" className="size-full object-cover" />
-                  </button>
+                  <CoverArt src={cover} alt={`${title} cover artwork`} className="size-8" />
                 ) : (
                   <span
                     className={cn(
@@ -1439,9 +1430,6 @@ export function VideoStudioConsole({
         />
       )}
 
-      {coverOpen && cover && (
-        <ImageLightbox src={cover} alt={`${title} cover artwork`} onClose={() => setCoverOpen(false)} />
-      )}
     </div>
   )
 }

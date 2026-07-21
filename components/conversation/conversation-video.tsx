@@ -32,7 +32,7 @@ import {
   X,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { ImageLightbox } from "@/components/image-lightbox"
+import { CoverArt } from "@/components/cover-art"
 import { LiveChat } from "@/components/live-chat"
 import { useLiveResourcesOptional } from "@/components/live/resource/resource-context"
 import { FloatingMessages } from "@/components/conversation/floating-messages"
@@ -260,7 +260,6 @@ export function ConversationVideo(props: ConversationVideoProps) {
     return () => clearTimeout(t)
   }, [arrived])
 
-  const [lightbox, setLightbox] = useState(false)
   const [page, setPage] = useState(0)
   const [dir, setDir] = useState(0)
   const [menuFor, setMenuFor] = useState<string | null>(null)
@@ -638,21 +637,13 @@ export function ConversationVideo(props: ConversationVideoProps) {
               exit={{ opacity: 0, height: 0 }}
               className="flex flex-col items-center gap-2 px-4 pb-4 pt-3 text-center"
             >
-              <motion.button
-                type="button"
-                layoutId="conv-cover"
-                onClick={() => cover && setLightbox(true)}
-                whileTap={{ scale: 0.96 }}
-                className="size-20 overflow-hidden rounded-2xl shadow-xl ring-1 ring-white/10"
-              >
-                {cover ? (
-                  <img src={cover || "/placeholder.svg"} alt={`${title} cover art`} className="size-full object-cover" />
-                ) : (
-                  <div className="flex size-full items-center justify-center bg-primary/20 text-2xl font-bold text-primary">
-                    {getInitials(title)}
-                  </div>
-                )}
-              </motion.button>
+              {cover ? (
+                <CoverArt src={cover} alt={`${title} cover art`} className="size-20" />
+              ) : (
+                <div className="flex size-20 items-center justify-center rounded-full bg-primary/20 text-2xl font-bold text-primary shadow-xl ring-2 ring-black">
+                  {getInitials(title)}
+                </div>
+              )}
               {/* Tapping the title/details collapses the header back to the
                   compact bar (the compact bar re-expands it), giving a clear
                   two-way toggle. The cover art keeps its own lightbox action. */}
@@ -1008,8 +999,6 @@ export function ConversationVideo(props: ConversationVideoProps) {
       {/* Prayer overlay + ended toast (shared with the audio Conversation) */}
       <PrayerOverlay active={prayerActive} endedAt={null} />
 
-      {/* Cover-art lightbox — animates back into the header on close */}
-      {lightbox && cover && <ImageLightbox src={cover} onClose={() => setLightbox(false)} />}
     </div>
   )
 }
