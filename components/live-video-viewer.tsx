@@ -48,7 +48,7 @@ import { ImageLightbox } from "@/components/image-lightbox"
 import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
 import { cn } from "@/lib/utils"
 
-/** Compact glass follow button for the host info pill. */
+/** Icon-only glass follow toggle for the host info pill. */
 function InlineFollowButton({
   targetUserId,
   targetName,
@@ -80,12 +80,11 @@ function InlineFollowButton({
       disabled={isPending}
       aria-label={following ? `Unfollow ${targetName}` : `Follow ${targetName}`}
       className={cn(
-        "ml-1 flex h-7 items-center gap-1 rounded-full px-3 text-xs font-semibold transition-colors disabled:opacity-60",
+        "flex size-7 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-60",
         following ? "bg-white/15 text-white ring-1 ring-inset ring-white/20" : "bg-live text-live-foreground",
       )}
     >
-      {following ? <UserCheck className="size-3.5" /> : <UserPlus className="size-3.5" />}
-      {following ? "Following" : "Follow"}
+      {following ? <UserCheck className="size-4" /> : <UserPlus className="size-4" />}
     </button>
   )
 }
@@ -683,13 +682,11 @@ export function LiveVideoViewer({
         {/* Floating reactions + gifts */}
         <ReactionLayer roomName={connected ? stream.roomName : undefined} />
 
-        {/* Premium Broadcast header: back • cover • title/host • LIVE • viewers */}
-        <div
-          className={cn(
-            "absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-2 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] transition-all duration-300",
-            controlsVisible ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-2 opacity-0",
-          )}
-        >
+        {/* Broadcast header — always visible. Tapping the stage only hides the
+            on-screen controls, never this header, so viewers can always see who
+            they're watching and leave. One compact host pill keeps it tidy:
+            cover thumb • host name / title • icon-only follow, then LIVE + count. */}
+        <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-2 p-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <BackExitMenu
               showMenu
@@ -700,51 +697,47 @@ export function LiveVideoViewer({
               }}
               onMinimize={onMinimize ?? (() => {})}
             />
-            {/* Clickable cover artwork — opens the full-screen viewer. */}
-            {stream.cover && (
-              <button
-                type="button"
-                onClick={() => setCoverOpen(true)}
-                aria-label="View cover artwork"
-                className="shrink-0 overflow-hidden rounded-xl ring-1 ring-inset ring-white/20 transition-transform active:scale-95"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={stream.cover || "/placeholder.svg"} alt="Broadcast cover" className="size-9 object-cover" />
-              </button>
-            )}
-            <div className="flex min-w-0 items-center gap-2 rounded-full bg-black/35 py-1 pl-1 pr-1.5 ring-1 ring-inset ring-white/10 backdrop-blur-md">
-              <span
-                className={cn(
-                  "flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white",
-                  getAvatarColor(stream.hostId),
-                )}
-                aria-hidden="true"
-              >
-                {getInitials(stream.hostName)}
-              </span>
-              <div className="flex min-w-0 flex-col leading-tight">
-                <span className="truncate text-sm font-semibold">{stream.title}</span>
-                <span className="truncate text-[11px] text-white/60">
-                  {stream.hostName} · @{stream.hostHandle}
+            <div className="flex min-w-0 items-center gap-2 rounded-full bg-black/40 py-1 pl-1 pr-1.5 ring-1 ring-inset ring-white/10 backdrop-blur-md">
+              {stream.cover ? (
+                <button
+                  type="button"
+                  onClick={() => setCoverOpen(true)}
+                  aria-label="View cover artwork"
+                  className="size-8 shrink-0 overflow-hidden rounded-full ring-1 ring-inset ring-white/20 transition-transform active:scale-95"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={stream.cover || "/placeholder.svg"} alt="Broadcast cover" className="size-full object-cover" />
+                </button>
+              ) : (
+                <span
+                  className={cn(
+                    "flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white",
+                    getAvatarColor(stream.hostId),
+                  )}
+                  aria-hidden="true"
+                >
+                  {getInitials(stream.hostName)}
                 </span>
+              )}
+              <div className="flex min-w-0 flex-col leading-tight">
+                <span className="truncate text-sm font-semibold text-white">{stream.hostName}</span>
+                <span className="truncate text-[11px] text-white/60">{stream.title}</span>
               </div>
               {!isSelf && (
-                <div className="shrink-0">
-                  <InlineFollowButton
-                    targetUserId={stream.hostId}
-                    targetName={stream.hostName}
-                    initialFollowing={initialFollowing}
-                  />
-                </div>
+                <InlineFollowButton
+                  targetUserId={stream.hostId}
+                  targetName={stream.hostName}
+                  initialFollowing={initialFollowing}
+                />
               )}
             </div>
           </div>
 
-          <div className="flex shrink-0 flex-col items-end gap-1.5">
-            <span className="flex items-center gap-1.5 rounded-full bg-live px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-live-foreground shadow-lg">
-              <span className="relative flex size-2">
+          <div className="flex shrink-0 items-center gap-1.5">
+            <span className="flex items-center gap-1.5 rounded-full bg-live px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-live-foreground shadow-lg">
+              <span className="relative flex size-1.5">
                 <span className="absolute inline-flex size-full animate-ping rounded-full bg-live-foreground/70" />
-                <span className="relative inline-flex size-2 rounded-full bg-live-foreground" />
+                <span className="relative inline-flex size-1.5 rounded-full bg-live-foreground" />
               </span>
               Live
             </span>
@@ -752,7 +745,7 @@ export function LiveVideoViewer({
               count={presenceCount || viewers}
               members={presenceMembers}
               immersive
-              className="px-3 py-1.5 text-xs font-medium"
+              className="px-2.5 py-1 text-[11px] font-medium"
             />
           </div>
         </div>
@@ -894,7 +887,14 @@ export function LiveVideoViewer({
         )}
       >
         {canWatch ? (
-          <LiveChat currentUser={currentUser} roomName={stream.roomName} immersive showResourceButton placeholder="" />
+            <LiveChat
+              currentUser={currentUser}
+              roomName={stream.roomName}
+              immersive
+              flatText
+              showResourceButton
+              placeholder=""
+            />
         ) : (
           <div className="flex h-full items-center justify-center p-4 text-center text-sm text-white/70">
             <p>

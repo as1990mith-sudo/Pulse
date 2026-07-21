@@ -56,6 +56,7 @@ export function LiveChat({
   emojiSide = "left",
   placeholder,
   showResourceButton = false,
+  flatText = false,
 }: {
   asHost?: boolean
   currentUser?: CurrentUser | null
@@ -78,6 +79,12 @@ export function LiveChat({
   // the Send button. Used by the audio podcast interfaces, which have no control
   // dock — the resource icon lives inline next to the message box instead.
   showResourceButton?: boolean
+  // TikTok-style presentation for video broadcasts: message text renders with no
+  // bubble (no background/ring/shadow/padding) and avatars are smaller, so the
+  // chat reads as lightweight text floating over the video rather than a stack of
+  // chat cards. Only affects the message rows — the chatroom shell, composer, and
+  // pinned/system rows are unchanged.
+  flatText?: boolean
 }) {
   const [draft, setDraft] = useState("")
   const [emojiOpen, setEmojiOpen] = useState(false)
@@ -316,21 +323,25 @@ export function LiveChat({
             const isMine = currentUser ? m.userId === currentUser.id : false
             const canPreview = !isMine && m.id > 0
             return (
-              <li key={m.id} className={cn("flex gap-2.5", isMine && "flex-row-reverse")}>
+              <li key={m.id} className={cn("flex gap-2.5", isMine && !flatText && "flex-row-reverse")}>
                 <ProfilePreview userId={m.userId} disabled={!canPreview} className="shrink-0">
-                  <Avatar className="size-8 shrink-0">
+                  <Avatar className={cn("shrink-0", flatText ? "size-5" : "size-8")}>
                     {m.userImage ? <AvatarImage src={m.userImage} alt={m.userName} /> : null}
-                    <AvatarFallback className={getAvatarColor(m.userId)}>{getInitials(m.userName)}</AvatarFallback>
+                    <AvatarFallback className={cn(getAvatarColor(m.userId), flatText && "text-[9px]")}>
+                      {getInitials(m.userName)}
+                    </AvatarFallback>
                   </Avatar>
                 </ProfilePreview>
-                <div className={cn("group flex max-w-[80%] flex-col gap-0.5", isMine && "items-end")}>
-                  <div className={cn("flex items-center gap-2", isMine && "flex-row-reverse")}>
+                <div className={cn("group flex max-w-[80%] flex-col gap-0.5", isMine && !flatText && "items-end")}>
+                  <div className={cn("flex items-center gap-2", isMine && !flatText && "flex-row-reverse")}>
                     <ProfilePreview
                       userId={m.userId}
                       disabled={!canPreview}
                       className={cn(
-                        "text-sm font-medium",
-                        m.isHost ? "text-primary" : immersive && "text-white",
+                        "font-medium",
+                        flatText ? "text-xs" : "text-sm",
+                        m.isHost ? "text-primary" : immersive ? "text-white" : undefined,
+                        flatText && !m.isHost && "text-white/80 [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]",
                         canPreview && "hover:underline",
                       )}
                     >
@@ -358,16 +369,23 @@ export function LiveChat({
                   </div>
                   <p
                     className={cn(
-                      "rounded-2xl px-3 py-1.5 text-sm leading-snug shadow-sm [overflow-wrap:anywhere]",
-                      isMine
-                        ? "rounded-br-md bg-primary text-primary-foreground"
-                        : immersive
-                          ? "rounded-bl-md bg-white/10 text-white/90 ring-1 ring-inset ring-white/10 backdrop-blur-md"
-                          : "rounded-bl-md bg-secondary text-foreground/90 ring-1 ring-inset ring-border/50",
-                      pinnedChatId === m.id && "ring-1 ring-primary/40",
+                      "text-sm leading-snug [overflow-wrap:anywhere]",
+                      flatText
+                        ? // TikTok style: bare text, no bubble. Subtle shadow keeps it
+                          // legible over bright video frames.
+                          "text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]"
+                        : cn(
+                            "rounded-2xl px-3 py-1.5 shadow-sm",
+                            isMine
+                              ? "rounded-br-md bg-primary text-primary-foreground"
+                              : immersive
+                                ? "rounded-bl-md bg-white/10 text-white/90 ring-1 ring-inset ring-white/10 backdrop-blur-md"
+                                : "rounded-bl-md bg-secondary text-foreground/90 ring-1 ring-inset ring-border/50",
+                            pinnedChatId === m.id && "ring-1 ring-primary/40",
+                          ),
                     )}
                   >
-                    <MentionText body={m.body} accent={isMine} />
+                    <MentionText body={m.body} accent={isMine && !flatText} />
                   </p>
                 </div>
               </li>

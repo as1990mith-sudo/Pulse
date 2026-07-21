@@ -177,7 +177,14 @@ export function ConversationVideo(props: ConversationVideoProps) {
   const gridLayout: GridLayout = roomState?.gridLayout ?? "balanced"
   const prayerActive = !!roomState?.prayerStartedAt
   const locked = !!roomState?.locked
-  const layout = LAYOUTS[gridLayout] ?? LAYOUTS.balanced
+  // Chat panel state lives here (above the layout resolution) because opening
+  // the chatroom forces the grid into a compact reflow.
+  const [chatOpen, setChatOpen] = useState(false)
+  // Everyone normally shares the host-selected layout. But the moment a user
+  // opens their chatroom, the grid reflows into the compact 3-column layout
+  // regardless of that selection, so tiles stay legible in the narrower space
+  // beside the open chat panel.
+  const layout = chatOpen ? LAYOUTS.compact : (LAYOUTS[gridLayout] ?? LAYOUTS.balanced)
 
   // When a controller changes shared state, refresh both this poll and the
   // parent's call-state poll so the whole room converges quickly.
@@ -226,7 +233,6 @@ export function ConversationVideo(props: ConversationVideoProps) {
   const [dir, setDir] = useState(0)
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [controlsOpen, setControlsOpen] = useState(false)
-  const [chatOpen, setChatOpen] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   // Study-resources drawer opener (present on every live). Sits in the dock
   // just before the chat button.
