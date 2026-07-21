@@ -905,3 +905,90 @@ export const bibleBookmark = pgTable(
     userVerseUnique: uniqueIndex("bible_bookmark_user_verse_idx").on(t.userId, t.verseId),
   }),
 )
+
+// --- Articles (long-form writing / blog) -----------------------------------
+// A long-form article any signed-in member can write and publish. The body is
+// sanitized HTML (see lib/article-sanitize.ts) produced by the rich editor.
+// `status` gates visibility: only "published" rows appear in the public hub;
+// "draft"/"archived" are visible only to the author. Engagement counters
+// (likeCount/commentCount/viewCount) are denormalized and kept in sync from the
+// shared `like`/`share` tables + the article_comment table. Authorship is real:
+// authorId scopes "my articles" and the writer profile.
+export const article = pgTable("article", {
+  id: serial("id").primaryKey(),
+  authorId: text("authorId").notNull(),
+  authorName: text("authorName").notNull(),
+  authorHandle: text("authorHandle").notNull(),
+  authorImage: text("authorImage"),
+  title: text("title").notNull(),
+  // Short plain-text summary shown on cards + used for SEO/meta. Derived from
+  // the body on save when the author leaves it blank.
+  excerpt: text("excerpt").notNull().default(""),
+  // Sanitized HTML body. Never rendered without passing through the sanitizer.
+  bodyHtml: text("bodyHtml").notNull().default(""),
+  coverUrl: text("coverUrl"),
+  category: text("category").notNull().default("General"),
+  // Free-text comma-free tags stored as a JSON array of strings.
+  tags: jsonb("tags").$type<string[]>().notNull().default([]),
+  // "draft" | "published" | "archived"
+  status: text("status").notNull().default("draft"),
+  // Estimated read time in minutes, derived from word count on save.
+  readMinutes: integer("readMinutes").notNull().default(1),
+  featured: boolean("featured").notNull().default(false),
+  likeCount: integer("likeCount").notNull().default(0),
+  commentCount: integer("commentCount").notNull().default(0),
+  viewCount: integer("viewCount").notNull().default(0),
+  // Set the moment status first flips to "published"; drives sort + display.
+  publishedAt: timestamp("publishedAt"),
+  editedAt: timestamp("editedAt"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})
+
+// Threaded comments on an article. parentId is null for top-level comments and
+// points at another comment for one level of replies. likes is denormalized and
+// backed by the shared `like` table (targetType "article_comment").
+export const articleComment = pgTable("article_comment", {
+  id: serial("id").primaryKey(),
+  articleId: integer("articleId").notNull(),
+  parentId: integer("parentId"),
+  userId: text("userId").notNull(),
+  userName: text("userName").notNull(),
+  userImage: text("userImage"),
+  body: text("body").notNull(),
+  likes: integer("likes").notNull().default(0),
+  deleted: boolean("deleted").notNull().default(false),
+  editedAt: timestamp("editedAt"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// Writer-subscribe graph, kept SEPARATE from the social `follow` table so a
+// member can follow someone's articles without following their social profile
+// (and vice-versa). One row per (writer, follower).
+export const articleFollow = pgTable(
+  "article_follow",
+  {
+    id: serial("id").primaryKey(),
+    writerId: text("writerId").notNull(),
+    followerId: text("followerId").notNull(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    uniq: uniqueIndex("article_follow_writer_follower_unique").on(t.writerId, t.followerId),
+  }),
+)
+
+// Comment reports for lightweight moderation. One row per (reporter, comment).
+export const articleCommentReport = pgTable(
+  "article_comment_report",
+  {
+    id: serial("id").primaryKey(),
+    commentId: integer("commentId").notNull(),
+    reporterId: text("reporterId").notNull(),
+    reason: text("reason").notNull().default(""),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    uniq: uniqueIndex("article_comment_report_unique").on(t.commentId, t.reporterId),
+  }),
+)

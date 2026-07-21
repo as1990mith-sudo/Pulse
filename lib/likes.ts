@@ -17,6 +17,8 @@ export type LikeTarget =
   | "devotional_comment"
   | "community_comment"
   | "dream_reply"
+  | "article"
+  | "article_comment"
 
 /**
  * Returns the subset of `targetIds` that the given user has already liked, as a

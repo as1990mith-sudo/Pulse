@@ -1,13 +1,16 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Mic, Images, AlignLeft, ArrowLeft, Plus, Info } from "lucide-react"
+import { Mic, Images, AlignLeft, ArrowLeft, Plus, Info, Newspaper, PenLine } from "lucide-react"
+import Link from "next/link"
 import type { Show } from "@/lib/data"
 import type { FeedPostView } from "@/app/actions/feed"
 import type { CurrentUser } from "@/lib/session"
+import type { ArticleCard as ArticleCardType } from "@/lib/article-types"
 import { EpisodeCatalog } from "@/components/episode-catalog"
 import { UploadEpisode } from "@/components/upload-episode"
 import { ProfilePostsGrid } from "@/components/profile/profile-posts-grid"
+import { ArticleRow } from "@/components/articles/article-card"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -15,19 +18,21 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
-type TabKey = "media" | "text" | "catalogue"
+type TabKey = "media" | "text" | "articles" | "catalogue"
 
 export function ProfileTabs({
   name,
   isSelf,
   episodes,
   posts,
+  articles,
   currentUser,
 }: {
   name: string
   isSelf: boolean
   episodes: Show[]
   posts: FeedPostView[]
+  articles: ArticleCardType[]
   currentUser: CurrentUser | null
 }) {
   // Split posts into two feeds: media posts (an image or video attached) and
@@ -47,6 +52,7 @@ export function ProfileTabs({
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; count: number }[] = [
     { key: "media", label: "Media", icon: <Images className="size-4" />, count: mediaPosts.length },
     { key: "text", label: "Text", icon: <AlignLeft className="size-4" />, count: textPosts.length },
+    { key: "articles", label: "Articles", icon: <Newspaper className="size-4" />, count: articles.length },
     { key: "catalogue", label: "Catalogue", icon: <Mic className="size-4" />, count: episodes.length },
   ]
 
@@ -108,7 +114,35 @@ export function ProfileTabs({
       {/* Content with a smooth fade/slide transition between tabs. Catalogue is
           rendered separately as a full-screen overlay below. */}
       <div key={tab} className="animate-in fade-in slide-in-from-bottom-1 duration-300 pt-4">
-        {tab === "catalogue" ? null : tab === "text" ? (
+        {tab === "catalogue" ? null : tab === "articles" ? (
+          articles.length === 0 ? (
+            <EmptyState
+              icon={<Newspaper className="size-6" />}
+              title="No articles yet"
+              message={
+                isSelf
+                  ? "Long-form articles you publish will appear here."
+                  : `${name} hasn't published any articles yet.`
+              }
+              action={
+                isSelf ? (
+                  <Link
+                    href="/articles/write"
+                    className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+                  >
+                    <PenLine className="size-4" /> Write an Article
+                  </Link>
+                ) : null
+              }
+            />
+          ) : (
+            <div className="flex flex-col gap-3">
+              {articles.map((a) => (
+                <ArticleRow key={a.id} article={a} />
+              ))}
+            </div>
+          )
+        ) : tab === "text" ? (
           textPosts.length === 0 ? (
             <EmptyState
               icon={<AlignLeft className="size-6" />}
@@ -244,7 +278,17 @@ function TabButton({
   )
 }
 
-function EmptyState({ icon, title, message }: { icon: React.ReactNode; title: string; message: string }) {
+function EmptyState({
+  icon,
+  title,
+  message,
+  action,
+}: {
+  icon: React.ReactNode
+  title: string
+  message: string
+  action?: React.ReactNode
+}) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-muted/30 px-6 py-16 text-center">
       <span className="flex size-12 items-center justify-center rounded-full bg-secondary text-muted-foreground">
@@ -252,6 +296,7 @@ function EmptyState({ icon, title, message }: { icon: React.ReactNode; title: st
       </span>
       <p className="font-medium">{title}</p>
       <p className="max-w-sm text-pretty text-sm text-muted-foreground">{message}</p>
+      {action}
     </div>
   )
 }
