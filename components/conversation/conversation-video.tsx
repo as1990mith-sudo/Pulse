@@ -37,6 +37,7 @@ import { LiveChat } from "@/components/live-chat"
 import { useLiveResourcesOptional } from "@/components/live/resource/resource-context"
 import { FloatingMessages } from "@/components/conversation/floating-messages"
 import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
+import { SnowOverlay } from "@/components/conversation/snow-overlay"
 import {
   blockParticipant,
   getConversationState,
@@ -533,6 +534,11 @@ export function ConversationVideo(props: ConversationVideoProps) {
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden bg-neutral-950 text-white">
+      {/* Ambient falling snow — subtle atmosphere over the whole room, sitting
+          above the video area but beneath the header and controls, and never
+          intercepting taps. */}
+      <SnowOverlay />
+
       {/* Arrival transition */}
       <AnimatePresence>
         {!arrived && (
@@ -653,7 +659,15 @@ export function ConversationVideo(props: ConversationVideoProps) {
                   </div>
                 )}
               </motion.button>
-              <div className="max-w-full">
+              {/* Tapping the title/details collapses the header back to the
+                  compact bar (the compact bar re-expands it), giving a clear
+                  two-way toggle. The cover art keeps its own lightbox action. */}
+              <button
+                type="button"
+                onClick={() => setCollapsed(true)}
+                aria-label="Collapse room details"
+                className="max-w-full"
+              >
                 <h1 className="text-balance text-base font-semibold leading-tight">{title}</h1>
                 {topic && (
                   <p className="mt-1 text-pretty text-sm text-white/75">
@@ -673,7 +687,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
                     </span>
                   )}
                 </p>
-              </div>
+              </button>
             </motion.div>
           )}
         </AnimatePresence>
