@@ -37,7 +37,6 @@ import { LiveChat } from "@/components/live-chat"
 import { useLiveResourcesOptional } from "@/components/live/resource/resource-context"
 import { FloatingMessages } from "@/components/conversation/floating-messages"
 import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
-import { SnowOverlay } from "@/components/conversation/snow-overlay"
 import {
   blockParticipant,
   getConversationState,
@@ -534,11 +533,6 @@ export function ConversationVideo(props: ConversationVideoProps) {
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden bg-neutral-950 text-white">
-      {/* Ambient falling snow — subtle atmosphere over the whole room, sitting
-          above the video area but beneath the header and controls, and never
-          intercepting taps. */}
-      <SnowOverlay />
-
       {/* Arrival transition */}
       <AnimatePresence>
         {!arrived && (

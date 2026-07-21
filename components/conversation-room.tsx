@@ -37,6 +37,7 @@ import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { ParticipantGrid, type GridParticipant } from "@/components/conversation/participant-grid"
 import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
 import { FloatingMessages } from "@/components/conversation/floating-messages"
+import { SnowOverlay } from "@/components/conversation/snow-overlay"
 import { MusicPanel, type Track } from "@/components/studio-console"
 import { useLiveResourcesOptional } from "@/components/live/resource/resource-context"
 import { ConversationThemeSheet } from "@/components/conversation/conversation-theme-sheet"
@@ -761,6 +762,9 @@ export function ConversationRoom({
             "radial-gradient(70% 55% at 20% 0%, color-mix(in oklch, var(--primary) 34%, transparent), transparent 62%), radial-gradient(60% 50% at 92% 18%, color-mix(in oklch, var(--live-accent) 24%, transparent), transparent 55%), radial-gradient(90% 65% at 50% 100%, color-mix(in oklch, var(--primary) 20%, transparent), transparent 62%)",
         }}
       />
+      {/* Ambient falling snow — subtle atmosphere over the whole room, never
+          intercepting taps. */}
+      <SnowOverlay />
       {cover && (
         <>
           {/* eslint-disable-next-line @next/next/no-img-element */}
