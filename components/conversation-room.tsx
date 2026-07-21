@@ -30,7 +30,7 @@ import {
 import { BackExitMenu } from "@/components/live-back-menu"
 import { LiveChat } from "@/components/live-chat"
 import { ActionSheet, type SheetAction } from "@/components/action-sheet"
-import { ImageLightbox } from "@/components/image-lightbox"
+import { CoverArt } from "@/components/cover-art"
 import { CoverUpload } from "@/components/admin/cover-upload"
 import { AudioFormatSelector } from "@/components/audio-format-selector"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
@@ -271,7 +271,6 @@ export function ConversationRoom({
   // Host-only UI: consolidated host-controls menu, theme picker, cover lightbox.
   const [hostMenuOpen, setHostMenuOpen] = useState(false)
   const [themeOpen, setThemeOpen] = useState(false)
-  const [coverOpen, setCoverOpen] = useState(false)
 
   // Host heartbeat: while the room is live, the host pings every 20s so the
   // stream's lastSeenAt stays fresh and the 60s stale-stream sweep never
@@ -815,17 +814,7 @@ export function ConversationRoom({
               transition={{ duration: 0.22 }}
               className="mt-2 flex items-center gap-2.5"
             >
-              {cover && (
-                <button
-                  type="button"
-                  onClick={() => setCoverOpen(true)}
-                  aria-label="View room cover"
-                  className="shrink-0"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={cover || "/placeholder.svg"} alt="" className="size-9 rounded-lg object-cover ring-1 ring-white/15" />
-                </button>
-              )}
+              {cover && <CoverArt src={cover} alt={`${title} cover`} className="size-9" />}
               <h1 className="min-w-0 flex-1 truncate text-sm font-bold leading-tight tracking-tight">{title}</h1>
               <span className="shrink-0 text-xs font-medium text-white/50">
                 {gridParticipants.length} here
@@ -840,18 +829,7 @@ export function ConversationRoom({
               transition={{ duration: 0.22 }}
               className="mt-3 flex flex-col items-center text-center"
             >
-              {cover && (
-                <motion.button
-                  layoutId="conv-cover"
-                  type="button"
-                  onClick={() => setCoverOpen(true)}
-                  aria-label="View room cover"
-                  className="mb-3 overflow-hidden rounded-2xl shadow-xl shadow-black/40 ring-1 ring-white/15 transition-transform active:scale-95"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={cover || "/placeholder.svg"} alt={`${title} cover`} className="size-24 object-cover" />
-                </motion.button>
-              )}
+              {cover && <CoverArt src={cover} alt={`${title} cover`} className="mb-3 size-24" />}
               <h1 className="max-w-full truncate text-lg font-bold leading-tight tracking-tight text-balance">{title}</h1>
               <p className="mt-0.5 text-xs font-medium text-white/60">Hosted by {hostName}</p>
               {topic && (
@@ -1064,10 +1042,6 @@ export function ConversationRoom({
         actions={participantActions}
       />
 
-      {/* Full-screen cover art viewer */}
-      {coverOpen && cover && (
-        <ImageLightbox src={cover} alt={`${title} cover`} onClose={() => setCoverOpen(false)} />
-      )}
     </div>
   )
 }

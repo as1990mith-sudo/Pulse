@@ -44,7 +44,7 @@ import { GridPrejoin } from "@/components/grid-prejoin"
 import type { ShareTarget } from "@/lib/share-types"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { broadcastStageRects, stageRectStyle, type StageRect } from "@/lib/broadcast-stage"
-import { ImageLightbox } from "@/components/image-lightbox"
+import { CoverArt } from "@/components/cover-art"
 import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
 import { cn } from "@/lib/utils"
 
@@ -194,8 +194,6 @@ export function LiveVideoViewer({
   // A pending "come on stage" invite from the host (accept/decline in-session).
   const [myInvite, setMyInvite] = useState<CallRequestView | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
-  // Full-screen cover artwork viewer (opened from the Broadcast header).
-  const [coverOpen, setCoverOpen] = useState(false)
   const [bursts, setBursts] = useState<Burst[]>([])
   // Tap the stage to hide/reveal the header + on-screen controls (immersive).
   const [controlsVisible, setControlsVisible] = useState(true)
@@ -706,15 +704,7 @@ export function LiveVideoViewer({
             />
             <div className="flex min-w-0 items-center gap-2 rounded-full bg-black/40 py-1 pl-1 pr-1.5 ring-1 ring-inset ring-white/10 backdrop-blur-md">
               {stream.cover ? (
-                <button
-                  type="button"
-                  onClick={() => setCoverOpen(true)}
-                  aria-label="View cover artwork"
-                  className="size-8 shrink-0 overflow-hidden rounded-full ring-1 ring-inset ring-white/20 transition-transform active:scale-95"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={stream.cover || "/placeholder.svg"} alt="Broadcast cover" className="size-full object-cover" />
-                </button>
+                <CoverArt src={stream.cover} alt={`${stream.title} cover artwork`} className="size-8" />
               ) : (
                 <span
                   className={cn(
@@ -926,10 +916,6 @@ export function LiveVideoViewer({
       )}
 
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
-
-      {coverOpen && stream.cover && (
-        <ImageLightbox src={stream.cover} alt={`${stream.title} cover artwork`} onClose={() => setCoverOpen(false)} />
-      )}
     </div>
   )
 }
