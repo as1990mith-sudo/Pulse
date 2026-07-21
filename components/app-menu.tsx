@@ -24,11 +24,9 @@ import {
   Newspaper,
   NotebookPen,
   Palette,
-  PenSquare,
   Radio,
   Bell,
   ShoppingBag,
-  ShoppingCart,
   Sun,
   UserPlus,
   Check,
@@ -37,7 +35,6 @@ import {
 } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
 import { getUnreadCount } from "@/app/actions/notifications"
-import { useStoreState } from "@/lib/use-store-state"
 import { SKINS, useSkin } from "@/components/skin-provider"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { startMenuFlow } from "@/lib/menu-flow"
@@ -87,10 +84,6 @@ export function AppMenu() {
     refreshInterval: 20000,
   })
   const notificationCount = unread ?? 0
-
-  // Reactive cart size so the Cart row shows how many items are queued.
-  const { cartCount } = useStoreState()
-  const cartItems = cartCount()
 
   const [mounted, setMounted] = useState(false)
   const [open, setOpen] = useState(false) // portal present (enter + exit)
@@ -324,16 +317,8 @@ export function AppMenu() {
                   <DrawerItem href="/bible" icon={BookOpen} label="Bible" onNavigate={navigate} />
                   <DrawerItem href="/live-notes" icon={NotebookPen} label="Live Notes" onNavigate={navigate} />
                   <DrawerItem href="/articles" icon={Newspaper} label="Articles" onNavigate={navigate} />
-                  <DrawerItem href="/articles/mine" icon={PenSquare} label="My Articles" onNavigate={navigate} />
                   <DrawerItem href="/store" icon={ShoppingBag} label="Book Store" onNavigate={navigate} />
                   <DrawerItem href="/library" icon={LibraryIcon} label="Library" onNavigate={navigate} />
-                  <DrawerItem
-                    href="/cart"
-                    icon={ShoppingCart}
-                    label="Cart"
-                    onNavigate={navigate}
-                    badge={cartItems}
-                  />
                 </Section>
 
                 <Divider />

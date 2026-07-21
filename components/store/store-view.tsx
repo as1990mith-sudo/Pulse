@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { Plus, Search, Store } from "lucide-react"
+import { Plus, Search, ShoppingCart, Tag } from "lucide-react"
 import { BOOK_CATEGORIES, type Book, type StoreCategory } from "@/lib/store-data"
 import { BookGridCard } from "@/components/store/store-cards"
+import { useStoreState } from "@/lib/use-store-state"
 import { cn } from "@/lib/utils"
 
 const PAGE = 12
@@ -22,6 +23,11 @@ export function StoreView({ books }: { books: Book[] }) {
 }
 
 function SearchBar() {
+  // Live cart size so the store's cart icon mirrors the badge that used to live
+  // in the app drawer.
+  const { cartCount } = useStoreState()
+  const cartItems = cartCount()
+
   return (
     <div className="mb-4">
       <div className="flex items-center gap-2">
@@ -44,7 +50,19 @@ function SearchBar() {
           aria-label="Your listings"
           className="tap-scale flex size-[42px] shrink-0 items-center justify-center rounded-2xl border border-border/60 bg-secondary/40 text-muted-foreground shadow-soft transition-colors hover:text-foreground"
         >
-          <Store className="size-4" />
+          <Tag className="size-4" />
+        </Link>
+        <Link
+          href="/cart"
+          aria-label={cartItems > 0 ? `Cart, ${cartItems} items` : "Cart"}
+          className="tap-scale relative flex size-[42px] shrink-0 items-center justify-center rounded-2xl border border-border/60 bg-secondary/40 text-muted-foreground shadow-soft transition-colors hover:text-foreground"
+        >
+          <ShoppingCart className="size-4" />
+          {cartItems > 0 && (
+            <span className="absolute -right-1 -top-1 flex min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold leading-[18px] text-primary-foreground">
+              {cartItems > 99 ? "99+" : cartItems}
+            </span>
+          )}
         </Link>
       </div>
     </div>
