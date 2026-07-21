@@ -89,30 +89,15 @@ export function ReelsFeed({
   // Instagram. Start muted so autoplay is allowed by the browser.
   const [muted, setMuted] = useState(true)
 
-  // Which reel is centered. We "window" video loading around it: only the active
-  // clip and its immediate neighbours mount decoding <video> elements, so the
-  // browser never juggles dozens of simultaneous video decoders — the key to
-  // buttery-smooth snapping between reels. Off-window reels render nothing heavy.
-  const [activeIndex, setActiveIndex] = useState(0)
-  useEffect(() => {
-    const scroller = scrollerRef.current
-    if (!scroller) return
-    let raf = 0
-    const onScroll = () => {
-      if (raf) return
-      raf = requestAnimationFrame(() => {
-        raf = 0
-        const h = scroller.clientHeight
-        if (!h) return
-        setActiveIndex(Math.round(scroller.scrollTop / h))
-      })
-    }
-    scroller.addEventListener("scroll", onScroll, { passive: true })
-    return () => {
-      scroller.removeEventListener("scroll", onScroll)
-      if (raf) cancelAnimationFrame(raf)
-    }
-  }, [])
+  // NOTE: We intentionally do NOT track a parent "activeIndex" here. Doing so
+  // forced a re-render of *every* reel on each scroll settle and drove the
+  // mount/unmount window from the top, which meant the next clip frequently had
+  // no <video> source until after the scroll had already landed — producing the
+  // load stall / double transition. Instead, each ReelItem self-observes with a
+  // generous rootMargin (see below): neighbours mount and fully preload a real,
+  // decoding <video> element while still off-screen and stay mounted across the
+  // swipe, so the transition itself is purely the browser's GPU scroll-snap
+  // transform — no re-render, no source assignment, no decode delay.
 
   // Lock background scroll while the immersive overlay is open, and signal the
   // app to hide the bottom nav so the reel is a whole, edge-to-edge experience.
@@ -169,12 +154,11 @@ export function ReelsFeed({
             </p>
           </div>
         ) : (
-          visible.map((reel, i) => (
+          visible.map((reel) => (
             <ReelItem
               key={reel.key}
               reel={reel}
               root={scrollerRef}
-              near={Math.abs(i - activeIndex) <= 1}
               muted={muted}
               onToggleMute={() => setMuted((m) => !m)}
               onTooLong={() => markTooLong(reel.key)}
@@ -212,7 +196,6 @@ export function ReelsFeed({
 function ReelItem({
   reel,
   root,
-  near,
   muted,
   onToggleMute,
   onTooLong,
@@ -220,9 +203,6 @@ function ReelItem({
 }: {
   reel: Reel
   root: React.RefObject<HTMLDivElement | null>
-  /** True when this reel is the active clip or an immediate neighbour. Only then
-   *  do we mount the decoding <video> elements, so scrolling stays smooth. */
-  near: boolean
   muted: boolean
   onToggleMute: () => void
   onTooLong: () => void
@@ -234,6 +214,12 @@ function ReelItem({
   const containerRef = useRef<HTMLDivElement>(null)
   const [active, setActive] = useState(false)
   const [paused, setPaused] = useState(false)
+  // `shouldRender` mounts the real decoding <video> elements. Driven by a
+  // generous rootMargin observer so it flips true while the reel is still a
+  // screen-and-a-bit away — meaning the next/prev clip is already a live,
+  // preloaded, first-frame-holding element before you swipe to it. Latches so a
+  // clip never remounts (and re-buffers) while you linger on its neighbour.
+  const [shouldRender, setShouldRender] = useState(false)
 
   // Robust muted autoplay: mobile browsers only permit autoplay while the video
   // is *genuinely* muted, and React's `muted` JSX prop is famously unreliable at
@@ -275,8 +261,45 @@ function ReelItem({
     if (videoRef.current) videoRef.current.muted = muted
   }, [muted])
 
+  // Render-window observer: fires while the reel is still ~1.4 screens away, so
+  // the <video> mounts and preloads (holding its first frame) well before it
+  // scrolls into view. Latches true and only releases once the reel is >2.5
+  // screens away, so the immediate neighbours never remount mid-swipe — the
+  // transition stays a pure scroll transform with zero load delay.
+  useEffect(() => {
+    const el = containerRef.current
+    const scroller = root.current
+    if (!el || !scroller) return
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) setShouldRender(true)
+      },
+      { root: scroller, rootMargin: "140% 0px", threshold: 0 },
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [root])
+
+  // Release far-away reels so we never hold more than a handful of decoders.
+  // A wider margin than the mount observer gives hysteresis: a reel mounts at
+  // 1.4 screens and only unmounts past 2.5, so hovering near it won't thrash.
+  useEffect(() => {
+    if (!shouldRender) return
+    const el = containerRef.current
+    const scroller = root.current
+    if (!el || !scroller) return
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) setShouldRender(false)
+      },
+      { root: scroller, rootMargin: "250% 0px", threshold: 0 },
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [root, shouldRender])
+
   // Autoplay only the reel that is centered in the viewport; pause + rewind the
-  // others so returning to a clip restarts it.
+  // others so returning to a clip restarts it. Strict 0.6 ratio = "centered".
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -307,16 +330,16 @@ function ReelItem({
     return () => observer.disconnect()
   }, [root, playVideo])
 
-  // When windowing mounts this reel's src just as it becomes the active clip,
-  // the IntersectionObserver may have already fired against an empty <video>.
-  // This re-attempts playback once both conditions hold so the clip never
-  // stalls on a blank frame after a fast scroll.
+  // Safety net: if the active observer fired before this reel's <video> had a
+  // source (e.g. a very fast fling that outran preload), re-attempt playback
+  // once both the clip is centered and its element is mounted, so it never
+  // stalls on a blank frame.
   useEffect(() => {
-    if (active && near) {
+    if (active && shouldRender) {
       playVideo(videoRef.current, mutedRef.current)
       playVideo(backdropRef.current, true)
     }
-  }, [active, near, playVideo])
+  }, [active, shouldRender, playVideo])
 
   function togglePlay() {
     const v = videoRef.current
@@ -425,7 +448,7 @@ function ReelItem({
       {/* Blurred backdrop: the same clip stretched to cover the frame so off-ratio
           videos fill edge-to-edge (no black bars, nothing "hanging"), while the
           real clip plays contained on top so no content is ever cropped. */}
-      {near && (
+      {shouldRender && (
         <video
           ref={backdropRef}
           src={url}
@@ -441,12 +464,12 @@ function ReelItem({
       <div aria-hidden="true" className="absolute inset-0 bg-black/30" />
       <video
         ref={videoRef}
-        src={near ? url : undefined}
+        src={shouldRender ? url : undefined}
         className="relative h-full w-full object-contain"
         playsInline
         loop
         muted={muted}
-        preload={near ? "auto" : "none"}
+        preload={shouldRender ? "auto" : "none"}
         onClick={togglePlay}
         onTimeUpdate={onTimeUpdate}
         onLoadedMetadata={(e) => {
