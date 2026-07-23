@@ -161,6 +161,14 @@ export function PdfViewer({
     () => ({
       cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
       standardFontDataUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/standard_fonts/`,
+      // Open fast: stream the file and fetch only the byte ranges needed for the
+      // pages in view instead of downloading the whole PDF up front. On
+      // range-capable storage (Vercel Blob) the first page paints as soon as its
+      // bytes arrive; on servers without range support pdf.js safely falls back
+      // to a full download. `disableAutoFetch` stops the eager background
+      // prefetch of the entire document that otherwise stalls large books.
+      disableStream: false,
+      disableAutoFetch: true,
     }),
     [],
   )
