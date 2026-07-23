@@ -12,6 +12,7 @@ import {
   Mic,
   MicOff,
   MonitorPlay,
+  MoreVertical,
   Music,
   Pin,
   PinOff,
@@ -143,6 +144,9 @@ function StageGuestTile({
     (el: HTMLVideoElement | null) => registerEl(peer.identity, el),
     [registerEl, peer.identity],
   )
+  // Spotlight + remove controls now live in a compact overflow menu anchored to
+  // the guest tile's bottom-right corner (instead of two buttons across the top).
+  const [menuOpen, setMenuOpen] = useState(false)
   return (
     <div
       style={stageRectStyle(rect)}
@@ -174,31 +178,67 @@ function StageGuestTile({
           </span>
         </div>
       )}
-      {/* Host controls: pin/unpin (spotlight) + remove */}
-      <div className="pointer-events-auto absolute inset-x-0 top-0 flex items-center justify-between p-1.5">
-        <button
-          type="button"
-          onClick={() => onTogglePin(peer.identity)}
-          aria-label={pinned ? `Unpin ${peer.name}` : `Spotlight ${peer.name}`}
-          aria-pressed={pinned}
-          className={cn(
-            "flex size-7 items-center justify-center rounded-full backdrop-blur-md transition-colors",
-            pinned ? "bg-primary text-primary-foreground" : "bg-black/50 text-white/90 hover:bg-black/70",
+      {/* Pinned indicator (read-only badge) — the toggle itself moved into the
+          overflow menu below. */}
+      {pinned && (
+        <span className="pointer-events-none absolute left-1.5 top-1.5 flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
+          <Pin className="size-3" /> Spotlight
+        </span>
+      )}
+      {/* Bottom bar: guest name on the left, host overflow menu on the right. */}
+      <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
+        <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-white">{peer.name}</span>
+        <div className="pointer-events-auto relative shrink-0">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((o) => !o)}
+            aria-label={`Options for ${peer.name}`}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            className="flex size-7 items-center justify-center rounded-full bg-black/50 text-white/90 backdrop-blur-md transition-colors hover:bg-black/70 active:scale-90"
+          >
+            <MoreVertical className="size-3.5" />
+          </button>
+          {menuOpen && (
+            <>
+              {/* Backdrop closes the menu on outside tap. */}
+              <button
+                type="button"
+                aria-label="Close menu"
+                onClick={() => setMenuOpen(false)}
+                className="fixed inset-0 z-40 cursor-default"
+              />
+              <div
+                role="menu"
+                className="absolute bottom-full right-0 z-50 mb-1.5 w-40 overflow-hidden rounded-xl border border-white/10 bg-neutral-900/95 p-1 text-white shadow-xl backdrop-blur-md"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    onTogglePin(peer.identity)
+                    setMenuOpen(false)
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium transition-colors hover:bg-white/10"
+                >
+                  {pinned ? <PinOff className="size-3.5 shrink-0" /> : <Pin className="size-3.5 shrink-0" />}
+                  {pinned ? "Remove spotlight" : "Spotlight"}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    onRemove(peer.identity)
+                    setMenuOpen(false)
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-destructive transition-colors hover:bg-destructive/15"
+                >
+                  <X className="size-3.5 shrink-0" /> Remove guest
+                </button>
+              </div>
+            </>
           )}
-        >
-          {pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
-        </button>
-        <button
-          type="button"
-          onClick={() => onRemove(peer.identity)}
-          aria-label={`Remove ${peer.name}`}
-          className="flex size-7 items-center justify-center rounded-full bg-black/50 text-white/90 backdrop-blur-md transition-colors hover:bg-destructive"
-        >
-          <X className="size-3.5" />
-        </button>
-      </div>
-      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
-        <span className="block truncate text-[11px] font-semibold text-white">{peer.name}</span>
+        </div>
       </div>
     </div>
   )
@@ -256,6 +296,9 @@ export function VideoStudioConsole({
   const [error, setError] = useState<string | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const [shareOpen, setShareOpen] = useState(false)
+  // Secondary header stats (viewers + elapsed timer) collapse into a top-right
+  // overflow menu so the host's name gets the full width of the header pill.
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
   // Confirmation gate before a host ends the live session, so a mis-tap on the
   // back menu can't drop everyone out of the broadcast.
   const [endConfirmOpen, setEndConfirmOpen] = useState(false)
@@ -962,8 +1005,9 @@ export function VideoStudioConsole({
             ) : null}
           </div>
 
-          {/* Right cluster: LIVE • viewers • timer. Share moved to the bottom
-              control dock so this header stays uncrowded and legible. */}
+          {/* Right cluster kept intentionally minimal: only the LIVE badge and a
+              three-dot menu. Viewers + timer live inside that menu so the host
+              name pill on the left keeps the maximum available width. */}
           <div className="flex shrink-0 items-center gap-1.5">
             {live && (
               <span className="flex items-center gap-1.5 rounded-full bg-live px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-live-foreground shadow-lg">
@@ -975,21 +1019,50 @@ export function VideoStudioConsole({
               </span>
             )}
             {live && (
-              <LiveAudienceSheet
-                count={audienceCount || viewers}
-                members={audienceMembers}
-                immersive
-                className="px-2.5 py-1 text-[11px] font-medium"
-                isHost
-                roomName={roomName ?? undefined}
-                blockedUsers={callState?.blockedUsers ?? []}
-                onChanged={() => void refreshCalls()}
-              />
-            )}
-            {live && (
-              <span className="rounded-full bg-black/35 px-2.5 py-1 font-mono text-[11px] tabular-nums text-white/90 ring-1 ring-inset ring-white/10 backdrop-blur-md">
-                {formatElapsed(elapsed)}
-              </span>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setHeaderMenuOpen((o) => !o)}
+                  aria-label="Broadcast stats and options"
+                  aria-haspopup="menu"
+                  aria-expanded={headerMenuOpen}
+                  className="flex size-8 items-center justify-center rounded-full bg-black/35 text-white ring-1 ring-inset ring-white/15 backdrop-blur-md transition-colors hover:bg-black/55 active:scale-90"
+                >
+                  <MoreVertical className="size-4" />
+                </button>
+                {headerMenuOpen && (
+                  <>
+                    <button
+                      type="button"
+                      aria-label="Close menu"
+                      onClick={() => setHeaderMenuOpen(false)}
+                      className="fixed inset-0 z-40 cursor-default"
+                    />
+                    <div
+                      role="menu"
+                      className="absolute right-0 top-full z-50 mt-1.5 w-52 overflow-hidden rounded-2xl border border-white/10 bg-neutral-900/95 p-1.5 text-white shadow-xl backdrop-blur-md"
+                    >
+                      {/* Viewers — opens the full audience sheet. */}
+                      <div className="[&_button]:w-full [&_button]:justify-start [&_button]:rounded-lg [&_button]:bg-transparent [&_button]:px-2.5 [&_button]:py-2 [&_button]:text-sm [&_button:hover]:bg-white/10">
+                        <LiveAudienceSheet
+                          count={audienceCount || viewers}
+                          members={audienceMembers}
+                          immersive
+                          isHost
+                          roomName={roomName ?? undefined}
+                          blockedUsers={callState?.blockedUsers ?? []}
+                          onChanged={() => void refreshCalls()}
+                        />
+                      </div>
+                      {/* Elapsed time (read-only). */}
+                      <div className="flex items-center justify-between rounded-lg px-2.5 py-2 text-sm">
+                        <span className="text-white/70">Elapsed</span>
+                        <span className="font-mono tabular-nums text-white/90">{formatElapsed(elapsed)}</span>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
           </div>
         </div>

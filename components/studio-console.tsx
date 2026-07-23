@@ -933,7 +933,14 @@ export function StudioConsole({
             </span>
           </div>
           <div className="min-h-0 flex-1 overflow-hidden">
-            <LiveChat asHost immersive showResourceButton currentUser={currentUser} roomName={roomName ?? undefined} />
+            <LiveChat
+              asHost
+              immersive
+              showResourceButton
+              placeholder=""
+              currentUser={currentUser}
+              roomName={roomName ?? undefined}
+            />
           </div>
         </section>
       </div>
