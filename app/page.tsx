@@ -29,7 +29,7 @@ export default async function DevotionalPage() {
           </span>
           <h1 className="text-2xl font-bold tracking-tight">No devotional yet</h1>
           <p className="max-w-md text-pretty text-muted-foreground">
-            The latest weekly devotional will appear here as soon as it&apos;s published.
+            The latest daily devotional will appear here as soon as it&apos;s published.
           </p>
         </main>
       </div>
@@ -57,7 +57,7 @@ export default async function DevotionalPage() {
           <div className="relative flex flex-col gap-4 p-6 pt-24 sm:p-8 sm:pt-32">
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
-                <Calendar className="size-3.5" /> Weekly Devotional
+                <Calendar className="size-3.5" /> Daily Devotional
               </span>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-foreground/5 px-3 py-1 text-xs font-medium text-muted-foreground">
                 <Clock className="size-3.5" /> {d.readingMinutes} min read

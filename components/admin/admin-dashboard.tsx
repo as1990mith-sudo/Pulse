@@ -145,7 +145,7 @@ function DevotionalManager({ devotionals }: { devotionals: DevotionalRow[] }) {
       <Card className="space-y-5 p-6">
         <div className="flex items-center gap-2">
           <Plus className="size-5 text-primary" />
-          <h2 className="text-lg font-semibold">New weekly devotional</h2>
+          <h2 className="text-lg font-semibold">New daily devotional</h2>
         </div>
         <p className="text-sm text-muted-foreground">
           This becomes the devotional shown on the homepage as soon as you publish it. Past devotionals are kept in your
