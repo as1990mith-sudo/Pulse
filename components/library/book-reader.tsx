@@ -33,12 +33,23 @@ export function BookReader({
   fileName: string
 }) {
   const [pdfError, setPdfError] = useState(false)
+  // Immersive Reading Mode collapses the outer chrome so the page fills the
+  // screen. PdfViewer owns the toggle and reports state back up here.
+  const [immersive, setImmersive] = useState(false)
   const pdf = isPdf(fileName, fileUrl)
 
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-background">
-      {/* Reader chrome */}
-      <header className="flex shrink-0 items-center gap-3 border-b border-border/60 bg-background/95 px-3 py-2.5 backdrop-blur-xl pt-[calc(0.625rem+env(safe-area-inset-top))]">
+      {/* Reader chrome. In immersive mode it lifts out of flow and fades away
+          (kept mounted so the transition in/out stays smooth). */}
+      <header
+        className={
+          "flex shrink-0 items-center gap-3 border-b border-border/60 bg-background/95 px-3 py-2.5 backdrop-blur-xl pt-[calc(0.625rem+env(safe-area-inset-top))] transition-[transform,opacity] duration-500 ease-out " +
+          (immersive
+            ? "pointer-events-none absolute inset-x-0 top-0 z-10 -translate-y-full opacity-0"
+            : "translate-y-0 opacity-100")
+        }
+      >
         <Link
           href="/library"
           aria-label="Back to library"
@@ -67,7 +78,12 @@ export function BookReader({
         {!fileUrl ? (
           <ReaderFallback title={title} fileUrl={fileUrl} fileName={fileName} reason="missing" />
         ) : pdf && !pdfError ? (
-          <PdfViewer fileUrl={fileUrl} onError={() => setPdfError(true)} />
+          <PdfViewer
+            fileUrl={fileUrl}
+            title={title}
+            onError={() => setPdfError(true)}
+            onImmersiveChange={setImmersive}
+          />
         ) : (
           <ReaderFallback title={title} fileUrl={fileUrl} fileName={fileName} reason="format" />
         )}
