@@ -48,9 +48,15 @@ export function VideoCard({
   const [isPending, startTransition] = useTransition()
   const [isPrivate, setIsPrivate] = useState(Boolean(show.isPrivate))
 
-  // On-demand videos open the immersive full-screen player overlay (same as
-  // audio) instead of navigating to a page that still shows the app header.
-  const playable = isPlayable(show) && Boolean(queue && queue.length > 0)
+  // Livestream replays (source === "live") must open the dedicated portrait
+  // LiveReplayWatch experience, which lives at the /live/[id] page. So they
+  // always navigate (the href branch) rather than opening the shared immersive
+  // overlay used for uploaded videos.
+  const isLiveReplay = show.source === "live"
+  // Uploaded on-demand videos open the immersive full-screen player overlay
+  // (same as audio) instead of navigating to a page that still shows the app
+  // header. Live replays are excluded so they route to their own player.
+  const playable = isPlayable(show) && Boolean(queue && queue.length > 0) && !isLiveReplay
   const href = `/live/${show.id}`
   // A play trigger when playable, otherwise a link to the watch page.
   const openProps = playable
