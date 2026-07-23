@@ -62,7 +62,7 @@ function AnonIdentity({ postedAt, edited }: { postedAt: string; edited: boolean 
         </AvatarFallback>
       </Avatar>
       <div className="min-w-0">
-        <p className="font-semibold tracking-tight text-foreground">{ANON_NAME}</p>
+        <p className="text-base font-bold tracking-tight text-foreground">{ANON_NAME}</p>
         <p className="text-xs text-muted-foreground">
           {postedAt}
           {edited && " · edited"}
@@ -84,7 +84,7 @@ function SenderIdentity({ dream, asInbox }: { dream: DreamView; asInbox?: boolea
       </Avatar>
       <div className="min-w-0">
         <div className="flex items-center gap-1.5">
-          <p className="truncate font-semibold tracking-tight">{dream.senderName}</p>
+          <p className="truncate text-base font-bold tracking-tight">{dream.senderName}</p>
           {dream.senderHandle && <span className="truncate text-xs text-muted-foreground">{dream.senderHandle}</span>}
         </div>
         <p className="text-xs text-muted-foreground">
@@ -505,7 +505,7 @@ function DreamItem({
             onChange={(e) => setDraft(e.target.value)}
             rows={4}
             maxLength={2000}
-            className="resize-none rounded-2xl text-[15px]"
+            className="resize-none rounded-2xl text-[17px]"
             autoFocus
           />
           {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
@@ -519,7 +519,7 @@ function DreamItem({
           </div>
         </div>
       ) : (
-        <p className="mt-3 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-justify hyphens-auto [text-justify:inter-word]">
+        <p className="mt-3 whitespace-pre-wrap break-words text-[17px] leading-relaxed text-justify hyphens-auto [text-justify:inter-word]">
           {linkify(body)}
         </p>
       )}
@@ -817,7 +817,7 @@ export function DreamInterpretation({ initialFeed }: { initialFeed: DreamFeed })
         </Avatar>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <h1 className="truncate text-base font-bold tracking-tight">Dream Interpretation</h1>
+                <h1 className="truncate text-xl font-bold tracking-tight">Dream Interpretation</h1>
             <button
               type="button"
               onClick={() => setInfoOpen(true)}
@@ -827,7 +827,7 @@ export function DreamInterpretation({ initialFeed }: { initialFeed: DreamFeed })
               <Info className="size-4" />
             </button>
           </div>
-          <p className="truncate text-xs text-muted-foreground">
+          <p className="truncate text-sm text-muted-foreground">
             {isAdmin ? "Interpreter inbox · you can see every sender" : "Share your dream anonymously"}
           </p>
         </div>
@@ -855,7 +855,7 @@ export function DreamInterpretation({ initialFeed }: { initialFeed: DreamFeed })
                   aria-selected={active}
                   onClick={() => setStatusFilter(tab.key)}
                   className={cn(
-                    "flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition-colors",
+                    "flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-base font-semibold transition-colors",
                     active
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground",
@@ -864,7 +864,7 @@ export function DreamInterpretation({ initialFeed }: { initialFeed: DreamFeed })
                   {tab.label}
                   <span
                     className={cn(
-                      "min-w-5 rounded-full px-1.5 py-0.5 text-xs tabular-nums",
+                      "min-w-5 rounded-full px-1.5 py-0.5 text-xs font-medium tabular-nums",
                       active ? "bg-blue-500/15 text-blue-600 dark:text-blue-400" : "bg-secondary text-muted-foreground",
                     )}
                   >
@@ -895,7 +895,7 @@ export function DreamInterpretation({ initialFeed }: { initialFeed: DreamFeed })
                   aria-selected={active}
                   onClick={() => setScope(t.key)}
                   className={cn(
-                    "flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition-colors",
+                    "flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-base font-semibold transition-colors",
                     active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
                   )}
                 >
@@ -903,7 +903,7 @@ export function DreamInterpretation({ initialFeed }: { initialFeed: DreamFeed })
                   {"count" in t && (
                     <span
                       className={cn(
-                        "min-w-5 rounded-full px-1.5 py-0.5 text-xs tabular-nums",
+                        "min-w-5 rounded-full px-1.5 py-0.5 text-xs font-medium tabular-nums",
                         active
                           ? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
                           : "bg-secondary text-muted-foreground",
@@ -975,7 +975,7 @@ export function DreamInterpretation({ initialFeed }: { initialFeed: DreamFeed })
         <button
           type="button"
           onClick={() => setComposerOpen(true)}
-          className="absolute bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-5 z-30 flex h-14 items-center gap-2 rounded-full bg-primary px-5 font-semibold text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95 sm:right-8"
+          className="absolute bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-5 z-30 flex h-14 items-center gap-2 rounded-full bg-primary px-5 text-base font-semibold text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95 sm:right-8"
         >
           <Plus className="size-5" />
           Share dream
