@@ -45,7 +45,16 @@ function formatTime(seconds: number) {
 
 const SKIP_SECONDS = 10
 
-export function FeedVideo({ src, className }: { src: string; className?: string }) {
+export function FeedVideo({
+  src,
+  className,
+  poster,
+}: {
+  src: string
+  className?: string
+  /** Optional cover image chosen in the editor; shown until playback starts. */
+  poster?: string
+}) {
   const ref = useRef<HTMLVideoElement>(null)
   const seekRef = useRef<HTMLDivElement>(null)
   const userPausedRef = useRef(false)
