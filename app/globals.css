@@ -1234,3 +1234,35 @@ svg.lucide {
 .article-editor:focus {
   outline: none;
 }
+
+/* Continuous horizontal marquee for descriptions that are too long to fit on
+   one line. The track holds two copies of the text so the loop is seamless;
+   it slides left→right and the second copy fills in from the left. */
+.marquee {
+  overflow: hidden;
+  white-space: nowrap;
+}
+.marquee__track {
+  display: inline-flex;
+  width: max-content;
+  animation: marquee-ltr 14s linear infinite;
+}
+.marquee__track > * {
+  padding-right: 2.5rem;
+}
+.marquee:hover .marquee__track {
+  animation-play-state: paused;
+}
+@keyframes marquee-ltr {
+  from {
+    transform: translateX(-50%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee__track {
+    animation: none;
+  }
+}
