@@ -25,6 +25,7 @@ import {
   ChevronRight,
   Images,
   GripVertical,
+  Flag,
 } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import {
@@ -55,8 +56,10 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { ReportReasonModal } from "@/components/report-reason-modal"
 import { ImageLightbox } from "@/components/image-lightbox"
 import { FeedVideo } from "@/components/feed-video"
 import { ReelsFeed } from "@/components/reels-feed"
@@ -68,6 +71,30 @@ import { PullToRefresh } from "@/components/pull-to-refresh"
 import type { ShareTarget } from "@/lib/share-types"
 import { cn } from "@/lib/utils"
 import { haptic } from "@/lib/haptics"
+
+/** Posts can be edited only within this window after publishing. */
+const EDIT_WINDOW_MS = 15 * 60 * 1000
+
+/** True when `createdAtMs` is less than 15 minutes before now. */
+function isWithinEditWindow(createdAtMs: number): boolean {
+  return Date.now() - createdAtMs < EDIT_WINDOW_MS
+}
+
+/**
+ * Shared modern popup styling so the post-options and media-upload menus look
+ * cohesive: rounded-2xl, translucent blurred surface, hairline border, soft
+ * shadow, and a fade + scale open/close transition (from the primitive).
+ */
+const POPUP_MENU_CONTENT =
+  "w-56 rounded-2xl border border-white/10 bg-popover/85 p-1.5 shadow-2xl backdrop-blur-xl"
+
+/**
+ * Roomy, aligned rows with consistent w-5/h-5 icons. The primitive already
+ * supplies a subtle highlight on hover/keyboard focus; we add a press state
+ * and larger rounding to match the modern card.
+ */
+const POPUP_MENU_ITEM =
+  "gap-3 rounded-xl px-3 py-2.5 text-[15px] font-medium transition-colors active:bg-white/10 [&_svg]:size-5"
 import { linkify, extractFirstUrl } from "@/lib/linkify"
 import { renderMessageBody } from "@/lib/rich-text"
 import { LinkPreview } from "@/components/link-preview"
@@ -666,15 +693,15 @@ export function MindFeed({
                     <Plus className="size-5" />
                   )}
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuItem onClick={() => photoCaptureRef.current?.click()} className="gap-2">
-                    <Camera className="size-4" /> Take photo
+                <DropdownMenuContent align="start" className={POPUP_MENU_CONTENT}>
+                  <DropdownMenuItem onClick={() => photoCaptureRef.current?.click()} className={POPUP_MENU_ITEM}>
+                    <Camera /> Take photo
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => videoCaptureRef.current?.click()} className="gap-2">
-                    <Video className="size-4" /> Record video
+                  <DropdownMenuItem onClick={() => videoCaptureRef.current?.click()} className={POPUP_MENU_ITEM}>
+                    <Video /> Record video
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="gap-2">
-                    <ImageIcon className="size-4" /> Upload from library
+                  <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className={POPUP_MENU_ITEM}>
+                    <ImageIcon /> Upload from library
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -945,6 +972,7 @@ export function PostCard({
   const [engagementKind, setEngagementKind] = useState<"likes" | "saves" | null>(null)
   const [showComments, setShowComments] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
   const [deleted, setDeleted] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editDraft, setEditDraft] = useState(post.text)
@@ -1167,45 +1195,58 @@ export function PostCard({
           {currentUser && !post.isSelf && (
             <FollowButton authorId={post.authorId} authorName={post.user} initialFollowing={post.isFollowing} />
           )}
-          {(text || post.isSelf) && (
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <button
-                    type="button"
-                    aria-label="Post options"
-                    className="rounded-full p-1.5 text-muted-foreground outline-none transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                }
-              >
-                <MoreHorizontal className="size-5" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {text && (
-                  <DropdownMenuItem onClick={copyPost} className="gap-2">
-                    {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-                    {copied ? "Copied" : "Copy text"}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label="Post options"
+                  className="rounded-full p-1.5 text-muted-foreground outline-none transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              }
+            >
+              <MoreHorizontal className="size-5" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className={POPUP_MENU_CONTENT}>
+              {text && (
+                <DropdownMenuItem onClick={copyPost} className={POPUP_MENU_ITEM}>
+                  {copied ? <Check /> : <Copy />}
+                  {copied ? "Copied" : "Copy text"}
+                </DropdownMenuItem>
+              )}
+
+              {post.isSelf ? (
+                <>
+                  {/* Owner: editing is only allowed within 15 min of publishing;
+                      after that the Edit action disappears, leaving only Delete. */}
+                  {isWithinEditWindow(post.createdAtMs) && (
+                    <DropdownMenuItem onClick={startEditing} className={POPUP_MENU_ITEM}>
+                      <Pencil /> Edit post
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onClick={() => setConfirmDelete(true)}
+                    className={POPUP_MENU_ITEM}
+                  >
+                    <Trash2 /> Delete post
                   </DropdownMenuItem>
-                )}
-                {currentUser && post.isSelf && (
-                  <>
-                    <DropdownMenuItem onClick={startEditing} className="gap-2">
-                      <Pencil className="size-4" /> Edit post
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      variant="destructive"
-                      onClick={() => setConfirmDelete(true)}
-                      className="gap-2"
-                    >
-                      <Trash2 className="size-4" /> Delete post
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+                </>
+              ) : (
+                <>
+                  {text && <DropdownMenuSeparator className="bg-white/10" />}
+                  {/* Non-owner: report opens the reason picker modal. */}
+                  <DropdownMenuItem onClick={() => setReportOpen(true)} className={POPUP_MENU_ITEM}>
+                    <Flag className="text-destructive" /> Report post
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
+
+      <ReportReasonModal open={reportOpen} onClose={() => setReportOpen(false)} subjectLabel={post.user} />
 
       {confirmDelete && (
         <div className="mx-3 mb-2 flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">

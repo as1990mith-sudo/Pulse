@@ -31,6 +31,74 @@ const MAX_REEL_SECONDS = 3 * 60 + 15
 type Reel = { post: FeedPostView; url: string; key: string }
 
 /**
+ * Turns one line of caption text into React nodes, converting simple markdown
+ * emphasis — **bold** or *bold* — into real <strong> elements instead of
+ * leaving the literal asterisks in the text. `**` is matched before `*` so
+ * double-asterisk spans win over single ones.
+ */
+function renderInlineBold(line: string, keyPrefix: string): React.ReactNode[] {
+  const nodes: React.ReactNode[] = []
+  const regex = /\*\*(.+?)\*\*|\*(.+?)\*/g
+  let lastIndex = 0
+  let boldIndex = 0
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(line)) !== null) {
+    if (match.index > lastIndex) nodes.push(line.slice(lastIndex, match.index))
+    const boldText = match[1] ?? match[2] ?? ""
+    nodes.push(
+      <strong key={`${keyPrefix}-b${boldIndex++}`} className="font-bold">
+        {boldText}
+      </strong>,
+    )
+    lastIndex = regex.lastIndex
+  }
+  if (lastIndex < line.length) nodes.push(line.slice(lastIndex))
+  return nodes
+}
+
+/**
+ * Caption under the author row. Collapsed, it shows only the first line; if the
+ * caption spans multiple lines a "Read More" toggle reveals the rest. Because
+ * the whole author/caption block is anchored to the bottom of the reel, growing
+ * this caption pushes the author row *upward* (rather than overlaying the
+ * scrubber/controls below it). Line breaks are preserved and *markdown* emphasis
+ * is parsed into bold.
+ */
+function ReelCaption({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const lines = useMemo(() => text.split("\n"), [text])
+  const hasMore = lines.length > 1
+  const shown = expanded ? lines : lines.slice(0, 1)
+
+  return (
+    <div className="mt-2.5 max-w-md" data-no-swipe>
+      <div
+        className={cn(
+          "overflow-hidden text-sm leading-relaxed drop-shadow transition-all duration-300 ease-out",
+          !expanded && "line-clamp-1",
+        )}
+      >
+        {shown.map((line, i) => (
+          <p key={i} className="whitespace-pre-line">
+            {renderInlineBold(line, `l${i}`)}
+          </p>
+        ))}
+      </div>
+      {hasMore && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-1 text-xs font-semibold text-white/80 transition-colors hover:text-white"
+          aria-expanded={expanded}
+        >
+          {expanded ? "Read Less" : "Read More"}
+        </button>
+      )}
+    </div>
+  )
+}
+
+/**
  * Full-screen, vertically-snapping reels experience. Flattens every video in the
  * feed (from all creators) into a randomized stack of clips. Each reel fills the
  * viewport; scrolling snaps to exactly one neighbour at a time, and the visible
@@ -241,6 +309,10 @@ function ReelItem({
   const [liked, setLiked] = useState(post.liked)
   const [likes, setLikes] = useState(post.likes)
   const [saved, setSaved] = useState(post.saved)
+  // Hide the Follow button on the current user's own reels; otherwise seed it
+  // from the post's follow state. Local-only for now — toggling is optimistic.
+  const isOwnReel = currentUser?.id === post.authorId
+  const [following, setFollowing] = useState(post.isFollowing)
   const [comments, setComments] = useState<FeedCommentView[]>(post.comments)
   const [commentsOpen, setCommentsOpen] = useState(false)
 
@@ -543,29 +615,51 @@ function ReelItem({
         {muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
       </button>
 
-      {/* Author + caption, bottom-left. Sits a touch lower (smaller pb) while
-          still clearing the scrubber at the very bottom. */}
+      {/* Author + caption, bottom-left. Bottom-anchored so expanding the caption
+          grows the block upward — pushing the author row up rather than covering
+          the scrubber/controls below. */}
       <div className="absolute inset-x-0 bottom-0 z-[1] p-4 pb-12 pr-24 text-white">
-        <Link href={`/u/${post.authorId}`} className="flex items-center gap-2.5">
-          <span
-            className={cn(
-              "flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-bold ring-2 ring-white/70",
-              post.color,
-            )}
-          >
-            {post.authorImage ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={post.authorImage || "/placeholder.svg"} alt={post.user} className="size-full object-cover" />
-            ) : (
-              post.initials
-            )}
-          </span>
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-bold leading-tight drop-shadow">{post.user}</span>
-            <span className="block truncate text-xs text-white/70">@{post.handle}</span>
-          </span>
-        </Link>
-        {post.text && <p className="mt-2.5 line-clamp-2 max-w-md text-sm leading-relaxed drop-shadow">{post.text}</p>}
+        <div className="flex items-center gap-2.5">
+          <Link href={`/u/${post.authorId}`} className="flex min-w-0 items-center gap-2.5">
+            <span
+              className={cn(
+                "flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-bold ring-2 ring-white/70",
+                post.color,
+              )}
+            >
+              {post.authorImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={post.authorImage || "/placeholder.svg"} alt={post.user} className="size-full object-cover" />
+              ) : (
+                post.initials
+              )}
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-bold leading-tight drop-shadow">{post.user}</span>
+              <span className="block truncate text-xs text-white/70">@{post.handle}</span>
+            </span>
+          </Link>
+          {!isOwnReel && (
+            <button
+              type="button"
+              data-no-swipe
+              onClick={() => {
+                setFollowing((f) => !f)
+                haptic("select")
+              }}
+              aria-pressed={following}
+              className={cn(
+                "shrink-0 rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+                following
+                  ? "border-white/60 bg-transparent text-white"
+                  : "border-white bg-white text-black hover:bg-white/90",
+              )}
+            >
+              {following ? "Following" : "Follow"}
+            </button>
+          )}
+        </div>
+        {post.text && <ReelCaption text={post.text} />}
       </div>
 
       {/* Draggable play tracker — full-width at the very bottom. Tap or drag the

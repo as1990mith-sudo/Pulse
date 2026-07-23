@@ -327,9 +327,21 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
   }
 
   return (
-    <div className="flex h-full flex-1 flex-col overflow-hidden">
+    <div
+      className={cn("relative flex h-full flex-1 flex-col overflow-hidden", !hasWallpaper && "bg-background")}
+      style={chatBackgroundStyle(bgId)}
+    >
+      {/* Wallpaper legibility scrim spanning the full chat height so the dark
+          tint reaches from the header all the way down past the composer,
+          instead of cutting off where the message list ends. */}
+      {hasWallpaper && <div className="pointer-events-none absolute inset-0 z-0 bg-background/45" aria-hidden />}
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-6">
+      <div
+        className={cn(
+          "relative z-10 flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-6",
+          hasWallpaper && "bg-background/40 backdrop-blur-md",
+        )}
+      >
         <Link
           href="/messages"
           aria-label="Back to messages"
@@ -449,7 +461,7 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
 
       {/* In-chat search overlay */}
       {searchOpen && (
-        <div className="flex items-center gap-2 border-b border-border/60 bg-background px-3 py-2 sm:px-4">
+        <div className="relative z-10 flex items-center gap-2 border-b border-border/60 bg-background px-3 py-2 sm:px-4">
           <Search className="size-4 shrink-0 text-muted-foreground" />
           <input
             autoFocus
@@ -519,12 +531,7 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
       )}
 
       {/* Messages */}
-      <div
-        className={cn("relative flex-1 overflow-y-auto", !hasWallpaper && "bg-card/30")}
-        style={chatBackgroundStyle(bgId)}
-      >
-        {/* Legibility scrim over photo/gradient wallpapers. */}
-        {hasWallpaper && <div className="pointer-events-none absolute inset-0 z-0 bg-background/45" aria-hidden />}
+      <div className={cn("relative z-10 flex-1 overflow-y-auto", !hasWallpaper && "bg-card/30")}>
         <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 py-5 sm:px-6">
           {messages.length === 0 && (
             <p className="py-10 text-center text-sm text-muted-foreground">
@@ -552,7 +559,12 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
 
       {/* Composer — replaced by a blocked notice while this user is blocked */}
       {blocked ? (
-        <div className="border-t border-border/60 bg-background px-4 py-4 pb-safe-2 pl-safe pr-safe sm:px-6">
+        <div
+          className={cn(
+            "relative z-10 border-t border-border/60 px-4 py-4 pb-safe-2 pl-safe pr-safe sm:px-6",
+            hasWallpaper ? "bg-background/40 backdrop-blur-md" : "bg-background",
+          )}
+        >
           <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-2 rounded-2xl bg-secondary/60 px-4 py-4 text-center">
             <span className="flex size-10 items-center justify-center rounded-full bg-destructive/15 text-destructive">
               <Ban className="size-5" />
@@ -571,7 +583,12 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
           </div>
         </div>
       ) : (
-      <div className="border-t border-border/60 bg-background px-4 py-3 pb-safe-2 pl-safe pr-safe sm:px-6">
+      <div
+        className={cn(
+          "relative z-10 border-t border-border/60 px-4 py-3 pb-safe-2 pl-safe pr-safe sm:px-6",
+          hasWallpaper ? "bg-background/40 backdrop-blur-md" : "bg-background",
+        )}
+      >
         <div className="mx-auto w-full max-w-3xl space-y-3">
           {attachment && (
             <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card p-3">
