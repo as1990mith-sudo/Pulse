@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Bookmark, Heart, Share2 } from "lucide-react"
+import { Bookmark, Download, Heart, MoreVertical, Pencil, Send } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import type { Show } from "@/lib/data"
 import type { CurrentUser } from "@/lib/session"
@@ -20,7 +20,14 @@ import {
 import { isItemSaved, toggleSaveItem } from "@/app/actions/share"
 import { getEpisodeEngagement, type EpisodeEngagement } from "@/app/actions/engagement"
 import { getFollowingIds } from "@/app/actions/follow"
+import { updateEpisode } from "@/app/actions/shows"
 import type { ShareTarget } from "@/lib/share-types"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { EpisodePlayer } from "@/components/episode-player"
 import { type ThreadComment } from "@/components/comment-thread"
 import { CommentSheet } from "@/components/comment-sheet"
@@ -92,6 +99,11 @@ export function EpisodeWatch({
   const [saveCount, setSaveCount] = useState(0)
   const [shareCount, setShareCount] = useState(0)
   const [, startTransition] = useTransition()
+
+  // Owner-only "Rename episode" modal state, pre-filled with the current title.
+  const [renameOpen, setRenameOpen] = useState(false)
+  const [renameValue, setRenameValue] = useState(show.title)
+  const [renameSaving, setRenameSaving] = useState(false)
 
   // Follow state for the episode's host, used to seed the inline Follow button
   // in the action bar. Only relevant when signed in and viewing someone else.
@@ -197,7 +209,27 @@ export function EpisodeWatch({
     setComments(await getEpisodeComments(episodeId!))
   }
 
+  async function handleRenameSave() {
+    const title = renameValue.trim()
+    if (!title || title === show.title) {
+      setRenameOpen(false)
+      return
+    }
+    setRenameSaving(true)
+    const res = await updateEpisode({ slug: show.id, title })
+    setRenameSaving(false)
+    if (res.ok) {
+      setRenameOpen(false)
+      // Refresh the server component so the new title flows back into the player.
+      router.refresh()
+    }
+  }
+
   const count = comments.length
+
+  // Suggested filename for the video download (derived from the title).
+  const videoExt = show.videoUrl?.split("?")[0].split(".").pop()?.slice(0, 5) || "mp4"
+  const downloadName = `${show.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.${videoExt}`
 
   return (
     <div className="mx-auto flex h-[100dvh] w-full max-w-3xl flex-col overflow-hidden bg-background">
@@ -251,6 +283,15 @@ export function EpisodeWatch({
                   className="h-8 rounded-full px-3 text-xs"
                 />
               )}
+              {/* Viewing your own episode: static, non-interactive Owner pill. */}
+              {currentUser && hostIsSelf && (
+                <span
+                  className="ml-1 select-none rounded-full bg-secondary px-3 py-1 text-xs font-semibold text-muted-foreground"
+                  aria-label="You own this episode"
+                >
+                  Owner
+                </span>
+              )}
 
               {/* Right: engagement actions, pushed to the far edge. */}
               <div className="ml-auto flex items-center gap-1">
@@ -288,17 +329,49 @@ export function EpisodeWatch({
                   aria-label={saved ? "Unsave episode" : "Save episode"}
                 >
                   <Bookmark className={cn("size-5", saved && "fill-current")} />
-                  <span className="tabular-nums">{saveCount > 0 ? saveCount : saved ? "Saved" : "Save"}</span>
+                  {saveCount > 0 && <span className="tabular-nums">{saveCount}</span>}
                 </button>
 
                 <button
                   onClick={() => setShareOpen(true)}
-                  className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+                  className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary active:scale-90"
                   aria-label="Share episode"
                 >
-                  <Share2 className="size-5" />
-                  <span className="tabular-nums">{shareCount > 0 ? shareCount : "Share"}</span>
+                  <Send className="size-5" />
+                  {shareCount > 0 && <span className="tabular-nums">{shareCount}</span>}
                 </button>
+
+                {/* Overflow menu: Download (all viewers) + Rename (owner only). */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    aria-label="Episode options"
+                    className="flex items-center justify-center rounded-full px-2 py-1.5 text-foreground transition-colors hover:bg-secondary active:scale-90"
+                  >
+                    <MoreVertical className="size-5" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    {show.videoUrl && (
+                      <DropdownMenuItem
+                        render={
+                          <a href={show.videoUrl} download={downloadName} aria-label="Download video">
+                            <Download className="size-4" /> Download
+                          </a>
+                        }
+                      />
+                    )}
+                    {hostIsSelf && (
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setRenameValue(show.title)
+                          setRenameOpen(true)
+                        }}
+                      >
+                        <Pencil className="size-4" />
+                        Rename episode
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           </div>
@@ -369,6 +442,52 @@ export function EpisodeWatch({
         onClose={() => setShareOpen(false)}
         onShared={() => setShareCount((n) => n + 1)}
       />
+
+      {/* Owner-only "Rename episode" modal — pre-filled card with a Save button. */}
+      {renameOpen && hostIsSelf && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-6">
+          <button
+            type="button"
+            aria-label="Cancel rename"
+            onClick={() => setRenameOpen(false)}
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          />
+          <div className="relative w-full max-w-sm rounded-2xl border border-border bg-background p-5 shadow-2xl">
+            <h2 className="text-base font-bold">Rename episode</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">Update the title of this episode.</p>
+            <input
+              autoFocus
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.nativeEvent.isComposing && e.keyCode !== 229) {
+                  e.preventDefault()
+                  void handleRenameSave()
+                }
+              }}
+              placeholder="Episode title"
+              className="mt-4 w-full rounded-xl border border-border bg-secondary px-3 py-2.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/50"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRenameOpen(false)}
+                className="rounded-full px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-foreground/5 active:scale-95"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleRenameSave()}
+                disabled={renameSaving || !renameValue.trim()}
+                className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-transform hover:brightness-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {renameSaving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
