@@ -442,7 +442,7 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
                     }}
                     className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors hover:bg-secondary"
                   >
-                    <ImageIcon className="size-4 shrink-0 text-muted-foreground" /> Change chat background
+                    <ImageIcon className="size-4 shrink-0 text-muted-foreground" /> Chat background
                   </button>
                   <button
                     type="button"

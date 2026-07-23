@@ -844,7 +844,7 @@ function VerseActionSheet({
       )}
     >
         <div className="mb-2.5 flex items-start justify-between gap-3">
-          <div className="min-w-0">
+          <div className="flex min-w-0 items-baseline gap-2">
             <p className="text-sm font-bold">{reference}</p>
             <p className="text-xs uppercase tracking-wider text-muted-foreground">{translationShort}</p>
           </div>

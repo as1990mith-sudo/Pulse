@@ -288,7 +288,7 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
   }
   menuActions.push({ label: "Send invite link", icon: Copy, onClick: copyInviteLink })
   if (detail.isAdmin) {
-    menuActions.push({ label: "Change chat background", icon: ImageIcon, onClick: () => setBgSheetOpen(true) })
+    menuActions.push({ label: "Chat background", icon: ImageIcon, onClick: () => setBgSheetOpen(true) })
   }
   if (!detail.isOwner) {
     menuActions.push({ label: "Leave group", icon: LogOut, destructive: true, onClick: () => setConfirmLeave(true) })

@@ -8,7 +8,6 @@ import {
   ChevronDown,
   Crown,
   Globe,
-  HandHeart,
   Loader2,
   Lock,
   MessageSquare,
@@ -51,7 +50,6 @@ import {
   removeCoHost,
   resolveMusicControl,
   resolveEndSession,
-  setPrayerMode,
   type CallRequestView,
   type CoHostPermissions,
   type LiveStreamView,
@@ -294,19 +292,9 @@ export function StudioConsole({
     prevPrayerRef.current = next
     setPrayerStartedAt(next)
   }, [callState?.prayerStartedAt])
+  // Prayer Mode is reconciled from server state only; the host trigger has been
+  // removed, so this stays inert unless a legacy session reports it.
   const prayerActive = prayerStartedAt != null
-  async function togglePrayer() {
-    if (!roomName) return
-    const next = !prayerActive
-    setPrayerStartedAt(next ? new Date().toISOString() : null)
-    if (!next) setPrayerEndedAt(Date.now())
-    try {
-      await setPrayerMode({ roomName, on: next })
-      refreshCalls()
-    } catch {
-      setPrayerStartedAt(next ? null : new Date().toISOString())
-    }
-  }
   // Co-host state from the poll. `coHosts` includes everyone granted co-host
   // status (on the call or off it) so the host can manage them all.
   const coHosts = callState?.coHosts ?? []
@@ -885,13 +873,6 @@ export function StudioConsole({
               active={panel === "music" || musicPlaying}
               disabled={!live || musicHandedOff}
               onClick={() => setPanel((p) => (p === "music" ? null : "music"))}
-            />
-            <DockButton
-              icon={<HandHeart className="size-5" />}
-              label={prayerActive ? "End Prayer Mode" : "Start Prayer Mode"}
-              active={prayerActive}
-              disabled={!live}
-              onClick={() => void togglePrayer()}
             />
             <DockButton
               icon={<Users className="size-5" />}

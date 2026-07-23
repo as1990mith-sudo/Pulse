@@ -6,7 +6,6 @@ import {
   Check,
   ChevronDown,
   Globe,
-  HandHeart,
   Loader2,
   Lock,
   Mic,
@@ -37,7 +36,6 @@ import {
   removeFromStage,
   setGuestsEnabled,
   setSpotlightGuest,
-  setPrayerMode,
   heartbeatBroadcast,
   type LiveStreamView,
   type LiveOrientation,
@@ -105,7 +103,7 @@ function GlassButton({
           ? "bg-destructive text-destructive-foreground ring-white/20 hover:opacity-90"
           : tone === "muted"
             ? "bg-white/90 text-neutral-900 ring-white/40"
-            : "bg-white/10 text-white ring-white/15 backdrop-blur-md hover:bg-white/20",
+            : "bg-black/40 text-white ring-white/10 backdrop-blur-md hover:bg-black/55",
       )}
     >
       {children}
@@ -503,19 +501,9 @@ export function VideoStudioConsole({
     prevPrayerRef.current = next
     setPrayerStartedAt(next)
   }, [callState?.prayerStartedAt])
+  // Prayer Mode is reconciled from server state only; the host trigger has been
+  // removed, so this stays inert unless a legacy session reports it.
   const prayerActive = prayerStartedAt != null
-  async function togglePrayer() {
-    if (!roomName) return
-    const next = !prayerActive
-    setPrayerStartedAt(next ? new Date().toISOString() : null)
-    if (!next) setPrayerEndedAt(Date.now())
-    try {
-      await setPrayerMode({ roomName, on: next })
-      refreshCalls()
-    } catch {
-      setPrayerStartedAt(next ? null : new Date().toISOString())
-    }
-  }
 
   // Duck the background music under the host's own speech — but never during
   // Prayer Mode, so worship/instrumental music keeps playing naturally.
@@ -696,7 +684,7 @@ export function VideoStudioConsole({
   // Broadcast caps the stage at 3 guests (host + 3 = 4 tiles total).
   const guests = peers.slice(0, 3)
 
-  // ── Broadcast spotlight (portrait) ────────────────────────────────────────
+  // ── Broadcast spotlight (portrait) ─────���──────────────────────────────────
   // The host can spotlight ONE called-in guest: that guest moves into the
   // primary slot and the host drops into a secondary slot. Spotlight is stored
   // server-side (gridPinnedId, reused) so viewers see the same swap.
@@ -824,8 +812,9 @@ export function VideoStudioConsole({
                 ? // Landscape letterboxes the feed so nothing is cropped.
                   "absolute inset-0 z-0"
                 : live
-                  ? // Portrait Broadcast: positioned via hostRect; rounded when sharing the stage.
-                    cn("z-20 overflow-hidden", stageTiles.length > 1 && "rounded-2xl ring-1 ring-inset ring-white/10")
+                  ? // Portrait Broadcast: positioned via hostRect. Always rounded so the
+                    // host's own frame matches the viewer's rounded video, even solo.
+                    "z-20 overflow-hidden rounded-2xl ring-1 ring-inset ring-white/10"
                   : // Pre-live: full-bleed (the preview element also renders below).
                     "absolute inset-0 z-0",
             )}
@@ -1336,14 +1325,6 @@ export function VideoStudioConsole({
               tone={musicTracks.length > 0 ? "muted" : "glass"}
             >
               <Music className="size-5" />
-            </GlassButton>
-            <GlassButton
-              label={prayerActive ? "End Prayer Mode" : "Start Prayer Mode"}
-              onClick={() => void togglePrayer()}
-              active={prayerActive}
-              tone={prayerActive ? "muted" : "glass"}
-            >
-              <HandHeart className="size-5" />
             </GlassButton>
             {roomName && (
               <GlassButton label="Share this live" onClick={() => setShareOpen(true)}>

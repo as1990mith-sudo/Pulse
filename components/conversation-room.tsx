@@ -54,7 +54,6 @@ import {
   heartbeatBroadcast,
   getConversationState,
   getLiveChat,
-  setPrayerMode,
   setPinnedParticipant,
   setRoomLock,
   setLiveTheme,
@@ -531,11 +530,6 @@ export function ConversationRoom({
       { label: "Background music", icon: Music, onClick: () => setMusicOpen(true) },
       { label: "Room theme", icon: Palette, onClick: () => setThemeOpen(true) },
       {
-        label: prayerActive ? "End Prayer Mode" : "Start Prayer Mode",
-        icon: HandHeart,
-        onClick: () => togglePrayer(),
-      },
-      {
         label: locked ? "Unlock room" : "Lock room",
         icon: locked ? Lock : LockOpen,
         hint: locked ? "New people can't join" : "Anyone can join",
@@ -545,13 +539,6 @@ export function ConversationRoom({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, prayerActive, locked])
 
-  function togglePrayer() {
-    if (!roomName) return
-    const next = !prayerActive
-    setPrayerStartedAt(next ? new Date().toISOString() : null)
-    if (!next) setPrayerEndedAt(Date.now())
-    void setPrayerMode({ roomName, on: next })
-  }
   function toggleLock() {
     if (!roomName) return
     const next = !locked
