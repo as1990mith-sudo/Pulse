@@ -459,6 +459,7 @@ function CommentItem({
           title={comment.isSelf ? "Your comment" : comment.name}
           preview={text}
           actions={actions}
+          dimBackdrop={false}
         />
       )}
     </div>

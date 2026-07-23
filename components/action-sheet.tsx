@@ -28,6 +28,7 @@ export function ActionSheet({
   title,
   preview,
   actions,
+  dimBackdrop = true,
 }: {
   open: boolean
   onClose: () => void
@@ -35,6 +36,12 @@ export function ActionSheet({
   /** Optional snippet of the target content shown under the title. */
   preview?: string
   actions: SheetAction[]
+  /**
+   * When true (default) the backdrop dims and blurs the page behind the sheet.
+   * Set false to keep the page fully visible — the backdrop stays as an
+   * invisible tap-to-close catcher.
+   */
+  dimBackdrop?: boolean
 }) {
   // Only portal on the client (document is unavailable during SSR).
   const [mounted, setMounted] = useState(false)
@@ -104,7 +111,10 @@ export function ActionSheet({
         type="button"
         aria-label="Close menu"
         onClick={onClose}
-        className="absolute inset-0 bg-background/60 backdrop-blur-md animate-in fade-in duration-200"
+        className={cn(
+          "absolute inset-0 animate-in fade-in duration-200",
+          dimBackdrop && "bg-background/60 backdrop-blur-md",
+        )}
       />
       {/* Sheet */}
       <div
