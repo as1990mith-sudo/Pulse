@@ -13,7 +13,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import {
   createChatroom,
-  joinByInviteCode,
   requestToJoin,
   searchChatrooms,
   type ChatroomSearchResult,
@@ -179,10 +178,8 @@ function DiscoverRooms() {
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<ChatroomSearchResult[]>([])
   const [searched, setSearched] = useState(false)
-  const [inviteCode, setInviteCode] = useState("")
   const [isSearching, startSearch] = useTransition()
   const [isJoining, startJoin] = useTransition()
-  const [error, setError] = useState<string | null>(null)
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault()
@@ -202,41 +199,10 @@ function DiscoverRooms() {
     })
   }
 
-  function handleInvite(e: React.FormEvent) {
-    e.preventDefault()
-    setError(null)
-    const code = inviteCode.trim()
-    if (!code) return
-    startJoin(async () => {
-      try {
-        const roomId = await joinByInviteCode(code)
-        router.push(`/chatrooms/${roomId}`)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not join with that code.")
-      }
-    })
-  }
-
   return (
     // Edge-to-edge immersive layout: break out of the page padding and stack
     // full-bleed sections divided by borders instead of boxed cards.
     <div className="-mx-4 divide-y divide-border/60 border-y border-border/60 sm:-mx-6">
-      <section className="space-y-3 px-4 py-5 sm:px-6">
-        <h2 className="text-sm font-semibold">Have an invite code?</h2>
-        <form onSubmit={handleInvite} className="flex gap-2">
-          <Input
-            value={inviteCode}
-            onChange={(e) => setInviteCode(e.target.value)}
-            placeholder="Enter invite code"
-            aria-label="Invite code"
-          />
-          <Button type="submit" disabled={isJoining || !inviteCode.trim()}>
-            {isJoining ? <Loader2 className="size-4 animate-spin" /> : "Join"}
-          </Button>
-        </form>
-        {error && <p className="text-sm text-destructive">{error}</p>}
-      </section>
-
       <section className="space-y-4 px-4 py-5 sm:px-6">
         <h2 className="text-sm font-semibold">Search rooms by name</h2>
         <form onSubmit={handleSearch} className="flex gap-2">
