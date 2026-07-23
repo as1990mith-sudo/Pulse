@@ -53,6 +53,12 @@ export type CommentThreadProps = {
    * control of their comments.
    */
   enforceTimeWindows?: boolean
+  /**
+   * When provided, tapping a comment author's name/avatar calls this instead of
+   * navigating to their profile page. Used by Community Help to pop a profile
+   * card (Follow · Message · View profile) without leaving the feed.
+   */
+  onAuthorClick?: (authorId: string) => void
 }
 
 /**
@@ -69,6 +75,7 @@ export function CommentThread({
   onDelete,
   showCopy = true,
   enforceTimeWindows = true,
+  onAuthorClick,
 }: CommentThreadProps) {
   // Group replies under their parent. Unknown parents fall back to top level.
   const { roots, repliesByParent } = useMemo(() => {
@@ -104,6 +111,7 @@ export function CommentThread({
             onDelete={onDelete}
             showCopy={showCopy}
             enforceTimeWindows={enforceTimeWindows}
+            onAuthorClick={onAuthorClick}
           />
         </li>
       ))}
@@ -130,6 +138,7 @@ function CommentNode({
   onDelete,
   showCopy,
   enforceTimeWindows,
+  onAuthorClick,
 }: {
   comment: ThreadComment
   depth: number
@@ -141,6 +150,7 @@ function CommentNode({
   onDelete: (commentId: number) => Promise<void> | void
   showCopy: boolean
   enforceTimeWindows: boolean
+  onAuthorClick?: (authorId: string) => void
 }) {
   const replies = repliesByParent.get(comment.id) ?? []
   const [collapsed, setCollapsed] = useState(true)
@@ -158,6 +168,7 @@ function CommentNode({
         onDelete={onDelete}
         showCopy={showCopy}
         enforceTimeWindows={enforceTimeWindows}
+        onAuthorClick={onAuthorClick}
       />
 
       {replies.length > 0 && (
@@ -188,6 +199,7 @@ function CommentNode({
                     onDelete={onDelete}
                     showCopy={showCopy}
                     enforceTimeWindows={enforceTimeWindows}
+                    onAuthorClick={onAuthorClick}
                   />
                 </li>
               ))}
@@ -210,6 +222,7 @@ function CommentItem({
   showCopy,
   enforceTimeWindows = true,
   isReply = false,
+  onAuthorClick,
 }: {
   comment: ThreadComment
   canInteract: boolean
@@ -221,6 +234,7 @@ function CommentItem({
   showCopy: boolean
   enforceTimeWindows?: boolean
   isReply?: boolean
+  onAuthorClick?: (authorId: string) => void
 }) {
   const [liked, setLiked] = useState(comment.liked)
   const [likes, setLikes] = useState(comment.likes)
@@ -304,15 +318,38 @@ function CommentItem({
 
   if (deleted) return null
 
-  const NameTag = comment.authorId ? Link : "span"
-  const nameProps = comment.authorId ? { href: `/u/${comment.authorId}` } : {}
+  // When a surface supplies onAuthorClick (e.g. Community Help), the author's
+  // name/avatar pops a profile card instead of navigating away. Otherwise fall
+  // back to a plain profile link.
+  const popsProfile = Boolean(comment.authorId && onAuthorClick)
+  const NameTag = popsProfile ? "button" : comment.authorId ? Link : "span"
+  const nameProps = popsProfile
+    ? { type: "button" as const, onClick: () => onAuthorClick!(comment.authorId!) }
+    : comment.authorId
+      ? { href: `/u/${comment.authorId}` }
+      : {}
+
+  const avatar = (
+    <Avatar className={cn("shrink-0", isReply ? "size-7" : "size-8")}>
+      {comment.image && <AvatarImage src={comment.image || "/placeholder.svg"} alt={comment.name} />}
+      <AvatarFallback className={cn("text-xs", comment.color)}>{comment.initials}</AvatarFallback>
+    </Avatar>
+  )
 
   return (
     <div className="flex gap-2.5">
-      <Avatar className={cn("shrink-0", isReply ? "size-7" : "size-8")}>
-        {comment.image && <AvatarImage src={comment.image || "/placeholder.svg"} alt={comment.name} />}
-        <AvatarFallback className={cn("text-xs", comment.color)}>{comment.initials}</AvatarFallback>
-      </Avatar>
+      {popsProfile ? (
+        <button
+          type="button"
+          onClick={() => onAuthorClick!(comment.authorId!)}
+          aria-label={`Open ${comment.name}'s profile`}
+          className="shrink-0 rounded-full transition-opacity hover:opacity-80"
+        >
+          {avatar}
+        </button>
+      ) : (
+        avatar
+      )}
       <div className="min-w-0 flex-1">
         <div
           onPointerDown={startPress}
@@ -328,7 +365,7 @@ function CommentItem({
         >
           <div className="flex flex-wrap items-center gap-x-2 text-sm">
             {/* @ts-expect-error polymorphic tag */}
-            <NameTag {...nameProps} className={cn("font-medium", comment.authorId && "hover:underline")}>
+            <NameTag {...nameProps} className={cn("text-sm font-semibold", comment.authorId && "hover:underline")}>
               {comment.name}
             </NameTag>
             {comment.handle && <span className="text-xs text-muted-foreground">{comment.handle}</span>}

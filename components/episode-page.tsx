@@ -5,9 +5,10 @@ import { BackButton } from "@/components/back-button"
 import { EpisodePlayer } from "@/components/episode-player"
 import { EpisodeInteractions } from "@/components/episode-interactions"
 import { EpisodeWatch } from "@/components/episode-watch"
+import { LiveReplayWatch } from "@/components/live-replay-watch"
 import { VideoCard } from "@/components/profile/video-card"
 import { getEpisodeComments } from "@/app/actions/episodes"
-import { getEpisodesByUser } from "@/lib/content"
+import { getEpisodesByUser, getCatalogEpisodes } from "@/lib/content"
 import { getCurrentUser } from "@/lib/session"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
@@ -22,9 +23,45 @@ export async function EpisodePage({ show }: { show: Show }) {
   // "Up next" queue: the same creator's other video episodes (excluding this one).
   const queue = creatorEpisodes.filter((ep) => ep.mediaType === "video" && ep.id !== show.id)
 
-  // Video episodes use the immersive, YouTube-style watch layout with a pinned
-  // player + action bar and a single scroll container beneath it. Audio episodes
-  // keep the classic scrolling page.
+  // Video content routes by its ORIGIN:
+  //  • livestream replays (source === "live") open the dedicated portrait
+  //    LiveReplayPlayer / LiveReplayWatch experience,
+  //  • uploaded videos keep the unchanged YouTube-style EpisodeWatch,
+  //  • audio keeps the classic scrolling page below.
+  if (show.videoUrl && show.source === "live") {
+    // Recommendation rails: this creator's other replays, related livestreams
+    // from across the catalogue, and recommended uploaded videos.
+    const catalog = await getCatalogEpisodes()
+    const creatorReplays = creatorEpisodes
+      .filter((ep) => ep.mediaType === "video" && ep.source === "live" && ep.id !== show.id)
+      .slice(0, 8)
+    const relatedReplays = catalog
+      .filter(
+        (ep) =>
+          ep.mediaType === "video" &&
+          ep.source === "live" &&
+          ep.id !== show.id &&
+          ep.host.id !== show.host.id,
+      )
+      .slice(0, 8)
+    const recommendedUploads = catalog
+      .filter((ep) => ep.mediaType === "video" && ep.source !== "live" && ep.id !== show.id)
+      .slice(0, 8)
+
+    return (
+      <LiveReplayWatch
+        show={show}
+        currentUser={currentUser}
+        initialComments={comments}
+        creatorReplays={creatorReplays}
+        relatedReplays={relatedReplays}
+        recommendedUploads={recommendedUploads}
+      />
+    )
+  }
+
+  // Uploaded video episodes use the immersive, YouTube-style watch layout with a
+  // pinned player + action bar and a single scroll container beneath it.
   if (show.videoUrl) {
     return <EpisodeWatch show={show} currentUser={currentUser} initialComments={comments} queue={queue} />
   }

@@ -47,6 +47,12 @@ export type CommentSheetProps = {
   canComment?: boolean
   showCopy?: boolean
   enforceTimeWindows?: boolean
+  /**
+   * When provided, tapping a comment author opens a profile card via this
+   * callback instead of navigating to their profile page. Passed straight
+   * through to the underlying CommentThread.
+   */
+  onAuthorClick?: (authorId: string) => void
   placeholder?: string
   /** Empty-state copy. */
   emptyText?: string
@@ -75,6 +81,7 @@ export function CommentSheet({
   canComment,
   showCopy = true,
   enforceTimeWindows = true,
+  onAuthorClick,
   placeholder = "Add a comment…",
   emptyText = "No comments yet",
   emptyHint = "Start the conversation.",
@@ -219,6 +226,7 @@ export function CommentSheet({
               onReply={onReply ?? (() => {})}
               onEdit={onEdit ?? (() => {})}
               onDelete={onDelete ?? (() => {})}
+              onAuthorClick={onAuthorClick}
             />
           )}
         </div>
@@ -240,7 +248,7 @@ export function CommentSheet({
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder={placeholder}
                 aria-label="Add a comment"
-                className="min-w-0 flex-1 bg-transparent py-2.5 text-sm text-white placeholder:text-white/40 focus:outline-none"
+                className="min-w-0 flex-1 bg-transparent py-2.5 text-[15px] text-white placeholder:text-white/40 focus:outline-none"
               />
               <button
                 type="submit"
