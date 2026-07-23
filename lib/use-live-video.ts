@@ -395,6 +395,17 @@ export function useLiveVideo({
       videoCaptureDefaults: {
         resolution: VideoPresets.h720.resolution,
       },
+      // Studio-grade microphone capture for the host. The browser's voice-call
+      // DSP (auto-gain, noise gate, echo canceller) is tuned for compressing
+      // speech on a call and makes phone mics sound thin and "pumpy"; disabling
+      // it preserves full dynamic range and tone at a clean 48 kHz stereo.
+      audioCaptureDefaults: {
+        autoGainControl: false,
+        echoCancellation: false,
+        noiseSuppression: false,
+        channelCount: 2,
+        sampleRate: 48000,
+      },
       publishDefaults: {
         // Simulcast so viewers on weak networks still receive a lower layer,
         // while good connections get the full 720p feed.
@@ -405,6 +416,14 @@ export function useLiveVideo({
         // Keep resolution sharp (rather than dropping to a blurry frame) when
         // the encoder is bandwidth-constrained — faces stay legible.
         degradationPreference: "maintain-resolution",
+        // Encode the host mic at the highest-fidelity music profile (128 kbps
+        // stereo) instead of the default 24 kbps speech codec. DTX off avoids
+        // swirl/dropouts on music and room tone; RED adds packet-loss
+        // resilience.
+        audioPreset: AudioPresets.musicHighQualityStereo,
+        forceStereo: true,
+        dtx: false,
+        red: true,
       },
     })
     roomRef.current = room
