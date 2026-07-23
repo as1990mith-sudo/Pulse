@@ -747,7 +747,7 @@ export function StudioConsole({
             <div className="flex items-center gap-2">
               {live ? (
                 <>
-                  <LiveBadge />
+                  <LiveBadge className="py-0.5" />
                   {reconnecting ? (
                     <span className="flex items-center gap-1 text-[11px] font-medium text-amber-300">
                       <Loader2 className="size-3 animate-spin" />

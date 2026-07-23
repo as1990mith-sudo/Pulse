@@ -629,7 +629,10 @@ export function LiveVideoViewer({
                 playsInline
                 muted
                 className={cn(
-                  "h-full w-full -scale-x-100 object-cover transition-opacity duration-300",
+                  "h-full w-full object-cover transition-opacity duration-300",
+                  // Mirror the front camera only; the back camera renders
+                  // un-mirrored so the scene isn't reversed.
+                  facingMode === "user" && "-scale-x-100",
                   camOn ? "opacity-100" : "opacity-0",
                 )}
               />

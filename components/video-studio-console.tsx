@@ -836,7 +836,10 @@ export function VideoStudioConsole({
               playsInline
               muted
               className={cn(
-                "h-full w-full -scale-x-100 transition-opacity duration-500 ease-out",
+                "h-full w-full transition-opacity duration-500 ease-out",
+                // Mirror only the front camera; the back camera must render
+                // un-mirrored so text/scenes aren't reversed.
+                facingMode === "user" && "-scale-x-100",
                 orientation === "landscape" ? "object-contain" : "object-cover",
                 live && camOn && localVideoReady ? "opacity-100" : "opacity-0",
               )}

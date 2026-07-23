@@ -7,6 +7,7 @@ import {
   Room,
   RoomEvent,
   Track,
+  VideoPresets,
   type LocalTrackPublication,
   type RemoteTrack,
   type RemoteTrackPublication,
@@ -384,7 +385,28 @@ export function useLiveVideo({
 
   const connect = useCallback(async () => {
     if (roomRef.current || !token || !serverUrl) return
-    const room = new Room({ adaptiveStream: true, dynacast: true })
+    const room = new Room({
+      adaptiveStream: true,
+      dynacast: true,
+      // Force a proper HD capture. Android Chrome otherwise defaults to a low
+      // ~480p (sometimes 640x480) capture, which is why Android publishers
+      // looked far worse than iOS Safari — Safari already captures 720p by
+      // default. Requesting 720p explicitly puts both platforms on par.
+      videoCaptureDefaults: {
+        resolution: VideoPresets.h720.resolution,
+      },
+      publishDefaults: {
+        // Simulcast so viewers on weak networks still receive a lower layer,
+        // while good connections get the full 720p feed.
+        videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360],
+        // Publish the primary layer at 720p's healthy bitrate instead of the
+        // conservative default, so the image isn't over-compressed on Android.
+        videoEncoding: VideoPresets.h720.encoding,
+        // Keep resolution sharp (rather than dropping to a blurry frame) when
+        // the encoder is bandwidth-constrained — faces stay legible.
+        degradationPreference: "maintain-resolution",
+      },
+    })
     roomRef.current = room
 
     room
@@ -615,43 +637,69 @@ export function useLiveVideo({
     if (!room) return
     const next = facingMode === "user" ? "environment" : "user"
     setLocalVideoReady(false)
+
+    const pub = room.localParticipant.getTrackPublication(Track.Source.Camera)
+    const track = pub?.videoTrack
+
+    // Read the true facingMode of the live track and sync it into state, so the
+    // mirror transform (front = mirrored, back = not) always matches the real
+    // camera. This is the crux of the Android bug: the old code assumed the flip
+    // succeeded and toggled `facingMode` regardless, so when the physical switch
+    // silently failed the *only* visible change was the self-view flipping
+    // mirrored/un-mirrored — looking like a mirror toggle instead of a real
+    // front/back switch.
+    const syncActualFacing = () => {
+      const settings = track?.mediaStreamTrack.getSettings() as MediaTrackSettings & {
+        facingMode?: string
+      }
+      const actual = settings?.facingMode
+      if (actual === "user" || actual === "environment") {
+        setFacingMode(actual)
+      } else {
+        // Browser doesn't report facingMode (common on desktop) — trust `next`.
+        setFacingMode(next)
+      }
+    }
+
     try {
-      // Prefer switching by explicit deviceId: enumerate the video inputs and
-      // pick a different camera than the one in use. This is the most reliable
-      // cross-device flip — plain facingMode constraints are silently ignored by
-      // some mobile browsers once a track is already live, which is why the flip
-      // appeared to do nothing.
-      const pub = room.localParticipant.getTrackPublication(Track.Source.Camera)
-      const track = pub?.videoTrack
-      const currentDeviceId = track?.mediaStreamTrack.getSettings().deviceId
-      let switched = false
-
-      try {
-        const devices = await navigator.mediaDevices.enumerateDevices()
-        const cams = devices.filter((d) => d.kind === "videoinput" && d.deviceId)
-        if (cams.length > 1) {
-          const target = cams.find((c) => c.deviceId !== currentDeviceId) ?? cams[0]
-          await room.switchActiveDevice("videoinput", target.deviceId)
-          switched = true
-        }
-      } catch {
-        // enumerateDevices / switchActiveDevice not available — fall through.
-      }
-
-      // Fallback: re-acquire the current track with the opposite facingMode.
-      if (!switched) {
-        if (track) {
+      // Primary path: restart the existing track with the opposite facing.
+      // `restartTrack` performs a *fresh* getUserMedia (it stops the old track
+      // first) rather than applyConstraints on a live track — the latter is what
+      // Android silently ignored, producing the "nothing happens but the mirror
+      // flips" symptom. A fresh acquisition actually moves to the other camera.
+      if (track) {
+        try {
           await track.restartTrack({ facingMode: next })
-        } else {
-          await room.localParticipant.setCameraEnabled(true, { facingMode: next })
+        } catch {
+          // The facing restart failed (e.g. this device doesn't expose a camera
+          // tagged with the requested facingMode). Fall back to enumerating the
+          // video inputs and switching to one whose *label* matches the desired
+          // front/back camera — the key fix over the old code, which picked the
+          // first different camera and often landed on another front lens,
+          // looking like nothing but a mirror flip.
+          const currentDeviceId = track.mediaStreamTrack.getSettings().deviceId
+          const devices = await navigator.mediaDevices.enumerateDevices()
+          const cams = devices.filter((d) => d.kind === "videoinput" && d.deviceId)
+          const wantBack = next === "environment"
+          const labelMatch = cams.find((c) => {
+            const l = c.label.toLowerCase()
+            return wantBack ? /back|rear|environment/.test(l) : /front|face|user/.test(l)
+          })
+          const target = labelMatch ?? cams.find((c) => c.deviceId !== currentDeviceId)
+          if (target && target.deviceId !== currentDeviceId) {
+            await room.switchActiveDevice("videoinput", target.deviceId)
+          }
         }
+      } else {
+        await room.localParticipant.setCameraEnabled(true, { facingMode: next })
       }
-      setFacingMode(next)
+      syncActualFacing()
       setCamOn(true)
       attachLocalVideo(room)
     } catch {
-      // Some devices expose only one camera or reject the constraint — restore
-      // the self-view so the frame doesn't stay blank.
+      // Only one camera, or the constraint was rejected outright — keep the
+      // current facing (don't toggle the mirror) and restore the self-view so
+      // the frame doesn't stay blank.
       attachLocalVideo(room)
     }
   }, [facingMode])

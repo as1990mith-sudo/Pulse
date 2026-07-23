@@ -521,13 +521,13 @@ export function LiveListener({
                 disabled={followPending}
                 aria-label={following ? `Unfollow ${stream.hostName}` : `Follow ${stream.hostName}`}
                 className={cn(
-                  "inline-flex size-7 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-60",
+                  "inline-flex size-5 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-60",
                   following
                     ? "bg-white/10 text-white/80 ring-1 ring-inset ring-white/15"
                     : "bg-live text-live-foreground",
                 )}
               >
-                {following ? <UserCheck className="size-4" /> : <UserPlus className="size-4" />}
+                {following ? <UserCheck className="size-3" /> : <UserPlus className="size-3" />}
               </button>
             ) : (
               <LiveBadge />
