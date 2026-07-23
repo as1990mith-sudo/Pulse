@@ -17,7 +17,15 @@ async function requireUser() {
   return session.user
 }
 
-export type PostMedia = { type: "image" | "video"; url: string }
+export type PostMedia = {
+  type: "image" | "video"
+  url: string
+  /** Optional cover thumbnail chosen in the editor (video frame or custom image). */
+  coverImageUrl?: string
+  /** Trim range in seconds for videos — playback metadata (no re-encode). */
+  trimStart?: number
+  trimEnd?: number
+}
 
 /**
  * Normalizes a feed_post row's media into an ordered carousel array. New posts

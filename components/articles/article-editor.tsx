@@ -22,6 +22,7 @@ import {
 import { ARTICLE_CATEGORIES } from "@/lib/article-types"
 import { saveArticle, publishArticle } from "@/app/actions/articles"
 import { uploadMedia } from "@/lib/upload-media"
+import { CropModal } from "@/components/media-editor/crop-modal"
 import { cn } from "@/lib/utils"
 
 type EditorSeed = {
@@ -46,6 +47,9 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
   const [tagsText, setTagsText] = useState((seed?.tags ?? []).join(", "))
   const [coverUrl, setCoverUrl] = useState<string | null>(seed?.coverUrl ?? null)
   const [uploadingCover, setUploadingCover] = useState(false)
+  // Object URL of the just-picked cover, shown in the 4:5 crop editor before
+  // it's uploaded. The user only chooses which region is framed (ratio locked).
+  const [coverToCrop, setCoverToCrop] = useState<string | null>(null)
   const [preview, setPreview] = useState(false)
   const [previewHtml, setPreviewHtml] = useState("")
   const [saving, startSaving] = useTransition()
@@ -85,19 +89,35 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
     if (url) exec("createLink", url)
   }
 
-  async function onCoverChange(e: React.ChangeEvent<HTMLInputElement>) {
+  // Picking a cover opens the 4:5 crop editor first — it's uploaded only after
+  // the user confirms which region is framed.
+  function onCoverChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    if (!file.type.startsWith("image/")) {
+      setError("Please choose an image for the cover.")
+      if (coverInputRef.current) coverInputRef.current.value = ""
+      return
+    }
+    setCoverToCrop(URL.createObjectURL(file))
+    if (coverInputRef.current) coverInputRef.current.value = ""
+  }
+
+  // Cropped 4:5 cover confirmed — upload the canvas output.
+  async function onCoverCropApply(blob: Blob) {
+    const src = coverToCrop
+    setCoverToCrop(null)
+    if (src) URL.revokeObjectURL(src)
     setUploadingCover(true)
     try {
-      const { url } = await uploadMedia(file, "covers")
+      const cropped = new File([blob], "cover.jpg", { type: "image/jpeg" })
+      const { url } = await uploadMedia(cropped, "covers")
       setCoverUrl(url)
       setDirty(true)
     } catch {
       setError("Cover upload failed. Try again.")
     } finally {
       setUploadingCover(false)
-      if (coverInputRef.current) coverInputRef.current.value = ""
     }
   }
 
@@ -424,6 +444,21 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
             />
           </div>
         </div>
+      )}
+
+      {/* Cover crop — locked to 4:5; the user only frames the region. */}
+      {coverToCrop && (
+        <CropModal
+          imageSrc={coverToCrop}
+          title="Crop cover"
+          ratios={[{ label: "4:5", value: 4 / 5 }]}
+          onCancel={() => {
+            const src = coverToCrop
+            setCoverToCrop(null)
+            if (src) URL.revokeObjectURL(src)
+          }}
+          onApply={onCoverCropApply}
+        />
       )}
 
       {/* Unsaved-changes confirmation on back */}

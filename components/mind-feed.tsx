@@ -47,7 +47,6 @@ import { type ThreadComment } from "@/components/comment-thread"
 import { CommentSheet } from "@/components/comment-sheet"
 import { toggleFollow } from "@/app/actions/follow"
 import type { CurrentUser } from "@/lib/session"
-import { uploadMedia } from "@/lib/upload-media"
 import { Button } from "@/components/ui/button"
 import { FormattedTextarea } from "@/components/formatted-textarea"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -100,8 +99,15 @@ import { renderMessageBody } from "@/lib/rich-text"
 import { LinkPreview } from "@/components/link-preview"
 import { AnnouncementBanner } from "@/components/announcement-banner"
 import type { AnnouncementView } from "@/app/actions/announcements"
+import { MediaEditorFlow, type EditedMedia } from "@/components/media-editor/media-editor-flow"
 
-type DraftMedia = { url: string; type: "image" | "video" }
+type DraftMedia = {
+  url: string
+  type: "image" | "video"
+  coverImageUrl?: string
+  trimStart?: number
+  trimEnd?: number
+}
 
 // Hard cap for uploaded clips: 15 minutes.
 const MAX_VIDEO_SECONDS = 15 * 60
@@ -194,6 +200,9 @@ export function MindFeed({
   const router = useRouter()
   const [draft, setDraft] = useState("")
   const [media, setMedia] = useState<DraftMedia[]>([])
+  // Files awaiting the crop/trim/cover editor. When set, the full-screen editor
+  // flow opens; it uploads the edited results and hands them back via onDone.
+  const [pendingFiles, setPendingFiles] = useState<File[] | null>(null)
   const [uploading, setUploading] = useState(false)
   // Upload progress (0–100) for the file currently transferring; null when idle.
   const [uploadPct, setUploadPct] = useState<number | null>(null)
@@ -321,6 +330,10 @@ export function MindFeed({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Validate the freshly picked files, then hand them to the editor flow
+  // (crop for photos, trim for videos, optional cover art). The flow uploads
+  // the edited results and returns them via handleEditorDone — nothing is
+  // uploaded here anymore.
   async function handleMediaPick(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
     if (files.length === 0) return
@@ -337,7 +350,7 @@ export function MindFeed({
 
     setUploading(true)
     try {
-      const uploaded: DraftMedia[] = []
+      const valid: File[] = []
       for (const file of selected) {
         const isVideo = file.type.startsWith("video/")
         const isImage = file.type.startsWith("image/")
@@ -345,7 +358,7 @@ export function MindFeed({
           setError("Please choose photos or videos only.")
           continue
         }
-        // Enforce the 15-minute video cap before uploading anything.
+        // Enforce the 15-minute video cap before opening the editor.
         if (isVideo) {
           const duration = await getVideoDuration(file).catch(() => 0)
           if (duration > MAX_VIDEO_SECONDS + 1) {
@@ -355,20 +368,32 @@ export function MindFeed({
             continue
           }
         }
-        setUploadPct(0)
-        const data = await uploadMedia(file, "chat", undefined, setUploadPct)
-        uploaded.push({ url: data.url, type: isVideo ? "video" : "image" })
+        valid.push(file)
       }
-      if (uploaded.length > 0) setMedia((prev) => [...prev, ...uploaded].slice(0, MAX_MEDIA))
       if (droppedForCap) setError(`Only the first ${MAX_MEDIA} items were added (max ${MAX_MEDIA} per post).`)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed.")
+      if (valid.length > 0) setPendingFiles(valid)
     } finally {
       setUploading(false)
-      setUploadPct(null)
       // Reset the originating input so picking the same file again re-fires.
       e.target.value = ""
     }
+  }
+
+  // Editor flow finished: append the edited + uploaded media to the draft.
+  function handleEditorDone(items: EditedMedia[]) {
+    setMedia((prev) =>
+      [
+        ...prev,
+        ...items.map((it) => ({
+          url: it.url,
+          type: it.type,
+          coverImageUrl: it.coverImageUrl,
+          trimStart: it.trimStart,
+          trimEnd: it.trimEnd,
+        })),
+      ].slice(0, MAX_MEDIA),
+    )
+    setPendingFiles(null)
   }
 
   function removeMediaAt(index: number) {
@@ -576,7 +601,13 @@ export function MindFeed({
             {media.length === 1 && (
               <div className="relative w-full overflow-hidden rounded-xl border border-border/60 bg-muted">
                 {media[0].type === "video" ? (
-                  <video src={media[0].url} controls playsInline className="max-h-[420px] w-full" />
+                  <video
+                    src={media[0].url}
+                    poster={media[0].coverImageUrl}
+                    controls
+                    playsInline
+                    className="max-h-[420px] w-full"
+                  />
                 ) : (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={media[0].url || "/placeholder.svg"} alt="Selected upload preview" className="max-h-[420px] w-full object-cover" />
@@ -621,7 +652,12 @@ export function MindFeed({
                       )}
                     >
                       {item.type === "video" ? (
-                        <video src={item.url} muted playsInline className="size-full object-cover" />
+                        item.coverImageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={item.coverImageUrl || "/placeholder.svg"} alt={`Upload ${index + 1}`} className="size-full object-cover" />
+                        ) : (
+                          <video src={item.url} muted playsInline className="size-full object-cover" />
+                        )
                       ) : (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={item.url || "/placeholder.svg"} alt={`Upload ${index + 1}`} className="size-full object-cover" />
@@ -746,6 +782,17 @@ export function MindFeed({
       </div>
       )}
 
+      {/* Pre-post media editor: crop photos / trim videos, then optional cover art. */}
+      {pendingFiles && (
+        <MediaEditorFlow
+          files={pendingFiles}
+          uploadFolder="chat"
+          maxVideoSeconds={MAX_VIDEO_SECONDS}
+          onDone={handleEditorDone}
+          onCancel={() => setPendingFiles(null)}
+        />
+      )}
+
       {/* Sticky segmented tabs that blend into the feed. Reels lives here as the
           third tab (after For you / Following); tapping it opens the immersive
           full-screen reels experience. */}
@@ -862,7 +909,7 @@ function PostMediaCarousel({
         {items.map((item, i) => (
           <div key={i} className="@container w-full shrink-0 snap-center snap-always">
             {item.type === "video" ? (
-              <FeedVideo src={item.url} className={cn("mx-auto w-full object-cover", heightClass)} />
+              <FeedVideo src={item.url} poster={item.coverImageUrl} className={cn("mx-auto w-full object-cover", heightClass)} />
             ) : (
               <button
                 type="button"

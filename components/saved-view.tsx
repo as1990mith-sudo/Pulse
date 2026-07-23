@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Bookmark, BookOpen, ChevronLeft, Clapperboard, MessageSquare, Mic } from "lucide-react"
+import { Bookmark, BookOpen, ChevronLeft, Clapperboard, MessageSquare, Mic, Newspaper } from "lucide-react"
 import type { SavedItemView } from "@/app/actions/share"
 import { cn } from "@/lib/utils"
 
@@ -61,6 +61,7 @@ const SAVED_FOLDERS: {
 }[] = [
   { key: "feed", label: "Feed", icon: <MessageSquare className="size-5" />, types: ["post"], always: true },
   { key: "catalogue", label: "Catalogue", icon: <Mic className="size-5" />, types: ["episode"], always: true },
+  { key: "articles", label: "Articles", icon: <Newspaper className="size-5" />, types: ["article"], always: true },
   { key: "devotionals", label: "Devotionals", icon: <BookOpen className="size-5" />, types: ["devotional"] },
   { key: "moments", label: "Moments", icon: <Clapperboard className="size-5" />, types: ["status"] },
 ]
@@ -98,7 +99,9 @@ function SavedFolders({ items }: { items: SavedItemView[] }) {
                 ? "Save a post from the feed and it will land in this folder."
                 : current.key === "catalogue"
                   ? "Save a video or audio episode from a creator's catalogue and it will appear here."
-                  : `Items you save will appear in ${current.label}.`
+                  : current.key === "articles"
+                    ? "Bookmark an article while reading and it will be collected here."
+                    : `Items you save will appear in ${current.label}.`
             }
           />
         ) : (
