@@ -1403,7 +1403,7 @@ export function PostCard({
         <button
           onClick={toggleSave}
           className={cn(
-            "ml-auto flex items-center gap-1.5 tabular-nums transition-colors hover:text-primary",
+            "flex items-center gap-1.5 tabular-nums transition-colors hover:text-primary",
             feed ? "text-[15px]" : "text-sm",
             saved && "text-primary",
             !currentUser && "cursor-not-allowed opacity-60",
@@ -1421,7 +1421,7 @@ export function PostCard({
         <button
           onClick={() => setShareOpen(true)}
           className={cn(
-            "flex items-center gap-1.5 tabular-nums transition-colors hover:text-muted-foreground",
+            "ml-auto mr-8 flex items-center gap-1.5 tabular-nums transition-colors hover:text-muted-foreground",
             feed ? "text-[15px]" : "text-sm",
           )}
           aria-label="Share"

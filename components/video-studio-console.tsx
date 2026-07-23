@@ -5,6 +5,7 @@ import useSWR from "swr"
 import {
   Check,
   ChevronDown,
+  Clock,
   Globe,
   Loader2,
   Lock,
@@ -296,7 +297,6 @@ export function VideoStudioConsole({
   const [shareOpen, setShareOpen] = useState(false)
   // Secondary header stats (viewers + elapsed timer) collapse into a top-right
   // overflow menu so the host's name gets the full width of the header pill.
-  const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
   // Confirmation gate before a host ends the live session, so a mis-tap on the
   // back menu can't drop everyone out of the broadcast.
   const [endConfirmOpen, setEndConfirmOpen] = useState(false)
@@ -684,7 +684,7 @@ export function VideoStudioConsole({
   // Broadcast caps the stage at 3 guests (host + 3 = 4 tiles total).
   const guests = peers.slice(0, 3)
 
-  // ── Broadcast spotlight (portrait) ─────���──────────────────────────────────
+  // ── Broadcast spotlight (portrait) ─────�����──────────────────────────────────
   // The host can spotlight ONE called-in guest: that guest moves into the
   // primary slot and the host drops into a secondary slot. Spotlight is stored
   // server-side (gridPinnedId, reused) so viewers see the same swap.
@@ -995,11 +995,19 @@ export function VideoStudioConsole({
                 <Video className="size-3.5" /> Video studio
               </span>
             ) : null}
+            {/* Elapsed timer — its own dark round pill sitting between the host
+                name and the LIVE badge, matching the other header pills. */}
+            {live && (
+              <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-black/40 px-2.5 py-1.5 text-[11px] font-medium text-white/90 ring-1 ring-inset ring-white/10 backdrop-blur-md">
+                <Clock className="size-3.5 text-white/70" />
+                <span className="font-mono tabular-nums">{formatElapsed(elapsed)}</span>
+              </span>
+            )}
           </div>
 
-          {/* Right cluster kept intentionally minimal: only the LIVE badge and a
-              three-dot menu. Viewers + timer live inside that menu so the host
-              name pill on the left keeps the maximum available width. */}
+          {/* Right cluster: the LIVE badge and the audience count. The count now
+              lives directly in the header (replacing the old three-dot menu);
+              tapping it still opens the full audience management sheet. */}
           <div className="flex shrink-0 items-center gap-1.5">
             {live && (
               <span className="flex items-center gap-1.5 rounded-full bg-live px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-live-foreground shadow-lg">
@@ -1011,50 +1019,16 @@ export function VideoStudioConsole({
               </span>
             )}
             {live && (
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setHeaderMenuOpen((o) => !o)}
-                  aria-label="Broadcast stats and options"
-                  aria-haspopup="menu"
-                  aria-expanded={headerMenuOpen}
-                  className="flex size-8 items-center justify-center rounded-full bg-black/35 text-white ring-1 ring-inset ring-white/15 backdrop-blur-md transition-colors hover:bg-black/55 active:scale-90"
-                >
-                  <MoreVertical className="size-4" />
-                </button>
-                {headerMenuOpen && (
-                  <>
-                    <button
-                      type="button"
-                      aria-label="Close menu"
-                      onClick={() => setHeaderMenuOpen(false)}
-                      className="fixed inset-0 z-40 cursor-default"
-                    />
-                    <div
-                      role="menu"
-                      className="absolute right-0 top-full z-50 mt-1.5 w-52 overflow-hidden rounded-2xl border border-white/10 bg-neutral-900/95 p-1.5 text-white shadow-xl backdrop-blur-md"
-                    >
-                      {/* Viewers — opens the full audience sheet. */}
-                      <div className="[&_button]:w-full [&_button]:justify-start [&_button]:rounded-lg [&_button]:bg-transparent [&_button]:px-2.5 [&_button]:py-2 [&_button]:text-sm [&_button:hover]:bg-white/10">
-                        <LiveAudienceSheet
-                          count={audienceCount || viewers}
-                          members={audienceMembers}
-                          immersive
-                          isHost
-                          roomName={roomName ?? undefined}
-                          blockedUsers={callState?.blockedUsers ?? []}
-                          onChanged={() => void refreshCalls()}
-                        />
-                      </div>
-                      {/* Elapsed time (read-only). */}
-                      <div className="flex items-center justify-between rounded-lg px-2.5 py-2 text-sm">
-                        <span className="text-white/70">Elapsed</span>
-                        <span className="font-mono tabular-nums text-white/90">{formatElapsed(elapsed)}</span>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
+              <LiveAudienceSheet
+                count={audienceCount || viewers}
+                members={audienceMembers}
+                immersive
+                isHost
+                roomName={roomName ?? undefined}
+                blockedUsers={callState?.blockedUsers ?? []}
+                onChanged={() => void refreshCalls()}
+                className="px-2.5 py-1 text-[11px] font-medium"
+              />
             )}
           </div>
         </div>

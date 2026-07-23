@@ -124,6 +124,11 @@ export function ReelsFeed({
   onSwipePrevTab?: () => void
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null)
+  // Manual, velocity-aware vertical navigation (replaces native scroll-snap so
+  // transitions are a short, snappy tween rather than the browser's floaty snap).
+  const animRef = useRef<number | null>(null)
+  const animatingRef = useRef(false)
+  const wheelLockRef = useRef(0)
 
   // One reel per video media item, shuffled once per open so the order feels
   // fresh but stays stable while the user keeps scrolling.
@@ -179,39 +184,155 @@ export function ReelsFeed({
     }
   }, [])
 
-  // Horizontal swipe → leave reels to the neighbouring feed tab on the left.
-  // Vertical swipes are reserved for scrolling between reels, so we only act on
-  // a clearly horizontal gesture that didn't begin on an interactive control
-  // (buttons, links, the scrubber, or the comments sheet).
-  const touchStart = useRef<{ x: number; y: number; skip: boolean } | null>(null)
-  function onTouchStart(e: React.TouchEvent) {
-    const t = e.touches[0]
-    const el = e.target as HTMLElement
-    const skip = Boolean(el.closest("input, button, a, [data-no-swipe]"))
-    touchStart.current = { x: t.clientX, y: t.clientY, skip }
-  }
-  function onTouchEnd(e: React.TouchEvent) {
-    const s = touchStart.current
-    touchStart.current = null
-    if (!s || s.skip || !onSwipePrevTab) return
-    const t = e.changedTouches[0]
-    const dx = t.clientX - s.x
-    const dy = t.clientY - s.y
-    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) onSwipePrevTab()
-  }
+  // Controlled, velocity-aware vertical navigation. We drive `scrollTop`
+  // ourselves (native scroll-snap is disabled) so a swipe follows the finger
+  // live and commits on release using EITHER a distance threshold (30% of the
+  // viewport) OR a fast flick (velocity), then tweens to the target reel in
+  // ~220ms with an ease-out curve. Horizontal flicks still hand off to the
+  // neighbouring feed tab. Gestures that begin on an interactive control (rail,
+  // scrubber, caption, comments sheet — all `data-no-swipe`) are ignored so
+  // their own scrolling/taps keep working. Listeners are non-passive so the
+  // vertical drag can `preventDefault` the browser's own momentum scroll.
+  useEffect(() => {
+    const scroller = scrollerRef.current
+    if (!scroller) return
+
+    const DISTANCE_RATIO = 0.3 // fraction of viewport height that commits a move
+    const VELOCITY = 0.5 // px/ms — a quick flick commits regardless of distance
+    const ANIM_MS = 220
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
+
+    const cancelAnim = () => {
+      if (animRef.current != null) cancelAnimationFrame(animRef.current)
+      animRef.current = null
+      animatingRef.current = false
+    }
+    const animateTo = (targetTop: number) => {
+      cancelAnim()
+      const start = scroller.scrollTop
+      const dist = targetTop - start
+      if (Math.abs(dist) < 1) {
+        scroller.scrollTop = targetTop
+        return
+      }
+      const t0 = performance.now()
+      animatingRef.current = true
+      const step = (now: number) => {
+        const p = Math.min(1, (now - t0) / ANIM_MS)
+        scroller.scrollTop = start + dist * easeOutCubic(p)
+        if (p < 1) {
+          animRef.current = requestAnimationFrame(step)
+        } else {
+          scroller.scrollTop = targetTop
+          animatingRef.current = false
+          animRef.current = null
+        }
+      }
+      animRef.current = requestAnimationFrame(step)
+    }
+    const lastIndex = () => Math.max(0, Math.round(scroller.scrollHeight / scroller.clientHeight) - 1)
+    const currentIndex = () => Math.round(scroller.scrollTop / scroller.clientHeight)
+    const goTo = (index: number) => {
+      const clamped = Math.max(0, Math.min(index, lastIndex()))
+      animateTo(clamped * scroller.clientHeight)
+    }
+
+    let startX = 0
+    let startY = 0
+    let startScroll = 0
+    let startTime = 0
+    let axis: "" | "v" | "h" = ""
+    let skip = false
+    let tracking = false
+
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) {
+        tracking = false
+        return
+      }
+      const t = e.touches[0]
+      skip = Boolean((e.target as HTMLElement).closest("input, button, a, [data-no-swipe]"))
+      startX = t.clientX
+      startY = t.clientY
+      startScroll = scroller.scrollTop
+      startTime = performance.now()
+      axis = ""
+      tracking = true
+      cancelAnim()
+    }
+    const onMove = (e: TouchEvent) => {
+      if (!tracking || skip) return
+      const t = e.touches[0]
+      const dx = t.clientX - startX
+      const dy = t.clientY - startY
+      if (!axis) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return
+        axis = Math.abs(dy) >= Math.abs(dx) ? "v" : "h"
+      }
+      if (axis === "v") {
+        e.preventDefault() // stop native momentum; we control the position
+        const max = lastIndex() * scroller.clientHeight
+        let next = startScroll - dy
+        // Rubber-band resistance past the first/last reel.
+        if (next < 0) next *= 0.35
+        else if (next > max) next = max + (next - max) * 0.35
+        scroller.scrollTop = next
+      }
+    }
+    const onEnd = (e: TouchEvent) => {
+      if (!tracking) return
+      tracking = false
+      if (skip) return
+      const t = e.changedTouches[0]
+      const dx = t.clientX - startX
+      const dy = t.clientY - startY
+      const dt = Math.max(1, performance.now() - startTime)
+      if (axis === "h") {
+        if (onSwipePrevTab && Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) onSwipePrevTab()
+        return
+      }
+      if (axis !== "v") return
+      const h = scroller.clientHeight
+      const cur = Math.round(startScroll / h)
+      const velocityUp = -dy / dt // + = flicking upward (toward the next reel)
+      const ratio = -dy / h
+      let target = cur
+      if (ratio > DISTANCE_RATIO || velocityUp > VELOCITY) target = cur + 1
+      else if (ratio < -DISTANCE_RATIO || velocityUp < -VELOCITY) target = cur - 1
+      goTo(target)
+    }
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return // ignore horizontal wheels
+      e.preventDefault()
+      const now = performance.now()
+      if (animatingRef.current || now < wheelLockRef.current) return
+      wheelLockRef.current = now + ANIM_MS + 120 // one notch = one reel
+      goTo(currentIndex() + (e.deltaY > 0 ? 1 : -1))
+    }
+
+    scroller.addEventListener("touchstart", onStart, { passive: true })
+    scroller.addEventListener("touchmove", onMove, { passive: false })
+    scroller.addEventListener("touchend", onEnd, { passive: true })
+    scroller.addEventListener("touchcancel", onEnd, { passive: true })
+    scroller.addEventListener("wheel", onWheel, { passive: false })
+    return () => {
+      cancelAnim()
+      scroller.removeEventListener("touchstart", onStart)
+      scroller.removeEventListener("touchmove", onMove)
+      scroller.removeEventListener("touchend", onEnd)
+      scroller.removeEventListener("touchcancel", onEnd)
+      scroller.removeEventListener("wheel", onWheel)
+    }
+  }, [onSwipePrevTab])
 
   return (
     // Explicit viewport dimensions (not just `inset-0`) so the overlay fills the
     // screen even while the page-entry animation briefly makes the wrapper a
     // containing block — otherwise `inset-0` would resolve against a 0×0 box.
-    <div
-      className="fixed left-0 top-0 z-[45] h-[100dvh] w-screen bg-black"
-      onTouchStart={onTouchStart}
-      onTouchEnd={onTouchEnd}
-    >
+    <div className="fixed left-0 top-0 z-[45] h-[100dvh] w-screen bg-black">
       <div
         ref={scrollerRef}
-        className="h-full snap-y snap-mandatory overflow-y-scroll overscroll-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="h-full overflow-y-scroll overscroll-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {visible.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center text-white/80">

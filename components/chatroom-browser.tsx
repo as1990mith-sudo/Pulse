@@ -34,9 +34,12 @@ function CommunityHelpEntry() {
       </Avatar>
       <div className="min-w-0 flex-1">
         <p className="truncate text-base font-semibold tracking-tight text-white">Community Help</p>
-        <p className="truncate text-sm leading-snug text-emerald-50/85">
-          Ask anything anonymously — anyone in the community can help.
-        </p>
+        <div className="marquee text-sm leading-snug text-emerald-50/85" aria-label="Ask anything anonymously — anyone in the community can help.">
+          <div className="marquee__track" aria-hidden="true">
+            <span>Ask anything anonymously — anyone in the community can help.</span>
+            <span>Ask anything anonymously — anyone in the community can help.</span>
+          </div>
+        </div>
       </div>
       <span className="shrink-0 rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-emerald-800 shadow-sm transition-transform group-hover:scale-105">
         Open
@@ -58,9 +61,12 @@ function DreamInterpretationEntry() {
       </Avatar>
       <div className="min-w-0 flex-1">
         <p className="truncate text-base font-semibold tracking-tight text-white">Dream Interpretation</p>
-        <p className="truncate text-sm leading-snug text-indigo-50/85">
-          Share your dreams anonymously — only the interpreter can reply.
-        </p>
+        <div className="marquee text-sm leading-snug text-indigo-50/85" aria-label="Share your dreams anonymously — only the interpreter can reply.">
+          <div className="marquee__track" aria-hidden="true">
+            <span>Share your dreams anonymously — only the interpreter can reply.</span>
+            <span>Share your dreams anonymously — only the interpreter can reply.</span>
+          </div>
+        </div>
       </div>
       <span className="shrink-0 rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-indigo-800 shadow-sm transition-transform group-hover:scale-105">
         Open
