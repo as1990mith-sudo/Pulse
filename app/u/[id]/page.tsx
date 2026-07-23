@@ -76,21 +76,22 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
             />
           </div>
 
-          {/* Full-width stacked actions for other people's profiles. */}
+          {/* Actions for other people's profiles — Follow and Message sit
+              side by side, each flexing to an equal share of the row. */}
           {!profile.isSelf && (
-            <div className="mt-4 flex w-full flex-col gap-2">
+            <div className="mt-4 flex w-full items-center gap-2">
               <ProfileFollowButton
                 targetUserId={profile.id}
                 targetName={profile.name}
                 initialFollowing={profile.isFollowing}
-                className="h-11 w-full rounded-full text-sm font-semibold"
+                className="h-11 flex-1 rounded-full text-sm font-semibold"
               />
               {currentUser && (
                 <ProfileMessageButton
                   targetUserId={profile.id}
                   targetName={profile.name}
                   variant="outline"
-                  className="h-11 w-full rounded-full text-sm font-semibold"
+                  className="h-11 flex-1 rounded-full text-sm font-semibold"
                 />
               )}
             </div>
