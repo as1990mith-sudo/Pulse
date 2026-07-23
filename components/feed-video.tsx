@@ -207,6 +207,7 @@ export function FeedVideo({
       <video
         ref={ref}
         src={posterSrc}
+        poster={poster}
         loop
         playsInline
         muted={muted}

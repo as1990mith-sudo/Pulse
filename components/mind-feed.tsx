@@ -909,7 +909,7 @@ function PostMediaCarousel({
         {items.map((item, i) => (
           <div key={i} className="@container w-full shrink-0 snap-center snap-always">
             {item.type === "video" ? (
-              <FeedVideo src={item.url} className={cn("mx-auto w-full object-cover", heightClass)} />
+              <FeedVideo src={item.url} poster={item.coverImageUrl} className={cn("mx-auto w-full object-cover", heightClass)} />
             ) : (
               <button
                 type="button"
