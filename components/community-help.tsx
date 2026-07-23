@@ -713,7 +713,7 @@ export function CommunityHelp({ initialPosts }: { initialPosts: CommunityPostVie
       <button
         type="button"
         onClick={() => setComposerOpen(true)}
-        className="absolute bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-5 z-30 flex h-14 items-center gap-2 rounded-full bg-primary px-5 text-base font-semibold text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95 sm:right-8"
+        className="absolute bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-5 z-30 inline-flex w-fit items-center gap-2 rounded-full bg-primary px-4 py-2 text-base font-semibold text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95 sm:right-8"
       >
         <Plus className="size-5" />
         Ask

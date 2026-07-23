@@ -3,32 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import useSWR from "swr"
-import QRCode from "qrcode"
-import {
-  Bookmark,
-  Check,
-  Copy,
-  Download,
-  Loader2,
-  Mail,
-  MoreHorizontal,
-  PlusCircle,
-  QrCode,
-  Search,
-  Send,
-  X,
-} from "lucide-react"
+import { Check, Link, Loader2, MoreHorizontal, Search, Send, X } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 import type { ShareSuggestion, ShareTarget } from "@/lib/share-types"
-import {
-  addTargetToStatus,
-  getShareSuggestions,
-  isItemSaved,
-  searchShareUsers,
-  shareToUsers,
-  toggleSaveItem,
-} from "@/app/actions/share"
+import { getShareSuggestions, searchShareUsers, shareToUsers } from "@/app/actions/share"
 import { recordShare } from "@/app/actions/engagement"
 
 type Toast = { id: number; message: string; spinner?: boolean }
@@ -51,10 +30,6 @@ export function ShareSheet({
   const [debounced, setDebounced] = useState("")
   const [selected, setSelected] = useState<string[]>([])
   const [sending, setSending] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [downloading, setDownloading] = useState(false)
-  const [qrOpen, setQrOpen] = useState(false)
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const [toasts, setToasts] = useState<Toast[]>([])
   const toastId = useRef(0)
 
@@ -79,8 +54,6 @@ export function ShareSheet({
     setQuery("")
     setDebounced("")
     setSelected([])
-    setQrOpen(false)
-    void isItemSaved(target.type, target.key).then(setSaved)
   }, [open, target.type, target.key])
 
   // Debounce the search box.
@@ -116,11 +89,6 @@ export function ShareSheet({
     if (!spinner) setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2200)
     return id
   }
-  function replaceToast(id: number, message: string) {
-    setToasts((t) => t.map((x) => (x.id === id ? { id, message, spinner: false } : x)))
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2200)
-  }
-
   function toggleSelect(id: string) {
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]))
   }
@@ -150,65 +118,6 @@ export function ShareSheet({
       pushToast("Link copied")
     } catch {
       pushToast("Could not copy link")
-    }
-  }
-
-  async function handleSave() {
-    try {
-      const res = await toggleSaveItem(target)
-      setSaved(res.saved)
-      pushToast(res.saved ? "Saved" : "Removed from saved")
-    } catch (err) {
-      pushToast(err instanceof Error ? err.message : "Could not save")
-    }
-  }
-
-  async function handleAddToStatus() {
-    try {
-      await addTargetToStatus(target)
-      void recordShare({ type: target.type, key: target.key })
-                    onShared?.()
-      pushToast("Added to your status")
-    } catch (err) {
-      pushToast(err instanceof Error ? err.message : "Could not add to status")
-    }
-  }
-
-  async function handleDownload() {
-    if (!target.downloadUrl || downloading) return
-    setDownloading(true)
-    const id = pushToast("Downloading…", true)
-    try {
-      const res = await fetch(target.downloadUrl, { mode: "cors" })
-      if (!res.ok) throw new Error("fetch failed")
-      const blob = await res.blob()
-      const objectUrl = URL.createObjectURL(blob)
-      const ext =
-        target.downloadKind === "video" ? "mp4" : target.downloadKind === "audio" ? "mp3" : "jpg"
-      const a = document.createElement("a")
-      a.href = objectUrl
-      a.download = `${slugify(target.title)}.${ext}`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      URL.revokeObjectURL(objectUrl)
-      replaceToast(id, "Download complete")
-    } catch {
-      // Fall back to opening the media in a new tab.
-      window.open(target.downloadUrl, "_blank", "noopener,noreferrer")
-      replaceToast(id, "Opened in new tab")
-    } finally {
-      setDownloading(false)
-    }
-  }
-
-  async function handleQr() {
-    try {
-      const dataUrl = await QRCode.toDataURL(absoluteUrl, { width: 480, margin: 2 })
-      setQrDataUrl(dataUrl)
-      setQrOpen(true)
-    } catch {
-      pushToast("Could not generate QR code")
     }
   }
 
@@ -303,7 +212,7 @@ export function ShareSheet({
               {debounced ? "No people found." : "Follow people to share with them here."}
             </p>
           ) : (
-            <ul className="grid grid-cols-3 gap-1">
+            <ul className="grid grid-cols-4 gap-0.5">
               {people.map((p) => {
                 const isSel = selected.includes(p.id)
                 return (
@@ -312,7 +221,7 @@ export function ShareSheet({
                       type="button"
                       onClick={() => toggleSelect(p.id)}
                       className={cn(
-                        "tap-scale flex w-full flex-col items-center gap-2 rounded-2xl px-1 py-3 transition-colors",
+                        "tap-scale flex w-full flex-col items-center gap-1.5 rounded-2xl px-0.5 py-3 transition-colors",
                         isSel ? "bg-primary/10" : "hover:bg-secondary/50",
                       )}
                       aria-pressed={isSel}
@@ -320,12 +229,12 @@ export function ShareSheet({
                       <span className="relative">
                         <Avatar
                           className={cn(
-                            "size-[4.25rem] transition-all duration-200",
+                            "size-14 transition-all duration-200",
                             isSel ? "ring-2 ring-primary ring-offset-2 ring-offset-popover" : "",
                           )}
                         >
                           {p.image && <AvatarImage src={p.image || "/placeholder.svg"} alt={p.name} />}
-                          <AvatarFallback className={cn("text-base font-semibold", p.color)}>
+                          <AvatarFallback className={cn("text-sm font-semibold", p.color)}>
                             {p.initials}
                           </AvatarFallback>
                         </Avatar>
@@ -351,40 +260,6 @@ export function ShareSheet({
         {selected.length === 0 ? (
           <div className="shrink-0 border-t border-border/60">
             <Row>
-              <QuickAction
-                icon={<Send className="size-5" />}
-                label="Share"
-                iconClassName="bg-primary text-primary-foreground hover:bg-primary/90"
-                onClick={handleSystemShare}
-              />
-              <QuickAction icon={<Copy className="size-5" />} label="Copy link" onClick={handleCopy} />
-              {target.downloadUrl ? (
-                <QuickAction
-                  icon={downloading ? <Loader2 className="size-5 animate-spin" /> : <Download className="size-5" />}
-                  label="Download"
-                  onClick={handleDownload}
-                />
-              ) : null}
-              <QuickAction
-                icon={<PlusCircle className="size-5" />}
-                label="Add to status"
-                onClick={handleAddToStatus}
-              />
-              <QuickAction icon={<QrCode className="size-5" />} label="QR code" onClick={handleQr} />
-              <QuickAction
-                icon={
-                  saved ? (
-                    <Check className="size-5 text-primary" />
-                  ) : (
-                    <Bookmark className="size-5" />
-                  )
-                }
-                label={saved ? "Saved" : "Save"}
-                onClick={handleSave}
-              />
-            </Row>
-
-            <Row className="border-t border-border/60">
               {externalTargets.map((t) => (
                 <QuickAction
                   key={t.label}
@@ -398,6 +273,7 @@ export function ShareSheet({
                   }}
                 />
               ))}
+              <QuickAction icon={<Link className="size-5" />} label="Copy Link" onClick={handleCopy} />
               <QuickAction icon={<MoreHorizontal className="size-5" />} label="More apps" onClick={handleSystemShare} />
             </Row>
           </div>
@@ -415,25 +291,6 @@ export function ShareSheet({
           </div>
         )}
       </div>
-
-      {/* QR overlay */}
-      {qrOpen && qrDataUrl && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center p-6" onClick={() => setQrOpen(false)}>
-          <div className="absolute inset-0 bg-black/70" />
-          <div className="relative flex flex-col items-center gap-4 rounded-3xl bg-popover p-6 text-popover-foreground shadow-2xl">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={qrDataUrl || "/placeholder.svg"} alt="QR code linking to this content" className="size-56 rounded-xl" />
-            <p className="max-w-56 truncate text-center text-xs text-muted-foreground">{absoluteUrl}</p>
-            <button
-              type="button"
-              onClick={() => setQrOpen(false)}
-              className="rounded-full bg-secondary px-5 py-2 text-sm font-medium"
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Toasts */}
       <div className="pointer-events-none fixed inset-x-0 bottom-6 z-20 flex flex-col items-center gap-2">
@@ -475,7 +332,11 @@ function QuickAction({
   iconClassName?: string
 }) {
   return (
-    <button type="button" onClick={onClick} className="tap-scale flex w-[3.5rem] shrink-0 flex-col items-center gap-1.5">
+    <button
+      type="button"
+      onClick={onClick}
+      className="tap-scale flex shrink-0 basis-[calc((100%-3rem)/5)] flex-col items-center gap-1.5"
+    >
       <span
         className={cn(
           "flex size-[3.25rem] items-center justify-center rounded-2xl bg-secondary/70 text-foreground transition-colors hover:bg-secondary",
@@ -487,10 +348,6 @@ function QuickAction({
       <span className="w-full truncate text-center text-[11px] font-medium text-muted-foreground">{label}</span>
     </button>
   )
-}
-
-function slugify(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 40) || "frequency"
 }
 
 function WhatsAppLogo({ className }: { className?: string }) {
@@ -537,12 +394,6 @@ function buildExternalTargets(target: ShareTarget, url: string) {
       href: `https://www.facebook.com/sharer/sharer.php?u=${enc(url)}`,
       className: "bg-[#1877F2] text-white hover:bg-[#1877F2]/90",
       icon: <FacebookLogo className="size-5" />,
-    },
-    {
-      label: "Email",
-      href: `mailto:?subject=${enc(text)}&body=${enc(url)}`,
-      className: "bg-secondary text-foreground",
-      icon: <Mail className="size-5" />,
     },
   ]
 }

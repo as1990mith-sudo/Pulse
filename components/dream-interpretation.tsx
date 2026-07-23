@@ -950,7 +950,7 @@ export function DreamInterpretation({ initialFeed }: { initialFeed: DreamFeed })
                   : "Be the first to share a dream — only the interpreter will know it's you."}
             </p>
             {!isAdmin && (
-              <Button onClick={() => setComposerOpen(true)} className="mt-2 gap-2 rounded-full">
+              <Button onClick={() => setComposerOpen(true)} className="mt-2 h-auto w-fit gap-2 rounded-full px-4 py-2">
                 <Plus className="size-4" /> Share a dream
               </Button>
             )}
