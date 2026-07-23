@@ -25,6 +25,7 @@ import { ShareSheet } from "@/components/share-sheet"
 import { BackExitMenu } from "@/components/live-back-menu"
 import { LiveChat } from "@/components/live-chat"
 import { CoverArt } from "@/components/cover-art"
+import { MarqueeTitle } from "@/components/marquee-title"
 import { CoHostConsole } from "@/components/cohost-console"
 import type { CurrentUser } from "@/lib/session"
 import type { ShareTarget } from "@/lib/share-types"
@@ -538,7 +539,10 @@ export function LiveListener({
               </span>
             )}
           </div>
-          <h1 className="mt-0.5 truncate text-base font-bold leading-tight tracking-tight text-white">{stream.title}</h1>
+          <MarqueeTitle
+            text={stream.title}
+            className="mt-0.5 text-base font-bold leading-tight tracking-tight text-white"
+          />
           <p className="truncate text-xs font-medium text-white/70">with {stream.hostName}</p>
         </div>
 

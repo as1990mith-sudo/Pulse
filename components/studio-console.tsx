@@ -61,6 +61,7 @@ import { useLiveAudio } from "@/lib/use-live-audio"
 import { uploadMedia } from "@/lib/upload-media"
 import { LiveChat } from "@/components/live-chat"
 import { CoverArt } from "@/components/cover-art"
+import { MarqueeTitle } from "@/components/marquee-title"
 import { ShareSheet } from "@/components/share-sheet"
 import type { ShareTarget } from "@/lib/share-types"
 import { LiveStage, MAX_GUESTS, QualityIcon } from "@/components/live-stage"
@@ -770,9 +771,10 @@ export function StudioConsole({
             </div>
 
             {live ? (
-              <h1 className="mt-0.5 truncate text-base font-bold leading-tight tracking-tight text-white">
-                {title || "Untitled session"}
-              </h1>
+              <MarqueeTitle
+                text={title || "Untitled session"}
+                className="mt-0.5 text-base font-bold leading-tight tracking-tight text-white"
+              />
             ) : (
               <input
                 value={title}

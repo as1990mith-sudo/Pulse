@@ -56,6 +56,7 @@ import { ShareSheet } from "@/components/share-sheet"
 import { ConversationVideo } from "@/components/conversation/conversation-video"
 import { CoverUpload } from "@/components/admin/cover-upload"
 import { CoverArt } from "@/components/cover-art"
+import { MarqueeTitle } from "@/components/marquee-title"
 import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
 import type { ShareTarget } from "@/lib/share-types"
 import { getAvatarColor, getInitials } from "@/lib/identity"
@@ -937,7 +938,7 @@ export function VideoStudioConsole({
                 )}
                 <div className="flex min-w-0 flex-col leading-tight">
                   <span className="truncate text-sm font-semibold text-white">{currentUser.name}</span>
-                  <span className="truncate text-[11px] text-white/60">{title}</span>
+                  <MarqueeTitle text={title} className="text-[11px] text-white/60" />
                 </div>
               </div>
             ) : !live ? (

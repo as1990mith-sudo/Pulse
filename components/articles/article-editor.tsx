@@ -52,6 +52,9 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
   const [publishing, startPublishing] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [savedNote, setSavedNote] = useState<string | null>(null)
+  // Tracks unsaved edits so leaving the page can prompt to save or discard.
+  const [dirty, setDirty] = useState(false)
+  const [confirmBack, setConfirmBack] = useState(false)
 
   // Seed the contentEditable body once on mount.
   useEffect(() => {
@@ -74,6 +77,7 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
     const html =
       '<blockquote class="verse">"For God so loved the world…" — John 3:16</blockquote><p><br/></p>'
     document.execCommand("insertHTML", false, html)
+    setDirty(true)
   }
 
   function addLink() {
@@ -88,6 +92,7 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
     try {
       const { url } = await uploadMedia(file, "covers")
       setCoverUrl(url)
+      setDirty(true)
     } catch {
       setError("Cover upload failed. Try again.")
     } finally {
@@ -107,6 +112,7 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
         false,
         `<img src="${url}" alt="" /><p><br/></p>`,
       )
+      setDirty(true)
     } catch {
       setError("Image upload failed. Try again.")
     } finally {
@@ -151,10 +157,39 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
     startSaving(async () => {
       const id = await persist()
       if (id) {
+        setDirty(false)
         setSavedNote("Draft saved")
         setTimeout(() => setSavedNote(null), 2000)
       }
     })
+  }
+
+  // Back navigation: if there are unsaved edits, ask to save or discard first.
+  function handleBack() {
+    if (dirty) {
+      setConfirmBack(true)
+    } else {
+      router.back()
+    }
+  }
+
+  function handleSaveAndExit() {
+    startSaving(async () => {
+      const id = await persist()
+      if (id) {
+        setDirty(false)
+        setConfirmBack(false)
+        router.back()
+      }
+      // If persist() returns null (e.g. missing title), the error banner shows
+      // inside the dialog and we keep the user on the page to fix it.
+    })
+  }
+
+  function handleDiscard() {
+    setDirty(false)
+    setConfirmBack(false)
+    router.back()
   }
 
   function handlePublish() {
@@ -180,7 +215,7 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
       {/* Top bar */}
       <div className="flex items-center justify-between gap-2">
         <button
-          onClick={() => router.back()}
+          onClick={handleBack}
           className="flex size-9 items-center justify-center rounded-full bg-muted text-foreground transition hover:bg-muted/70"
           aria-label="Go back"
         >
@@ -222,7 +257,10 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={coverUrl || "/placeholder.svg"} alt="" className="max-h-64 w-full object-cover" />
             <button
-              onClick={() => setCoverUrl(null)}
+              onClick={() => {
+                setCoverUrl(null)
+                setDirty(true)
+              }}
               className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-full bg-black/60 text-white"
               aria-label="Remove cover"
             >
@@ -256,7 +294,10 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
       {/* Title */}
       <textarea
         value={title}
-        onChange={(e) => setTitle(e.target.value)}
+        onChange={(e) => {
+          setTitle(e.target.value)
+          setDirty(true)
+        }}
         rows={1}
         placeholder="Article title"
         className="mt-5 w-full resize-none bg-transparent font-display text-3xl font-bold leading-tight text-foreground outline-none placeholder:text-muted-foreground/50"
@@ -268,7 +309,10 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
           {ARTICLE_CATEGORIES.map((c) => (
             <button
               key={c}
-              onClick={() => setCategory(c)}
+              onClick={() => {
+                setCategory(c)
+                setDirty(true)
+              }}
               className={cn(
                 "rounded-full px-3 py-1 text-xs font-medium transition",
                 category === c
@@ -282,7 +326,10 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
         </div>
         <input
           value={tagsText}
-          onChange={(e) => setTagsText(e.target.value)}
+          onChange={(e) => {
+            setTagsText(e.target.value)
+            setDirty(true)
+          }}
           placeholder="Add tags, comma separated"
           className="w-full rounded-xl bg-card px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
         />
@@ -340,6 +387,7 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
         ref={editorRef}
         contentEditable
         suppressContentEditableWarning
+        onInput={() => setDirty(true)}
         data-placeholder="Tell your story…"
         className="article-editor article-prose mt-5 min-h-[40vh] outline-none"
       />
@@ -374,6 +422,50 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
               className="article-prose mt-6"
               dangerouslySetInnerHTML={{ __html: previewHtml }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Unsaved-changes confirmation on back */}
+      {confirmBack && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            aria-label="Cancel"
+            onClick={() => setConfirmBack(false)}
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          />
+          <div className="relative z-10 m-3 w-full max-w-sm overflow-hidden rounded-3xl border border-border bg-card p-5 shadow-2xl">
+            <h3 className="text-base font-bold text-foreground">Save your draft?</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              You have unsaved changes. Save them as a draft or discard and leave.
+            </p>
+            {error && (
+              <p className="mt-3 rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
+            )}
+            <div className="mt-5 flex flex-col gap-2">
+              <button
+                onClick={handleSaveAndExit}
+                disabled={saving}
+                className="flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="size-4 animate-spin" /> : "Save draft & leave"}
+              </button>
+              <button
+                onClick={handleDiscard}
+                disabled={saving}
+                className="rounded-full bg-destructive/10 px-4 py-2.5 text-sm font-semibold text-destructive transition hover:bg-destructive/20 disabled:opacity-50"
+              >
+                Discard changes
+              </button>
+              <button
+                onClick={() => setConfirmBack(false)}
+                disabled={saving}
+                className="rounded-full px-4 py-2.5 text-sm font-medium text-muted-foreground transition hover:text-foreground disabled:opacity-50"
+              >
+                Keep editing
+              </button>
+            </div>
           </div>
         </div>
       )}
