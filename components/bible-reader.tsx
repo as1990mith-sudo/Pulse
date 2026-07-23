@@ -668,7 +668,10 @@ function VerseActionSheet({
   const [copied, setCopied] = useState(false)
   const [noteCopied, setNoteCopied] = useState(false)
   const popRef = useRef<HTMLDivElement>(null)
-  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null)
+  const [coords, setCoords] = useState<{ top: number; left: number; maxH: number } | null>(null)
+  // Enables the smooth top/left transition only AFTER the first placement, so
+  // the popover doesn't slide in from the off-screen measuring position.
+  const [settled, setSettled] = useState(false)
   // Which side of the verse the popover sits on, so it can grow out of the verse
   // (transform-origin) rather than appearing to blink in from the top.
   const [placement, setPlacement] = useState<"below" | "above">("below")
@@ -690,26 +693,64 @@ function VerseActionSheet({
     if (!anchorRect) return
     const compute = () => {
       const margin = 8
-      const vw = window.innerWidth
-      const vh = window.innerHeight
+      // Comfortable breathing room to leave above the on-screen keyboard.
+      const comfort = 14
+      // The visual viewport shrinks when the keyboard opens (unlike
+      // window.innerHeight), so we measure against it to stay above the keyboard
+      // and respect any browser UI / safe-area offset via its offsetTop.
+      const vv = typeof window !== "undefined" ? window.visualViewport : null
+      const vw = vv?.width ?? window.innerWidth
+      const vh = vv?.height ?? window.innerHeight
+      const vvTop = vv?.offsetTop ?? 0
+      const vvLeft = vv?.offsetLeft ?? 0
+      const layoutH = window.innerHeight
+      // Keyboard height ≈ how much the visual viewport is shorter than the layout.
+      const keyboardInset = Math.max(0, layoutH - vh - vvTop)
+      const keyboardOpen = keyboardInset > 120
+
       const width = Math.min(VERSE_POPOVER_WIDTH, vw - margin * 2)
       const height = popRef.current?.offsetHeight ?? 220
+      // Cap the popover to the visible area so it can never be clipped; the note
+      // field scrolls internally rather than pushing the buttons out of view.
+      const maxH = Math.max(200, vh - margin * 2)
+
       let left = anchorRect.left + anchorRect.width / 2 - width / 2
-      left = Math.max(margin, Math.min(left, vw - width - margin))
-      const spaceBelow = vh - anchorRect.bottom
-      const flipAbove = spaceBelow < height + margin && anchorRect.top > spaceBelow
-      const top = flipAbove
-        ? Math.max(margin, anchorRect.top - height - 6)
-        : Math.min(anchorRect.bottom + 6, vh - height - margin)
-      setPlacement(flipAbove ? "above" : "below")
-      setCoords({ top, left })
+      left = Math.max(vvLeft + margin, Math.min(left, vvLeft + vw - width - margin))
+
+      const visibleTop = vvTop + margin
+      const visibleBottom = vvTop + vh - margin
+
+      let top: number
+      let place: "above" | "below" = "below"
+      if (keyboardOpen || editingNote) {
+        // Park the popover just above the keyboard, fully inside the visible area,
+        // so the note field, Save, Cancel and Close all stay reachable.
+        top = Math.max(visibleTop, visibleBottom - Math.min(height, maxH) - comfort)
+      } else {
+        const spaceBelow = visibleBottom - anchorRect.bottom
+        const flipAbove = spaceBelow < height && anchorRect.top - visibleTop > spaceBelow
+        place = flipAbove ? "above" : "below"
+        top = flipAbove
+          ? Math.max(visibleTop, anchorRect.top - height - 6)
+          : Math.min(anchorRect.bottom + 6, visibleBottom - height)
+        top = Math.max(visibleTop, top)
+      }
+      setPlacement(place)
+      setCoords({ top, left, maxH })
     }
     compute()
+    // Reveal + arm the transition on the next frame so the entrance isn't a slide.
+    const raf = requestAnimationFrame(() => setSettled(true))
     window.addEventListener("scroll", compute, true)
     window.addEventListener("resize", compute)
+    window.visualViewport?.addEventListener("resize", compute)
+    window.visualViewport?.addEventListener("scroll", compute)
     return () => {
+      cancelAnimationFrame(raf)
       window.removeEventListener("scroll", compute, true)
       window.removeEventListener("resize", compute)
+      window.visualViewport?.removeEventListener("resize", compute)
+      window.visualViewport?.removeEventListener("scroll", compute)
     }
   }, [anchorRect, editingNote, note])
 
@@ -782,13 +823,20 @@ function VerseActionSheet({
         top: coords?.top ?? -9999,
         left: coords?.left ?? -9999,
         width: Math.min(VERSE_POPOVER_WIDTH, typeof window !== "undefined" ? window.innerWidth - 16 : VERSE_POPOVER_WIDTH),
+        maxHeight: coords?.maxH,
         visibility: coords ? "visible" : "hidden",
         // Grow out of the edge nearest the tapped verse so the popover reads as
         // emerging from the verse instead of blinking in from the top.
         transformOrigin: placement === "above" ? "bottom center" : "top center",
+        // GPU-accelerated, fluid repositioning when the keyboard opens/closes —
+        // armed only after the first placement so the entrance isn't a slide.
+        transition: settled
+          ? "top 0.3s cubic-bezier(0.22, 1, 0.36, 1), left 0.3s cubic-bezier(0.22, 1, 0.36, 1)"
+          : undefined,
+        willChange: "top, left",
       }}
       className={cn(
-        "z-[70] rounded-2xl border border-border bg-popover-solid p-3 text-popover-foreground shadow-2xl",
+        "z-[70] flex flex-col overflow-y-auto overscroll-contain rounded-2xl border border-border bg-popover-solid p-3 text-popover-foreground shadow-2xl",
         // Only run the entrance animation once anchored (coords known), so it
         // animates in from its final position next to the verse rather than
         // from the off-screen measuring holder.
@@ -810,7 +858,9 @@ function VerseActionSheet({
           </button>
         </div>
 
-        <p className="mb-4 max-h-32 overflow-y-auto text-pretty text-sm leading-relaxed text-muted-foreground">{text}</p>
+        {/* Preview only the first line (truncated with an ellipsis) to save
+            vertical space — the full verse is still copied/shared via `formatted`. */}
+        <p className="mb-4 truncate text-sm leading-relaxed text-muted-foreground">{text}</p>
 
         <div className="flex items-center gap-2">
           <button
@@ -893,8 +943,10 @@ function VerseActionSheet({
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder="Write a note for this verse…"
-                rows={4}
-                className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm leading-relaxed text-foreground outline-none ring-primary/40 transition-shadow placeholder:text-muted-foreground focus:ring-2"
+                // One line shorter than before to free up room for the keyboard;
+                // long notes scroll internally so the buttons never get pushed off.
+                rows={3}
+                className="max-h-40 w-full resize-none overflow-y-auto rounded-xl border border-border bg-background px-3 py-2 text-sm leading-relaxed text-foreground outline-none ring-primary/40 transition-shadow placeholder:text-muted-foreground focus:ring-2"
               />
               <div className="flex items-center gap-2">
                 <button
