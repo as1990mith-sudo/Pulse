@@ -1,10 +1,18 @@
 "use client"
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
-import { ChevronDown, Gauge, ListMusic, Maximize, Minimize, Pause, Play, Radio, RotateCcw, RotateCw, SkipBack, SkipForward, X } from "lucide-react"
+import { ChevronDown, Gauge, ListMusic, Maximize, Minimize, MoreVertical, Pause, Pencil, Play, Radio, Repeat, Repeat1, RotateCcw, RotateCw, Shuffle, SkipBack, SkipForward, X } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { cn } from "@/lib/utils"
+import { authClient } from "@/lib/auth-client"
 import { getEpisodeComments } from "@/app/actions/episodes"
+import { updateEpisode } from "@/app/actions/shows"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { recordEpisodeView, getEpisodeEngagement, type EpisodeEngagement } from "@/app/actions/engagement"
 import { EpisodeNowPlayingActions } from "@/components/episode-now-playing-actions"
 import { EpisodeCommentsInline } from "@/components/episode-comments-inline"
@@ -92,6 +100,20 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
   // Full engagement summary (views · likes · comments · shares · saves) shown as
   // a stats line under the title. Loaded when the track opens.
   const [engagement, setEngagement] = useState<EpisodeEngagement | null>(null)
+
+  // Spotify/Apple-Music-style extra transport toggles for the audio player.
+  // Shuffle picks a random upcoming track; repeat cycles off → all → one.
+  const [shuffle, setShuffle] = useState(false)
+  const [repeatMode, setRepeatMode] = useState<"off" | "all" | "one">("off")
+
+  // Signed-in session, used to show the owner-only "Rename episode" menu item.
+  const { data: session } = authClient.useSession()
+
+  // Inline "Rename episode" modal state (owner only). `renameOpen` shows the
+  // sheet; `renameValue` is the editable title, seeded from the current track.
+  const [renameOpen, setRenameOpen] = useState(false)
+  const [renameValue, setRenameValue] = useState("")
+  const [renameSaving, setRenameSaving] = useState(false)
 
   // The active track's playable source + whether it's a video recording. A
   // single <video> element drives both audio and video episodes (a <video>
@@ -403,10 +425,17 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
 
   function handleEnded() {
     setPlaying(false)
-    // Auto-advance to the next playable track in the queue.
-    const idx = queue.findIndex((s) => s.id === current?.id)
-    const next = idx >= 0 ? queue[idx + 1] : undefined
-    if (next) play(next, queue)
+    // Repeat one: replay the current track from the top.
+    if (repeatMode === "one") {
+      const el = mediaRef.current
+      if (el) {
+        el.currentTime = 0
+        void el.play().catch(() => {})
+      }
+      return
+    }
+    // Otherwise advance (honouring shuffle + repeat-all) via the shared helper.
+    playNext()
   }
 
   const currentIndex = current ? queue.findIndex((s) => s.id === current.id) : -1
@@ -420,11 +449,23 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
     : []
   const hasPrev = currentIndex > 0
   const hasNext = currentIndex >= 0 && currentIndex < queue.length - 1
+  // With shuffle or repeat-all there's always somewhere to go next (as long as
+  // the queue has more than one track), so the Next button stays enabled.
+  const canNext = hasNext || ((shuffle || repeatMode === "all") && queue.length > 1)
   const playPrev = () => {
     if (hasPrev) play(queue[currentIndex - 1], queue)
   }
   const playNext = () => {
+    // Shuffle: jump to a random *other* track in the queue.
+    if (shuffle && queue.length > 1) {
+      const others = queue.filter((s) => s.id !== current?.id)
+      const pick = others[Math.floor(Math.random() * others.length)]
+      if (pick) play(pick, queue)
+      return
+    }
     if (hasNext) play(queue[currentIndex + 1], queue)
+    // Repeat-all: wrap back to the top of the queue once we run off the end.
+    else if (repeatMode === "all" && queue.length > 0) play(queue[0], queue)
   }
   const pct = duration > 0 ? (currentTime / duration) * 100 : 0
 

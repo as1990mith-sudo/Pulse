@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react"
 import Link from "next/link"
-import { Bookmark, Heart, Share2 } from "lucide-react"
+import { Bookmark, Heart, Send } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import { authClient } from "@/lib/auth-client"
 import type { Show } from "@/lib/data"
@@ -150,8 +150,10 @@ export function EpisodeNowPlayingActions({
     })
   }
 
+  // Icon-only actions with the count inline, right next to the icon. Tap
+  // feedback via a subtle scale so the compact controls still feel responsive.
   const baseBtn =
-    "flex flex-col items-center gap-1 rounded-2xl px-3 py-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+    "flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-muted-foreground transition-transform transition-colors hover:bg-foreground/5 hover:text-foreground active:scale-90 disabled:cursor-not-allowed disabled:opacity-40"
 
   return (
     <>
@@ -175,6 +177,16 @@ export function EpisodeNowPlayingActions({
             className="h-8 rounded-full px-3 text-xs"
           />
         )}
+        {/* Viewing your own episode: a static, non-interactive Owner pill in
+            place of the Follow/Unfollow button. */}
+        {signedIn && hostIsSelf && (
+          <span
+            className="ml-1 select-none rounded-full bg-secondary px-3 py-1 text-xs font-semibold text-muted-foreground"
+            aria-label="You own this episode"
+          >
+            Owner
+          </span>
+        )}
 
         {/* Right: engagement actions, pushed to the far edge. */}
         <div className="ml-auto flex items-center gap-1">
@@ -187,7 +199,7 @@ export function EpisodeNowPlayingActions({
           className={cn(baseBtn, liked && "text-live hover:text-live")}
         >
           <Heart className={cn("size-6", liked && "fill-current")} />
-          <span className="tabular-nums">{likes > 0 ? likes : "Like"}</span>
+          {likes > 0 && <span className="tabular-nums">{likes}</span>}
         </button>
 
         <button
@@ -199,7 +211,7 @@ export function EpisodeNowPlayingActions({
           className={cn(baseBtn, commentsExpanded && "text-primary hover:text-primary")}
         >
           <CommentIcon className="size-6" />
-          <span className="tabular-nums">{commentCount > 0 ? commentCount : "Comment"}</span>
+          {commentCount > 0 && <span className="tabular-nums">{commentCount}</span>}
         </button>
 
         <button
@@ -211,7 +223,7 @@ export function EpisodeNowPlayingActions({
           className={cn(baseBtn, saved && "text-primary hover:text-primary")}
         >
           <Bookmark className={cn("size-6", saved && "fill-current")} />
-          <span className="tabular-nums">{saves > 0 ? saves : saved ? "Saved" : "Save"}</span>
+          {saves > 0 && <span className="tabular-nums">{saves}</span>}
         </button>
 
         <button
@@ -220,8 +232,8 @@ export function EpisodeNowPlayingActions({
           aria-label="Share episode"
           className={cn(baseBtn)}
         >
-          <Share2 className="size-6" />
-          <span className="tabular-nums">{shares > 0 ? shares : "Share"}</span>
+          <Send className="size-6" />
+          {shares > 0 && <span className="tabular-nums">{shares}</span>}
         </button>
         </div>
       </div>
