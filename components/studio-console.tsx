@@ -1398,7 +1398,16 @@ export function MusicPanel({
   return (
     <Sheet title="Background music" onClose={onClose}>
       <div className="space-y-4">
-        <input ref={fileInputRef} type="file" accept="audio/*" multiple className="hidden" onChange={handlePick} />
+        {/* Explicit extensions alongside "audio/*" so iOS Safari doesn't grey out
+            audio files in the Files app (a bare wildcard leaves them unselectable). */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="audio/*,.mp3,.m4a,.wav,.aac,.flac,.ogg,.oga,.opus,.aif,.aiff,.caf"
+          multiple
+          className="hidden"
+          onChange={handlePick}
+        />
 
         {/* ── Now playing: premium control surface ── */}
         {activeTrack && (

@@ -255,7 +255,15 @@ export function UploadEpisode({ open, onOpenChange }: { open: boolean; onOpenCha
         <input
           ref={mediaInputRef}
           type="file"
-          accept={kind === "video" ? "video/*" : "audio/*"}
+          // iOS Safari greys out most files when the accept list is only the bare
+          // "audio/*" / "video/*" wildcard, so audio tracks can't be selected from
+          // the Files app. Listing explicit extensions alongside the wildcard
+          // re-enables them across iPhone, Android and desktop.
+          accept={
+            kind === "video"
+              ? "video/*,.mp4,.mov,.m4v,.webm"
+              : "audio/*,.mp3,.m4a,.wav,.aac,.flac,.ogg,.oga,.opus,.aif,.aiff,.caf"
+          }
           className="hidden"
           onChange={handleMediaPick}
         />

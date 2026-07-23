@@ -118,16 +118,25 @@ function describeMediaError(err: unknown): string {
 
 /**
  * Pick the best MediaRecorder container the browser supports for recording the
- * host's video session. VP9/VP8 WebM first (Chrome/Android), then MP4 (Safari).
+ * host's video session.
+ *
+ * MP4/H.264 is tried FIRST because it's the only format that plays back
+ * universally — most importantly on iPhones/Safari, which cannot decode the
+ * VP8/VP9 video track inside a WebM recording (the audio still plays, so the
+ * replay would otherwise appear as a black screen with sound). WebM/VP9/VP8 is
+ * kept as a fallback for browsers (older Android Chrome) that can't record MP4.
  * Returns "" to let MediaRecorder choose its own default when none match.
  */
 function pickVideoRecordingMime(): string {
   if (typeof MediaRecorder === "undefined") return ""
   const candidates = [
+    "video/mp4;codecs=avc1.640028,mp4a.40.2",
+    "video/mp4;codecs=avc1,mp4a.40.2",
+    "video/mp4;codecs=h264,aac",
+    "video/mp4",
     "video/webm;codecs=vp9,opus",
     "video/webm;codecs=vp8,opus",
     "video/webm",
-    "video/mp4",
   ]
   for (const c of candidates) {
     if (MediaRecorder.isTypeSupported(c)) return c

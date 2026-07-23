@@ -1027,7 +1027,10 @@ export function VideoStudioConsole({
                 roomName={roomName ?? undefined}
                 blockedUsers={callState?.blockedUsers ?? []}
                 onChanged={() => void refreshCalls()}
-                className="px-2.5 py-1 text-[11px] font-medium"
+                // Match the elapsed timer's dark pill (the default immersive
+                // trigger uses a light bg-white/10, which read as "no dark
+                // background" next to the timer). bg-black/40 wins via cn().
+                className="bg-black/40 px-2.5 py-1.5 text-[11px] font-medium text-white/90 ring-1 ring-inset ring-white/10 backdrop-blur-md hover:bg-black/55"
               />
             )}
           </div>
