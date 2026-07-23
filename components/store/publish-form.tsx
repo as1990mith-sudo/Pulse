@@ -451,7 +451,10 @@ export function PublishForm() {
                     </span>
                     <input
                       type="file"
-                      accept="video/*,audio/*"
+                      // Explicit extensions so iOS Safari doesn't grey out audio
+                      // files in the Files app (a bare wildcard makes them
+                      // unselectable on iPhone).
+                      accept="video/*,audio/*,.mp4,.mov,.m4v,.webm,.mp3,.m4a,.wav,.aac,.flac,.ogg,.oga,.opus,.aif,.aiff,.caf"
                       className="hidden"
                       onChange={(e) => {
                         handleLessonFile(lesson.key, e.target.files?.[0] ?? null)
