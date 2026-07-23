@@ -6,7 +6,6 @@ import {
   Check,
   ChevronDown,
   Globe,
-  HandHeart,
   Loader2,
   Lock,
   Mic,
@@ -37,7 +36,6 @@ import {
   removeFromStage,
   setGuestsEnabled,
   setSpotlightGuest,
-  setPrayerMode,
   heartbeatBroadcast,
   type LiveStreamView,
   type LiveOrientation,
@@ -105,7 +103,7 @@ function GlassButton({
           ? "bg-destructive text-destructive-foreground ring-white/20 hover:opacity-90"
           : tone === "muted"
             ? "bg-white/90 text-neutral-900 ring-white/40"
-            : "bg-white/10 text-white ring-white/15 backdrop-blur-md hover:bg-white/20",
+            : "bg-black/40 text-white ring-white/10 backdrop-blur-md hover:bg-black/55",
       )}
     >
       {children}
@@ -503,19 +501,9 @@ export function VideoStudioConsole({
     prevPrayerRef.current = next
     setPrayerStartedAt(next)
   }, [callState?.prayerStartedAt])
+  // Prayer Mode is reconciled from server state only; the host trigger has been
+  // removed, so this stays inert unless a legacy session reports it.
   const prayerActive = prayerStartedAt != null
-  async function togglePrayer() {
-    if (!roomName) return
-    const next = !prayerActive
-    setPrayerStartedAt(next ? new Date().toISOString() : null)
-    if (!next) setPrayerEndedAt(Date.now())
-    try {
-      await setPrayerMode({ roomName, on: next })
-      refreshCalls()
-    } catch {
-      setPrayerStartedAt(next ? null : new Date().toISOString())
-    }
-  }
 
   // Duck the background music under the host's own speech — but never during
   // Prayer Mode, so worship/instrumental music keeps playing naturally.
@@ -1336,14 +1324,6 @@ export function VideoStudioConsole({
               tone={musicTracks.length > 0 ? "muted" : "glass"}
             >
               <Music className="size-5" />
-            </GlassButton>
-            <GlassButton
-              label={prayerActive ? "End Prayer Mode" : "Start Prayer Mode"}
-              onClick={() => void togglePrayer()}
-              active={prayerActive}
-              tone={prayerActive ? "muted" : "glass"}
-            >
-              <HandHeart className="size-5" />
             </GlassButton>
             {roomName && (
               <GlassButton label="Share this live" onClick={() => setShareOpen(true)}>

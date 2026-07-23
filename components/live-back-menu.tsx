@@ -47,7 +47,7 @@ export function BackExitMenu({
         type="button"
         onClick={onExit}
         aria-label="Back"
-        className="relative flex size-10 shrink-0 items-center justify-center rounded-full bg-white/15 text-white ring-1 ring-inset ring-white/15 transition-colors hover:bg-white/25"
+        className="relative flex size-10 shrink-0 items-center justify-center rounded-full bg-black/40 text-white ring-1 ring-inset ring-white/10 backdrop-blur-md transition-colors hover:bg-black/55"
       >
         <ArrowLeft className="size-5" strokeWidth={2.5} />
       </button>
@@ -62,7 +62,7 @@ export function BackExitMenu({
         onClick={() => setOpen((o) => !o)}
         aria-label="Back options"
         aria-expanded={open}
-        className="relative flex size-10 items-center justify-center rounded-full bg-white/15 text-white ring-1 ring-inset ring-white/15 transition-colors hover:bg-white/25"
+        className="relative flex size-10 items-center justify-center rounded-full bg-black/40 text-white ring-1 ring-inset ring-white/10 backdrop-blur-md transition-colors hover:bg-black/55"
       >
         <ArrowLeft className="size-5" strokeWidth={2.5} />
       </button>

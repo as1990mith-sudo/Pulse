@@ -47,7 +47,6 @@ import {
   respondGridPin,
   setGridCohost,
   setGridLayout,
-  setPrayerMode,
   setRoomLock,
   type GridLayout,
   type LiveChatMessageView,
@@ -982,12 +981,6 @@ export function ConversationVideo(props: ConversationVideoProps) {
                   icon={locked ? LockOpen : Lock}
                   label={locked ? "Unlock room" : "Lock room"}
                   onClick={() => run("lock", () => setRoomLock({ roomName, locked: !locked }))}
-                />
-                <SheetButton
-                  icon={Radio}
-                  label={prayerActive ? "End prayer" : "Prayer Mode"}
-                  active={prayerActive}
-                  onClick={() => run("prayer", () => setPrayerMode({ roomName, on: !prayerActive }))}
                 />
               </div>
             </motion.div>
