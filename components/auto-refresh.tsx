@@ -10,13 +10,19 @@ import { useRouter } from "next/navigation"
  * and without losing client state (scroll position, the persistent live room,
  * the episode player, form inputs, open dialogs).
  *
- * It refreshes on a steady interval while the tab is visible, and immediately
- * when the user returns to the tab or the network reconnects, so new posts,
- * adverts and live sessions appear (and ended ones disappear) automatically —
- * users never have to pull-to-refresh or reload.
+ * It refreshes immediately when the user returns to the tab, refocuses the
+ * window, or the network reconnects — so new posts, adverts and live sessions
+ * are up to date whenever the user is actually looking at the app.
+ *
+ * It deliberately does NOT refresh on a steady timer. A periodic
+ * `router.refresh()` re-renders the entire Server Component tree in place every
+ * few seconds, and that repaint is visible as an intermittent screen flicker
+ * (and reloads full-bleed images) while the user is simply reading. The truly
+ * live surfaces — the feed, chat, live rooms, DMs and notifications — already
+ * poll their own data client-side via SWR, so a constant full-app refresh is
+ * redundant with those and only adds the flicker. Refreshing on
+ * focus/visibility/reconnect keeps data fresh without the periodic repaint.
  */
-const REFRESH_INTERVAL_MS = 20_000
-
 export function AutoRefresh() {
   const router = useRouter()
   // Throttle so a focus/visibility/online burst can't trigger many refreshes
@@ -31,12 +37,6 @@ export function AutoRefresh() {
       router.refresh()
     }
 
-    // Steady background refresh — only while the tab is actually visible to
-    // avoid pointless work (and battery drain) on backgrounded tabs.
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") refresh()
-    }, REFRESH_INTERVAL_MS)
-
     // Returning to the tab (or reconnecting) should show fresh data right away.
     const onVisible = () => {
       if (document.visibilityState === "visible") refresh()
@@ -46,7 +46,6 @@ export function AutoRefresh() {
     window.addEventListener("online", refresh)
 
     return () => {
-      window.clearInterval(interval)
       document.removeEventListener("visibilitychange", onVisible)
       window.removeEventListener("focus", onVisible)
       window.removeEventListener("online", refresh)
