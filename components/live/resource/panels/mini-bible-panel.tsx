@@ -6,9 +6,9 @@
 // chat — all without leaving the live. Highlights/bookmarks persist to the
 // signed-in reader's account (reusing the main Bible's annotation actions).
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import useSWR from "swr"
-import { Bookmark, Check, ChevronDown, Copy, Highlighter, Search, Send, X } from "lucide-react"
+import { Bookmark, Check, ChevronDown, Copy, Send, X } from "lucide-react"
 import { BIBLE_BOOKS, getBook } from "@/lib/bible-books"
 import {
   getBibleAnnotations,
@@ -35,25 +35,12 @@ async function loadChapter(bookIndex: number): Promise<ChapterFile> {
   return res.json()
 }
 
-// Parse "John 3:16" / "1 John 2" into a book/chapter target.
-function parseReference(q: string): { bookIndex: number; chapter: number; verse?: number } | null {
-  const m = q.trim().match(/^([1-3]?\s?[a-zA-Z]+(?:\s[a-zA-Z]+)*)\s*(\d+)?(?::(\d+))?$/)
-  if (!m) return null
-  const name = m[1].trim().toLowerCase()
-  const idx = BIBLE_BOOKS.findIndex((b) => b.name.toLowerCase().startsWith(name))
-  if (idx < 0) return null
-  const chapter = m[2] ? Math.max(1, Math.min(Number(m[2]), BIBLE_BOOKS[idx].chapters)) : 1
-  const verse = m[3] ? Number(m[3]) : undefined
-  return { bookIndex: idx, chapter, verse }
-}
-
 export function MiniBiblePanel() {
   const { shareToChat, canShareToChat, payload } = useLiveResources()
   const biblePayload = payload?.kind === "bible" ? payload : null
 
   const [book, setBook] = useState(biblePayload?.book ?? "John")
   const [chapter, setChapter] = useState(biblePayload?.chapter ?? 1)
-  const [query, setQuery] = useState("")
   const [selected, setSelected] = useState<number | null>(biblePayload?.verseId ? Number(biblePayload.verseId.split(":")[2]) : null)
   const [shared, setShared] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -66,24 +53,6 @@ export function MiniBiblePanel() {
   const { data: bookmarks, mutate: mutateBm } = useSWR("mini-bible-bookmarks", getBibleBookmarks)
 
   const verses: Verse[] = chapterData?.chapters[String(chapter)] ?? []
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return verses
-    // If it parses as a reference, don't filter (we jump instead, handled below).
-    if (parseReference(query)) return verses
-    return verses.filter((v) => v.text.toLowerCase().includes(q))
-  }, [verses, query])
-
-  // Jump to a reference when the query is a valid one.
-  useEffect(() => {
-    const ref = parseReference(query)
-    if (!ref) return
-    setBook(BIBLE_BOOKS[ref.bookIndex].name)
-    setChapter(ref.chapter)
-    if (ref.verse) setSelected(ref.verse)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query])
 
   // Reset selection + scroll to top on chapter change.
   useEffect(() => {
@@ -132,7 +101,7 @@ export function MiniBiblePanel() {
 
   return (
     <div className="flex h-full flex-col">
-        {/* Book / chapter pickers + search */}
+        {/* Book / chapter pickers */}
         <div className="flex flex-col gap-2 border-b border-white/8 px-3 py-2.5">
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
@@ -169,34 +138,14 @@ export function MiniBiblePanel() {
               <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-white/40" />
             </div>
           </div>
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-white/40" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search or jump to a reference…"
-              aria-label="Search scripture"
-              className="w-full rounded-xl border border-white/10 bg-white/5 py-2 pl-9 pr-8 text-sm text-white placeholder:text-white/35 outline-none focus:border-primary/50"
-            />
-            {query && (
-              <button
-                type="button"
-                onClick={() => setQuery("")}
-                aria-label="Clear search"
-                className="absolute right-2 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full text-white/50 hover:text-white"
-              >
-                <X className="size-4" />
-              </button>
-            )}
-          </div>
         </div>
 
         {/* Verses */}
         <div ref={scrollRef} className="min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain px-2 py-2">
-          {filtered.length === 0 && (
-            <p className="px-3 py-6 text-center text-sm text-white/40">No verses match your search.</p>
+          {verses.length === 0 && (
+            <p className="px-3 py-6 text-center text-sm text-white/40">Loading chapter…</p>
           )}
-          {filtered.map((v) => {
+          {verses.map((v) => {
             const hl = highlightOf(v.verse)
             const hlClass = HIGHLIGHT_COLORS.find((c) => c.key === hl)?.className
             const isSel = selected === v.verse

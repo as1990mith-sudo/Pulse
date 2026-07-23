@@ -6,12 +6,14 @@
 // and a smoothly animated body. The live plays on underneath the whole time —
 // this is an overlay, never a navigation.
 
-import { useRef } from "react"
+import { useRef, useState } from "react"
 import { motion, useDragControls } from "motion/react"
 import {
   BookOpen,
   FileText,
   GripHorizontal,
+  Maximize2,
+  Minimize2,
   Minus,
   NotebookPen,
   Pin,
@@ -45,6 +47,9 @@ export function MiniPanelShell({
   const { activePanel, openPanel, closePanel, openDrawer } = useLiveResources()
   const dragControls = useDragControls()
   const panelRef = useRef<HTMLDivElement>(null)
+  // "Expand" grows the floating card ~20% larger (both height and width) so more
+  // of the resource is visible, while staying an overlay the live plays behind.
+  const [expanded, setExpanded] = useState(false)
 
   return (
     <motion.div
@@ -59,7 +64,11 @@ export function MiniPanelShell({
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.94, y: 24 }}
       transition={{ type: "spring", stiffness: 320, damping: 30 }}
-      className="pointer-events-auto absolute bottom-4 left-1/2 z-[15] flex h-[68%] max-h-[560px] w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 flex-col overflow-hidden rounded-3xl border border-white/12 bg-zinc-950/95 shadow-2xl ring-1 ring-black/50 backdrop-blur-2xl"
+      className={cn(
+        "pointer-events-auto absolute bottom-4 left-1/2 z-[15] flex w-[calc(100%-1.5rem)] -translate-x-1/2 flex-col overflow-hidden rounded-3xl border border-white/12 bg-zinc-950/95 shadow-2xl ring-1 ring-black/50 backdrop-blur-2xl transition-[height,max-width,max-height] duration-300 ease-out",
+        // Base size vs. expanded (+20% on each axis: 68%→82%, 560→672px, 28→33.6rem).
+        expanded ? "h-[82%] max-h-[672px] max-w-[33.6rem]" : "h-[68%] max-h-[560px] max-w-md",
+      )}
     >
       {/* Drag handle + header */}
       <div
@@ -76,6 +85,15 @@ export function MiniPanelShell({
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-[15px] font-bold leading-tight text-white">{title}</h2>
           </div>
+          <button
+            type="button"
+            onClick={() => setExpanded((e) => !e)}
+            aria-label={expanded ? "Shrink panel" : "Expand panel"}
+            aria-pressed={expanded}
+            className="flex size-8 items-center justify-center rounded-full bg-white/8 text-white/70 transition-colors hover:bg-white/15 hover:text-white"
+          >
+            {expanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+          </button>
           <button
             type="button"
             onClick={openDrawer}
