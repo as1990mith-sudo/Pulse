@@ -176,31 +176,31 @@ export function CommentSheet({
         onClick={onClose}
         className="absolute inset-0 bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-200"
       />
-      {/* Force dark tokens so the shared (token-based) CommentThread always reads
-          correctly on this dark immersive sheet, regardless of app theme. */}
-      <div className="dark relative flex max-h-[82%] min-h-[52%] flex-col rounded-t-[1.75rem] border-t border-white/10 bg-neutral-950 text-white shadow-2xl animate-in slide-in-from-bottom duration-300 ease-out">
+      {/* Theme-sensitive surface: uses design tokens so the sheet follows the
+          app's light/dark theme instead of being permanently charcoal. */}
+      <div className="relative flex max-h-[82%] min-h-[52%] flex-col rounded-t-[1.75rem] border-t border-border bg-background text-foreground shadow-2xl animate-in slide-in-from-bottom duration-300 ease-out">
         {/* Grabber + title row */}
         <header className="relative shrink-0 px-4 pt-2.5">
           <span
-            className="mx-auto mb-2.5 block h-1 w-9 rounded-full bg-white/25"
+            className="mx-auto mb-2.5 block h-1 w-9 rounded-full bg-muted-foreground/30"
             aria-hidden="true"
             onClick={onClose}
           />
           <div className="flex items-center justify-center pb-3">
             <div className="flex items-center gap-2">
-              <CommentIcon className="size-[18px] text-white/70" />
+              <CommentIcon className="size-[18px] text-muted-foreground" />
               <h2 className="text-[15px] font-semibold tracking-tight">{headerTitle}</h2>
             </div>
             <button
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-full bg-white/5 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+              className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-full bg-secondary text-muted-foreground transition-colors hover:bg-secondary/80 hover:text-foreground"
             >
               <X className="size-[18px]" />
             </button>
           </div>
-          <div className="h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+          <div className="h-px w-full bg-gradient-to-r from-transparent via-border to-transparent" />
         </header>
 
         <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 text-foreground">
@@ -208,12 +208,12 @@ export function CommentSheet({
             children
           ) : count === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-14 text-center">
-              <span className="flex size-14 items-center justify-center rounded-full bg-white/5">
-                <CommentIcon className="size-7 text-white/40" />
+              <span className="flex size-14 items-center justify-center rounded-full bg-secondary">
+                <CommentIcon className="size-7 text-muted-foreground" />
               </span>
               <div className="space-y-0.5">
-                <p className="text-sm font-medium text-white/80">{emptyText}</p>
-                <p className="text-xs text-white/45">{emptyHint}</p>
+                <p className="text-sm font-medium text-foreground">{emptyText}</p>
+                <p className="text-xs text-muted-foreground">{emptyHint}</p>
               </div>
             </div>
           ) : (
@@ -234,35 +234,35 @@ export function CommentSheet({
         {children ? null : showComposer ? (
           <form
             onSubmit={submit}
-            className="flex shrink-0 items-center gap-2.5 border-t border-white/10 bg-neutral-950/95 px-3.5 py-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] backdrop-blur"
+            className="flex shrink-0 items-center gap-2.5 border-t border-border bg-background/95 px-3.5 py-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] backdrop-blur"
           >
             {currentUser && (
-              <Avatar className="size-8 shrink-0 ring-1 ring-white/10">
+              <Avatar className="size-8 shrink-0 ring-1 ring-border">
                 {currentUser.image && <AvatarImage src={currentUser.image || "/placeholder.svg"} alt={currentUser.name} />}
                 <AvatarFallback className={cn("text-[11px]", currentUser.color)}>{currentUser.initials}</AvatarFallback>
               </Avatar>
             )}
-            <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-full bg-white/[0.08] pl-4 pr-1.5 ring-1 ring-inset ring-white/10 transition focus-within:ring-white/25">
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-full bg-secondary pl-4 pr-1.5 ring-1 ring-inset ring-border transition focus-within:ring-ring">
               <input
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder={placeholder}
                 aria-label="Add a comment"
-                className="min-w-0 flex-1 bg-transparent py-2.5 text-[15px] text-white placeholder:text-white/40 focus:outline-none"
+                className="min-w-0 flex-1 bg-transparent py-2.5 text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none"
               />
               <button
                 type="submit"
                 disabled={!draft.trim() || sending}
                 aria-label="Post comment"
-                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-all hover:opacity-90 disabled:scale-90 disabled:bg-white/10 disabled:text-white/40"
+                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-all hover:opacity-90 disabled:scale-90 disabled:bg-muted disabled:text-muted-foreground"
               >
                 {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
               </button>
             </div>
           </form>
         ) : (
-          <p className="shrink-0 border-t border-white/10 px-4 py-4 text-center text-sm text-white/60">
-            <Link href="/sign-in" className="font-semibold text-white underline">
+          <p className="shrink-0 border-t border-border px-4 py-4 text-center text-sm text-muted-foreground">
+            <Link href="/sign-in" className="font-semibold text-foreground underline">
               Sign in
             </Link>{" "}
             to join the conversation.

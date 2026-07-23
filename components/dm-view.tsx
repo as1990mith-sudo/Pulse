@@ -31,7 +31,7 @@ import { DM_DELETE_WINDOW_MS, DM_EDIT_WINDOW_MS } from "@/lib/dm-constants"
 import { ActionSheet, type SheetAction } from "@/components/action-sheet"
 import { getActiveCall, startCall, type CallMode, type DmCallView } from "@/app/actions/dm-call"
 import { ChatBackgroundSheet } from "@/components/chat-background-sheet"
-import { chatBackgroundStorageKey, chatBackgroundStyle, getChatBackground } from "@/lib/chat-backgrounds"
+import { CHAT_BACKGROUND_STORAGE_KEY, chatBackgroundStyle, getChatBackground } from "@/lib/chat-backgrounds"
 
 const REPORT_REASONS = ["Spam", "Harassment", "Impersonation", "Inappropriate content", "Other"] as const
 
@@ -70,20 +70,36 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
   const [blocked, setBlocked] = useState(false)
   const [flashId, setFlashId] = useState<number | null>(null)
 
-  // Chat background is scoped to this conversation only (persisted per id).
+  // Chat background is one global preference applied to every DM thread. Load
+  // it on mount and keep in sync if another open conversation changes it (the
+  // `storage` event fires across tabs; a custom event covers same-tab updates).
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(chatBackgroundStorageKey(detail.id))
-      if (saved) setBgId(saved)
-    } catch {
-      // ignore storage access errors
+    const read = () => {
+      try {
+        const saved = localStorage.getItem(CHAT_BACKGROUND_STORAGE_KEY)
+        setBgId(saved || "default")
+      } catch {
+        // ignore storage access errors
+      }
     }
-  }, [detail.id])
+    read()
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === CHAT_BACKGROUND_STORAGE_KEY) read()
+    }
+    window.addEventListener("storage", onStorage)
+    window.addEventListener("dm-chat-bg-change", read)
+    return () => {
+      window.removeEventListener("storage", onStorage)
+      window.removeEventListener("dm-chat-bg-change", read)
+    }
+  }, [])
 
   function selectBackground(id: string) {
     setBgId(id)
     try {
-      localStorage.setItem(chatBackgroundStorageKey(detail.id), id)
+      localStorage.setItem(CHAT_BACKGROUND_STORAGE_KEY, id)
+      // Notify other DM views mounted in this same tab (e.g. mini-chat docks).
+      window.dispatchEvent(new Event("dm-chat-bg-change"))
     } catch {
       // ignore storage access errors
     }
@@ -335,10 +351,11 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
           tint reaches from the header all the way down past the composer,
           instead of cutting off where the message list ends. */}
       {hasWallpaper && <div className="pointer-events-none absolute inset-0 z-0 bg-background/45" aria-hidden />}
-      {/* Header */}
+      {/* Header — sits above the message list (z-10) so the overflow menu
+          dropdown renders on top of message bubbles instead of behind them. */}
       <div
         className={cn(
-          "relative z-10 flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-6",
+          "relative z-30 flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-6",
           hasWallpaper && "bg-background/40 backdrop-blur-md",
         )}
       >
@@ -461,7 +478,7 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
 
       {/* In-chat search overlay */}
       {searchOpen && (
-        <div className="relative z-10 flex items-center gap-2 border-b border-border/60 bg-background px-3 py-2 sm:px-4">
+        <div className="relative z-20 flex items-center gap-2 border-b border-border/60 bg-background px-3 py-2 sm:px-4">
           <Search className="size-4 shrink-0 text-muted-foreground" />
           <input
             autoFocus
@@ -699,12 +716,13 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
       </div>
       )}
 
-      {/* Chat background picker (scoped to this conversation) */}
+      {/* Chat background picker (one global preference for all DM threads) */}
       <ChatBackgroundSheet
         open={bgSheetOpen}
         current={bgId}
         onSelect={selectBackground}
         onClose={() => setBgSheetOpen(false)}
+        subtitle="Applies to all your chats"
       />
 
       {/* Report user modal */}
