@@ -8,6 +8,7 @@ import { getAdminUser } from "@/lib/admin"
 import { db } from "@/lib/db"
 import { dream, dreamReply, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
+import { formatPostTimestamp } from "@/lib/format-timestamp"
 import { EDIT_WINDOW_MS } from "@/lib/interactions"
 import { getLikedSet, setLike } from "@/lib/likes"
 
@@ -17,17 +18,9 @@ async function requireUser() {
   return session.user
 }
 
-function timeAgo(date: Date): string {
-  const secs = Math.floor((Date.now() - date.getTime()) / 1000)
-  if (secs < 60) return "now"
-  const mins = Math.floor(secs / 60)
-  if (mins < 60) return `${mins}m`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h`
-  const days = Math.floor(hrs / 24)
-  if (days < 7) return `${days}d`
-  return `${Math.floor(days / 7)}w`
-}
+// Relative for the first 24h, then an absolute dd/mm/yy date. Shared with the
+// social feed so all post-style timestamps format identically.
+const timeAgo = formatPostTimestamp
 
 export type DreamView = {
   id: number

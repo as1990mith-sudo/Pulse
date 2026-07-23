@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { feedComment, feedPost, follow, like, repost, savedItem, share, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
+import { formatPostTimestamp } from "@/lib/format-timestamp"
 import { getLikedSet, setLike } from "@/lib/likes"
 import { notifyUser } from "@/app/actions/notifications"
 
@@ -160,16 +161,9 @@ async function getUserInfoMap(userIds: string[]): Promise<Map<string, { name: st
   return new Map(rows.map((r) => [r.id, { name: r.name, image: r.image }]))
 }
 
-function timeAgo(date: Date): string {
-  const secs = Math.floor((Date.now() - date.getTime()) / 1000)
-  if (secs < 60) return "now"
-  const mins = Math.floor(secs / 60)
-  if (mins < 60) return `${mins}m`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h`
-  const days = Math.floor(hrs / 24)
-  return `${days}d`
-}
+// Relative for the first 24h, then an absolute dd/mm/yy date. Shared helper so
+// feed posts, comments and replies all format timestamps identically.
+const timeAgo = formatPostTimestamp
 
 export async function getFeed(): Promise<FeedPostView[]> {
   const session = await auth.api.getSession({ headers: await headers() })
