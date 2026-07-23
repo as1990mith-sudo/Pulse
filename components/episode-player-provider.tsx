@@ -469,6 +469,29 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
   }
   const pct = duration > 0 ? (currentTime / duration) * 100 : 0
 
+  // Owner = the signed-in user is the episode's host. Gates the "Rename
+  // episode" overflow item. (The server action re-checks ownership, so this is
+  // purely a UI affordance.)
+  const isOwner = !!session?.user?.id && !!current && session.user.id === current.host.id
+
+  async function handleRenameSave() {
+    if (!current) return
+    const title = renameValue.trim()
+    if (!title || title === current.title) {
+      setRenameOpen(false)
+      return
+    }
+    setRenameSaving(true)
+    const res = await updateEpisode({ slug: current.id, title })
+    setRenameSaving(false)
+    if (res.ok) {
+      // Optimistically reflect the new title in the player + queue.
+      setCurrent((c) => (c ? { ...c, title } : c))
+      setQueue((q) => q.map((s) => (s.id === current.id ? { ...s, title } : s)))
+      setRenameOpen(false)
+    }
+  }
+
   // In-app picture-in-picture: when a *video* is minimised we keep the same
   // <video> element mounted and shrink the whole immersive overlay into a small
   // floating card, so the footage keeps *playing on screen* with our own
@@ -856,14 +879,38 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                     <ChevronDown className="size-6" />
                   </button>
                   <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Now playing</span>
-                  <button
-                    type="button"
-                    onClick={close}
-                    aria-label="Close player"
-                    className="flex size-9 items-center justify-center rounded-full text-foreground/80 transition-colors hover:bg-foreground/10 hover:text-foreground active:scale-90"
-                  >
-                    <X className="size-5" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    {/* Owner-only overflow menu: rename this episode inline. */}
+                    {isOwner && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          aria-label="Episode options"
+                          className="flex size-9 items-center justify-center rounded-full text-foreground/80 transition-colors hover:bg-foreground/10 hover:text-foreground active:scale-90"
+                        >
+                          <MoreVertical className="size-5" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setRenameValue(current.title)
+                              setRenameOpen(true)
+                            }}
+                          >
+                            <Pencil className="size-4" />
+                            Rename episode
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                    <button
+                      type="button"
+                      onClick={close}
+                      aria-label="Close player"
+                      className="flex size-9 items-center justify-center rounded-full text-foreground/80 transition-colors hover:bg-foreground/10 hover:text-foreground active:scale-90"
+                    >
+                      <X className="size-5" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Premium cover — a compact, centered piece of artwork that
@@ -927,10 +974,24 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                   </div>
                 </div>
 
-                {/* Transport — previous / play / next. Compact, premium controls:
-                    a refined 56px accent play button flanked by smaller filled
-                    skip glyphs, nudged up toward the scrubber. */}
-                <div className="mt-2 flex items-center justify-center gap-9">
+                {/* Transport — Shuffle · Previous · Play/Pause · Next · Repeat,
+                    the modern music-app order with equal spacing. The accent
+                    play button stays centered; shuffle/repeat are toggles that
+                    glow in the accent color when active. Extra bottom margin
+                    lifts the whole row off the base edge of the player. */}
+                <div className="mb-6 mt-3 flex items-center justify-center gap-6">
+                  <button
+                    onClick={() => setShuffle((s) => !s)}
+                    aria-label="Shuffle"
+                    aria-pressed={shuffle}
+                    className={cn(
+                      "relative flex items-center justify-center transition-colors active:scale-90",
+                      shuffle ? "text-primary" : "text-foreground/55 hover:text-foreground",
+                    )}
+                  >
+                    <Shuffle className="size-5" />
+                    {shuffle && <span className="absolute -bottom-1.5 size-1 rounded-full bg-primary" />}
+                  </button>
                   <button
                     onClick={playPrev}
                     disabled={!hasPrev}
@@ -948,12 +1009,71 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                   </button>
                   <button
                     onClick={playNext}
-                    disabled={!hasNext}
+                    disabled={!canNext}
                     aria-label="Next episode"
                     className="flex items-center justify-center text-foreground/60 transition-colors hover:text-foreground active:scale-90 disabled:pointer-events-none disabled:opacity-30"
                   >
                     <SkipForward className="size-6 fill-current" />
                   </button>
+                  <button
+                    onClick={() => setRepeatMode((m) => (m === "off" ? "all" : m === "all" ? "one" : "off"))}
+                    aria-label={`Repeat: ${repeatMode}`}
+                    aria-pressed={repeatMode !== "off"}
+                    className={cn(
+                      "relative flex items-center justify-center transition-colors active:scale-90",
+                      repeatMode !== "off" ? "text-primary" : "text-foreground/55 hover:text-foreground",
+                    )}
+                  >
+                    {repeatMode === "one" ? <Repeat1 className="size-5" /> : <Repeat className="size-5" />}
+                    {repeatMode !== "off" && <span className="absolute -bottom-1.5 size-1 rounded-full bg-primary" />}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Owner-only "Rename episode" modal — a small centered card
+                pre-filled with the current title and a Save button. */}
+            {renameOpen && isOwner && (
+              <div className="fixed inset-0 z-[70] flex items-center justify-center p-6">
+                <button
+                  type="button"
+                  aria-label="Cancel rename"
+                  onClick={() => setRenameOpen(false)}
+                  className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                />
+                <div className="relative w-full max-w-sm rounded-2xl border border-border bg-background p-5 shadow-2xl">
+                  <h2 className="text-base font-bold">Rename episode</h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Update the title of this episode.</p>
+                  <input
+                    autoFocus
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.nativeEvent.isComposing && e.keyCode !== 229) {
+                        e.preventDefault()
+                        void handleRenameSave()
+                      }
+                    }}
+                    placeholder="Episode title"
+                    className="mt-4 w-full rounded-xl border border-border bg-secondary px-3 py-2.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                  <div className="mt-4 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRenameOpen(false)}
+                      className="rounded-full px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-foreground/5 active:scale-95"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleRenameSave()}
+                      disabled={renameSaving || !renameValue.trim()}
+                      className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-transform hover:brightness-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {renameSaving ? "Saving…" : "Save"}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -987,7 +1107,7 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                   <>
                     <span aria-hidden className="mx-1.5 text-muted-foreground/40">·</span>
                     <span className="tabular-nums">
-                      {new Intl.NumberFormat("en", { notation: "compact" }).format(engagement.views)} views
+                      {new Intl.NumberFormat("en", { notation: "compact" }).format(engagement.views)} {isVideo ? "views" : "plays"}
                     </span>
                   </>
                 )}
