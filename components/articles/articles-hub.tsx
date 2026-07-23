@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { Loader2, PenLine, Search, Users, X } from "lucide-react"
+import { Loader2, PenLine, Search, UserRound, Users, X } from "lucide-react"
 import type { ArticleCard, FeaturedWriter } from "@/lib/article-types"
 import { getArticleFeed } from "@/app/actions/articles"
 import { ArticleRow, FeaturedArticleCard } from "@/components/articles/article-card"
@@ -169,7 +169,15 @@ export function ArticlesHub({
                     {w.articleCount} article{w.articleCount === 1 ? "" : "s"}
                   </p>
                 </div>
-                {w.isSelf ? null : (
+                {w.isSelf ? (
+                  <Link
+                    href={`/u/${w.author.id}`}
+                    className="tap-scale inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary px-4 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-secondary/70"
+                  >
+                    <UserRound className="size-3.5" />
+                    Profile
+                  </Link>
+                ) : (
                   <WriterFollowButton writerId={w.author.id} initialFollowing={w.followingWriter} size="sm" />
                 )}
               </div>
