@@ -684,7 +684,7 @@ export function VideoStudioConsole({
   // Broadcast caps the stage at 3 guests (host + 3 = 4 tiles total).
   const guests = peers.slice(0, 3)
 
-  // ── Broadcast spotlight (portrait) ────────────────────────────────────────
+  // ── Broadcast spotlight (portrait) ─────���──────────────────────────────────
   // The host can spotlight ONE called-in guest: that guest moves into the
   // primary slot and the host drops into a secondary slot. Spotlight is stored
   // server-side (gridPinnedId, reused) so viewers see the same swap.
@@ -812,8 +812,9 @@ export function VideoStudioConsole({
                 ? // Landscape letterboxes the feed so nothing is cropped.
                   "absolute inset-0 z-0"
                 : live
-                  ? // Portrait Broadcast: positioned via hostRect; rounded when sharing the stage.
-                    cn("z-20 overflow-hidden", stageTiles.length > 1 && "rounded-2xl ring-1 ring-inset ring-white/10")
+                  ? // Portrait Broadcast: positioned via hostRect. Always rounded so the
+                    // host's own frame matches the viewer's rounded video, even solo.
+                    "z-20 overflow-hidden rounded-2xl ring-1 ring-inset ring-white/10"
                   : // Pre-live: full-bleed (the preview element also renders below).
                     "absolute inset-0 z-0",
             )}
