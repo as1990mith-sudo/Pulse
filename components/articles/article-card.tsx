@@ -21,7 +21,7 @@ export function ArticleRow({ article }: { article: ArticleCardType }) {
   return (
     <Link
       href={`/articles/${article.id}`}
-      className="tap-scale group flex gap-3 rounded-2xl border border-border/50 bg-card/60 p-3 shadow-soft transition-colors hover:bg-card sm:gap-4 sm:p-4"
+      className="tap-scale group flex gap-3 rounded-2xl border border-border bg-card p-3 shadow-elevated ring-1 ring-white/5 transition-colors hover:border-primary/40 hover:bg-secondary/40 sm:gap-4 sm:p-4"
     >
       <div className="min-w-0 flex-1">
         <div className="mb-1.5 flex items-center gap-2">
@@ -115,7 +115,7 @@ export function ArticleTile({ article }: { article: ArticleCardType }) {
   return (
     <Link
       href={`/articles/${article.id}`}
-      className="tap-scale group flex flex-col overflow-hidden rounded-2xl border border-border/50 bg-card/60 shadow-soft transition-colors hover:bg-card"
+      className="tap-scale group flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-elevated ring-1 ring-white/5 transition-colors hover:border-primary/40 hover:bg-secondary/40"
     >
       {article.coverUrl ? (
         <div className="aspect-[16/10] w-full overflow-hidden">

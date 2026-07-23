@@ -43,6 +43,8 @@ import { useAutoHideChatChrome } from "@/lib/chat-chrome"
 import { renderMessageBody } from "@/lib/rich-text"
 import { compressImage, uploadMedia } from "@/lib/upload-media"
 import { ActionSheet, type SheetAction } from "@/components/action-sheet"
+import { ChatBackgroundSheet } from "@/components/chat-background-sheet"
+import { getChatBackground, chatBackgroundStyle } from "@/lib/chat-backgrounds"
 import { canEdit, canDelete } from "@/lib/interactions"
 import {
   approveJoinRequest,
@@ -55,7 +57,9 @@ import {
   sendChatMessage,
   setChatroomMemberRole,
   togglePinMessage,
+  updateChatroomBackground,
   updateChatroomImage,
+  updateChatroomName,
   type ChatAttachmentType,
   type ChatMessageView,
   type ChatroomDetail,
@@ -82,6 +86,13 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [showMembers, setShowMembers] = useState(false)
   const [showEmoji, setShowEmoji] = useState(false)
+  // Header overflow menu + the modals it can open.
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [editProfileOpen, setEditProfileOpen] = useState(false)
+  const [bgSheetOpen, setBgSheetOpen] = useState(false)
+  const [groupLightbox, setGroupLightbox] = useState(false)
+  const [confirmLeave, setConfirmLeave] = useState(false)
+  const [inviteCopied, setInviteCopied] = useState(false)
   const [recording, setRecording] = useState(false)
   const [sendingVoice, setSendingVoice] = useState(false)
   // Bumped when the header call button is tapped to tell ChatroomCall to join.
@@ -246,6 +257,46 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
     })
   }
 
+  function copyInviteLink() {
+    const link =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/chatrooms/join/${detail.inviteCode}`
+        : detail.inviteCode
+    const share = (navigator as Navigator & { share?: (data: ShareData) => Promise<void> }).share
+    if (share) {
+      void share({ title: detail.name, text: `Join ${detail.name} on Frequency`, url: link }).catch(() => {})
+      return
+    }
+    navigator.clipboard?.writeText(link).then(() => {
+      setInviteCopied(true)
+      window.setTimeout(() => setInviteCopied(false), 2000)
+    })
+  }
+
+  async function handleSelectBackground(id: string) {
+    const background = id === "default" ? null : id
+    // Optimistic: reflect the choice immediately, then persist for all members.
+    setBgSheetOpen(false)
+    await updateChatroomBackground({ chatroomId: detail.id, background })
+    router.refresh()
+  }
+
+  // Header overflow menu — availability differs by role.
+  const menuActions: SheetAction[] = []
+  if (detail.isAdmin) {
+    menuActions.push({ label: "Edit Profile", icon: Pencil, onClick: () => setEditProfileOpen(true) })
+  }
+  menuActions.push({ label: "Send invite link", icon: Copy, onClick: copyInviteLink })
+  if (detail.isAdmin) {
+    menuActions.push({ label: "Change chat background", icon: ImageIcon, onClick: () => setBgSheetOpen(true) })
+  }
+  if (!detail.isOwner) {
+    menuActions.push({ label: "Leave group", icon: LogOut, destructive: true, onClick: () => setConfirmLeave(true) })
+  }
+
+  const background = getChatBackground(detail.background)
+  const hasWallpaper = background.kind !== "default"
+
   async function handleDeleteMessage(messageId: number) {
     // Optimistically mark deleted, then persist.
     await mutateMessages(
@@ -301,24 +352,26 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
         </Link>
         <button
           type="button"
-          onClick={() => setShowMembers((s) => !s)}
-          aria-expanded={showMembers}
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl py-1 pl-1 pr-2 text-left transition-colors hover:bg-secondary/50"
+          onClick={() => (detail.image ? setGroupLightbox(true) : setShowMembers((s) => !s))}
+          aria-label={detail.image ? "View group picture" : "Show members"}
+          className="shrink-0 rounded-full"
         >
-          <Avatar className="size-10 shrink-0 ring-1 ring-border/50">
+          <Avatar className="size-10 ring-1 ring-border/50 transition-opacity hover:opacity-80">
             {detail.image && <AvatarImage src={detail.image || "/placeholder.svg"} alt={detail.name} />}
             <AvatarFallback className="bg-secondary text-sm">
               {detail.name.slice(0, 2).toUpperCase()}
             </AvatarFallback>
           </Avatar>
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowMembers((s) => !s)}
+          aria-expanded={showMembers}
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl py-1 pl-2 pr-2 text-left transition-colors hover:bg-secondary/50"
+        >
           <span className="min-w-0">
             <span className="block truncate text-[15px] font-semibold leading-tight">{detail.name}</span>
             <span className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-              {detail.isAdmin && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-1.5 py-0.5 font-medium text-primary">
-                  <Crown className="size-3" /> Admin
-                </span>
-              )}
               <span className="inline-flex items-center gap-1">
                 <Users className="size-3.5" /> {detail.members.length}{" "}
                 {detail.members.length === 1 ? "member" : "members"}
@@ -330,19 +383,74 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
           type="button"
           variant="ghost"
           size="icon"
-          className="size-10 shrink-0 rounded-full"
+          className="-mr-1 size-10 shrink-0 rounded-full"
           onClick={() => setCallStartNonce((n) => n + 1)}
           aria-label="Start or join group call"
         >
           <Phone className="size-5" />
         </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-10 shrink-0 rounded-full"
+          onClick={() => setMenuOpen(true)}
+          aria-label="More options"
+        >
+          <MoreVertical className="size-5" />
+        </Button>
       </div>
+
+      {/* Header overflow menu */}
+      <ActionSheet
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        title={detail.name}
+        actions={menuActions}
+      />
+
+      {/* Enlarged group picture lightbox */}
+      {groupLightbox && detail.image && (
+        <ImageLightbox src={detail.image} alt={detail.name} onClose={() => setGroupLightbox(false)} />
+      )}
+
+      {/* Admin: shared chat background picker */}
+      <ChatBackgroundSheet
+        open={bgSheetOpen}
+        current={detail.background ?? "default"}
+        subtitle="Applies for everyone in the group"
+        onSelect={handleSelectBackground}
+        onClose={() => setBgSheetOpen(false)}
+      />
+
+      {/* Admin: edit group name + picture */}
+      {editProfileOpen && (
+        <EditProfileModal detail={detail} onClose={() => setEditProfileOpen(false)} />
+      )}
+
+      {/* Leave group confirmation */}
+      {confirmLeave && (
+        <ConfirmLeaveDialog
+          groupName={detail.name}
+          leaving={isLeaving}
+          onCancel={() => setConfirmLeave(false)}
+          onConfirm={handleLeave}
+        />
+      )}
+
+      {inviteCopied && (
+        <div className="pointer-events-none fixed inset-x-0 top-4 z-[90] flex justify-center px-4">
+          <span className="rounded-full bg-foreground px-4 py-1.5 text-sm font-medium text-background shadow-lg">
+            Invite link copied
+          </span>
+        </div>
+      )}
 
       <ChatroomCall chatroomId={detail.id} roomTitle={detail.name} startNonce={callStartNonce} />
 
       {(showMembers || (detail.isAdmin && detail.joinRequests.length > 0)) && (
         <div className="max-h-[60vh] space-y-3 overflow-y-auto overscroll-contain border-b border-border/60 px-4 py-3 sm:px-6">
-          {showMembers && <MembersPanel detail={detail} onLeave={handleLeave} leaving={isLeaving} />}
+          {showMembers && <MembersPanel detail={detail} />}
           {detail.isAdmin && detail.joinRequests.length > 0 && <JoinRequests detail={detail} />}
         </div>
       )}
@@ -381,8 +489,16 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
         </div>
       )}
 
-      {/* Messages — fills remaining height */}
-      <div onScroll={onMessagesScroll} className="flex-1 overflow-y-auto bg-card/30">
+      {/* Messages — fills remaining height. A fixed wallpaper layer sits behind
+          the scrolling thread so the shared background stays put while scrolling. */}
+      <div className="relative flex-1 overflow-hidden">
+        <div
+          aria-hidden
+          className={cn("absolute inset-0", !hasWallpaper && "bg-card/30")}
+          style={hasWallpaper ? chatBackgroundStyle(detail.background) : undefined}
+        />
+        {hasWallpaper && <div aria-hidden className="absolute inset-0 bg-background/55" />}
+        <div onScroll={onMessagesScroll} className="relative h-full overflow-y-auto">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 py-5 sm:px-6">
           {messages.length === 0 && (
             <p className="py-10 text-center text-sm text-muted-foreground">
@@ -410,6 +526,7 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
             ),
           )}
           <div ref={scrollEndRef} />
+        </div>
         </div>
       </div>
 
@@ -741,21 +858,13 @@ function MessageBubble({
   )
 }
 
-function MembersPanel({
-  detail,
-  onLeave,
-  leaving,
-}: {
-  detail: ChatroomDetail
-  onLeave: () => void
-  leaving: boolean
-}) {
-  const router = useRouter()
+/**
+ * The plain member list. Same view for admins and regular members — only the
+ * per-member action availability (remove, promote) differs by role, handled in
+ * MemberRow. No group-picture editing lives here (that moved to Edit Profile).
+ */
+function MembersPanel({ detail }: { detail: ChatroomDetail }) {
   const [copied, setCopied] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const [groupCropSrc, setGroupCropSrc] = useState<string | null>(null)
-  const imageInputRef = useRef<HTMLInputElement>(null)
-  const [isPending, startTransition] = useTransition()
 
   function copyInvite() {
     const link =
@@ -768,66 +877,8 @@ function MembersPanel({
     })
   }
 
-  function handleGroupImage(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (file) setGroupCropSrc(URL.createObjectURL(file))
-    if (imageInputRef.current) imageInputRef.current.value = ""
-  }
-
-  async function handleGroupCropped(blob: Blob) {
-    setGroupCropSrc(null)
-    setUploading(true)
-    try {
-      const file = new File([blob], "group.jpg", { type: "image/jpeg" })
-      const data = await uploadMedia(file, "chat")
-      await updateChatroomImage({ chatroomId: detail.id, image: data.url })
-      router.refresh()
-    } catch {
-      // ignore — surfaced via no change
-    } finally {
-      setUploading(false)
-    }
-  }
-
-  function removeGroupImage() {
-    startTransition(async () => {
-      await updateChatroomImage({ chatroomId: detail.id, image: null })
-      router.refresh()
-    })
-  }
-
   return (
     <div className="space-y-4 rounded-2xl border border-border/60 bg-card p-4 shadow-sm">
-      {detail.isAdmin && (
-        <div className="flex items-center gap-3 border-b border-border/60 pb-4">
-          <Avatar className="size-14 ring-1 ring-border/50">
-            {detail.image && <AvatarImage src={detail.image || "/placeholder.svg"} alt={detail.name} />}
-            <AvatarFallback className="bg-secondary text-base">{detail.name.slice(0, 2).toUpperCase()}</AvatarFallback>
-          </Avatar>
-          <div className="space-y-1.5">
-            <p className="text-sm font-medium">Group picture</p>
-            <div className="flex items-center gap-2">
-              <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleGroupImage} />
-              <Button
-                variant="secondary"
-                size="sm"
-                className="gap-1.5 rounded-full"
-                onClick={() => imageInputRef.current?.click()}
-                disabled={uploading || isPending}
-              >
-                <ImageIcon className="size-3.5" />
-                {uploading ? "Uploading…" : detail.image ? "Change" : "Upload"}
-              </Button>
-              {detail.image && (
-                <Button variant="ghost" size="sm" className="rounded-full text-muted-foreground" onClick={removeGroupImage} disabled={isPending}>
-                  Remove
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {detail.members.length} {detail.members.length === 1 ? "member" : "members"}
@@ -847,29 +898,6 @@ function MembersPanel({
       <p className="text-xs text-muted-foreground">
         Invite code: <span className="font-mono font-medium text-foreground">{detail.inviteCode}</span>
       </p>
-
-      {!detail.isOwner && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-center gap-2 rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
-          onClick={onLeave}
-          disabled={leaving}
-        >
-          <LogOut className="size-4" /> Leave group
-        </Button>
-      )}
-
-      {groupCropSrc && (
-        <ImageCropper
-          src={groupCropSrc}
-          aspect={1}
-          round
-          title="Adjust group picture"
-          onCancel={() => setGroupCropSrc(null)}
-          onCropped={handleGroupCropped}
-        />
-      )}
     </div>
   )
 }
@@ -944,6 +972,7 @@ function MemberRow({
   return (
     <li className="flex items-center gap-3 px-1 py-2.5">
       <Avatar className="size-9 shrink-0">
+        {member.image && <AvatarImage src={member.image || "/placeholder.svg"} alt={member.userName} />}
         <AvatarFallback className={cn("text-xs", member.color)}>{member.initials}</AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1">
@@ -954,7 +983,7 @@ function MemberRow({
       </div>
       {isOwnerMember ? (
         <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary">
-          <Crown className="size-3" /> Owner
+          Owner
         </span>
       ) : member.role === "admin" ? (
         <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-foreground">
@@ -1023,6 +1052,205 @@ function JoinRequests({ detail }: { detail: ChatroomDetail }) {
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Admin-only modal to edit the group's name and change/remove its picture.
+ * The picture is persisted as soon as it's cropped; the name is saved on submit.
+ */
+function EditProfileModal({ detail, onClose }: { detail: ChatroomDetail; onClose: () => void }) {
+  const router = useRouter()
+  const [name, setName] = useState(detail.name)
+  const [uploading, setUploading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [groupCropSrc, setGroupCropSrc] = useState<string | null>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
+  const [isPending, startTransition] = useTransition()
+
+  function handleGroupImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) setGroupCropSrc(URL.createObjectURL(file))
+    if (imageInputRef.current) imageInputRef.current.value = ""
+  }
+
+  async function handleGroupCropped(blob: Blob) {
+    setGroupCropSrc(null)
+    setUploading(true)
+    try {
+      const file = new File([blob], "group.jpg", { type: "image/jpeg" })
+      const data = await uploadMedia(file, "chat")
+      await updateChatroomImage({ chatroomId: detail.id, image: data.url })
+      router.refresh()
+    } catch {
+      // ignore — surfaced via no change
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  function removeGroupImage() {
+    startTransition(async () => {
+      await updateChatroomImage({ chatroomId: detail.id, image: null })
+      router.refresh()
+    })
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault()
+    const next = name.trim()
+    if (!next) return
+    setSaving(true)
+    try {
+      if (next !== detail.name) await updateChatroomName({ chatroomId: detail.id, name: next })
+      router.refresh()
+      onClose()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Edit group profile"
+    >
+      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="relative z-10 m-3 w-full max-w-sm space-y-5 rounded-3xl border border-border/60 bg-card p-5 shadow-2xl">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold">Edit profile</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
+          >
+            <X className="size-5" />
+          </button>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <Avatar className="size-16 ring-1 ring-border/50">
+            {detail.image && <AvatarImage src={detail.image || "/placeholder.svg"} alt={detail.name} />}
+            <AvatarFallback className="bg-secondary text-lg">{detail.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+          </Avatar>
+          <div className="flex flex-wrap items-center gap-2">
+            <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleGroupImage} />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="gap-1.5 rounded-full"
+              onClick={() => imageInputRef.current?.click()}
+              disabled={uploading || isPending}
+            >
+              <ImageIcon className="size-3.5" />
+              {uploading ? "Uploading…" : detail.image ? "Change icon" : "Upload icon"}
+            </Button>
+            {detail.image && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="gap-1.5 rounded-full text-muted-foreground"
+                onClick={removeGroupImage}
+                disabled={isPending}
+              >
+                <Trash2 className="size-3.5" /> Remove
+              </Button>
+            )}
+          </div>
+        </div>
+
+        <form onSubmit={handleSave} className="space-y-4">
+          <div className="space-y-1.5">
+            <label htmlFor="group-name" className="text-xs font-medium text-muted-foreground">
+              Group name
+            </label>
+            <Input
+              id="group-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Group name"
+              maxLength={80}
+              autoFocus
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" className="rounded-full" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" className="rounded-full" disabled={saving || !name.trim()}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        </form>
+      </div>
+
+      {groupCropSrc && (
+        <ImageCropper
+          src={groupCropSrc}
+          aspect={1}
+          round
+          title="Adjust group picture"
+          onCancel={() => setGroupCropSrc(null)}
+          onCropped={handleGroupCropped}
+        />
+      )}
+    </div>
+  )
+}
+
+/** Confirmation dialog shown before a member leaves the group. */
+function ConfirmLeaveDialog({
+  groupName,
+  leaving,
+  onCancel,
+  onConfirm,
+}: {
+  groupName: string
+  leaving: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center p-4"
+      role="alertdialog"
+      aria-modal="true"
+      aria-label="Leave group"
+    >
+      <button type="button" aria-label="Cancel" onClick={onCancel} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="relative z-10 w-full max-w-xs space-y-4 rounded-3xl border border-border/60 bg-card p-5 text-center shadow-2xl">
+        <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-destructive/15 text-destructive">
+          <LogOut className="size-6" />
+        </div>
+        <div className="space-y-1">
+          <h3 className="text-base font-bold">Leave group?</h3>
+          <p className="text-sm text-muted-foreground">
+            {"You'll stop receiving messages from "}
+            <span className="font-medium text-foreground">{groupName}</span>
+            {". You can rejoin later with an invite link."}
+          </p>
+        </div>
+        <div className="flex flex-col gap-2">
+          <Button
+            type="button"
+            variant="destructive"
+            className="w-full rounded-full"
+            onClick={onConfirm}
+            disabled={leaving}
+          >
+            {leaving ? "Leaving…" : "Leave group"}
+          </Button>
+          <Button type="button" variant="ghost" className="w-full rounded-full" onClick={onCancel} disabled={leaving}>
+            Cancel
+          </Button>
+        </div>
       </div>
     </div>
   )

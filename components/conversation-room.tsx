@@ -31,6 +31,7 @@ import { BackExitMenu } from "@/components/live-back-menu"
 import { LiveChat } from "@/components/live-chat"
 import { ActionSheet, type SheetAction } from "@/components/action-sheet"
 import { CoverArt } from "@/components/cover-art"
+import { MarqueeTitle } from "@/components/marquee-title"
 import { CoverUpload } from "@/components/admin/cover-upload"
 import { AudioFormatSelector } from "@/components/audio-format-selector"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
@@ -815,7 +816,7 @@ export function ConversationRoom({
               className="mt-2 flex items-center gap-2.5"
             >
               {cover && <CoverArt src={cover} alt={`${title} cover`} className="size-9" />}
-              <h1 className="min-w-0 flex-1 truncate text-sm font-bold leading-tight tracking-tight">{title}</h1>
+              <MarqueeTitle text={title} className="min-w-0 flex-1 text-sm font-bold leading-tight tracking-tight" />
               <span className="shrink-0 text-xs font-medium text-white/50">
                 {gridParticipants.length} here
               </span>

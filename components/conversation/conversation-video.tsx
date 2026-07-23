@@ -33,6 +33,7 @@ import {
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { CoverArt } from "@/components/cover-art"
+import { MarqueeTitle } from "@/components/marquee-title"
 import { LiveChat } from "@/components/live-chat"
 import { useLiveResourcesOptional } from "@/components/live/resource/resource-context"
 import { FloatingMessages } from "@/components/conversation/floating-messages"
@@ -623,9 +624,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
                   </div>
                 )}
               </div>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-semibold">{title}</span>
-              </span>
+              <MarqueeTitle text={title} className="min-w-0 flex-1 text-sm font-semibold" />
               <span className="shrink-0 text-xs text-white/60">{participantCount} here</span>
             </motion.button>
           ) : (

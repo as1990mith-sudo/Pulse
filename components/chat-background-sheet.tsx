@@ -18,11 +18,13 @@ export function ChatBackgroundSheet({
   current,
   onSelect,
   onClose,
+  subtitle = "Only changes this conversation",
 }: {
   open: boolean
   current: string
   onSelect: (id: string) => void
   onClose: () => void
+  subtitle?: string
 }) {
   const [mounted] = useState(() => typeof document !== "undefined")
   if (!mounted) return null
@@ -58,7 +60,7 @@ export function ChatBackgroundSheet({
               </span>
               <div>
                 <h3 className="text-sm font-bold">Chat background</h3>
-                <p className="text-xs text-white/55">Only changes this conversation</p>
+                <p className="text-xs text-white/55">{subtitle}</p>
               </div>
             </div>
 

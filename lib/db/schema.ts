@@ -208,6 +208,8 @@ export const chatroom = pgTable("chatroom", {
   ownerId: text("ownerId").notNull(),
   ownerName: text("ownerName").notNull(),
   inviteCode: text("inviteCode").notNull().unique(),
+  // Shared chat wallpaper id (see lib/chat-backgrounds). Applies for all members.
+  background: text("background"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 

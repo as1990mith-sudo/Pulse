@@ -45,6 +45,7 @@ import type { ShareTarget } from "@/lib/share-types"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { broadcastStageRects, stageRectStyle, type StageRect } from "@/lib/broadcast-stage"
 import { CoverArt } from "@/components/cover-art"
+import { MarqueeTitle } from "@/components/marquee-title"
 import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
 import { cn } from "@/lib/utils"
 
@@ -628,7 +629,10 @@ export function LiveVideoViewer({
                 playsInline
                 muted
                 className={cn(
-                  "h-full w-full -scale-x-100 object-cover transition-opacity duration-300",
+                  "h-full w-full object-cover transition-opacity duration-300",
+                  // Mirror the front camera only; the back camera renders
+                  // un-mirrored so the scene isn't reversed.
+                  facingMode === "user" && "-scale-x-100",
                   camOn ? "opacity-100" : "opacity-0",
                 )}
               />
@@ -718,7 +722,7 @@ export function LiveVideoViewer({
               )}
               <div className="flex min-w-0 flex-col leading-tight">
                 <span className="truncate text-sm font-semibold text-white">{stream.hostName}</span>
-                <span className="truncate text-[11px] text-white/60">{stream.title}</span>
+                <MarqueeTitle text={stream.title} className="text-[11px] text-white/60" />
               </div>
               {!isSelf && (
                 <InlineFollowButton

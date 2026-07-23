@@ -25,6 +25,7 @@ import { ShareSheet } from "@/components/share-sheet"
 import { BackExitMenu } from "@/components/live-back-menu"
 import { LiveChat } from "@/components/live-chat"
 import { CoverArt } from "@/components/cover-art"
+import { MarqueeTitle } from "@/components/marquee-title"
 import { CoHostConsole } from "@/components/cohost-console"
 import type { CurrentUser } from "@/lib/session"
 import type { ShareTarget } from "@/lib/share-types"
@@ -520,13 +521,13 @@ export function LiveListener({
                 disabled={followPending}
                 aria-label={following ? `Unfollow ${stream.hostName}` : `Follow ${stream.hostName}`}
                 className={cn(
-                  "inline-flex size-7 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-60",
+                  "inline-flex size-5 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-60",
                   following
                     ? "bg-white/10 text-white/80 ring-1 ring-inset ring-white/15"
                     : "bg-live text-live-foreground",
                 )}
               >
-                {following ? <UserCheck className="size-4" /> : <UserPlus className="size-4" />}
+                {following ? <UserCheck className="size-3" /> : <UserPlus className="size-3" />}
               </button>
             ) : (
               <LiveBadge />
@@ -538,7 +539,10 @@ export function LiveListener({
               </span>
             )}
           </div>
-          <h1 className="mt-0.5 truncate text-base font-bold leading-tight tracking-tight text-white">{stream.title}</h1>
+          <MarqueeTitle
+            text={stream.title}
+            className="mt-0.5 text-base font-bold leading-tight tracking-tight text-white"
+          />
           <p className="truncate text-xs font-medium text-white/70">with {stream.hostName}</p>
         </div>
 

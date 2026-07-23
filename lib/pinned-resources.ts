@@ -3,7 +3,7 @@
 // may only export async functions — runtime values (like the PIN_KINDS array)
 // and types must be defined here and imported where needed.
 
-export const PIN_KINDS = ["verse", "pdf", "book", "devotional", "link", "session"] as const
+export const PIN_KINDS = ["verse", "pdf", "book", "devotional", "link", "session", "image", "text"] as const
 export type PinKind = (typeof PIN_KINDS)[number]
 
 export type PinnedResourceView = {

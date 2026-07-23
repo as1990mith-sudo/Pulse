@@ -61,6 +61,7 @@ import { useLiveAudio } from "@/lib/use-live-audio"
 import { uploadMedia } from "@/lib/upload-media"
 import { LiveChat } from "@/components/live-chat"
 import { CoverArt } from "@/components/cover-art"
+import { MarqueeTitle } from "@/components/marquee-title"
 import { ShareSheet } from "@/components/share-sheet"
 import type { ShareTarget } from "@/lib/share-types"
 import { LiveStage, MAX_GUESTS, QualityIcon } from "@/components/live-stage"
@@ -746,7 +747,7 @@ export function StudioConsole({
             <div className="flex items-center gap-2">
               {live ? (
                 <>
-                  <LiveBadge />
+                  <LiveBadge className="py-0.5" />
                   {reconnecting ? (
                     <span className="flex items-center gap-1 text-[11px] font-medium text-amber-300">
                       <Loader2 className="size-3 animate-spin" />
@@ -770,9 +771,10 @@ export function StudioConsole({
             </div>
 
             {live ? (
-              <h1 className="mt-0.5 truncate text-base font-bold leading-tight tracking-tight text-white">
-                {title || "Untitled session"}
-              </h1>
+              <MarqueeTitle
+                text={title || "Untitled session"}
+                className="mt-0.5 text-base font-bold leading-tight tracking-tight text-white"
+              />
             ) : (
               <input
                 value={title}
@@ -931,7 +933,14 @@ export function StudioConsole({
             </span>
           </div>
           <div className="min-h-0 flex-1 overflow-hidden">
-            <LiveChat asHost immersive showResourceButton currentUser={currentUser} roomName={roomName ?? undefined} />
+            <LiveChat
+              asHost
+              immersive
+              showResourceButton
+              placeholder=""
+              currentUser={currentUser}
+              roomName={roomName ?? undefined}
+            />
           </div>
         </section>
       </div>

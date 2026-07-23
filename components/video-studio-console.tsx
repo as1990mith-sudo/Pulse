@@ -12,6 +12,7 @@ import {
   Mic,
   MicOff,
   MonitorPlay,
+  MoreVertical,
   Music,
   Pin,
   PinOff,
@@ -56,6 +57,7 @@ import { ShareSheet } from "@/components/share-sheet"
 import { ConversationVideo } from "@/components/conversation/conversation-video"
 import { CoverUpload } from "@/components/admin/cover-upload"
 import { CoverArt } from "@/components/cover-art"
+import { MarqueeTitle } from "@/components/marquee-title"
 import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
 import type { ShareTarget } from "@/lib/share-types"
 import { getAvatarColor, getInitials } from "@/lib/identity"
@@ -142,6 +144,9 @@ function StageGuestTile({
     (el: HTMLVideoElement | null) => registerEl(peer.identity, el),
     [registerEl, peer.identity],
   )
+  // Spotlight + remove controls now live in a compact overflow menu anchored to
+  // the guest tile's bottom-right corner (instead of two buttons across the top).
+  const [menuOpen, setMenuOpen] = useState(false)
   return (
     <div
       style={stageRectStyle(rect)}
@@ -173,31 +178,67 @@ function StageGuestTile({
           </span>
         </div>
       )}
-      {/* Host controls: pin/unpin (spotlight) + remove */}
-      <div className="pointer-events-auto absolute inset-x-0 top-0 flex items-center justify-between p-1.5">
-        <button
-          type="button"
-          onClick={() => onTogglePin(peer.identity)}
-          aria-label={pinned ? `Unpin ${peer.name}` : `Spotlight ${peer.name}`}
-          aria-pressed={pinned}
-          className={cn(
-            "flex size-7 items-center justify-center rounded-full backdrop-blur-md transition-colors",
-            pinned ? "bg-primary text-primary-foreground" : "bg-black/50 text-white/90 hover:bg-black/70",
+      {/* Pinned indicator (read-only badge) — the toggle itself moved into the
+          overflow menu below. */}
+      {pinned && (
+        <span className="pointer-events-none absolute left-1.5 top-1.5 flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
+          <Pin className="size-3" /> Spotlight
+        </span>
+      )}
+      {/* Bottom bar: guest name on the left, host overflow menu on the right. */}
+      <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
+        <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-white">{peer.name}</span>
+        <div className="pointer-events-auto relative shrink-0">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((o) => !o)}
+            aria-label={`Options for ${peer.name}`}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            className="flex size-7 items-center justify-center rounded-full bg-black/50 text-white/90 backdrop-blur-md transition-colors hover:bg-black/70 active:scale-90"
+          >
+            <MoreVertical className="size-3.5" />
+          </button>
+          {menuOpen && (
+            <>
+              {/* Backdrop closes the menu on outside tap. */}
+              <button
+                type="button"
+                aria-label="Close menu"
+                onClick={() => setMenuOpen(false)}
+                className="fixed inset-0 z-40 cursor-default"
+              />
+              <div
+                role="menu"
+                className="absolute bottom-full right-0 z-50 mb-1.5 w-40 overflow-hidden rounded-xl border border-white/10 bg-neutral-900/95 p-1 text-white shadow-xl backdrop-blur-md"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    onTogglePin(peer.identity)
+                    setMenuOpen(false)
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium transition-colors hover:bg-white/10"
+                >
+                  {pinned ? <PinOff className="size-3.5 shrink-0" /> : <Pin className="size-3.5 shrink-0" />}
+                  {pinned ? "Remove spotlight" : "Spotlight"}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    onRemove(peer.identity)
+                    setMenuOpen(false)
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-destructive transition-colors hover:bg-destructive/15"
+                >
+                  <X className="size-3.5 shrink-0" /> Remove guest
+                </button>
+              </div>
+            </>
           )}
-        >
-          {pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
-        </button>
-        <button
-          type="button"
-          onClick={() => onRemove(peer.identity)}
-          aria-label={`Remove ${peer.name}`}
-          className="flex size-7 items-center justify-center rounded-full bg-black/50 text-white/90 backdrop-blur-md transition-colors hover:bg-destructive"
-        >
-          <X className="size-3.5" />
-        </button>
-      </div>
-      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
-        <span className="block truncate text-[11px] font-semibold text-white">{peer.name}</span>
+        </div>
       </div>
     </div>
   )
@@ -255,6 +296,9 @@ export function VideoStudioConsole({
   const [error, setError] = useState<string | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const [shareOpen, setShareOpen] = useState(false)
+  // Secondary header stats (viewers + elapsed timer) collapse into a top-right
+  // overflow menu so the host's name gets the full width of the header pill.
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
   // Confirmation gate before a host ends the live session, so a mis-tap on the
   // back menu can't drop everyone out of the broadcast.
   const [endConfirmOpen, setEndConfirmOpen] = useState(false)
@@ -682,8 +726,9 @@ export function VideoStudioConsole({
   const guestTiles = stageTiles
     .map((t, i) => ({ tile: t, rect: stageRects[i] }))
     .filter((x): x is { tile: { kind: "guest"; peer: RemotePeer }; rect: StageRect } => x.tile.kind === "guest")
-  // With 3+ people on a portrait Broadcast, give the stage more vertical room
-  // (and shrink the chat a touch) so the top host tile reads taller/portrait.
+  // With 3+ people on a portrait Broadcast the stage grows slightly. These flex
+  // ratios are kept identical to the viewer (LiveVideoViewer) so the host's
+  // video reads at exactly the same height as the audience sees it.
   const tallStage = live && orientation !== "landscape" && stageTiles.length >= 3
 
   return (
@@ -753,7 +798,7 @@ export function VideoStudioConsole({
       <div
         className={cn(
           "relative min-h-0 overflow-hidden transition-[flex-grow] duration-500 ease-out",
-          orientation === "landscape" ? "flex-[1.75]" : tallStage ? "flex-[3.3]" : "flex-[2.5]",
+          orientation === "landscape" ? "flex-[1.75]" : tallStage ? "flex-[2.9]" : "flex-[2.5]",
         )}
       >
         {/* Persistent host camera — the live publisher feed (mirrored self-view).
@@ -763,27 +808,43 @@ export function VideoStudioConsole({
             1/2/3/4-person layouts, so the local camera track stays attached. A
             spotlighted guest simply pushes the host into a secondary slot. */}
         {!(live && isGridMeeting) && (
-          <video
-            ref={localVideoRef}
-            autoPlay
-            playsInline
-            muted
+          // Positioned wrapper owns the rect + rounding. Clipping the border
+          // radius on this `overflow-hidden` container (instead of directly on
+          // the <video>) is what actually rounds the corners — a <video> with
+          // object-cover paints its decoded texture past its own border-radius
+          // on many browsers, which is why the host frame looked square. This
+          // matches how guest tiles and the viewer round their videos.
+          <div
             style={live && orientation !== "landscape" ? stageRectStyle(hostRect) : undefined}
             className={cn(
               // Display surface only — let taps fall through to the tap-capture
               // layer below so tapping the video toggles the controls.
-              "pointer-events-none -scale-x-100 transition-[top,left,width,height,opacity] duration-500 ease-out",
+              "pointer-events-none transition-[top,left,width,height] duration-500 ease-out",
               orientation === "landscape"
                 ? // Landscape letterboxes the feed so nothing is cropped.
-                  "absolute inset-0 z-0 h-full w-full object-contain"
+                  "absolute inset-0 z-0"
                 : live
                   ? // Portrait Broadcast: positioned via hostRect; rounded when sharing the stage.
-                    cn("z-20 object-cover", stageTiles.length > 1 && "rounded-2xl ring-1 ring-inset ring-white/10")
+                    cn("z-20 overflow-hidden", stageTiles.length > 1 && "rounded-2xl ring-1 ring-inset ring-white/10")
                   : // Pre-live: full-bleed (the preview element also renders below).
-                    "absolute inset-0 z-0 h-full w-full object-cover",
-              live && camOn && localVideoReady ? "opacity-100" : "opacity-0",
+                    "absolute inset-0 z-0",
             )}
-          />
+          >
+            <video
+              ref={localVideoRef}
+              autoPlay
+              playsInline
+              muted
+              className={cn(
+                "h-full w-full transition-opacity duration-500 ease-out",
+                // Mirror only the front camera; the back camera must render
+                // un-mirrored so text/scenes aren't reversed.
+                facingMode === "user" && "-scale-x-100",
+                orientation === "landscape" ? "object-contain" : "object-cover",
+                live && camOn && localVideoReady ? "opacity-100" : "opacity-0",
+              )}
+            />
+          </div>
         )}
         {/* Pre-live preview camera */}
         {!live && (
@@ -937,7 +998,7 @@ export function VideoStudioConsole({
                 )}
                 <div className="flex min-w-0 flex-col leading-tight">
                   <span className="truncate text-sm font-semibold text-white">{currentUser.name}</span>
-                  <span className="truncate text-[11px] text-white/60">{title}</span>
+                  <MarqueeTitle text={title} className="text-[11px] text-white/60" />
                 </div>
               </div>
             ) : !live ? (
@@ -947,7 +1008,9 @@ export function VideoStudioConsole({
             ) : null}
           </div>
 
-          {/* Right cluster: LIVE • viewers • timer • share. */}
+          {/* Right cluster kept intentionally minimal: only the LIVE badge and a
+              three-dot menu. Viewers + timer live inside that menu so the host
+              name pill on the left keeps the maximum available width. */}
           <div className="flex shrink-0 items-center gap-1.5">
             {live && (
               <span className="flex items-center gap-1.5 rounded-full bg-live px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-live-foreground shadow-lg">
@@ -959,31 +1022,50 @@ export function VideoStudioConsole({
               </span>
             )}
             {live && (
-              <LiveAudienceSheet
-                count={audienceCount || viewers}
-                members={audienceMembers}
-                immersive
-                className="px-2.5 py-1 text-[11px] font-medium"
-                isHost
-                roomName={roomName ?? undefined}
-                blockedUsers={callState?.blockedUsers ?? []}
-                onChanged={() => void refreshCalls()}
-              />
-            )}
-            {live && (
-              <span className="rounded-full bg-black/35 px-2.5 py-1 font-mono text-[11px] tabular-nums text-white/90 ring-1 ring-inset ring-white/10 backdrop-blur-md">
-                {formatElapsed(elapsed)}
-              </span>
-            )}
-            {live && roomName && (
-              <button
-                type="button"
-                onClick={() => setShareOpen(true)}
-                aria-label="Share this live"
-                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-black/35 text-white ring-1 ring-inset ring-white/15 backdrop-blur-md transition-colors hover:bg-black/50 active:scale-90"
-              >
-                <Send className="size-4" />
-              </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setHeaderMenuOpen((o) => !o)}
+                  aria-label="Broadcast stats and options"
+                  aria-haspopup="menu"
+                  aria-expanded={headerMenuOpen}
+                  className="flex size-8 items-center justify-center rounded-full bg-black/35 text-white ring-1 ring-inset ring-white/15 backdrop-blur-md transition-colors hover:bg-black/55 active:scale-90"
+                >
+                  <MoreVertical className="size-4" />
+                </button>
+                {headerMenuOpen && (
+                  <>
+                    <button
+                      type="button"
+                      aria-label="Close menu"
+                      onClick={() => setHeaderMenuOpen(false)}
+                      className="fixed inset-0 z-40 cursor-default"
+                    />
+                    <div
+                      role="menu"
+                      className="absolute right-0 top-full z-50 mt-1.5 w-52 overflow-hidden rounded-2xl border border-white/10 bg-neutral-900/95 p-1.5 text-white shadow-xl backdrop-blur-md"
+                    >
+                      {/* Viewers — opens the full audience sheet. */}
+                      <div className="[&_button]:w-full [&_button]:justify-start [&_button]:rounded-lg [&_button]:bg-transparent [&_button]:px-2.5 [&_button]:py-2 [&_button]:text-sm [&_button:hover]:bg-white/10">
+                        <LiveAudienceSheet
+                          count={audienceCount || viewers}
+                          members={audienceMembers}
+                          immersive
+                          isHost
+                          roomName={roomName ?? undefined}
+                          blockedUsers={callState?.blockedUsers ?? []}
+                          onChanged={() => void refreshCalls()}
+                        />
+                      </div>
+                      {/* Elapsed time (read-only). */}
+                      <div className="flex items-center justify-between rounded-lg px-2.5 py-2 text-sm">
+                        <span className="text-white/70">Elapsed</span>
+                        <span className="font-mono tabular-nums text-white/90">{formatElapsed(elapsed)}</span>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -1263,6 +1345,11 @@ export function VideoStudioConsole({
             >
               <HandHeart className="size-5" />
             </GlassButton>
+            {roomName && (
+              <GlassButton label="Share this live" onClick={() => setShareOpen(true)}>
+                <Send className="size-5" />
+              </GlassButton>
+            )}
           </div>
         )}
 
@@ -1303,7 +1390,7 @@ export function VideoStudioConsole({
       <div
         className={cn(
           "min-h-0 border-t border-white/10 bg-neutral-950 transition-[flex-grow] duration-500 ease-out",
-          tallStage ? "flex-[1.1]" : "flex-[1.5]",
+          "flex-[1.5]",
         )}
       >
         <LiveChat

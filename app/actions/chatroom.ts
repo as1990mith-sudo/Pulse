@@ -103,6 +103,8 @@ export type ChatroomDetail = {
   name: string
   description: string | null
   image: string | null
+  /** Shared chat wallpaper id (see lib/chat-backgrounds) applied for all members. */
+  background: string | null
   ownerId: string
   ownerName: string
   inviteCode: string
@@ -113,7 +115,14 @@ export type ChatroomDetail = {
   currentUserInitials: string
   currentUserColor: string
   currentUserImage: string | null
-  members: { userId: string; userName: string; initials: string; color: string; role: string }[]
+  members: {
+    userId: string
+    userName: string
+    initials: string
+    color: string
+    image: string | null
+    role: string
+  }[]
   messages: ChatMessageView[]
   joinRequests: JoinRequestView[]
 }
@@ -344,13 +353,18 @@ export async function getChatroomDetail(chatroomId: number): Promise<ChatroomDet
         .orderBy(asc(chatroomJoinRequest.createdAt))
     : []
 
-  const imageMap = await resolveSenderImages([user.id, ...messages.map((m) => m.userId)])
+  const imageMap = await resolveSenderImages([
+    user.id,
+    ...members.map((m) => m.userId),
+    ...messages.map((m) => m.userId),
+  ])
 
   return {
     id: room.id,
     name: room.name,
     description: room.description,
     image: room.image,
+    background: room.background ?? null,
     ownerId: room.ownerId,
     ownerName: room.ownerName,
     inviteCode: room.inviteCode,
@@ -365,6 +379,7 @@ export async function getChatroomDetail(chatroomId: number): Promise<ChatroomDet
       userName: m.userName,
       initials: getInitials(m.userName),
       color: getAvatarColor(m.userId),
+      image: imageMap.get(m.userId) ?? null,
       role: m.role,
     })),
     messages: messages.map((m) => toMessageView(m, user.id, imageMap)),
@@ -493,6 +508,35 @@ export async function updateChatroomImage(input: { chatroomId: number; image: st
     .where(eq(chatroom.id, input.chatroomId))
   revalidatePath(`/chatrooms/${input.chatroomId}`)
   revalidatePath("/chatrooms")
+}
+
+/** Admin renames the chatroom (used by the Edit Profile modal). */
+export async function updateChatroomName(input: { chatroomId: number; name: string }) {
+  const user = await requireUser()
+  const { isAdmin } = await loadRoomWithRole(input.chatroomId, user.id)
+  if (!isAdmin) throw new Error("Only the chatroom admin can rename the group.")
+  const name = input.name.trim()
+  if (!name) throw new Error("Group name is required.")
+
+  await db.update(chatroom).set({ name }).where(eq(chatroom.id, input.chatroomId))
+  revalidatePath(`/chatrooms/${input.chatroomId}`)
+  revalidatePath("/chatrooms")
+}
+
+/**
+ * Admin sets the shared chat wallpaper for the room. Stored on the room so the
+ * background renders identically for every member. `null` restores the default.
+ */
+export async function updateChatroomBackground(input: { chatroomId: number; background: string | null }) {
+  const user = await requireUser()
+  const { isAdmin } = await loadRoomWithRole(input.chatroomId, user.id)
+  if (!isAdmin) throw new Error("Only the chatroom admin can change the chat background.")
+
+  await db
+    .update(chatroom)
+    .set({ background: input.background?.trim() || null })
+    .where(eq(chatroom.id, input.chatroomId))
+  revalidatePath(`/chatrooms/${input.chatroomId}`)
 }
 
 /** Join directly via an invite code (no approval needed). */
