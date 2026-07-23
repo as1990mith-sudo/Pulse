@@ -43,6 +43,7 @@ import {
 } from "@/app/actions/community"
 import { type ThreadComment } from "@/components/comment-thread"
 import { CommentSheet } from "@/components/comment-sheet"
+import { MiniChatProvider, useMiniChat } from "@/components/mini-chat"
 
 function toThreadComment(c: CommunityCommentView): ThreadComment {
   return {
@@ -79,7 +80,7 @@ function AnonIdentity({ postedAt, edited }: { postedAt: string; edited?: boolean
         <AvatarFallback className="bg-emerald-600 font-bold text-white">?</AvatarFallback>
       </Avatar>
       <div className="min-w-0">
-        <p className="flex items-center gap-1.5 font-semibold tracking-tight text-foreground">
+        <p className="flex items-center gap-1.5 text-base font-bold tracking-tight text-foreground">
           {ANON_NAME}
           {edited && <span className="text-xs font-normal text-muted-foreground">Edited</span>}
         </p>
@@ -103,7 +104,7 @@ function SelfIdentity({ post, edited }: { post: CommunityPostView; edited?: bool
         </AvatarFallback>
       </Avatar>
       <div className="min-w-0">
-        <p className="flex items-center gap-1.5 truncate font-semibold tracking-tight">
+        <p className="flex items-center gap-1.5 truncate text-base font-bold tracking-tight">
           {post.authorName}
           {edited && <span className="text-xs font-normal text-muted-foreground">Edited</span>}
         </p>
@@ -134,6 +135,9 @@ function CommentSection({
   const { data = [], mutate } = useSWR(open ? ["community-comments", postId] : null, () =>
     getCommunityComments(postId),
   )
+  // Tapping a helper's name/avatar opens a profile card (Follow · Message ·
+  // View profile) instead of leaving the feed.
+  const { openProfile } = useMiniChat()
 
   return (
     <CommentSheet
@@ -142,6 +146,7 @@ function CommentSection({
       comments={data.map(toThreadComment)}
       currentUser={null}
       canComment
+      onAuthorClick={openProfile}
       placeholder="Offer your help…"
       emptyText="No replies yet"
       emptyHint="Be the first to help out."
@@ -339,7 +344,7 @@ function PostItem({
             rows={3}
             maxLength={1000}
             autoFocus
-            className="resize-none rounded-2xl text-[15px]"
+            className="resize-none rounded-2xl text-[17px]"
           />
           {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
           <div className="mt-2 flex items-center justify-end gap-2">
@@ -366,7 +371,7 @@ function PostItem({
           </div>
         </div>
       ) : (
-        <p className="mt-3 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-pretty">
+        <p className="mt-3 whitespace-pre-wrap break-words text-[17px] leading-relaxed text-pretty">
           {linkify(body)}
         </p>
       )}
@@ -600,6 +605,7 @@ export function CommunityHelp({ initialPosts }: { initialPosts: CommunityPostVie
   }
 
   return (
+    <MiniChatProvider>
     <div className="flex h-full flex-col overflow-hidden">
       {/* Sticky header with title + info */}
       <header className="flex items-center gap-3 border-b border-border/60 bg-background/95 px-4 py-3 backdrop-blur sm:px-6">
@@ -616,7 +622,7 @@ export function CommunityHelp({ initialPosts }: { initialPosts: CommunityPostVie
         </Avatar>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <h1 className="truncate text-base font-bold tracking-tight">Community Help</h1>
+            <h1 className="truncate text-xl font-bold tracking-tight">Community Help</h1>
             <button
               type="button"
               onClick={() => setInfoOpen(true)}
@@ -626,7 +632,7 @@ export function CommunityHelp({ initialPosts }: { initialPosts: CommunityPostVie
               <Info className="size-4" />
             </button>
           </div>
-          <p className="truncate text-xs text-muted-foreground">Ask anonymously · anyone can help</p>
+          <p className="truncate text-sm text-muted-foreground">Ask anonymously · anyone can help</p>
         </div>
       </header>
 
@@ -648,7 +654,7 @@ export function CommunityHelp({ initialPosts }: { initialPosts: CommunityPostVie
                 aria-selected={active}
                 onClick={() => setScope(t.key)}
                 className={cn(
-                  "flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition-colors",
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-base font-semibold transition-colors",
                   active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
                 )}
               >
@@ -656,7 +662,7 @@ export function CommunityHelp({ initialPosts }: { initialPosts: CommunityPostVie
                 {"count" in t && (
                   <span
                     className={cn(
-                      "min-w-5 rounded-full px-1.5 py-0.5 text-xs tabular-nums",
+                      "min-w-5 rounded-full px-1.5 py-0.5 text-xs font-medium tabular-nums",
                       active
                         ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
                         : "bg-secondary text-muted-foreground",
@@ -707,7 +713,7 @@ export function CommunityHelp({ initialPosts }: { initialPosts: CommunityPostVie
       <button
         type="button"
         onClick={() => setComposerOpen(true)}
-        className="absolute bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-5 z-30 flex h-14 items-center gap-2 rounded-full bg-primary px-5 font-semibold text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95 sm:right-8"
+        className="absolute bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-5 z-30 flex h-14 items-center gap-2 rounded-full bg-primary px-5 text-base font-semibold text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95 sm:right-8"
       >
         <Plus className="size-5" />
         Ask
@@ -716,5 +722,6 @@ export function CommunityHelp({ initialPosts }: { initialPosts: CommunityPostVie
       <Composer open={composerOpen} onClose={() => setComposerOpen(false)} onCreated={handleCreated} />
       <InfoModal open={infoOpen} onClose={() => setInfoOpen(false)} />
     </div>
+    </MiniChatProvider>
   )
 }
