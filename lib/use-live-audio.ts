@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
+  AudioPresets,
   ConnectionQuality,
   LocalAudioTrack,
   Room,
@@ -337,7 +338,33 @@ export function useLiveAudio() {
       intentionalDisconnectRef.current = false
       update({ connecting: true, error: null, reconnecting: false })
       try {
-        const room = new Room({ adaptiveStream: true, dynacast: true })
+        const room = new Room({
+      adaptiveStream: true,
+      dynacast: true,
+      // Studio-grade microphone capture. The browser's voice-call DSP
+      // (auto-gain, noise gate, echo canceller) is what makes phone mics sound
+      // thin and "pumpy" — it's tuned for compressing speech on a call, not for
+      // a clean broadcast. Turning it off preserves the full dynamic range and
+      // tone, and we ask for a full 48 kHz stereo signal.
+      audioCaptureDefaults: {
+        autoGainControl: false,
+        echoCancellation: false,
+        noiseSuppression: false,
+        channelCount: 2,
+        sampleRate: 48000,
+      },
+      publishDefaults: {
+        // Encode the mic at the highest-fidelity music profile (128 kbps
+        // stereo) instead of the default 24 kbps speech codec.
+        audioPreset: AudioPresets.musicHighQualityStereo,
+        forceStereo: true,
+        // DTX chops the stream during "silence" (adds swirl/dropouts on music
+        // and room tone); RED adds packet-loss resilience. Studio audio wants
+        // DTX off and RED on.
+        dtx: false,
+        red: true,
+      },
+    })
         roomRef.current = room
 
         room
