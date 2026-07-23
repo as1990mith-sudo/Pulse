@@ -1,5 +1,4 @@
 import { notFound, redirect } from "next/navigation"
-import { SiteHeader } from "@/components/site-header"
 import { DmView } from "@/components/dm-view"
 import { getConversationDetail } from "@/app/actions/dm"
 import { getCurrentUser } from "@/lib/session"
@@ -21,7 +20,6 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
 
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden">
-      <SiteHeader />
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col overflow-hidden">
         <DmView detail={detail} />
       </main>
