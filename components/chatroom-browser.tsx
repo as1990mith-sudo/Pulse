@@ -203,8 +203,7 @@ function DiscoverRooms() {
     // Edge-to-edge immersive layout: break out of the page padding and stack
     // full-bleed sections divided by borders instead of boxed cards.
     <div className="-mx-4 divide-y divide-border/60 border-y border-border/60 sm:-mx-6">
-      <section className="space-y-4 px-4 py-5 sm:px-6">
-        <h2 className="text-sm font-semibold">Search rooms by name</h2>
+      <section className="space-y-4 px-4 pb-5 pt-3 sm:px-6">
         <form onSubmit={handleSearch} className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
