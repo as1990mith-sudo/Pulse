@@ -2,8 +2,8 @@ import type { CSSProperties } from "react"
 
 /**
  * Chat wallpapers for 1-on-1 conversations (and reusable by group chatrooms).
- * A selection is scoped to a single conversation — persisted in localStorage
- * keyed by conversation id, never shared across threads.
+ * A selection is a single app-wide preference — persisted once in localStorage
+ * and applied to every direct-message thread in the inbox.
  *
  * Three flavors:
  *  - `default` — the app's normal dark message surface (no wallpaper).
@@ -86,8 +86,9 @@ export function chatBackgroundSwatchStyle(bg: ChatBackground): CSSProperties {
   return {}
 }
 
-const STORAGE_PREFIX = "dm-chat-bg:"
-
-export function chatBackgroundStorageKey(conversationId: number | string) {
-  return `${STORAGE_PREFIX}${conversationId}`
-}
+/**
+ * Single global key for the DM wallpaper preference. Previously the wallpaper
+ * was scoped per conversation (`dm-chat-bg:<id>`); it is now one shared choice
+ * applied across every direct-message thread.
+ */
+export const CHAT_BACKGROUND_STORAGE_KEY = "dm-chat-bg"
