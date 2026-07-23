@@ -683,8 +683,9 @@ export function VideoStudioConsole({
   const guestTiles = stageTiles
     .map((t, i) => ({ tile: t, rect: stageRects[i] }))
     .filter((x): x is { tile: { kind: "guest"; peer: RemotePeer }; rect: StageRect } => x.tile.kind === "guest")
-  // With 3+ people on a portrait Broadcast, give the stage more vertical room
-  // (and shrink the chat a touch) so the top host tile reads taller/portrait.
+  // With 3+ people on a portrait Broadcast the stage grows slightly. These flex
+  // ratios are kept identical to the viewer (LiveVideoViewer) so the host's
+  // video reads at exactly the same height as the audience sees it.
   const tallStage = live && orientation !== "landscape" && stageTiles.length >= 3
 
   return (
@@ -754,7 +755,7 @@ export function VideoStudioConsole({
       <div
         className={cn(
           "relative min-h-0 overflow-hidden transition-[flex-grow] duration-500 ease-out",
-          orientation === "landscape" ? "flex-[1.75]" : tallStage ? "flex-[3.3]" : "flex-[2.5]",
+          orientation === "landscape" ? "flex-[1.75]" : tallStage ? "flex-[2.9]" : "flex-[2.5]",
         )}
       >
         {/* Persistent host camera — the live publisher feed (mirrored self-view).
@@ -764,27 +765,40 @@ export function VideoStudioConsole({
             1/2/3/4-person layouts, so the local camera track stays attached. A
             spotlighted guest simply pushes the host into a secondary slot. */}
         {!(live && isGridMeeting) && (
-          <video
-            ref={localVideoRef}
-            autoPlay
-            playsInline
-            muted
+          // Positioned wrapper owns the rect + rounding. Clipping the border
+          // radius on this `overflow-hidden` container (instead of directly on
+          // the <video>) is what actually rounds the corners — a <video> with
+          // object-cover paints its decoded texture past its own border-radius
+          // on many browsers, which is why the host frame looked square. This
+          // matches how guest tiles and the viewer round their videos.
+          <div
             style={live && orientation !== "landscape" ? stageRectStyle(hostRect) : undefined}
             className={cn(
               // Display surface only — let taps fall through to the tap-capture
               // layer below so tapping the video toggles the controls.
-              "pointer-events-none -scale-x-100 transition-[top,left,width,height,opacity] duration-500 ease-out",
+              "pointer-events-none transition-[top,left,width,height] duration-500 ease-out",
               orientation === "landscape"
                 ? // Landscape letterboxes the feed so nothing is cropped.
-                  "absolute inset-0 z-0 h-full w-full object-contain"
+                  "absolute inset-0 z-0"
                 : live
                   ? // Portrait Broadcast: positioned via hostRect; rounded when sharing the stage.
-                    cn("z-20 object-cover", stageTiles.length > 1 && "rounded-2xl ring-1 ring-inset ring-white/10")
+                    cn("z-20 overflow-hidden", stageTiles.length > 1 && "rounded-2xl ring-1 ring-inset ring-white/10")
                   : // Pre-live: full-bleed (the preview element also renders below).
-                    "absolute inset-0 z-0 h-full w-full object-cover",
-              live && camOn && localVideoReady ? "opacity-100" : "opacity-0",
+                    "absolute inset-0 z-0",
             )}
-          />
+          >
+            <video
+              ref={localVideoRef}
+              autoPlay
+              playsInline
+              muted
+              className={cn(
+                "h-full w-full -scale-x-100 transition-opacity duration-500 ease-out",
+                orientation === "landscape" ? "object-contain" : "object-cover",
+                live && camOn && localVideoReady ? "opacity-100" : "opacity-0",
+              )}
+            />
+          </div>
         )}
         {/* Pre-live preview camera */}
         {!live && (
@@ -948,7 +962,8 @@ export function VideoStudioConsole({
             ) : null}
           </div>
 
-          {/* Right cluster: LIVE • viewers • timer • share. */}
+          {/* Right cluster: LIVE • viewers • timer. Share moved to the bottom
+              control dock so this header stays uncrowded and legible. */}
           <div className="flex shrink-0 items-center gap-1.5">
             {live && (
               <span className="flex items-center gap-1.5 rounded-full bg-live px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-live-foreground shadow-lg">
@@ -975,16 +990,6 @@ export function VideoStudioConsole({
               <span className="rounded-full bg-black/35 px-2.5 py-1 font-mono text-[11px] tabular-nums text-white/90 ring-1 ring-inset ring-white/10 backdrop-blur-md">
                 {formatElapsed(elapsed)}
               </span>
-            )}
-            {live && roomName && (
-              <button
-                type="button"
-                onClick={() => setShareOpen(true)}
-                aria-label="Share this live"
-                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-black/35 text-white ring-1 ring-inset ring-white/15 backdrop-blur-md transition-colors hover:bg-black/50 active:scale-90"
-              >
-                <Send className="size-4" />
-              </button>
             )}
           </div>
         </div>
@@ -1264,6 +1269,11 @@ export function VideoStudioConsole({
             >
               <HandHeart className="size-5" />
             </GlassButton>
+            {roomName && (
+              <GlassButton label="Share this live" onClick={() => setShareOpen(true)}>
+                <Send className="size-5" />
+              </GlassButton>
+            )}
           </div>
         )}
 
@@ -1304,7 +1314,7 @@ export function VideoStudioConsole({
       <div
         className={cn(
           "min-h-0 border-t border-white/10 bg-neutral-950 transition-[flex-grow] duration-500 ease-out",
-          tallStage ? "flex-[1.1]" : "flex-[1.5]",
+          "flex-[1.5]",
         )}
       >
         <LiveChat
