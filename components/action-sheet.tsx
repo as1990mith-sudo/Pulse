@@ -93,7 +93,12 @@ export function ActionSheet({
   if (!open || !mounted) return null
 
   return createPortal(
-    <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
+    // z-[85] so this per-item action menu always sits above the content sheets
+    // it can be launched from — notably the CommentSheet (z-70) used by feed,
+    // devotional, community help and dream interpretation — instead of hiding
+    // behind them. (In Reels the thread has no wrapping sheet, so it already
+    // showed correctly.)
+    <div className="fixed inset-0 z-[85] flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
       {/* Backdrop */}
       <button
         type="button"
