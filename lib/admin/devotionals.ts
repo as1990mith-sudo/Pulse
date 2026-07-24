@@ -1,35 +1,10 @@
 import { and, count, desc, eq, gt, inArray, or, sql } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { devotional, devotionalComment } from "@/lib/db/schema"
+import type { DevotionalRow, DevotionalStatus } from "./devotionals-types"
 
-export type DevotionalStatus = "draft" | "scheduled" | "published" | "archived"
-
-export const DEVOTIONAL_STATUSES: DevotionalStatus[] = ["published", "scheduled", "draft", "archived"]
-
-export const DEVOTIONAL_STATUS_LABELS: Record<DevotionalStatus, string> = {
-  draft: "Draft",
-  scheduled: "Scheduled",
-  published: "Published",
-  archived: "Archived",
-}
-
-export type DevotionalRow = {
-  id: number
-  title: string
-  verseRef: string
-  verse: string
-  body: string
-  prayer: string
-  cover: string | null
-  readingMinutes: number
-  publishDate: string
-  status: DevotionalStatus
-  scheduledFor: string | null
-  createdAt: string
-  lastPostedAt: string
-  isLive: boolean // the single row currently shown on the homepage
-  commentCount: number
-}
+export { DEVOTIONAL_STATUSES, DEVOTIONAL_STATUS_LABELS } from "./devotionals-types"
+export type { DevotionalRow, DevotionalStatus } from "./devotionals-types"
 
 const PAGE_SIZE = 20
 
