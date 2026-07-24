@@ -12,8 +12,8 @@ import { StudioErrorBoundary } from "@/components/studio-error-boundary"
 import type { CurrentUser } from "@/lib/session"
 import type { LiveStreamView } from "@/app/actions/live"
 import { cn } from "@/lib/utils"
-import { ResourceProvider, type LiveDescriptor } from "@/components/live/resource/resource-context"
-import { LiveResourceLayer } from "@/components/live/resource/live-resource-layer"
+import { ResourceProvider, useLiveResources, type LiveDescriptor } from "@/components/live/resource/resource-context"
+import { LiveResourceLayer, DesktopResourceDock } from "@/components/live/resource/live-resource-layer"
 
 /**
  * A live audio session is hosted at the app level (above the router) so that
@@ -189,11 +189,7 @@ export function LiveSessionProvider({ children }: { children: React.ReactNode })
           live format without ever navigating away. */}
       {session && (
         <ResourceProvider descriptor={deriveDescriptor(session, meta)}>
-        <div
-          className="fixed inset-0 z-[60] overscroll-contain"
-          style={minimized ? { display: "none" } : undefined}
-          aria-hidden={minimized}
-        >
+        <LiveRoomStage minimized={minimized}>
           {session.kind === "host" ? (
             <StudioErrorBoundary>
               <div className="flex h-dvh flex-col overflow-hidden">
@@ -271,16 +267,54 @@ export function LiveSessionProvider({ children }: { children: React.ReactNode })
             </div>
           )}
 
-          {/* Universal resource layer: floating button, drawer, and the single
-              active mini panel. Lives inside the fullscreen region so panels can
-              be dragged within the live and the live keeps running behind them. */}
-          <LiveResourceLayer />
-        </div>
+        </LiveRoomStage>
         </ResourceProvider>
       )}
 
       {session && minimized && meta && <MiniPlayer meta={meta} onExpand={expand} />}
     </LiveSessionContext.Provider>
+  )
+}
+
+/**
+ * Layout shell for the immersive live room.
+ *
+ * - Mobile: unchanged — the room is a full-screen overlay covering the viewport.
+ * - Desktop (lg+): the room is centred in a framed column (matching the feed's
+ *   centred reading width) instead of stretching edge to edge. When a resource
+ *   panel is open the room shifts narrower and the panel docks to its right, the
+ *   two centred together as a single group.
+ *
+ * Rendered inside ResourceProvider so it can react to the active resource panel.
+ */
+function LiveRoomStage({ minimized, children }: { minimized: boolean; children: React.ReactNode }) {
+  const { activePanel } = useLiveResources()
+  const docked = Boolean(activePanel)
+
+  return (
+    <div
+      className={cn(
+        "fixed inset-0 z-[60] overscroll-contain",
+        "lg:flex lg:justify-center lg:overflow-hidden lg:bg-black",
+      )}
+      style={minimized ? { display: "none" } : undefined}
+      aria-hidden={minimized}
+    >
+      {/* Room column: full-screen on mobile, centred framed column on desktop. */}
+      <div
+        className={cn(
+          "relative h-dvh w-full overflow-hidden bg-black lg:h-dvh lg:shrink-0 lg:border-x lg:border-white/10",
+          docked ? "lg:w-[600px]" : "lg:w-[680px]",
+        )}
+      >
+        {children}
+        {/* Universal resource layer: drawer picker + floating mini-panel (mobile). */}
+        <LiveResourceLayer />
+      </div>
+
+      {/* Desktop-only right dock (renders nothing until a panel is open). */}
+      <DesktopResourceDock />
+    </div>
   )
 }
 
