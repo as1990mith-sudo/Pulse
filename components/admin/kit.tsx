@@ -113,6 +113,37 @@ export function StatCard({
 /** Alias of StatCard for live-activity tiles (label + numeric value + icon). */
 export const StatTile = StatCard
 
+const BADGE_TONES: Record<string, string> = {
+  success: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400 ring-emerald-500/20",
+  warning: "bg-amber-500/12 text-amber-600 dark:text-amber-400 ring-amber-500/20",
+  danger: "bg-red-500/12 text-red-600 dark:text-red-400 ring-red-500/20",
+  info: "bg-sky-500/12 text-sky-600 dark:text-sky-400 ring-sky-500/20",
+  neutral: "bg-muted text-muted-foreground ring-border",
+}
+
+/** A small rounded status pill. */
+export function StatusBadge({
+  tone = "neutral",
+  children,
+  className,
+}: {
+  tone?: "success" | "warning" | "danger" | "info" | "neutral"
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ring-1 ring-inset",
+        BADGE_TONES[tone],
+        className,
+      )}
+    >
+      {children}
+    </span>
+  )
+}
+
 const STATUS_STYLES: Record<string, { dot: string; text: string }> = {
   operational: { dot: "bg-emerald-500", text: "text-emerald-500" },
   degraded: { dot: "bg-amber-500", text: "text-amber-500" },

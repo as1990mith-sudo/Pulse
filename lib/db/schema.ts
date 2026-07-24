@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, serial, integer, jsonb, uniqueIndex } from "drizzle-orm/pg-core"
+import { pgTable, text, timestamp, boolean, serial, integer, jsonb, uniqueIndex, primaryKey } from "drizzle-orm/pg-core"
 
 // --- Better Auth required tables -------------------------------------------
 // Column names are camelCase to match Better Auth's defaults. Do not rename.
@@ -1047,6 +1047,23 @@ export const userModerationState = pgTable("user_moderation_state", {
   updatedBy: text("updatedBy"),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 })
+
+// Universal moderation state for any piece of content, keyed by (type, id).
+// Lets moderators hide/remove/restore posts, articles, episodes, comments, etc.
+// without adding a column to every content table. "visible" rows are omitted in
+// practice — absence of a row means visible.
+export const contentModerationState = pgTable(
+  "content_moderation_state",
+  {
+    contentType: text("contentType").notNull(),
+    contentId: text("contentId").notNull(),
+    state: text("state").notNull().default("visible"), // "visible" | "hidden" | "removed"
+    reason: text("reason"),
+    moderatedBy: text("moderatedBy"),
+    moderatedAt: timestamp("moderatedAt").notNull().defaultNow(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.contentType, t.contentId] }) }),
+)
 
 // Support / complaints / feedback ticketing.
 export const supportTicket = pgTable("support_ticket", {

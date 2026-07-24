@@ -140,3 +140,16 @@ export const ROLE_ORDER: AdminRole[] = [
   "customer_support",
   "analytics_viewer",
 ]
+
+/** Ordered role list with metadata — convenient for role pickers. */
+export const ADMIN_ROLES: { id: AdminRole; label: string; description: string }[] = ROLE_ORDER.map((id) => ({
+  id,
+  label: ROLE_META[id].label,
+  description: ROLE_META[id].description,
+}))
+
+/** Alias of roleHasPermission for call sites that pass a possibly-null role. */
+export function hasPermission(role: AdminRole | null | undefined, permission: Permission): boolean {
+  if (!role) return false
+  return roleHasPermission(role, permission)
+}

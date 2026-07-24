@@ -13,6 +13,18 @@ type AuditInput = {
 }
 
 /**
+ * Convenience wrapper: writeAudit(adminId, action, { targetType, targetId, metadata }).
+ * Delegates to logAudit so both calling styles work.
+ */
+export function writeAudit(
+  adminId: string,
+  action: string,
+  opts?: Omit<AuditInput, "adminId" | "action">,
+): Promise<void> {
+  return logAudit({ adminId, action, ...opts })
+}
+
+/**
  * Append an entry to the permanent admin audit trail. Captures IP + user agent
  * from the request headers where available. Never throws — audit logging must
  * not break the action it records.
