@@ -7,12 +7,12 @@ import { Badge } from "@/components/ui/badge"
  * architecturally complete while signalling the feature is on the roadmap.
  */
 export function ComingSoon({
-  icon: Icon,
+  icon: Icon = Sparkles,
   title,
   description,
   bullets,
 }: {
-  icon: LucideIcon
+  icon?: LucideIcon
   title: string
   description: string
   bullets?: string[]

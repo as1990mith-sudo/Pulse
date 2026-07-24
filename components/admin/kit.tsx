@@ -52,6 +52,31 @@ export function Panel({
   )
 }
 
+/** A Panel with a titled header and body padding — the default content card. */
+export function AdminCard({
+  title,
+  action,
+  className,
+  children,
+}: {
+  title?: string
+  action?: React.ReactNode
+  className?: string
+  children: React.ReactNode
+}) {
+  return (
+    <Panel className={cn("p-5", className)}>
+      {(title || action) && (
+        <div className="mb-4 flex items-center justify-between gap-3">
+          {title && <h3 className="text-sm font-semibold text-foreground">{title}</h3>}
+          {action}
+        </div>
+      )}
+      {children}
+    </Panel>
+  )
+}
+
 /** A single KPI / metric tile. */
 export function StatCard({
   label,
@@ -84,6 +109,9 @@ export function StatCard({
     </Panel>
   )
 }
+
+/** Alias of StatCard for live-activity tiles (label + numeric value + icon). */
+export const StatTile = StatCard
 
 const STATUS_STYLES: Record<string, { dot: string; text: string }> = {
   operational: { dot: "bg-emerald-500", text: "text-emerald-500" },
