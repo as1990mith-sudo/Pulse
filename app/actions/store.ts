@@ -296,7 +296,9 @@ export type PublishInput = {
   lessons?: PublishLessonInput[]
 }
 
-export async function publishProduct(input: PublishInput): Promise<{ id: string; kind: string }> {
+export async function publishProduct(
+  input: PublishInput,
+): Promise<{ id: string; kind: string; pendingApproval: boolean }> {
   const user = await requireUser()
 
   const title = input.title?.trim()

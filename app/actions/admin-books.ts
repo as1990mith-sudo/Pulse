@@ -11,12 +11,12 @@ import type { SubmissionStatus } from "@/lib/admin/books"
 
 /** Client re-fetch helpers (permission-guarded). */
 export async function fetchBookSubmissions(status: SubmissionStatus | "all", page = 0) {
-  await requirePermission("books.view")
+  await requirePermission("books.review")
   return listBookSubmissions(status, page)
 }
 
 export async function fetchBookStats() {
-  await requirePermission("books.view")
+  await requirePermission("books.review")
   return getBookApprovalStats()
 }
 
@@ -40,7 +40,7 @@ async function notifyAuthor(userId: string, message: string, link = "/store/list
 
 /** Loads a submission and asserts the acting admin may review it. */
 async function loadForReview(submissionId: string) {
-  const actor = await requirePermission("books.approve")
+  const actor = await requirePermission("books.review")
   const submission = await getBookSubmission(submissionId)
   if (!submission) throw new Error("Submission not found")
   return { actor, submission }

@@ -139,6 +139,12 @@ export const devotional = pgTable("devotional", {
   cover: text("cover"),
   readingMinutes: integer("readingMinutes").notNull().default(3),
   publishDate: text("publishDate").notNull(),
+  // Lifecycle: "draft" | "scheduled" | "published" | "archived". Existing rows
+  // default to "published" so nothing already live changes. Only published rows
+  // (and scheduled rows whose time has passed) are shown to the public.
+  status: text("status").notNull().default("published"),
+  // When status is "scheduled", the time it should go live.
+  scheduledFor: timestamp("scheduledFor"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   // Bumped whenever the devotional is (re)posted. The homepage shows the row
   // with the most recent lastPostedAt, so any devotional can be reused without

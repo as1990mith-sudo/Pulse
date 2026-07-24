@@ -61,18 +61,23 @@ export function BookReviewDrawer({
 
   function submit() {
     if (!submission) return
+    const trimmed = note.trim()
+    // Validate before entering the transition so we never return a value from it.
+    if ((mode === "reject" || mode === "changes") && !trimmed) {
+      toast.error(mode === "reject" ? "Please provide feedback" : "Please describe the changes needed")
+      return
+    }
+    const id = submission.id
     startTransition(async () => {
       try {
         if (mode === "approve") {
-          await approveBook(submission.id, note.trim() || undefined)
+          await approveBook(id, trimmed || undefined)
           toast.success("Book approved and published")
         } else if (mode === "reject") {
-          if (!note.trim()) return toast.error("Please provide feedback")
-          await rejectBook(submission.id, note.trim())
+          await rejectBook(id, trimmed)
           toast.success("Book rejected")
         } else if (mode === "changes") {
-          if (!note.trim()) return toast.error("Please describe the changes needed")
-          await requestBookChanges(submission.id, note.trim())
+          await requestBookChanges(id, trimmed)
           toast.success("Changes requested")
         }
         onReviewed()

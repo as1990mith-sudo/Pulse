@@ -7,7 +7,7 @@ import { BooksApproval } from "@/components/admin/books/books-approval"
 export const metadata: Metadata = { title: "Books Approval · Frequency Admin" }
 
 export default async function BooksPage() {
-  const actor = await requirePermission("books.view")
+  const actor = await requirePermission("books.review")
   const [{ rows, total, counts }, stats] = await Promise.all([
     listBookSubmissions("pending", 0),
     getBookApprovalStats(),
@@ -18,7 +18,7 @@ export default async function BooksPage() {
       initialTotal={total}
       initialCounts={counts}
       stats={stats}
-      canApprove={hasPermission(actor.role, "books.approve")}
+      canApprove={hasPermission(actor.role, "books.review")}
     />
   )
 }

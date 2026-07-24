@@ -12,7 +12,7 @@ import {
   TrendingUp,
   FileText,
 } from "lucide-react"
-import { PageHeader, AdminCard, StatCard, StatusBadge, EmptyState, Spinner } from "@/components/admin/kit"
+import { PageHeader, StatCard, StatusBadge, EmptyState, Spinner } from "@/components/admin/kit"
 import { fetchBookSubmissions } from "@/app/actions/admin-books"
 import type { BookSubmissionRow, SubmissionStatus } from "@/lib/admin/books"
 import { BookReviewDrawer } from "./book-review-drawer"
@@ -87,19 +87,19 @@ export function BooksApproval({
 
       {/* Analytics */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard icon={Clock} label="Pending review" value={stats.pending} tone="warning" />
+        <StatCard icon={Clock} label="Pending review" value={stats.pending} accent="warning" />
         <StatCard
           icon={TrendingUp}
           label="Approval rate"
           value={stats.approvalRate === null ? "—" : `${stats.approvalRate}%`}
-          tone="info"
+          accent="primary"
         />
         <StatCard
           icon={Clock}
           label="Avg. time to decision"
           value={stats.avgHours === null ? "—" : `${stats.avgHours}h`}
         />
-        <StatCard icon={BookOpen} label="Live in store" value={stats.publishedBooks} tone="success" />
+        <StatCard icon={BookOpen} label="Live in store" value={stats.publishedBooks} accent="success" />
       </div>
 
       {/* Status tabs */}
@@ -145,7 +145,12 @@ export function BooksApproval({
       ) : (
         <div className="grid gap-3 lg:grid-cols-2">
           {rows.map((b) => (
-            <AdminCard key={b.id} className="cursor-pointer transition-colors hover:border-primary/40" onClick={() => setActive(b)}>
+            <button
+              key={b.id}
+              type="button"
+              onClick={() => setActive(b)}
+              className="rounded-2xl border border-border/70 bg-card/70 p-5 text-left shadow-soft backdrop-blur-xl transition-colors hover:border-primary/40"
+            >
               <div className="flex gap-4">
                 <div className="relative h-24 w-16 shrink-0 overflow-hidden rounded-md bg-muted">
                   {b.cover ? (
@@ -177,7 +182,7 @@ export function BooksApproval({
                   )}
                 </div>
               </div>
-            </AdminCard>
+            </button>
           ))}
         </div>
       )}
