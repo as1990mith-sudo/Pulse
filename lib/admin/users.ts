@@ -186,3 +186,41 @@ export async function getOnlineUserIds(): Promise<Set<string>> {
     .where(sql`${session.expiresAt} > ${now}`)
   return new Set(rows.map((r) => r.userId))
 }
+
+export type AdminTeamRow = {
+  userId: string
+  name: string
+  email: string
+  image: string | null
+  initials: string
+  color: string
+  role: AdminRole
+  createdAt: string
+}
+
+/** The current admin team: everyone with an admin_member record, most senior first. */
+export async function listAdminTeam(): Promise<AdminTeamRow[]> {
+  const rows = await db
+    .select({
+      userId: adminMember.userId,
+      role: adminMember.role,
+      createdAt: adminMember.createdAt,
+      name: userTable.name,
+      email: userTable.email,
+      image: userTable.image,
+    })
+    .from(adminMember)
+    .innerJoin(userTable, eq(userTable.id, adminMember.userId))
+    .orderBy(desc(adminMember.createdAt))
+
+  return rows.map((r) => ({
+    userId: r.userId,
+    name: r.name,
+    email: r.email,
+    image: r.image,
+    initials: getInitials(r.name),
+    color: getAvatarColor(r.userId),
+    role: r.role as AdminRole,
+    createdAt: (r.createdAt as Date).toISOString(),
+  }))
+}

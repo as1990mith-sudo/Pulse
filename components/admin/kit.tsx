@@ -7,6 +7,37 @@ export function Spinner({ className }: { className?: string }) {
   return <Loader2 className={cn("h-5 w-5 animate-spin text-muted-foreground", className)} />
 }
 
+/** A circular user avatar that shows an image when available, else colored initials. */
+export function Avatar({
+  name,
+  src,
+  initials,
+  color,
+  className,
+}: {
+  name: string
+  src?: string | null
+  initials: string
+  color: string
+  className?: string
+}) {
+  return (
+    <div
+      className={cn(
+        "flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-semibold text-white",
+        className,
+      )}
+      style={{ backgroundColor: color }}
+    >
+      {src ? (
+        <img src={src || "/placeholder.svg"} alt={name} className="size-full object-cover" />
+      ) : (
+        <span aria-hidden>{initials}</span>
+      )}
+    </div>
+  )
+}
+
 /** Page title + optional description and right-aligned actions. */
 export function PageHeader({
   title,
