@@ -36,13 +36,15 @@ export function BroadcastCentre({
   analytics,
   audienceSizes,
   canPush,
+  defaultChannel = "in_app",
 }: {
   initialRows: BroadcastRow[]
   analytics: Analytics
   audienceSizes: Record<Audience, number>
   canPush: boolean
+  defaultChannel?: "in_app" | "push"
 }) {
-  const [channel, setChannel] = useState<"in_app" | "push">("in_app")
+  const [channel, setChannel] = useState<"in_app" | "push">(defaultChannel)
   const [title, setTitle] = useState("")
   const [body, setBody] = useState("")
   const [audience, setAudience] = useState<Audience>("everyone")

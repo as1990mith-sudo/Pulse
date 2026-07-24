@@ -51,6 +51,28 @@ export const ALL_PERMISSIONS: Permission[] = [
   "settings.manage",
 ]
 
+// Human-friendly labels for each permission, grouped for the Permissions matrix.
+export const PERMISSION_META: Record<Permission, { label: string; group: string }> = {
+  "roles.manage": { label: "Manage admin roles", group: "Administration" },
+  "settings.manage": { label: "Manage platform settings", group: "Administration" },
+  "security.view": { label: "View security & audit", group: "Administration" },
+  "infrastructure.view": { label: "View infrastructure", group: "Administration" },
+  "users.view": { label: "View users", group: "Users" },
+  "users.moderate": { label: "Moderate users", group: "Users" },
+  "reports.view": { label: "View reports", group: "Moderation" },
+  "reports.action": { label: "Action reports", group: "Moderation" },
+  "books.review": { label: "Review book submissions", group: "Content" },
+  "devotionals.manage": { label: "Manage devotionals", group: "Content" },
+  "articles.manage": { label: "Manage articles", group: "Content" },
+  "events.manage": { label: "Manage events", group: "Content" },
+  "livestreams.manage": { label: "Manage livestreams", group: "Content" },
+  "broadcast.send": { label: "Send broadcasts", group: "Communication" },
+  "push.send": { label: "Send push notifications", group: "Communication" },
+  "support.view": { label: "View support tickets", group: "Support" },
+  "support.manage": { label: "Manage support tickets", group: "Support" },
+  "analytics.view": { label: "View analytics", group: "Growth" },
+}
+
 // Human-friendly labels + descriptions for the Roles/Permissions UI.
 export const ROLE_META: Record<AdminRole, { label: string; description: string }> = {
   super_admin: {
