@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm"
+import { and, desc, eq, inArray, lte, or, sql } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { devotional, episode, user as userTable } from "@/lib/db/schema"
 import type { Devotional, Show, Host, PodcastHost } from "@/lib/data"
@@ -110,7 +110,20 @@ export async function getEpisodesByUser(userId: string, includePrivate = false):
  * the database, or null when none have been posted yet.
  */
 export async function getLatestDevotional(): Promise<Devotional | null> {
-  const [row] = await db.select().from(devotional).orderBy(desc(devotional.lastPostedAt)).limit(1)
+  // Public visibility rule: a devotional is live if it is "published", or it is
+  // "scheduled" and its scheduled time has arrived. Drafts, archived rows and
+  // not-yet-due scheduled rows are hidden from readers.
+  const [row] = await db
+    .select()
+    .from(devotional)
+    .where(
+      or(
+        eq(devotional.status, "published"),
+        and(eq(devotional.status, "scheduled"), lte(devotional.scheduledFor, sql`now()`)),
+      ),
+    )
+    .orderBy(desc(devotional.lastPostedAt))
+    .limit(1)
   if (!row) return null
   return {
     date: row.publishDate,

@@ -28,6 +28,7 @@ const TABS: Tab[] = [
  */
 function isImmersive(p: string): boolean {
   if (/^\/(login|sign-in|sign-up|reset-password)(\/|$)/.test(p)) return true
+  if (/^\/admin(\/|$)/.test(p)) return true // admin console has its own full navigation
   if (/^\/live\/[^/]+/.test(p)) return true // inside a live room
   if (/^\/messages(\/|$)/.test(p)) return true // DM inbox + threads
   if (/^\/status\/[^/]+/.test(p)) return true // full-screen status viewer

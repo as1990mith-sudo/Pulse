@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, serial, integer, jsonb, uniqueIndex } from "drizzle-orm/pg-core"
+import { pgTable, text, timestamp, boolean, serial, integer, jsonb, uniqueIndex, primaryKey } from "drizzle-orm/pg-core"
 
 // --- Better Auth required tables -------------------------------------------
 // Column names are camelCase to match Better Auth's defaults. Do not rename.
@@ -139,6 +139,12 @@ export const devotional = pgTable("devotional", {
   cover: text("cover"),
   readingMinutes: integer("readingMinutes").notNull().default(3),
   publishDate: text("publishDate").notNull(),
+  // Lifecycle: "draft" | "scheduled" | "published" | "archived". Existing rows
+  // default to "published" so nothing already live changes. Only published rows
+  // (and scheduled rows whose time has passed) are shown to the public.
+  status: text("status").notNull().default("published"),
+  // When status is "scheduled", the time it should go live.
+  scheduledFor: timestamp("scheduledFor"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   // Bumped whenever the devotional is (re)posted. The homepage shows the row
   // with the most recent lastPostedAt, so any devotional can be reused without
@@ -994,3 +1000,143 @@ export const articleCommentReport = pgTable(
     uniq: uniqueIndex("article_comment_report_unique").on(t.commentId, t.reporterId),
   }),
 )
+
+// --- Admin Console ----------------------------------------------------------
+// Operational tables for the Frequency Admin Console. Identity is always the
+// permanent user.id (never a display name). Created via scripts/setup-admin-console.mjs.
+
+// Role-based access control: who is an admin and at what level.
+export const adminMember = pgTable("admin_member", {
+  id: text("id").primaryKey(),
+  userId: text("userId").notNull().unique(),
+  role: text("role").notNull().default("moderator"),
+  createdBy: text("createdBy"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})
+
+// User-submitted reports against any content type, profile, or message.
+export const contentReport = pgTable("content_report", {
+  id: text("id").primaryKey(),
+  contentType: text("contentType").notNull(),
+  contentId: text("contentId").notNull(),
+  reporterId: text("reporterId"),
+  reason: text("reason").notNull(),
+  details: text("details"),
+  status: text("status").notNull().default("pending"),
+  resolvedBy: text("resolvedBy"),
+  resolvedAt: timestamp("resolvedAt"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// Permanent, append-only moderation history.
+export const moderationAction = pgTable("moderation_action", {
+  id: text("id").primaryKey(),
+  targetType: text("targetType").notNull(),
+  targetId: text("targetId").notNull(),
+  action: text("action").notNull(),
+  reason: text("reason"),
+  adminId: text("adminId").notNull(),
+  reportId: text("reportId"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// Current moderation status per user.
+export const userModerationState = pgTable("user_moderation_state", {
+  userId: text("userId").primaryKey(),
+  status: text("status").notNull().default("active"),
+  verified: boolean("verified").notNull().default(false),
+  warnings: integer("warnings").notNull().default(0),
+  suspendedUntil: timestamp("suspendedUntil"),
+  reason: text("reason"),
+  updatedBy: text("updatedBy"),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})
+
+// Universal moderation state for any piece of content, keyed by (type, id).
+// Lets moderators hide/remove/restore posts, articles, episodes, comments, etc.
+// without adding a column to every content table. "visible" rows are omitted in
+// practice — absence of a row means visible.
+export const contentModerationState = pgTable(
+  "content_moderation_state",
+  {
+    contentType: text("contentType").notNull(),
+    contentId: text("contentId").notNull(),
+    state: text("state").notNull().default("visible"), // "visible" | "hidden" | "removed"
+    reason: text("reason"),
+    moderatedBy: text("moderatedBy"),
+    moderatedAt: timestamp("moderatedAt").notNull().defaultNow(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.contentType, t.contentId] }) }),
+)
+
+// Support / complaints / feedback ticketing.
+export const supportTicket = pgTable("support_ticket", {
+  id: text("id").primaryKey(),
+  userId: text("userId"),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  category: text("category").notNull().default("complaint"),
+  priority: text("priority").notNull().default("normal"),
+  status: text("status").notNull().default("open"),
+  assignedTo: text("assignedTo"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})
+
+// Mandatory pre-publication approval workflow for books.
+export const bookSubmission = pgTable("book_submission", {
+  id: text("id").primaryKey(),
+  productId: text("productId").notNull(),
+  status: text("status").notNull().default("pending"),
+  reviewedBy: text("reviewedBy"),
+  reviewedAt: timestamp("reviewedAt"),
+  feedback: text("feedback"),
+  internalNotes: text("internalNotes"),
+  submissionCount: integer("submissionCount").notNull().default(1),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})
+
+// Broadcast Centre: announcements, maintenance notices, emergency, banners.
+export const broadcast = pgTable("broadcast", {
+  id: text("id").primaryKey(),
+  type: text("type").notNull().default("announcement"),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  audience: text("audience").notNull().default("everyone"),
+  status: text("status").notNull().default("draft"),
+  scheduledFor: timestamp("scheduledFor"),
+  sentAt: timestamp("sentAt"),
+  createdBy: text("createdBy").notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// Targeted push notification campaigns.
+export const pushCampaign = pgTable("push_campaign", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  audience: text("audience").notNull().default("everyone"),
+  status: text("status").notNull().default("draft"),
+  scheduledFor: timestamp("scheduledFor"),
+  sentAt: timestamp("sentAt"),
+  recipientCount: integer("recipientCount"),
+  createdBy: text("createdBy").notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// Append-only audit trail for every admin action.
+export const auditLog = pgTable("audit_log", {
+  id: text("id").primaryKey(),
+  adminId: text("adminId").notNull(),
+  action: text("action").notNull(),
+  targetType: text("targetType"),
+  targetId: text("targetId"),
+  result: text("result").notNull().default("success"),
+  ipAddress: text("ipAddress"),
+  userAgent: text("userAgent"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
