@@ -1,6 +1,11 @@
 import type React from "react"
-import type { LucideIcon } from "lucide-react"
+import { Loader2, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
+
+/** A centered loading spinner. */
+export function Spinner({ className }: { className?: string }) {
+  return <Loader2 className={cn("h-5 w-5 animate-spin text-muted-foreground", className)} />
+}
 
 /** Page title + optional description and right-aligned actions. */
 export function PageHeader({

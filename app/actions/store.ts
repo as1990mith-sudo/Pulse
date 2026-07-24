@@ -5,7 +5,8 @@ import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { storeLesson, storeProduct, storePurchase } from "@/lib/db/schema"
+import { bookSubmission, storeLesson, storeProduct, storePurchase } from "@/lib/db/schema"
+import { randomUUID } from "crypto"
 import type { Book, Course, CourseDifficulty, Lesson, StoreCategory, StoreProduct } from "@/lib/store-data"
 
 // --- Auth helpers ----------------------------------------------------------
@@ -313,6 +314,10 @@ export async function publishProduct(input: PublishInput): Promise<{ id: string;
     throw new Error("Add at least one lesson with an uploaded video or audio file.")
   }
 
+  // Books require admin approval before they go public; courses publish
+  // immediately. A pending book stays unpublished until an admin approves it.
+  const requiresApproval = input.kind === "book"
+
   const [row] = await db
     .insert(storeProduct)
     .values({
@@ -331,8 +336,21 @@ export async function publishProduct(input: PublishInput): Promise<{ id: string;
       pages: input.kind === "book" ? input.pages ?? null : null,
       difficulty: input.kind === "course" ? input.difficulty ?? "Beginner" : null,
       totalDuration: input.kind === "course" ? input.totalDuration ?? null : null,
+      published: !requiresApproval,
     })
     .returning({ id: storeProduct.id })
+
+  // Open an approval submission for the newly created book.
+  if (requiresApproval) {
+    await db.insert(bookSubmission).values({
+      id: randomUUID(),
+      productId: String(row.id),
+      status: "pending",
+      submissionCount: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+  }
 
   if (input.kind === "course" && lessons.length > 0) {
     await db.insert(storeLesson).values(
@@ -348,7 +366,7 @@ export async function publishProduct(input: PublishInput): Promise<{ id: string;
   }
 
   revalidatePath("/store")
-  return { id: String(row.id), kind: input.kind }
+  return { id: String(row.id), kind: input.kind, pendingApproval: requiresApproval }
 }
 
 /** The current user's own listings, for a "manage" view. */

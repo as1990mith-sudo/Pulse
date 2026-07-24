@@ -12,45 +12,11 @@ import {
   moderationAction,
 } from "@/lib/db/schema"
 
-export type ReportStatus = "pending" | "reviewing" | "resolved" | "dismissed"
-
-export type ContentSnapshot = {
-  found: boolean
-  authorId: string | null
-  authorName: string | null
-  title: string | null
-  excerpt: string | null
-  createdAt: string | null
-  state: "visible" | "hidden" | "removed"
-}
-
-export type ReportRow = {
-  id: string
-  contentType: string
-  contentId: string
-  reporterId: string | null
-  reason: string
-  details: string | null
-  status: ReportStatus
-  resolvedBy: string | null
-  resolvedAt: string | null
-  createdAt: string
-  reportCount: number // how many reports exist for this same content
-  content: ContentSnapshot
-}
+import type { ContentSnapshot, ReportRow, ReportStatus } from "./reports-types"
+export { CONTENT_TYPE_LABELS } from "./reports-types"
+export type { ContentSnapshot, ReportRow, ReportStatus } from "./reports-types"
 
 const PAGE_SIZE = 20
-
-/** Human labels for the content types we support in the queue. */
-export const CONTENT_TYPE_LABELS: Record<string, string> = {
-  feed_post: "Feed Post",
-  feed_comment: "Feed Comment",
-  article: "Article",
-  article_comment: "Article Comment",
-  episode: "Episode",
-  community_post: "Community Post",
-  user: "User",
-}
 
 /** Loads a lightweight snapshot for each (type,id) pair so the queue can show
  * what was reported without a round-trip per row. */
