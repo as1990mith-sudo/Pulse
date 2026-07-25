@@ -143,8 +143,8 @@ export function AdminRolesView({
       {team.length === 0 ? (
         <EmptyState icon={ShieldCheck} title="No admins yet" description="Grant admin access to build your team." />
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-border/70">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-2xl border border-border/70">
+          <table className="w-full min-w-[560px] text-sm">
             <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-4 py-3 font-medium">Member</th>
