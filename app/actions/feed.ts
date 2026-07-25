@@ -10,6 +10,50 @@ import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { formatPostTimestamp } from "@/lib/format-timestamp"
 import { getLikedSet, setLike } from "@/lib/likes"
 import { notifyUser } from "@/app/actions/notifications"
+import { downgradeBlockedMentions, extractMentionRefs, type MentionRef } from "@/lib/mentions"
+import { filterAllowedMentions } from "@/lib/mentions-server"
+
+/**
+ * Resolves @mention tokens in freshly-authored plain text against each target's
+ * privacy setting. Returns the text with any BLOCKED mentions downgraded to
+ * inert `@Name` text, plus the list of mentions that are allowed (for storage +
+ * notifications). Shared by createPost/editPost and reusable by future surfaces.
+ */
+async function resolveTextMentions(
+  actorId: string,
+  text: string,
+): Promise<{ text: string; allowed: MentionRef[] }> {
+  const refs = extractMentionRefs(text)
+  if (refs.length === 0) return { text, allowed: [] }
+  const allowed = await filterAllowedMentions(actorId, refs)
+  const allowedIds = new Set(allowed.map((m) => m.userId))
+  const blocked = new Set(refs.map((m) => m.userId).filter((id) => !allowedIds.has(id)))
+  return { text: downgradeBlockedMentions(text, blocked), allowed }
+}
+
+/** Sends a "mentioned you" notification to each newly-tagged user. */
+async function notifyMentioned(
+  actor: { id: string; name: string },
+  mentions: MentionRef[],
+  link: string,
+  previous: MentionRef[] = [],
+) {
+  const alreadyNotified = new Set(previous.map((m) => m.userId))
+  await Promise.all(
+    mentions
+      .filter((m) => m.userId !== actor.id && !alreadyNotified.has(m.userId))
+      .map((m) =>
+        notifyUser({
+          userId: m.userId,
+          actorId: actor.id,
+          actorName: actor.name,
+          type: "mention",
+          message: `${actor.name} mentioned you in a post`,
+          link,
+        }),
+      ),
+  )
+}
 
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -513,7 +557,8 @@ export async function createPost(input: {
   media?: PostMedia[]
 }) {
   const user = await requireUser()
-  const text = input.text.trim()
+  // Resolve @mentions (privacy-checked); blocked ones become inert text.
+  const { text, allowed: mentions } = await resolveTextMentions(user.id, input.text.trim())
 
   // Accept either the new ordered media array or the legacy single image/video.
   const media: PostMedia[] = (input.media ?? []).filter((m) => m && m.url).slice(0, 10)
@@ -536,11 +581,17 @@ export async function createPost(input: {
       image: first?.type === "image" ? first.url : null,
       video: first?.type === "video" ? first.url : null,
       media: media.length > 0 ? media : null,
+      mentions: mentions.length > 0 ? mentions : null,
     })
     .returning({ id: feedPost.id })
 
   // Note: new posts intentionally do NOT notify followers. Notifications are
   // reserved for when a followed user goes live (see app/actions/live.ts).
+  // Tagged users, however, are always notified.
+  if (inserted?.id) {
+    await notifyMentioned(user, mentions, `/feed?post=${inserted.id}`)
+  }
+
   // Revalidate the author's profile too so the new post shows up immediately —
   // and, since posts are ordered newest-first, as the first tile on the Posts tab.
   revalidatePath("/feed")
