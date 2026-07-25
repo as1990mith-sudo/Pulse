@@ -113,17 +113,28 @@ export async function getLatestDevotional(): Promise<Devotional | null> {
   // Public visibility rule: a devotional is live if it is "published", or it is
   // "scheduled" and its scheduled time has arrived. Drafts, archived rows and
   // not-yet-due scheduled rows are hidden from readers.
-  const [row] = await db
-    .select()
-    .from(devotional)
-    .where(
-      or(
-        eq(devotional.status, "published"),
-        and(eq(devotional.status, "scheduled"), lte(devotional.scheduledFor, sql`now()`)),
-      ),
-    )
-    .orderBy(desc(devotional.lastPostedAt))
-    .limit(1)
+  //
+  // Wrapped in try/catch so a database outage (e.g. the provider is temporarily
+  // unreachable or over its transfer quota) degrades gracefully to the "No
+  // devotional yet" empty state on the homepage instead of throwing an
+  // unhandled error that crashes the entire page render.
+  let row
+  try {
+    ;[row] = await db
+      .select()
+      .from(devotional)
+      .where(
+        or(
+          eq(devotional.status, "published"),
+          and(eq(devotional.status, "scheduled"), lte(devotional.scheduledFor, sql`now()`)),
+        ),
+      )
+      .orderBy(desc(devotional.lastPostedAt))
+      .limit(1)
+  } catch (err) {
+    console.error("[v0] getLatestDevotional query failed:", err)
+    return null
+  }
   if (!row) return null
   return {
     date: row.publishDate,
