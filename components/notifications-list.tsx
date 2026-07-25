@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import useSWR, { useSWRConfig } from "swr"
-import { Bell, Heart, Radio, UserPlus, Megaphone, Repeat2, Trash2, X, CheckCircle2, Circle } from "lucide-react"
+import { Bell, Heart, Radio, UserPlus, Megaphone, Repeat2, Trash2, X, CheckCircle2, Circle, AtSign } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import {
   getNotifications,
@@ -22,6 +22,7 @@ const ICONS: Record<NotificationType, React.ComponentType<{ className?: string }
   post: Megaphone,
   follow: UserPlus,
   repost: Repeat2,
+  mention: AtSign,
 }
 
 function verb(type: NotificationType) {
@@ -38,6 +39,8 @@ function verb(type: NotificationType) {
       return "followed you"
     case "repost":
       return "reposted your post"
+    case "mention":
+      return "mentioned you"
   }
 }
 

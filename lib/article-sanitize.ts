@@ -25,7 +25,7 @@ const ALLOWED: Record<string, string[]> = {
   ul: [],
   ol: [],
   li: [],
-  a: ["href"],
+  a: ["href", "data-mention-id", "class"],
   img: ["src", "alt"],
   figure: [],
   figcaption: [],
@@ -38,8 +38,8 @@ const ALLOWED: Record<string, string[]> = {
 // Elements that never have a closing tag.
 const VOID = new Set(["br", "img", "hr"])
 
-// class values we permit (used for the verse blockquote styling).
-const ALLOWED_CLASSES = new Set(["verse"])
+// class values we permit (verse blockquote styling + inline @mention links).
+const ALLOWED_CLASSES = new Set(["verse", "mention"])
 
 function isSafeUrl(url: string): boolean {
   const trimmed = url.trim()
@@ -85,8 +85,10 @@ function buildAttrs(tag: string, attrs: Record<string, string>): string {
     }
     out.push(`${name}="${escapeAttr(value)}"`)
   }
-  if (tag === "a" && out.some((a) => a.startsWith("href="))) {
-    // Harden outbound links.
+  // Harden OUTBOUND links only. Internal @mention links (data-mention-id) point
+  // at in-app profiles and must open in the same tab like normal navigation.
+  const isMention = out.some((a) => a.startsWith("data-mention-id="))
+  if (tag === "a" && !isMention && out.some((a) => a.startsWith("href="))) {
     out.push('target="_blank"', 'rel="noopener noreferrer nofollow"')
   }
   return out.length ? " " + out.join(" ") : ""
