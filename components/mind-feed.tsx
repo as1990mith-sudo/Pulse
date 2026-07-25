@@ -499,8 +499,11 @@ export function MindFeed({
 
   // The Events feature (formerly the top-of-feed Announcements banner). It now
   // lives exclusively inside the "Events" sub-tab, where creators publish and
-  // browse upcoming events. Signed-out users still see it above their feed.
-  const announcementBanner = (
+  // browse upcoming events. Hidden entirely for signed-out visitors — there's
+  // nothing they can do with it (no publishing, no interest actions), so the
+  // whole section (header + empty state) is omitted rather than shown as a
+  // dead-end "Sign in to publish" card.
+  const announcementBanner = currentUser ? (
     <div className="pt-4 pb-5">
       <AnnouncementBanner
         announcements={announcements}
@@ -509,7 +512,7 @@ export function MindFeed({
         isAdmin={isAdmin}
       />
     </div>
-  )
+  ) : null
 
   // Full-screen, immersive reels tab. Rendered as a fixed overlay so it feels
   // premium and edge-to-edge (nothing "hanging"), with the tab switcher floating
