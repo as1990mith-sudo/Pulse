@@ -58,67 +58,86 @@ function renderInlineBold(line: string, keyPrefix: string): React.ReactNode[] {
 }
 
 /**
- * Caption under the author row. Collapsed, it clamps to a single line; a
- * "Read More" toggle reveals the rest. Following the TikTok/Reels convention,
- * the toggle appears whenever the caption is actually clipped — whether it
- * spans multiple lines OR is a single line long enough to overflow — rather
- * than only when explicit newlines exist. Because the whole author/caption
- * block is anchored to the bottom of the reel, expanding grows the block
- * *upward*. Line breaks are preserved and *markdown* emphasis is parsed to bold.
+ * Caption under the author row. Mirrors the feed post caption exactly so the
+ * two read identically: the same base font size and tight leading, clamped to a
+ * single line when collapsed, with the last visible line fading directly into an
+ * inline "… Read more" (never a separate line). Because the whole author/caption
+ * block is bottom-anchored, expanding grows the block *upward*; tapping the body
+ * text collapses it again. Line breaks are preserved and *markdown* emphasis is
+ * parsed to bold.
  */
 function ReelCaption({ text }: { text: string }) {
   const [expanded, setExpanded] = useState(false)
-  const [clipped, setClipped] = useState(false)
+  const [clampable, setClampable] = useState(false)
   const textRef = useRef<HTMLDivElement>(null)
-  const lines = useMemo(() => text.split("\n"), [text])
+
+  // Match the feed caption's metrics: 1 collapsed line at leading-tight (1.25).
+  const LINE_HEIGHT = 1.25
+  const collapsedMaxEm = LINE_HEIGHT
+  const isClamped = clampable && !expanded
 
   // Flatten every line into one inline flow (newlines preserved via
-  // `whitespace-pre-line`) so a single clamped container can measure real
-  // overflow — multiple block <p> children don't clamp/measure reliably.
+  // `whitespace-pre-line`) so the clamp/measure works against a single box.
   const nodes = useMemo(() => {
     const out: React.ReactNode[] = []
-    lines.forEach((line, i) => {
+    text.split("\n").forEach((line, i) => {
       if (i > 0) out.push("\n")
       out.push(...renderInlineBold(line, `l${i}`))
     })
     return out
-  }, [lines])
+  }, [text])
 
-  // While collapsed, the caption is clipped when its full content is taller
-  // than the single visible line. Re-measured on resize and when the text
-  // changes. Left untouched while expanded so "Read Less" stays available.
+  // Only surface "Read more" when the caption genuinely overflows one line.
+  // Re-measured on resize and when the text/expansion changes.
   useEffect(() => {
-    if (expanded) return
     const el = textRef.current
-    if (!el) return
-    const measure = () => setClipped(el.scrollHeight - el.clientHeight > 1)
+    if (!el) {
+      setClampable(false)
+      return
+    }
+    const measure = () => {
+      const lineHeightPx = collapsedMaxEm * Number.parseFloat(getComputedStyle(el).fontSize || "16")
+      setClampable(el.scrollHeight > lineHeightPx + 2)
+    }
     measure()
     const ro = new ResizeObserver(measure)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [text, expanded])
+  }, [text, collapsedMaxEm, expanded])
 
   return (
-    <div className="mt-2.5 max-w-md" data-no-swipe>
+    <div className="mt-2 max-w-md" data-no-swipe>
       <div
         ref={textRef}
         className={cn(
-          "whitespace-pre-line text-sm leading-relaxed drop-shadow transition-all duration-300 ease-out",
-          !expanded && "line-clamp-1",
+          "relative whitespace-pre-line text-base leading-tight drop-shadow transition-all",
+          isClamped && "overflow-hidden",
+          clampable && expanded && "cursor-pointer",
         )}
+        style={isClamped ? { maxHeight: `${collapsedMaxEm}em` } : undefined}
+        onClick={
+          clampable && expanded
+            ? (e) => {
+                // Collapse when tapping the body, but let links/buttons through.
+                if (!(e.target as HTMLElement).closest("a,button")) setExpanded(false)
+              }
+            : undefined
+        }
       >
         {nodes}
+        {isClamped && (
+          // Sits on the last visible line; the text fades directly into the
+          // inline "… Read more" via the horizontal gradient (same as the feed).
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            className="absolute bottom-0 right-0 flex items-baseline bg-gradient-to-l from-black from-50% to-transparent pl-14 text-base font-semibold leading-tight text-white/70 drop-shadow transition-colors hover:text-white"
+          >
+            <span aria-hidden className="text-white/90">…&nbsp;</span>
+            Read more
+          </button>
+        )}
       </div>
-      {(clipped || expanded) && (
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="mt-1 text-xs font-semibold text-white/80 transition-colors hover:text-white"
-          aria-expanded={expanded}
-        >
-          {expanded ? "Read Less" : "Read More"}
-        </button>
-      )}
     </div>
   )
 }
@@ -787,8 +806,15 @@ function ReelItem({
 
       {/* Right-hand action rail (raised to clear the mute button + scrubber).
           z-[3] keeps it above the full-width caption block (z-[1]) so its taps
-          aren't swallowed by the caption's invisible box. */}
-      <div className="absolute bottom-32 right-3 z-[3] flex flex-col items-center gap-5 text-white" data-no-swipe>
+          aren't swallowed by the caption's invisible box. Only shown for the
+          active reel so a neighbouring reel's rail can't bleed in while scrolling. */}
+      <div
+        className={cn(
+          "absolute bottom-32 right-3 z-[3] flex flex-col items-center gap-5 text-white transition-opacity duration-200",
+          active ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
+        data-no-swipe
+      >
         <button type="button" onClick={toggleLike} className="flex flex-col items-center gap-1" aria-pressed={liked}>
           <Heart
             className={cn(
@@ -828,7 +854,10 @@ function ReelItem({
         type="button"
         onClick={onToggleMute}
         aria-label={muted ? "Unmute" : "Mute"}
-        className="absolute bottom-16 right-4 z-[3] flex size-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition-colors hover:bg-black/60"
+        className={cn(
+          "absolute bottom-16 right-4 z-[3] flex size-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition-colors hover:bg-black/60",
+          active ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
         data-no-swipe
       >
         {muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
@@ -836,8 +865,15 @@ function ReelItem({
 
       {/* Author + caption, bottom-left. Bottom-anchored so expanding the caption
           grows the block upward — pushing the author row up rather than covering
-          the scrubber/controls below. */}
-      <div className="absolute inset-x-0 bottom-0 z-[1] p-4 pb-12 pr-24 text-white">
+          the scrubber/controls below. Only shown for the centered (active) reel
+          so a neighbouring reel's profile never bleeds into this one while
+          scrolling — matching how Instagram/TikTok hide inactive-reel chrome. */}
+      <div
+        className={cn(
+          "absolute inset-x-0 bottom-0 z-[1] p-4 pb-12 pr-24 text-white transition-opacity duration-200",
+          active ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
+      >
         <div className="flex items-center gap-2.5">
           <Link href={`/u/${post.authorId}`} className="flex min-w-0 items-center gap-2.5">
             <span
@@ -882,9 +918,14 @@ function ReelItem({
       </div>
 
       {/* Draggable play tracker — full-width at the very bottom. Tap or drag the
-          thumb anywhere along the track to seek to that point in the clip. */}
+          thumb anywhere along the track to seek to that point in the clip. Only
+          the active reel's scrubber is shown so it can't bleed in from a
+          neighbour while scrolling. */}
       <div
-        className="absolute inset-x-0 bottom-0 z-[2] px-3 pb-[max(env(safe-area-inset-bottom),0.4rem)] pt-3"
+        className={cn(
+          "absolute inset-x-0 bottom-0 z-[2] px-3 pb-[max(env(safe-area-inset-bottom),0.4rem)] pt-3 transition-opacity duration-200",
+          active ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
         data-no-swipe
       >
         <div
