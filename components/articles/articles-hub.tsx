@@ -54,6 +54,9 @@ export function ArticlesHub({
           search: debounced.trim() || undefined,
           offset,
           limit: PAGE,
+          // The featured hero only shows in the default view, so only exclude it
+          // there — search/category results should still be able to surface it.
+          excludeId: isDefaultView ? (featured?.id ?? undefined) : undefined,
         })
         if (token !== queryRef.current) return
         setItems((prev) => (replace ? res.items : [...prev, ...res.items]))
@@ -62,7 +65,7 @@ export function ArticlesHub({
         if (token === queryRef.current) setLoading(false)
       }
     },
-    [category, debounced],
+    [category, debounced, isDefaultView, featured?.id],
   )
 
   // Refetch from the top whenever the filter or search changes. Skip the very

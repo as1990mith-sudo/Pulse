@@ -11,7 +11,10 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic"
 
 export default async function ArticlesPage() {
-  const [hub, feed] = await Promise.all([getArticleHub(), getArticleFeed({ limit: 12 })])
+  // Fetch the featured article first so the latest feed can omit it (otherwise
+  // the hero article shows up again as the first "Latest articles" card).
+  const hub = await getArticleHub()
+  const feed = await getArticleFeed({ limit: 12, excludeId: hub.featured?.id })
 
   return (
     <div className="min-h-screen">
