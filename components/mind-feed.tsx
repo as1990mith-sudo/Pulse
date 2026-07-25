@@ -26,6 +26,7 @@ import {
   Images,
   GripVertical,
   Flag,
+  Maximize2,
 } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import {
@@ -60,8 +61,10 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ReportReasonModal } from "@/components/report-reason-modal"
 import { ImageLightbox } from "@/components/image-lightbox"
+import { ImmersiveImageViewer } from "@/components/immersive-image-viewer"
 import { FeedVideo } from "@/components/feed-video"
 import { ReelsFeed } from "@/components/reels-feed"
+import { useMediaAspect, isTallMedia } from "@/hooks/use-media-aspect"
 import { StatusBar } from "@/components/status-bar"
 import type { StatusGroup } from "@/app/actions/status"
 import { ShareSheet } from "@/components/share-sheet"
@@ -563,6 +566,7 @@ export function MindFeed({
                 currentUser={currentUser}
                 variant="feed"
                 highlighted={highlightedPost === String(post.id)}
+                videoFeedPosts={allPosts}
               />
             </li>
           ))}
@@ -850,6 +854,85 @@ export function MindFeed({
 }
 
 /**
+ * A single media item inside a feed post, framed as a CONTAINED preview.
+ *
+ * Portrait media taller than 4:5 (e.g. 9:16) is clamped to a 4:5 frame and
+ * center-cropped with object-cover — it never takes over the feed. Square and
+ * landscape media keep their natural ratio (4:5 only acts as the tallest the
+ * frame is allowed to get). The original media is never modified: cropping is
+ * purely visual, and tapping opens the immersive viewer at natural ratio.
+ */
+function MediaSlide({
+  item,
+  index,
+  count,
+  feed,
+  authorName,
+  onOpenImage,
+  onOpenVideo,
+}: {
+  item: PostMedia
+  index: number
+  count: number
+  feed: boolean
+  authorName: string
+  onOpenImage: () => void
+  onOpenVideo?: () => void
+}) {
+  const ratio = useMediaAspect(item.url, item.type)
+  const tall = isTallMedia(ratio)
+
+  // Tall media is clamped to a 4:5 frame; other ratios render naturally but are
+  // never allowed to exceed the 4:5 height (so extra-tall outliers stay bounded).
+  // A hard viewport cap keeps any single frame from dominating the screen.
+  const frameStyle: React.CSSProperties = tall
+    ? { aspectRatio: "4 / 5" }
+    : { aspectRatio: ratio ? String(ratio) : "4 / 5", maxHeight: feed ? "min(75svh, 40rem)" : "40rem" }
+
+  if (item.type === "video") {
+    return (
+      <div className="relative w-full overflow-hidden bg-black" style={frameStyle}>
+        <FeedVideo src={item.url} poster={item.coverImageUrl} className="h-full w-full object-cover" />
+        {/* Expand into the immersive vertical viewer. Kept separate from the
+            frame tap so inline play/pause still works. */}
+        {onOpenVideo && (
+          <button
+            type="button"
+            onClick={onOpenVideo}
+            aria-label="Open video full screen"
+            className="absolute right-2 top-2 z-10 flex size-9 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm transition-colors hover:bg-black/75"
+          >
+            <Maximize2 className="size-4" />
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onOpenImage}
+      className="relative block w-full overflow-hidden bg-muted transition-opacity hover:opacity-95"
+      style={frameStyle}
+      aria-label={count > 1 ? `Open image ${index + 1} of ${count} full screen` : "Open image full screen"}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={item.url || "/placeholder.svg"}
+        alt={count > 1 ? `Post attachment ${index + 1} of ${count}` : `Image posted by ${authorName}`}
+        className="h-full w-full object-cover"
+      />
+      {tall && (
+        <span className="pointer-events-none absolute right-2 top-2 flex size-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm">
+          <Maximize2 className="size-4" />
+        </span>
+      )}
+    </button>
+  )
+}
+
+/**
  * Instagram-style media for a post. A single item renders as before (image
  * opens a lightbox, video plays inline). Multiple items become a horizontal,
  * scroll-snapping carousel you swipe left/right, with dot indicators, a
@@ -859,21 +942,21 @@ function PostMediaCarousel({
   items,
   feed,
   authorName,
+  onOpenImage,
+  onOpenVideo,
 }: {
   items: PostMedia[]
   feed: boolean
   authorName: string
+  // Tapping a portrait image opens the full-screen natural-ratio image viewer.
+  onOpenImage?: (index: number) => void
+  // Tapping/expanding a video opens the immersive vertical video viewer.
+  onOpenVideo?: (index: number) => void
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const [active, setActive] = useState(0)
   const [lightbox, setLightbox] = useState<string | null>(null)
   const multiple = items.length > 1
-  // Cap every media frame at a 1080×1920 (9:16 portrait) ratio: `177.778cqw`
-  // equals the slide width × 1920/1080, so anything taller than 9:16 is clamped
-  // and cropped (via object-cover) into the frame, while landscape/square media
-  // — which is shorter than the cap — displays uncropped. The svh/px cap still
-  // applies so media never exceeds the viewport.
-  const heightClass = feed ? "max-h-[min(85svh,177.778cqw)]" : "max-h-[min(640px,177.778cqw)]"
 
   // Track which slide is centered as the user swipes, so the dots/counter stay
   // in sync. We derive the index from scrollLeft rather than IntersectionObserver
@@ -907,24 +990,16 @@ function PostMediaCarousel({
         )}
       >
         {items.map((item, i) => (
-          <div key={i} className="@container w-full shrink-0 snap-center snap-always">
-            {item.type === "video" ? (
-              <FeedVideo src={item.url} poster={item.coverImageUrl} className={cn("mx-auto w-full object-cover", heightClass)} />
-            ) : (
-              <button
-                type="button"
-                onClick={() => setLightbox(item.url)}
-                className="block w-full bg-muted transition-opacity hover:opacity-95"
-                aria-label={`Expand image ${i + 1} of ${items.length} to full screen`}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={item.url || "/placeholder.svg"}
-                  alt={`Post attachment ${i + 1} of ${items.length}`}
-                  className={cn("mx-auto w-full object-cover", heightClass)}
-                />
-              </button>
-            )}
+          <div key={i} className="w-full shrink-0 snap-center snap-always">
+            <MediaSlide
+              item={item}
+              index={i}
+              count={items.length}
+              feed={feed}
+              authorName={authorName}
+              onOpenImage={() => (onOpenImage ? onOpenImage(i) : setLightbox(item.url))}
+              onOpenVideo={onOpenVideo ? () => onOpenVideo(i) : undefined}
+            />
           </div>
         ))}
       </div>
@@ -990,6 +1065,7 @@ export function PostCard({
   currentUser,
   variant = "card",
   highlighted = false,
+  videoFeedPosts,
 }: {
   post: FeedPostView
   currentUser: CurrentUser | null
@@ -998,6 +1074,9 @@ export function PostCard({
   variant?: "card" | "feed"
   // Briefly ring the card when it's the deep-linked target of a shared link.
   highlighted?: boolean
+  // Sibling posts to browse in the immersive video viewer (vertical swipe).
+  // When omitted, tapping a video opens the viewer with just this post.
+  videoFeedPosts?: FeedPostView[]
 }) {
   const feed = variant === "feed"
   const router = useRouter()
@@ -1027,6 +1106,9 @@ export function PostCard({
   const [edited, setEdited] = useState(post.edited)
   const [text, setText] = useState(post.text)
   const [isPending, startTransition] = useTransition()
+  // Immersive media viewers, opened by tapping media in the contained preview.
+  const [imageViewer, setImageViewer] = useState<number | null>(null)
+  const [videoViewerKey, setVideoViewerKey] = useState<string | null>(null)
 
   function handleDelete() {
     startTransition(async () => {
@@ -1407,8 +1489,16 @@ export function PostCard({
         )
       )}
 
-      {/* Media — large, edge-to-edge Instagram-style (swipeable when multiple) */}
-      {hasMedia && <PostMediaCarousel items={mediaItems} feed={feed} authorName={post.user} />}
+      {/* Media — contained preview; tapping opens the immersive viewer. */}
+      {hasMedia && (
+        <PostMediaCarousel
+          items={mediaItems}
+          feed={feed}
+          authorName={post.user}
+          onOpenImage={(i) => setImageViewer(i)}
+          onOpenVideo={(i) => setVideoViewerKey(`${post.id}-${i}`)}
+        />
+      )}
 
       {/* Actions — each count sits to the right of its button */}
       <div
@@ -1505,6 +1595,36 @@ export function PostCard({
           kind={engagementKind}
           open
           onClose={() => setEngagementKind(null)}
+        />
+      )}
+
+      {/* Full-screen natural-ratio image viewer. Maps the tapped carousel index
+          to the image-only list so paging skips any interleaved videos. */}
+      {imageViewer != null &&
+        (() => {
+          const images = mediaItems.filter((m) => m.type === "image").map((m) => m.url)
+          if (images.length === 0) return null
+          const tappedUrl = mediaItems[imageViewer]?.url
+          const startIndex = Math.max(0, images.indexOf(tappedUrl))
+          return (
+            <ImmersiveImageViewer
+              post={post}
+              images={images}
+              startIndex={startIndex}
+              currentUser={currentUser}
+              onClose={() => setImageViewer(null)}
+            />
+          )
+        })()}
+
+      {/* Immersive vertical video viewer (reuses Reels), opened on the tapped
+          clip and swiping through eligible feed videos. */}
+      {videoViewerKey && (
+        <ReelsFeed
+          posts={videoFeedPosts && videoFeedPosts.length > 0 ? videoFeedPosts : [post]}
+          initialKey={videoViewerKey}
+          currentUser={currentUser}
+          onClose={() => setVideoViewerKey(null)}
         />
       )}
     </article>

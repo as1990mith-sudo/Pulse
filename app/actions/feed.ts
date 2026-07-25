@@ -605,21 +605,25 @@ export async function createPost(input: {
 export async function editPost(input: { postId: number; text: string }) {
   const user = await requireUser()
   const [row] = await db
-    .select({ userId: feedPost.userId, image: feedPost.image, video: feedPost.video })
+    .select({ userId: feedPost.userId, image: feedPost.image, video: feedPost.video, mentions: feedPost.mentions })
     .from(feedPost)
     .where(eq(feedPost.id, input.postId))
   if (!row) throw new Error("Post not found.")
   if (row.userId !== user.id) throw new Error("You can only edit your own posts.")
 
-  const text = input.text.trim()
+  // Re-resolve @mentions on the edited text (privacy-checked); only users newly
+  // tagged in this edit get notified (see notifyMentioned's `previous` guard).
+  const { text, allowed: mentions } = await resolveTextMentions(user.id, input.text.trim())
   // A post must still have content after the edit — keep it non-empty unless
   // there's attached media to carry it.
   if (!text && !row.image && !row.video) throw new Error("Post cannot be empty.")
 
   await db
     .update(feedPost)
-    .set({ text, editedAt: new Date() })
+    .set({ text, editedAt: new Date(), mentions: mentions.length > 0 ? mentions : null })
     .where(and(eq(feedPost.id, input.postId), eq(feedPost.userId, user.id)))
+
+  await notifyMentioned(user, mentions, `/feed?post=${input.postId}`, row.mentions ?? [])
 
   revalidatePath("/feed")
   revalidatePath(`/u/${user.id}`)
