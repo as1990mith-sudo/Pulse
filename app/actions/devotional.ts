@@ -45,18 +45,22 @@ function timeAgo(date: Date): string {
 }
 
 export async function getDevotionalComments(devotionalDate: string): Promise<DevotionalCommentView[]> {
-  const session = await auth.api.getSession({ headers: await headers() })
-  const viewerId = session?.user?.id ?? null
+  // Read-only path used during page render: on any DB failure return an empty
+  // comment list rather than throwing, so a transient outage doesn't crash the
+  // devotional page. (Mutations below still throw so the user sees the error.)
+  try {
+    const session = await auth.api.getSession({ headers: await headers() })
+    const viewerId = session?.user?.id ?? null
 
-  const rows = await db
-    .select()
-    .from(devotionalComment)
-    .where(eq(devotionalComment.devotionalDate, devotionalDate))
-    .orderBy(asc(devotionalComment.createdAt))
+    const rows = await db
+      .select()
+      .from(devotionalComment)
+      .where(eq(devotionalComment.devotionalDate, devotionalDate))
+      .orderBy(asc(devotionalComment.createdAt))
 
-  const likedSet = await getLikedSet(viewerId, "devotional_comment", rows.map((r) => r.id))
+    const likedSet = await getLikedSet(viewerId, "devotional_comment", rows.map((r) => r.id))
 
-  return rows.map((c) => ({
+    return rows.map((c) => ({
     id: c.id,
     parentId: c.parentId ?? null,
     authorId: c.userId,
@@ -72,6 +76,10 @@ export async function getDevotionalComments(devotionalDate: string): Promise<Dev
     postedAt: timeAgo(c.createdAt),
     createdAtMs: c.createdAt.getTime(),
   }))
+  } catch (err) {
+    console.error("[v0] getDevotionalComments query failed:", err)
+    return []
+  }
 }
 
 export async function addDevotionalComment(input: { devotionalDate: string; text: string; parentId?: number | null }) {
