@@ -1,13 +1,13 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { Heart, MoreHorizontal, Copy, Pencil, Trash2, Send, X } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { ActionSheet, type SheetAction } from "@/components/action-sheet"
+import { type SheetAction } from "@/components/action-sheet"
 import { canEdit, canDelete } from "@/lib/interactions"
 import { cn } from "@/lib/utils"
 
@@ -258,7 +258,18 @@ function CommentItem({
   const [deleted, setDeleted] = useState(false)
   const [edited, setEdited] = useState(comment.edited)
   const [copied, setCopied] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
   let pressTimer: ReturnType<typeof setTimeout> | null = null
+
+  // Close the anchored options menu when tapping/clicking anywhere outside it.
+  useEffect(() => {
+    if (!menuOpen) return
+    function onDown(e: PointerEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
+    }
+    document.addEventListener("pointerdown", onDown)
+    return () => document.removeEventListener("pointerdown", onDown)
+  }, [menuOpen])
 
   const editable = comment.isSelf && (!enforceTimeWindows || canEdit(comment.createdAtMs))
   const deletable = comment.isSelf && (!enforceTimeWindows || canDelete(comment.createdAtMs))
@@ -432,14 +443,47 @@ function CommentItem({
             </button>
           )}
           {hasMenu && (
-            <button
-              type="button"
-              onClick={() => setMenuOpen(true)}
-              className="ml-auto flex items-center transition-colors hover:text-foreground"
-              aria-label="More options"
-            >
-              <MoreHorizontal className="size-4" />
-            </button>
+            <div ref={menuRef} className="relative ml-auto">
+              <button
+                type="button"
+                onClick={() => setMenuOpen((o) => !o)}
+                className={cn(
+                  "flex items-center rounded-full p-1 transition-colors hover:text-foreground",
+                  menuOpen && "text-foreground",
+                )}
+                aria-label="More options"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+              >
+                <MoreHorizontal className="size-4" />
+              </button>
+              {menuOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-2xl border border-border/60 bg-card p-1 shadow-xl duration-150 animate-in fade-in zoom-in-95"
+                >
+                  {actions.map((action) => (
+                    <button
+                      key={action.label}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        void action.onClick()
+                      }}
+                      className={cn(
+                        "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+                        action.destructive
+                          ? "text-destructive hover:bg-destructive/10"
+                          : "hover:bg-secondary",
+                      )}
+                    >
+                      <action.icon className="size-4" /> {action.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
 
@@ -462,17 +506,6 @@ function CommentItem({
           </form>
         )}
       </div>
-
-      {hasMenu && (
-        <ActionSheet
-          open={menuOpen}
-          onClose={() => setMenuOpen(false)}
-          title={comment.isSelf ? "Your comment" : comment.name}
-          preview={text}
-          actions={actions}
-          dimBackdrop={false}
-        />
-      )}
     </div>
   )
 }
