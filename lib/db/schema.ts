@@ -1151,3 +1151,15 @@ export const auditLog = pgTable("audit_log", {
   metadata: jsonb("metadata"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
+
+// Global "who is online right now" heartbeat. One row per signed-in user,
+// upserted every ~25s by a client heartbeat while the app tab is visible. A
+// user counts as online only while their lastSeenAt is fresh (last minute), so
+// the admin "Online now" figure is a true real-time count rather than a tally
+// of long-lived login sessions.
+export const onlinePresence = pgTable("online_presence", {
+  userId: text("userId")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  lastSeenAt: timestamp("lastSeenAt").notNull().defaultNow(),
+})
