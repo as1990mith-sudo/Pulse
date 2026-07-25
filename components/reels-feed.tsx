@@ -30,7 +30,7 @@ import { CommentThread, type ThreadComment } from "@/components/comment-thread"
 // is filtered out client-side once its metadata reveals the true duration.
 const MAX_REEL_SECONDS = 3 * 60 + 15
 
-type Reel = { post: FeedPostView; url: string; key: string; trimStart?: number; trimEnd?: number }
+type Reel = { post: FeedPostView; url: string; key: string; poster?: string; trimStart?: number; trimEnd?: number }
 
 /**
  * Caption under the author row. Mirrors the feed post caption exactly so the
@@ -163,7 +163,14 @@ export function ReelsFeed({
     for (const p of posts) {
       p.media.forEach((m, i) => {
         if (m.type === "video" && m.url)
-          items.push({ post: p, url: m.url, key: `${p.id}-${i}`, trimStart: m.trimStart, trimEnd: m.trimEnd })
+          items.push({
+            post: p,
+            url: m.url,
+            key: `${p.id}-${i}`,
+            poster: m.coverImageUrl,
+            trimStart: m.trimStart,
+            trimEnd: m.trimEnd,
+          })
       })
     }
     // When opened from a specific feed video, preserve feed order and float the
@@ -444,6 +451,13 @@ function ReelItem({
   currentUser: CurrentUser | null
 }) {
   const { post, url } = reel
+  // Append a media-fragment (`#t=<start>`) so the browser decodes and paints the
+  // first frame as the element's thumbnail immediately — even before playback
+  // begins. Without this the freshly-mounted <video> shows a black box for a
+  // few seconds while it buffers (the "dark before the video starts" bug on
+  // expand). Uses the trimmed start when present, otherwise 0.1s.
+  const posterTime = (reel.trimStart ?? 0) > 0 ? (reel.trimStart as number) : 0.1
+  const posterSrc = url.includes("#") ? url : `${url}#t=${posterTime}`
   const videoRef = useRef<HTMLVideoElement>(null)
   const backdropRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -721,7 +735,8 @@ function ReelItem({
       {shouldRender && (
         <video
           ref={backdropRef}
-          src={url}
+          src={posterSrc}
+          poster={reel.poster}
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-2xl"
           playsInline
@@ -734,7 +749,8 @@ function ReelItem({
       <div aria-hidden="true" className="absolute inset-0 bg-black/30" />
       <video
         ref={videoRef}
-        src={shouldRender ? url : undefined}
+        src={shouldRender ? posterSrc : undefined}
+        poster={reel.poster}
         className="relative h-full w-full object-contain"
         playsInline
         loop
