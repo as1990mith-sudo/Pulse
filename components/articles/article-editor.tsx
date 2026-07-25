@@ -48,7 +48,7 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
   const [tagsText, setTagsText] = useState((seed?.tags ?? []).join(", "))
   const [coverUrl, setCoverUrl] = useState<string | null>(seed?.coverUrl ?? null)
   const [uploadingCover, setUploadingCover] = useState(false)
-  // Object URL of the just-picked cover, shown in the 4:5 crop editor before
+  // Object URL of the just-picked cover, shown in the 16:9 crop editor before
   // it's uploaded. The user only chooses which region is framed (ratio locked).
   const [coverToCrop, setCoverToCrop] = useState<string | null>(null)
   const [preview, setPreview] = useState(false)
@@ -93,7 +93,7 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
     if (url) exec("createLink", url)
   }
 
-  // Picking a cover opens the 4:5 crop editor first — it's uploaded only after
+  // Picking a cover opens the 16:9 crop editor first — it's uploaded only after
   // the user confirms which region is framed.
   function onCoverChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -107,7 +107,7 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
     if (coverInputRef.current) coverInputRef.current.value = ""
   }
 
-  // Cropped 4:5 cover confirmed — upload the canvas output.
+  // Cropped 16:9 cover confirmed — upload the canvas output.
   async function onCoverCropApply(blob: Blob) {
     const src = coverToCrop
     setCoverToCrop(null)
@@ -459,7 +459,7 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
         <CropModal
           imageSrc={coverToCrop}
           title="Crop cover"
-          ratios={[{ label: "4:5", value: 4 / 5 }]}
+          ratios={[{ label: "16:9", value: 16 / 9 }]}
           onCancel={() => {
             const src = coverToCrop
             setCoverToCrop(null)
