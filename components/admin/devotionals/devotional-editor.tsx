@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { CoverUpload } from "@/components/admin/cover-upload"
 import type { DevotionalRow } from "@/lib/admin/devotionals-types"
 import { createDevotional, updateDevotional, scheduleDevotional } from "@/app/actions/admin-devotionals"
 
@@ -124,9 +125,11 @@ export function DevotionalEditor({
             <Field label="Prayer">
               <Textarea value={prayer} onChange={(e) => setPrayer(e.target.value)} rows={3} placeholder="Father, we thank you…" />
             </Field>
-            <Field label="Cover image URL (optional)">
-              <Input value={cover} onChange={(e) => setCover(e.target.value)} placeholder="https://…" />
-            </Field>
+            <CoverUpload
+              label="Cover image (optional)"
+              value={cover || null}
+              onChange={(url) => setCover(url ?? "")}
+            />
             <Field label="Schedule for (optional)">
               <Input type="datetime-local" value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} />
             </Field>
