@@ -15,6 +15,7 @@ import type { ThreadComment } from "@/components/comment-thread"
 import type { CurrentUser } from "@/lib/session"
 import type { ShareTarget } from "@/lib/share-types"
 import { haptic } from "@/lib/haptics"
+import { renderMessageBody } from "@/lib/rich-text"
 import { cn } from "@/lib/utils"
 
 /**
@@ -230,10 +231,18 @@ export function ImmersiveImageViewer({
         </RailButton>
       </div>
 
-      {/* Caption. */}
+      {/* Caption. Rendered with the shared rich-text renderer (not raw text) so
+          mention tokens like `@[Name](id)`, bold/italic markers, and links match
+          exactly what the feed shows instead of leaking the raw markup. */}
       {post.text && (
         <div className="absolute inset-x-0 bottom-0 z-10 max-w-lg bg-gradient-to-t from-black/70 to-transparent px-4 pb-8 pt-12 pr-20">
-          <p className="line-clamp-2 text-sm leading-relaxed text-white/90">{post.text}</p>
+          <p className="line-clamp-2 whitespace-pre-wrap text-sm leading-relaxed text-white/90">
+            {renderMessageBody(post.text, {
+              link: true,
+              linkClassName: "font-medium text-white underline-offset-2 [overflow-wrap:anywhere] hover:underline",
+              mentionClassName: "font-semibold text-white hover:underline",
+            })}
+          </p>
         </div>
       )}
 
