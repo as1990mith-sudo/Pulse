@@ -225,7 +225,12 @@ export function FeedVideo({
   const posterSrc = src.includes("#") ? src : `${src}#t=${posterTime}`
 
   return (
-    <div className="group relative overflow-hidden bg-black">
+    // Fill the parent frame (e.g. MindFeed's fixed 4:5 card) so every overlay —
+    // the poster, the centered play button, and the bottom control bar — anchors
+    // to the *visible* crop rather than the video's full natural height. Without
+    // this the wrapper grew to the clip's intrinsic (e.g. 9:16) height, centering
+    // the play button off-frame and pushing the controls out of the 4:5 view.
+    <div className="group absolute inset-0 overflow-hidden bg-black">
       <video
         ref={ref}
         src={posterSrc}
@@ -234,7 +239,7 @@ export function FeedVideo({
         playsInline
         muted={muted}
         preload="metadata"
-        className={cn("w-full", className)}
+        className={cn("h-full w-full", className)}
         onClick={togglePlay}
         onPlay={() => {
           setPlaying(true)
