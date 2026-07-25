@@ -8,7 +8,7 @@ import { EpisodeWatch } from "@/components/episode-watch"
 import { LiveReplayWatch } from "@/components/live-replay-watch"
 import { VideoCard } from "@/components/profile/video-card"
 import { getEpisodeComments } from "@/app/actions/episodes"
-import { getEpisodesByUser, getCatalogEpisodes } from "@/lib/content"
+import { getEpisodesByUser } from "@/lib/content"
 import { getCurrentUser } from "@/lib/session"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
@@ -29,24 +29,11 @@ export async function EpisodePage({ show }: { show: Show }) {
   //  • uploaded videos keep the unchanged YouTube-style EpisodeWatch,
   //  • audio keeps the classic scrolling page below.
   if (show.videoUrl && show.source === "live") {
-    // Recommendation rails: this creator's other replays, related livestreams
-    // from across the catalogue, and recommended uploaded videos.
-    const catalog = await getCatalogEpisodes()
-    const creatorReplays = creatorEpisodes
-      .filter((ep) => ep.mediaType === "video" && ep.source === "live" && ep.id !== show.id)
-      .slice(0, 8)
-    const relatedReplays = catalog
-      .filter(
-        (ep) =>
-          ep.mediaType === "video" &&
-          ep.source === "live" &&
-          ep.id !== show.id &&
-          ep.host.id !== show.host.id,
-      )
-      .slice(0, 8)
-    const recommendedUploads = catalog
-      .filter((ep) => ep.mediaType === "video" && ep.source !== "live" && ep.id !== show.id)
-      .slice(0, 8)
+    // The replay opens as a full-screen vertical reel restricted to THIS
+    // creator's livestream replays — scrolling up/down pages through them.
+    const creatorReplays = creatorEpisodes.filter(
+      (ep) => ep.mediaType === "video" && ep.source === "live" && ep.id !== show.id,
+    )
 
     return (
       <LiveReplayWatch
@@ -54,8 +41,6 @@ export async function EpisodePage({ show }: { show: Show }) {
         currentUser={currentUser}
         initialComments={comments}
         creatorReplays={creatorReplays}
-        relatedReplays={relatedReplays}
-        recommendedUploads={recommendedUploads}
       />
     )
   }
