@@ -30,13 +30,23 @@ export function LiveReplayPlayer({
   onMinimize,
   onRestore,
   onClose,
+  variant = "page",
+  autoPlay = false,
 }: {
   show: Show
   minimized?: boolean
   onMinimize?: () => void
   onRestore?: () => void
   onClose?: () => void
+  // "page" is the classic pinned player (portrait stage + minimize contract).
+  // "reel" makes the player fill its parent slide edge-to-edge for the
+  // full-screen vertical replay reel — no minimize/close chrome of its own, so
+  // the reel supplies its own close button and overlaid action rail.
+  variant?: "page" | "reel"
+  // Reel slides auto-play the moment they become the active slide.
+  autoPlay?: boolean
 }) {
+  const isReel = variant === "reel"
   const mediaUrl = show.videoUrl
   const hasRealCover = Boolean(show.cover) && !show.cover!.includes("/placeholder.svg")
 
@@ -101,13 +111,23 @@ export function LiveReplayPlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing])
 
+  // Reel slides autoplay as soon as they mount (they only mount when active).
+  useEffect(() => {
+    if (!autoPlay) return
+    const el = mediaRef.current
+    if (!el) return
+    el.play().catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoPlay])
+
   // Swipe-down-to-minimize gesture (matches the standard player's minimize).
+  // Disabled in reel mode so the vertical reel scroll owns vertical gestures.
   const touchStartY = useRef<number | null>(null)
   function onTouchStart(e: React.TouchEvent) {
     touchStartY.current = e.touches[0]?.clientY ?? null
   }
   function onTouchEnd(e: React.TouchEvent) {
-    if (touchStartY.current == null || minimized) return
+    if (touchStartY.current == null || minimized || isReel) return
     const dy = (e.changedTouches[0]?.clientY ?? 0) - touchStartY.current
     if (dy > 70) onMinimize?.()
     touchStartY.current = null
@@ -116,12 +136,12 @@ export function LiveReplayPlayer({
   if (!mediaUrl) return null
 
   return (
-    <div className="relative isolate">
+    <div className={cn("relative isolate", isReel && "h-full w-full")}>
       <div
         ref={frameRef}
         onClick={minimized ? onRestore : onSurfaceTap}
-        onTouchStart={minimized ? undefined : onTouchStart}
-        onTouchEnd={minimized ? undefined : onTouchEnd}
+        onTouchStart={minimized || isReel ? undefined : onTouchStart}
+        onTouchEnd={minimized || isReel ? undefined : onTouchEnd}
         className={cn(
           "relative bg-black",
           isFullscreen
@@ -130,9 +150,13 @@ export function LiveReplayPlayer({
               ? // Floating mini-player docked bottom-right — portrait framed, same
                 // spring-eased entrance as the standard player.
                 "fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-50 aspect-[9/16] w-28 cursor-pointer overflow-hidden rounded-xl shadow-floating ring-1 ring-white/15 duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] animate-in fade-in zoom-in-95"
-              : // Portrait stage: tall, occupies most of the viewport height, and
-                // is capped so both edges stay reachable on wide screens.
-                "mx-auto flex h-[78dvh] max-h-[78dvh] w-full max-w-[calc(78dvh*9/16)] cursor-pointer items-center justify-center overflow-hidden",
+              : isReel
+                ? // Reel slide: fill the whole slide edge-to-edge; the portrait
+                  // recording stays centered via object-contain on the black stage.
+                  "flex h-full w-full cursor-pointer items-center justify-center overflow-hidden"
+                : // Portrait stage: tall, occupies most of the viewport height, and
+                  // is capped so both edges stay reachable on wide screens.
+                  "mx-auto flex h-[78dvh] max-h-[78dvh] w-full max-w-[calc(78dvh*9/16)] cursor-pointer items-center justify-center overflow-hidden",
         )}
       >
         <video

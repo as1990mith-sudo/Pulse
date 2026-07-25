@@ -1,9 +1,9 @@
 "use client"
 
-import { useEffect, useState, useTransition } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Bookmark, Heart, Radio, Share2 } from "lucide-react"
+import { Bookmark, Heart, Share2, X } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import type { Show } from "@/lib/data"
 import type { CurrentUser } from "@/lib/session"
@@ -25,10 +25,16 @@ import { LiveReplayPlayer } from "@/components/live-replay-player"
 import { type ThreadComment } from "@/components/comment-thread"
 import { CommentSheet } from "@/components/comment-sheet"
 import { ShareSheet } from "@/components/share-sheet"
-import { VideoCard } from "@/components/profile/video-card"
 import { ProfileFollowButton } from "@/components/profile/profile-follow-button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
+
+/** Compact count for the overlaid action rail (1.2k, 3.4M). */
+function formatCount(n: number): string {
+  if (n < 1000) return String(n)
+  if (n < 1_000_000) return `${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}k`.replace(".0", "")
+  return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M`.replace(".0", "")
+}
 
 function toThreadComment(c: EpisodeCommentView): ThreadComment {
   return {
@@ -51,55 +57,146 @@ function toThreadComment(c: EpisodeCommentView): ThreadComment {
 }
 
 /**
- * "Streamed …" label — reframes the episode's publish time as a past broadcast,
- * replacing any "LIVE NOW" indicator. Prefers the relative form ("Streamed 2w
- * ago"); the absolute date is shown alongside as "Originally streamed on …".
+ * "Streamed …" label — reframes the episode's publish time as a past broadcast.
  */
 function streamedLabel(show: Show): string {
   if (show.publishedAt) {
-    const rel = show.publishedAt === "just now" ? "just now" : `${show.publishedAt}`
-    return show.publishedAt === "just now" ? "Streamed just now" : `Streamed ${rel}`
+    return show.publishedAt === "just now" ? "Streamed just now" : `Streamed ${show.publishedAt}`
   }
   if (show.publishedDate) return `Streamed on ${show.publishedDate}`
   return "Livestream replay"
 }
 
 /**
- * LiveReplayWatch — the watch page for archived *video livestream* replays.
- *
- * It mirrors the uploaded-video watch layout (pinned player + Like/Comment/
- * Save/Share bar, scrollable details beneath) so navigation feels identical, but
- * hosts the PORTRAIT `LiveReplayPlayer` and swaps the uploaded-video framing for
- * replay-specific info: a "Streamed …" label, total duration, replay-view count,
- * description and tags, plus three recommendation rails (more replays from this
- * creator, related livestreams, recommended uploads). No live-only affordances.
+ * LiveReplayWatch — a FULL-SCREEN vertical reel of a creator's livestream
+ * replays. The current replay opens first; swiping / scrolling up or down snaps
+ * to the previous / next replay from the SAME creator. Each slide fills the
+ * entire screen (no scroll area beneath the player) with the like / comment /
+ * share / save actions and title overlaid directly on the video, plus a close
+ * button that exits back to where the user came from.
  */
 export function LiveReplayWatch({
   show,
   currentUser,
   initialComments,
   creatorReplays,
-  relatedReplays,
-  recommendedUploads,
 }: {
   show: Show
   currentUser: CurrentUser | null
   initialComments: EpisodeCommentView[]
   creatorReplays: Show[]
-  relatedReplays: Show[]
-  recommendedUploads: Show[]
+  // relatedReplays / recommendedUploads are intentionally no longer used — the
+  // reel is restricted to this creator's replays.
+  relatedReplays?: Show[]
+  recommendedUploads?: Show[]
 }) {
-  const episodeId = show.episodeId
   const router = useRouter()
 
-  const [minimized, setMinimized] = useState(false)
-  const [commentsOpen, setCommentsOpen] = useState(false)
+  // Reel order: the opened replay first, then the creator's other replays
+  // (deduped, playable video only). This keeps up/down within one creator.
+  const replays = useMemo(() => {
+    const seen = new Set<string>()
+    const list: Show[] = []
+    for (const s of [show, ...creatorReplays]) {
+      const id = s.id
+      if (!id || seen.has(id)) continue
+      if (!s.videoUrl && !s.audioUrl) continue
+      seen.add(id)
+      list.push(s)
+    }
+    return list
+  }, [show, creatorReplays])
 
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [activeIndex, setActiveIndex] = useState(0)
+
+  // Track which slide is centered so only it auto-plays.
+  useEffect(() => {
+    const root = containerRef.current
+    if (!root) return
+    const slides = Array.from(root.querySelectorAll<HTMLElement>("[data-replay-slide]"))
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting && e.intersectionRatio >= 0.6) {
+            const idx = Number((e.target as HTMLElement).dataset.index)
+            if (!Number.isNaN(idx)) setActiveIndex(idx)
+          }
+        }
+      },
+      { root, threshold: [0.6] },
+    )
+    slides.forEach((s) => io.observe(s))
+    return () => io.disconnect()
+  }, [replays.length])
+
+  // Hide the global bottom nav for the whole immersive reel, matching Reels.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("reels:active", { detail: true }))
+    return () => {
+      window.dispatchEvent(new CustomEvent("reels:active", { detail: false }))
+    }
+  }, [])
+
+  function close() {
+    if (typeof window !== "undefined" && window.history.length > 1) router.back()
+    else router.push("/catalog")
+  }
+
+  if (replays.length === 0) return null
+
+  return (
+    <div
+      ref={containerRef}
+      className="fixed inset-0 z-40 h-[100dvh] w-full snap-y snap-mandatory overflow-y-auto overscroll-y-contain bg-black [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
+      {/* Close button — fixed above every slide. */}
+      <button
+        type="button"
+        onClick={close}
+        aria-label="Close replay"
+        className="tap-scale fixed left-4 top-[calc(0.75rem+env(safe-area-inset-top))] z-50 flex size-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition-colors hover:bg-black/60"
+      >
+        <X className="size-5" />
+      </button>
+
+      {replays.map((s, i) => (
+        <ReplaySlide
+          key={s.id}
+          show={s}
+          index={i}
+          active={i === activeIndex}
+          currentUser={currentUser}
+          initialComments={i === 0 ? initialComments : undefined}
+        />
+      ))}
+    </div>
+  )
+}
+
+/** A single full-screen replay slide with the player + overlaid action rail. */
+function ReplaySlide({
+  show,
+  index,
+  active,
+  currentUser,
+  initialComments,
+}: {
+  show: Show
+  index: number
+  active: boolean
+  currentUser: CurrentUser | null
+  initialComments?: EpisodeCommentView[]
+}) {
+  const episodeId = show.episodeId
+
+  const [commentsOpen, setCommentsOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   const [liked, setLiked] = useState(false)
   const [likes, setLikes] = useState(show.likes ?? 0)
   const [saved, setSaved] = useState(false)
-  const [comments, setComments] = useState<EpisodeCommentView[]>(initialComments)
-  const [shareOpen, setShareOpen] = useState(false)
+  const [comments, setComments] = useState<EpisodeCommentView[]>(initialComments ?? [])
+  const [commentsLoaded, setCommentsLoaded] = useState(Boolean(initialComments))
   const [engagement, setEngagement] = useState<EpisodeEngagement | null>(null)
   const [saveCount, setSaveCount] = useState(0)
   const [shareCount, setShareCount] = useState(0)
@@ -109,57 +206,47 @@ export function LiveReplayWatch({
   const [followKnown, setFollowKnown] = useState(false)
   const [hostFollowing, setHostFollowing] = useState(false)
 
+  // Lazily load per-slide data only once the slide becomes active, so we don't
+  // fire a request for every replay up front.
+  const loadedRef = useRef(false)
   useEffect(() => {
-    if (!currentUser || hostIsSelf) {
-      setFollowKnown(false)
-      return
-    }
-    let active = true
-    getFollowingIds()
-      .then((ids) => {
-        if (!active) return
-        setHostFollowing(ids.includes(show.host.id))
-        setFollowKnown(true)
-      })
-      .catch(() => {})
-    return () => {
-      active = false
-    }
-  }, [currentUser, hostIsSelf, show.host.id])
-
-  useEffect(() => {
-    if (!currentUser || !episodeId) {
-      setSaved(false)
-      setLiked(false)
-      return
-    }
-    let active = true
-    isItemSaved("episode", String(episodeId))
-      .then((s) => active && setSaved(s))
-      .catch(() => {})
-    isEpisodeLiked(episodeId)
-      .then((l) => active && setLiked(l))
-      .catch(() => {})
-    return () => {
-      active = false
-    }
-  }, [currentUser, episodeId])
-
-  useEffect(() => {
-    if (!episodeId) return
-    let active = true
+    if (!active || loadedRef.current || !episodeId) return
+    loadedRef.current = true
+    let alive = true
     getEpisodeEngagement(episodeId)
       .then((e) => {
-        if (!active) return
+        if (!alive) return
         setEngagement(e)
         setSaveCount(e.saves)
         setShareCount(e.shares)
       })
       .catch(() => {})
-    return () => {
-      active = false
+    if (!commentsLoaded) {
+      getEpisodeComments(episodeId)
+        .then((c) => alive && (setComments(c), setCommentsLoaded(true)))
+        .catch(() => {})
     }
-  }, [episodeId])
+    if (currentUser) {
+      isItemSaved("episode", String(episodeId))
+        .then((s) => alive && setSaved(s))
+        .catch(() => {})
+      isEpisodeLiked(episodeId)
+        .then((l) => alive && setLiked(l))
+        .catch(() => {})
+      if (!hostIsSelf) {
+        getFollowingIds()
+          .then((ids) => {
+            if (!alive) return
+            setHostFollowing(ids.includes(show.host.id))
+            setFollowKnown(true)
+          })
+          .catch(() => {})
+      }
+    }
+    return () => {
+      alive = false
+    }
+  }, [active, episodeId, currentUser, hostIsSelf, show.host.id, commentsLoaded])
 
   if (!episodeId) return null
 
@@ -168,7 +255,7 @@ export function LiveReplayWatch({
     key: String(episodeId),
     title: `${show.title} on Frequency`,
     subtitle: show.tagline,
-    url: typeof window !== "undefined" ? window.location.pathname + window.location.search : "/catalog",
+    url: `/live/${show.id}`,
     image: show.cover,
     downloadUrl: show.videoUrl ?? null,
     downloadKind: show.videoUrl ? "video" : null,
@@ -206,204 +293,110 @@ export function LiveReplayWatch({
     setComments(await getEpisodeComments(episodeId!))
   }
 
-  const count = comments.length
-  const views = engagement?.views ?? show.listeners ?? 0
-  const tags = show.category ? [show.category] : []
+  const commentCount = comments.length
 
   return (
-    <div className="mx-auto flex h-[100dvh] w-full max-w-3xl flex-col overflow-hidden bg-background">
-      {/* ============================= SECTION 1 — pinned ===================== */}
-      <div className="relative shrink-0">
-        <LiveReplayPlayer
-          show={show}
-          minimized={minimized}
-          onMinimize={() => setMinimized(true)}
-          onRestore={() => setMinimized(false)}
-          onClose={() => {
-            if (window.history.length > 1) router.back()
-            else router.push("/catalog")
-          }}
-        />
-
-        {/* Action bar — hidden while the player is collapsed to a mini-player. */}
-        {!minimized && (
-          <div className="border-b border-border/60 px-2 py-1.5 sm:px-4">
-            <div className="flex items-center gap-1">
-              <Link
-                href={`/u/${show.host.id}`}
-                className="tap-scale shrink-0"
-                aria-label={`View ${show.host.name}'s profile`}
-              >
-                <Avatar className="size-9 ring-1 ring-border/60">
-                  {show.host.avatar && <AvatarImage src={show.host.avatar || "/placeholder.svg"} alt={show.host.name} />}
-                  <AvatarFallback className="text-xs">{show.host.name[0]}</AvatarFallback>
-                </Avatar>
-              </Link>
-              {currentUser && !hostIsSelf && followKnown && (
-                <ProfileFollowButton
-                  targetUserId={show.host.id}
-                  targetName={show.host.name}
-                  initialFollowing={hostFollowing}
-                  className="h-8 rounded-full px-3 text-xs"
-                />
-              )}
-
-              <div className="ml-auto flex items-center gap-1">
-                <button
-                  onClick={toggleLike}
-                  disabled={!currentUser}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors hover:bg-secondary disabled:opacity-50",
-                    liked ? "text-live" : "text-foreground",
-                  )}
-                  aria-pressed={liked}
-                  aria-label="Like replay"
-                >
-                  <Heart className={cn("size-5", liked && "fill-current")} />
-                  {likes > 0 && <span className="tabular-nums">{likes}</span>}
-                </button>
-
-                <button
-                  onClick={() => setCommentsOpen(true)}
-                  className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
-                  aria-label="View comments"
-                >
-                  <CommentIcon className="size-5" />
-                  {count > 0 && <span className="tabular-nums">{count}</span>}
-                </button>
-
-                <button
-                  onClick={toggleSave}
-                  disabled={!currentUser}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors hover:bg-secondary disabled:opacity-50",
-                    saved ? "text-primary" : "text-foreground",
-                  )}
-                  aria-pressed={saved}
-                  aria-label={saved ? "Unsave replay" : "Save replay"}
-                >
-                  <Bookmark className={cn("size-5", saved && "fill-current")} />
-                  <span className="tabular-nums">{saveCount > 0 ? saveCount : saved ? "Saved" : "Save"}</span>
-                </button>
-
-                <button
-                  onClick={() => setShareOpen(true)}
-                  className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
-                  aria-label="Share replay"
-                >
-                  <Share2 className="size-5" />
-                  <span className="tabular-nums">{shareCount > 0 ? shareCount : "Share"}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+    <section
+      data-replay-slide
+      data-index={index}
+      className="relative h-[100dvh] w-full snap-start snap-always"
+    >
+      {/* The player fills the slide; portrait recordings letterbox on black. */}
+      <div className="absolute inset-0">
+        <LiveReplayPlayer show={show} variant="reel" autoPlay={active} />
       </div>
 
-      {/* ========================= SECTION 2 — scrollable ==================== */}
-      <div className="flex-1 overflow-y-auto overscroll-contain">
-        <div className="space-y-6 px-4 py-4 pb-16 sm:px-6">
-          {/* Replay information block. */}
-          <section className="space-y-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
-              <Radio className="size-3" /> Livestream replay
-            </span>
-            <h1 className="text-balance text-lg font-bold leading-tight">{show.title}</h1>
-            <p className="text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">{streamedLabel(show)}</span>
-              <span> · </span>
-              <span className="tabular-nums">
-                {new Intl.NumberFormat("en", { notation: "compact" }).format(views)} replay {views === 1 ? "view" : "views"}
-              </span>
-              {show.duration && (
-                <>
-                  <span> · </span>
-                  <span className="tabular-nums">{show.duration}</span>
-                </>
-              )}
-            </p>
-            {show.publishedDate && (
-              <p className="text-xs text-muted-foreground">Originally streamed on {show.publishedDate}</p>
-            )}
-          </section>
+      {/* Bottom gradient so overlaid text/actions stay legible over any frame. */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-56 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
 
-          {/* Creator card */}
-          <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card p-4">
-            <Avatar className="size-11">
+      {/* Overlaid action rail — like / comment / share / save, reels-style. */}
+      <div className="absolute bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-2 z-20 flex flex-col items-center gap-4 text-white">
+        <button
+          onClick={toggleLike}
+          disabled={!currentUser}
+          className="tap-scale flex flex-col items-center gap-1 disabled:opacity-60"
+          aria-pressed={liked}
+          aria-label="Like replay"
+        >
+          <span className="flex size-11 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm">
+            <Heart className={cn("size-6", liked && "fill-live text-live")} />
+          </span>
+          {likes > 0 && <span className="text-xs font-semibold tabular-nums">{formatCount(likes)}</span>}
+        </button>
+
+        <button
+          onClick={() => setCommentsOpen(true)}
+          className="tap-scale flex flex-col items-center gap-1"
+          aria-label="View comments"
+        >
+          <span className="flex size-11 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm">
+            <CommentIcon className="size-6" />
+          </span>
+          {commentCount > 0 && <span className="text-xs font-semibold tabular-nums">{formatCount(commentCount)}</span>}
+        </button>
+
+        <button
+          onClick={() => setShareOpen(true)}
+          className="tap-scale flex flex-col items-center gap-1"
+          aria-label="Share replay"
+        >
+          <span className="flex size-11 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm">
+            <Share2 className="size-6" />
+          </span>
+          {shareCount > 0 && <span className="text-xs font-semibold tabular-nums">{formatCount(shareCount)}</span>}
+        </button>
+
+        <button
+          onClick={toggleSave}
+          disabled={!currentUser}
+          className="tap-scale flex flex-col items-center gap-1 disabled:opacity-60"
+          aria-pressed={saved}
+          aria-label="Save replay"
+        >
+          <span className="flex size-11 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm">
+            <Bookmark className={cn("size-6", saved && "fill-white text-white")} />
+          </span>
+          {saveCount > 0 && <span className="text-xs font-semibold tabular-nums">{formatCount(saveCount)}</span>}
+        </button>
+      </div>
+
+      {/* Overlaid title / creator / streamed-label, bottom-left. */}
+      <div className="absolute bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-4 right-20 z-20 text-white">
+        <div className="flex items-center gap-2">
+          <Link href={`/u/${show.host.id}`} className="tap-scale shrink-0" aria-label={`View ${show.host.name}'s profile`}>
+            <Avatar className="size-9 ring-1 ring-white/30">
               {show.host.avatar && <AvatarImage src={show.host.avatar || "/placeholder.svg"} alt={show.host.name} />}
-              <AvatarFallback>{show.host.name[0]}</AvatarFallback>
+              <AvatarFallback className="text-xs">{show.host.name[0]}</AvatarFallback>
             </Avatar>
-            <Link href={`/u/${show.host.id}`} className="min-w-0">
-              <p className="truncate font-semibold leading-none hover:underline">{show.host.name}</p>
-              <p className="truncate text-sm text-muted-foreground">{show.host.handle}</p>
+          </Link>
+          <div className="min-w-0">
+            <Link href={`/u/${show.host.id}`} className="block truncate text-sm font-semibold hover:underline">
+              {show.host.name}
             </Link>
+            <p className="truncate text-xs text-white/70">{streamedLabel(show)}</p>
           </div>
-
-          {/* Description */}
-          {show.description && (
-            <div className="space-y-2 rounded-xl border border-border/60 bg-card p-5">
-              <h2 className="text-sm font-semibold">About this stream</h2>
-              <p className="whitespace-pre-wrap text-pretty leading-relaxed text-muted-foreground">{show.description}</p>
-            </div>
-          )}
-
-          {/* Tags */}
-          {tags.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-full border border-border/60 bg-secondary px-3 py-1 text-xs font-medium text-muted-foreground"
-                >
-                  #{tag}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Recommendation rails. */}
-          {creatorReplays.length > 0 && (
-            <section className="space-y-3">
-              <h2 className="text-sm font-semibold">More replays from {show.host.name}</h2>
-              <div className="flex flex-col gap-3">
-                {creatorReplays.map((ep) => (
-                  <VideoCard key={ep.id} show={ep} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {relatedReplays.length > 0 && (
-            <section className="space-y-3">
-              <h2 className="text-sm font-semibold">Related livestreams</h2>
-              <div className="flex flex-col gap-3">
-                {relatedReplays.map((ep) => (
-                  <VideoCard key={ep.id} show={ep} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {recommendedUploads.length > 0 && (
-            <section className="space-y-3">
-              <h2 className="text-sm font-semibold">Recommended videos</h2>
-              <div className="flex flex-col gap-3">
-                {recommendedUploads.map((ep) => (
-                  <VideoCard key={ep.id} show={ep} />
-                ))}
-              </div>
-            </section>
+          {currentUser && !hostIsSelf && followKnown && (
+            <ProfileFollowButton
+              targetUserId={show.host.id}
+              targetName={show.host.name}
+              initialFollowing={hostFollowing}
+              className="ml-1 h-8 shrink-0 rounded-full px-3 text-xs"
+            />
           )}
         </div>
+        <h1 className="mt-2 line-clamp-2 text-pretty text-base font-semibold leading-snug">{show.title}</h1>
+        {show.tagline && <p className="mt-0.5 line-clamp-1 text-sm text-white/70">{show.tagline}</p>}
       </div>
 
+      {/* Comments open in the same sheet used elsewhere (portals above the reel). */}
       <CommentSheet
         open={commentsOpen}
         onClose={() => setCommentsOpen(false)}
+        count={commentCount}
         comments={comments.map(toThreadComment)}
         currentUser={currentUser}
         onSubmit={submitComment}
-        onLike={(commentId, liked) => void setEpisodeCommentLike({ commentId, liked })}
+        onLike={(commentId, likedNext) => void setEpisodeCommentLike({ commentId, liked: likedNext })}
         onReply={async (parentId, value) => {
           await addEpisodeComment({ episodeId: episodeId!, text: value, parentId })
           setComments(await getEpisodeComments(episodeId!))
@@ -419,11 +412,11 @@ export function LiveReplayWatch({
       />
 
       <ShareSheet
-        target={shareTarget}
         open={shareOpen}
         onClose={() => setShareOpen(false)}
+        target={shareTarget}
         onShared={() => setShareCount((n) => n + 1)}
       />
-    </div>
+    </section>
   )
 }

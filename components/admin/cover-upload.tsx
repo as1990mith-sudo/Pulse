@@ -4,6 +4,7 @@ import { useRef, useState } from "react"
 import { ImagePlus, Loader2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { uploadMedia } from "@/lib/upload-media"
+import { CropModal } from "@/components/media-editor/crop-modal"
 
 export function CoverUpload({
   value,
@@ -17,12 +18,25 @@ export function CoverUpload({
   const inputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Object URL of the freshly-picked file, shown in the crop editor before we
+  // upload. Null when the cropper is closed.
+  const [cropSrc, setCropSrc] = useState<string | null>(null)
 
-  async function handleFile(file: File) {
+  function openCropper(file: File) {
     setError(null)
+    setCropSrc(URL.createObjectURL(file))
+  }
+
+  function closeCropper() {
+    if (cropSrc) URL.revokeObjectURL(cropSrc)
+    setCropSrc(null)
+  }
+
+  async function handleCropped(blob: Blob) {
+    closeCropper()
     setUploading(true)
     try {
-      const data = await uploadMedia(file, "covers")
+      const data = await uploadMedia(blob, "covers", "cover.jpg")
       onChange(data.url)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed")
@@ -78,12 +92,22 @@ export function CoverUpload({
         className="sr-only"
         onChange={(e) => {
           const file = e.target.files?.[0]
-          if (file) handleFile(file)
+          if (file) openCropper(file)
           e.target.value = ""
         }}
       />
 
       {error && <p className="text-sm text-destructive">{error}</p>}
+
+      {cropSrc && (
+        <CropModal
+          imageSrc={cropSrc}
+          title="Crop cover"
+          ratios={[{ label: "16:9", value: 16 / 9 }]}
+          onCancel={closeCropper}
+          onApply={handleCropped}
+        />
+      )}
     </div>
   )
 }

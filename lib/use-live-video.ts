@@ -13,6 +13,7 @@ import {
   type RemoteTrackPublication,
   type RemoteParticipant,
 } from "livekit-client"
+import { LiveCompositor, type CompositorSource } from "@/lib/live-compositor"
 
 /** Reject a promise if it doesn't settle within `ms`, with a friendly message. */
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
@@ -173,6 +174,7 @@ export function useLiveVideo({
   autoPublish = false,
   initialMicOn = true,
   initialCamOn = true,
+  recordAspect = "portrait",
   onAskUnmute,
 }: {
   token: string | null
@@ -188,6 +190,10 @@ export function useLiveVideo({
   // participant enter a grid meeting muted and/or with their camera off.
   initialMicOn?: boolean
   initialCamOn?: boolean
+  // Shape of the host's session recording. "portrait" mirrors a broadcast
+  // stream; "landscape" mirrors a grid meeting. The recording composites every
+  // participant tile into this frame so the replay matches the live view.
+  recordAspect?: "portrait" | "landscape"
   // Fired when the host asks this client to unmute (received over the data
   // channel). The UI shows a prompt; we never open the mic without consent.
   onAskUnmute?: () => void
@@ -212,14 +218,20 @@ export function useLiveVideo({
   const musicLoopRef = useRef(false)
   const musicEndedRef = useRef<(() => void) | null>(null)
 
-  // Host-side session recording. We record the self-view <video> (via
-  // captureStream, so it survives front/back camera flips) plus the mic track
-  // into one MediaRecorder, then hand the finished blob to the console for
-  // upload + auto-publish when the broadcast ends.
+  // Host-side session recording. We record a COMPOSITE of every participant —
+  // a canvas grid of all camera tiles plus a mix of everyone's audio — exactly
+  // like viewers saw it live, via LiveCompositor. The finished blob is handed to
+  // the console for upload + auto-publish when the broadcast ends.
   const recorderRef = useRef<MediaRecorder | null>(null)
   const recordChunksRef = useRef<Blob[]>([])
   const recordMimeRef = useRef<string>("video/webm")
   const recordingStartedRef = useRef(false)
+  const compositorRef = useRef<LiveCompositor | null>(null)
+  const recordAspectRef = useRef(recordAspect)
+  recordAspectRef.current = recordAspect
+  // Ordered roster (host first) mirrored into a ref so the compositor's draw
+  // loop can read the current tiles without React re-renders.
+  const peersRef = useRef<RemotePeer[]>([])
 
   const [connected, setConnected] = useState(false)
   const [micOn, setMicOn] = useState(initialMicOn)
@@ -284,6 +296,7 @@ export function useLiveVideo({
     })
     // Host first, then guests in join order.
     out.sort((a, b) => Number(b.isHost) - Number(a.isHost))
+    peersRef.current = out
     setPeers(out)
   }, [])
 
@@ -373,6 +386,11 @@ export function useLiveVideo({
       } catch {
         /* already stopped */
       }
+    }
+    // Tear down the composite canvas/audio graph if it's still running.
+    if (compositorRef.current) {
+      compositorRef.current.stop()
+      compositorRef.current = null
     }
     const room = roomRef.current
     if (room) {
@@ -892,36 +910,67 @@ export function useLiveVideo({
   }, [])
 
   /**
-   * Begin recording the host's session (idempotent). Captures the self-view
-   * element's stream — which keeps producing frames across camera flips — plus
-   * the live mic track, into a single MediaRecorder. No-op off the host path,
-   * without MediaRecorder support, or if already recording.
+   * Begin recording the host's session (idempotent). Records a COMPOSITE of the
+   * whole call — every participant's camera tile in a grid, plus a mix of
+   * everyone's audio — so the saved replay matches what viewers saw live rather
+   * than only the host's own camera. No-op off the host path, without
+   * MediaRecorder support, or if already recording.
    */
   const startRecording = useCallback(() => {
     if (recordingStartedRef.current) return
     if (typeof MediaRecorder === "undefined") return
     const room = roomRef.current
-    const videoEl = localVideoRef.current
-    if (!room || !videoEl) return
+    if (!room) return
 
     let stream: MediaStream
+    let compositor: LiveCompositor
     try {
-      const capture = (
-        videoEl as HTMLVideoElement & {
-          captureStream?: () => MediaStream
-          mozCaptureStream?: () => MediaStream
-        }
-      )
-      const captured = capture.captureStream?.() ?? capture.mozCaptureStream?.()
-      const tracks: MediaStreamTrack[] = []
-      if (captured) tracks.push(...captured.getVideoTracks())
-      const micTrack = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track?.mediaStreamTrack
-      if (micTrack) tracks.push(micTrack)
-      if (tracks.length === 0) return
-      stream = new MediaStream(tracks)
+      compositor = new LiveCompositor({
+        aspect: recordAspectRef.current,
+        // Ordered tiles: the local host first, then every remote peer. Each
+        // tile re-reads its live <video> element every frame, so camera on/off
+        // and late joiners are captured as they happen.
+        getSources: () => {
+          const sources: CompositorSource[] = []
+          sources.push({
+            id: room.localParticipant.identity,
+            videoEl: localVideoRef.current,
+            label: room.localParticipant.name || "Host",
+          })
+          for (const peer of peersRef.current) {
+            sources.push({
+              id: peer.identity,
+              videoEl: remoteVideoEls.current.get(peer.identity) ?? null,
+              label: peer.name,
+            })
+          }
+          return sources
+        },
+        // Every audio track in the room: host mic, each guest mic, and the
+        // background-music track the host is publishing.
+        getAudioTracks: () => {
+          const tracks: MediaStreamTrack[] = []
+          const mic = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track?.mediaStreamTrack
+          if (mic) tracks.push(mic)
+          room.remoteParticipants.forEach((p) => {
+            p.trackPublications.forEach((pub) => {
+              if (pub.kind === Track.Kind.Audio && pub.track?.mediaStreamTrack) tracks.push(pub.track.mediaStreamTrack)
+            })
+          })
+          const music = musicTrackRef.current?.mediaStreamTrack
+          if (music) tracks.push(music)
+          return tracks
+        },
+      })
+      stream = compositor.start()
+      if (stream.getVideoTracks().length === 0) {
+        compositor.stop()
+        return
+      }
     } catch {
       return
     }
+    compositorRef.current = compositor
 
     const mime = pickVideoRecordingMime()
     recordMimeRef.current = mime || "video/webm"
@@ -929,6 +978,8 @@ export function useLiveVideo({
     try {
       rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream)
     } catch {
+      compositor.stop()
+      compositorRef.current = null
       return
     }
     recordChunksRef.current = []
@@ -938,6 +989,8 @@ export function useLiveVideo({
     try {
       rec.start(1000) // gather data in 1s slices so a crash still yields most of the take
     } catch {
+      compositor.stop()
+      compositorRef.current = null
       return
     }
     recorderRef.current = rec
@@ -953,17 +1006,26 @@ export function useLiveVideo({
       const rec = recorderRef.current
       const assemble = () =>
         recordChunksRef.current.length > 0 ? new Blob(recordChunksRef.current, { type: recordMimeRef.current }) : null
+      const tearDownCompositor = () => {
+        if (compositorRef.current) {
+          compositorRef.current.stop()
+          compositorRef.current = null
+        }
+      }
       if (!rec || rec.state === "inactive") {
+        tearDownCompositor()
         resolve(assemble())
         return
       }
       rec.onstop = () => {
         recorderRef.current = null
+        tearDownCompositor()
         resolve(assemble())
       }
       try {
         rec.stop()
       } catch {
+        tearDownCompositor()
         resolve(assemble())
       }
     })

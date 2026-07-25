@@ -201,52 +201,58 @@ export function TrimModal({
           </span>
         </div>
 
-        {/* Timeline strip: thumbnails, dimmed outside the selection, two handles */}
-        <div ref={stripRef} className="relative h-16 select-none touch-none">
-          <div className="absolute inset-0 flex overflow-hidden rounded-xl bg-white/5">
-            {thumbs.map((src, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img key={i} src={src || "/placeholder.svg"} alt="" className="h-full flex-1 object-cover" draggable={false} />
-            ))}
-          </div>
+        {/* Timeline strip. The outer padding leaves room so the start/end
+            handles stay fully on-screen and easy to grab even at 0% / 100% —
+            previously the end handle sat off the right edge and couldn't be
+            dragged inward to trim the ending. */}
+        <div className="px-4">
+          <div ref={stripRef} className="relative h-16 select-none touch-none">
+            <div className="pointer-events-none absolute inset-0 flex overflow-hidden rounded-xl bg-white/5">
+              {thumbs.map((src, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={i} src={src || "/placeholder.svg"} alt="" className="h-full flex-1 object-cover" draggable={false} />
+              ))}
+            </div>
 
-          {/* Dim the trimmed-away regions */}
-          <div className="absolute inset-y-0 left-0 rounded-l-xl bg-black/60" style={{ width: `${pctStart}%` }} />
-          <div className="absolute inset-y-0 right-0 rounded-r-xl bg-black/60" style={{ width: `${100 - pctEnd}%` }} />
+            {/* Dim the trimmed-away regions (purely visual — never intercept the
+                drag so the handles are always grabbable). */}
+            <div className="pointer-events-none absolute inset-y-0 left-0 rounded-l-xl bg-black/60" style={{ width: `${pctStart}%` }} />
+            <div className="pointer-events-none absolute inset-y-0 right-0 rounded-r-xl bg-black/60" style={{ width: `${100 - pctEnd}%` }} />
 
-          {/* Selection frame */}
-          <div
-            className="absolute inset-y-0 border-y-[3px] border-primary"
-            style={{ left: `${pctStart}%`, right: `${100 - pctEnd}%` }}
-          />
+            {/* Selection frame */}
+            <div
+              className="pointer-events-none absolute inset-y-0 border-y-[3px] border-primary"
+              style={{ left: `${pctStart}%`, right: `${100 - pctEnd}%` }}
+            />
 
-          {/* Playhead */}
-          {playing && (
-            <div className="absolute inset-y-0 w-0.5 bg-white/90" style={{ left: `${pctPlayhead}%` }} />
-          )}
+            {/* Playhead */}
+            {playing && (
+              <div className="pointer-events-none absolute inset-y-0 w-0.5 bg-white/90" style={{ left: `${pctPlayhead}%` }} />
+            )}
 
-          {/* Start handle */}
-          <div
-            onPointerDown={beginDrag("start")}
-            className="absolute inset-y-0 z-10 flex w-6 -translate-x-1/2 cursor-ew-resize items-center justify-center rounded-l-xl bg-primary"
-            style={{ left: `${pctStart}%` }}
-            role="slider"
-            aria-label="Trim start"
-            aria-valuenow={Math.round(start)}
-          >
-            <span className="h-6 w-0.5 rounded-full bg-primary-foreground/80" />
-          </div>
+            {/* Start handle — wide, centered on its point for an easy touch target */}
+            <div
+              onPointerDown={beginDrag("start")}
+              className="absolute inset-y-0 z-20 flex w-8 -translate-x-1/2 cursor-ew-resize touch-none items-center justify-center rounded-xl bg-primary shadow-lg"
+              style={{ left: `${pctStart}%` }}
+              role="slider"
+              aria-label="Trim start"
+              aria-valuenow={Math.round(start)}
+            >
+              <span className="h-6 w-1 rounded-full bg-primary-foreground/80" />
+            </div>
 
-          {/* End handle */}
-          <div
-            onPointerDown={beginDrag("end")}
-            className="absolute inset-y-0 z-10 flex w-6 translate-x-1/2 cursor-ew-resize items-center justify-center rounded-r-xl bg-primary"
-            style={{ left: `${pctEnd}%` }}
-            role="slider"
-            aria-label="Trim end"
-            aria-valuenow={Math.round(end)}
-          >
-            <span className="h-6 w-0.5 rounded-full bg-primary-foreground/80" />
+            {/* End handle */}
+            <div
+              onPointerDown={beginDrag("end")}
+              className="absolute inset-y-0 z-20 flex w-8 -translate-x-1/2 cursor-ew-resize touch-none items-center justify-center rounded-xl bg-primary shadow-lg"
+              style={{ left: `${pctEnd}%` }}
+              role="slider"
+              aria-label="Trim end"
+              aria-valuenow={Math.round(end)}
+            >
+              <span className="h-6 w-1 rounded-full bg-primary-foreground/80" />
+            </div>
           </div>
         </div>
 

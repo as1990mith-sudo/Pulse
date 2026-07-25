@@ -41,7 +41,11 @@ export default async function ChatroomsPage() {
       <div className="relative">
         <SiteHeader />
         <main>
-          <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
+          {/* scroll-mt keeps the first promo card clear of the sticky,
+              hide-on-scroll header when the page scrolls (e.g. as the mobile
+              browser chrome shows/hides on this short page), so the top of the
+              Community Help card is never pinned under the header. */}
+          <div className="mx-auto w-full max-w-3xl px-4 py-8 [&>*]:scroll-mt-24 sm:px-6">
             <ChatroomBrowser rooms={rooms} />
           </div>
         </main>

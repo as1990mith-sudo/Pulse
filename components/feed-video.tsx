@@ -49,17 +49,29 @@ export function FeedVideo({
   src,
   className,
   poster,
+  trimStart,
+  trimEnd,
 }: {
   src: string
   className?: string
   /** Optional cover image chosen in the editor; shown until playback starts. */
   poster?: string
+  /** Trim window in seconds. Playback is kept within [trimStart, trimEnd] so
+   *  viewers only ever see the trimmed selection — the file itself is untouched. */
+  trimStart?: number
+  trimEnd?: number
 }) {
   const ref = useRef<HTMLVideoElement>(null)
   const seekRef = useRef<HTMLDivElement>(null)
   const userPausedRef = useRef(false)
   const programmaticPauseRef = useRef(false)
   const draggingRef = useRef(false)
+
+  // The active trim window. `windowEndRef` is finalized once real duration is
+  // known (on loadedmetadata); until then it's the requested end or +Infinity.
+  const windowStartRef = useRef(Math.max(0, trimStart ?? 0))
+  const windowEndRef = useRef(trimEnd != null ? trimEnd : Number.POSITIVE_INFINITY)
+  windowStartRef.current = Math.max(0, trimStart ?? 0)
 
   const [muted, setMuted] = useState(sharedMuted)
   const [playing, setPlaying] = useState(false)
@@ -85,6 +97,14 @@ export function FeedVideo({
 
   // Try to play with sound; if the browser blocks it, fall back to muted.
   const attemptPlay = useCallback((el: HTMLVideoElement) => {
+    // Never start outside the trimmed window.
+    if (el.currentTime < windowStartRef.current || el.currentTime >= windowEndRef.current) {
+      try {
+        el.currentTime = windowStartRef.current
+      } catch {
+        /* not seekable yet */
+      }
+    }
     el.muted = sharedMuted
     el.play().catch(() => {
       if (!sharedMuted) {
@@ -141,10 +161,11 @@ export function FeedVideo({
   function skip(delta: number) {
     const el = ref.current
     if (!el) return
-    const total = duration || el.duration || 0
-    const next = Math.min(total, Math.max(0, el.currentTime + delta))
+    const ws = windowStartRef.current
+    const we = Number.isFinite(windowEndRef.current) ? windowEndRef.current : el.duration || 0
+    const next = Math.min(we, Math.max(ws, el.currentTime + delta))
     el.currentTime = next
-    setCurrent(next)
+    setCurrent(next - ws)
   }
 
   // Translate a pointer x-position over the track into a seek time.
@@ -153,13 +174,13 @@ export function FeedVideo({
       const el = ref.current
       const bar = seekRef.current
       if (!el || !bar) return
-      const total = duration || el.duration || 0
+      // `duration` state is the trimmed window length; map the track to it.
+      const total = duration || 0
       if (!total) return
       const rect = bar.getBoundingClientRect()
       const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
-      const t = ratio * total
-      el.currentTime = t
-      setCurrent(t)
+      el.currentTime = windowStartRef.current + ratio * total
+      setCurrent(ratio * total)
     },
     [duration],
   )
@@ -200,7 +221,8 @@ export function FeedVideo({
   // 0.1s as the element's thumbnail — even before the clip scrolls fully into
   // view or starts playing. This is what makes the real first frame show
   // instead of the browser's blurry default play-glyph on a grey box.
-  const posterSrc = src.includes("#") ? src : `${src}#t=0.1`
+  const posterTime = (trimStart ?? 0) > 0 ? (trimStart as number) : 0.1
+  const posterSrc = src.includes("#") ? src : `${src}#t=${posterTime}`
 
   return (
     <div className="group relative overflow-hidden bg-black">
@@ -228,21 +250,45 @@ export function FeedVideo({
           userPausedRef.current = true
         }}
         onLoadedMetadata={(e) => {
-          setDuration(e.currentTarget.duration)
-          // Backstop for browsers that ignore the media fragment: nudge to a
-          // tiny offset so a real frame is decoded and shown as the thumbnail.
           const el = e.currentTarget
-          if (!started && el.currentTime < 0.05) {
+          const real = el.duration && isFinite(el.duration) ? el.duration : 0
+          // Finalize the trim window against the real duration, then expose the
+          // trimmed length as the video's duration so all controls treat the
+          // clip as if it were exactly the selected range.
+          const ws = Math.max(0, Math.min(trimStart ?? 0, real))
+          const we = Math.min(trimEnd != null ? trimEnd : real, real)
+          windowStartRef.current = ws
+          windowEndRef.current = we > ws ? we : real
+          setDuration(Math.max(0, windowEndRef.current - ws))
+          // Seek to the window start so the trimmed first frame is the thumbnail.
+          if (!started) {
             try {
-              el.currentTime = 0.1
+              el.currentTime = ws > 0 ? ws : 0.1
             } catch {
               /* seek not ready yet — the media fragment still covers this */
             }
           }
         }}
         onTimeUpdate={(e) => {
+          const el = e.currentTarget
+          // Keep playback inside the trimmed window, looping back to its start.
+          if (el.currentTime >= windowEndRef.current) {
+            try {
+              el.currentTime = windowStartRef.current
+            } catch {
+              /* ignore */
+            }
+          } else if (el.currentTime < windowStartRef.current - 0.05) {
+            try {
+              el.currentTime = windowStartRef.current
+            } catch {
+              /* ignore */
+            }
+          }
           // While actively dragging, the thumb is driven by the pointer.
-          if (!draggingRef.current) setCurrent(e.currentTarget.currentTime)
+          if (!draggingRef.current) {
+            setCurrent(Math.max(0, el.currentTime - windowStartRef.current))
+          }
         }}
       />
 

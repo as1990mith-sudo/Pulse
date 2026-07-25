@@ -28,7 +28,7 @@ import { CommentThread, type ThreadComment } from "@/components/comment-thread"
 // is filtered out client-side once its metadata reveals the true duration.
 const MAX_REEL_SECONDS = 3 * 60 + 15
 
-type Reel = { post: FeedPostView; url: string; key: string }
+type Reel = { post: FeedPostView; url: string; key: string; trimStart?: number; trimEnd?: number }
 
 /**
  * Turns one line of caption text into React nodes, converting simple markdown
@@ -141,7 +141,8 @@ export function ReelsFeed({
     const items: Reel[] = []
     for (const p of posts) {
       p.media.forEach((m, i) => {
-        if (m.type === "video" && m.url) items.push({ post: p, url: m.url, key: `${p.id}-${i}` })
+        if (m.type === "video" && m.url)
+          items.push({ post: p, url: m.url, key: `${p.id}-${i}`, trimStart: m.trimStart, trimEnd: m.trimEnd })
       })
     }
     // When opened from a specific feed video, preserve feed order and float the
@@ -417,6 +418,11 @@ function ReelItem({
   const videoRef = useRef<HTMLVideoElement>(null)
   const backdropRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  // Trim window (seconds). Playback and the scrubber are confined to this range
+  // so the reel only ever shows the trimmed selection. Finalized against the
+  // real duration on loadedmetadata.
+  const windowStartRef = useRef(Math.max(0, reel.trimStart ?? 0))
+  const windowEndRef = useRef(reel.trimEnd != null ? reel.trimEnd : Number.POSITIVE_INFINITY)
   const [active, setActive] = useState(false)
   const [paused, setPaused] = useState(false)
   // `shouldRender` mounts the real decoding <video> elements. Driven by a
@@ -615,21 +621,47 @@ function ReelItem({
     }
   }
 
-  // Keep the scrubber in sync with playback (unless the user is dragging).
-  function onTimeUpdate() {
-    const v = videoRef.current
-    if (!v || scrubbingRef.current || !v.duration) return
-    setProgress((v.currentTime / v.duration) * 100)
+  // Effective trimmed window length, falling back to full duration.
+  function windowLen(v: HTMLVideoElement) {
+    const end = Number.isFinite(windowEndRef.current) ? windowEndRef.current : v.duration || 0
+    return Math.max(0, end - windowStartRef.current)
   }
 
-  // Translate a pointer x-position over the track into a seek time (drag or tap).
+  // Keep the scrubber in sync with playback and loop within the trim window.
+  function onTimeUpdate() {
+    const v = videoRef.current
+    if (!v || !v.duration) return
+    // Loop back to the window start once the trimmed end is reached.
+    if (v.currentTime >= windowEndRef.current) {
+      try {
+        v.currentTime = windowStartRef.current
+      } catch {
+        /* ignore */
+      }
+    } else if (v.currentTime < windowStartRef.current - 0.05) {
+      try {
+        v.currentTime = windowStartRef.current
+      } catch {
+        /* ignore */
+      }
+    }
+    if (scrubbingRef.current) return
+    const len = windowLen(v)
+    if (len > 0) setProgress(((v.currentTime - windowStartRef.current) / len) * 100)
+  }
+
+  // Translate a pointer x-position over the track into a seek time within the
+  // trimmed window (drag or tap).
   const seekToClientX = useCallback((clientX: number) => {
     const v = videoRef.current
     const bar = seekRef.current
     if (!v || !bar || !v.duration) return
+    const end = Number.isFinite(windowEndRef.current) ? windowEndRef.current : v.duration
+    const len = Math.max(0, end - windowStartRef.current)
+    if (len <= 0) return
     const rect = bar.getBoundingClientRect()
     const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
-    v.currentTime = ratio * v.duration
+    v.currentTime = windowStartRef.current + ratio * len
     setProgress(ratio * 100)
   }, [])
 
@@ -682,7 +714,24 @@ function ReelItem({
         onClick={togglePlay}
         onTimeUpdate={onTimeUpdate}
         onLoadedMetadata={(e) => {
-          if (e.currentTarget.duration > MAX_REEL_SECONDS) onTooLong()
+          const el = e.currentTarget
+          const real = el.duration && isFinite(el.duration) ? el.duration : 0
+          // Finalize the trim window against the real duration.
+          const ws = Math.max(0, Math.min(reel.trimStart ?? 0, real))
+          const we = Math.min(reel.trimEnd != null ? reel.trimEnd : real, real)
+          windowStartRef.current = ws
+          windowEndRef.current = we > ws ? we : real
+          // Cap is measured against the TRIMMED length, so a long source trimmed
+          // to a short clip is allowed.
+          if (windowEndRef.current - ws > MAX_REEL_SECONDS) onTooLong()
+          // Start at the trimmed beginning.
+          if (ws > 0) {
+            try {
+              el.currentTime = ws
+            } catch {
+              /* not seekable yet */
+            }
+          }
         }}
       />
 

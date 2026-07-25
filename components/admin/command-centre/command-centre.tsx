@@ -1,5 +1,7 @@
 "use client"
 
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import {
   Activity,
@@ -72,6 +74,23 @@ export function CommandCentre({
 }) {
   const attentionTotal = queue.reports + queue.tickets + queue.pendingBooks
   const firstName = adminName.split(" ")[0]
+
+  // Keep the dashboard figures genuinely live. This page is pure data (no
+  // media/players/forms to disrupt), so a periodic server refresh is safe here
+  // and re-runs the DB-backed metrics — including the real-time online count —
+  // roughly every 15s while an admin is actively viewing the tab.
+  const router = useRouter()
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === "visible") router.refresh()
+    }
+    const id = window.setInterval(tick, 15_000)
+    document.addEventListener("visibilitychange", tick)
+    return () => {
+      window.clearInterval(id)
+      document.removeEventListener("visibilitychange", tick)
+    }
+  }, [router])
 
   return (
     <div className="space-y-8">

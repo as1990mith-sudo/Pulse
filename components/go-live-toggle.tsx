@@ -38,9 +38,6 @@ export function GoLiveToggle() {
           <h2 className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">
             Your audience is waiting. Choose how you want to go on air.
           </h2>
-          <p className="leading-relaxed text-muted-foreground">
-            Broadcast a live audio room or a full-screen video stream.
-          </p>
         </div>
 
         {/* Segmented mode toggle */}

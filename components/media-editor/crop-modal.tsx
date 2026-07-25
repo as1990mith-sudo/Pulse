@@ -12,8 +12,13 @@ const DEFAULT_RATIOS: AspectOption[] = [
   { label: "Free", value: null },
   { label: "1:1", value: 1 },
   { label: "4:5", value: 4 / 5 },
+  { label: "9:16", value: 9 / 16 },
   { label: "16:9", value: 16 / 9 },
 ]
+
+// Tallest portrait shape we ever allow (width/height). Nothing may be taller
+// than 9:16, so the "Free" option is clamped to this even for very tall photos.
+const MIN_ASPECT = 9 / 16
 
 /**
  * WhatsApp-style crop editor. Shows the image with a draggable/zoomable crop
@@ -48,7 +53,9 @@ export function CropModal({
     setCroppedAreaPixels(areaPixels)
   }, [])
 
-  const effectiveAspect = ratio.value ?? mediaAspect
+  // When a fixed ratio is picked, use it. "Free" follows the photo's natural
+  // shape but is never allowed to exceed 9:16 tallness.
+  const effectiveAspect = ratio.value ?? Math.max(mediaAspect, MIN_ASPECT)
   const showRatioBar = ratios.length > 1
 
   async function apply() {

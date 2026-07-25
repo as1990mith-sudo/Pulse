@@ -6,6 +6,7 @@ import { SkinProvider, SKIN_INIT_SCRIPT } from '@/components/skin-provider'
 import { LiveSessionProvider } from '@/components/live-session'
 import { EpisodePlayerProvider } from '@/components/episode-player-provider'
 import { AutoRefresh } from '@/components/auto-refresh'
+import { PresenceHeartbeat } from '@/components/presence-heartbeat'
 import { BottomNav } from '@/components/bottom-nav'
 import './globals.css'
 
@@ -91,6 +92,9 @@ export default function RootLayout({
                 {/* Keeps server-rendered data (feed, adverts, live status, …)
                     continuously fresh so users never have to manually reload. */}
                 <AutoRefresh />
+                {/* Reports the signed-in user as online (no-op when signed out)
+                    so the admin dashboard shows a true real-time presence count. */}
+                <PresenceHeartbeat />
                 {/* The whole app shell gently slides right (micro-parallax) when
                     the left navigation drawer opens. */}
                 <div id="app-shell" className="app-shell">

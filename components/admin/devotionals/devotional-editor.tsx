@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { CoverUpload } from "@/components/admin/cover-upload"
 import type { DevotionalRow } from "@/lib/admin/devotionals-types"
 import { createDevotional, updateDevotional, scheduleDevotional } from "@/app/actions/admin-devotionals"
 
@@ -90,14 +91,14 @@ export function DevotionalEditor({
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="right" className="w-full sm:max-w-xl p-0">
-        <SheetHeader className="border-b border-border/60 px-6 py-4">
+        <SheetHeader className="shrink-0 border-b border-border/60 px-6 py-4">
           <SheetTitle>{isEdit ? "Edit devotional" : "New devotional"}</SheetTitle>
           <SheetDescription>
             {isEdit ? "Update the content and re-publish or re-schedule." : "Compose a devotional, then publish, schedule, or save as a draft."}
           </SheetDescription>
         </SheetHeader>
 
-        <ScrollArea className="h-[calc(100vh-9.5rem)]">
+        <ScrollArea className="min-h-0 flex-1">
           <div className="space-y-5 px-6 py-5">
             <Field label="Title">
               <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Walking in faith" />
@@ -124,16 +125,18 @@ export function DevotionalEditor({
             <Field label="Prayer">
               <Textarea value={prayer} onChange={(e) => setPrayer(e.target.value)} rows={3} placeholder="Father, we thank you…" />
             </Field>
-            <Field label="Cover image URL (optional)">
-              <Input value={cover} onChange={(e) => setCover(e.target.value)} placeholder="https://…" />
-            </Field>
+            <CoverUpload
+              label="Cover image (optional)"
+              value={cover || null}
+              onChange={(url) => setCover(url ?? "")}
+            />
             <Field label="Schedule for (optional)">
               <Input type="datetime-local" value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} />
             </Field>
           </div>
         </ScrollArea>
 
-        <div className="flex items-center gap-2 border-t border-border/60 px-6 py-4">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-border/60 px-6 py-4">
           <Button variant="outline" onClick={() => save("draft")} disabled={isPending} className="gap-2">
             <FileText className="h-4 w-4" /> Save draft
           </Button>
