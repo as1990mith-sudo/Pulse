@@ -40,7 +40,7 @@ function ShowTypeCard({
 }: {
   href: string
   label: string
-  description: string
+  description?: string
   count: number
   icon: typeof Video
   accent: string
@@ -58,7 +58,7 @@ function ShowTypeCard({
       </div>
       <div className="space-y-1.5">
         <h3 className="text-lg font-bold tracking-tight sm:text-xl">{label}</h3>
-        <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
+        {description && <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>}
       </div>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <span className="text-sm font-medium tabular-nums">
@@ -109,7 +109,6 @@ export default async function LivePage() {
               <ShowTypeCard
                 href="/live/browse?type=video"
                 label="Video shows"
-                description="Face-to-face rooms and video broadcasts happening live."
                 count={videoCount}
                 icon={Video}
                 accent="bg-primary/15 text-primary"
@@ -117,7 +116,6 @@ export default async function LivePage() {
               <ShowTypeCard
                 href="/live/browse?type=audio"
                 label="Audio shows"
-                description="Talk rooms and audio broadcasts you can drop into and listen."
                 count={audioCount}
                 icon={Mic}
                 accent="bg-live/15 text-live"
