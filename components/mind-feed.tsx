@@ -50,6 +50,7 @@ import { toggleFollow } from "@/app/actions/follow"
 import type { CurrentUser } from "@/lib/session"
 import { Button } from "@/components/ui/button"
 import { FormattedTextarea } from "@/components/formatted-textarea"
+import { useMentionAutocomplete, MentionAutocompleteList } from "@/components/mention-autocomplete"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card } from "@/components/ui/card"
 import {
@@ -224,6 +225,14 @@ export function MindFeed({
   // picker on desktop.
   const photoCaptureRef = useRef<HTMLInputElement>(null)
   const videoCaptureRef = useRef<HTMLInputElement>(null)
+  // @mention autocomplete for the composer. The draft stays human-readable
+  // ("@John Smith"); mentions are serialized to canonical tokens on publish.
+  const composeTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const mentions = useMentionAutocomplete({
+    value: draft,
+    onChange: setDraft,
+    textareaRef: composeTextareaRef,
+  })
 
   // Poll the feed so new tweets and comments from others appear without a manual
   // refresh. The server-rendered posts seed the initial data.
@@ -423,11 +432,13 @@ export function MindFeed({
 
   function publish(e: React.FormEvent) {
     e.preventDefault()
-    const text = draft.trim()
+    // Serialize picked @mentions into canonical tokens before trimming/sending.
+    const text = mentions.serialize().trim()
     if (!text && media.length === 0) return
     startTransition(async () => {
       const created = await createPost({ text, media })
       setDraft("")
+      mentions.reset()
       clearMedia()
       // Pin the new post to the top of "For you" and make sure we're on a tab
       // that shows it, so the user sees their post appear first immediately.
@@ -595,13 +606,28 @@ export function MindFeed({
             </Avatar>
           </Link>
           <div className="flex-1 space-y-3">
-            <FormattedTextarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="Share a thought…"
-              className="min-h-24 resize-none rounded-xl border border-border bg-background px-3.5 py-3 text-lg leading-relaxed shadow-sm placeholder:text-muted-foreground/70 focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-ring/40"
-              aria-label="Write a post"
-            />
+            <div className="relative">
+              <FormattedTextarea
+                textareaRef={composeTextareaRef}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => mentions.onKeyDown(e)}
+                onKeyUp={mentions.onCaretChange}
+                onClick={mentions.onCaretChange}
+                onSelect={mentions.onCaretChange}
+                placeholder="Share a thought…"
+                className="min-h-24 resize-none rounded-xl border border-border bg-background px-3.5 py-3 text-lg leading-relaxed shadow-sm placeholder:text-muted-foreground/70 focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-ring/40"
+                aria-label="Write a post"
+              />
+              {mentions.open && (
+                <MentionAutocompleteList
+                  candidates={mentions.candidates}
+                  activeIndex={mentions.activeIndex}
+                  loading={mentions.loading}
+                  onSelect={mentions.onSelect}
+                />
+              )}
+            </div>
             {media.length === 1 && (
               <div className="relative w-full overflow-hidden rounded-xl border border-border/60 bg-muted">
                 {media[0].type === "video" ? (

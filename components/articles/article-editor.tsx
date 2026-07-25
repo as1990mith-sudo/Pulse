@@ -23,6 +23,7 @@ import { ARTICLE_CATEGORIES } from "@/lib/article-types"
 import { saveArticle, publishArticle } from "@/app/actions/articles"
 import { uploadMedia } from "@/lib/upload-media"
 import { CropModal } from "@/components/media-editor/crop-modal"
+import { useEditableMentionAutocomplete } from "@/components/editable-mention-autocomplete"
 import { cn } from "@/lib/utils"
 
 type EditorSeed = {
@@ -59,6 +60,9 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
   // Tracks unsaved edits so leaving the page can prompt to save or discard.
   const [dirty, setDirty] = useState(false)
   const [confirmBack, setConfirmBack] = useState(false)
+  // @mention autocomplete for the rich body. Inserts inline mention anchors at
+  // the caret; the publish action re-derives the mention list from the HTML.
+  const mentions = useEditableMentionAutocomplete(editorRef)
 
   // Seed the contentEditable body once on mount.
   useEffect(() => {
@@ -403,14 +407,18 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
       </div>
 
       {/* Body editor */}
-      <div
-        ref={editorRef}
-        contentEditable
-        suppressContentEditableWarning
-        onInput={() => setDirty(true)}
-        data-placeholder="Tell your story…"
-        className="article-editor article-prose mt-5 min-h-[40vh] outline-none"
-      />
+      <div className="relative">
+        <div
+          ref={editorRef}
+          contentEditable
+          suppressContentEditableWarning
+          onInput={() => setDirty(true)}
+          onKeyDown={(e) => mentions.onKeyDown(e)}
+          data-placeholder="Tell your story…"
+          className="article-editor article-prose mt-5 min-h-[40vh] outline-none"
+        />
+        {mentions.overlay}
+      </div>
 
       {/* Preview overlay */}
       {preview && (
