@@ -185,11 +185,15 @@ export async function getArticleFeed(input: {
   search?: string
   offset?: number
   limit?: number
+  /** Article to omit from the results (e.g. the one shown in the featured hero). */
+  excludeId?: string
 }): Promise<{ items: ArticleCard[]; nextOffset: number | null }> {
   const limit = Math.min(Math.max(input.limit ?? 12, 1), 30)
   const offset = Math.max(input.offset ?? 0, 0)
 
   const filters = [eq(article.status, "published")]
+  const excludeNum = Number(input.excludeId)
+  if (Number.isFinite(excludeNum)) filters.push(ne(article.id, excludeNum))
   if (input.category && input.category !== "All") filters.push(eq(article.category, input.category))
   if (input.search?.trim()) {
     const q = `%${input.search.trim()}%`
