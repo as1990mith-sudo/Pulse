@@ -30,11 +30,10 @@ function isImmersive(p: string): boolean {
   if (/^\/(login|sign-in|sign-up|reset-password)(\/|$)/.test(p)) return true
   if (/^\/admin(\/|$)/.test(p)) return true // admin console has its own full navigation
   if (/^\/live\/[^/]+/.test(p)) return true // inside a live room
-  if (/^\/messages(\/|$)/.test(p)) return true // DM inbox + threads
+  if (/^\/messages\/[^/]+/.test(p)) return true // inside a DM thread (keep the bar on the inbox list)
   if (/^\/status\/[^/]+/.test(p)) return true // full-screen status viewer
   if (/^\/library\/[^/]+\/[^/]+/.test(p)) return true // in-app reader / course player
   if (/^\/store\/[^/]+\/[^/]+/.test(p)) return true // product page (sticky CTA)
-  if (/^\/bible(\/|$)/.test(p)) return true // immersive reader
   if (/^\/studio(\/|$)/.test(p)) return true // broadcast studio
   // A specific chat room (but keep the bar on the browse lists).
   if (/^\/chatrooms\/(?!community$|dreams$)[^/]+/.test(p)) return true
