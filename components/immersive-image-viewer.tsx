@@ -6,7 +6,6 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { X, Heart, Bookmark, Share2, ChevronLeft, ChevronRight } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { CommentSheet } from "@/components/comment-sheet"
 import { ShareSheet } from "@/components/share-sheet"
 import { addPostComment, setPostLike, setCommentLike, type FeedPostView } from "@/app/actions/feed"
@@ -125,24 +124,9 @@ export function ImmersiveImageViewer({
       aria-label={`Image posted by ${post.user}`}
       className="fixed inset-0 z-[70] flex flex-col bg-black"
     >
-      {/* Top bar: creator + close. */}
-      <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-between bg-gradient-to-b from-black/60 to-transparent px-4 pb-8 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
-        <Link
-          href={`/u/${post.authorId}`}
-          onClick={onClose}
-          className="flex items-center gap-2.5"
-        >
-          <Avatar className="size-9 ring-2 ring-white/25">
-            <AvatarImage src={post.authorImage ?? undefined} alt={post.user} />
-            <AvatarFallback style={{ backgroundColor: post.color }} className="text-sm font-semibold text-white">
-              {post.initials}
-            </AvatarFallback>
-          </Avatar>
-          <div className="leading-tight">
-            <p className="text-sm font-semibold text-white">{post.user}</p>
-            <p className="text-xs text-white/60">{post.handle.startsWith("@") ? post.handle : `@${post.handle}`}</p>
-          </div>
-        </Link>
+      {/* Top bar: close only. The creator identity now lives bottom-left to match
+          the Reels viewer. */}
+      <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-end bg-gradient-to-b from-black/60 to-transparent px-4 pb-8 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
         <button
           type="button"
           onClick={onClose}
@@ -231,20 +215,43 @@ export function ImmersiveImageViewer({
         </RailButton>
       </div>
 
-      {/* Caption. Rendered with the shared rich-text renderer (not raw text) so
-          mention tokens like `@[Name](id)`, bold/italic markers, and links match
-          exactly what the feed shows instead of leaking the raw markup. */}
-      {post.text && (
-        <div className="absolute inset-x-0 bottom-0 z-10 max-w-lg bg-gradient-to-t from-black/70 to-transparent px-4 pb-8 pt-12 pr-20">
-          <p className="line-clamp-2 whitespace-pre-wrap text-sm leading-relaxed text-white/90">
+      {/* Author + caption, bottom-left — mirrors the Reels viewer (position,
+          avatar size, and font sizes) so the creator identity is consistent
+          across both viewers. `pr-24` keeps the block clear of the action rail. */}
+      <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-4 pb-8 pt-12 pr-24 text-white">
+        <Link href={`/u/${post.authorId}`} onClick={onClose} className="flex min-w-0 items-center gap-2.5">
+          <span
+            className={cn(
+              "flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-bold ring-2 ring-white/70",
+              post.color,
+            )}
+          >
+            {post.authorImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={post.authorImage || "/placeholder.svg"} alt={post.user} className="size-full object-cover" />
+            ) : (
+              post.initials
+            )}
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-bold leading-tight drop-shadow">{post.user}</span>
+            <span className="block truncate text-xs text-white/70">@{post.handle.replace(/^@/, "")}</span>
+          </span>
+        </Link>
+
+        {/* Caption. Rendered with the shared rich-text renderer (not raw text) so
+            mention tokens like `@[Name](id)`, bold/italic markers, and links match
+            exactly what the feed shows instead of leaking the raw markup. */}
+        {post.text && (
+          <p className="mt-2 line-clamp-2 whitespace-pre-wrap text-sm leading-relaxed text-white/90">
             {renderMessageBody(post.text, {
               link: true,
               linkClassName: "font-medium text-white underline-offset-2 [overflow-wrap:anywhere] hover:underline",
               mentionClassName: "font-semibold text-white hover:underline",
             })}
           </p>
-        </div>
-      )}
+        )}
+      </div>
 
       <CommentSheet
         open={commentsOpen}
