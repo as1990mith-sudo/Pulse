@@ -7,6 +7,7 @@ import { ArrowLeft, History, Lightbulb, MessageSquare, PenLine } from "lucide-re
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { CommentSheet } from "@/components/comment-sheet"
+import { MarqueeTitle } from "@/components/marquee-title"
 import { type ThreadComment } from "@/components/comment-thread"
 import {
   createPost,
@@ -119,7 +120,7 @@ export function QuestionOfTheDay({
         </Avatar>
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-xl font-bold tracking-tight">Question of the Day</h1>
-          <p className="truncate text-sm text-muted-foreground">One question · many perspectives</p>
+          <MarqueeTitle text="One question · many perspectives" className="text-sm text-muted-foreground" />
         </div>
         <Link
           href="/chatrooms/questions/archive"
@@ -169,12 +170,6 @@ export function QuestionOfTheDay({
                   />
                 )}
                 <h2 className="text-balance text-base leading-relaxed">{question.questionText}</h2>
-                <p className="mt-3 text-pretty text-sm leading-relaxed text-muted-foreground">
-                  Share your perspective and read how others in the community see it. Every voice adds something.
-                </p>
-                <Button onClick={() => setSheetOpen(true)} className="mt-4 gap-2 rounded-full">
-                  <PenLine className="size-4" /> Share your response
-                </Button>
               </div>
             </section>
 

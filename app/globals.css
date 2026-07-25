@@ -1016,7 +1016,7 @@ svg.lucide {
 .marquee__track {
   display: inline-flex;
   width: max-content;
-  animation: title-marquee 14s linear infinite;
+  animation: title-marquee 17.5s linear infinite;
   will-change: transform;
 }
 
@@ -1246,7 +1246,7 @@ svg.lucide {
 .marquee__track {
   display: inline-flex;
   width: max-content;
-  animation: title-marquee 14s linear infinite;
+  animation: title-marquee 17.5s linear infinite;
 }
 .marquee__track > * {
   padding-right: 2.5rem;
