@@ -241,9 +241,11 @@ export function ImmersiveImageViewer({
 
         {/* Caption. Rendered with the shared rich-text renderer (not raw text) so
             mention tokens like `@[Name](id)`, bold/italic markers, and links match
-            exactly what the feed shows instead of leaking the raw markup. */}
+            exactly what the feed shows instead of leaking the raw markup. Shown in
+            full (no line-clamp / "Read more") — a long caption scrolls within a
+            capped height so it never covers the whole image. */}
         {post.text && (
-          <p className="mt-2 line-clamp-2 whitespace-pre-wrap text-sm leading-relaxed text-white/90">
+          <p className="mt-2 max-h-[40vh] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-white/90">
             {renderMessageBody(post.text, {
               link: true,
               linkClassName: "font-medium text-white underline-offset-2 [overflow-wrap:anywhere] hover:underline",
