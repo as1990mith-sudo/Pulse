@@ -1,10 +1,11 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Pause, Play, RotateCcw, RotateCw, Gauge, Maximize, Minimize, ChevronDown, X, PictureInPicture2 } from "lucide-react"
+import { Pause, Play, RotateCcw, RotateCw, Gauge, Maximize, Minimize, ChevronDown, X, PictureInPicture2, Volume2, VolumeX } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { cn } from "@/lib/utils"
 import { useSharedPlayback, formatTime } from "@/lib/hooks/use-shared-playback"
+import { useSharedMute } from "@/lib/shared-mute"
 
 /**
  * LiveReplayPlayer — a dedicated player for archived *video livestream* replays
@@ -78,6 +79,14 @@ export function LiveReplayPlayer({
     setDuration,
   } = engine
 
+  // App-wide mute preference (shared with the feed + reels players). It starts
+  // muted so the reel can autoplay — browsers only allow gesture-free autoplay
+  // on muted media — and the viewer can unmute with the toggle below.
+  const [muted, setMuted] = useSharedMute()
+  useEffect(() => {
+    if (mediaRef.current) mediaRef.current.muted = muted
+  }, [muted, mediaRef])
+
   // YouTube-style auto-hiding controls.
   const [controlsVisible, setControlsVisible] = useState(true)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -116,7 +125,14 @@ export function LiveReplayPlayer({
     if (!autoPlay) return
     const el = mediaRef.current
     if (!el) return
-    el.play().catch(() => {})
+    el.muted = muted
+    el.play().catch(() => {
+      // Autoplay with sound is blocked by browsers; fall back to muted playback
+      // so the replay still starts, then the viewer can unmute with the toggle.
+      setMuted(true)
+      el.muted = true
+      el.play().catch(() => {})
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoPlay])
 
@@ -225,8 +241,37 @@ export function LiveReplayPlayer({
               </button>
             )}
 
-            {/* Top-right: Picture-in-Picture + close. */}
+            {/* Top-right: speed (reel only) + mute + Picture-in-Picture + close.
+                In reel mode the speed control lives up here so it never collides
+                with the creator/title overlay pinned to the bottom-left. */}
             <div className="absolute right-3 top-3 z-20 flex items-center gap-3">
+              {isReel && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    cycleSpeed()
+                    revealControls()
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-black/45 px-3 py-1.5 text-xs font-semibold text-white/90 backdrop-blur-md transition-colors hover:bg-black/65"
+                  aria-label="Change playback speed"
+                >
+                  <Gauge className="size-3.5" />
+                  {speed}x
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setMuted(!muted)
+                  revealControls()
+                }}
+                aria-label={muted ? "Unmute" : "Mute"}
+                className="flex items-center justify-center text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-transform active:scale-90"
+              >
+                {muted ? <VolumeX className="size-6" /> : <Volume2 className="size-6" />}
+              </button>
               <button
                 type="button"
                 onClick={(e) => {
@@ -296,25 +341,26 @@ export function LiveReplayPlayer({
               </div>
             </div>
 
-            {/* Base cluster: speed (left) + fullscreen (right) above the scrubber. */}
+            {/* Base cluster: (page-only speed + fullscreen row) above the scrubber.
+                In reel mode the speed control moved to the top-right and
+                fullscreen is redundant, so this bottom cluster shrinks to just
+                the time + scrubber — leaving room for the reel's creator/title
+                and action rail to sit clear above it. */}
             <div className="absolute inset-x-0 bottom-0 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-              <div className="mb-2 flex items-center justify-between">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    cycleSpeed()
-                    revealControls()
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-black/45 px-3 py-1.5 text-xs font-semibold text-white/90 backdrop-blur-md transition-colors hover:bg-black/65"
-                  aria-label="Change playback speed"
-                >
-                  <Gauge className="size-3.5" />
-                  {speed}x
-                </button>
-                {/* The reel already fills the entire screen, so a fullscreen /
-                    expand control is redundant there — only the classic pinned
-                    "page" player offers it. */}
-                {!isReel && (
+              {!isReel && (
+                <div className="mb-2 flex items-center justify-between">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      cycleSpeed()
+                      revealControls()
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-black/45 px-3 py-1.5 text-xs font-semibold text-white/90 backdrop-blur-md transition-colors hover:bg-black/65"
+                    aria-label="Change playback speed"
+                  >
+                    <Gauge className="size-3.5" />
+                    {speed}x
+                  </button>
                   <button
                     type="button"
                     onClick={(e) => {
@@ -327,8 +373,8 @@ export function LiveReplayPlayer({
                   >
                     {isFullscreen ? <Minimize className="size-6" /> : <Maximize className="size-6" />}
                   </button>
-                )}
-              </div>
+                </div>
+              )}
 
               <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium tabular-nums text-white/85">
                 <span>{formatTime(current)}</span>

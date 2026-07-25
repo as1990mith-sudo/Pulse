@@ -842,21 +842,22 @@ function ReelItem({
           <Share2 className="size-7 drop-shadow transition-transform active:scale-90" />
           <span className="text-xs font-semibold">Share</span>
         </button>
+        {/* Mute toggle — lives in the action rail alongside the other icons so it
+            shares their icon + label design language. */}
+        <button
+          type="button"
+          onClick={onToggleMute}
+          className="flex flex-col items-center gap-1"
+          aria-label={muted ? "Unmute" : "Mute"}
+        >
+          {muted ? (
+            <VolumeX className="size-7 drop-shadow transition-transform active:scale-90" />
+          ) : (
+            <Volume2 className="size-7 drop-shadow transition-transform active:scale-90" />
+          )}
+          <span className="text-xs font-semibold">{muted ? "Muted" : "Sound"}</span>
+        </button>
       </div>
-
-      {/* Mute toggle — moved to the bottom-right, just above the scrubber. */}
-      <button
-        type="button"
-        onClick={onToggleMute}
-        aria-label={muted ? "Unmute" : "Mute"}
-        className={cn(
-          "absolute bottom-16 right-4 z-[3] flex size-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur transition-colors hover:bg-black/60",
-          active ? "opacity-100" : "pointer-events-none opacity-0",
-        )}
-        data-no-swipe
-      >
-        {muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
-      </button>
 
       {/* Author + caption, bottom-left. Bottom-anchored so expanding the caption
           grows the block upward — pushing the author row up rather than covering
