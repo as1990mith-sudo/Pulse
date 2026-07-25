@@ -33,6 +33,7 @@ import {
   Lock,
   MailQuestion,
   Megaphone,
+  MessageCircleQuestion,
   MessageSquareWarning,
   Radio,
   ScrollText,
@@ -108,6 +109,7 @@ export const ADMIN_NAV: NavGroup[] = [
     label: "Content",
     items: [
       { label: "Devotionals", href: "/admin/content/devotionals", icon: BookOpen, status: "ready", permission: "devotionals.manage", keywords: "daily verse" },
+      { label: "Question of the Day", href: "/admin/content/questions", icon: MessageCircleQuestion, status: "ready", permission: "qotd.manage", keywords: "qotd daily question discussion prompt" },
       { label: "Articles", href: "/admin/content/articles", icon: FileText, status: "ready", permission: "articles.manage", keywords: "posts writing" },
       { label: "Books", href: "/admin/content/books", icon: Boxes, status: "ready", permission: "books.review", keywords: "approval library pdf" },
       { label: "Livestreams", href: "/admin/content/livestreams", icon: Radio, status: "ready", permission: "livestreams.manage" },
@@ -198,6 +200,7 @@ export type QuickAction = {
 
 export const QUICK_ACTIONS: QuickAction[] = [
   { label: "New Devotional", href: "/admin/content/devotionals?new=1", icon: BookOpen, permission: "devotionals.manage" },
+  { label: "New Question of the Day", href: "/admin/content/questions?new=1", icon: MessageCircleQuestion, permission: "qotd.manage" },
   { label: "Send Announcement", href: "/admin/communication/broadcast?new=1", icon: Megaphone, permission: "broadcast.send" },
   { label: "View Reports", href: "/admin/moderation/reports", icon: Flag, permission: "reports.view" },
   { label: "User Search", href: "/admin/users", icon: Users, permission: "users.view" },
