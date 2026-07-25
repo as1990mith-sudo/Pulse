@@ -10,11 +10,11 @@ import {
   feedComment,
   feedPost,
   liveStream,
-  session,
   storeProduct,
   supportTicket,
   user as userTable,
 } from "@/lib/db/schema"
+import { getOnlineCount } from "@/app/actions/presence"
 
 /** Start of the current day (server time) for "today" counts. */
 function startOfToday(): Date {
@@ -32,14 +32,13 @@ async function countRows(table: Parameters<typeof db.select>[0] extends never ? 
 
 /**
  * Live activity numbers for the Command Centre, all sourced from the database
- * so nothing is fabricated. "Online" approximates users with an unexpired
- * session; the rest are true "today" counts.
+ * so nothing is fabricated. "Online" is a true real-time presence count (users
+ * whose heartbeat pinged within the last minute); the rest are "today" counts.
  */
 export async function getLiveActivity() {
   const today = startOfToday()
-  const now = new Date()
   const [online, registrations, posts, comments, streamsLive, articlesToday] = await Promise.all([
-    countRows(session, gte(session.expiresAt, now)),
+    getOnlineCount(),
     countRows(userTable, gte(userTable.createdAt, today)),
     countRows(feedPost, gte(feedPost.createdAt, today)),
     countRows(feedComment, gte(feedComment.createdAt, today)),
