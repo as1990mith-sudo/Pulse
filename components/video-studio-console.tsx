@@ -362,6 +362,8 @@ export function VideoStudioConsole({
     hostId: currentUser.id,
     // Grid ("landscape") streams are meetings — everyone publishes.
     autoPublish: orientation === "landscape",
+    // Record the composite in the same shape the audience watched in.
+    recordAspect: orientation === "landscape" ? "landscape" : "portrait",
   })
 
   // A live "Grid" stream renders the Meet/Zoom-style meeting grid instead of the
