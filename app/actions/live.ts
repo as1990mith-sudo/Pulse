@@ -38,10 +38,17 @@ async function requireUser() {
  * (which is what previously stranded a dropped host and orphaned the row).
  */
 async function endStaleStreams(): Promise<void> {
-  await db
-    .update(liveStream)
-    .set({ status: "ended", endedAt: new Date() })
-    .where(and(eq(liveStream.status, "live"), lt(liveStream.lastSeenAt, new Date(Date.now() - STALE_AFTER_MS))))
+  // Best-effort cleanup that runs at the top of read paths — swallow errors so a
+  // transient DB failure (or the DB being unreachable) can't crash the page that
+  // just wanted to list streams. The next read will retry the cleanup.
+  try {
+    await db
+      .update(liveStream)
+      .set({ status: "ended", endedAt: new Date() })
+      .where(and(eq(liveStream.status, "live"), lt(liveStream.lastSeenAt, new Date(Date.now() - STALE_AFTER_MS))))
+  } catch (err) {
+    console.error("[v0] endStaleStreams cleanup failed:", err)
+  }
 }
 
 /**

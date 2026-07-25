@@ -10,6 +10,13 @@ import { PresenceHeartbeat } from '@/components/presence-heartbeat'
 import { BottomNav } from '@/components/bottom-nav'
 import './globals.css'
 
+// Every route in this app is personalized (session + live database reads), so
+// none of it should be statically prerendered at build time — that would both
+// bake in a logged-out shell and fail the build when the DB is unreachable
+// during `next build`. Setting `dynamic` here cascades to all child segments,
+// so each page is rendered per-request instead. (Applies to the whole app.)
+export const dynamic = 'force-dynamic'
+
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
 const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
