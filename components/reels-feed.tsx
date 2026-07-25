@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import Link from "next/link"
 import {
   Bookmark,
@@ -57,34 +58,58 @@ function renderInlineBold(line: string, keyPrefix: string): React.ReactNode[] {
 }
 
 /**
- * Caption under the author row. Collapsed, it shows only the first line; if the
- * caption spans multiple lines a "Read More" toggle reveals the rest. Because
- * the whole author/caption block is anchored to the bottom of the reel, growing
- * this caption pushes the author row *upward* (rather than overlaying the
- * scrubber/controls below it). Line breaks are preserved and *markdown* emphasis
- * is parsed into bold.
+ * Caption under the author row. Collapsed, it clamps to a single line; a
+ * "Read More" toggle reveals the rest. Following the TikTok/Reels convention,
+ * the toggle appears whenever the caption is actually clipped — whether it
+ * spans multiple lines OR is a single line long enough to overflow — rather
+ * than only when explicit newlines exist. Because the whole author/caption
+ * block is anchored to the bottom of the reel, expanding grows the block
+ * *upward*. Line breaks are preserved and *markdown* emphasis is parsed to bold.
  */
 function ReelCaption({ text }: { text: string }) {
   const [expanded, setExpanded] = useState(false)
+  const [clipped, setClipped] = useState(false)
+  const textRef = useRef<HTMLDivElement>(null)
   const lines = useMemo(() => text.split("\n"), [text])
-  const hasMore = lines.length > 1
-  const shown = expanded ? lines : lines.slice(0, 1)
+
+  // Flatten every line into one inline flow (newlines preserved via
+  // `whitespace-pre-line`) so a single clamped container can measure real
+  // overflow — multiple block <p> children don't clamp/measure reliably.
+  const nodes = useMemo(() => {
+    const out: React.ReactNode[] = []
+    lines.forEach((line, i) => {
+      if (i > 0) out.push("\n")
+      out.push(...renderInlineBold(line, `l${i}`))
+    })
+    return out
+  }, [lines])
+
+  // While collapsed, the caption is clipped when its full content is taller
+  // than the single visible line. Re-measured on resize and when the text
+  // changes. Left untouched while expanded so "Read Less" stays available.
+  useEffect(() => {
+    if (expanded) return
+    const el = textRef.current
+    if (!el) return
+    const measure = () => setClipped(el.scrollHeight - el.clientHeight > 1)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [text, expanded])
 
   return (
     <div className="mt-2.5 max-w-md" data-no-swipe>
       <div
+        ref={textRef}
         className={cn(
-          "overflow-hidden text-sm leading-relaxed drop-shadow transition-all duration-300 ease-out",
+          "whitespace-pre-line text-sm leading-relaxed drop-shadow transition-all duration-300 ease-out",
           !expanded && "line-clamp-1",
         )}
       >
-        {shown.map((line, i) => (
-          <p key={i} className="whitespace-pre-line">
-            {renderInlineBold(line, `l${i}`)}
-          </p>
-        ))}
+        {nodes}
       </div>
-      {hasMore && (
+      {(clipped || expanded) && (
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
@@ -342,11 +367,12 @@ export function ReelsFeed({
     }
   }, [onSwipePrevTab])
 
-  return (
+  const overlay = (
     // Explicit viewport dimensions (not just `inset-0`) so the overlay fills the
     // screen even while the page-entry animation briefly makes the wrapper a
     // containing block — otherwise `inset-0` would resolve against a 0×0 box.
-    <div className="fixed left-0 top-0 z-[45] h-[100dvh] w-screen bg-black">
+    // z-[60] sits above the sticky app header (z-40) and bottom nav.
+    <div className="fixed left-0 top-0 z-[60] h-[100dvh] w-screen bg-black">
       <div
         ref={scrollerRef}
         className="h-full overflow-y-scroll overscroll-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -382,7 +408,8 @@ export function ReelsFeed({
         {header ? (
           <div className="pointer-events-auto flex flex-1 justify-center">{header}</div>
         ) : (
-          <span className="text-lg font-bold text-white drop-shadow">Reels</span>
+          // No title text — an empty spacer keeps the close button right-aligned.
+          <span aria-hidden className="flex-1" />
         )}
         {onClose && (
           <button
@@ -397,6 +424,12 @@ export function ReelsFeed({
       </div>
     </div>
   )
+
+  // Portal to <body> so the immersive overlay escapes any transformed
+  // page-transition ancestor, whose stacking context otherwise trapped it
+  // *beneath* the sticky app header — hiding the close button. This mounts only
+  // via user interaction, so `document` is always available on the client.
+  return typeof document === "undefined" ? null : createPortal(overlay, document.body)
 }
 
 function ReelItem({

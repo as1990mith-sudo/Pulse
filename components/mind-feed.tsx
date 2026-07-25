@@ -468,39 +468,10 @@ export function MindFeed({
     { id: "reels" as const, label: "Reels" },
   ]
 
-  // Move to the sub-tab `dir` steps away (−1 = the tab on the left, +1 = the
-  // tab on the right), clamped to the ends. Backs the horizontal swipe gestures
-  // on both the feed tabs and the full-screen reels.
-  function goToAdjacentTab(dir: -1 | 1) {
-    const idx = TAB_ITEMS.findIndex((t) => t.id === tab)
-    const nextIdx = idx + dir
-    if (idx < 0 || nextIdx < 0 || nextIdx >= TAB_ITEMS.length) return
-    setTab(TAB_ITEMS[nextIdx].id)
-    haptic("select")
-  }
-
-  // Horizontal-swipe detection for the feed sub-tabs (For you / Following /
-  // Status): swipe left → next tab on the right, swipe right → previous tab on
-  // the left. We ignore swipes that begin on an interactive/horizontally-
-  // scrollable element (media carousels, the video scrubber, buttons, links) so
-  // those keep their own gestures.
-  const feedTouch = useRef<{ x: number; y: number; skip: boolean } | null>(null)
-  function onFeedTouchStart(e: React.TouchEvent) {
-    const t = e.touches[0]
-    const el = e.target as HTMLElement
-    const skip = Boolean(el.closest('[data-no-tab-swipe], [role="slider"], video, input, textarea, button, a'))
-    feedTouch.current = { x: t.clientX, y: t.clientY, skip }
-  }
-  function onFeedTouchEnd(e: React.TouchEvent) {
-    const s = feedTouch.current
-    feedTouch.current = null
-    if (!s || s.skip) return
-    const t = e.changedTouches[0]
-    const dx = t.clientX - s.x
-    const dy = t.clientY - s.y
-    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return
-    goToAdjacentTab(dx < 0 ? 1 : -1)
-  }
+  // Sub-tabs are switched by tapping the tab labels only. Horizontal
+  // swipe-to-switch was intentionally removed so a sideways drag never jumps
+  // between For You / Following / Reels — it kept hijacking media and content
+  // gestures. Tapping the switcher remains the single, predictable way to move.
 
   // Floating switcher shown over the reels: the three tabs "sit" on top of the
   // video (like TikTok's For You / Following) so switching back is one tap away.
@@ -545,12 +516,7 @@ export function MindFeed({
   // on top. Available to everyone — no auth gate on watching.
   if (tab === "reels") {
     return (
-      <ReelsFeed
-        posts={allPosts}
-        header={reelsSwitcher}
-        currentUser={currentUser}
-        onSwipePrevTab={() => goToAdjacentTab(-1)}
-      />
+      <ReelsFeed posts={allPosts} header={reelsSwitcher} currentUser={currentUser} />
     )
   }
 
@@ -851,7 +817,7 @@ export function MindFeed({
       </div>
 
       {/* Swipe horizontally to move between the feed sub-tabs. */}
-      <div onTouchStart={onFeedTouchStart} onTouchEnd={onFeedTouchEnd}>
+        <div>
         {tab === "events" ? (
           announcementBanner
         ) : tab === "status" ? (
