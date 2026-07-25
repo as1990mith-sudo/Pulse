@@ -24,6 +24,12 @@ import {
   sanitizeArticleHtml,
 } from "@/lib/article-sanitize"
 import { ARTICLE_CATEGORIES } from "@/lib/article-types"
+import {
+  downgradeBlockedHtmlMentions,
+  extractHtmlMentionRefs,
+  type MentionRef,
+} from "@/lib/mentions"
+import { filterAllowedMentions } from "@/lib/mentions-server"
 import type {
   ArticleAuthor,
   ArticleCard,
@@ -459,6 +465,47 @@ export async function getArticleComments(articleId: string): Promise<ArticleComm
  * server-side; excerpt + read time are derived. `status` controls visibility.
  * Returns the article id (create or update).
  */
+/**
+ * Privacy-checks the @mentions embedded in a sanitized article body. Returns
+ * the body with any BLOCKED mention anchors downgraded to plain `@Name` text,
+ * plus the list of allowed mentions (for storage + notifications).
+ */
+async function resolveArticleMentions(
+  authorId: string,
+  bodyHtml: string,
+): Promise<{ bodyHtml: string; allowed: MentionRef[] }> {
+  const refs = extractHtmlMentionRefs(bodyHtml)
+  if (refs.length === 0) return { bodyHtml, allowed: [] }
+  const allowed = await filterAllowedMentions(authorId, refs)
+  const allowedIds = new Set(allowed.map((m) => m.userId))
+  const blocked = new Set(refs.map((m) => m.userId).filter((id) => !allowedIds.has(id)))
+  return { bodyHtml: downgradeBlockedHtmlMentions(bodyHtml, blocked), allowed }
+}
+
+/** Notifies newly-tagged users that they were mentioned in an article. */
+async function notifyArticleMentions(
+  actor: { id: string; name: string },
+  mentions: MentionRef[],
+  articleId: number,
+  title: string,
+  previous: MentionRef[] = [],
+) {
+  const already = new Set(previous.map((m) => m.userId))
+  const targets = mentions.filter((m) => m.userId !== actor.id && !already.has(m.userId))
+  if (targets.length === 0) return
+  const link = `/articles/${articleId}`
+  await db.insert(notification).values(
+    targets.map((m) => ({
+      userId: m.userId,
+      actorId: actor.id,
+      actorName: actor.name,
+      type: "mention" as const,
+      message: `${actor.name} mentioned you in "${title}"`,
+      link,
+    })),
+  )
+}
+
 export async function saveArticle(input: {
   id?: string
   title: string
@@ -474,7 +521,9 @@ export async function saveArticle(input: {
   if (!title) throw new Error("Give your article a title.")
   if (title.length > 160) throw new Error("Title is too long (max 160 characters).")
 
-  const bodyHtml = sanitizeArticleHtml(input.bodyHtml)
+  const sanitized = sanitizeArticleHtml(input.bodyHtml)
+  // Privacy-check @mentions; blocked ones are downgraded to plain text in-body.
+  const { bodyHtml, allowed: mentionRefs } = await resolveArticleMentions(user.id, sanitized)
   const plain = htmlToPlainText(bodyHtml)
   const excerpt = (input.excerpt?.trim() || deriveExcerpt(bodyHtml)).slice(0, 280)
   const readMinutes = estimateReadMinutes(bodyHtml)
@@ -502,6 +551,7 @@ export async function saveArticle(input: {
         coverUrl: input.coverUrl ?? null,
         category,
         tags,
+        mentions: mentionRefs.length > 0 ? mentionRefs : null,
         status,
         readMinutes,
         authorName,
@@ -513,6 +563,17 @@ export async function saveArticle(input: {
       })
       .where(eq(article.id, numId))
     if (nowPublishing) await notifyFollowers(user.id, authorName, numId, title)
+    // Notify mentioned users once the article is public. On re-saves of an
+    // already-published article, only newly-added mentions are notified.
+    if (status === "published") {
+      await notifyArticleMentions(
+        { id: user.id, name: authorName },
+        mentionRefs,
+        numId,
+        title,
+        existing.status === "published" ? existing.mentions ?? [] : [],
+      )
+    }
     revalidateArticle(numId, user.id)
     return { id: String(numId) }
   }
@@ -530,12 +591,16 @@ export async function saveArticle(input: {
       coverUrl: input.coverUrl ?? null,
       category,
       tags,
+      mentions: mentionRefs.length > 0 ? mentionRefs : null,
       status,
       readMinutes,
       publishedAt: status === "published" ? new Date() : null,
     })
     .returning({ id: article.id })
   if (status === "published") await notifyFollowers(user.id, authorName, created.id, title)
+  if (status === "published") {
+    await notifyArticleMentions({ id: user.id, name: authorName }, mentionRefs, created.id, title)
+  }
   revalidateArticle(created.id, user.id)
   return { id: String(created.id) }
 }
@@ -556,7 +621,11 @@ export async function publishArticle(id: string): Promise<{ id: string }> {
       updatedAt: new Date(),
     })
     .where(eq(article.id, numId))
-  if (row.status !== "published") await notifyFollowers(user.id, row.authorName, numId, row.title)
+  if (row.status !== "published") {
+    await notifyFollowers(user.id, row.authorName, numId, row.title)
+    // First public appearance — notify anyone tagged in the saved body.
+    await notifyArticleMentions({ id: user.id, name: row.authorName }, row.mentions ?? [], numId, row.title)
+  }
   revalidateArticle(numId, user.id)
   return { id: String(numId) }
 }

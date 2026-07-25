@@ -26,6 +26,7 @@ import {
   Palette,
   Radio,
   Bell,
+  ShieldCheck,
   ShoppingBag,
   Sun,
   UserPlus,
@@ -339,6 +340,9 @@ export function AppMenu() {
 
                 <Section label="Preferences">
                   <AppearanceItem />
+                  {signedIn && (
+                    <DrawerItem href="/settings/privacy" icon={ShieldCheck} label="Privacy" onNavigate={navigate} />
+                  )}
                   <DrawerItem href="/live#go-live" icon={Radio} label="Creator Studio" onNavigate={navigate} />
                 </Section>
 

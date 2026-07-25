@@ -11,6 +11,9 @@ export const user = pgTable("user", {
   image: text("image"),
   // Short user-written profile bio (max 25 words, enforced in the action).
   bio: text("bio"),
+  // Who may @mention this user: "everyone" | "followers" | "none". Enforced
+  // server-side; blocked mentions render as plain text and send no notification.
+  mentionPrivacy: text("mentionPrivacy").notNull().default("everyone"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 })
@@ -73,6 +76,10 @@ export const feedPost = pgTable("feed_post", {
   // Ordered carousel of media for Instagram-style multi-media posts. Each item
   // is { type: "image" | "video", url: string }. Null/empty for text posts.
   media: jsonb("media").$type<{ type: "image" | "video"; url: string }[]>(),
+  // Resolved @mentions in `text`, in the order they appear. Each item is
+  // { userId, name } for a user who passed the privacy check at save time.
+  // Drives clickable mention links + notifications. Null/empty for none.
+  mentions: jsonb("mentions").$type<{ userId: string; name: string }[]>(),
   likes: integer("likes").notNull().default(0),
   reposts: integer("reposts").notNull().default(0),
   // Set the first time the author edits the post; drives the "· edited" label.
@@ -938,6 +945,10 @@ export const article = pgTable("article", {
   category: text("category").notNull().default("General"),
   // Free-text comma-free tags stored as a JSON array of strings.
   tags: jsonb("tags").$type<string[]>().notNull().default([]),
+  // Resolved @mentions inside `bodyHtml`, in appearance order. Each item is
+  // { userId, name } for a user who passed the privacy check at publish time.
+  // Drives notifications; the clickable links live in the sanitized HTML.
+  mentions: jsonb("mentions").$type<{ userId: string; name: string }[]>(),
   // "draft" | "published" | "archived"
   status: text("status").notNull().default("draft"),
   // Estimated read time in minutes, derived from word count on save.

@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import useSWR from "swr"
-import { LogOut, Radio, LayoutDashboard, User } from "lucide-react"
+import { LogOut, Radio, LayoutDashboard, User, ShieldCheck } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
 import { checkIsAdmin } from "@/app/actions/admin"
 import { Button } from "@/components/ui/button"
@@ -95,6 +95,10 @@ export function UserMenu() {
           <DropdownMenuItem render={<Link href="/studio" />} className="gap-2">
             <Radio className="size-4" />
             Open studio
+          </DropdownMenuItem>
+          <DropdownMenuItem render={<Link href="/settings/privacy" />} className="gap-2">
+            <ShieldCheck className="size-4" />
+            Privacy &amp; mentions
           </DropdownMenuItem>
           {isAdmin && (
             <DropdownMenuItem render={<Link href="/admin" />} className="gap-2">

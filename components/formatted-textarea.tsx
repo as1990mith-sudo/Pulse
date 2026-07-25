@@ -57,7 +57,11 @@ function renderOverlay(text: string, keyBase = "ov"): ReactNode[] {
   return nodes
 }
 
-type FormattedTextareaProps = ComponentProps<typeof Textarea>
+type FormattedTextareaProps = ComponentProps<typeof Textarea> & {
+  // Optional ref to the underlying <textarea>, used by mention autocomplete to
+  // read the caret position and restore focus after inserting a mention.
+  textareaRef?: React.Ref<HTMLTextAreaElement>
+}
 
 /**
  * Drop-in replacement for <Textarea> that shows live `*bold*` / `_italic_`
@@ -65,7 +69,7 @@ type FormattedTextareaProps = ComponentProps<typeof Textarea>
  * styled mirror layer (same grid cell), so the caret and selection still work
  * normally while the formatting renders underneath.
  */
-export function FormattedTextarea({ value, className, ...props }: FormattedTextareaProps) {
+export function FormattedTextarea({ value, className, textareaRef, ...props }: FormattedTextareaProps) {
   const text = typeof value === "string" ? value : value != null ? String(value) : ""
   const overlay = useMemo(() => renderOverlay(text), [text])
 
@@ -89,6 +93,7 @@ export function FormattedTextarea({ value, className, ...props }: FormattedTexta
           never hides the mirror underneath. */}
       <Textarea
         {...props}
+        ref={textareaRef}
         value={value}
         className={cn(className, "col-start-1 row-start-1 bg-transparent text-transparent caret-foreground dark:bg-transparent")}
       />

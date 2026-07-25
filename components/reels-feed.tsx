@@ -110,6 +110,7 @@ export function ReelsFeed({
   header,
   currentUser = null,
   onSwipePrevTab,
+  initialKey,
 }: {
   posts: FeedPostView[]
   onClose?: () => void
@@ -122,6 +123,10 @@ export function ReelsFeed({
   /** Called on a horizontal swipe so the parent can switch to the neighbouring
    *  feed sub-tab on the left (Reels is the last tab, so left is the only way). */
   onSwipePrevTab?: () => void
+  /** When set (a `${postId}-${mediaIndex}` key), the viewer opens on THAT clip
+   *  instead of a shuffled stack — used when tapping a video in the feed. The
+   *  remaining clips follow in feed order so vertical swiping keeps browsing. */
+  initialKey?: string
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null)
   // Manual, velocity-aware vertical navigation (replaces native scroll-snap so
@@ -139,12 +144,23 @@ export function ReelsFeed({
         if (m.type === "video" && m.url) items.push({ post: p, url: m.url, key: `${p.id}-${i}` })
       })
     }
+    // When opened from a specific feed video, preserve feed order and float the
+    // tapped clip to the front so it's the first reel shown. Otherwise shuffle
+    // for the standalone Reels experience.
+    if (initialKey) {
+      const idx = items.findIndex((it) => it.key === initialKey)
+      if (idx > 0) {
+        const [target] = items.splice(idx, 1)
+        items.unshift(target)
+      }
+      return items
+    }
     for (let i = items.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1))
       ;[items[i], items[j]] = [items[j], items[i]]
     }
     return items
-  }, [posts])
+  }, [posts, initialKey])
 
   // Clips whose real duration exceeds the cap are hidden once we learn it.
   const [tooLong, setTooLong] = useState<Set<string>>(new Set())

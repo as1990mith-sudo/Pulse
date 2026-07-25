@@ -1,5 +1,7 @@
 import { Fragment, type ReactNode } from "react"
+import Link from "next/link"
 import { linkify } from "@/lib/linkify"
+import { MENTION_TOKEN_RE } from "@/lib/mentions"
 
 export type RichTextOptions = {
   /** Turn URLs into clickable links within plain-text runs. */
@@ -20,6 +22,44 @@ const MENTION_REGEX = /(@[a-zA-Z0-9_.]+)/g
  * text, so the two never collide.
  */
 function renderLeaf(text: string, keyBase: string, opts: RichTextOptions): ReactNode[] {
+  if (!text) return []
+
+  // Canonical mention tokens `@[Name](userId)` are always rendered as clickable
+  // profile links, regardless of `opts.mention` (they're unambiguous). The text
+  // between/around tokens is handed to the plain-leaf renderer below.
+  const re = new RegExp(MENTION_TOKEN_RE.source, "g")
+  const nodes: ReactNode[] = []
+  let last = 0
+  let i = 0
+  let match: RegExpExecArray | null
+  while ((match = re.exec(text)) !== null) {
+    const [full, name, userId] = match
+    if (match.index > last) {
+      nodes.push(...renderPlainLeaf(text.slice(last, match.index), `${keyBase}-p${i}`, opts))
+    }
+    nodes.push(
+      <Link
+        key={`${keyBase}-mn${i}`}
+        href={`/u/${userId}`}
+        onClick={(e) => e.stopPropagation()}
+        className={opts.mentionClassName ?? "font-semibold text-primary hover:underline"}
+      >
+        @{name}
+      </Link>,
+    )
+    last = match.index + full.length
+    i++
+  }
+  if (last === 0) return renderPlainLeaf(text, keyBase, opts)
+  if (last < text.length) nodes.push(...renderPlainLeaf(text.slice(last), `${keyBase}-p${i}`, opts))
+  return nodes
+}
+
+/**
+ * Renders a mention-token-free run: optional `@word` highlighting (legacy,
+ * non-clickable) and/or clickable URLs.
+ */
+function renderPlainLeaf(text: string, keyBase: string, opts: RichTextOptions): ReactNode[] {
   if (!text) return []
 
   if (opts.mention) {
