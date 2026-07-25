@@ -55,6 +55,7 @@ export function LiveReplayPlayer({
     episodeId: show.episodeId ?? null,
     hasRealCover,
     skipSeconds: 15,
+    autoPlay,
   })
   const {
     mediaRef,

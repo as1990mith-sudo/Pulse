@@ -29,8 +29,18 @@ export function useSharedPlayback(opts: {
   hasRealCover?: boolean
   /** Skip amount in seconds for rewind/forward. Defaults to 15. */
   skipSeconds?: number
+  /**
+   * When true, the video begins playing immediately on mount (reel slides).
+   * In that case we must NOT run the poster/duration seek tricks in
+   * `onLoadedMetadata`: seeking to the end (1e7) to probe an Infinity-duration
+   * blob, or to 0.1 for a poster frame, while the element is actively playing
+   * corrupts frame presentation — the video keeps advancing time + audio but
+   * paints black until a manual pause/seek forces a repaint. Duration resolves
+   * on its own via `durationchange` as the blob buffers.
+   */
+  autoPlay?: boolean
 }) {
-  const { episodeId, hasRealCover = false, skipSeconds = 15 } = opts
+  const { episodeId, hasRealCover = false, skipSeconds = 15, autoPlay = false } = opts
 
   const mediaRef = useRef<HTMLVideoElement>(null)
   const frameRef = useRef<HTMLDivElement>(null)
@@ -211,6 +221,13 @@ export function useSharedPlayback(opts: {
   const onLoadedMetadata = useCallback(
     (e: React.SyntheticEvent<HTMLVideoElement>) => {
       const el = e.currentTarget
+      // Autoplaying reels must never be seeked here — doing so mid-play leaves
+      // the video painting black. Just record a finite duration; an
+      // Infinity-duration blob resolves later through `onDurationChange`.
+      if (autoPlay) {
+        if (el.duration !== Infinity && !Number.isNaN(el.duration)) setDuration(el.duration)
+        return
+      }
       if (el.duration === Infinity || Number.isNaN(el.duration)) {
         const onUpdate = () => {
           if (el.duration !== Infinity && !Number.isNaN(el.duration)) {
@@ -232,7 +249,7 @@ export function useSharedPlayback(opts: {
         }
       }
     },
-    [hasRealCover],
+    [hasRealCover, autoPlay],
   )
 
   const pct = duration > 0 ? (current / duration) * 100 : 0
