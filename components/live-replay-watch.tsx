@@ -319,8 +319,8 @@ function ReplaySlide({
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-56 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
 
       {/* Overlaid action rail — like / comment / share / save, reels-style.
-          Sits above the player's bottom time + scrubber so nothing overlaps. */}
-      <div className="absolute bottom-[calc(3.75rem+env(safe-area-inset-bottom))] right-2 z-20 flex flex-col items-center gap-4 text-white">
+          Sits well above the player's bottom time + scrubber so nothing overlaps. */}
+      <div className="absolute bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-2 z-20 flex flex-col items-center gap-4 text-white">
         <button
           onClick={toggleLike}
           disabled={!currentUser}
@@ -370,9 +370,10 @@ function ReplaySlide({
         </button>
       </div>
 
-      {/* Overlaid title / creator / streamed-label, bottom-left. Lifted above
-          the player's bottom scrubber so the controls stay reachable. */}
-      <div className="absolute bottom-[calc(3.75rem+env(safe-area-inset-bottom))] left-4 right-20 z-20 text-white">
+      {/* Overlaid title / creator / streamed-label, bottom-left. Lifted well
+          above the player's bottom time + scrubber so the duration tracker is
+          never hidden behind this overlay. */}
+      <div className="absolute bottom-[calc(5.5rem+env(safe-area-inset-bottom))] left-4 right-20 z-20 text-white">
         <div className="flex items-center gap-2">
           <Link href={`/u/${show.host.id}`} className="tap-scale shrink-0" aria-label={`View ${show.host.name}'s profile`}>
             <Avatar className="size-9 ring-1 ring-white/30">
