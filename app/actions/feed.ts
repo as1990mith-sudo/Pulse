@@ -1,6 +1,6 @@
 "use server"
 
-import { and, asc, count, desc, eq, ilike, inArray, or } from "drizzle-orm"
+import { and, asc, count, desc, eq, ilike, inArray, isNull, or } from "drizzle-orm"
 import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
@@ -238,7 +238,10 @@ export async function getFeed(): Promise<FeedPostView[]> {
       )
     : new Set<string>()
 
-  const posts = await db.select().from(feedPost).orderBy(desc(feedPost.createdAt))
+  // Only main-feed posts. Room posts (iTestify testimonies, Question of the Day
+  // responses) carry a non-null `channel` and are excluded here so they render
+  // exclusively inside their own community rooms.
+  const posts = await db.select().from(feedPost).where(isNull(feedPost.channel)).orderBy(desc(feedPost.createdAt))
   const comments = await db.select().from(feedComment).orderBy(asc(feedComment.createdAt))
   const repostedSet = await getRepostedSet(currentUserId)
   const savedSet = await getSavedPostSet(currentUserId)
@@ -259,6 +262,83 @@ export async function getFeed(): Promise<FeedPostView[]> {
   const ordered = [...posts].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
 
   return ordered.map((p) => ({
+    id: p.id,
+    authorId: p.userId,
+    user: infoMap.get(p.userId)?.name ?? p.authorName,
+    handle: getHandle(infoMap.get(p.userId)?.name ?? p.authorName),
+    initials: getInitials(infoMap.get(p.userId)?.name ?? p.authorName),
+    color: getAvatarColor(p.userId),
+    authorImage: infoMap.get(p.userId)?.image ?? null,
+    postedAt: timeAgo(p.createdAt),
+    createdAtMs: p.createdAt.getTime(),
+    text: p.text,
+    image: p.image,
+    video: p.video,
+    media: toMedia(p),
+    likes: p.likes,
+    liked: likedPostSet.has(p.id),
+    reposts: p.reposts,
+    reposted: repostedSet.has(p.id),
+    saved: savedSet.has(String(p.id)),
+    saves: saveCounts.get(p.id) ?? 0,
+    shares: shareCounts.get(p.id) ?? 0,
+    edited: !!p.editedAt,
+    isFollowing: followingIds.has(p.userId),
+    isSelf: currentUserId === p.userId,
+    mentionedMe: currentUserId ? (p.mentions ?? []).some((m) => m.userId === currentUserId) : false,
+    comments: comments
+      .filter((c) => c.postId === p.id)
+      .map((c) => toCommentView(c, infoMap, currentUserId, likedCommentSet)),
+  }))
+}
+
+/**
+ * Newest-first posts for a single community room `channel`
+ * ("itestify" or "qotd:<questionId>"). Returns the same rich FeedPostView the
+ * main feed uses, so room UIs can reuse <PostCard> and all its engagement,
+ * comment, media and moderation wiring unchanged.
+ */
+export async function getChannelFeed(channel: string): Promise<FeedPostView[]> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  const currentUserId = session?.user?.id ?? null
+
+  const followingIds = currentUserId
+    ? new Set(
+        (
+          await db
+            .select({ followingId: follow.followingId })
+            .from(follow)
+            .where(eq(follow.followerId, currentUserId))
+        ).map((r) => r.followingId),
+      )
+    : new Set<string>()
+
+  const posts = await db
+    .select()
+    .from(feedPost)
+    .where(eq(feedPost.channel, channel))
+    .orderBy(desc(feedPost.createdAt))
+  if (posts.length === 0) return []
+
+  const postIds = posts.map((p) => p.id)
+  const comments = await db
+    .select()
+    .from(feedComment)
+    .where(inArray(feedComment.postId, postIds))
+    .orderBy(asc(feedComment.createdAt))
+  const repostedSet = await getRepostedSet(currentUserId)
+  const savedSet = await getSavedPostSet(currentUserId)
+  const saveCounts = await getPostSaveCounts(postIds)
+  const shareCounts = await getPostShareCounts(postIds)
+  const likedPostSet = await getLikedSet(currentUserId, "post", postIds)
+  const likedCommentSet = await getLikedSet(currentUserId, "feed_comment", comments.map((c) => c.id))
+
+  const infoMap = await getUserInfoMap([
+    ...posts.map((p) => p.userId),
+    ...comments.map((c) => c.userId),
+  ])
+
+  return posts.map((p) => ({
     id: p.id,
     authorId: p.userId,
     user: infoMap.get(p.userId)?.name ?? p.authorName,
@@ -317,7 +397,7 @@ export async function searchPosts(query: string): Promise<FeedPostView[]> {
   const posts = await db
     .select()
     .from(feedPost)
-    .where(or(ilike(feedPost.text, like), ilike(feedPost.authorName, like)))
+    .where(and(isNull(feedPost.channel), or(ilike(feedPost.text, like), ilike(feedPost.authorName, like))))
     .orderBy(desc(feedPost.createdAt))
     .limit(50)
 
@@ -387,10 +467,12 @@ export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
       )
     : new Set<string>()
 
+  // Exclude room-scoped posts (iTestify / Question of the Day) so the profile
+  // Posts tab shows only the user's main-feed posts; room content stays in-room.
   const posts = await db
     .select()
     .from(feedPost)
-    .where(eq(feedPost.userId, userId))
+    .where(and(eq(feedPost.userId, userId), isNull(feedPost.channel)))
     .orderBy(desc(feedPost.createdAt))
   const comments = await db.select().from(feedComment).orderBy(asc(feedComment.createdAt))
   const repostedSet = await getRepostedSet(currentUserId)
@@ -565,6 +647,10 @@ export async function createPost(input: {
   image?: string | null
   video?: string | null
   media?: PostMedia[]
+  // Scopes the post to a community room instead of the main feed:
+  // "itestify" (a testimony) or "qotd:<questionId>" (a Question of the Day
+  // response). Omitted/null for a normal feed post.
+  channel?: string | null
 }) {
   const user = await requireUser()
   // Resolve @mentions (privacy-checked); blocked ones become inert text.
@@ -577,6 +663,8 @@ export async function createPost(input: {
     else if (input.video) media.push({ type: "video", url: input.video })
   }
   if (!text && media.length === 0) throw new Error("Post cannot be empty.")
+
+  const channel = input.channel?.trim() || null
 
   // Mirror the first item into the legacy columns so older readers still work.
   const first = media[0] ?? null
@@ -591,6 +679,7 @@ export async function createPost(input: {
       image: first?.type === "image" ? first.url : null,
       video: first?.type === "video" ? first.url : null,
       media: media.length > 0 ? media : null,
+      channel,
       mentions: mentions.length > 0 ? mentions : null,
     })
     .returning({ id: feedPost.id })
@@ -606,6 +695,9 @@ export async function createPost(input: {
   // and, since posts are ordered newest-first, as the first tile on the Posts tab.
   revalidatePath("/feed")
   revalidatePath(`/u/${user.id}`)
+  // Keep the room views fresh when posting a testimony / QOTD response.
+  if (channel === "itestify") revalidatePath("/chatrooms/itestify")
+  else if (channel?.startsWith("qotd:")) revalidatePath("/chatrooms/questions")
 
   // Return the new id so the client can float this post to the top of the feed.
   return { id: inserted?.id ?? null }

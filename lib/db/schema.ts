@@ -76,6 +76,11 @@ export const feedPost = pgTable("feed_post", {
   // Ordered carousel of media for Instagram-style multi-media posts. Each item
   // is { type: "image" | "video", url: string }. Null/empty for text posts.
   media: jsonb("media").$type<{ type: "image" | "video"; url: string }[]>(),
+  // Scopes a post to a community room instead of the main social feed. Null =
+  // the normal feed. "itestify" = an iTestify testimony. "qotd:<questionId>" =
+  // a response under that Question of the Day's discussion thread. The main feed
+  // query filters to channel IS NULL so room posts never leak into it.
+  channel: text("channel"),
   // Resolved @mentions in `text`, in the order they appear. Each item is
   // { userId, name } for a user who passed the privacy check at save time.
   // Drives clickable mention links + notifications. Null/empty for none.
@@ -1149,6 +1154,31 @@ export const auditLog = pgTable("audit_log", {
   ipAddress: text("ipAddress"),
   userAgent: text("userAgent"),
   metadata: jsonb("metadata"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// --- Question of the Day ---------------------------------------------------
+// One thought-provoking Christian/life question published by an admin for a
+// focused daily community discussion. Only admins create/publish these; regular
+// users only view and respond. Responses live in feed_post with
+// channel = "qotd:<id>", so they reuse the whole feed engagement + media stack.
+// Lifecycle mirrors devotionals: draft | scheduled | published | archived.
+// Exactly one question is the live/featured one at a time (the most recently
+// published, non-archived row); publishing a new one archives the previous.
+export const qotdQuestion = pgTable("qotd_question", {
+  id: serial("id").primaryKey(),
+  adminId: text("adminId").notNull(),
+  adminName: text("adminName").notNull(),
+  questionText: text("questionText").notNull(),
+  // Optional admin-uploaded image, shown with the featured question. Uses the
+  // existing Frequency image upload + cropping flow.
+  image: text("image"),
+  status: text("status").notNull().default("draft"),
+  // The publication / active date (YYYY-MM-DD), per the scheduling system.
+  activeDate: text("activeDate").notNull(),
+  scheduledFor: timestamp("scheduledFor"),
+  publishedAt: timestamp("publishedAt"),
+  archivedAt: timestamp("archivedAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
