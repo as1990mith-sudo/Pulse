@@ -126,6 +126,9 @@ export type FeedPostView = {
   edited: boolean
   isFollowing: boolean
   isSelf: boolean
+  // True when the signed-in viewer is one of this post's allowed mentions, so
+  // the UI can offer "Remove my mention" without exposing the full list.
+  mentionedMe: boolean
   comments: FeedCommentView[]
 }
 
@@ -276,6 +279,7 @@ export async function getFeed(): Promise<FeedPostView[]> {
     edited: !!p.editedAt,
     isFollowing: followingIds.has(p.userId),
     isSelf: currentUserId === p.userId,
+    mentionedMe: currentUserId ? (p.mentions ?? []).some((m) => m.userId === currentUserId) : false,
     comments: comments
       .filter((c) => c.postId === p.id)
       .map((c) => toCommentView(c, infoMap, currentUserId, likedCommentSet)),
@@ -358,6 +362,7 @@ export async function searchPosts(query: string): Promise<FeedPostView[]> {
     edited: !!p.editedAt,
     isFollowing: followingIds.has(p.userId),
     isSelf: currentUserId === p.userId,
+    mentionedMe: currentUserId ? (p.mentions ?? []).some((m) => m.userId === currentUserId) : false,
     comments: comments
       .filter((c) => c.postId === p.id)
       .map((c) => toCommentView(c, infoMap, currentUserId, likedCommentSet)),
@@ -421,6 +426,7 @@ export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
     edited: !!p.editedAt,
     isFollowing: followingIds.has(p.userId),
     isSelf: currentUserId === p.userId,
+    mentionedMe: currentUserId ? (p.mentions ?? []).some((m) => m.userId === currentUserId) : false,
     comments: comments
       .filter((c) => c.postId === p.id)
       .map((c) => toCommentView(c, infoMap, currentUserId, likedCommentSet)),
@@ -497,6 +503,7 @@ export async function getRepostsByUser(userId: string): Promise<FeedPostView[]> 
     edited: !!p.editedAt,
     isFollowing: followingIds.has(p.userId),
     isSelf: currentUserId === p.userId,
+    mentionedMe: currentUserId ? (p.mentions ?? []).some((m) => m.userId === currentUserId) : false,
     comments: comments
       .filter((c) => c.postId === p.id)
       .map((c) => toCommentView(c, infoMap, currentUserId, likedCommentSet)),

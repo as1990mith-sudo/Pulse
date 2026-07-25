@@ -27,6 +27,8 @@ import {
   GripVertical,
   Flag,
   Maximize2,
+  AtSign,
+  UserX,
 } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import {
@@ -44,6 +46,8 @@ import {
   type PostMedia,
 } from "@/app/actions/feed"
 import { toggleSaveItem } from "@/app/actions/share"
+import { removeMyMention, reportMention } from "@/app/actions/mentions"
+import { toast } from "sonner"
 import { type ThreadComment } from "@/components/comment-thread"
 import { CommentSheet } from "@/components/comment-sheet"
 import { toggleFollow } from "@/app/actions/follow"
@@ -1125,6 +1129,10 @@ export function PostCard({
   const [showComments, setShowComments] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
+  const [mentionReportOpen, setMentionReportOpen] = useState(false)
+  // Tracks whether the viewer has removed their own mention from this post, so
+  // the "Remove my mention" action hides itself after a successful removal.
+  const [mentionRemoved, setMentionRemoved] = useState(false)
   const [deleted, setDeleted] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editDraft, setEditDraft] = useState(post.text)
@@ -1140,6 +1148,20 @@ export function PostCard({
     startTransition(async () => {
       await deletePost(post.id)
       setDeleted(true)
+      await globalMutate("feed")
+      router.refresh()
+    })
+  }
+
+  function handleRemoveMyMention() {
+    startTransition(async () => {
+      const res = await removeMyMention({ contentType: "post", contentId: post.id })
+      if (!res.ok) {
+        toast.error(res.error ?? "Couldn't remove the mention.")
+        return
+      }
+      setMentionRemoved(true)
+      toast.success("Your mention was removed from this post.")
       await globalMutate("feed")
       router.refresh()
     })
@@ -1390,6 +1412,23 @@ export function PostCard({
               ) : (
                 <>
                   {text && <DropdownMenuSeparator className="bg-white/10" />}
+                  {/* Mention safety: only the tagged viewer can remove their own
+                      mention or report it. Hidden once the removal succeeds. */}
+                  {post.mentionedMe && !mentionRemoved && (
+                    <>
+                      <DropdownMenuItem
+                        onClick={handleRemoveMyMention}
+                        disabled={isPending}
+                        className={POPUP_MENU_ITEM}
+                      >
+                        <UserX /> Remove my mention
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setMentionReportOpen(true)} className={POPUP_MENU_ITEM}>
+                        <AtSign className="text-destructive" /> Report this mention
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator className="bg-white/10" />
+                    </>
+                  )}
                   {/* Non-owner: report opens the reason picker modal. */}
                   <DropdownMenuItem onClick={() => setReportOpen(true)} className={POPUP_MENU_ITEM}>
                     <Flag className="text-destructive" /> Report post
@@ -1402,6 +1441,23 @@ export function PostCard({
       </div>
 
       <ReportReasonModal open={reportOpen} onClose={() => setReportOpen(false)} subjectLabel={post.user} />
+
+      {/* Dedicated mention report — routes into the shared moderation queue with
+          a mention content type via the reportMention server action. */}
+      <ReportReasonModal
+        open={mentionReportOpen}
+        onClose={() => setMentionReportOpen(false)}
+        subjectLabel={post.user}
+        onSubmit={(reason) => {
+          if (!currentUser) return
+          void reportMention({
+            contentType: "post",
+            contentId: post.id,
+            mentionedUserId: currentUser.id,
+            reason,
+          })
+        }}
+      />
 
       {confirmDelete && (
         <div className="mx-3 mb-2 flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
