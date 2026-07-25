@@ -71,7 +71,7 @@ import { LiveBadge } from "@/components/live-badge"
 import { ReactionLayer } from "@/components/live-reactions"
 import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
 import { BackExitMenu } from "@/components/live-back-menu"
-import { CoverUpload } from "@/components/admin/cover-upload"
+import { CoverUpload, SQUARE_PORTRAIT_RATIOS } from "@/components/admin/cover-upload"
 import { AudioFormatSelector } from "@/components/audio-format-selector"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -577,7 +577,12 @@ export function StudioConsole({
           <div className="space-y-5">
             <AudioFormatSelector active="podcast" />
 
-            <CoverUpload value={cover} onChange={setCover} label="Cover artwork (required)" />
+            <CoverUpload
+              value={cover}
+              onChange={setCover}
+              label="Cover artwork (required)"
+              ratios={SQUARE_PORTRAIT_RATIOS}
+            />
 
             <label className="block space-y-1.5">
               <span className="text-sm font-medium">Room name</span>

@@ -1,6 +1,7 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
+import { createPortal } from "react-dom"
 import Cropper, { type Area } from "react-easy-crop"
 import { Check, Loader2, X, ZoomIn } from "lucide-react"
 import { getCroppedBlob } from "@/lib/media-edit"
@@ -48,6 +49,13 @@ export function CropModal({
   const [mediaAspect, setMediaAspect] = useState(1)
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null)
   const [working, setWorking] = useState(false)
+  // Portal target guard: this overlay is `position: fixed`, but when it renders
+  // inside a transformed/animated ancestor (e.g. a Sheet), that ancestor becomes
+  // its containing block and the "fullscreen" overlay gets trapped inside the
+  // panel — the layout looks chaotic. Rendering into <body> keeps it viewport-
+  // relative and truly fullscreen everywhere it's used.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   const onCropComplete = useCallback((_area: Area, areaPixels: Area) => {
     setCroppedAreaPixels(areaPixels)
@@ -69,7 +77,9 @@ export function CropModal({
     }
   }
 
-  return (
+  if (!mounted) return null
+
+  return createPortal(
     <div className="fixed inset-0 z-[80] flex flex-col bg-black" role="dialog" aria-modal="true" aria-label={title}>
       {/* Top bar */}
       <div className="flex items-center justify-between px-3 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
@@ -149,6 +159,7 @@ export function CropModal({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

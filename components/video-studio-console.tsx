@@ -54,7 +54,7 @@ import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { useLivePresence } from "@/lib/use-live-presence"
 import { ShareSheet } from "@/components/share-sheet"
 import { ConversationVideo } from "@/components/conversation/conversation-video"
-import { CoverUpload } from "@/components/admin/cover-upload"
+import { CoverUpload, SQUARE_PORTRAIT_RATIOS } from "@/components/admin/cover-upload"
 import { CoverArt } from "@/components/cover-art"
 import { MarqueeTitle } from "@/components/marquee-title"
 import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
@@ -1155,6 +1155,9 @@ export function VideoStudioConsole({
                 value={cover}
                 onChange={setCover}
                 label={orientation === "landscape" ? "Room cover" : "Broadcast cover"}
+                // The portrait broadcast is a live stream — offer 1:1 / 4:5 crops.
+                // Landscape Conversation rooms keep the default 16:9 cover.
+                {...(orientation === "landscape" ? {} : { ratios: SQUARE_PORTRAIT_RATIOS })}
               />
 
               {/* Discussion topic — Conversation rooms only. */}

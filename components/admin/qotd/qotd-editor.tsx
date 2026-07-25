@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { CoverUpload } from "@/components/admin/cover-upload"
+import { CoverUpload, SQUARE_PORTRAIT_RATIOS } from "@/components/admin/cover-upload"
 import type { QotdQuestionRow } from "@/lib/qotd-types"
 import { createQuestion, updateQuestion, scheduleQuestion, publishQuestion } from "@/app/actions/admin-qotd"
 
@@ -125,6 +125,7 @@ export function QotdEditor({
               label="Image (optional)"
               value={image || null}
               onChange={(url) => setImage(url ?? "")}
+              ratios={SQUARE_PORTRAIT_RATIOS}
             />
             <Field label="Schedule for (optional)">
               <Input type="datetime-local" value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} />
