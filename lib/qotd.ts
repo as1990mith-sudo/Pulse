@@ -123,3 +123,19 @@ export async function getArchivedQuestions(): Promise<QotdQuestionRow[]> {
   const counts = await getResponseCounts(rows.map((r) => r.id))
   return rows.map((r) => toRow(r, null, counts.get(r.id) ?? 0))
 }
+
+/**
+ * Admin management list — all questions in a status (or all), newest first,
+ * each with its response count and whether it's the current live one.
+ */
+export async function listQuestions(status: QotdStatus | "all" = "all"): Promise<QotdQuestionRow[]> {
+  await activateDueQuestions()
+  const rows = await db
+    .select()
+    .from(qotdQuestion)
+    .where(status === "all" ? undefined : eq(qotdQuestion.status, status))
+    .orderBy(desc(sql`coalesce(${qotdQuestion.publishedAt}, ${qotdQuestion.scheduledFor}, ${qotdQuestion.createdAt})`))
+  const liveId = await getLiveQuestionId()
+  const counts = await getResponseCounts(rows.map((r) => r.id))
+  return rows.map((r) => toRow(r, liveId, counts.get(r.id) ?? 0))
+}
