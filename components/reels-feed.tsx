@@ -21,6 +21,7 @@ import { addPostComment, setPostLike, setCommentLike, editPostComment, deletePos
 import { toggleSaveItem } from "@/app/actions/share"
 import type { CurrentUser } from "@/lib/session"
 import { haptic } from "@/lib/haptics"
+import { renderMessageBody } from "@/lib/rich-text"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { CommentThread, type ThreadComment } from "@/components/comment-thread"
@@ -30,32 +31,6 @@ import { CommentThread, type ThreadComment } from "@/components/comment-thread"
 const MAX_REEL_SECONDS = 3 * 60 + 15
 
 type Reel = { post: FeedPostView; url: string; key: string; trimStart?: number; trimEnd?: number }
-
-/**
- * Turns one line of caption text into React nodes, converting simple markdown
- * emphasis — **bold** or *bold* — into real <strong> elements instead of
- * leaving the literal asterisks in the text. `**` is matched before `*` so
- * double-asterisk spans win over single ones.
- */
-function renderInlineBold(line: string, keyPrefix: string): React.ReactNode[] {
-  const nodes: React.ReactNode[] = []
-  const regex = /\*\*(.+?)\*\*|\*(.+?)\*/g
-  let lastIndex = 0
-  let boldIndex = 0
-  let match: RegExpExecArray | null
-  while ((match = regex.exec(line)) !== null) {
-    if (match.index > lastIndex) nodes.push(line.slice(lastIndex, match.index))
-    const boldText = match[1] ?? match[2] ?? ""
-    nodes.push(
-      <strong key={`${keyPrefix}-b${boldIndex++}`} className="font-bold">
-        {boldText}
-      </strong>,
-    )
-    lastIndex = regex.lastIndex
-  }
-  if (lastIndex < line.length) nodes.push(line.slice(lastIndex))
-  return nodes
-}
 
 /**
  * Caption under the author row. Mirrors the feed post caption exactly so the
@@ -76,16 +51,18 @@ function ReelCaption({ text }: { text: string }) {
   const collapsedMaxEm = LINE_HEIGHT
   const isClamped = clampable && !expanded
 
-  // Flatten every line into one inline flow (newlines preserved via
-  // `whitespace-pre-line`) so the clamp/measure works against a single box.
-  const nodes = useMemo(() => {
-    const out: React.ReactNode[] = []
-    text.split("\n").forEach((line, i) => {
-      if (i > 0) out.push("\n")
-      out.push(...renderInlineBold(line, `l${i}`))
-    })
-    return out
-  }, [text])
+  // Render with the shared rich-text renderer so `@[Name](id)` mentions,
+  // **bold**/*bold*/_italic_ and links all match the feed exactly (newlines are
+  // preserved by the container's `whitespace-pre-line`).
+  const nodes = useMemo(
+    () =>
+      renderMessageBody(text, {
+        link: true,
+        linkClassName: "font-medium text-white underline-offset-2 [overflow-wrap:anywhere] hover:underline",
+        mentionClassName: "font-semibold text-white hover:underline",
+      }),
+    [text],
+  )
 
   // Only surface "Read more" when the caption genuinely overflows one line.
   // Re-measured on resize and when the text/expansion changes.

@@ -14,9 +14,9 @@ import { cn } from "@/lib/utils"
 const TEXTAREA_BASE =
   "flex field-sizing-content min-h-16 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40"
 
-// Matches WhatsApp-style `*bold*` / `_italic_` exactly like lib/rich-text.tsx,
+// Matches `**bold**` / `*bold*` / `_italic_` exactly like lib/rich-text.tsx,
 // but here we KEEP the markers visible so the user can see what they typed.
-const FORMAT_RE = /([*_])(?=\S)([\s\S]*?\S)\1/g
+const FORMAT_RE = /(\*\*|[*_])(?=\S)([\s\S]*?\S)\1/g
 
 /**
  * Renders the draft text with `*bold*` / `_italic_` styling applied live, while
@@ -39,10 +39,15 @@ function renderOverlay(text: string, keyBase = "ov"): ReactNode[] {
     nodes.push(
       <span key={`${keyBase}-w${i}`}>
         <span className="text-muted-foreground/40">{marker}</span>
-        {marker === "*" ? (
-          <strong className="font-semibold">{innerNodes}</strong>
-        ) : (
+        {marker === "_" ? (
           <em>{innerNodes}</em>
+        ) : (
+          // Faux-bold via text-shadow, NOT font-weight: a real bold face has
+          // wider glyph advances than the plain textarea underneath, which would
+          // make the mirror wrap at different points and drift the text out of
+          // sync with the caret. text-shadow thickens the strokes while keeping
+          // the exact same advance widths, so wrapping/caret alignment holds.
+          <span style={{ textShadow: "0.4px 0 currentColor, -0.4px 0 currentColor" }}>{innerNodes}</span>
         )}
         <span className="text-muted-foreground/40">{marker}</span>
       </span>,

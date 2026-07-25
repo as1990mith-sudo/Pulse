@@ -89,12 +89,13 @@ function renderPlainLeaf(text: string, keyBase: string, opts: RichTextOptions): 
  * over a shared stateful `lastIndex`.
  */
 function renderFormatted(text: string, keyBase: string, opts: RichTextOptions): ReactNode[] {
-  // Matches `*bold*` or `_italic_` like WhatsApp: a single `*` or `_` marker
-  // whose content starts and ends with a non-space character (so `2 * 3` or a
-  // stray underscore isn't treated as formatting). The backreference makes the
-  // closing marker match the opener, and `[\s\S]` lets it span line breaks
-  // without needing the `s` (dotAll) flag.
-  const re = /([*_])(?=\S)([\s\S]*?\S)\1/g
+  // Matches `**bold**` (markdown), `*bold*` (WhatsApp) or `_italic_`: the marker
+  // (double or single asterisk, or underscore) wraps content that starts and
+  // ends with a non-space character (so `2 * 3` or a stray underscore isn't
+  // treated as formatting). `**` is tried before `*` so double-asterisk spans
+  // win. The backreference makes the closing marker match the opener, and
+  // `[\s\S]` lets it span line breaks without needing the `s` (dotAll) flag.
+  const re = /(\*\*|[*_])(?=\S)([\s\S]*?\S)\1/g
   const nodes: ReactNode[] = []
   let last = 0
   let i = 0
@@ -107,12 +108,12 @@ function renderFormatted(text: string, keyBase: string, opts: RichTextOptions): 
     }
     const innerNodes = renderFormatted(inner, `${keyBase}-f${i}`, opts)
     nodes.push(
-      marker === "*" ? (
+      marker === "_" ? (
+        <em key={`${keyBase}-i${i}`}>{innerNodes}</em>
+      ) : (
         <strong key={`${keyBase}-b${i}`} className="font-semibold">
           {innerNodes}
         </strong>
-      ) : (
-        <em key={`${keyBase}-i${i}`}>{innerNodes}</em>
       ),
     )
     last = match.index + full.length
