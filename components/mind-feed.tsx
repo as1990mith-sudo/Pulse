@@ -914,12 +914,24 @@ function MediaSlide({
 
   // Tallest shape we ever frame (width/height). 9:16 = 0.5625.
   const MIN_ASPECT = 9 / 16
-  // Prefer an explicitly chosen crop ratio (cropped videos); otherwise the
-  // detected natural ratio. Clamp so nothing is ever taller than 9:16 — such
-  // media is center-cropped into a 9:16 frame via object-cover. A viewport cap
-  // keeps any single frame from dominating the screen.
+  // Prefer an explicitly chosen crop ratio (cropped media); otherwise the
+  // detected natural ratio.
   const chosen = item.aspectRatio ?? ratio
-  const framedAspect = chosen != null ? Math.max(chosen, MIN_ASPECT) : null
+
+  let framedAspect: number | null
+  if (item.type === "video") {
+    // Videos in the feed are restricted to a fixed set of card shapes:
+    // 4:5 (0.8), 1:1 (1) and 16:9 (1.7778). A clip in any other ratio — most
+    // notably vertical 9:16 — is presented in a 4:5 card and center-cropped
+    // with object-cover. The untouched full ratio is only revealed when the
+    // clip is expanded into the immersive viewer (which uses object-contain).
+    const ALLOWED_VIDEO_ASPECTS = [4 / 5, 1, 16 / 9]
+    const allowed = chosen != null && ALLOWED_VIDEO_ASPECTS.some((a) => Math.abs(chosen - a) < 0.02)
+    framedAspect = allowed ? (chosen as number) : 4 / 5
+  } else {
+    // Images keep their natural ratio, clamped so nothing is taller than 9:16.
+    framedAspect = chosen != null ? Math.max(chosen, MIN_ASPECT) : null
+  }
   // The media is visually cropped (content cut off) whenever its natural ratio
   // differs from the frame — used to show an "expand to full screen" hint.
   const cropped = ratio != null && framedAspect != null && Math.abs(ratio - framedAspect) > 0.01
