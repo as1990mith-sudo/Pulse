@@ -59,6 +59,12 @@ export type CommentThreadProps = {
    * card (Follow · Message · View profile) without leaving the feed.
    */
   onAuthorClick?: (authorId: string) => void
+  /**
+   * When false, hides the per-comment "Reply" affordance entirely. Used by flat
+   * comment surfaces (e.g. Question of the Day, where each entry is a top-level
+   * response with no sub-threads). Defaults to true.
+   */
+  allowReply?: boolean
 }
 
 /**
@@ -76,6 +82,7 @@ export function CommentThread({
   showCopy = true,
   enforceTimeWindows = true,
   onAuthorClick,
+  allowReply = true,
 }: CommentThreadProps) {
   // Group replies under their parent. Unknown parents fall back to top level.
   const { roots, repliesByParent } = useMemo(() => {
@@ -105,6 +112,7 @@ export function CommentThread({
             depth={0}
             repliesByParent={repliesByParent}
             canInteract={canInteract}
+            allowReply={allowReply}
             onLike={onLike}
             onReply={onReply}
             onEdit={onEdit}
@@ -132,6 +140,7 @@ function CommentNode({
   depth,
   repliesByParent,
   canInteract,
+  allowReply = true,
   onLike,
   onReply,
   onEdit,
@@ -144,6 +153,7 @@ function CommentNode({
   depth: number
   repliesByParent: Map<number, ThreadComment[]>
   canInteract: boolean
+  allowReply?: boolean
   onLike: (commentId: number, liked: boolean) => void
   onReply: (parentId: number, text: string) => Promise<void> | void
   onEdit: (commentId: number, text: string) => Promise<void> | void
@@ -160,7 +170,7 @@ function CommentNode({
       <CommentItem
         comment={comment}
         canInteract={canInteract}
-        canReply={canInteract && depth < MAX_DEPTH}
+        canReply={allowReply && canInteract && depth < MAX_DEPTH}
         isReply={depth > 0}
         onLike={onLike}
         onReply={onReply}
@@ -193,6 +203,7 @@ function CommentNode({
                     depth={depth + 1}
                     repliesByParent={repliesByParent}
                     canInteract={canInteract}
+                    allowReply={allowReply}
                     onLike={onLike}
                     onReply={onReply}
                     onEdit={onEdit}

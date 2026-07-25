@@ -57,6 +57,13 @@ export type CommentSheetProps = {
   /** Empty-state copy. */
   emptyText?: string
   emptyHint?: string
+  /** Hides the per-comment reply affordance (flat surfaces like QOTD). */
+  allowReply?: boolean
+  /**
+   * Overrides the sheet's height classes. Defaults to `max-h-[82%] min-h-[52%]`.
+   * Pass e.g. `"h-[85%]"` for a fixed-height sheet.
+   */
+  heightClassName?: string
 }
 
 /**
@@ -85,6 +92,8 @@ export function CommentSheet({
   placeholder = "Add a comment…",
   emptyText = "No comments yet",
   emptyHint = "Start the conversation.",
+  allowReply = true,
+  heightClassName,
 }: CommentSheetProps) {
   const [draft, setDraft] = useState("")
   const [sending, setSending] = useState(false)
@@ -178,7 +187,12 @@ export function CommentSheet({
       />
       {/* Theme-sensitive surface: uses design tokens so the sheet follows the
           app's light/dark theme instead of being permanently charcoal. */}
-      <div className="relative flex max-h-[82%] min-h-[52%] flex-col rounded-t-[1.75rem] border-t border-border bg-background text-foreground shadow-2xl animate-in slide-in-from-bottom duration-300 ease-out">
+      <div
+        className={cn(
+          "relative flex flex-col rounded-t-[1.75rem] border-t border-border bg-background text-foreground shadow-2xl animate-in slide-in-from-bottom duration-300 ease-out",
+          heightClassName ?? "max-h-[82%] min-h-[52%]",
+        )}
+      >
         {/* Grabber + title row */}
         <header className="relative shrink-0 px-4 pt-2.5">
           <span
@@ -227,6 +241,7 @@ export function CommentSheet({
               onEdit={onEdit ?? (() => {})}
               onDelete={onDelete ?? (() => {})}
               onAuthorClick={onAuthorClick}
+              allowReply={allowReply}
             />
           )}
         </div>

@@ -6,12 +6,45 @@ import useSWR from "swr"
 import { ArrowLeft, History, Lightbulb, MessageSquare, PenLine } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import { ChannelComposer } from "@/components/channel-composer"
-import { PostCard } from "@/components/mind-feed"
-import { getChannelFeed, type FeedPostView } from "@/app/actions/feed"
+import { CommentSheet } from "@/components/comment-sheet"
+import { type ThreadComment } from "@/components/comment-thread"
+import {
+  createPost,
+  deletePost,
+  editPost,
+  getChannelFeed,
+  setPostLike,
+  type FeedPostView,
+} from "@/app/actions/feed"
 import { qotdChannel, type QotdQuestionRow } from "@/lib/qotd-types"
 import { useAutoHideChatChrome } from "@/lib/chat-chrome"
 import type { CurrentUser } from "@/lib/session"
+
+/**
+ * A Question-of-the-Day response is stored as a channel feed post, but the UI
+ * presents each one as a flat top-level comment (no sub-threads, no media) so
+ * the surface reads like the feed's comment section rather than a wall of
+ * independent posts.
+ */
+function responseToThreadComment(p: FeedPostView): ThreadComment {
+  return {
+    id: p.id,
+    parentId: null,
+    authorId: p.authorId,
+    isSelf: p.isSelf,
+    name: p.user,
+    handle: p.handle,
+    initials: p.initials,
+    color: p.color,
+    image: p.authorImage,
+    text: p.text,
+    likes: p.likes,
+    liked: p.liked,
+    edited: p.edited,
+    postedAt: p.postedAt,
+    createdAtMs: p.createdAtMs,
+  }
+}
 
 export function QuestionOfTheDay({
   question,
@@ -24,7 +57,7 @@ export function QuestionOfTheDay({
   currentUser: CurrentUser
   archiveCount: number
 }) {
-  const [composerOpen, setComposerOpen] = useState(false)
+  const [sheetOpen, setSheetOpen] = useState(false)
   const onFeedScroll = useAutoHideChatChrome()
   const channel = question ? qotdChannel(question.id) : null
 
@@ -33,6 +66,40 @@ export function QuestionOfTheDay({
     () => getChannelFeed(channel as string),
     { fallbackData: initialResponses, refreshInterval: 20000 },
   )
+
+  // Post a new response to the QOTD channel, then refresh the list.
+  async function handleSubmit(text: string) {
+    if (!channel) return
+    await createPost({ text, channel })
+    await mutate()
+  }
+
+  // Like/unlike a response with an optimistic list update.
+  async function handleLike(id: number, liked: boolean) {
+    await mutate(
+      (cur = responses) => cur.map((p) => (p.id === id ? { ...p, liked, likes: p.likes + (liked ? 1 : -1) } : p)),
+      { revalidate: false },
+    )
+    try {
+      await setPostLike({ postId: id, liked })
+    } catch {
+      await mutate()
+    }
+  }
+
+  async function handleEdit(id: number, text: string) {
+    await editPost({ postId: id, text })
+    await mutate()
+  }
+
+  async function handleDelete(id: number) {
+    await deletePost(id)
+    await mutate()
+  }
+
+  const responseCount = responses.length
+  const countLabel =
+    responseCount > 0 ? `${responseCount} ${responseCount === 1 ? "response" : "responses"}` : "Responses"
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -104,35 +171,38 @@ export function QuestionOfTheDay({
                 <p className="mt-3 text-pretty text-sm leading-relaxed text-muted-foreground">
                   Share your perspective and read how others in the community see it. Every voice adds something.
                 </p>
-                <Button onClick={() => setComposerOpen(true)} className="mt-4 gap-2 rounded-full">
+                <Button onClick={() => setSheetOpen(true)} className="mt-4 gap-2 rounded-full">
                   <PenLine className="size-4" /> Share your response
                 </Button>
               </div>
             </section>
 
-            {/* Responses */}
-            <section className="mx-auto max-w-2xl">
-              <div className="flex items-center gap-2 px-4 py-3 text-sm font-semibold text-muted-foreground sm:px-6">
-                <MessageSquare className="size-4" />
-                {responses.length > 0
-                  ? `${responses.length} ${responses.length === 1 ? "response" : "responses"}`
-                  : "Responses"}
-              </div>
-              {responses.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 px-6 py-16 text-center">
-                  <p className="font-semibold">Be the first to respond</p>
-                  <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
-                    Tap &ldquo;Share your response&rdquo; to start the conversation.
-                  </p>
-                </div>
+            {/* Responses — opens the comment-section sheet (like the feed). */}
+            <section className="mx-auto max-w-2xl px-4 sm:px-6">
+              {responseCount === 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setSheetOpen(true)}
+                  className="flex w-full flex-col items-center gap-2 rounded-2xl border border-dashed border-border/60 px-6 py-12 text-center transition-colors hover:bg-secondary/40"
+                >
+                  <MessageSquare className="size-6 text-muted-foreground" />
+                  <span className="font-semibold">Be the first to respond</span>
+                  <span className="max-w-xs text-sm leading-relaxed text-muted-foreground">
+                    Tap to open the conversation and share your perspective.
+                  </span>
+                </button>
               ) : (
-                <ul className="divide-y divide-border/60 border-t border-border/60 pb-28">
-                  {responses.map((post) => (
-                    <li key={post.id}>
-                      <PostCard post={post} currentUser={currentUser} variant="feed" videoFeedPosts={responses} />
-                    </li>
-                  ))}
-                </ul>
+                <button
+                  type="button"
+                  onClick={() => setSheetOpen(true)}
+                  className="flex w-full items-center justify-between gap-3 rounded-2xl border border-border/60 px-4 py-4 text-left transition-colors hover:bg-secondary/40"
+                >
+                  <span className="flex items-center gap-2 font-semibold">
+                    <MessageSquare className="size-4 text-muted-foreground" />
+                    {countLabel}
+                  </span>
+                  <span className="text-sm font-medium text-primary">View</span>
+                </button>
               )}
             </section>
           </>
@@ -143,7 +213,7 @@ export function QuestionOfTheDay({
       {question && (
         <button
           type="button"
-          onClick={() => setComposerOpen(true)}
+          onClick={() => setSheetOpen(true)}
           className="absolute bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-5 z-30 inline-flex w-fit items-center gap-2 rounded-full bg-primary px-4 py-2 text-base font-semibold text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95 sm:right-8"
         >
           <PenLine className="size-5" />
@@ -151,17 +221,25 @@ export function QuestionOfTheDay({
         </button>
       )}
 
+      {/* Comment-section sheet: flat, text-only responses at 85% screen height. */}
       {question && channel && (
-        <ChannelComposer
-          open={composerOpen}
-          onClose={() => setComposerOpen(false)}
-          onCreated={() => mutate()}
-          channel={channel}
+        <CommentSheet
+          open={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+          title={countLabel}
+          count={responseCount}
+          comments={responses.map(responseToThreadComment)}
           currentUser={currentUser}
-          title="Your response"
+          onSubmit={handleSubmit}
+          onLike={handleLike}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          allowReply={false}
+          enforceTimeWindows={false}
+          heightClassName="h-[85%]"
           placeholder="What are your thoughts on today's question?"
-          submitLabel="Post response"
-          accent="amber"
+          emptyText="No responses yet"
+          emptyHint="Be the first to share your perspective."
         />
       )}
     </div>

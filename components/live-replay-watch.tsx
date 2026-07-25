@@ -139,8 +139,17 @@ export function LiveReplayWatch({
   }, [])
 
   function close() {
+    // If the replay is floating in the OS Picture-in-Picture window, the viewer
+    // wants to keep watching that mini window while they browse. Dismissing the
+    // full-screen reel should therefore drop them into the live video catalogue
+    // (episodes) rather than unwinding history back to wherever they came from —
+    // and we deliberately do NOT exit PiP, so the floating player keeps playing.
+    if (typeof document !== "undefined" && document.pictureInPictureElement) {
+      router.push("/live")
+      return
+    }
     if (typeof window !== "undefined" && window.history.length > 1) router.back()
-    else router.push("/catalog")
+    else router.push("/live")
   }
 
   if (replays.length === 0) return null

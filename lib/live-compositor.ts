@@ -12,6 +12,8 @@
  * reflected in the recording as they happen.
  */
 
+import { broadcastStageRects } from "@/lib/broadcast-stage"
+
 export type CompositorSource = {
   /** Stable id (participant identity) used to key placeholder colors. */
   id: string
@@ -171,6 +173,27 @@ export class LiveCompositor {
 
     const sources = this.opts.getSources()
     const n = Math.max(1, sources.length)
+
+    // Portrait broadcasts must mirror the LIVE broadcast stage EXACTLY so the
+    // saved replay looks like what viewers saw live: 2 tiles = side-by-side
+    // columns, 3 = tall primary on top with two panels below, 4 = balanced 2×2.
+    // We reuse the same `broadcastStageRects` geometry the live stage uses
+    // (host/primary first, matching this compositor's source order). Grid
+    // meetings (landscape) and rare >4-tile overflow keep the generic grid.
+    if (portrait && sources.length <= 4) {
+      const rects = broadcastStageRects(sources.length)
+      const half = GAP / 2
+      for (let i = 0; i < sources.length; i++) {
+        const r = rects[i]!
+        const x = (r.left / 100) * W + half
+        const y = (r.top / 100) * H + half
+        const w = (r.width / 100) * W - GAP
+        const h = (r.height / 100) * H - GAP
+        this.drawTile(sources[i]!, x, y, w, h)
+      }
+      return
+    }
+
     const { cols, rows } = gridDims(n, portrait)
     const cellW = (W - GAP * (cols + 1)) / cols
     const cellH = (H - GAP * (rows + 1)) / rows
