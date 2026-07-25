@@ -50,6 +50,7 @@ import { ReactionLayer } from "@/components/live-reactions"
 import { LiveChat } from "@/components/live-chat"
 import { MusicPanel, type Track } from "@/components/studio-console"
 import { BackExitMenu } from "@/components/live-back-menu"
+import { SaveEpisodePrompt } from "@/components/live/save-episode-prompt"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { useLivePresence } from "@/lib/use-live-presence"
 import { ShareSheet } from "@/components/share-sheet"
@@ -302,6 +303,12 @@ export function VideoStudioConsole({
   const [endConfirmOpen, setEndConfirmOpen] = useState(false)
   // While the finished recording is being saved (uploaded + auto-published).
   const [saving, setSaving] = useState(false)
+  // After the room has ended for everyone, the host is asked whether to save the
+  // session as an episode. Holds the metadata needed to publish if they say yes.
+  const [saveDecision, setSaveDecision] = useState<{ duration: string } | null>(null)
+  // In-flight recording finalization, started the instant the host ends the live
+  // so it never blocks the room from closing for participants.
+  const recordingPromiseRef = useRef<Promise<Blob | null> | null>(null)
   const startedAtRef = useRef<number | null>(null)
 
   // Background music playlist — the exact same rich panel used in podcast studio
@@ -551,16 +558,34 @@ export function VideoStudioConsole({
     }
   }
 
-  async function endLive() {
-    // Grab the session recording before we tear the room down, then upload it to
-    // Blob and auto-publish it as a "live" video episode (files under the
-    // catalogue's Live → Video tab). Failures fall through to a clean exit so a
-    // host is never trapped on the studio screen.
+  // Terminate the live room IMMEDIATELY for everyone. Recording finalization is
+  // kicked off first (synchronously stopping the recorder so no footage is lost)
+  // but is NOT awaited here — we hold the promise and only resolve it later if
+  // the host chooses to save. Ending the broadcast and disconnecting are
+  // fire-and-forget so the room closes for participants without waiting on the
+  // recording, uploads, episode creation, or the host's save decision.
+  function endLiveRoom() {
+    recordingPromiseRef.current = stopRecording().catch(() => null)
+    if (roomName) void endBroadcast({ roomName }).catch(() => {})
+    disconnect()
+    setSaveDecision({ duration: formatElapsed(elapsed) })
+  }
+
+  // Host chose to save the just-ended session: upload the recording to Blob and
+  // publish it as a "live" video episode (files under the catalogue's
+  // Live → Video tab). The room is already closed, so this runs freely without
+  // holding anyone in the room.
+  async function handleSaveEpisode() {
+    const dec = saveDecision
+    setSaveDecision(null)
+    if (!dec) {
+      onExit?.()
+      return
+    }
     setSaving(true)
-    const durationStr = formatElapsed(elapsed)
     let videoUrl: string | null = null
     try {
-      const blob = await stopRecording()
+      const blob = await (recordingPromiseRef.current ?? Promise.resolve(null))
       if (blob && blob.size > 0) {
         const ext = blob.type.includes("mp4") ? "mp4" : "webm"
         const file = new File([blob], `live-session.${ext}`, { type: blob.type })
@@ -568,26 +593,30 @@ export function VideoStudioConsole({
         videoUrl = data.url
       }
     } catch {
-      /* keep going — end the broadcast even if the recording couldn't be saved */
+      /* keep going — a recording/upload failure must not trap the host */
     }
-
-    if (roomName) await endBroadcast({ roomName }).catch(() => {})
-
     if (videoUrl) {
       await publishShow({
         title,
         tagline: "",
         category,
-        duration: durationStr,
+        duration: dec.duration,
         description: "",
         cover: null,
         videoUrl,
         source: "live",
       }).catch(() => {})
     }
-
-    disconnect()
+    recordingPromiseRef.current = null
     setSaving(false)
+    onExit?.()
+  }
+
+  // Host confirmed they don't want to save. Drop the recording and leave — the
+  // live room already ended when they confirmed.
+  function handleDiscardEpisode() {
+    setSaveDecision(null)
+    recordingPromiseRef.current = null
     onExit?.()
   }
 
@@ -905,7 +934,13 @@ export function VideoStudioConsole({
                   <p className="text-sm font-medium text-pretty">{rtcError}</p>
                   <button
                     type="button"
-                    onClick={endLive}
+                    onClick={() => {
+                      // Connection failed — nothing was broadcast or recorded, so
+                      // just tear down the room and leave (no save prompt).
+                      if (roomName) void endBroadcast({ roomName }).catch(() => {})
+                      disconnect()
+                      onExit?.()
+                    }}
                     className="mt-1 rounded-full bg-white/10 px-5 py-2 text-sm font-semibold text-white ring-1 ring-inset ring-white/15 transition-colors hover:bg-white/20"
                   >
                     Go back
@@ -1402,6 +1437,10 @@ export function VideoStudioConsole({
         </div>
       )}
 
+      {/* Post-end save decision. Shown once the room has already closed for
+          everyone; choosing "Yes" runs the upload/publish below. */}
+      {saveDecision && <SaveEpisodePrompt onSave={() => void handleSaveEpisode()} onDiscard={handleDiscardEpisode} />}
+
       {/* Saving overlay while the finished recording uploads + auto-publishes. */}
       {saving && (
         <div className="fixed inset-0 z-[70] flex flex-col items-center justify-center gap-3 bg-black/80 backdrop-blur-sm px-6 text-center">
@@ -1443,7 +1482,7 @@ export function VideoStudioConsole({
                 type="button"
                 onClick={() => {
                   setEndConfirmOpen(false)
-                  void endLive()
+                  endLiveRoom()
                 }}
                 className="flex w-full items-center justify-center gap-2 rounded-2xl bg-destructive px-5 py-3 text-sm font-semibold text-destructive-foreground transition-opacity hover:opacity-90 active:scale-[0.99]"
               >

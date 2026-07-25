@@ -54,7 +54,8 @@ import {
   type CoHostPermissions,
   type LiveStreamView,
 } from "@/app/actions/live"
-import { ManageCoHostMenu, MusicApprovalPrompt, EndSessionPrompt, CoHostsPanel } from "@/components/live/cohost-menu"
+  import { ManageCoHostMenu, MusicApprovalPrompt, EndSessionPrompt, CoHostsPanel } from "@/components/live/cohost-menu"
+  import { SaveEpisodePrompt } from "@/components/live/save-episode-prompt"
 import { useLiveAudio } from "@/lib/use-live-audio"
 import { uploadMedia } from "@/lib/upload-media"
 import { LiveChat } from "@/components/live-chat"
@@ -153,6 +154,16 @@ export function StudioConsole({
   // Optional free-text room topic (e.g. "Faith & finance"). Not required.
   const [roomTopic, setRoomTopic] = useState<string>(resumeStream?.topic ?? "")
   const [endedSession, setEndedSession] = useState<EndedSession>(null)
+  // After the room has ended for everyone, the host is asked whether to save the
+  // session as an episode. This holds the metadata needed to publish if they
+  // say yes. It is entirely separate from tearing down the live room.
+  const [saveDecision, setSaveDecision] = useState<{ title: string; duration: string; cover: string | null } | null>(
+    null,
+  )
+  // The in-flight recording finalization, started the instant the host ends the
+  // live. We hold the promise (rather than awaiting it inline) so recording
+  // finalization never blocks the room from closing for participants.
+  const recordingPromiseRef = useRef<Promise<Blob | null> | null>(null)
   const [roomName, setRoomName] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -477,16 +488,25 @@ export function StudioConsole({
       onAirRef.current = false
       setOnAir(false)
       const duration = formatDuration(elapsed)
-      const audioBlob = recording ? await stopRecording().catch(() => null) : recordedBlobRef.current
-      if (roomName) await endBroadcast({ roomName }).catch(() => {})
-      await disconnect()
+      // ── Terminate the live room IMMEDIATELY for everyone. ──────────────────
+      // Recording finalization is kicked off first (synchronously stopping the
+      // recorder so no audio is lost) but we deliberately DO NOT await it here —
+      // we hold the promise and resolve it later, only if the host chooses to
+      // save. Ending the broadcast and disconnecting are fire-and-forget so the
+      // room closes for participants without waiting on recording, uploads,
+      // episode creation, or the host's save decision.
+      recordingPromiseRef.current = recording
+        ? stopRecording().catch(() => null)
+        : Promise.resolve(recordedBlobRef.current)
+      if (roomName) void endBroadcast({ roomName }).catch(() => {})
+      void disconnect()
       setRoomName(null)
       setPanel(null)
       setRecording(false)
       recordedBlobRef.current = null
-      // Carry the live session's cover art into the auto-published episode so the
-      // media player shows the same artwork that was used on air.
-      setEndedSession({ title, duration, audioBlob, cover })
+      // The room is now ending for everyone — ask the host, as a separate step,
+      // whether they'd like to keep this session as an episode.
+      setSaveDecision({ title, duration, cover })
       setElapsed(0)
     } else {
       // Cover art is required for audio live sessions.
@@ -521,6 +541,26 @@ export function StudioConsole({
       startRecording()
       setRecording(true)
     }
+  }
+
+  // Host chose to save the just-ended session. We await the background recording
+  // finalization (usually already resolved) and hand off to PublishOverlay,
+  // which uploads the audio and publishes the episode exactly as before.
+  async function handleSaveEpisode() {
+    const dec = saveDecision
+    setSaveDecision(null)
+    if (!dec) return
+    const audioBlob = await (recordingPromiseRef.current ?? Promise.resolve(null))
+    recordingPromiseRef.current = null
+    setEndedSession({ title: dec.title, duration: dec.duration, audioBlob, cover: dec.cover })
+  }
+
+  // Host confirmed they don't want to save. Drop the recording and leave the
+  // studio — the live room already ended when they confirmed.
+  function handleDiscardEpisode() {
+    setSaveDecision(null)
+    recordingPromiseRef.current = null
+    onExit?.()
   }
 
   async function acceptCall(id: number) {
@@ -1014,6 +1054,10 @@ export function StudioConsole({
           onDecline={() => void handleResolveEnd(false)}
         />
       )}
+
+      {/* Post-end save decision. Shown once the room has already closed for
+          everyone; choosing "Yes" hands off to the auto-publishing overlay. */}
+      {saveDecision && <SaveEpisodePrompt onSave={() => void handleSaveEpisode()} onDiscard={handleDiscardEpisode} />}
 
       {endedSession && (
         <PublishOverlay
