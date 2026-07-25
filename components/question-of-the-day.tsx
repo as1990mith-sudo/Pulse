@@ -158,16 +158,17 @@ export function QuestionOfTheDay({
                   <Lightbulb className="size-3.5" /> Today · {question.activeDate}
                 </p>
                 {question.image && (
+                  // Render at the image's own aspect ratio (1:1 or 4:5 from the
+                  // admin cropper) — width fills the column, height follows the
+                  // upload so it's never re-cropped to 16:9.
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={question.image || "/placeholder.svg"}
                     alt=""
-                    className="mb-4 aspect-video w-full rounded-2xl border border-border/60 object-cover"
+                    className="mb-4 w-full rounded-2xl border border-border/60"
                   />
                 )}
-                <h2 className="text-balance text-2xl font-bold leading-tight tracking-tight sm:text-3xl">
-                  {question.questionText}
-                </h2>
+                <h2 className="text-balance text-base leading-relaxed">{question.questionText}</h2>
                 <p className="mt-3 text-pretty text-sm leading-relaxed text-muted-foreground">
                   Share your perspective and read how others in the community see it. Every voice adds something.
                 </p>
