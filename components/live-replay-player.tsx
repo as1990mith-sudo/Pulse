@@ -311,18 +311,23 @@ export function LiveReplayPlayer({
                   <Gauge className="size-3.5" />
                   {speed}x
                 </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    void toggleFullscreen()
-                    revealControls()
-                  }}
-                  aria-label={isFullscreen ? "Exit fullscreen" : "Expand to fullscreen"}
-                  className="flex items-center justify-center text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-transform active:scale-90"
-                >
-                  {isFullscreen ? <Minimize className="size-6" /> : <Maximize className="size-6" />}
-                </button>
+                {/* The reel already fills the entire screen, so a fullscreen /
+                    expand control is redundant there — only the classic pinned
+                    "page" player offers it. */}
+                {!isReel && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      void toggleFullscreen()
+                      revealControls()
+                    }}
+                    aria-label={isFullscreen ? "Exit fullscreen" : "Expand to fullscreen"}
+                    className="flex items-center justify-center text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-transform active:scale-90"
+                  >
+                    {isFullscreen ? <Minimize className="size-6" /> : <Maximize className="size-6" />}
+                  </button>
+                )}
               </div>
 
               <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium tabular-nums text-white/85">
