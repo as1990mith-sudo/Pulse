@@ -136,18 +136,19 @@ export function QotdEditor({
           </div>
         </ScrollArea>
 
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-border/60 px-6 py-4">
-          <Button variant="outline" onClick={() => save("draft")} disabled={isPending} className="gap-2">
-            <FileText className="h-4 w-4" /> Save draft
+        {/* Draft, Schedule and Publish share a single equal-width row. Schedule
+            is always available (like the devotional editor's scheduling); it
+            uses the "Schedule for" date field above and prompts if it's empty. */}
+        <div className="grid shrink-0 grid-cols-3 gap-2 border-t border-border/60 px-4 py-4 sm:px-6">
+          <Button variant="outline" size="sm" onClick={() => save("draft")} disabled={isPending} className="gap-1.5">
+            <FileText className="h-4 w-4" /> Draft
           </Button>
-          {scheduleAt && (
-            <Button variant="outline" onClick={() => save("schedule")} disabled={isPending} className="gap-2">
-              <CalendarClock className="h-4 w-4" /> Schedule
-            </Button>
-          )}
-          <Button onClick={() => save("publish")} disabled={isPending} className="ml-auto gap-2">
+          <Button variant="outline" size="sm" onClick={() => save("schedule")} disabled={isPending} className="gap-1.5">
+            <CalendarClock className="h-4 w-4" /> Schedule
+          </Button>
+          <Button size="sm" onClick={() => save("publish")} disabled={isPending} className="gap-1.5">
             {isEdit ? <Save className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-            {isEdit ? "Save & publish" : "Publish now"}
+            Publish
           </Button>
         </div>
       </SheetContent>

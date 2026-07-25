@@ -40,16 +40,15 @@ export function QotdArchiveDetail({
               <Lightbulb className="size-3.5" /> {question.activeDate}
             </p>
             {question.image && (
+              // Keep the uploaded 1:1 / 4:5 aspect instead of re-cropping to 16:9.
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={question.image || "/placeholder.svg"}
                 alt=""
-                className="mb-4 aspect-video w-full rounded-2xl border border-border/60 object-cover"
+                className="mb-4 w-full rounded-2xl border border-border/60"
               />
             )}
-            <h2 className="text-balance text-2xl font-bold leading-tight tracking-tight sm:text-3xl">
-              {question.questionText}
-            </h2>
+            <h2 className="text-balance text-base leading-relaxed">{question.questionText}</h2>
             <p className="mt-3 text-sm text-muted-foreground">
               This question has been archived. Its discussion is preserved below.
             </p>
