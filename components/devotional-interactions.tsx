@@ -133,15 +133,15 @@ export function DevotionalInteractions({
           Share
         </Button>
 
-        <button
-          type="button"
+        <Button
+          variant="secondary"
           onClick={() => setCommentsOpen(true)}
-          className="ml-auto flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          className="gap-2"
           aria-label="View comments"
         >
           <CommentIcon className="size-4" />
           {comments.length}
-        </button>
+        </Button>
       </div>
 
       <CommentSheet
