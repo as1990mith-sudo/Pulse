@@ -157,14 +157,16 @@ export function ArticleReader({
         )}
       </div>
 
-      {/* Cover */}
+      {/* Cover — always shown at a consistent 16:9 frame regardless of the
+          uploaded image's own aspect ratio, so tall/portrait covers don't
+          dominate the article. */}
       {article.coverUrl && (
-        <div className="mt-6 overflow-hidden rounded-2xl">
+        <div className="mt-6 aspect-video w-full overflow-hidden rounded-2xl">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={article.coverUrl || "/placeholder.svg"}
             alt=""
-            className="w-full object-cover"
+            className="size-full object-cover"
           />
         </div>
       )}

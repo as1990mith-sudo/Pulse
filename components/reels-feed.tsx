@@ -22,6 +22,7 @@ import { toggleSaveItem } from "@/app/actions/share"
 import type { CurrentUser } from "@/lib/session"
 import { haptic } from "@/lib/haptics"
 import { renderMessageBody } from "@/lib/rich-text"
+import { useSharedMute } from "@/lib/shared-mute"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { CommentThread, type ThreadComment } from "@/components/comment-thread"
@@ -203,9 +204,10 @@ export function ReelsFeed({
   }, [])
   const visible = reels.filter((r) => !tooLong.has(r.key))
 
-  // Sound is global across reels (toggling on one carries to the next), matching
-  // Instagram. Start muted so autoplay is allowed by the browser.
-  const [muted, setMuted] = useState(true)
+  // Sound is a single app-wide preference shared with the feed video previews,
+  // so muting/unmuting here carries to the feed and vice-versa (and across reels
+  // too). Starts muted so autoplay is allowed by the browser.
+  const [muted, setMuted] = useSharedMute()
 
   // NOTE: We intentionally do NOT track a parent "activeIndex" here. Doing so
   // forced a re-render of *every* reel on each scroll settle and drove the
@@ -395,7 +397,7 @@ export function ReelsFeed({
               reel={reel}
               root={scrollerRef}
               muted={muted}
-              onToggleMute={() => setMuted((m) => !m)}
+              onToggleMute={() => setMuted(!muted)}
               onTooLong={() => markTooLong(reel.key)}
               currentUser={currentUser}
             />

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react"
 import { Play, Pause, Volume2, VolumeX, RotateCcw, RotateCw } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { getSharedMuted, setSharedMuted, useSharedMute } from "@/lib/shared-mute"
 
 /**
  * A feed video with a modern, minimal custom control bar.
@@ -26,15 +27,6 @@ import { cn } from "@/lib/utils"
  * - Tap the frame to play/pause, skip ±10s, and scrub by tapping OR dragging the
  *   time track (pointer + keyboard).
  */
-
-// Shared, cross-instance mute preference. Starts unmuted ("sound on by
-// default"); flips to muted only if the browser forces it or the user opts out.
-let sharedMuted = false
-const muteListeners = new Set<(m: boolean) => void>()
-function setSharedMuted(next: boolean) {
-  sharedMuted = next
-  muteListeners.forEach((fn) => fn(next))
-}
 
 function formatTime(seconds: number) {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00"
@@ -73,22 +65,14 @@ export function FeedVideo({
   const windowEndRef = useRef(trimEnd != null ? trimEnd : Number.POSITIVE_INFINITY)
   windowStartRef.current = Math.max(0, trimStart ?? 0)
 
-  const [muted, setMuted] = useState(sharedMuted)
+  // Mute is a single app-wide preference shared with the expanded reel player.
+  const [muted, setMuted] = useSharedMute()
   const [playing, setPlaying] = useState(false)
   const [current, setCurrent] = useState(0)
   const [duration, setDuration] = useState(0)
   // Stays false until the clip has begun playing at least once. While false we
   // show a full-bleed premium poster that hides the native play-glyph flash.
   const [started, setStarted] = useState(false)
-
-  // Keep this instance in sync with the shared mute preference.
-  useEffect(() => {
-    const fn = (m: boolean) => setMuted(m)
-    muteListeners.add(fn)
-    return () => {
-      muteListeners.delete(fn)
-    }
-  }, [])
 
   useEffect(() => {
     const el = ref.current
@@ -105,9 +89,9 @@ export function FeedVideo({
         /* not seekable yet */
       }
     }
-    el.muted = sharedMuted
+    el.muted = getSharedMuted()
     el.play().catch(() => {
-      if (!sharedMuted) {
+      if (!getSharedMuted()) {
         setSharedMuted(true)
         el.muted = true
         el.play().catch(() => {})
