@@ -36,6 +36,16 @@ export function SiteHeader({ collapsible = false }: { collapsible?: boolean } = 
         frame = 0
         const y = window.scrollY
         const delta = y - lastY.current
+        // Only auto-hide on pages with meaningful scroll distance. On short
+        // pages the small scroll from mobile browser-chrome show/hide would
+        // otherwise make the sticky header re-pin over the top of the content
+        // (e.g. tucking the first Chatrooms card under the header).
+        const scrollable = document.documentElement.scrollHeight - window.innerHeight
+        if (scrollable < 240) {
+          setWindowHidden(false)
+          lastY.current = y
+          return
+        }
         // Ignore tiny jitters; always show near the very top.
         if (Math.abs(delta) > 6) {
           setWindowHidden(delta > 0 && y > 72)
