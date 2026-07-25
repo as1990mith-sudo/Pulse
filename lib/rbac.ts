@@ -20,6 +20,7 @@ export type Permission =
   | "support.manage"
   | "books.review" // approve/reject/request changes
   | "devotionals.manage"
+  | "qotd.manage" // create/publish/schedule/archive Questions of the Day
   | "articles.manage"
   | "events.manage"
   | "livestreams.manage"
@@ -40,6 +41,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "support.manage",
   "books.review",
   "devotionals.manage",
+  "qotd.manage",
   "articles.manage",
   "events.manage",
   "livestreams.manage",
@@ -63,6 +65,7 @@ export const PERMISSION_META: Record<Permission, { label: string; group: string 
   "reports.action": { label: "Action reports", group: "Moderation" },
   "books.review": { label: "Review book submissions", group: "Content" },
   "devotionals.manage": { label: "Manage devotionals", group: "Content" },
+  "qotd.manage": { label: "Manage Questions of the Day", group: "Content" },
   "articles.manage": { label: "Manage articles", group: "Content" },
   "events.manage": { label: "Manage events", group: "Content" },
   "livestreams.manage": { label: "Manage livestreams", group: "Content" },
@@ -113,6 +116,7 @@ const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "support.manage",
     "books.review",
     "devotionals.manage",
+    "qotd.manage",
     "articles.manage",
     "events.manage",
     "livestreams.manage",
@@ -134,6 +138,7 @@ const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
   ],
   content_manager: [
     "devotionals.manage",
+    "qotd.manage",
     "articles.manage",
     "books.review",
     "events.manage",

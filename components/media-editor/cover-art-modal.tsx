@@ -173,9 +173,13 @@ function VideoFramePicker({
 
   return (
     <Shell onSkip={onSkip} onDone={useFrame} doneLabel="Use this frame" working={working} doneDisabled={duration === 0}>
-      <div className="flex flex-1 flex-col">
+      {/* min-h-0 lets this flex column shrink inside the Shell so the scrubber
+          strip and footer button below stay on-screen. */}
+      <div className="flex min-h-0 flex-1 flex-col">
         <p className="px-5 pb-3 text-center text-sm text-white/60">Scrub to pick a frame for your cover</p>
-        <div className="relative flex flex-1 items-center justify-center overflow-hidden">
+        {/* min-h-0 + a hard height cap prevent a tall (e.g. 9:16) clip from
+            blowing the column out and pushing the scrubber off-screen. */}
+        <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-4">
           {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
           <video
             ref={videoRef}
@@ -187,9 +191,12 @@ function VideoFramePicker({
               const v = videoRef.current
               if (!v) return
               setDuration(v.duration && isFinite(v.duration) ? v.duration : 0)
-              v.currentTime = rangeStart
+              // Seek slightly into the range so a real (non-black) first frame
+              // paints for the preview.
+              v.currentTime = Math.min(rangeStart + 0.05, rangeEnd ?? rangeStart + 0.05)
             }}
-            className="max-h-full max-w-full"
+            className="max-h-full max-w-full rounded-xl object-contain"
+            style={{ maxHeight: "min(60svh, 34rem)" }}
           />
         </div>
 

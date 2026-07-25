@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Check, Clock, Compass, ImageIcon, Loader2, MoonStar, Plus, PlusCircle, Search, Users } from "lucide-react"
+import { Check, Clock, Compass, Flame, ImageIcon, Lightbulb, Loader2, MoonStar, Plus, PlusCircle, Search, Users } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -47,6 +47,69 @@ function CommunityHelpEntry() {
   )
 }
 
+function QuestionOfTheDayEntry() {
+  return (
+    <Link
+      href="/chatrooms/questions"
+      className="group flex items-center gap-3 rounded-xl border border-amber-300/20 bg-gradient-to-br from-amber-900 via-amber-800 to-yellow-700 px-4 py-3 shadow-lg shadow-amber-950/40 transition-all hover:from-amber-800 hover:via-amber-700 hover:to-yellow-600 hover:shadow-amber-950/50 sm:px-5"
+    >
+      <Avatar className="size-12 shrink-0 ring-2 ring-white/50 transition-transform duration-200 group-hover:scale-105">
+        <AvatarFallback className="bg-amber-800 text-white">
+          <Lightbulb className="size-6" />
+        </AvatarFallback>
+      </Avatar>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-base font-semibold tracking-tight text-white">Question of the Day</p>
+        <div
+          className="marquee text-sm leading-snug text-amber-50/85"
+          aria-label="One question. Many perspectives. Join today's community discussion."
+        >
+          <div className="marquee__track" aria-hidden="true">
+            <span>One question. Many perspectives. Join today&apos;s community discussion.</span>
+            <span>One question. Many perspectives. Join today&apos;s community discussion.</span>
+          </div>
+        </div>
+      </div>
+      <span className="shrink-0 rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-amber-800 shadow-sm transition-transform group-hover:scale-105">
+        Open
+      </span>
+    </Link>
+  )
+}
+
+function ITestifyEntry() {
+  return (
+    <Link
+      href="/chatrooms/itestify"
+      className="group flex items-center gap-3 rounded-xl border border-rose-300/20 bg-gradient-to-br from-rose-950 via-rose-800 to-red-700 px-4 py-3 shadow-lg shadow-rose-950/40 transition-all hover:from-rose-900 hover:via-rose-700 hover:to-red-600 hover:shadow-rose-950/50 sm:px-5"
+    >
+      <Avatar className="size-12 shrink-0 ring-2 ring-white/50 transition-transform duration-200 group-hover:scale-105">
+        <AvatarFallback className="bg-rose-800 text-white">
+          <Flame className="size-6" />
+        </AvatarFallback>
+      </Avatar>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-base font-semibold tracking-tight text-white">iTestify</p>
+        <div
+          className="marquee text-sm leading-snug text-rose-50/85"
+          aria-label="Share what God has done — testimonies that build faith."
+        >
+          <div className="marquee__track" aria-hidden="true">
+            <span>Share what God has done — testimonies that build faith.</span>
+            <span>Share what God has done — testimonies that build faith.</span>
+          </div>
+        </div>
+      </div>
+      <span className="shrink-0 rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-rose-800 shadow-sm transition-transform group-hover:scale-105">
+        Open
+      </span>
+    </Link>
+  )
+}
+
+// Preserved for a future version. Dream Interpretation is intentionally NOT
+// rendered in the current Chatroom navigation, but its component, route
+// (/chatrooms/dreams), data and backend remain intact so it can be restored.
 function DreamInterpretationEntry() {
   return (
     <Link
@@ -77,9 +140,13 @@ function DreamInterpretationEntry() {
 export function ChatroomBrowser({ rooms }: { rooms: ChatroomSummary[] }) {
   return (
     <Tabs defaultValue="my-rooms" className="space-y-3">
+      {/* Active community rooms, in fixed order: Community Help, Question of
+          the Day, iTestify. Dream Interpretation is preserved in the backend
+          but intentionally hidden from this navigation for now. */}
       <div className="space-y-2">
         <CommunityHelpEntry />
-        <DreamInterpretationEntry />
+        <QuestionOfTheDayEntry />
+        <ITestifyEntry />
       </div>
       {/* Luxury segmented control: a floating rounded-full "rail" with a soft
           hairline border and inner shadow. The active segment lifts on a
