@@ -69,7 +69,7 @@ import { ImageLightbox } from "@/components/image-lightbox"
 import { ImmersiveImageViewer } from "@/components/immersive-image-viewer"
 import { FeedVideo } from "@/components/feed-video"
 import { ReelsFeed } from "@/components/reels-feed"
-import { useMediaAspect, isTallMedia } from "@/hooks/use-media-aspect"
+import { useMediaAspect } from "@/hooks/use-media-aspect"
 import { StatusBar } from "@/components/status-bar"
 import type { StatusGroup } from "@/app/actions/status"
 import { ShareSheet } from "@/components/share-sheet"
@@ -406,6 +406,7 @@ export function MindFeed({
           coverImageUrl: it.coverImageUrl,
           trimStart: it.trimStart,
           trimEnd: it.trimEnd,
+          aspectRatio: it.aspectRatio,
         })),
       ].slice(0, MAX_MEDIA),
     )
@@ -886,11 +887,11 @@ export function MindFeed({
 /**
  * A single media item inside a feed post, framed as a CONTAINED preview.
  *
- * Portrait media taller than 4:5 (e.g. 9:16) is clamped to a 4:5 frame and
- * center-cropped with object-cover — it never takes over the feed. Square and
- * landscape media keep their natural ratio (4:5 only acts as the tallest the
- * frame is allowed to get). The original media is never modified: cropping is
- * purely visual, and tapping opens the immersive viewer at natural ratio.
+ * If the author chose a crop ratio in the editor (`item.aspectRatio`), the
+ * frame uses it; otherwise it falls back to the media's natural ratio. Nothing
+ * is ever framed taller than 9:16 — taller media is clamped to a 9:16 frame and
+ * center-cropped with object-cover. The original media is never modified:
+ * cropping is purely visual, and tapping opens the immersive viewer.
  */
 function MediaSlide({
   item,
@@ -910,19 +911,33 @@ function MediaSlide({
   onOpenVideo?: () => void
 }) {
   const ratio = useMediaAspect(item.url, item.type)
-  const tall = isTallMedia(ratio)
 
-  // Tall media is clamped to a 4:5 frame; other ratios render naturally but are
-  // never allowed to exceed the 4:5 height (so extra-tall outliers stay bounded).
-  // A hard viewport cap keeps any single frame from dominating the screen.
-  const frameStyle: React.CSSProperties = tall
-    ? { aspectRatio: "4 / 5" }
-    : { aspectRatio: ratio ? String(ratio) : "4 / 5", maxHeight: feed ? "min(75svh, 40rem)" : "40rem" }
+  // Tallest shape we ever frame (width/height). 9:16 = 0.5625.
+  const MIN_ASPECT = 9 / 16
+  // Prefer an explicitly chosen crop ratio (cropped videos); otherwise the
+  // detected natural ratio. Clamp so nothing is ever taller than 9:16 — such
+  // media is center-cropped into a 9:16 frame via object-cover. A viewport cap
+  // keeps any single frame from dominating the screen.
+  const chosen = item.aspectRatio ?? ratio
+  const framedAspect = chosen != null ? Math.max(chosen, MIN_ASPECT) : null
+  // The media is visually cropped (content cut off) whenever its natural ratio
+  // differs from the frame — used to show an "expand to full screen" hint.
+  const cropped = ratio != null && framedAspect != null && Math.abs(ratio - framedAspect) > 0.01
+  const frameStyle: React.CSSProperties = {
+    aspectRatio: framedAspect ? String(framedAspect) : "4 / 5",
+    maxHeight: feed ? "min(85svh, 46rem)" : "46rem",
+  }
 
   if (item.type === "video") {
     return (
       <div className="relative w-full overflow-hidden bg-black" style={frameStyle}>
-        <FeedVideo src={item.url} poster={item.coverImageUrl} className="h-full w-full object-cover" />
+        <FeedVideo
+          src={item.url}
+          poster={item.coverImageUrl}
+          trimStart={item.trimStart}
+          trimEnd={item.trimEnd}
+          className="h-full w-full object-cover"
+        />
         {/* Expand into the immersive vertical viewer. Kept separate from the
             frame tap so inline play/pause still works. */}
         {onOpenVideo && (
@@ -953,7 +968,7 @@ function MediaSlide({
         alt={count > 1 ? `Post attachment ${index + 1} of ${count}` : `Image posted by ${authorName}`}
         className="h-full w-full object-cover"
       />
-      {tall && (
+      {cropped && (
         <span className="pointer-events-none absolute right-2 top-2 flex size-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm">
           <Maximize2 className="size-4" />
         </span>

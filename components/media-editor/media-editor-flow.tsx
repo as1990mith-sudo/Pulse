@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react"
 import { uploadMedia } from "@/lib/upload-media"
 import { CropModal, type AspectOption } from "@/components/media-editor/crop-modal"
 import { TrimModal } from "@/components/media-editor/trim-modal"
+import { VideoRatioModal } from "@/components/media-editor/video-ratio-modal"
 import { CoverArtModal } from "@/components/media-editor/cover-art-modal"
 
 /** A media item after it has gone through the pre-post editing flow. */
@@ -16,22 +17,24 @@ export type EditedMedia = {
   /** Trim range in seconds (videos only) — stored as playback metadata. */
   trimStart?: number
   trimEnd?: number
+  /** Chosen display aspect ratio (videos only) — applied as a render crop. */
+  aspectRatio?: number
 }
 
 type UploadFolder = Parameters<typeof uploadMedia>[1]
 
-type Stage = "init" | "crop" | "trim" | "cover" | "uploading"
+type Stage = "init" | "crop" | "trim" | "ratio" | "cover" | "uploading"
 
 type Pending =
   | { type: "image"; mainBlob: Blob; previewUrl: string }
-  | { type: "video"; mainBlob: Blob; trimStart: number; trimEnd: number }
+  | { type: "video"; mainBlob: Blob; trimStart: number; trimEnd: number; aspectRatio?: number }
 
 /**
  * Drives the WhatsApp-style pre-post editing flow for a batch of freshly picked
  * files, one at a time:
  *
  *   photo → Crop → (optional) Cover art → upload
- *   video → Trim → (optional) Cover art → upload
+ *   video → Trim → Crop ratio → (optional) Cover art → upload
  *
  * Collects the edited + uploaded results and hands them back via `onDone`.
  * Cancelling a single item discards just that item and moves on to the next.
@@ -92,6 +95,11 @@ export function MediaEditorFlow({
 
   function onTrimApply(range: { trimStart: number; trimEnd: number }) {
     setPending({ type: "video", mainBlob: files[index], trimStart: range.trimStart, trimEnd: range.trimEnd })
+    setStage("ratio")
+  }
+
+  function onRatioApply(aspectRatio: number | null) {
+    setPending((p) => (p && p.type === "video" ? { ...p, aspectRatio: aspectRatio ?? undefined } : p))
     setStage("cover")
   }
 
@@ -116,6 +124,7 @@ export function MediaEditorFlow({
         coverImageUrl,
         trimStart: pending.type === "video" ? pending.trimStart : undefined,
         trimEnd: pending.type === "video" ? pending.trimEnd : undefined,
+        aspectRatio: pending.type === "video" ? pending.aspectRatio : undefined,
       })
       advance()
     } catch {
@@ -146,6 +155,17 @@ export function MediaEditorFlow({
         maxSeconds={maxVideoSeconds}
         onCancel={advance}
         onApply={onTrimApply}
+      />
+    )
+  }
+
+  if (stage === "ratio" && pending?.type === "video") {
+    return (
+      <VideoRatioModal
+        videoSrc={srcUrl}
+        previewStart={pending.trimStart}
+        onCancel={advance}
+        onApply={onRatioApply}
       />
     )
   }

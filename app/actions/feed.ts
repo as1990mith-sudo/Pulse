@@ -69,6 +69,9 @@ export type PostMedia = {
   /** Trim range in seconds for videos — playback metadata (no re-encode). */
   trimStart?: number
   trimEnd?: number
+  /** Chosen display aspect ratio (width/height), e.g. 1 (1:1), 0.5625 (9:16).
+   *  Applied at render as a crop frame — no re-encode. Capped at 9:16 tallness. */
+  aspectRatio?: number
 }
 
 /**
