@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react"
 import { Play, Pause, Volume2, VolumeX, RotateCcw, RotateCw } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getSharedMuted, setSharedMuted, useSharedMute } from "@/lib/shared-mute"
+import { rememberVideoPosition, getImmersiveViewerOpen, useImmersiveViewerOpen } from "@/lib/video-handoff"
 
 /**
  * A feed video with a modern, minimal custom control bar.
@@ -58,6 +59,13 @@ export function FeedVideo({
   const userPausedRef = useRef(false)
   const programmaticPauseRef = useRef(false)
   const draggingRef = useRef(false)
+  // Whether the clip is currently scrolled into view, so we can resume the
+  // right clips when the immersive viewer closes.
+  const inViewRef = useRef(false)
+
+  // While the full-screen reel viewer is open, inline feed videos must not play
+  // (otherwise the feed clip and the expanded clip play at once).
+  const viewerOpen = useImmersiveViewerOpen()
 
   // The active trim window. `windowEndRef` is finalized once real duration is
   // known (on loadedmetadata); until then it's the requested end or +Infinity.
@@ -81,6 +89,8 @@ export function FeedVideo({
 
   // Try to play with sound; if the browser blocks it, fall back to muted.
   const attemptPlay = useCallback((el: HTMLVideoElement) => {
+    // Never autoplay while the expanded reel viewer owns playback.
+    if (getImmersiveViewerOpen()) return
     // Never start outside the trimmed window.
     if (el.currentTime < windowStartRef.current || el.currentTime >= windowEndRef.current) {
       try {
@@ -105,7 +115,9 @@ export function FeedVideo({
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
+        const visible = entry.isIntersecting && entry.intersectionRatio >= 0.6
+        inViewRef.current = visible
+        if (visible) {
           if (!userPausedRef.current) attemptPlay(el)
         } else {
           programmaticPauseRef.current = true
@@ -118,6 +130,20 @@ export function FeedVideo({
     observer.observe(el)
     return () => observer.disconnect()
   }, [attemptPlay])
+
+  // Pause inline playback while the immersive viewer is open, and resume the
+  // in-view clip (unless the user had paused it) once it closes — so expanding
+  // hands playback off cleanly instead of running two videos at once.
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    if (viewerOpen) {
+      programmaticPauseRef.current = true
+      el.pause()
+    } else if (inViewRef.current && !userPausedRef.current) {
+      attemptPlay(el)
+    }
+  }, [viewerOpen, attemptPlay])
 
   function togglePlay() {
     const el = ref.current
@@ -278,6 +304,9 @@ export function FeedVideo({
           if (!draggingRef.current) {
             setCurrent(Math.max(0, el.currentTime - windowStartRef.current))
           }
+          // Remember the absolute position so expanding into the reel can
+          // continue from exactly here instead of restarting.
+          rememberVideoPosition(src, el.currentTime)
         }}
       />
 

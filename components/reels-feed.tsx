@@ -23,6 +23,7 @@ import type { CurrentUser } from "@/lib/session"
 import { haptic } from "@/lib/haptics"
 import { renderMessageBody } from "@/lib/rich-text"
 import { useSharedMute } from "@/lib/shared-mute"
+import { getVideoPosition, setImmersiveViewerOpen } from "@/lib/video-handoff"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { CommentThread, type ThreadComment } from "@/components/comment-thread"
@@ -191,6 +192,16 @@ export function ReelsFeed({
     }
     return items
   }, [posts, initialKey])
+
+  // When opened as the immersive overlay from a feed clip (`initialKey`), tell
+  // inline feed videos to pause and hand playback off, so the expanded reel is
+  // the only thing playing. The standalone Reels tab (no `initialKey`) leaves
+  // the flag untouched.
+  useEffect(() => {
+    if (!initialKey) return
+    setImmersiveViewerOpen(true)
+    return () => setImmersiveViewerOpen(false)
+  }, [initialKey])
 
   // Clips whose real duration exceeds the cap are hidden once we learn it.
   const [tooLong, setTooLong] = useState<Set<string>>(new Set())
@@ -400,6 +411,7 @@ export function ReelsFeed({
               onToggleMute={() => setMuted(!muted)}
               onTooLong={() => markTooLong(reel.key)}
               currentUser={currentUser}
+              resumeFrom={reel.key === initialKey ? getVideoPosition(reel.url) : undefined}
             />
           ))
         )}
@@ -444,6 +456,7 @@ function ReelItem({
   onToggleMute,
   onTooLong,
   currentUser,
+  resumeFrom,
 }: {
   reel: Reel
   root: React.RefObject<HTMLDivElement | null>
@@ -451,8 +464,14 @@ function ReelItem({
   onToggleMute: () => void
   onTooLong: () => void
   currentUser: CurrentUser | null
+  /** Absolute time (seconds) to resume from when this reel was expanded from a
+   *  playing feed clip. Applied once so the reel continues instead of restarting. */
+  resumeFrom?: number
 }) {
   const { post, url } = reel
+  // Ensures the feed-handoff resume position is applied only on the first
+  // metadata load — not on loop or when the reel is revisited.
+  const resumedRef = useRef(false)
   // Append a media-fragment (`#t=<start>`) so the browser decodes and paints the
   // first frame as the element's thumbnail immediately — even before playback
   // begins. Without this the freshly-mounted <video> shows a black box for a
@@ -771,10 +790,18 @@ function ReelItem({
           // Cap is measured against the TRIMMED length, so a long source trimmed
           // to a short clip is allowed.
           if (windowEndRef.current - ws > MAX_REEL_SECONDS) onTooLong()
-          // Start at the trimmed beginning.
-          if (ws > 0) {
+          // If expanded from a playing feed clip, resume from that exact spot
+          // (clamped into the trim window); otherwise start at the trimmed
+          // beginning. The resume applies only once.
+          const end = Number.isFinite(windowEndRef.current) ? windowEndRef.current : real
+          let startAt = ws
+          if (resumeFrom != null && !resumedRef.current) {
+            resumedRef.current = true
+            startAt = Math.min(Math.max(resumeFrom, ws), Math.max(ws, end - 0.25))
+          }
+          if (startAt > 0) {
             try {
-              el.currentTime = ws
+              el.currentTime = startAt
             } catch {
               /* not seekable yet */
             }
