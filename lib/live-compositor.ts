@@ -34,6 +34,17 @@ type CompositorOptions = {
 
 const GAP = 8
 
+/**
+ * Target recording frame rate. The canvas is captured at this rate AND the
+ * compositor's draw loop is paced to it, so every captured frame corresponds
+ * to a freshly-drawn, evenly-spaced frame — the recipe for smooth 30fps
+ * playback. Drawing faster (at the raw rAF/display rate of 60–120Hz) just
+ * burns CPU/GPU on frames the 30fps capture throws away, which on mobile leads
+ * to thermal throttling and uneven capture cadence (judder).
+ */
+const TARGET_FPS = 30
+const FRAME_INTERVAL_MS = 1000 / TARGET_FPS
+
 /** Deterministic pleasant color for a name (HSL hue from a simple hash). */
 function colorFor(seed: string): string {
   let h = 0
@@ -73,6 +84,8 @@ export class LiveCompositor {
   private canvas: HTMLCanvasElement
   private ctx: CanvasRenderingContext2D
   private raf = 0
+  /** Timestamp of the last drawn frame, used to pace the loop to TARGET_FPS. */
+  private lastDrawTs = 0
   private opts: CompositorOptions
 
   private audioCtx: AudioContext | null = null
@@ -100,7 +113,7 @@ export class LiveCompositor {
   /** Begin compositing + audio mixing and return the combined recording stream. */
   start(): MediaStream {
     const stream = (this.canvas as HTMLCanvasElement & { captureStream: (fps?: number) => MediaStream }).captureStream(
-      30,
+      TARGET_FPS,
     )
 
     // --- Audio graph: mix every track into one destination node. ---
@@ -118,9 +131,19 @@ export class LiveCompositor {
       /* No audio context — the replay will still capture the composite video. */
     }
 
-    const draw = () => {
-      this.drawFrame()
+    // Pace the draw loop to TARGET_FPS instead of drawing on every rAF tick.
+    // We still schedule via rAF (so it aligns to vsync and pauses when the tab
+    // is hidden) but only actually redraw once a frame interval has elapsed.
+    // The 1ms tolerance keeps a 60Hz display from skipping to every *third*
+    // rAF tick (which would drop us to ~20fps); it lands cleanly on every
+    // second tick for an even 30fps cadence.
+    this.lastDrawTs = 0
+    const draw = (ts: number) => {
       this.raf = requestAnimationFrame(draw)
+      if (this.lastDrawTs === 0 || ts - this.lastDrawTs >= FRAME_INTERVAL_MS - 1) {
+        this.lastDrawTs = ts
+        this.drawFrame()
+      }
     }
     this.raf = requestAnimationFrame(draw)
     return stream
@@ -129,6 +152,7 @@ export class LiveCompositor {
   stop() {
     if (this.raf) cancelAnimationFrame(this.raf)
     this.raf = 0
+    this.lastDrawTs = 0
     if (this.audioTimer) clearInterval(this.audioTimer)
     this.audioTimer = null
     this.connected.forEach((node) => {
