@@ -132,7 +132,14 @@ export function QuestionOfTheDay({
         </Link>
       </header>
 
-      <div onScroll={onFeedScroll} className="flex-1 overflow-y-auto scroll-smooth overscroll-contain">
+      {/* Bottom padding reserves space for the floating Respond button (which is
+          absolutely positioned ~4.75rem up and ~2.75rem tall) so the question
+          text and the responses bar always scroll clear of it instead of being
+          covered. */}
+      <div
+        onScroll={onFeedScroll}
+        className="flex-1 overflow-y-auto scroll-smooth overscroll-contain pb-[calc(8.5rem+env(safe-area-inset-bottom))]"
+      >
         {!question ? (
           <div className="flex flex-col items-center justify-center gap-3 px-6 py-24 text-center">
             <Avatar className="size-16 ring-2 ring-amber-500/30">
