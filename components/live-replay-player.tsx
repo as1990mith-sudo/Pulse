@@ -377,13 +377,31 @@ export function LiveReplayPlayer({
                 </div>
               )}
 
-              <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium tabular-nums text-white/85">
+              <div className="relative z-30 mb-1.5 flex items-center justify-between text-[11px] font-medium tabular-nums text-white/85">
                 <span>{formatTime(current)}</span>
                 <span>-{formatTime(Math.max(0, duration - current))}</span>
               </div>
-              <div className="group relative h-1.5 w-full" onClick={(e) => e.stopPropagation()}>
-                <div className="absolute inset-0 rounded-full bg-white/25" />
-                <div className="absolute inset-y-0 left-0 rounded-full bg-primary" style={{ width: `${pct}%` }} />
+              {/* Seek slider. The interactive <input> is a tall (h-8) invisible
+                  hit area centered over a thin visual track, so it is easy to
+                  grab and drag. It sits at z-30 (above the reel's creator/title
+                  and action-rail overlays) and uses touch-action:none so a
+                  horizontal drag scrubs instead of triggering the reel's
+                  vertical scroll-snap. */}
+              <div
+                className="group relative z-30 h-8 w-full"
+                style={{ touchAction: "none" }}
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <div className="pointer-events-none absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-white/25" />
+                <div
+                  className="pointer-events-none absolute left-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-primary"
+                  style={{ width: `${pct}%` }}
+                />
+                <div
+                  className="pointer-events-none absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary shadow-[0_1px_3px_rgba(0,0,0,0.5)]"
+                  style={{ left: `${pct}%` }}
+                />
                 <input
                   type="range"
                   min={0}
@@ -395,6 +413,7 @@ export function LiveReplayPlayer({
                     revealControls()
                   }}
                   className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                  style={{ touchAction: "none" }}
                   aria-label="Seek"
                 />
               </div>
