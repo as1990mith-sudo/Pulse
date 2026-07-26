@@ -80,9 +80,16 @@ export function FormattedTextarea({ value, className, textareaRef, ...props }: F
 
   return (
     <div className="relative grid">
-      {/* Visible mirror: renders the formatted text and sets the box height. */}
+      {/* Visible mirror: renders the formatted text and sets the box height.
+          `display:block` is forced (via inline style, which beats the `flex`
+          that TEXTAREA_BASE carries for the real control): as a flex container
+          the mirror would treat each text run + the bold/italic <span> as
+          separate flex items and spread them into columns, shattering the
+          sentence the moment any formatting is applied. A block keeps the runs
+          flowing inline like normal wrapped text. */}
       <div
         aria-hidden
+        style={{ display: "block" }}
         className={cn(
           TEXTAREA_BASE,
           className,
