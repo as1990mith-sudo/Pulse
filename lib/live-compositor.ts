@@ -198,18 +198,21 @@ export class LiveCompositor {
     // or flex 2.9 with 3+ people on stage) — it never occupies the whole
     // portrait screen. Drawing the rects across the full 720×1280 canvas is what
     // made replays stretch every participant into an excessively tall/narrow
-    // column. Instead we draw the composition into a top-aligned band matching
-    // that same live fraction, leaving the rest dark (where the live chat sat),
-    // so a 2/3/4-person replay keeps the exact frame proportions viewers saw
-    // live. A single participant still uses the full portrait frame.
+    // column. Instead we draw the composition into a band matching that same
+    // live fraction, so a 2/3/4-person replay keeps the exact frame proportions
+    // viewers saw live. The band is VERTICALLY CENTERED in the frame so the
+    // tiles sit in the middle with balanced dark margins above and below,
+    // rather than pinned to the top with a large empty gap underneath. A single
+    // participant still fills the whole portrait frame.
     if (portrait && sources.length <= 4) {
       const rects = broadcastStageRects(sources.length)
       const half = GAP / 2
       const bandHeight = H * liveStageHeightFraction(sources.length)
+      const bandTop = (H - bandHeight) / 2
       for (let i = 0; i < sources.length; i++) {
         const r = rects[i]!
         const x = (r.left / 100) * W + half
-        const y = (r.top / 100) * bandHeight + half
+        const y = bandTop + (r.top / 100) * bandHeight + half
         const w = (r.width / 100) * W - GAP
         const h = (r.height / 100) * bandHeight - GAP
         this.drawTile(sources[i]!, x, y, w, h)
