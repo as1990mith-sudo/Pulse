@@ -33,6 +33,7 @@ export function LiveReplayPlayer({
   onClose,
   variant = "page",
   autoPlay = false,
+  onControlsVisibleChange,
 }: {
   show: Show
   minimized?: boolean
@@ -46,6 +47,11 @@ export function LiveReplayPlayer({
   variant?: "page" | "reel"
   // Reel slides auto-play the moment they become the active slide.
   autoPlay?: boolean
+  // Fired whenever the player's controls show/hide. The reel wrapper uses this
+  // to fade its own overlaid chrome (creator/title + like/comment/share/save
+  // rail) in lockstep with the tap-to-toggle, so a single tap governs ALL
+  // replay controls, not just the ones the player draws.
+  onControlsVisibleChange?: (visible: boolean) => void
 }) {
   const isReel = variant === "reel"
   const mediaUrl = show.videoUrl
@@ -91,6 +97,12 @@ export function LiveReplayPlayer({
   // YouTube-style auto-hiding controls.
   const [controlsVisible, setControlsVisible] = useState(true)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Keep the reel wrapper's own overlays in sync with the player's controls so
+  // one tap toggles everything together.
+  useEffect(() => {
+    onControlsVisibleChange?.(controlsVisible)
+  }, [controlsVisible, onControlsVisibleChange])
 
   function scheduleHide() {
     if (hideTimer.current) clearTimeout(hideTimer.current)
