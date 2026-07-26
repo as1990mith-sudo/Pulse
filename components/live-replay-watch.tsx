@@ -211,6 +211,10 @@ function ReplaySlide({
   const [shareCount, setShareCount] = useState(0)
   const [, startTransition] = useTransition()
 
+  // Mirrors the player's tap-to-toggle controls state so this slide's overlaid
+  // creator/title and action rail fade in/out together with the player chrome.
+  const [controlsVisible, setControlsVisible] = useState(true)
+
   const hostIsSelf = currentUser?.id === show.host.id
   const [followKnown, setFollowKnown] = useState(false)
   const [hostFollowing, setHostFollowing] = useState(false)
@@ -312,15 +316,33 @@ function ReplaySlide({
     >
       {/* The player fills the slide; portrait recordings letterbox on black. */}
       <div className="absolute inset-0">
-        <LiveReplayPlayer show={show} variant="reel" autoPlay={active} />
+        <LiveReplayPlayer
+          show={show}
+          variant="reel"
+          autoPlay={active}
+          onControlsVisibleChange={setControlsVisible}
+        />
       </div>
 
-      {/* Bottom gradient so overlaid text/actions stay legible over any frame. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-56 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+      {/* Bottom gradient so overlaid text/actions stay legible over any frame.
+          Fades with the controls so hiding them leaves a clean frame. */}
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-x-0 bottom-0 h-56 bg-gradient-to-t from-black/80 via-black/30 to-transparent transition-opacity duration-300",
+          controlsVisible ? "opacity-100" : "opacity-0",
+        )}
+      />
 
       {/* Overlaid action rail — like / comment / share / save, reels-style.
-          Sits well above the player's bottom time + scrubber so nothing overlaps. */}
-      <div className="absolute bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-2 z-20 flex flex-col items-center gap-4 text-white">
+          Sits well above the player's bottom time + scrubber so nothing overlaps.
+          Fades and stops intercepting taps with the controls, so when hidden a
+          tap on this region falls through to the player and re-shows everything. */}
+      <div
+        className={cn(
+          "absolute bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-2 z-20 flex flex-col items-center gap-4 text-white transition-opacity duration-300",
+          controlsVisible ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
+      >
         <button
           onClick={toggleLike}
           disabled={!currentUser}
@@ -372,8 +394,13 @@ function ReplaySlide({
 
       {/* Overlaid title / creator / streamed-label, bottom-left. Lifted well
           above the player's bottom time + scrubber so the duration tracker is
-          never hidden behind this overlay. */}
-      <div className="absolute bottom-[calc(5.5rem+env(safe-area-inset-bottom))] left-4 right-20 z-20 text-white">
+          never hidden behind this overlay. Fades with the controls. */}
+      <div
+        className={cn(
+          "absolute bottom-[calc(5.5rem+env(safe-area-inset-bottom))] left-4 right-20 z-20 text-white transition-opacity duration-300",
+          controlsVisible ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
+      >
         <div className="flex items-center gap-2">
           <Link href={`/u/${show.host.id}`} className="tap-scale shrink-0" aria-label={`View ${show.host.name}'s profile`}>
             <Avatar className="size-9 ring-1 ring-white/30">

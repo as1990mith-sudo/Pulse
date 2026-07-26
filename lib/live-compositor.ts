@@ -48,6 +48,19 @@ function initials(name: string): string {
   return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase()
 }
 
+/**
+ * Fraction of the portrait recording height the broadcast stage should fill,
+ * mirroring the live viewer's flexbox split (stage flex 2.5, or 2.9 with 3+ on
+ * stage, above a flex-1.5 chat). Keeping the same fraction reproduces the live
+ * tile proportions in the replay instead of stretching tiles down the full
+ * frame. A lone participant fills the whole frame.
+ */
+function liveStageHeightFraction(participants: number): number {
+  if (participants <= 1) return 1
+  if (participants === 2) return 2.5 / (2.5 + 1.5)
+  return 2.9 / (2.9 + 1.5)
+}
+
 /** Grid columns/rows for n tiles, biased to the recording orientation. */
 function gridDims(n: number, portrait: boolean): { cols: number; rows: number } {
   if (n <= 1) return { cols: 1, rows: 1 }
@@ -178,17 +191,27 @@ export class LiveCompositor {
     // saved replay looks like what viewers saw live: 2 tiles = side-by-side
     // columns, 3 = tall primary on top with two panels below, 4 = balanced 2×2.
     // We reuse the same `broadcastStageRects` geometry the live stage uses
-    // (host/primary first, matching this compositor's source order). Grid
-    // meetings (landscape) and rare >4-tile overflow keep the generic grid.
+    // (host/primary first, matching this compositor's source order).
+    //
+    // Crucially, we also reproduce the live stage's VERTICAL PROPORTIONS. Live,
+    // the stage only fills the top of the room (flex 2.5 above a flex-1.5 chat,
+    // or flex 2.9 with 3+ people on stage) — it never occupies the whole
+    // portrait screen. Drawing the rects across the full 720×1280 canvas is what
+    // made replays stretch every participant into an excessively tall/narrow
+    // column. Instead we draw the composition into a top-aligned band matching
+    // that same live fraction, leaving the rest dark (where the live chat sat),
+    // so a 2/3/4-person replay keeps the exact frame proportions viewers saw
+    // live. A single participant still uses the full portrait frame.
     if (portrait && sources.length <= 4) {
       const rects = broadcastStageRects(sources.length)
       const half = GAP / 2
+      const bandHeight = H * liveStageHeightFraction(sources.length)
       for (let i = 0; i < sources.length; i++) {
         const r = rects[i]!
         const x = (r.left / 100) * W + half
-        const y = (r.top / 100) * H + half
+        const y = (r.top / 100) * bandHeight + half
         const w = (r.width / 100) * W - GAP
-        const h = (r.height / 100) * H - GAP
+        const h = (r.height / 100) * bandHeight - GAP
         this.drawTile(sources[i]!, x, y, w, h)
       }
       return
