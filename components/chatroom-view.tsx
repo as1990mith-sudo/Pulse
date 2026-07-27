@@ -46,6 +46,7 @@ import { ActionSheet, type SheetAction } from "@/components/action-sheet"
 import { ChatBackgroundSheet } from "@/components/chat-background-sheet"
 import { getChatBackground, chatBackgroundStyle } from "@/lib/chat-backgrounds"
 import { canEdit, canDelete } from "@/lib/interactions"
+import { formatChatTimestamp } from "@/lib/format-timestamp"
 import {
   approveJoinRequest,
   deleteChatMessage,
@@ -746,7 +747,7 @@ function MessageBubble({
           >
             {m.isSelf ? "You" : m.userName}
           </Link>
-          <span className="text-[10px] text-muted-foreground">{m.postedAt}</span>
+          <span className="text-[10px] text-muted-foreground">{formatChatTimestamp(m.createdAtMs)}</span>
           {m.edited && <span className="text-[10px] text-muted-foreground">· edited</span>}
           {copied && <span className="text-[10px] text-primary">Copied</span>}
           {m.pinned && <Pin className="size-3 text-primary" />}

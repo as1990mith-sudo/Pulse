@@ -583,7 +583,13 @@ export function StudioConsole({
   // formats share one interface. Only the category control differs in source
   // (LIVE_CATEGORIES vs the conversation list) — the control itself is the same
   // dropdown. Skipped when resuming/ended so the on-air + summary views show.
-  if (!live && !endedSession) {
+  // NOTE: `saveDecision` must keep us OUT of this pre-live setup branch. When
+  // the host ends, `live` flips to false and `endedSession` is still null (it's
+  // only set once the host chooses "Save"), so without the `!saveDecision`
+  // guard we'd bounce back to the setup screen and the SaveEpisodePrompt overlay
+  // (rendered further down) would never appear — the host would silently lose
+  // the chance to save the episode.
+  if (!live && !endedSession && !saveDecision) {
     return (
       <div className="relative flex h-full flex-col overflow-y-auto bg-zinc-950 text-white">
         <div

@@ -225,6 +225,9 @@ export const chatroom = pgTable("chatroom", {
   image: text("image"),
   ownerId: text("ownerId").notNull(),
   ownerName: text("ownerName").notNull(),
+  // "public" rooms are listed under Discover by default; "private" rooms are
+  // hidden from the default list and only appear when searched by name.
+  visibility: text("visibility").notNull().default("public"),
   inviteCode: text("inviteCode").notNull().unique(),
   // Shared chat wallpaper id (see lib/chat-backgrounds). Applies for all members.
   background: text("background"),

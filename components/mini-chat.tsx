@@ -54,6 +54,7 @@ import { compressImage, uploadMedia } from "@/lib/upload-media"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { haptic } from "@/lib/haptics"
 import { cn } from "@/lib/utils"
+import { formatChatTimestamp } from "@/lib/format-timestamp"
 
 const EMOJIS = ["🙏", "❤️", "🕊️", "✨", "🙌", "📖", "🔥", "😊", "😂", "🥰", "👍", "🎉", "🌿", "☀️", "💯", "🍞"]
 const MAX_MINI_CHATS = 3
@@ -705,7 +706,7 @@ function Bubble({ m, onImage }: { m: DmMessageView; onImage: () => void }) {
           <p className={cn("whitespace-pre-wrap [overflow-wrap:anywhere]", (isImage || isAudio) && "px-2 pb-1 pt-1")}>{m.body}</p>
         )}
         <span className={cn("mt-0.5 block text-[10px]", m.isSelf ? "text-primary-foreground/70" : "text-muted-foreground")}>
-          {m.postedAt}
+          {formatChatTimestamp(m.createdAtMs)}
         </span>
       </div>
     </div>

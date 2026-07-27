@@ -29,3 +29,37 @@ export function formatPostTimestamp(postDate: Date | string | number): string {
   const yy = String(d.getFullYear()).slice(-2)
   return `${dd}/${mm}/${yy}`
 }
+
+/**
+ * Timestamp formatter for chat message bubbles (chatrooms + DMs). Unlike the
+ * feed's relative "5m / 2h / 32d" style, chats show the actual clock time so a
+ * conversation reads like a normal messaging app:
+ *
+ * - Sent today:            just the time, e.g. "4:03 PM"
+ * - Earlier this year:     date + time, e.g. "24 Jun, 4:03 PM"
+ * - A previous year:       date + year + time, e.g. "24 Jun 2024, 4:03 PM"
+ *
+ * Uses the viewer's locale/timezone, so it must run on the client.
+ *
+ * Accepts a Date or a date-like value (ISO string / epoch ms).
+ */
+export function formatChatTimestamp(value: Date | string | number): string {
+  const d = value instanceof Date ? value : new Date(value)
+  const now = new Date()
+  const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  if (sameDay) return time
+
+  const sameYear = d.getFullYear() === now.getFullYear()
+  const date = d.toLocaleDateString(
+    [],
+    sameYear
+      ? { day: "numeric", month: "short" }
+      : { day: "numeric", month: "short", year: "numeric" },
+  )
+  return `${date}, ${time}`
+}
