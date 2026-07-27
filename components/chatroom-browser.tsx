@@ -190,7 +190,7 @@ function MyRooms({ rooms }: { rooms: ChatroomSummary[] }) {
         <Link
           key={room.id}
           href={`/chatrooms/${room.id}`}
-          className="group flex items-center gap-3 rounded-xl border border-border/60 bg-card px-4 py-3 shadow-lg shadow-black/20 transition-all hover:bg-secondary/40 hover:shadow-black/30 sm:px-5"
+          className="group flex items-center gap-3 rounded-xl border-2 border-border bg-card px-4 py-3 shadow-lg shadow-black/20 transition-all hover:border-foreground/30 hover:bg-secondary/40 hover:shadow-black/30 sm:px-5"
         >
           <Avatar className="size-12 shrink-0 ring-2 ring-border/60 transition-transform duration-200 group-hover:scale-105">
             {room.image && <AvatarImage src={room.image || "/placeholder.svg"} alt={room.name} />}
