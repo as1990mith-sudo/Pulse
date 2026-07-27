@@ -719,11 +719,15 @@ export function CommunityHelp({ initialPosts }: { initialPosts: CommunityPostVie
         )}
       </div>
 
-      {/* Floating ask button */}
+      {/* Floating ask button — slides away on scroll-down and returns on
+          scroll-up, in lockstep with the header (same chrome scroll signal). */}
       <button
         type="button"
         onClick={() => setComposerOpen(true)}
-        className="absolute bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-5 z-30 inline-flex w-fit items-center gap-2 rounded-full bg-primary px-4 py-2 text-base font-semibold text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95 sm:right-8"
+        className={cn(
+          "absolute bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-5 z-30 inline-flex w-fit items-center gap-2 rounded-full bg-primary px-4 py-2 text-base font-semibold text-primary-foreground shadow-lg transition-[transform,opacity] duration-300 ease-out hover:scale-105 active:scale-95 sm:right-8",
+          chromeHidden ? "pointer-events-none translate-y-[200%] opacity-0" : "translate-y-0 opacity-100",
+        )}
       >
         <Plus className="size-5" />
         Ask
