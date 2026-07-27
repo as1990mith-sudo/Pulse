@@ -144,7 +144,9 @@ export function EpisodeCatalog({
 
   return (
     <div className="space-y-4">
-      {/* Audio / Video / Live segmented toggle. */}
+      {/* Audio / Live segmented toggle. The top-level "Video" (uploads) tab is
+          hidden from the front end for now — restore its entry below to
+          re-enable it. Live recordings still expose their own Video subtab. */}
       <div
         role="tablist"
         aria-label="Filter episodes by type"
@@ -153,7 +155,7 @@ export function EpisodeCatalog({
         {(
           [
             { key: "audio", label: "Audio", icon: Headphones, count: counts.audio },
-            { key: "video", label: "Video", icon: Video, count: counts.video },
+            // { key: "video", label: "Video", icon: Video, count: counts.video },
             { key: "live", label: "Live", icon: Radio, count: counts.live },
           ] as const
         ).map(({ key, label, icon: Icon, count }) => {
