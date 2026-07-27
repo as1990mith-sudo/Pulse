@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Check, Clock, Compass, Flame, ImageIcon, Lightbulb, Loader2, MoonStar, Plus, PlusCircle, Search, Users } from "lucide-react"
+import { Check, Clock, Compass, Flame, Globe, ImageIcon, Lightbulb, Loader2, Lock, MoonStar, Plus, PlusCircle, Search, Users } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import {
   createChatroom,
+  listDiscoverChatrooms,
   requestToJoin,
   searchChatrooms,
   type ChatroomSearchResult,
@@ -122,7 +123,13 @@ function DreamInterpretationEntry() {
   )
 }
 
-export function ChatroomBrowser({ rooms }: { rooms: ChatroomSummary[] }) {
+export function ChatroomBrowser({
+  rooms,
+  discoverRooms,
+}: {
+  rooms: ChatroomSummary[]
+  discoverRooms: ChatroomSearchResult[]
+}) {
   return (
     <Tabs defaultValue="my-rooms" className="space-y-3">
       {/* Active community rooms, in fixed order: Community Help, Question of
@@ -158,7 +165,7 @@ export function ChatroomBrowser({ rooms }: { rooms: ChatroomSummary[] }) {
         <MyRooms rooms={rooms} />
       </TabsContent>
       <TabsContent value="discover">
-        <DiscoverRooms />
+        <DiscoverRooms initialRooms={discoverRooms} />
       </TabsContent>
       <TabsContent value="create">
         <CreateRoom />
@@ -225,13 +232,19 @@ function MyRooms({ rooms }: { rooms: ChatroomSummary[] }) {
   )
 }
 
-function DiscoverRooms() {
-  const router = useRouter()
+function DiscoverRooms({ initialRooms }: { initialRooms: ChatroomSearchResult[] }) {
   const [query, setQuery] = useState("")
+  // Default public rooms (shown when not searching) and search results are held
+  // separately so clearing the search box restores the default listing.
+  const [defaultRooms, setDefaultRooms] = useState<ChatroomSearchResult[]>(initialRooms)
   const [results, setResults] = useState<ChatroomSearchResult[]>([])
   const [searched, setSearched] = useState(false)
   const [isSearching, startSearch] = useTransition()
   const [isJoining, startJoin] = useTransition()
+
+  // When there's an active search we show its results; otherwise the default
+  // public list. Private rooms only ever appear via search.
+  const rooms = searched ? results : defaultRooms
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault()
@@ -244,10 +257,22 @@ function DiscoverRooms() {
     })
   }
 
+  function handleQueryChange(value: string) {
+    setQuery(value)
+    // Clearing the box returns to the default public listing.
+    if (!value.trim()) {
+      setSearched(false)
+      setResults([])
+    }
+  }
+
   function handleRequest(id: number) {
     startJoin(async () => {
       await requestToJoin(id)
-      setResults((prev) => prev.map((r) => (r.id === id ? { ...r, requestStatus: "pending" } : r)))
+      const mark = (r: ChatroomSearchResult) =>
+        r.id === id ? { ...r, requestStatus: "pending" as const } : r
+      setResults((prev) => prev.map(mark))
+      setDefaultRooms((prev) => prev.map(mark))
     })
   }
 
@@ -261,7 +286,7 @@ function DiscoverRooms() {
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => handleQueryChange(e.target.value)}
               placeholder="Search chatrooms"
               aria-label="Search chatrooms by name"
               className="pl-9"
@@ -272,13 +297,23 @@ function DiscoverRooms() {
           </Button>
         </form>
 
-        {searched && results.length === 0 && !isSearching && (
-          <p className="py-4 text-center text-sm text-muted-foreground">No chatrooms match that name.</p>
+        {searched ? (
+          <p className="text-xs font-medium text-muted-foreground">
+            {results.length > 0 ? "Search results" : "No chatrooms match that name."}
+          </p>
+        ) : (
+          rooms.length > 0 && <p className="text-xs font-medium text-muted-foreground">Public rooms</p>
         )}
 
-        {results.length > 0 && (
+        {!searched && rooms.length === 0 && (
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            No public rooms yet. Search by name to find private rooms.
+          </p>
+        )}
+
+        {rooms.length > 0 && (
           <div className="-mx-4 divide-y divide-border/60 border-y border-border/60 sm:-mx-6">
-            {results.map((room) => (
+            {rooms.map((room) => (
               <div
                 key={room.id}
                 className="flex items-center justify-between gap-3 px-4 py-3.5 transition-colors hover:bg-secondary/40 sm:px-6"
@@ -328,6 +363,8 @@ function CreateRoom() {
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [image, setImage] = useState<string | null>(null)
+  // Required choice — no default so the user must explicitly pick one.
+  const [visibility, setVisibility] = useState<"public" | "private" | null>(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -360,9 +397,13 @@ function CreateRoom() {
     setError(null)
     const trimmed = name.trim()
     if (!trimmed) return
+    if (!visibility) {
+      setError("Choose whether this room is public or private.")
+      return
+    }
     startTransition(async () => {
       try {
-        const roomId = await createChatroom({ name: trimmed, description, image })
+        const roomId = await createChatroom({ name: trimmed, description, image, visibility })
         router.push(`/chatrooms/${roomId}`)
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not create the chatroom.")
@@ -422,14 +463,61 @@ function CreateRoom() {
             maxLength={280}
           />
         </div>
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium">
+            Visibility <span className="text-destructive">*</span>
+          </legend>
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                {
+                  value: "public" as const,
+                  icon: Globe,
+                  label: "Public",
+                  hint: "Listed under Discover",
+                },
+                {
+                  value: "private" as const,
+                  icon: Lock,
+                  label: "Private",
+                  hint: "Hidden — found only by search",
+                },
+              ]
+            ).map(({ value, icon: Icon, label, hint }) => {
+              const selected = visibility === value
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => {
+                    setVisibility(value)
+                    setError(null)
+                  }}
+                  className={`flex flex-col items-start gap-1 rounded-xl border-2 p-3 text-left transition-colors ${
+                    selected
+                      ? "border-primary bg-primary/10"
+                      : "border-border bg-card hover:border-foreground/30 hover:bg-secondary/40"
+                  }`}
+                >
+                  <span className="flex items-center gap-2 text-sm font-semibold">
+                    <Icon className="size-4" />
+                    {label}
+                  </span>
+                  <span className="text-xs text-muted-foreground leading-snug">{hint}</span>
+                </button>
+              )
+            })}
+          </div>
+        </fieldset>
         {error && <p className="text-sm text-destructive">{error}</p>}
-        <Button type="submit" className="w-full gap-2" disabled={isPending || !name.trim()}>
+        <Button type="submit" className="w-full gap-2" disabled={isPending || !name.trim() || !visibility}>
           {isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
           Create chatroom
         </Button>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          You&apos;ll become the admin and get an invite link to share. Others can also find your room by name and
-          request to join.
+          You&apos;ll become the admin and get an invite link to share. Public rooms appear under Discover; private
+          rooms stay hidden there and can only be found by searching their exact name.
         </p>
       </form>
 

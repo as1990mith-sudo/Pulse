@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { SiteHeader } from "@/components/site-header"
 import { ChatroomBrowser } from "@/components/chatroom-browser"
-import { getMyChatrooms } from "@/app/actions/chatroom"
+import { getMyChatrooms, listDiscoverChatrooms } from "@/app/actions/chatroom"
 import { getCurrentUser } from "@/lib/session"
 
 export default async function ChatroomsPage() {
@@ -27,7 +27,7 @@ export default async function ChatroomsPage() {
     )
   }
 
-  const rooms = await getMyChatrooms()
+  const [rooms, discoverRooms] = await Promise.all([getMyChatrooms(), listDiscoverChatrooms()])
 
   return (
     // Warm, themed backdrop: a soft amber wash bleeding down from the top plus a
@@ -46,7 +46,7 @@ export default async function ChatroomsPage() {
               browser chrome shows/hides on this short page), so the top of the
               Community Help card is never pinned under the header. */}
           <div className="mx-auto w-full max-w-3xl px-4 py-8 [&>*]:scroll-mt-24 sm:px-6">
-            <ChatroomBrowser rooms={rooms} />
+            <ChatroomBrowser rooms={rooms} discoverRooms={discoverRooms} />
           </div>
         </main>
       </div>

@@ -28,6 +28,7 @@ import {
   type DmMessageView,
 } from "@/app/actions/dm"
 import { DM_DELETE_WINDOW_MS, DM_EDIT_WINDOW_MS } from "@/lib/dm-constants"
+import { formatChatTimestamp } from "@/lib/format-timestamp"
 import { ActionSheet, type SheetAction } from "@/components/action-sheet"
 import { getActiveCall, startCall, type CallMode, type DmCallView } from "@/app/actions/dm-call"
 import { ChatBackgroundSheet } from "@/components/chat-background-sheet"
@@ -935,7 +936,7 @@ function DmBubble({
           <AvatarFallback className={cn("text-[10px]", color)}>{initials}</AvatarFallback>
         </Avatar>
         <div className={cn("max-w-[75%] space-y-0.5", m.isSelf && "text-right")}>
-          <span className="text-[10px] text-muted-foreground">{m.postedAt}</span>
+          <span className="text-[10px] text-muted-foreground">{formatChatTimestamp(m.createdAtMs)}</span>
           <div
             className={cn(
               "inline-flex items-center gap-1.5 rounded-2xl border border-dashed border-border/70 px-3 py-2 text-sm italic text-muted-foreground",
@@ -966,7 +967,7 @@ function DmBubble({
       <div className={cn("relative max-w-[75%] space-y-0.5", m.isSelf && "text-right")}>
         <span className={cn("flex items-center gap-1 text-[10px] text-muted-foreground", m.isSelf && "justify-end")}>
           {m.pinned && <Pin className="size-3 fill-current" aria-label="Pinned" />}
-          {m.postedAt}
+          {formatChatTimestamp(m.createdAtMs)}
           {m.edited && <span>· edited</span>}
           {copied && <span className="text-primary">Copied</span>}
         </span>

@@ -239,17 +239,15 @@ export async function getMyChatrooms(): Promise<ChatroomSummary[]> {
 }
 
 /** Public search: find rooms by name. Returns membership + request status. */
-export async function searchChatrooms(query: string): Promise<ChatroomSearchResult[]> {
-  const user = await requireUser()
-  const q = query.trim()
-  if (!q) return []
-
-  const rooms = await db
-    .select()
-    .from(chatroom)
-    .where(ilike(chatroom.name, `%${q}%`))
-    .orderBy(asc(chatroom.name))
-    .limit(25)
+/**
+ * Enriches a raw list of chatroom rows with the requesting user's membership +
+ * pending-join-request status, shared by both the Discover default listing and
+ * search results.
+ */
+async function enrichRoomsForUser(
+  rooms: (typeof chatroom.$inferSelect)[],
+  userId: string,
+): Promise<ChatroomSearchResult[]> {
   const ids = rooms.map((r) => r.id)
   const counts = await memberCounts(ids)
 
@@ -259,7 +257,7 @@ export async function searchChatrooms(query: string): Promise<ChatroomSearchResu
           await db
             .select({ chatroomId: chatroomMember.chatroomId })
             .from(chatroomMember)
-            .where(and(eq(chatroomMember.userId, user.id), inArray(chatroomMember.chatroomId, ids)))
+            .where(and(eq(chatroomMember.userId, userId), inArray(chatroomMember.chatroomId, ids)))
         ).map((m) => m.chatroomId),
       )
     : new Set<number>()
@@ -268,7 +266,7 @@ export async function searchChatrooms(query: string): Promise<ChatroomSearchResu
     ? await db
         .select()
         .from(chatroomJoinRequest)
-        .where(and(eq(chatroomJoinRequest.userId, user.id), inArray(chatroomJoinRequest.chatroomId, ids)))
+        .where(and(eq(chatroomJoinRequest.userId, userId), inArray(chatroomJoinRequest.chatroomId, ids)))
     : []
   const requestMap = new Map(myRequests.map((r) => [r.chatroomId, r.status as "pending" | "approved" | "rejected"]))
 
@@ -284,14 +282,49 @@ export async function searchChatrooms(query: string): Promise<ChatroomSearchResu
   }))
 }
 
+/**
+ * Default Discover listing: public rooms only. Private rooms never appear here
+ * — they can only be reached via `searchChatrooms` (i.e. searched by name).
+ */
+export async function listDiscoverChatrooms(): Promise<ChatroomSearchResult[]> {
+  const user = await requireUser()
+  const rooms = await db
+    .select()
+    .from(chatroom)
+    .where(eq(chatroom.visibility, "public"))
+    .orderBy(desc(chatroom.createdAt))
+    .limit(50)
+  return enrichRoomsForUser(rooms, user.id)
+}
+
+export async function searchChatrooms(query: string): Promise<ChatroomSearchResult[]> {
+  const user = await requireUser()
+  const q = query.trim()
+  if (!q) return []
+
+  // Search matches by name across BOTH public and private rooms — this is the
+  // only way a private room surfaces in Discover.
+  const rooms = await db
+    .select()
+    .from(chatroom)
+    .where(ilike(chatroom.name, `%${q}%`))
+    .orderBy(asc(chatroom.name))
+    .limit(25)
+  return enrichRoomsForUser(rooms, user.id)
+}
+
 export async function createChatroom(input: {
   name: string
   description?: string | null
   image?: string | null
+  visibility: "public" | "private"
 }) {
   const user = await requireUser()
   const name = input.name.trim()
   if (!name) throw new Error("Chatroom name is required.")
+  if (input.visibility !== "public" && input.visibility !== "private") {
+    throw new Error("Choose whether the room is public or private.")
+  }
 
   const [room] = await db
     .insert(chatroom)
@@ -301,6 +334,7 @@ export async function createChatroom(input: {
       image: input.image?.trim() || null,
       ownerId: user.id,
       ownerName: user.name,
+      visibility: input.visibility,
       inviteCode: generateInviteCode(),
     })
     .returning()
