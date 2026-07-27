@@ -27,7 +27,6 @@ import {
   Radio,
   Bell,
   ShieldCheck,
-  ShoppingBag,
   Sun,
   UserPlus,
   Check,
@@ -318,7 +317,8 @@ export function AppMenu() {
                   <DrawerItem href="/bible" icon={BookOpen} label="Bible" onNavigate={navigate} />
                   <DrawerItem href="/live-notes" icon={NotebookPen} label="Live Notes" onNavigate={navigate} />
                   <DrawerItem href="/articles" icon={Newspaper} label="Articles" onNavigate={navigate} />
-                  <DrawerItem href="/store" icon={ShoppingBag} label="Book Store" onNavigate={navigate} />
+                  {/* Book Store hidden from the front end for now — restore this item to re-enable. */}
+                  {/* <DrawerItem href="/store" icon={ShoppingBag} label="Book Store" onNavigate={navigate} /> */}
                   <DrawerItem href="/library" icon={LibraryIcon} label="Library" onNavigate={navigate} />
                 </Section>
 

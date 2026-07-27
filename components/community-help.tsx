@@ -26,7 +26,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { ShareSheet } from "@/components/share-sheet"
 import type { ShareTarget } from "@/lib/share-types"
 import { linkify } from "@/lib/linkify"
-import { useAutoHideChatChrome } from "@/lib/chat-chrome"
+import { useAutoHideChatChrome, useChatChromeHidden } from "@/lib/chat-chrome"
 import { cn } from "@/lib/utils"
 import {
   addCommunityComment,
@@ -571,6 +571,9 @@ export function CommunityHelp({ initialPosts }: { initialPosts: CommunityPostVie
   const [scope, setScope] = useState<"community" | "mine">("community")
   // Auto-hide the global app header as the feed scrolls (Instagram/Telegram feel).
   const onFeedScroll = useAutoHideChatChrome()
+  // Same scroll-direction signal that hides the global header — used here to
+  // collapse this room's own header in lockstep (down = hide, up = reveal).
+  const chromeHidden = useChatChromeHidden()
 
   const visiblePosts = scope === "mine" ? posts.filter((p) => p.isSelf) : posts
   const myCount = posts.filter((p) => p.isSelf).length
@@ -607,8 +610,15 @@ export function CommunityHelp({ initialPosts }: { initialPosts: CommunityPostVie
   return (
     <MiniChatProvider>
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Sticky header with title + info */}
-      <header className="flex items-center gap-3 border-b border-border/60 bg-background/95 px-4 py-3 backdrop-blur sm:px-6">
+      {/* Header collapses + fades away on scroll-down and returns on scroll-up,
+          mirroring the global chrome. max-height + opacity keep it in flow so
+          the feed reclaims the space smoothly. */}
+      <header
+        className={cn(
+          "flex items-center gap-3 overflow-hidden border-b border-border/60 bg-background/95 px-4 py-3 backdrop-blur transition-[max-height,opacity,padding] duration-300 sm:px-6",
+          chromeHidden ? "pointer-events-none max-h-0 border-transparent py-0 opacity-0" : "max-h-24 opacity-100",
+        )}
+      >
         <Link
           href="/chatrooms"
           className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"

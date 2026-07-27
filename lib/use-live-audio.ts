@@ -216,6 +216,10 @@ export function useLiveAudio() {
   const recordCtxRef = useRef<AudioContext | null>(null)
   const recordDestRef = useRef<MediaStreamAudioDestinationNode | null>(null)
   const recordMimeRef = useRef<string>("")
+  // Remote participants' audio folded into the recording, keyed by identity, so
+  // conversation recordings capture every speaker (not just the host mic). Kept
+  // in sync as people join/leave while recording.
+  const recordRemoteSourcesRef = useRef<Map<string, MediaStreamAudioSourceNode>>(new Map())
   // Sound-effects bus (host side): a single published track through which
   // synthesized chimes are mixed into the broadcast (and recording).
   const fxCtxRef = useRef<AudioContext | null>(null)
@@ -376,11 +380,36 @@ export function useLiveAudio() {
               el.muted = listenerMutedRef.current
               audioElsRef.current.set(participant.identity, el)
               document.body.appendChild(el)
+
+              // If a recording is in progress, fold this speaker in so late
+              // joiners are captured too.
+              const recCtx = recordCtxRef.current
+              const recDest = recordDestRef.current
+              const remoteTrack = track.mediaStreamTrack
+              if (recCtx && recDest && remoteTrack && !recordRemoteSourcesRef.current.has(participant.identity)) {
+                try {
+                  const src = recCtx.createMediaStreamSource(new MediaStream([remoteTrack]))
+                  src.connect(recDest)
+                  recordRemoteSourcesRef.current.set(participant.identity, src)
+                } catch {
+                  /* best-effort */
+                }
+              }
             }
           })
           .on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack, _pub, participant: RemoteParticipant) => {
             track.detach().forEach((el) => el.remove())
             audioElsRef.current.delete(participant.identity)
+            // Drop this speaker from the recording bus when they leave/unpublish.
+            const src = recordRemoteSourcesRef.current.get(participant.identity)
+            if (src) {
+              try {
+                src.disconnect()
+              } catch {
+                /* already torn down */
+              }
+              recordRemoteSourcesRef.current.delete(participant.identity)
+            }
           })
           .on(RoomEvent.ParticipantConnected, () => {
             refreshCounts(room)
@@ -807,6 +836,22 @@ export function useLiveAudio() {
         ctx.createMediaStreamSource(musicStreamRef.current).connect(dest)
       }
 
+      // Fold in every remote speaker already in the room so conversation
+      // recordings capture all voices, not just the host's mic. Late joiners
+      // are added by the TrackSubscribed handler while recording continues.
+      room.remoteParticipants.forEach((p) => {
+        const remoteTrack = p.getTrackPublication(Track.Source.Microphone)?.audioTrack?.mediaStreamTrack
+        if (remoteTrack) {
+          try {
+            const src = ctx.createMediaStreamSource(new MediaStream([remoteTrack]))
+            src.connect(dest)
+            recordRemoteSourcesRef.current.set(p.identity, src)
+          } catch {
+            /* best-effort per participant */
+          }
+        }
+      })
+
       const { mime } = pickAudioMime()
       recordMimeRef.current = mime || "audio/webm"
       const chunks: BlobPart[] = []
@@ -843,6 +888,14 @@ export function useLiveAudio() {
     const blob = new Blob(recordChunksRef.current, { type: recordMimeRef.current || "audio/webm" })
     recorderRef.current = null
     recordChunksRef.current = []
+    recordRemoteSourcesRef.current.forEach((src) => {
+      try {
+        src.disconnect()
+      } catch {
+        /* already torn down */
+      }
+    })
+    recordRemoteSourcesRef.current.clear()
     await recordCtxRef.current?.close().catch(() => {})
     recordCtxRef.current = null
     recordDestRef.current = null

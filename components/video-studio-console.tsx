@@ -1185,14 +1185,14 @@ export function VideoStudioConsole({
 
               {/* Cover artwork — both Broadcast and Conversation carry a cover
                   (the room's identity, shown in the header + opened in the
-                  full-screen lightbox when tapped). */}
+                  full-screen lightbox when tapped). Both offer 1:1 / 4:5 crops
+                  so the cover matches the square/portrait art used everywhere it
+                  appears (catalogue, cards, lightbox). */}
               <CoverUpload
                 value={cover}
                 onChange={setCover}
                 label={orientation === "landscape" ? "Room cover" : "Broadcast cover"}
-                // The portrait broadcast is a live stream — offer 1:1 / 4:5 crops.
-                // Landscape Conversation rooms keep the default 16:9 cover.
-                {...(orientation === "landscape" ? {} : { ratios: SQUARE_PORTRAIT_RATIOS })}
+                ratios={SQUARE_PORTRAIT_RATIOS}
               />
 
               {/* Discussion topic — Conversation rooms only. */}

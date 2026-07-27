@@ -1,7 +1,6 @@
 "use client"
 
-import Link from "next/link"
-import { Library as LibraryIcon, ShoppingBag } from "lucide-react"
+import { Library as LibraryIcon } from "lucide-react"
 import type { Book } from "@/lib/store-data"
 import { BookGridCard } from "@/components/store/store-cards"
 
@@ -48,15 +47,10 @@ function EmptyLibrary() {
       </span>
       <h2 className="text-lg font-semibold text-foreground">Your library is empty</h2>
       <p className="mt-1 max-w-xs text-pretty text-sm text-muted-foreground">
-        Books you purchase from the Store will appear here for reading.
+        Books you purchase will appear here for reading.
       </p>
-      <Link
-        href="/store"
-        className="mt-5 flex items-center gap-2 rounded-2xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-elevated transition-transform active:scale-[0.98]"
-      >
-        <ShoppingBag className="size-4" />
-        Browse the Store
-      </Link>
+      {/* "Browse the Store" link hidden while the Book Store is disabled on the
+          front end — restore this link to re-enable. */}
     </div>
   )
 }

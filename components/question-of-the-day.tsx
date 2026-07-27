@@ -18,7 +18,7 @@ import {
   type FeedPostView,
 } from "@/app/actions/feed"
 import { qotdChannel, type QotdQuestionRow } from "@/lib/qotd-types"
-import { useAutoHideChatChrome } from "@/lib/chat-chrome"
+import { useAutoHideChatChrome, useChatChromeHidden } from "@/lib/chat-chrome"
 import type { CurrentUser } from "@/lib/session"
 
 /**
@@ -60,6 +60,8 @@ export function QuestionOfTheDay({
 }) {
   const [sheetOpen, setSheetOpen] = useState(false)
   const onFeedScroll = useAutoHideChatChrome()
+  // Collapse this room's header in sync with the global chrome scroll signal.
+  const chromeHidden = useChatChromeHidden()
   const channel = question ? qotdChannel(question.id) : null
 
   const { data: responses = initialResponses, mutate } = useSWR(
@@ -104,8 +106,12 @@ export function QuestionOfTheDay({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Sticky header */}
-      <header className="flex items-center gap-3 border-b border-border/60 bg-background/95 px-4 py-3 backdrop-blur sm:px-6">
+      {/* Header collapses + fades on scroll-down, returns on scroll-up. */}
+      <header
+        className={`flex items-center gap-3 overflow-hidden border-b border-border/60 bg-background/95 px-4 py-3 backdrop-blur transition-[max-height,opacity,padding] duration-300 sm:px-6 ${
+          chromeHidden ? "pointer-events-none max-h-0 border-transparent py-0 opacity-0" : "max-h-24 opacity-100"
+        }`}
+      >
         <Link
           href="/chatrooms"
           className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
@@ -132,7 +138,14 @@ export function QuestionOfTheDay({
         </Link>
       </header>
 
-      <div onScroll={onFeedScroll} className="flex-1 overflow-y-auto scroll-smooth overscroll-contain">
+      {/* Bottom padding reserves space for the floating Respond button (which is
+          absolutely positioned ~4.75rem up and ~2.75rem tall) so the question
+          text and the responses bar always scroll clear of it instead of being
+          covered. */}
+      <div
+        onScroll={onFeedScroll}
+        className="flex-1 overflow-y-auto scroll-smooth overscroll-contain pb-[calc(8.5rem+env(safe-area-inset-bottom))]"
+      >
         {!question ? (
           <div className="flex flex-col items-center justify-center gap-3 px-6 py-24 text-center">
             <Avatar className="size-16 ring-2 ring-amber-500/30">

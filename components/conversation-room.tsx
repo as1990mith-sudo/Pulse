@@ -28,11 +28,12 @@ import {
   X,
 } from "lucide-react"
 import { BackExitMenu } from "@/components/live-back-menu"
+import { SaveEpisodePrompt } from "@/components/live/save-episode-prompt"
 import { LiveChat } from "@/components/live-chat"
 import { ActionSheet, type SheetAction } from "@/components/action-sheet"
 import { CoverArt } from "@/components/cover-art"
 import { MarqueeTitle } from "@/components/marquee-title"
-import { CoverUpload } from "@/components/admin/cover-upload"
+import { CoverUpload, SQUARE_PORTRAIT_RATIOS } from "@/components/admin/cover-upload"
 import { AudioFormatSelector } from "@/components/audio-format-selector"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { ParticipantGrid, type GridParticipant } from "@/components/conversation/participant-grid"
@@ -62,6 +63,8 @@ import {
   type LiveStreamView,
   type LiveChatMessageView,
 } from "@/app/actions/live"
+import { publishShow } from "@/app/actions/shows"
+import { uploadMedia } from "@/lib/upload-media"
 import type { CurrentUser } from "@/lib/session"
 import { cn } from "@/lib/utils"
 
@@ -158,6 +161,8 @@ export function ConversationRoom({
     setMusicEndedHandler,
     duckMusic,
     stopMusic,
+    startRecording,
+    stopRecording,
   } = useLiveAudio()
 
   // ── Setup (host, brand-new room) ─────────────────────────────────────────
@@ -220,6 +225,11 @@ export function ConversationRoom({
         // Participants arrive muted; the host resumes with their mic ready.
         muted: !isHost,
       })
+      // Only the host records the room (to save it as an episode later).
+      if (isHost) {
+        startRecording()
+        setRecording(true)
+      }
       setConnecting(false)
       setTimeout(() => setArrived(true), 900)
     })()
@@ -255,6 +265,9 @@ export function ConversationRoom({
     setLive(true)
     startedRef.current = true
     await connect({ serverUrl: res.serverUrl, token: res.token, publish: true })
+    // Record the gathering (host side) so it can be saved as an episode on end.
+    startRecording()
+    setRecording(true)
     setArrived(true)
   }
 
@@ -265,6 +278,16 @@ export function ConversationRoom({
   const [theme, setThemeState] = useState<string>(streamData?.theme ?? "default")
   const [ended, setEnded] = useState(false)
   const [hostEnded, setHostEnded] = useState(false)
+
+  // ── Recording + post-end "save as episode?" decision (host only) ──────────
+  const [recording, setRecording] = useState(false)
+  // Held so we can finalize the recording lazily — only if the host chooses to
+  // save — without blocking room teardown for everyone else.
+  const recordingPromiseRef = useRef<Promise<Blob | null> | null>(null)
+  const [saveDecision, setSaveDecision] = useState<{ title: string; duration: string; cover: string | null } | null>(
+    null,
+  )
+  const [savingEpisode, setSavingEpisode] = useState(false)
   const [prayerEndedAt, setPrayerEndedAt] = useState<number | null>(null)
   const prevPrayer = useRef<string | null>(prayerStartedAt)
 
@@ -573,7 +596,56 @@ export function ConversationRoom({
     else router.push("/live")
   }
   async function endRoom() {
-    if (roomName) await endBroadcast({ roomName }).catch(() => {})
+    // Tear the room down immediately for everyone. The recorder is stopped
+    // synchronously (so no audio is lost) but we deliberately do NOT await it —
+    // we hold the promise and only resolve it if the host chooses to save.
+    const duration = formatElapsed(elapsed)
+    recordingPromiseRef.current = recording ? stopRecording().catch(() => null) : Promise.resolve(null)
+    setRecording(false)
+    if (roomName) void endBroadcast({ roomName }).catch(() => {})
+    void disconnect()
+    // Ask the host, as a separate step, whether to keep this as an episode.
+    setSaveDecision({ title, duration, cover: cover ?? null })
+  }
+
+  // Host chose to save — finalize the (usually already-resolved) recording,
+  // upload it, and auto-publish it to the catalogue's Live tab, then leave.
+  async function handleSaveEpisode() {
+    const dec = saveDecision
+    if (!dec) return
+    setSavingEpisode(true)
+    const audioBlob = await (recordingPromiseRef.current ?? Promise.resolve(null))
+    recordingPromiseRef.current = null
+    let audioUrl: string | null = null
+    if (audioBlob) {
+      try {
+        const ext = audioBlob.type.includes("mp4") ? "mp4" : "webm"
+        const file = new File([audioBlob], `conversation.${ext}`, { type: audioBlob.type })
+        const data = await uploadMedia(file, "episodes")
+        audioUrl = data.url
+      } catch {
+        // Publish without audio rather than failing the save entirely.
+      }
+    }
+    await publishShow({
+      title: dec.title,
+      tagline: "",
+      category: "",
+      duration: dec.duration,
+      description: "",
+      cover: dec.cover,
+      audioUrl,
+      source: "live",
+    }).catch(() => null)
+    setSaveDecision(null)
+    setSavingEpisode(false)
+    leaveRoom()
+  }
+
+  // Host declined to save — drop the recording and leave.
+  function handleDiscardEpisode() {
+    recordingPromiseRef.current = null
+    setSaveDecision(null)
     leaveRoom()
   }
 
@@ -638,7 +710,12 @@ export function ConversationRoom({
           <div className="space-y-5">
             <AudioFormatSelector active="conversation" />
 
-            <CoverUpload value={setupCover} onChange={setSetupCover} label="Room cover" />
+            <CoverUpload
+              value={setupCover}
+              onChange={setSetupCover}
+              label="Room cover"
+              ratios={SQUARE_PORTRAIT_RATIOS}
+            />
 
             <label className="block space-y-1.5">
               <span className="text-sm font-medium">Room name</span>
@@ -1030,6 +1107,21 @@ export function ConversationRoom({
         actions={participantActions}
       />
 
+      {/* Post-end "save as episode?" decision (host). While saving, the prompt
+          is replaced by a small saving state so the host isn't left staring at
+          a frozen dialog during upload/publish. */}
+      {saveDecision &&
+        (savingEpisode ? (
+          <div className="fixed inset-0 z-[75] flex items-center justify-center p-6">
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" aria-hidden="true" />
+            <div className="relative z-10 flex w-full max-w-xs flex-col items-center gap-3 rounded-3xl border border-white/10 bg-zinc-900/95 p-6 text-center text-white shadow-2xl backdrop-blur-xl">
+              <Loader2 className="size-8 animate-spin text-primary" />
+              <p className="text-sm font-semibold">Saving this gathering to your catalogue…</p>
+            </div>
+          </div>
+        ) : (
+          <SaveEpisodePrompt onSave={() => void handleSaveEpisode()} onDiscard={handleDiscardEpisode} />
+        ))}
     </div>
   )
 }
