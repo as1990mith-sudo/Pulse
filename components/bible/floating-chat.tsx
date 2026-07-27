@@ -14,6 +14,7 @@ import { ImageLightbox } from "@/components/image-lightbox"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { haptic } from "@/lib/haptics"
 import { cn } from "@/lib/utils"
+import { formatChatTimestamp } from "@/lib/format-timestamp"
 import { useBibleFellowship } from "./fellowship-context"
 import type { ActiveChat } from "./fellowship-context"
 
@@ -534,7 +535,7 @@ function Bubble({ m, onImage }: { m: DmMessageView; onImage: () => void }) {
         {isAudio && <AudioMessage src={m.attachmentUrl!} mine={m.isSelf} className="min-w-[180px] px-1" />}
         {m.body && <p className={cn("whitespace-pre-wrap [overflow-wrap:anywhere]", (isImage || isAudio) && "px-2 pb-1 pt-1")}>{m.body}</p>}
         <span className={cn("mt-0.5 block text-[10px]", m.isSelf ? "text-primary-foreground/70" : "text-muted-foreground")}>
-          {m.postedAt}
+          {formatChatTimestamp(m.createdAtMs)}
         </span>
       </div>
     </div>
