@@ -470,20 +470,10 @@ function CreateRoom() {
           <div className="grid grid-cols-2 gap-2">
             {(
               [
-                {
-                  value: "public" as const,
-                  icon: Globe,
-                  label: "Public",
-                  hint: "Listed under Discover",
-                },
-                {
-                  value: "private" as const,
-                  icon: Lock,
-                  label: "Private",
-                  hint: "Hidden — found only by search",
-                },
+                { value: "public" as const, icon: Globe, label: "Public" },
+                { value: "private" as const, icon: Lock, label: "Private" },
               ]
-            ).map(({ value, icon: Icon, label, hint }) => {
+            ).map(({ value, icon: Icon, label }) => {
               const selected = visibility === value
               return (
                 <button
@@ -494,17 +484,14 @@ function CreateRoom() {
                     setVisibility(value)
                     setError(null)
                   }}
-                  className={`flex flex-col items-start gap-1 rounded-xl border-2 p-3 text-left transition-colors ${
+                  className={`flex items-center gap-2 rounded-xl border-2 p-3 text-left text-sm font-semibold transition-colors ${
                     selected
                       ? "border-primary bg-primary/10"
                       : "border-border bg-card hover:border-foreground/30 hover:bg-secondary/40"
                   }`}
                 >
-                  <span className="flex items-center gap-2 text-sm font-semibold">
-                    <Icon className="size-4" />
-                    {label}
-                  </span>
-                  <span className="text-xs text-muted-foreground leading-snug">{hint}</span>
+                  <Icon className="size-4" />
+                  {label}
                 </button>
               )
             })}
