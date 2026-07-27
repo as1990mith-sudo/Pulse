@@ -33,12 +33,9 @@ function CommunityHelpEntry() {
       </Avatar>
       <div className="min-w-0 flex-1">
         <p className="truncate text-base font-semibold tracking-tight text-white">Community Help</p>
-        <div className="marquee text-sm leading-snug text-emerald-50/85" aria-label="Ask anything anonymously — anyone in the community can help.">
-          <div className="marquee__track" aria-hidden="true">
-            <span>Ask anything anonymously — anyone in the community can help.</span>
-            <span>Ask anything anonymously — anyone in the community can help.</span>
-          </div>
-        </div>
+        <p className="truncate text-sm leading-snug text-emerald-50/85">
+          Ask anything anonymously — anyone in the community can help.
+        </p>
       </div>
       <span className="shrink-0 rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-emerald-800 shadow-sm transition-transform group-hover:scale-105">
         Open
@@ -60,15 +57,9 @@ function QuestionOfTheDayEntry() {
       </Avatar>
       <div className="min-w-0 flex-1">
         <p className="truncate text-base font-semibold tracking-tight text-white">Question of the Day</p>
-        <div
-          className="marquee text-sm leading-snug text-amber-50/85"
-          aria-label="One question. Many perspectives. Join today's community discussion."
-        >
-          <div className="marquee__track" aria-hidden="true">
-            <span>One question. Many perspectives. Join today&apos;s community discussion.</span>
-            <span>One question. Many perspectives. Join today&apos;s community discussion.</span>
-          </div>
-        </div>
+        <p className="truncate text-sm leading-snug text-amber-50/85">
+          One question. Many perspectives. Join today&apos;s community discussion.
+        </p>
       </div>
       <span className="shrink-0 rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-amber-800 shadow-sm transition-transform group-hover:scale-105">
         Open
@@ -90,15 +81,9 @@ function ITestifyEntry() {
       </Avatar>
       <div className="min-w-0 flex-1">
         <p className="truncate text-base font-semibold tracking-tight text-white">iTestify</p>
-        <div
-          className="marquee text-sm leading-snug text-rose-50/85"
-          aria-label="Share what God has done — testimonies that build faith."
-        >
-          <div className="marquee__track" aria-hidden="true">
-            <span>Share what God has done — testimonies that build faith.</span>
-            <span>Share what God has done — testimonies that build faith.</span>
-          </div>
-        </div>
+        <p className="truncate text-sm leading-snug text-rose-50/85">
+          Share what God has done — testimonies that build faith.
+        </p>
       </div>
       <span className="shrink-0 rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-rose-800 shadow-sm transition-transform group-hover:scale-105">
         Open
@@ -196,42 +181,42 @@ function MyRooms({ rooms }: { rooms: ChatroomSummary[] }) {
   }
 
   return (
-    // Edge-to-edge immersive list: break out of the page's horizontal padding
-    // and use full-width divided rows instead of boxed cards.
-    <div className="-mx-4 divide-y divide-border/60 border-y border-border/60 sm:-mx-6">
+    // Rooms are rendered as the same rounded "pill" cards as the featured
+    // Community Help / QOTD / iTestify entries above — matching layout, shadow
+    // and white "Open" pill — while keeping each room's own neutral colour
+    // scheme rather than adopting the vivid featured gradients.
+    <div className="space-y-2">
       {rooms.map((room) => (
         <Link
           key={room.id}
           href={`/chatrooms/${room.id}`}
-          className="group flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-secondary/40 sm:px-6"
+          className="group flex items-center gap-3 rounded-xl border border-border/60 bg-card px-4 py-3 shadow-lg shadow-black/20 transition-all hover:bg-secondary/40 hover:shadow-black/30 sm:px-5"
         >
-          <div className="flex min-w-0 items-center gap-3">
-            <Avatar className="size-12 shrink-0 ring-2 ring-border/60 transition-transform duration-200 group-hover:scale-105">
-              {room.image && <AvatarImage src={room.image || "/placeholder.svg"} alt={room.name} />}
-              <AvatarFallback className="bg-secondary text-base font-semibold">
-                {room.name.slice(0, 2).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <div className="min-w-0">
-              {/* Name gets the full width and truncates on its own line, so the
-                  Admin tag (moved to the meta line below) never overlaps it. */}
-              <p className="min-w-0 truncate text-base font-semibold tracking-tight">{room.name}</p>
-              {room.description && (
-                <p className="truncate text-xs leading-snug text-muted-foreground">{room.description}</p>
+          <Avatar className="size-12 shrink-0 ring-2 ring-border/60 transition-transform duration-200 group-hover:scale-105">
+            {room.image && <AvatarImage src={room.image || "/placeholder.svg"} alt={room.name} />}
+            <AvatarFallback className="bg-secondary text-base font-semibold">
+              {room.name.slice(0, 2).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            {/* Name gets the full width and truncates on its own line, so the
+                Admin tag (moved to the meta line below) never overlaps it. */}
+            <p className="min-w-0 truncate text-base font-semibold tracking-tight">{room.name}</p>
+            {room.description && (
+              <p className="truncate text-xs leading-snug text-muted-foreground">{room.description}</p>
+            )}
+            <p className="mt-1 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <Users className="size-3.5" /> {room.memberCount} {room.memberCount === 1 ? "member" : "members"}
+              </span>
+              {room.isOwner && (
+                <Badge variant="secondary" className="h-4 shrink-0 px-1.5 text-[10px] font-semibold leading-none">
+                  Admin
+                </Badge>
               )}
-              <p className="mt-1 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <Users className="size-3.5" /> {room.memberCount} {room.memberCount === 1 ? "member" : "members"}
-                </span>
-                {room.isOwner && (
-                  <Badge variant="secondary" className="h-4 shrink-0 px-1.5 text-[10px] font-semibold leading-none">
-                    Admin
-                  </Badge>
-                )}
-              </p>
-            </div>
+            </p>
           </div>
-          <span className="shrink-0 rounded-full bg-foreground px-3.5 py-1.5 text-xs font-semibold text-background transition-opacity group-hover:opacity-90">
+          <span className="shrink-0 rounded-full bg-foreground px-4 py-1.5 text-sm font-semibold text-background shadow-sm transition-transform group-hover:scale-105">
             Open
           </span>
         </Link>

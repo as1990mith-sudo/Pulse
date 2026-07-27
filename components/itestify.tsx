@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { ChannelComposer } from "@/components/channel-composer"
 import { PostCard } from "@/components/mind-feed"
 import { getChannelFeed, type FeedPostView } from "@/app/actions/feed"
-import { useAutoHideChatChrome } from "@/lib/chat-chrome"
+import { useAutoHideChatChrome, useChatChromeHidden } from "@/lib/chat-chrome"
 import type { CurrentUser } from "@/lib/session"
 
 const ITESTIFY_CHANNEL = "itestify"
@@ -25,6 +25,8 @@ export function ITestify({
 }) {
   const [composerOpen, setComposerOpen] = useState(false)
   const onFeedScroll = useAutoHideChatChrome()
+  // Collapse this room's header in sync with the global chrome scroll signal.
+  const chromeHidden = useChatChromeHidden()
 
   const { data: posts = initialPosts, mutate } = useSWR(
     ["itestify-feed", ITESTIFY_CHANNEL],
@@ -34,8 +36,12 @@ export function ITestify({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Sticky header */}
-      <header className="flex items-center gap-3 border-b border-border/60 bg-background/95 px-4 py-3 backdrop-blur sm:px-6">
+      {/* Header collapses + fades on scroll-down, returns on scroll-up. */}
+      <header
+        className={`flex items-center gap-3 overflow-hidden border-b border-border/60 bg-background/95 px-4 py-3 backdrop-blur transition-[max-height,opacity,padding] duration-300 sm:px-6 ${
+          chromeHidden ? "pointer-events-none max-h-0 border-transparent py-0 opacity-0" : "max-h-24 opacity-100"
+        }`}
+      >
         <Link
           href="/chatrooms"
           className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
