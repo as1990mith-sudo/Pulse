@@ -106,16 +106,19 @@ export function DmInbox({
   return (
     <>
       {/* "Respond later" header when viewing the archive, or the entry row on
-          the main inbox (only shown once something has been archived). */}
+          the main inbox (only shown once something has been archived). Styled as
+          a premium pill to match the conversation cards below. */}
       {showArchived ? (
         <button
           type="button"
           onClick={() => setShowArchived(false)}
-          className="flex w-full items-center gap-3 border-y border-border/60 px-4 py-3 text-left transition-colors hover:bg-secondary/40 sm:px-5"
+          className="mb-2.5 flex w-full items-center gap-3 rounded-2xl border-2 border-border bg-card px-3.5 py-3 text-left shadow-lg shadow-black/20 transition-all hover:border-foreground/30 hover:bg-secondary/40 active:scale-[0.99]"
         >
-          <ArrowLeft className="size-5 shrink-0 text-muted-foreground" />
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground">
+            <ArrowLeft className="size-5" />
+          </span>
           <span className="font-semibold">Respond later</span>
-          <span className="ml-auto rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-muted-foreground">
+          <span className="ml-auto rounded-full bg-secondary px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">
             {archivedCount}
           </span>
         </button>
@@ -124,13 +127,13 @@ export function DmInbox({
           <button
             type="button"
             onClick={() => setShowArchived(true)}
-            className="flex w-full items-center gap-3 border-y border-border/60 px-4 py-3 text-left transition-colors hover:bg-secondary/40 sm:px-5"
+            className="mb-2.5 flex w-full items-center gap-3 rounded-2xl border-2 border-border bg-card px-3.5 py-3 text-left shadow-lg shadow-black/20 transition-all hover:border-foreground/30 hover:bg-secondary/40 active:scale-[0.99]"
           >
-            <span className="flex size-9 items-center justify-center rounded-full bg-secondary text-muted-foreground">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground">
               <Clock className="size-4" />
             </span>
             <span className="font-medium">Respond later</span>
-            <span className="ml-auto rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+            <span className="ml-auto rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
               {archivedCount}
             </span>
           </button>
@@ -138,7 +141,7 @@ export function DmInbox({
       )}
 
       {visibleList.length === 0 ? (
-        <div className="px-4 py-16 text-center sm:px-6">
+        <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-16 text-center">
           <p className="text-pretty text-sm text-muted-foreground">
             {showArchived
               ? "Nothing here. Chats you move to Respond later will show up in this list."
