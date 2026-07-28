@@ -1,7 +1,8 @@
 import Link from "next/link"
 import { SiteHeader } from "@/components/site-header"
-import { DmInbox } from "@/components/dm-inbox"
+import { MessagesHub } from "@/components/messages-hub"
 import { getConversations } from "@/app/actions/dm"
+import { getMyChatrooms, listDiscoverChatrooms } from "@/app/actions/chatroom"
 import { getCurrentUser } from "@/lib/session"
 
 export default async function MessagesPage() {
@@ -27,14 +28,31 @@ export default async function MessagesPage() {
     )
   }
 
-  const conversations = await getConversations()
+  const [conversations, rooms, discoverRooms] = await Promise.all([
+    getConversations(),
+    getMyChatrooms(),
+    listDiscoverChatrooms(),
+  ])
 
   return (
-    <div className="min-h-screen">
-      <SiteHeader />
-      <main className="mx-auto w-full max-w-2xl py-8">
-        <DmInbox conversations={conversations} currentUser={currentUser} />
-      </main>
+    // Same warm themed backdrop as the standalone Chatrooms page so the two
+    // experiences feel like one consistent, premium surface.
+    <div className="relative min-h-screen bg-gradient-to-b from-primary/15 via-background to-background">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-80 bg-[radial-gradient(60%_100%_at_50%_0%,color-mix(in_oklab,var(--primary)_22%,transparent),transparent)]"
+      />
+      <div className="relative">
+        <SiteHeader />
+        <main>
+          <MessagesHub
+            conversations={conversations}
+            currentUser={currentUser}
+            rooms={rooms}
+            discoverRooms={discoverRooms}
+          />
+        </main>
+      </div>
     </div>
   )
 }

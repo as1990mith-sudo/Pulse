@@ -21,6 +21,8 @@ import {
 } from "@/app/actions/chatroom"
 import { ImageCropper } from "@/components/image-cropper"
 import { uploadMedia } from "@/lib/upload-media"
+import { useHideOnScrollDown } from "@/lib/chat-chrome"
+import { cn } from "@/lib/utils"
 
 function CommunityHelpEntry() {
   return (
@@ -126,40 +128,66 @@ function DreamInterpretationEntry() {
 export function ChatroomBrowser({
   rooms,
   discoverRooms,
+  showFeatured = true,
+  stickyTabs = true,
 }: {
   rooms: ChatroomSummary[]
   discoverRooms: ChatroomSearchResult[]
+  // Show the featured community rooms (Community Help / QOTD / iTestify) above
+  // the switcher. Kept on the standalone Chatrooms page, hidden when this
+  // browser is embedded inside Messages → Rooms (user-created rooms only).
+  showFeatured?: boolean
+  // Pin the My rooms / Discover / Create switcher to the top and hide it on
+  // scroll-down (immersive). Disabled when a parent already owns a sticky tab
+  // bar (Messages → Rooms), so we don't stack two pinned controls.
+  stickyTabs?: boolean
 }) {
+  // Drives the immersive hide-on-scroll for the sticky switcher, in lockstep
+  // with the global header and bottom nav.
+  const chromeHidden = useHideOnScrollDown()
+
   return (
     <Tabs defaultValue="my-rooms" className="space-y-3">
       {/* Active community rooms, in fixed order: Community Help, Question of
           the Day, iTestify. Dream Interpretation is preserved in the backend
           but intentionally hidden from this navigation for now. */}
-      <div className="space-y-2">
-        <CommunityHelpEntry />
-        <QuestionOfTheDayEntry />
-        <ITestifyEntry />
-      </div>
+      {showFeatured && (
+        <div className="space-y-2">
+          <CommunityHelpEntry />
+          <QuestionOfTheDayEntry />
+          <ITestifyEntry />
+        </div>
+      )}
       {/* Luxury segmented control: a floating rounded-full "rail" with a soft
           hairline border and inner shadow. The active segment lifts on a
           gold gradient pill with a warm glow, while idle segments stay quiet —
-          giving the switcher a premium, tactile feel. */}
-      <TabsList className="mx-auto grid h-14 w-full max-w-md grid-cols-3 gap-1 rounded-full border border-primary/15 bg-gradient-to-b from-card/80 to-card/40 p-1.5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06),0_8px_24px_-12px_rgba(0,0,0,0.6)] backdrop-blur-xl">
-        {[
-          { value: "my-rooms", label: "My rooms", icon: Users },
-          { value: "discover", label: "Discover", icon: Compass },
-          { value: "create", label: "Create", icon: PlusCircle },
-        ].map(({ value, label, icon: Icon }) => (
-          <TabsTrigger
-            key={value}
-            value={value}
-            className="group relative flex h-full items-center justify-center gap-1.5 rounded-full border-0 bg-transparent text-[13px] font-medium tracking-wide text-muted-foreground shadow-none transition-all duration-300 hover:text-foreground data-[state=active]:bg-gradient-to-b data-[state=active]:from-primary data-[state=active]:to-primary/85 data-[state=active]:font-semibold data-[state=active]:text-primary-foreground data-[state=active]:shadow-[0_2px_10px_-2px_color-mix(in_oklab,var(--primary)_60%,transparent),inset_0_1px_0_0_rgba(255,255,255,0.25)]"
-          >
-            <Icon className="size-4 transition-transform duration-300 group-data-[state=active]:scale-110" />
-            {label}
-          </TabsTrigger>
-        ))}
-      </TabsList>
+          giving the switcher a premium, tactile feel. When `stickyTabs`, the
+          whole rail pins beneath the header on a frosted full-bleed backdrop
+          and slides away on scroll-down for an immersive, distraction-free read. */}
+      <div
+        className={cn(
+          stickyTabs &&
+            "sticky top-[calc(4rem+env(safe-area-inset-top))] z-30 -mx-4 border-b border-border/60 bg-background/80 px-4 py-2.5 backdrop-blur-xl transition-[transform,opacity] duration-300 ease-out sm:-mx-6 sm:px-6",
+          stickyTabs && (chromeHidden ? "-translate-y-[calc(100%+4.5rem)] opacity-0" : "translate-y-0 opacity-100"),
+        )}
+      >
+        <TabsList className="mx-auto grid h-14 w-full max-w-md grid-cols-3 gap-1 rounded-full border border-primary/15 bg-gradient-to-b from-card/80 to-card/40 p-1.5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06),0_8px_24px_-12px_rgba(0,0,0,0.6)] backdrop-blur-xl">
+          {[
+            { value: "my-rooms", label: "My rooms", icon: Users },
+            { value: "discover", label: "Discover", icon: Compass },
+            { value: "create", label: "Create", icon: PlusCircle },
+          ].map(({ value, label, icon: Icon }) => (
+            <TabsTrigger
+              key={value}
+              value={value}
+              className="group relative flex h-full items-center justify-center gap-1.5 rounded-full border-0 bg-transparent text-[13px] font-medium tracking-wide text-muted-foreground shadow-none transition-all duration-300 hover:text-foreground data-[state=active]:bg-gradient-to-b data-[state=active]:from-primary data-[state=active]:to-primary/85 data-[state=active]:font-semibold data-[state=active]:text-primary-foreground data-[state=active]:shadow-[0_2px_10px_-2px_color-mix(in_oklab,var(--primary)_60%,transparent),inset_0_1px_0_0_rgba(255,255,255,0.25)]"
+            >
+              <Icon className="size-4 transition-transform duration-300 group-data-[state=active]:scale-110" />
+              {label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </div>
 
       <TabsContent value="my-rooms">
         <MyRooms rooms={rooms} />

@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useSyncExternalStore } from "react"
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react"
 
 /* -------------------------------------------------------------------------- *
  *  Auto-hiding global chrome for immersive chat interfaces.
@@ -106,4 +106,50 @@ export function useAutoHideChatChrome() {
       // Small jitters within the deadband are ignored to prevent flicker.
     })
   }, [])
+}
+
+/**
+ * Window-scroll variant for standard document-scrolling pages (Messages inbox,
+ * Chatrooms browse). Returns whether page chrome (sticky tab bars, toolbars)
+ * should be hidden: true while scrolling down, false while scrolling up or near
+ * the top. The thresholds mirror the global SiteHeader's own window-scroll logic
+ * so the header, tab controls and bottom nav all hide/reveal in lockstep with
+ * no flicker. Purely transform-driven by the consumer — never mutates scroll.
+ */
+export function useHideOnScrollDown(minScrollable = 240) {
+  const [hidden, setHidden] = useState(false)
+
+  useEffect(() => {
+    let lastY = window.scrollY
+    let frame = 0
+    function onScroll() {
+      if (frame) return
+      frame = requestAnimationFrame(() => {
+        frame = 0
+        const y = window.scrollY
+        const delta = y - lastY
+        // On short pages (little to scroll), keep chrome visible — matches the
+        // header so a brief mobile browser-chrome shift never hides the bar.
+        const scrollable = document.documentElement.scrollHeight - window.innerHeight
+        if (scrollable < minScrollable) {
+          setHidden(false)
+          lastY = y
+          return
+        }
+        if (Math.abs(delta) > 6) {
+          setHidden(delta > 0 && y > 72)
+          lastY = y
+        } else if (y <= 72) {
+          setHidden(false)
+        }
+      })
+    }
+    window.addEventListener("scroll", onScroll, { passive: true })
+    return () => {
+      window.removeEventListener("scroll", onScroll)
+      if (frame) cancelAnimationFrame(frame)
+    }
+  }, [minScrollable])
+
+  return hidden
 }
