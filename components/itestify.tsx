@@ -19,9 +19,13 @@ const MAX_VIDEO_SECONDS = 10 * 60
 export function ITestify({
   initialPosts,
   currentUser,
+  // Hidden back arrow when embedded in the Chat Rooms two-tab hub (the page is
+  // already /chatrooms, so a "Back to chatrooms" link would loop to itself).
+  embedded = false,
 }: {
   initialPosts: FeedPostView[]
   currentUser: CurrentUser
+  embedded?: boolean
 }) {
   const [composerOpen, setComposerOpen] = useState(false)
   const onFeedScroll = useAutoHideChatChrome()
@@ -42,13 +46,15 @@ export function ITestify({
           chromeHidden ? "pointer-events-none max-h-0 border-transparent py-0 opacity-0" : "max-h-24 opacity-100"
         }`}
       >
-        <Link
-          href="/chatrooms"
-          className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-          aria-label="Back to chatrooms"
-        >
-          <ArrowLeft className="size-5" />
-        </Link>
+        {!embedded && (
+          <Link
+            href="/chatrooms"
+            className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            aria-label="Back to chatrooms"
+          >
+            <ArrowLeft className="size-5" />
+          </Link>
+        )}
         <Avatar className="size-9 ring-2 ring-rose-500/30">
           <AvatarFallback className="bg-rose-600 text-white">
             <Flame className="size-5" />
