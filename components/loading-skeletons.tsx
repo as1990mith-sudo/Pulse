@@ -33,20 +33,6 @@ function PostSkeleton() {
   )
 }
 
-/** A horizontal list row (messages, generic lists). */
-function RowSkeleton() {
-  return (
-    <div className="flex items-center gap-3 px-4 py-3 sm:px-5">
-      <Skeleton className="size-12 shrink-0 rounded-full" />
-      <div className="flex flex-1 flex-col gap-2">
-        <Skeleton className="h-3.5 w-36 rounded-md" />
-        <Skeleton className="h-3 w-48 rounded-md" />
-      </div>
-      <Skeleton className="h-3 w-10 rounded-md" />
-    </div>
-  )
-}
-
 /* Page-level skeletons ------------------------------------------------------ */
 
 export function FeedSkeleton() {
@@ -80,15 +66,24 @@ export function FeedSkeleton() {
 
 export function MessagesSkeleton() {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-gradient-to-b from-primary/15 via-background to-background">
       <SiteHeader />
-      <main className="mx-auto w-full max-w-2xl py-8">
-        <div className="px-4 sm:px-6">
-          <Skeleton className="h-7 w-32 rounded-lg" />
-        </div>
-        <div className="mt-4 flex flex-col">
+      <main className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
+        {/* Chats / Rooms segmented control */}
+        <Skeleton className="mx-auto h-14 w-full max-w-md rounded-full" />
+        {/* Premium conversation cards */}
+        <div className="mt-4 flex flex-col gap-2">
           {Array.from({ length: 7 }).map((_, i) => (
-            <RowSkeleton key={i} />
+            <div key={i} className="flex items-center gap-3 rounded-xl border-2 border-border bg-card px-4 py-3">
+              <Skeleton className="size-12 shrink-0 rounded-full" />
+              <div className="flex flex-1 flex-col gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <Skeleton className="h-4 w-32 rounded-md" />
+                  <Skeleton className="h-3 w-10 rounded-md" />
+                </div>
+                <Skeleton className="h-3.5 w-[60%] rounded-md" />
+              </div>
+            </div>
           ))}
         </div>
       </main>

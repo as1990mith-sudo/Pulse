@@ -149,14 +149,18 @@ export function DmInbox({
           </p>
         </div>
       ) : (
-        <ul className="divide-y divide-border/60 border-y border-border/60">
+        // Each private conversation is rendered with the exact same premium
+        // rounded pill card used by the standalone Chatrooms "My rooms" list
+        // (rounded-xl, border-2, bg-card, soft shadow, hover scale) for a
+        // consistent design language across the app.
+        <ul className="space-y-2">
           {visibleList.map((c) => (
             <li key={c.id} className="relative">
               <Link
                 href={`/messages/${c.id}`}
                 className={cn(
-                  "flex items-center gap-3 py-4 pl-4 pr-12 transition-colors hover:bg-secondary/40 sm:pl-5",
-                  c.priority && "bg-primary/5 hover:bg-primary/10",
+                  "group flex items-center gap-3 rounded-xl border-2 border-border bg-card py-3 pl-4 pr-14 shadow-lg shadow-black/20 transition-all hover:border-foreground/30 hover:bg-secondary/40 hover:shadow-black/30 active:scale-[0.99] sm:pl-5",
+                  c.priority && "border-primary/40 bg-primary/[0.06] hover:border-primary/60 hover:bg-primary/10",
                 )}
               >
                 {c.hasActiveStatus ? (
@@ -171,20 +175,20 @@ export function DmInbox({
                     }}
                     aria-label={`View ${c.otherUserName}'s status`}
                     className={cn(
-                      "flex shrink-0 items-center justify-center rounded-full p-[2px] transition-transform hover:scale-[1.04]",
+                      "flex shrink-0 items-center justify-center rounded-full p-[2px] transition-transform hover:scale-[1.06] group-hover:scale-105",
                       c.statusAllViewed && "bg-border",
                     )}
                     style={c.statusAllViewed ? undefined : { backgroundImage: "var(--skin-ring)" }}
                   >
                     <span className="rounded-full border-2 border-card p-[1px]">
-                      <Avatar className="size-10">
+                      <Avatar className="size-11">
                         {c.image && <AvatarImage src={c.image || "/placeholder.svg"} alt={c.otherUserName} />}
                         <AvatarFallback className={cn("text-sm", c.color)}>{c.initials}</AvatarFallback>
                       </Avatar>
                     </span>
                   </button>
                 ) : (
-                  <Avatar className="size-11 shrink-0">
+                  <Avatar className="size-12 shrink-0 ring-2 ring-border/60 transition-transform duration-200 group-hover:scale-105">
                     {c.image && <AvatarImage src={c.image || "/placeholder.svg"} alt={c.otherUserName} />}
                     <AvatarFallback className={cn("text-sm", c.color)}>{c.initials}</AvatarFallback>
                   </Avatar>
@@ -195,19 +199,33 @@ export function DmInbox({
                       {c.priority && (
                         <Pin className="size-3.5 shrink-0 -rotate-45 fill-primary text-primary" aria-label="Priority" />
                       )}
-                      <span className={cn("truncate font-medium", c.unread && "font-semibold")}>{c.otherUserName}</span>
+                      <span className={cn("truncate text-base font-semibold tracking-tight", !c.unread && "font-medium")}>
+                        {c.otherUserName}
+                      </span>
                     </span>
-                    <span className="shrink-0 text-xs text-muted-foreground">{c.lastMessageAt}</span>
+                    <span className="shrink-0 text-xs font-medium text-muted-foreground">{c.lastMessageAt}</span>
                   </div>
-                  <p className={cn("truncate text-sm text-muted-foreground", c.unread && "font-medium text-foreground")}>
+                  <p
+                    className={cn(
+                      "mt-0.5 truncate text-sm text-muted-foreground",
+                      c.unread && "font-medium text-foreground",
+                    )}
+                  >
                     {c.lastMessage}
                   </p>
                 </div>
-                {c.unread && <span className="size-2.5 shrink-0 rounded-full bg-primary" aria-label="Unread" />}
+                {c.unread && (
+                  <span
+                    className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground shadow-sm shadow-primary/40"
+                    aria-label="Unread messages"
+                  >
+                    <span className="size-2 rounded-full bg-primary-foreground" />
+                  </span>
+                )}
               </Link>
 
               {/* Per-chat menu: archive (Respond later) / unarchive + delete. */}
-              <div className="absolute right-1 top-1/2 -translate-y-1/2">
+              <div className="absolute right-2 top-1/2 -translate-y-1/2">
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     aria-label={`Options for chat with ${c.otherUserName}`}
