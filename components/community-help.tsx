@@ -557,7 +557,15 @@ function InfoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
 /*  Root                                                                      */
 /* -------------------------------------------------------------------------- */
 
-export function CommunityHelp({ initialPosts }: { initialPosts: CommunityPostView[] }) {
+export function CommunityHelp({
+  initialPosts,
+  // When rendered inside the Chat Rooms two-tab hub the page IS /chatrooms, so
+  // the "Back to chatrooms" arrow would loop back to itself — hide it there.
+  embedded = false,
+}: {
+  initialPosts: CommunityPostView[]
+  embedded?: boolean
+}) {
   const { mutate } = useSWRConfig()
   const { data: posts = initialPosts } = useSWR("community-posts", getCommunityPosts, {
     fallbackData: initialPosts,
@@ -619,13 +627,15 @@ export function CommunityHelp({ initialPosts }: { initialPosts: CommunityPostVie
           chromeHidden ? "pointer-events-none max-h-0 border-transparent py-0 opacity-0" : "max-h-24 opacity-100",
         )}
       >
-        <Link
-          href="/chatrooms"
-          className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-          aria-label="Back to chatrooms"
-        >
-          <ArrowLeft className="size-5" />
-        </Link>
+        {!embedded && (
+          <Link
+            href="/chatrooms"
+            className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            aria-label="Back to chatrooms"
+          >
+            <ArrowLeft className="size-5" />
+          </Link>
+        )}
         <Avatar className="size-9 ring-2 ring-emerald-500/30">
           <AvatarImage src={ANON_AVATAR || "/placeholder.svg"} alt="" />
           <AvatarFallback className="bg-emerald-600 font-bold text-white">?</AvatarFallback>
