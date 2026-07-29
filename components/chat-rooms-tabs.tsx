@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { HelpCircle, Flame, Info } from "lucide-react"
+import { Flame, Info } from "lucide-react"
 import { CommunityHelp, CommunityHelpInfoModal } from "@/components/community-help"
 import { ITestify } from "@/components/itestify"
 import { useChatChromeHidden, setChatChromeHidden } from "@/lib/chat-chrome"
@@ -58,10 +58,11 @@ export function ChatRoomsTabs({
           aria-label="Chat Rooms sections"
           className="mx-auto grid h-14 w-full max-w-md grid-cols-2 gap-1 rounded-full border border-primary/15 bg-gradient-to-b from-card/80 to-card/40 p-1.5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06),0_8px_24px_-12px_rgba(0,0,0,0.6)] backdrop-blur-xl"
         >
-          {/* Community Help segment: the tab selector plus an info (ⓘ) button
-              beside the label. Both live inside one rounded segment that carries
-              the active gradient pill. Sibling buttons (not nested) keep it valid
-              and accessible. */}
+          {/* Community Help segment: the tab selector plus an adjacent info (ⓘ)
+              button. The info icon is the segment's only icon (it replaces the
+              old HelpCircle logo), and the label stays on a single line. Both
+              live inside one rounded segment that carries the active gradient
+              pill; sibling buttons (not nested) keep it valid and accessible. */}
           <div
             className={cn(
               "flex h-full items-center justify-center rounded-full transition-all duration-300",
@@ -76,13 +77,10 @@ export function ChatRoomsTabs({
               aria-selected={tab === "community"}
               onClick={() => switchTab("community")}
               className={cn(
-                "inline-flex h-full items-center gap-1.5 rounded-full pl-3 text-[13px] font-medium tracking-wide transition-colors",
+                "inline-flex h-full items-center whitespace-nowrap rounded-full pl-4 text-[13px] font-medium tracking-wide transition-colors",
                 tab === "community" ? "font-semibold" : "hover:text-foreground",
               )}
             >
-              <HelpCircle
-                className={cn("size-4 transition-transform duration-300", tab === "community" && "scale-110")}
-              />
               Community Help
             </button>
             <button
@@ -90,11 +88,11 @@ export function ChatRoomsTabs({
               onClick={() => setInfoOpen(true)}
               aria-label="How Community Help works"
               className={cn(
-                "flex h-full items-center rounded-full pl-1 pr-3 transition-opacity",
+                "flex h-full items-center rounded-full pl-1.5 pr-4 transition-opacity",
                 tab === "community" ? "opacity-90 hover:opacity-100" : "hover:text-foreground",
               )}
             >
-              <Info className="size-4" />
+              <Info className={cn("size-4 transition-transform duration-300", tab === "community" && "scale-110")} />
             </button>
           </div>
 
