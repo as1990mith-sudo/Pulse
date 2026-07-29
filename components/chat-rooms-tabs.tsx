@@ -56,7 +56,7 @@ export function ChatRoomsTabs({
         <div
           role="tablist"
           aria-label="Chat Rooms sections"
-          className="mx-auto grid h-14 w-full max-w-md grid-cols-2 gap-1 rounded-full border border-primary/15 bg-gradient-to-b from-card/80 to-card/40 p-1.5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06),0_8px_24px_-12px_rgba(0,0,0,0.6)] backdrop-blur-xl"
+          className="mx-auto grid h-11 w-full max-w-md grid-cols-2 gap-1 rounded-full border border-primary/15 bg-gradient-to-b from-card/80 to-card/40 p-1 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06),0_8px_24px_-12px_rgba(0,0,0,0.6)] backdrop-blur-xl"
         >
           {/* Community Help segment: the tab selector plus an adjacent info (ⓘ)
               button. The info icon is the segment's only icon (it replaces the
