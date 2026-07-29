@@ -1,8 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { HelpCircle, Flame } from "lucide-react"
-import { CommunityHelp } from "@/components/community-help"
+import { HelpCircle, Flame, Info } from "lucide-react"
+import { CommunityHelp, CommunityHelpInfoModal } from "@/components/community-help"
 import { ITestify } from "@/components/itestify"
 import { useChatChromeHidden, setChatChromeHidden } from "@/lib/chat-chrome"
 import { cn } from "@/lib/utils"
@@ -30,6 +30,9 @@ export function ChatRoomsTabs({
   currentUser: React.ComponentProps<typeof ITestify>["currentUser"]
 }) {
   const [tab, setTab] = useState<Tab>("community")
+  // The Community Help info (ⓘ) sheet — its content moved here from the old
+  // standalone Community Help header, which no longer renders inside the hub.
+  const [infoOpen, setInfoOpen] = useState(false)
   const chromeHidden = useChatChromeHidden()
 
   function switchTab(next: Tab) {
@@ -40,13 +43,8 @@ export function ChatRoomsTabs({
     setTab(next)
   }
 
-  const tabs: { value: Tab; label: string; icon: typeof HelpCircle }[] = [
-    { value: "community", label: "Community Help", icon: HelpCircle },
-    { value: "itestify", label: "iTestify", icon: Flame },
-  ]
-
   return (
-    <div className="flex h-[100dvh] flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
       {/* Top-level segmented control. Collapses (max-height + opacity, kept in
           flow) on scroll-down so the feed reclaims the space smoothly. */}
       <div
@@ -60,31 +58,66 @@ export function ChatRoomsTabs({
           aria-label="Chat Rooms sections"
           className="mx-auto grid h-14 w-full max-w-md grid-cols-2 gap-1 rounded-full border border-primary/15 bg-gradient-to-b from-card/80 to-card/40 p-1.5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06),0_8px_24px_-12px_rgba(0,0,0,0.6)] backdrop-blur-xl"
         >
-          {tabs.map(({ value, label, icon: Icon }) => {
-            const active = tab === value
-            return (
-              <button
-                key={value}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => switchTab(value)}
-                className={cn(
-                  "group relative flex h-full items-center justify-center gap-1.5 rounded-full text-[13px] font-medium tracking-wide transition-all duration-300",
-                  active
-                    ? "bg-gradient-to-b from-primary to-primary/85 font-semibold text-primary-foreground shadow-[0_2px_10px_-2px_color-mix(in_oklab,var(--primary)_60%,transparent),inset_0_1px_0_0_rgba(255,255,255,0.25)]"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <Icon className={cn("size-4 transition-transform duration-300", active && "scale-110")} />
-                {label}
-              </button>
-            )
-          })}
+          {/* Community Help segment: the tab selector plus an info (ⓘ) button
+              beside the label. Both live inside one rounded segment that carries
+              the active gradient pill. Sibling buttons (not nested) keep it valid
+              and accessible. */}
+          <div
+            className={cn(
+              "flex h-full items-center justify-center rounded-full transition-all duration-300",
+              tab === "community"
+                ? "bg-gradient-to-b from-primary to-primary/85 text-primary-foreground shadow-[0_2px_10px_-2px_color-mix(in_oklab,var(--primary)_60%,transparent),inset_0_1px_0_0_rgba(255,255,255,0.25)]"
+                : "text-muted-foreground",
+            )}
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === "community"}
+              onClick={() => switchTab("community")}
+              className={cn(
+                "inline-flex h-full items-center gap-1.5 rounded-full pl-3 text-[13px] font-medium tracking-wide transition-colors",
+                tab === "community" ? "font-semibold" : "hover:text-foreground",
+              )}
+            >
+              <HelpCircle
+                className={cn("size-4 transition-transform duration-300", tab === "community" && "scale-110")}
+              />
+              Community Help
+            </button>
+            <button
+              type="button"
+              onClick={() => setInfoOpen(true)}
+              aria-label="How Community Help works"
+              className={cn(
+                "flex h-full items-center rounded-full pl-1 pr-3 transition-opacity",
+                tab === "community" ? "opacity-90 hover:opacity-100" : "hover:text-foreground",
+              )}
+            >
+              <Info className="size-4" />
+            </button>
+          </div>
+
+          {/* iTestify segment */}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "itestify"}
+            onClick={() => switchTab("itestify")}
+            className={cn(
+              "group relative flex h-full items-center justify-center gap-1.5 rounded-full text-[13px] font-medium tracking-wide transition-all duration-300",
+              tab === "itestify"
+                ? "bg-gradient-to-b from-primary to-primary/85 font-semibold text-primary-foreground shadow-[0_2px_10px_-2px_color-mix(in_oklab,var(--primary)_60%,transparent),inset_0_1px_0_0_rgba(255,255,255,0.25)]"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <Flame className={cn("size-4 transition-transform duration-300", tab === "itestify" && "scale-110")} />
+            iTestify
+          </button>
         </div>
       </div>
 
-      {/* Active experience fills the rest and owns its own scroll + header. */}
+      {/* Active experience fills the rest and owns its own scroll. */}
       <div className="relative flex-1 overflow-hidden">
         {tab === "community" ? (
           <CommunityHelp embedded initialPosts={communityPosts} />
@@ -92,6 +125,8 @@ export function ChatRoomsTabs({
           <ITestify embedded initialPosts={itestifyPosts} currentUser={currentUser} />
         )}
       </div>
+
+      <CommunityHelpInfoModal open={infoOpen} onClose={() => setInfoOpen(false)} />
     </div>
   )
 }
