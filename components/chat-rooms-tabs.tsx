@@ -73,26 +73,26 @@ export function ChatRoomsTabs({
           >
             <button
               type="button"
-              role="tab"
-              aria-selected={tab === "community"}
-              onClick={() => switchTab("community")}
-              className={cn(
-                "inline-flex h-full items-center whitespace-nowrap rounded-full pl-4 text-[13px] font-medium tracking-wide transition-colors",
-                tab === "community" ? "font-semibold" : "hover:text-foreground",
-              )}
-            >
-              Community Help
-            </button>
-            <button
-              type="button"
               onClick={() => setInfoOpen(true)}
               aria-label="How Community Help works"
               className={cn(
-                "flex h-full items-center rounded-full pl-1.5 pr-4 transition-opacity",
+                "flex h-full items-center rounded-full pl-4 pr-1.5 transition-opacity",
                 tab === "community" ? "opacity-90 hover:opacity-100" : "hover:text-foreground",
               )}
             >
               <Info className={cn("size-4 transition-transform duration-300", tab === "community" && "scale-110")} />
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === "community"}
+              onClick={() => switchTab("community")}
+              className={cn(
+                "inline-flex h-full items-center whitespace-nowrap rounded-full pr-4 text-[13px] font-medium tracking-wide transition-colors",
+                tab === "community" ? "font-semibold" : "hover:text-foreground",
+              )}
+            >
+              Community Help
             </button>
           </div>
 
