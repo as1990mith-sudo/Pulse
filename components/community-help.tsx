@@ -500,7 +500,10 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
 /*  Info modal                                                                */
 /* -------------------------------------------------------------------------- */
 
-function InfoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+// Exported so the Chat Rooms two-tab hub can trigger the same information from
+// the info (ⓘ) button beside the "Community Help" tab label — the standalone
+// header that used to hold it is hidden in embedded mode.
+export function CommunityHelpInfoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   if (!open || typeof document === "undefined") return null
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
@@ -618,84 +621,91 @@ export function CommunityHelp({
   return (
     <MiniChatProvider>
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Header collapses + fades away on scroll-down and returns on scroll-up,
-          mirroring the global chrome. max-height + opacity keep it in flow so
-          the feed reclaims the space smoothly. */}
-      <header
-        className={cn(
-          "flex items-center gap-3 overflow-hidden border-b border-border/60 bg-background/95 px-4 py-3 backdrop-blur transition-[max-height,opacity,padding] duration-300 sm:px-6",
-          chromeHidden ? "pointer-events-none max-h-0 border-transparent py-0 opacity-0" : "max-h-24 opacity-100",
-        )}
-      >
-        {!embedded && (
-          <Link
-            href="/chatrooms"
-            className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-            aria-label="Back to chatrooms"
+      {/* Standalone header + "Community / My Posts" filter. Both are hidden when
+          embedded in the Chat Rooms two-tab hub — there the top-level tab bar IS
+          the section header, the info (ⓘ) lives beside the tab label, and the
+          old "My Posts" concept is removed. Kept intact for the standalone
+          /chatrooms/community route (reached from shared deep links). */}
+      {!embedded && (
+        <>
+          {/* Header collapses + fades away on scroll-down and returns on scroll-up,
+              mirroring the global chrome. max-height + opacity keep it in flow so
+              the feed reclaims the space smoothly. */}
+          <header
+            className={cn(
+              "flex items-center gap-3 overflow-hidden border-b border-border/60 bg-background/95 px-4 py-3 backdrop-blur transition-[max-height,opacity,padding] duration-300 sm:px-6",
+              chromeHidden ? "pointer-events-none max-h-0 border-transparent py-0 opacity-0" : "max-h-24 opacity-100",
+            )}
           >
-            <ArrowLeft className="size-5" />
-          </Link>
-        )}
-        <Avatar className="size-9 ring-2 ring-emerald-500/30">
-          <AvatarImage src={ANON_AVATAR || "/placeholder.svg"} alt="" />
-          <AvatarFallback className="bg-emerald-600 font-bold text-white">?</AvatarFallback>
-        </Avatar>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <h1 className="truncate text-xl font-bold tracking-tight">Community Help</h1>
-            <button
-              type="button"
-              onClick={() => setInfoOpen(true)}
-              className="rounded-full p-0.5 text-muted-foreground transition-colors hover:text-primary"
-              aria-label="How Community Help works"
+            <Link
+              href="/chatrooms"
+              className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              aria-label="Back to chatrooms"
             >
-              <Info className="size-4" />
-            </button>
-          </div>
-          <p className="truncate text-sm text-muted-foreground">Ask anonymously · anyone can help</p>
-        </div>
-      </header>
+              <ArrowLeft className="size-5" />
+            </Link>
+            <Avatar className="size-9 ring-2 ring-emerald-500/30">
+              <AvatarImage src={ANON_AVATAR || "/placeholder.svg"} alt="" />
+              <AvatarFallback className="bg-emerald-600 font-bold text-white">?</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <h1 className="truncate text-xl font-bold tracking-tight">Community Help</h1>
+                <button
+                  type="button"
+                  onClick={() => setInfoOpen(true)}
+                  className="rounded-full p-0.5 text-muted-foreground transition-colors hover:text-primary"
+                  aria-label="How Community Help works"
+                >
+                  <Info className="size-4" />
+                </button>
+              </div>
+              <p className="truncate text-sm text-muted-foreground">Ask anonymously · anyone can help</p>
+            </div>
+          </header>
 
-      {/* Community / My Posts toggle */}
-      <div className="border-b border-border/60 bg-background/95 px-4 py-2.5 backdrop-blur sm:px-6">
-        <div role="tablist" aria-label="Filter questions" className="flex gap-1 rounded-full bg-secondary/60 p-1">
-          {(
-            [
-              { key: "community", label: "Community" },
-              { key: "mine", label: "My Posts", count: myCount },
-            ] as const
-          ).map((t) => {
-            const active = scope === t.key
-            return (
-              <button
-                key={t.key}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setScope(t.key)}
-                className={cn(
-                  "flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-base font-semibold transition-colors",
-                  active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {t.label}
-                {"count" in t && (
-                  <span
+          {/* Community / My Posts toggle */}
+          <div className="border-b border-border/60 bg-background/95 px-4 py-2.5 backdrop-blur sm:px-6">
+            <div role="tablist" aria-label="Filter questions" className="flex gap-1 rounded-full bg-secondary/60 p-1">
+              {(
+                [
+                  { key: "community", label: "Community" },
+                  { key: "mine", label: "My Posts", count: myCount },
+                ] as const
+              ).map((t) => {
+                const active = scope === t.key
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => setScope(t.key)}
                     className={cn(
-                      "min-w-5 rounded-full px-1.5 py-0.5 text-xs font-medium tabular-nums",
-                      active
-                        ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                        : "bg-secondary text-muted-foreground",
+                      "flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-base font-semibold transition-colors",
+                      active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
                     )}
                   >
-                    {t.count}
-                  </span>
-                )}
-              </button>
-            )
-          })}
-        </div>
-      </div>
+                    {t.label}
+                    {"count" in t && (
+                      <span
+                        className={cn(
+                          "min-w-5 rounded-full px-1.5 py-0.5 text-xs font-medium tabular-nums",
+                          active
+                            ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                            : "bg-secondary text-muted-foreground",
+                        )}
+                      >
+                        {t.count}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Immersive smooth-scrolling feed */}
       <div onScroll={onFeedScroll} className="flex-1 overflow-y-auto scroll-smooth overscroll-contain">
@@ -744,7 +754,7 @@ export function CommunityHelp({
       </button>
 
       <Composer open={composerOpen} onClose={() => setComposerOpen(false)} onCreated={handleCreated} />
-      <InfoModal open={infoOpen} onClose={() => setInfoOpen(false)} />
+      <CommunityHelpInfoModal open={infoOpen} onClose={() => setInfoOpen(false)} />
     </div>
     </MiniChatProvider>
   )

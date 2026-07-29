@@ -5,6 +5,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Home, SquarePen, Radio, MessagesSquare, type LucideIcon } from "lucide-react"
 import { haptic } from "@/lib/haptics"
+import { useChatChromeHidden } from "@/lib/chat-chrome"
 import { cn } from "@/lib/utils"
 
 type Tab = { href: string; label: string; icon: LucideIcon }
@@ -64,6 +65,11 @@ export function BottomNav() {
   // Hide-on-scroll-down / reveal-on-scroll-up, like Instagram & Safari.
   const [tucked, setTucked] = useState(false)
   const lastY = useRef(0)
+  // Immersive inner-scroll surfaces (Chat Rooms, Community Help, chat threads)
+  // scroll a nested container, not the window — so `tucked` never fires there.
+  // The shared chat-chrome store carries their scroll direction, letting the
+  // bottom nav tuck away and return in lockstep with the header and tab bar.
+  const chatHidden = useChatChromeHidden()
 
   // Reserve space so page content never hides behind the fixed bar.
   useEffect(() => {
@@ -107,7 +113,7 @@ export function BottomNav() {
     <div
       className={cn(
         "pointer-events-none fixed inset-x-0 bottom-0 z-50 flex px-3 pb-[max(env(safe-area-inset-bottom),0.5rem)] transition-[transform,opacity] duration-300 ease-out will-change-transform",
-        tucked ? "translate-y-[150%] opacity-0" : "translate-y-0 opacity-100",
+        tucked || chatHidden ? "translate-y-[150%] opacity-0" : "translate-y-0 opacity-100",
       )}
     >
       {/* Floating, glassy pill that hovers just above the very bottom edge.

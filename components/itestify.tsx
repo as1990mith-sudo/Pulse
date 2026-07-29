@@ -40,13 +40,15 @@ export function ITestify({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Header collapses + fades on scroll-down, returns on scroll-up. */}
-      <header
-        className={`flex items-center gap-3 overflow-hidden border-b border-border/60 bg-background/95 px-4 py-3 backdrop-blur transition-[max-height,opacity,padding] duration-300 sm:px-6 ${
-          chromeHidden ? "pointer-events-none max-h-0 border-transparent py-0 opacity-0" : "max-h-24 opacity-100"
-        }`}
-      >
-        {!embedded && (
+      {/* Standalone header — hidden when embedded in the Chat Rooms two-tab hub
+          (the top-level tab bar is the section header there). Kept for the
+          standalone /chatrooms/itestify route. */}
+      {!embedded && (
+        <header
+          className={`flex items-center gap-3 overflow-hidden border-b border-border/60 bg-background/95 px-4 py-3 backdrop-blur transition-[max-height,opacity,padding] duration-300 sm:px-6 ${
+            chromeHidden ? "pointer-events-none max-h-0 border-transparent py-0 opacity-0" : "max-h-24 opacity-100"
+          }`}
+        >
           <Link
             href="/chatrooms"
             className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
@@ -54,17 +56,17 @@ export function ITestify({
           >
             <ArrowLeft className="size-5" />
           </Link>
-        )}
-        <Avatar className="size-9 ring-2 ring-rose-500/30">
-          <AvatarFallback className="bg-rose-600 text-white">
-            <Flame className="size-5" />
-          </AvatarFallback>
-        </Avatar>
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-xl font-bold tracking-tight">iTestify</h1>
-          <p className="truncate text-sm text-muted-foreground">Share what God has done</p>
-        </div>
-      </header>
+          <Avatar className="size-9 ring-2 ring-rose-500/30">
+            <AvatarFallback className="bg-rose-600 text-white">
+              <Flame className="size-5" />
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-xl font-bold tracking-tight">iTestify</h1>
+            <p className="truncate text-sm text-muted-foreground">Share what God has done</p>
+          </div>
+        </header>
+      )}
 
       <div onScroll={onFeedScroll} className="flex-1 overflow-y-auto scroll-smooth overscroll-contain">
         {posts.length === 0 ? (

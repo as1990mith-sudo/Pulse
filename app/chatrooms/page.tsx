@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation"
+import { SiteHeader } from "@/components/site-header"
 import { ChatRoomsTabs } from "@/components/chat-rooms-tabs"
 import { getCommunityPosts } from "@/app/actions/community"
 import { getChannelFeed } from "@/app/actions/feed"
@@ -18,6 +19,15 @@ export default async function ChatroomsPage() {
   const [communityPosts, itestifyPosts] = await Promise.all([getCommunityPosts(), getChannelFeed("itestify")])
 
   return (
-    <ChatRoomsTabs communityPosts={communityPosts} itestifyPosts={itestifyPosts} currentUser={currentUser} />
+    // Full-viewport immersive shell: the main Frequency header stays visible on
+    // load and collapses to zero height on scroll-down (reveal on scroll-up),
+    // in lockstep with the tab bar and bottom nav — all driven by the shared
+    // chat-chrome store the feeds update as they scroll.
+    <div className="flex h-[100dvh] flex-col overflow-hidden">
+      <SiteHeader collapsible />
+      <div className="min-h-0 flex-1">
+        <ChatRoomsTabs communityPosts={communityPosts} itestifyPosts={itestifyPosts} currentUser={currentUser} />
+      </div>
+    </div>
   )
 }
