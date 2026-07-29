@@ -54,7 +54,7 @@ export function MessagesHub({
         <div
           role="tablist"
           aria-label="Messages sections"
-          className="relative mx-auto grid h-14 w-full max-w-md grid-cols-2 gap-1 rounded-full border border-primary/15 bg-gradient-to-b from-card/80 to-card/40 p-1.5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06),0_8px_24px_-12px_rgba(0,0,0,0.6)] backdrop-blur-xl"
+          className="relative mx-auto grid h-11 w-full max-w-md grid-cols-2 gap-1 rounded-full border border-primary/15 bg-gradient-to-b from-card/80 to-card/40 p-1 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06),0_8px_24px_-12px_rgba(0,0,0,0.6)] backdrop-blur-xl"
         >
           {/* Animated indicator pill. Width spans one segment (half the rail
               minus the 0.375rem padding). Because the pill's width equals the
@@ -65,7 +65,7 @@ export function MessagesHub({
               and silently drops it (which previously froze the pill on Chats). */}
           <span
             aria-hidden="true"
-            className="absolute inset-y-1.5 left-1.5 w-[calc(50%_-_0.375rem)] rounded-full bg-gradient-to-b from-primary to-primary/85 shadow-[0_2px_10px_-2px_color-mix(in_oklab,var(--primary)_60%,transparent),inset_0_1px_0_0_rgba(255,255,255,0.25)] transition-transform duration-300 ease-out"
+            className="absolute inset-y-1 left-1 w-[calc(50%_-_0.25rem)] rounded-full bg-gradient-to-b from-primary to-primary/85 shadow-[0_2px_10px_-2px_color-mix(in_oklab,var(--primary)_60%,transparent),inset_0_1px_0_0_rgba(255,255,255,0.25)] transition-transform duration-300 ease-out"
             style={{ transform: tab === "rooms" ? "translateX(100%)" : "translateX(0)" }}
           />
           {TABS.map(({ value, label, icon: Icon }) => {

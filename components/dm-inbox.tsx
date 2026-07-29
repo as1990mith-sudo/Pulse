@@ -112,12 +112,12 @@ export function DmInbox({
         <button
           type="button"
           onClick={() => setShowArchived(false)}
-          className="mb-2.5 flex w-full items-center gap-3 rounded-2xl border-2 border-border bg-card px-3.5 py-3 text-left shadow-lg shadow-black/20 transition-all hover:border-foreground/30 hover:bg-secondary/40 active:scale-[0.99]"
+          className="mb-1 flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-secondary/40 active:scale-[0.99]"
         >
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary/70 text-foreground">
             <ArrowLeft className="size-5" />
           </span>
-          <span className="font-semibold">Respond later</span>
+          <span className="font-semibold tracking-tight">Respond later</span>
           <span className="ml-auto rounded-full bg-secondary px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">
             {archivedCount}
           </span>
@@ -127,12 +127,12 @@ export function DmInbox({
           <button
             type="button"
             onClick={() => setShowArchived(true)}
-            className="mb-2.5 flex w-full items-center gap-3 rounded-2xl border-2 border-border bg-card px-3.5 py-3 text-left shadow-lg shadow-black/20 transition-all hover:border-foreground/30 hover:bg-secondary/40 active:scale-[0.99]"
+            className="mb-1 flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-secondary/40 active:scale-[0.99]"
           >
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground">
-              <Clock className="size-4" />
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary/70 text-muted-foreground">
+              <Clock className="size-[18px]" />
             </span>
-            <span className="font-medium">Respond later</span>
+            <span className="font-medium tracking-tight">Respond later</span>
             <span className="ml-auto rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
               {archivedCount}
             </span>
@@ -149,18 +149,20 @@ export function DmInbox({
           </p>
         </div>
       ) : (
-        // Each private conversation is rendered with the exact same premium
-        // rounded pill card used by the standalone Chatrooms "My rooms" list
-        // (rounded-xl, border-2, bg-card, soft shadow, hover scale) for a
-        // consistent design language across the app.
-        <ul className="space-y-2">
+        // Immersive, edge-to-edge conversation list. Rows have no card border or
+        // shadow — they read as one continuous surface separated by subtle
+        // hairline dividers, with a soft rounded highlight on hover the way
+        // iMessage/Telegram feel. Priority threads get a subtle primary tint +
+        // left accent bar instead of a heavy box.
+        <ul className="[&>li:not(:last-child)]:border-b [&>li:not(:last-child)]:border-border/40">
           {visibleList.map((c) => (
             <li key={c.id} className="relative">
               <Link
                 href={`/messages/${c.id}`}
                 className={cn(
-                  "group flex items-center gap-3 rounded-xl border-2 border-border bg-card py-3 pl-4 pr-14 shadow-lg shadow-black/20 transition-all hover:border-foreground/30 hover:bg-secondary/40 hover:shadow-black/30 active:scale-[0.99] sm:pl-5",
-                  c.priority && "border-primary/40 bg-primary/[0.06] hover:border-primary/60 hover:bg-primary/10",
+                  "group relative flex items-center gap-3 rounded-xl py-3 pl-2 pr-14 transition-colors hover:bg-secondary/40 active:scale-[0.99]",
+                  c.priority &&
+                    "bg-primary/[0.05] before:absolute before:inset-y-2 before:left-0 before:w-1 before:rounded-full before:bg-primary/70 hover:bg-primary/[0.09]",
                 )}
               >
                 {c.hasActiveStatus ? (
