@@ -118,7 +118,12 @@ export function VideoCard({
         {...openProps}
         aria-label={playable ? `Play ${show.title}` : `Watch ${show.title}`}
         className={cn(
-          "relative block aspect-video w-32 shrink-0 overflow-hidden bg-secondary sm:w-40",
+          "relative block w-32 shrink-0 overflow-hidden bg-secondary sm:w-40",
+          // Livestream replays are portrait recordings, so their list thumbnail
+          // is a taller 4:5 poster that shows the uploaded cover art cropped to
+          // fill (object-cover below), consistent and never distorted. Uploaded
+          // videos keep the classic 16:9 thumbnail.
+          isLiveReplay ? "aspect-[4/5]" : "aspect-video",
           // Perfect rectangle (no rounding) when immersive; rounded card otherwise.
           flush ? "rounded-none sm:rounded-xl" : "rounded-xl",
         )}
@@ -170,7 +175,13 @@ export function VideoCard({
       <div className="flex min-w-0 flex-1 items-start gap-1 py-0.5">
         <OpenTag
           {...openProps}
-          className="flex min-w-0 flex-1 flex-col overflow-hidden text-left max-h-[72px] sm:max-h-[90px]"
+          className={cn(
+            "flex min-w-0 flex-1 flex-col overflow-hidden text-left",
+            // Cap the text column to the thumbnail's height so the row never
+            // grows taller than its poster: 4:5 for live replays (w-32→160px,
+            // w-40→200px), 16:9 otherwise (72px/90px).
+            isLiveReplay ? "max-h-[160px] sm:max-h-[200px]" : "max-h-[72px] sm:max-h-[90px]",
+          )}
         >
           {/* Title wraps to at most two lines (YouTube-style) and truncates with
               an ellipsis. The column is capped to the thumbnail's height
