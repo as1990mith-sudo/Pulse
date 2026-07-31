@@ -44,6 +44,7 @@ import {
 import { type ThreadComment } from "@/components/comment-thread"
 import { CommentSheet } from "@/components/comment-sheet"
 import { MiniChatProvider, useMiniChat } from "@/components/mini-chat"
+import { EditedIndicator } from "@/components/edited-indicator"
 
 function toThreadComment(c: CommunityCommentView): ThreadComment {
   return {
@@ -82,7 +83,7 @@ function AnonIdentity({ postedAt, edited }: { postedAt: string; edited?: boolean
       <div className="min-w-0">
         <p className="flex items-center gap-1.5 text-base font-bold tracking-tight text-foreground">
           {ANON_NAME}
-          {edited && <span className="text-xs font-normal text-muted-foreground">Edited</span>}
+          {edited && <EditedIndicator />}
         </p>
         <p className="text-xs text-muted-foreground">{postedAt}</p>
       </div>
@@ -106,7 +107,7 @@ function SelfIdentity({ post, edited }: { post: CommunityPostView; edited?: bool
       <div className="min-w-0">
         <p className="flex items-center gap-1.5 truncate text-base font-bold tracking-tight">
           {post.authorName}
-          {edited && <span className="text-xs font-normal text-muted-foreground">Edited</span>}
+          {edited && <EditedIndicator />}
         </p>
         <p className="text-xs text-muted-foreground">
           {post.postedAt} · <span className="font-medium text-foreground">You are anonymous in this room</span>

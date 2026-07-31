@@ -61,7 +61,7 @@ export function EditedIndicator({ className }: { className?: string }) {
           role="status"
           className="absolute bottom-full left-1/2 z-50 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2.5 py-1 text-xs font-normal text-background shadow-md"
         >
-          Post was edited
+          Post was edited.
         </span>
       )}
     </span>
