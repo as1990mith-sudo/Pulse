@@ -794,8 +794,8 @@ function MessageBubble({
             m.attachmentType === "image" || m.attachmentType === "video" ? "p-1" : "px-3 py-1.5",
             canOpenMenu && "cursor-pointer select-none",
             m.isSelf
-              ? "rounded-br-md bg-primary text-primary-foreground"
-              : "rounded-bl-md bg-secondary text-foreground ring-1 ring-inset ring-border/50",
+              ? "rounded-tr-md bg-primary text-primary-foreground"
+              : "rounded-tl-md bg-secondary text-foreground ring-1 ring-inset ring-border/50",
           )}
         >
           {m.attachmentUrl && m.attachmentType === "image" && (
@@ -957,7 +957,7 @@ function ChatroomMediaGroup({
           buildActions={buildActions}
           className={cn(
             "shadow-sm ring-1 ring-inset ring-border/40",
-            isSelf ? "rounded-2xl rounded-br-md" : "rounded-2xl rounded-bl-md",
+            isSelf ? "rounded-2xl rounded-tr-md" : "rounded-2xl rounded-tl-md",
             flashed && "ring-2 ring-primary/40",
           )}
         />
