@@ -43,6 +43,8 @@ import { useAutoHideChatChrome } from "@/lib/chat-chrome"
 import { renderMessageBody } from "@/lib/rich-text"
 import { compressImage, uploadMedia } from "@/lib/upload-media"
 import { ActionSheet, type SheetAction } from "@/components/action-sheet"
+import { MediaCollage, type CollageMedia } from "@/components/chat/media-collage"
+import { groupConsecutiveMedia } from "@/lib/media-grouping"
 import { ChatBackgroundSheet } from "@/components/chat-background-sheet"
 import { getChatBackground, chatBackgroundStyle } from "@/lib/chat-backgrounds"
 import { canEdit, canDelete } from "@/lib/interactions"
@@ -506,20 +508,43 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
               No messages yet. Say hello to get the conversation started.
             </p>
           )}
-          {messages.map((m) =>
-            m.kind === "system" ? (
+          {groupConsecutiveMedia(
+            messages,
+            (m) => ({
+              senderKey: `u-${m.userId}`,
+              createdAtMs: m.createdAtMs,
+              // Only pure photo/video messages from a member group together.
+              groupable:
+                m.kind === "user" &&
+                !m.deleted &&
+                !m.body &&
+                !!m.attachmentUrl &&
+                (m.attachmentType === "image" || m.attachmentType === "video"),
+            }),
+            (m) => m.id,
+          ).map((run) =>
+            run.type === "group" ? (
+              <ChatroomMediaGroup
+                key={run.key}
+                messages={run.items}
+                isAdmin={detail.isAdmin}
+                flashId={flashId}
+                onDelete={handleDeleteMessage}
+                onTogglePin={handleTogglePin}
+              />
+            ) : run.item.kind === "system" ? (
               // Centered notice for auto events like "<name> joined the room".
-              <div key={m.id} className="flex justify-center py-1">
+              <div key={run.item.id} className="flex justify-center py-1">
                 <span className="rounded-full bg-muted/60 px-3 py-1 text-center text-xs text-muted-foreground">
-                  {m.body}
+                  {run.item.body}
                 </span>
               </div>
             ) : (
               <MessageBubble
-                key={m.id}
-                message={m}
+                key={run.item.id}
+                message={run.item}
                 isAdmin={detail.isAdmin}
-                flashed={flashId === m.id}
+                flashed={flashId === run.item.id}
                 onDelete={handleDeleteMessage}
                 onTogglePin={handleTogglePin}
                 onEdit={handleEditMessage}
@@ -853,6 +878,88 @@ function MessageBubble({
           title={m.isSelf ? "Your message" : m.userName}
           preview={m.body ?? m.attachmentName ?? undefined}
           actions={actions}
+        />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Renders a run of consecutive photo/video messages from one member (within 3
+ * minutes) as a single WhatsApp-style collage bubble, keeping the same avatar +
+ * name + timestamp chrome as a normal message. Each tile stays individually
+ * openable in the viewer and long-pressable for pin/delete (subject to the same
+ * admin/author permissions), so only the visual layout changes.
+ */
+function ChatroomMediaGroup({
+  messages,
+  isAdmin,
+  flashId,
+  onDelete,
+  onTogglePin,
+}: {
+  messages: ChatMessageView[]
+  isAdmin: boolean
+  flashId: number | null
+  onDelete: (messageId: number) => void
+  onTogglePin: (messageId: number, pinned: boolean) => void
+}) {
+  const first = messages[0]
+  const isSelf = first.isSelf
+  const lastMs = messages[messages.length - 1].createdAtMs
+  const anyPinned = messages.some((m) => m.pinned)
+  const flashed = flashId != null && messages.some((m) => m.id === flashId)
+
+  const media: CollageMedia[] = messages.map((m) => ({
+    key: m.id,
+    anchorId: `chat-msg-${m.id}`,
+    url: m.attachmentUrl as string,
+    type: m.attachmentType === "video" ? "video" : "image",
+    name: m.attachmentName,
+  }))
+
+  function buildActions(index: number): SheetAction[] {
+    const m = messages[index]
+    if (m.id <= 0) return []
+    const actions: SheetAction[] = []
+    if (isAdmin || m.isSelf) {
+      actions.push({
+        label: m.pinned ? "Unpin message" : "Pin message",
+        icon: m.pinned ? PinOff : Pin,
+        onClick: () => onTogglePin(m.id, !m.pinned),
+      })
+    }
+    if (isAdmin || (m.isSelf && canDelete(m.createdAtMs))) {
+      actions.push({ label: "Delete message", icon: Trash2, destructive: true, onClick: () => onDelete(m.id) })
+    }
+    return actions
+  }
+
+  return (
+    <div className={cn("flex gap-2.5", isSelf && "flex-row-reverse")}>
+      <Link href={`/u/${first.userId}`} aria-label={`View ${first.userName}'s profile`} className="shrink-0">
+        <Avatar className="size-7 transition-opacity hover:opacity-80">
+          {first.image && <AvatarImage src={first.image || "/placeholder.svg"} alt={first.userName} />}
+          <AvatarFallback className={cn("text-[10px]", first.color)}>{first.initials}</AvatarFallback>
+        </Avatar>
+      </Link>
+      <div className={cn("flex max-w-[75%] flex-col gap-0.5", isSelf && "items-end text-right")}>
+        <div className={cn("flex items-center gap-2", isSelf && "flex-row-reverse")}>
+          <Link href={`/u/${first.userId}`} className="text-xs font-medium hover:underline">
+            {isSelf ? "You" : first.userName}
+          </Link>
+          <span className="text-[10px] text-muted-foreground">{formatChatTimestamp(lastMs)}</span>
+          {anyPinned && <Pin className="size-3 text-primary" />}
+        </div>
+        <MediaCollage
+          items={media}
+          mine={isSelf}
+          buildActions={buildActions}
+          className={cn(
+            "shadow-sm ring-1 ring-inset ring-border/40",
+            isSelf ? "rounded-2xl rounded-br-md" : "rounded-2xl rounded-bl-md",
+            flashed && "ring-2 ring-primary/40",
+          )}
         />
       </div>
     </div>

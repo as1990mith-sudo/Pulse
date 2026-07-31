@@ -133,19 +133,54 @@ export function LiveReplayPlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing])
 
-  // Reel slides autoplay as soon as they mount (they only mount when active).
+  // Drive the progress tracker from the media clock every animation frame while
+  // playing. `timeupdate` only fires ~4x/sec, which makes the scrubber/thumb
+  // and time labels visibly step on 60–120Hz displays; reading `currentTime`
+  // via requestAnimationFrame instead lets them advance once per rendered frame
+  // so playback controls stay perfectly smooth on high-refresh hardware.
+  const progressRafRef = useRef<number | null>(null)
   useEffect(() => {
-    if (!autoPlay) return
+    if (!playing) {
+      if (progressRafRef.current != null) {
+        cancelAnimationFrame(progressRafRef.current)
+        progressRafRef.current = null
+      }
+      return
+    }
+    const tick = () => {
+      const el = mediaRef.current
+      // Don't fight an in-flight seek — its target is already reflected in state.
+      if (el && !el.seeking) setCurrent(el.currentTime)
+      progressRafRef.current = requestAnimationFrame(tick)
+    }
+    progressRafRef.current = requestAnimationFrame(tick)
+    return () => {
+      if (progressRafRef.current != null) {
+        cancelAnimationFrame(progressRafRef.current)
+        progressRafRef.current = null
+      }
+    }
+  }, [playing, mediaRef, setCurrent])
+
+  // Reel slides play only while they are the active (centered) slide. When a
+  // slide scrolls off, pause it so no off-screen replay keeps decoding in the
+  // background — this keeps a single video (and a single rAF loop) live at a
+  // time, which is what keeps scrolling and rendering smooth on the reel.
+  useEffect(() => {
     const el = mediaRef.current
     if (!el) return
-    el.muted = muted
-    el.play().catch(() => {
-      // Autoplay with sound is blocked by browsers; fall back to muted playback
-      // so the replay still starts, then the viewer can unmute with the toggle.
-      setMuted(true)
-      el.muted = true
-      el.play().catch(() => {})
-    })
+    if (autoPlay) {
+      el.muted = muted
+      el.play().catch(() => {
+        // Autoplay with sound is blocked by browsers; fall back to muted playback
+        // so the replay still starts, then the viewer can unmute with the toggle.
+        setMuted(true)
+        el.muted = true
+        el.play().catch(() => {})
+      })
+    } else if (isReel) {
+      el.pause()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoPlay])
 
@@ -193,13 +228,21 @@ export function LiveReplayPlayer({
           src={mediaUrl}
           poster={hasRealCover ? (show.cover ?? undefined) : undefined}
           playsInline
-          preload="metadata"
+          // The active slide (autoPlay) eagerly buffers the media so playback
+          // begins the moment the viewer opens the replay instead of stalling
+          // on a metadata-only fetch; inactive slides stay light at "metadata".
+          // The poster (cover art) paints instantly while the first frames load.
+          preload={autoPlay ? "auto" : "metadata"}
           // Contain keeps the portrait recording in its native aspect ratio, so
           // nothing important is cropped even on non-portrait viewports.
           className="size-full object-contain"
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
-          onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
+          // While playing, the rAF loop above owns `current` at the display
+          // refresh rate; this only backfills the position when paused/seeking.
+          onTimeUpdate={(e) => {
+            if (e.currentTarget.paused) setCurrent(e.currentTarget.currentTime)
+          }}
           onLoadedMetadata={onLoadedMetadata}
           onDurationChange={(e) => {
             const d = e.currentTarget.duration
