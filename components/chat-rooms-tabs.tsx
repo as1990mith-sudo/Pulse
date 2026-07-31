@@ -49,7 +49,7 @@ export function ChatRoomsTabs({
           flow) on scroll-down so the feed reclaims the space smoothly. */}
       <div
         className={cn(
-          "shrink-0 overflow-hidden border-b border-border/60 bg-background/95 px-4 pb-2.5 pt-3 backdrop-blur transition-[max-height,opacity,padding] duration-300 ease-out sm:px-6",
+          "shrink-0 overflow-hidden border-b border-border/60 bg-background/95 px-4 pb-2.5 pt-3 backdrop-blur transition-[max-height,opacity,padding] duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none sm:px-6",
           chromeHidden ? "pointer-events-none max-h-0 border-transparent py-0 opacity-0" : "max-h-24 opacity-100",
         )}
       >

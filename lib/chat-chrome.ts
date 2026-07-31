@@ -36,9 +36,11 @@ export function useChatChromeHidden() {
   )
 }
 
-// Tunable thresholds for a fluid, flicker-free feel.
-const HIDE_DELTA = 6 // px of downward travel before hiding
-const REVEAL_DELTA = 10 // px of upward travel before revealing (direction-change debounce)
+// Tunable thresholds for a fluid, flicker-free feel. Slightly larger deltas
+// mean a small, incidental scroll won't trigger the fade — so when the header
+// does fade it reads as an intentional, gentle transition rather than a twitch.
+const HIDE_DELTA = 12 // px of sustained downward travel before hiding
+const REVEAL_DELTA = 12 // px of upward travel before revealing (direction-change debounce)
 const TOP_ZONE = 8 // always reveal within this many px of the top
 
 /**
