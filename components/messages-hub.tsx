@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { MessageCircle, Users } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useHideOnScrollDown } from "@/lib/chat-chrome"
@@ -38,8 +39,22 @@ export function MessagesHub({
   rooms: ChatroomSummary[]
   discoverRooms: ChatroomSearchResult[]
 }) {
-  const [tab, setTab] = useState<Tab>("chats")
+  // Initialize from the URL (?tab=rooms) so the selection survives navigation:
+  // opening a room routes to /chatrooms/[id], and the back button restores
+  // /messages?tab=rooms, reopening the Rooms list instead of resetting to Chats.
+  const searchParams = useSearchParams()
+  const [tab, setTab] = useState<Tab>(searchParams.get("tab") === "rooms" ? "rooms" : "chats")
   const chromeHidden = useHideOnScrollDown()
+
+  function selectTab(next: Tab) {
+    setTab(next)
+    // Reflect the tab in the URL without navigating; Next.js syncs replaceState
+    // with useSearchParams. Chats is the default, so it needs no query param.
+    if (typeof window !== "undefined") {
+      const url = next === "rooms" ? `${window.location.pathname}?tab=rooms` : window.location.pathname
+      window.history.replaceState(null, "", url)
+    }
+  }
 
   return (
     <div>
@@ -76,7 +91,7 @@ export function MessagesHub({
                 type="button"
                 role="tab"
                 aria-selected={active}
-                onClick={() => setTab(value)}
+                onClick={() => selectTab(value)}
                 className={cn(
                   "group relative z-10 flex h-full items-center justify-center gap-1.5 rounded-full text-[13px] tracking-wide transition-colors duration-300",
                   active ? "font-semibold text-primary-foreground" : "font-medium text-muted-foreground hover:text-foreground",

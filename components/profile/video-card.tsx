@@ -118,12 +118,13 @@ export function VideoCard({
         {...openProps}
         aria-label={playable ? `Play ${show.title}` : `Watch ${show.title}`}
         className={cn(
-          "relative block w-32 shrink-0 overflow-hidden bg-secondary sm:w-40",
+          "relative block shrink-0 overflow-hidden bg-secondary",
           // Livestream replays are portrait recordings, so their list thumbnail
-          // is a taller 4:5 poster that shows the uploaded cover art cropped to
-          // fill (object-cover below), consistent and never distorted. Uploaded
-          // videos keep the classic 16:9 thumbnail.
-          isLiveReplay ? "aspect-[4/5]" : "aspect-video",
+          // is a 4:5 poster showing the uploaded cover art cropped to fill
+          // (object-cover below), consistent and never distorted. It's kept
+          // deliberately compact (w-24/w-28 → 120px/140px tall) so the list row
+          // stays sleek. Uploaded videos keep the wider 16:9 thumbnail.
+          isLiveReplay ? "aspect-[4/5] w-24 sm:w-28" : "aspect-video w-32 sm:w-40",
           // Perfect rectangle (no rounding) when immersive; rounded card otherwise.
           flush ? "rounded-none sm:rounded-xl" : "rounded-xl",
         )}
@@ -178,9 +179,9 @@ export function VideoCard({
           className={cn(
             "flex min-w-0 flex-1 flex-col overflow-hidden text-left",
             // Cap the text column to the thumbnail's height so the row never
-            // grows taller than its poster: 4:5 for live replays (w-32→160px,
-            // w-40→200px), 16:9 otherwise (72px/90px).
-            isLiveReplay ? "max-h-[160px] sm:max-h-[200px]" : "max-h-[72px] sm:max-h-[90px]",
+            // grows taller than its poster: 4:5 for live replays (w-24→120px,
+            // w-28→140px), 16:9 otherwise (72px/90px).
+            isLiveReplay ? "max-h-[120px] sm:max-h-[140px]" : "max-h-[72px] sm:max-h-[90px]",
           )}
         >
           {/* Title wraps to at most two lines (YouTube-style) and truncates with

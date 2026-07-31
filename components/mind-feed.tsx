@@ -108,6 +108,7 @@ import { LinkPreview } from "@/components/link-preview"
 import { AnnouncementBanner } from "@/components/announcement-banner"
 import type { AnnouncementView } from "@/app/actions/announcements"
 import { MediaEditorFlow, type EditedMedia } from "@/components/media-editor/media-editor-flow"
+import { EditedIndicator } from "@/components/edited-indicator"
 
 type DraftMedia = {
   url: string
@@ -1371,18 +1372,18 @@ export function PostCard({
               {post.user}
             </Link>
             {/* Flex row so the handle/time can truncate on long usernames while
-                the "Edited" tag stays fixed (shrink-0) and is never clipped. */}
-            <span className={cn("flex min-w-0 items-center text-muted-foreground", feed ? "text-sm" : "text-xs")}>
+                the edited info icon stays fixed (shrink-0) and is never clipped. */}
+            <span className={cn("flex min-w-0 items-center gap-1 text-muted-foreground", feed ? "text-sm" : "text-xs")}>
               <span className="truncate">
                 {post.handle} · {post.postedAt}
               </span>
-              {edited && <span className="shrink-0 whitespace-nowrap">{" · Edited"}</span>}
+              {edited && <EditedIndicator />}
             </span>
           </div>
         </div>
         {/* Aligned to the top (username line) rather than centered, so the
             follow icon doesn't hover over — and visually truncate — the second
-            metadata line that carries the "· Edited" tag on longer usernames. */}
+            metadata line that carries the edited info icon on longer usernames. */}
         <div className="flex shrink-0 items-center gap-1 self-start">
           {currentUser && !post.isSelf && (
             <FollowButton authorId={post.authorId} authorName={post.user} initialFollowing={post.isFollowing} />

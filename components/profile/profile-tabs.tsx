@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { Mic, Images, AlignLeft, ArrowLeft, Plus, Info, Newspaper, PenLine } from "lucide-react"
 import Link from "next/link"
 import type { Show } from "@/lib/data"
@@ -56,7 +57,16 @@ export function ProfileTabs({
     { key: "catalogue", label: "Catalogue", icon: <Mic className="size-4" />, count: episodes.length },
   ]
 
-  const [tab, setTab] = useState<TabKey>("media")
+  // Initialize the active tab from the URL (?tab=…). This makes the selection
+  // survive navigation: opening a Catalogue item routes to /live/[id], and the
+  // browser/router back button restores /u/[id]?tab=catalogue, so the profile
+  // reopens on Catalogue instead of resetting to Media.
+  const searchParams = useSearchParams()
+  const tabFromUrl = ((): TabKey => {
+    const t = searchParams.get("tab")
+    return t === "text" || t === "articles" || t === "catalogue" || t === "media" ? t : "media"
+  })()
+  const [tab, setTab] = useState<TabKey>(tabFromUrl)
   // The tab the user was on before opening Catalogue, so the back arrow can
   // return them exactly where they were.
   const [prevTab, setPrevTab] = useState<TabKey>("media")
@@ -83,6 +93,13 @@ export function ProfileTabs({
     // Remember where we came from when entering Catalogue.
     if (key === "catalogue" && tab !== "catalogue") setPrevTab(tab)
     setTab(key)
+    // Reflect the tab in the URL (without a navigation) so it's restored when
+    // the user returns from an opened item. Next.js syncs replaceState with
+    // useSearchParams. Media is the default, so it needs no query param.
+    if (typeof window !== "undefined") {
+      const url = key === "media" ? window.location.pathname : `${window.location.pathname}?tab=${key}`
+      window.history.replaceState(null, "", url)
+    }
   }
 
   return (
@@ -178,7 +195,7 @@ export function ProfileTabs({
           <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border/60 bg-background/80 px-4 py-3 backdrop-blur-xl">
             <button
               type="button"
-              onClick={() => setTab(prevTab)}
+              onClick={() => selectTab(prevTab)}
               aria-label="Back"
               className="tap-scale -ml-1 flex size-9 items-center justify-center rounded-full text-foreground transition-colors hover:bg-secondary/60"
             >
