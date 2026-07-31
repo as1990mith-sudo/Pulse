@@ -57,6 +57,7 @@ export function AudioMessage({
 }) {
   const audioRef = useRef<HTMLAudioElement>(null)
   const trackRef = useRef<HTMLDivElement>(null)
+  const rafRef = useRef<number | null>(null)
   const [playing, setPlaying] = useState(false)
   const [current, setCurrent] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -66,6 +67,34 @@ export function AudioMessage({
   const waveform = useWaveform(src)
   const progress = duration > 0 ? current / duration : 0
   const speed = SPEEDS[speedIndex]
+
+  // Drive progress from the audio engine's clock every animation frame (~60fps)
+  // instead of the `timeupdate` DOM event (which only fires ~4x/sec and makes
+  // the tracker feel sluggish and jumpy). `audio.currentTime` is the single
+  // source of truth, so the tracker stays locked to the sound.
+  const syncFromAudio = useCallback(() => {
+    const el = audioRef.current
+    if (el && !dragging) setCurrent(el.currentTime)
+  }, [dragging])
+
+  const stopRaf = useCallback(() => {
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+    }
+  }, [])
+
+  const startRaf = useCallback(() => {
+    stopRaf()
+    const tick = () => {
+      syncFromAudio()
+      rafRef.current = requestAnimationFrame(tick)
+    }
+    rafRef.current = requestAnimationFrame(tick)
+  }, [stopRaf, syncFromAudio])
+
+  // Cancel any pending frame on unmount.
+  useEffect(() => () => stopRaf(), [stopRaf])
 
   function togglePlay() {
     const el = audioRef.current
@@ -131,16 +160,31 @@ export function AudioMessage({
         ref={audioRef}
         src={src}
         preload="metadata"
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
-        onEnded={() => setPlaying(false)}
+        onPlay={() => {
+          setPlaying(true)
+          startRaf()
+        }}
+        onPause={() => {
+          setPlaying(false)
+          stopRaf()
+          syncFromAudio()
+        }}
+        onEnded={() => {
+          setPlaying(false)
+          stopRaf()
+          const el = audioRef.current
+          if (el) setCurrent(el.duration || 0)
+        }}
+        onSeeked={syncFromAudio}
         onLoadedMetadata={(e) => {
           const d = e.currentTarget.duration
           if (Number.isFinite(d)) setDuration(d)
           e.currentTarget.playbackRate = speed
         }}
+        // Lightweight fallback so the position stays roughly correct even when
+        // the tab is backgrounded and rAF is throttled/paused by the browser.
         onTimeUpdate={(e) => {
-          if (!dragging) setCurrent(e.currentTarget.currentTime)
+          if (!dragging && rafRef.current == null) setCurrent(e.currentTarget.currentTime)
         }}
       />
 
@@ -172,27 +216,45 @@ export function AudioMessage({
             seekToClientX(e.clientX, true)
           }}
           onKeyDown={onKeyDown}
-          className="flex h-8 cursor-pointer touch-none items-center gap-[2px]"
+          className="relative flex h-8 cursor-pointer touch-none items-center gap-[2px]"
         >
           {waveform.map((height, i) => {
-            const filled = i / waveform.length <= progress
+            // Fractional fill: the bar the cursor is currently over fills
+            // proportionally (0–100%) rather than snapping, so motion reads as
+            // continuous across the whole waveform.
+            const barStart = i / waveform.length
+            const barEnd = (i + 1) / waveform.length
+            const fill = Math.min(1, Math.max(0, (progress - barStart) / (barEnd - barStart)))
+            const emptyColor = mine ? "rgba(255,255,255,0.3)" : "var(--color-foreground)"
+            const fillColor = mine ? "var(--color-primary-foreground)" : "var(--color-primary)"
             return (
               <span
                 key={i}
-                className={cn(
-                  "flex-1 rounded-full transition-colors",
-                  mine
-                    ? filled
-                      ? "bg-primary-foreground"
-                      : "bg-primary-foreground/30"
-                    : filled
-                      ? "bg-primary"
-                      : "bg-foreground/25",
-                )}
-                style={{ height: `${Math.round(height * 100)}%` }}
+                className={cn("flex-1 rounded-full", !mine && fill < 1 && "opacity-25")}
+                style={{
+                  height: `${Math.round(height * 100)}%`,
+                  // A hard gradient stop at the fill point paints the passed
+                  // portion in the fill color and the rest in the empty color.
+                  background: `linear-gradient(to right, ${fillColor} ${fill * 100}%, ${emptyColor} ${fill * 100}%)`,
+                }}
               />
             )
           })}
+
+          {/* Smooth gliding cursor — the primary sense of motion. It tracks the
+              exact playback ratio and eases briefly between rAF samples so it
+              feels buttery even if a frame is dropped. */}
+          <span
+            aria-hidden
+            className={cn(
+              "pointer-events-none absolute top-1/2 h-full w-[2px] -translate-x-1/2 -translate-y-1/2 rounded-full",
+              mine ? "bg-primary-foreground" : "bg-primary",
+            )}
+            style={{
+              left: `${progress * 100}%`,
+              transition: dragging ? "none" : "left 80ms linear",
+            }}
+          />
         </div>
 
         <div className="flex items-center justify-between gap-2">
