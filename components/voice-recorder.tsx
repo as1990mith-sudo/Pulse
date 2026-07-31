@@ -27,29 +27,84 @@ export function VoiceRecorder({
   onCancel: () => void
   sending?: boolean
 }) {
+  const LIVE_BARS = 40
   const [phase, setPhase] = useState<"recording" | "preview">("recording")
   const [seconds, setSeconds] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [previewPlaying, setPreviewPlaying] = useState(false)
+  // Live input levels (0–1) driving the recording waveform, newest on the right.
+  const [levels, setLevels] = useState<number[]>(() => Array(LIVE_BARS).fill(0))
 
   const recorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const blobRef = useRef<Blob | null>(null)
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const finalDurationRef = useRef(0)
 
-  function clearTimer() {
-    if (timerRef.current) {
-      clearInterval(timerRef.current)
-      timerRef.current = null
+  // rAF-driven clock + analyser so the timer and waveform update every frame in
+  // real time, instead of a 1s setInterval that drifts and jumps.
+  const rafRef = useRef<number | null>(null)
+  const startTimeRef = useRef(0)
+  const elapsedRef = useRef(0)
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const analyserRef = useRef<AnalyserNode | null>(null)
+  const dataRef = useRef<Uint8Array | null>(null)
+  const levelsRef = useRef<number[]>(Array(LIVE_BARS).fill(0))
+
+  function stopRaf() {
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
     }
+  }
+
+  function teardownAudioGraph() {
+    stopRaf()
+    analyserRef.current = null
+    dataRef.current = null
+    const ctx = audioCtxRef.current
+    audioCtxRef.current = null
+    if (ctx && ctx.state !== "closed") void ctx.close().catch(() => {})
   }
 
   function stopStream() {
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
+  }
+
+  // Single rAF loop: advances the elapsed clock from performance.now() (no
+  // drift, continuous) and samples the analyser for a live input level so the
+  // waveform responds to incoming audio in real time.
+  function tick() {
+    const elapsed = (performance.now() - startTimeRef.current) / 1000
+    elapsedRef.current = elapsed
+    // Only re-render the seconds label when the whole-second value changes.
+    setSeconds((prev) => (Math.floor(elapsed) !== prev ? Math.min(Math.floor(elapsed), MAX_SECONDS) : prev))
+
+    const analyser = analyserRef.current
+    const data = dataRef.current
+    if (analyser && data) {
+      analyser.getByteTimeDomainData(data)
+      // RMS amplitude around the 128 midpoint → 0..1 level.
+      let sum = 0
+      for (let i = 0; i < data.length; i++) {
+        const v = (data[i] - 128) / 128
+        sum += v * v
+      }
+      const rms = Math.sqrt(sum / data.length)
+      const level = Math.min(1, rms * 3.2) // gentle boost so quiet speech is visible
+      const next = levelsRef.current.slice(1)
+      next.push(level)
+      levelsRef.current = next
+      setLevels(next)
+    }
+
+    if (elapsed >= MAX_SECONDS) {
+      finishRecording()
+      return
+    }
+    rafRef.current = requestAnimationFrame(tick)
   }
 
   // Start recording as soon as the recorder mounts.
@@ -72,22 +127,33 @@ export function VoiceRecorder({
         rec.onstop = () => {
           const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" })
           blobRef.current = blob
-          finalDurationRef.current = seconds
+          // Use the rAF clock's value (not the stale `seconds` state, which the
+          // closure captured as 0) for an accurate final duration.
+          finalDurationRef.current = elapsedRef.current
+          teardownAudioGraph()
           stopStream()
           setPhase("preview")
         }
+
+        // Live analyser graph for the real-time waveform.
+        try {
+          const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+          const ctx = new AudioCtx()
+          audioCtxRef.current = ctx
+          const source = ctx.createMediaStreamSource(stream)
+          const analyser = ctx.createAnalyser()
+          analyser.fftSize = 256
+          source.connect(analyser)
+          analyserRef.current = analyser
+          dataRef.current = new Uint8Array(analyser.fftSize)
+        } catch {
+          /* analyser is optional; timer still works without it */
+        }
+
         rec.start()
-        timerRef.current = setInterval(() => {
-          setSeconds((s) => {
-            const next = s + 1
-            if (next >= MAX_SECONDS) {
-              // Hard stop at the cap.
-              finishRecording()
-              return MAX_SECONDS
-            }
-            return next
-          })
-        }, 1000)
+        startTimeRef.current = performance.now()
+        elapsedRef.current = 0
+        rafRef.current = requestAnimationFrame(tick)
       } catch {
         if (!cancelled) setError("Microphone access was denied.")
       }
@@ -95,7 +161,7 @@ export function VoiceRecorder({
     void start()
     return () => {
       cancelled = true
-      clearTimer()
+      teardownAudioGraph()
       try {
         recorderRef.current?.stream?.getTracks().forEach((t) => t.stop())
       } catch {
@@ -107,13 +173,12 @@ export function VoiceRecorder({
   }, [])
 
   function finishRecording() {
-    clearTimer()
+    teardownAudioGraph()
     const rec = recorderRef.current
     if (rec && rec.state !== "inactive") rec.stop()
   }
 
   function discard() {
-    clearTimer()
     finishRecording()
     blobRef.current = null
     if (audioRef.current) {
@@ -160,9 +225,21 @@ export function VoiceRecorder({
             <span className="absolute inline-flex size-full animate-ping rounded-full bg-destructive/60" />
             <span className="relative inline-flex size-2.5 rounded-full bg-destructive" />
           </span>
-          <span className="flex-1 text-sm font-medium tabular-nums">
-            Recording… {fmt(seconds)} <span className="text-muted-foreground">/ {fmt(MAX_SECONDS)}</span>
-          </span>
+          <div className="flex flex-1 items-center gap-2">
+            {/* Real-time input waveform. */}
+            <div className="flex h-6 flex-1 items-center gap-[2px]" aria-hidden>
+              {levels.map((lvl, i) => (
+                <span
+                  key={i}
+                  className="w-full flex-1 rounded-full bg-destructive/70"
+                  style={{ height: `${Math.max(8, Math.round(lvl * 100))}%` }}
+                />
+              ))}
+            </div>
+            <span className="shrink-0 text-sm font-medium tabular-nums">
+              {fmt(seconds)} <span className="text-muted-foreground">/ {fmt(MAX_SECONDS)}</span>
+            </span>
+          </div>
           <button
             type="button"
             onClick={discard}
