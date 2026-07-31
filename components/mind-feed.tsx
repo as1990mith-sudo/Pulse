@@ -69,7 +69,7 @@ import { ImageLightbox } from "@/components/image-lightbox"
 import { ImmersiveImageViewer } from "@/components/immersive-image-viewer"
 import { FeedVideo } from "@/components/feed-video"
 import { ReelsFeed } from "@/components/reels-feed"
-import { useMediaAspect } from "@/hooks/use-media-aspect"
+import { useMediaAspect, FEED_PREVIEW_MIN_RATIO } from "@/hooks/use-media-aspect"
 import { StatusBar } from "@/components/status-bar"
 import type { StatusGroup } from "@/app/actions/status"
 import { ShareSheet } from "@/components/share-sheet"
@@ -881,13 +881,15 @@ function MediaSlide({
 }) {
   const ratio = useMediaAspect(item.url, item.type)
 
-  // Tallest shape we ever frame (width/height). 9:16 = 0.5625.
-  const MIN_ASPECT = 9 / 16
   // Prefer an explicitly chosen crop ratio (cropped media); otherwise the
   // detected natural ratio.
   const chosen = item.aspectRatio ?? ratio
 
   let framedAspect: number | null
+  // Images taller than the 4:5 preview frame (e.g. a 9:16 crop) are shown
+  // CONTAINED inside a 4:5 card — the full vertical composition is visible with
+  // no further cropping. Exact 4:5 / 1:1 / 16:9 crops fill their own card.
+  let imageTall = false
   if (item.type === "video") {
     // Videos in the feed are restricted to a fixed set of card shapes:
     // 4:5 (0.8), 1:1 (1) and 16:9 (1.7778). A clip in any other ratio — most
@@ -898,12 +900,17 @@ function MediaSlide({
     const allowed = chosen != null && ALLOWED_VIDEO_ASPECTS.some((a) => Math.abs(chosen - a) < 0.02)
     framedAspect = allowed ? (chosen as number) : 4 / 5
   } else {
-    // Images keep their natural ratio, clamped so nothing is taller than 9:16.
-    framedAspect = chosen != null ? Math.max(chosen, MIN_ASPECT) : null
+    imageTall = chosen != null && chosen < FEED_PREVIEW_MIN_RATIO - 0.01
+    framedAspect = imageTall ? FEED_PREVIEW_MIN_RATIO : chosen
   }
-  // The media is visually cropped (content cut off) whenever its natural ratio
-  // differs from the frame — used to show an "expand to full screen" hint.
-  const cropped = ratio != null && framedAspect != null && Math.abs(ratio - framedAspect) > 0.01
+  // Whether the preview differs from the media's true framing — used to show an
+  // "expand to full screen" hint. Videos are center-cropped (content cut off);
+  // tall images are letterboxed inside 4:5 (full composition, but full screen
+  // reveals it larger at its true ratio).
+  const cropped =
+    item.type === "video"
+      ? ratio != null && framedAspect != null && Math.abs(ratio - framedAspect) > 0.01
+      : imageTall
   const frameStyle: React.CSSProperties = {
     aspectRatio: framedAspect ? String(framedAspect) : "4 / 5",
     maxHeight: feed ? "min(85svh, 46rem)" : "46rem",
@@ -943,11 +950,23 @@ function MediaSlide({
       style={frameStyle}
       aria-label={count > 1 ? `Open image ${index + 1} of ${count} full screen` : "Open image full screen"}
     >
+      {/* Tall images (taller than 4:5) sit inside a 4:5 card via object-contain.
+          A blurred, zoomed copy of the same photo fills the letterbox space for a
+          premium, intentional look instead of hard black bars. */}
+      {imageTall && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={item.url || "/placeholder.svg"}
+          alt=""
+          aria-hidden
+          className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover blur-2xl"
+        />
+      )}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={item.url || "/placeholder.svg"}
         alt={count > 1 ? `Post attachment ${index + 1} of ${count}` : `Image posted by ${authorName}`}
-        className="h-full w-full object-cover"
+        className={cn("relative h-full w-full", imageTall ? "object-contain" : "object-cover")}
       />
       {cropped && (
         <span className="pointer-events-none absolute right-2 top-2 flex size-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm">

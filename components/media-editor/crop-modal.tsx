@@ -7,14 +7,16 @@ import { Check, Loader2, X, ZoomIn } from "lucide-react"
 import { getCroppedBlob } from "@/lib/media-edit"
 import { cn } from "@/lib/utils"
 
-export type AspectOption = { label: string; value: number | null }
+export type AspectOption = { label: string; value: number | null; hint?: string }
 
+// Photo crop presets for the feed. "Free" is intentionally omitted so every
+// posted photo lands on one of four consistent, premium shapes. The first entry
+// (4:5 Portrait) is the default selection. Order matches the product spec.
 const DEFAULT_RATIOS: AspectOption[] = [
-  { label: "Free", value: null },
-  { label: "1:1", value: 1 },
-  { label: "4:5", value: 4 / 5 },
-  { label: "9:16", value: 9 / 16 },
-  { label: "16:9", value: 16 / 9 },
+  { label: "4:5", value: 4 / 5, hint: "Portrait" },
+  { label: "1:1", value: 1, hint: "Square" },
+  { label: "16:9", value: 16 / 9, hint: "Landscape" },
+  { label: "9:16", value: 9 / 16, hint: "Vertical" },
 ]
 
 // Tallest portrait shape we ever allow (width/height). Nothing may be taller
@@ -146,14 +148,25 @@ export function CropModal({
                 type="button"
                 onClick={() => setRatio(r)}
                 className={cn(
-                  "min-w-14 rounded-full px-4 py-2 text-sm font-semibold transition-colors active:scale-95",
+                  "flex min-w-16 flex-col items-center gap-0.5 rounded-2xl px-3 py-2 leading-none transition-colors active:scale-95",
                   ratio.label === r.label
                     ? "bg-white text-black"
                     : "bg-white/10 text-white/80 hover:bg-white/20",
                 )}
                 aria-pressed={ratio.label === r.label}
+                aria-label={r.hint ? `${r.hint} ${r.label}` : r.label}
               >
-                {r.label}
+                <span className="text-sm font-semibold">{r.label}</span>
+                {r.hint && (
+                  <span
+                    className={cn(
+                      "text-[10px] font-medium uppercase tracking-wide",
+                      ratio.label === r.label ? "text-black/60" : "text-white/50",
+                    )}
+                  >
+                    {r.hint}
+                  </span>
+                )}
               </button>
             ))}
           </div>
