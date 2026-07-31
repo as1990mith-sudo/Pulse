@@ -346,13 +346,22 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
       {/* Header — tap the title block to open group info / members. The Admin
           badge lives on the subtitle line so it never crowds the room name. */}
       <div className="flex items-center gap-1.5 border-b border-border/60 bg-background/80 px-2 py-2.5 backdrop-blur sm:px-4">
-        <Link
-          href="/chatrooms"
+        <button
+          type="button"
+          onClick={() => {
+            // Return to wherever the user actually came from (mirrors the device
+            // back button) instead of pushing a fresh /chatrooms entry — pushing
+            // one leaves a duplicate on the stack, so backing out of the rooms
+            // list would land on this room again. Fall back to the list only
+            // when there's no in-app history (e.g. opened via a shared link).
+            if (typeof window !== "undefined" && window.history.length > 1) router.back()
+            else router.push("/chatrooms")
+          }}
           aria-label="Back to chatrooms"
           className="flex size-10 shrink-0 items-center justify-center rounded-full text-foreground transition-colors hover:bg-secondary"
         >
           <ChevronLeft className="size-6" />
-        </Link>
+        </button>
         <button
           type="button"
           onClick={() => (detail.image ? setGroupLightbox(true) : setShowMembers((s) => !s))}
