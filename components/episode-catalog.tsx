@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { Headphones, Radio, Search, Video } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { EpisodeRow } from "@/components/profile/episode-row"
@@ -37,9 +38,41 @@ export function EpisodeCatalog({
   owned?: boolean
 }) {
   const [query, setQuery] = useState("")
-  const [tab, setTab] = useState<MediaTab>("audio")
+
+  // Persist the active top-level tab (?cat=) and the Live subtab (?kind=) in the
+  // URL so the selection survives navigation. Opening a live video replay routes
+  // to /live/[id]; the back button restores /u/[id]?tab=catalogue&cat=live&kind=video,
+  // so the user returns to the live *video* Catalogue rather than resetting to Audio.
+  const searchParams = useSearchParams()
+  const catParam = searchParams.get("cat")
+  const kindParam = searchParams.get("kind")
+  const [tab, setTab] = useState<MediaTab>(
+    catParam === "live" || catParam === "video" || catParam === "audio" ? catParam : "audio",
+  )
   // Video / Audio subtab within the Live tab.
-  const [liveKind, setLiveKind] = useState<LiveKind>("video")
+  const [liveKind, setLiveKind] = useState<LiveKind>(kindParam === "audio" ? "audio" : "video")
+
+  // Reflect a tab/subtab change in the URL without navigating, preserving any
+  // other params already present (e.g. ?tab=catalogue). Next.js keeps
+  // useSearchParams in sync with replaceState.
+  function syncUrl(nextTab: MediaTab, nextKind: LiveKind) {
+    if (typeof window === "undefined") return
+    const params = new URLSearchParams(window.location.search)
+    params.set("cat", nextTab)
+    if (nextTab === "live") params.set("kind", nextKind)
+    else params.delete("kind")
+    window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`)
+  }
+
+  function selectTab(next: MediaTab) {
+    setTab(next)
+    syncUrl(next, liveKind)
+  }
+
+  function selectLiveKind(next: LiveKind) {
+    setLiveKind(next)
+    syncUrl(tab, next)
+  }
   // Selected playlist filter for the (upload) video tab ("all" = every playlist).
   const [playlist, setPlaylist] = useState<string>("all")
 
@@ -166,7 +199,7 @@ export function EpisodeCatalog({
               type="button"
               role="tab"
               aria-selected={active}
-              onClick={() => setTab(key)}
+              onClick={() => selectTab(key)}
               className={`flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium transition-colors ${
                 active
                   ? "bg-primary text-primary-foreground"
@@ -207,7 +240,7 @@ export function EpisodeCatalog({
                 type="button"
                 role="tab"
                 aria-selected={active}
-                onClick={() => setLiveKind(key)}
+                onClick={() => selectLiveKind(key)}
                 className={`flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                   active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                 }`}

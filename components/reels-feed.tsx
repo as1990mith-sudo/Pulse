@@ -826,13 +826,16 @@ function ReelItem({
       {/* Bottom gradient for legibility of the caption/author. */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/80 to-transparent" />
 
-      {/* Right-hand action rail (raised to clear the mute button + scrubber).
+      {/* Right-hand action rail. Sits low near the caption (bottom-20) so it
+          reads as anchored to the bottom controls rather than floating high up
+          the clip; the caption's pr-24 reserves this right column so the two
+          never overlap, and it still clears the full-width scrubber below.
           z-[3] keeps it above the full-width caption block (z-[1]) so its taps
           aren't swallowed by the caption's invisible box. Only shown for the
           active reel so a neighbouring reel's rail can't bleed in while scrolling. */}
       <div
         className={cn(
-          "absolute bottom-32 right-3 z-[3] flex flex-col items-center gap-5 text-white transition-opacity duration-200",
+          "absolute bottom-20 right-3 z-[3] flex flex-col items-center gap-5 text-white transition-opacity duration-200",
           active ? "opacity-100" : "pointer-events-none opacity-0",
         )}
         data-no-swipe
