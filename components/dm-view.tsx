@@ -17,6 +17,8 @@ import { extractFirstUrl } from "@/lib/linkify"
 import { renderMessageBody } from "@/lib/rich-text"
 import { LinkPreview } from "@/components/link-preview"
 import { compressImage, uploadMedia } from "@/lib/upload-media"
+import { MediaCollage, type CollageMedia } from "@/components/chat/media-collage"
+import { groupConsecutiveMedia } from "@/lib/media-grouping"
 import {
   deleteDirectMessage,
   editDirectMessage,
@@ -556,21 +558,49 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
               No messages yet. Say hello to {detail.otherUserName}.
             </p>
           )}
-          {messages.map((m) => (
-            <DmBubble
-              key={m.id}
-              message={m}
-              color={m.isSelf ? detail.currentUserColor : detail.color}
-              initials={m.isSelf ? detail.currentUserInitials : detail.initials}
-              image={m.isSelf ? detail.currentUserImage : detail.image}
-              name={m.isSelf ? "You" : detail.otherUserName}
-              highlighted={matchSet.has(m.id)}
-              flashed={flashId === m.id}
-              onDelete={handleDeleteMessage}
-              onTogglePin={handleTogglePin}
-              onEdit={handleEditMessage}
-            />
-          ))}
+          {groupConsecutiveMedia(
+            messages,
+            (m) => ({
+              senderKey: m.isSelf ? "self" : `u-${m.senderId}`,
+              createdAtMs: m.createdAtMs,
+              // Only pure, non-quoted photo/video messages group together.
+              groupable:
+                !m.deleted &&
+                !m.body &&
+                m.statusId == null &&
+                !!m.attachmentUrl &&
+                (m.attachmentType === "image" || m.attachmentType === "video"),
+            }),
+            (m) => m.id,
+          ).map((run) =>
+            run.type === "single" ? (
+              <DmBubble
+                key={run.item.id}
+                message={run.item}
+                color={run.item.isSelf ? detail.currentUserColor : detail.color}
+                initials={run.item.isSelf ? detail.currentUserInitials : detail.initials}
+                image={run.item.isSelf ? detail.currentUserImage : detail.image}
+                name={run.item.isSelf ? "You" : detail.otherUserName}
+                highlighted={matchSet.has(run.item.id)}
+                flashed={flashId === run.item.id}
+                onDelete={handleDeleteMessage}
+                onTogglePin={handleTogglePin}
+                onEdit={handleEditMessage}
+              />
+            ) : (
+              <DmMediaGroup
+                key={run.key}
+                messages={run.items}
+                color={run.items[0].isSelf ? detail.currentUserColor : detail.color}
+                initials={run.items[0].isSelf ? detail.currentUserInitials : detail.initials}
+                image={run.items[0].isSelf ? detail.currentUserImage : detail.image}
+                name={run.items[0].isSelf ? "You" : detail.otherUserName}
+                flashId={flashId}
+                onDelete={handleDeleteMessage}
+                onTogglePin={handleTogglePin}
+              />
+            ),
+          )}
           <div ref={scrollEndRef} />
         </div>
       </div>
@@ -1116,6 +1146,84 @@ function DmBubble({
           title={m.isSelf ? "Your message" : name}
           preview={m.body ?? m.attachmentName ?? undefined}
           actions={actions}
+        />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Renders a run of consecutive photo/video messages (same sender, within 3
+ * minutes) as one WhatsApp-style collage bubble. Keeps the same avatar +
+ * timestamp chrome as a normal bubble; each tile stays individually openable in
+ * the viewer and long-pressable for pin/delete, so no per-message behaviour is
+ * lost — only the visual layout is grouped.
+ */
+function DmMediaGroup({
+  messages,
+  color,
+  initials,
+  image,
+  name,
+  flashId,
+  onDelete,
+  onTogglePin,
+}: {
+  messages: DmMessageView[]
+  color: string
+  initials: string
+  image: string | null
+  name: string
+  flashId: number | null
+  onDelete: (id: number) => void
+  onTogglePin: (id: number, pinned: boolean) => void
+}) {
+  const isSelf = messages[0].isSelf
+  // WhatsApp shows one timestamp for the group — use the most recent item's.
+  const lastMs = messages[messages.length - 1].createdAtMs
+  const anyPinned = messages.some((m) => m.pinned)
+  const flashed = flashId != null && messages.some((m) => m.id === flashId)
+
+  const media: CollageMedia[] = messages.map((m) => ({
+    key: m.id,
+    anchorId: `dm-msg-${m.id}`,
+    url: m.attachmentUrl as string,
+    type: m.attachmentType === "video" ? "video" : "image",
+    name: m.attachmentName,
+  }))
+
+  function buildActions(index: number): SheetAction[] {
+    const m = messages[index]
+    if (m.id <= 0 || m.deleted) return []
+    const actions: SheetAction[] = [
+      { label: m.pinned ? "Unpin" : "Pin", icon: m.pinned ? PinOff : Pin, onClick: () => onTogglePin(m.id, !m.pinned) },
+    ]
+    if (m.isSelf && Date.now() - m.createdAtMs < DM_DELETE_WINDOW_MS) {
+      actions.push({ label: "Delete", icon: Trash2, destructive: true, onClick: () => onDelete(m.id) })
+    }
+    return actions
+  }
+
+  return (
+    <div className={cn("flex scroll-mt-24 gap-3", isSelf && "flex-row-reverse")}>
+      <Avatar className="size-7 shrink-0">
+        {image && <AvatarImage src={image || "/placeholder.svg"} alt={name} />}
+        <AvatarFallback className={cn("text-[10px]", color)}>{initials}</AvatarFallback>
+      </Avatar>
+      <div className={cn("flex max-w-[75%] flex-col gap-0.5", isSelf && "items-end text-right")}>
+        <span className={cn("flex items-center gap-1 text-[10px] text-muted-foreground", isSelf && "justify-end")}>
+          {anyPinned && <Pin className="size-3 fill-current" aria-label="Pinned" />}
+          {formatChatTimestamp(lastMs)}
+        </span>
+        <MediaCollage
+          items={media}
+          mine={isSelf}
+          buildActions={buildActions}
+          className={cn(
+            "shadow-sm ring-1 ring-inset ring-border/40",
+            isSelf ? "rounded-2xl rounded-br-md" : "rounded-2xl rounded-bl-md",
+            flashed && "ring-2 ring-primary/60",
+          )}
         />
       </div>
     </div>
