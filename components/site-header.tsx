@@ -113,15 +113,19 @@ export function SiteHeader({ collapsible = false }: { collapsible?: boolean } = 
     return (
       <div
         className={cn(
-          "z-40 grid transition-[grid-template-rows] duration-[260ms] ease-out motion-reduce:transition-none",
+          // Gentle, longer collapse on a soft ease-in-out curve so the height
+          // reclaim glides rather than snaps.
+          "z-40 grid transition-[grid-template-rows] duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none",
           hidden ? "grid-rows-[0fr]" : "grid-rows-[1fr]",
         )}
       >
         <div className="overflow-hidden">
           <header
             className={cn(
-              "border-b border-border/60 bg-background/80 pt-safe backdrop-blur-xl transition-[transform,opacity] duration-[260ms] ease-out will-change-transform motion-reduce:transition-none",
-              hidden ? "-translate-y-2 opacity-0" : "translate-y-0 opacity-100",
+              // Primarily an opacity fade (barely any slide) so it dissolves
+              // away smoothly instead of sliding out abruptly.
+              "border-b border-border/60 bg-background/80 pt-safe backdrop-blur-xl transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] will-change-[transform,opacity] motion-reduce:transition-none",
+              hidden ? "-translate-y-1 opacity-0" : "translate-y-0 opacity-100",
             )}
           >
             {bar}
@@ -134,7 +138,9 @@ export function SiteHeader({ collapsible = false }: { collapsible?: boolean } = 
   return (
     <header
       className={cn(
-        "sticky top-0 z-40 border-b border-border/60 bg-background/80 pt-safe backdrop-blur-xl transition-[transform,opacity] duration-300 ease-out",
+        // Longer, softer ease-in-out so the header gently fades/glides out of
+        // view on scroll-down and eases back in on scroll-up.
+        "sticky top-0 z-40 border-b border-border/60 bg-background/80 pt-safe backdrop-blur-xl transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] will-change-[transform,opacity] motion-reduce:transition-none",
         hidden ? "-translate-y-full opacity-0" : "translate-y-0 opacity-100",
       )}
     >
