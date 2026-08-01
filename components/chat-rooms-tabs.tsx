@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Flame, Info } from "lucide-react"
 import { CommunityHelp, CommunityHelpInfoModal } from "@/components/community-help"
 import { ITestify } from "@/components/itestify"
-import { useChatChromeHidden, setChatChromeHidden } from "@/lib/chat-chrome"
+import { setChatChromeHidden } from "@/lib/chat-chrome"
 import { cn } from "@/lib/utils"
 
 type Tab = "community" | "itestify"
@@ -33,7 +33,6 @@ export function ChatRoomsTabs({
   // The Community Help info (ⓘ) sheet — its content moved here from the old
   // standalone Community Help header, which no longer renders inside the hub.
   const [infoOpen, setInfoOpen] = useState(false)
-  const chromeHidden = useChatChromeHidden()
 
   function switchTab(next: Tab) {
     if (next === tab) return
@@ -45,14 +44,9 @@ export function ChatRoomsTabs({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Top-level segmented control. Collapses (max-height + opacity, kept in
-          flow) on scroll-down so the feed reclaims the space smoothly. */}
-      <div
-        className={cn(
-          "shrink-0 overflow-hidden border-b border-border/60 bg-background/95 px-4 pb-2.5 pt-3 backdrop-blur transition-[max-height,opacity,padding] duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none sm:px-6",
-          chromeHidden ? "pointer-events-none max-h-0 border-transparent py-0 opacity-0" : "max-h-24 opacity-100",
-        )}
-      >
+      {/* Top-level segmented control. Stays static (always visible) — only the
+          global app header hides/reveals on scroll. */}
+      <div className="shrink-0 overflow-hidden border-b border-border/60 bg-background/95 px-4 pb-2.5 pt-3 backdrop-blur sm:px-6">
         <div
           role="tablist"
           aria-label="Chat Rooms sections"
