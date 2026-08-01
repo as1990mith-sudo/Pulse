@@ -26,7 +26,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { ShareSheet } from "@/components/share-sheet"
 import type { ShareTarget } from "@/lib/share-types"
 import { linkify } from "@/lib/linkify"
-import { compressImage, uploadMedia } from "@/lib/upload-media"
+import { compressImage, cropImageToAspect, uploadMedia } from "@/lib/upload-media"
 import { useAutoHideChatChrome, useChatChromeHidden } from "@/lib/chat-chrome"
 import { cn } from "@/lib/utils"
 import {
@@ -208,7 +208,7 @@ function PostItem({
       {/* Indented, Threads-style row: avatar in a fixed left gutter, all content
           (name, question, image, actions) flows in the column to its right. */}
       <div className="flex gap-3">
-        <CommunityAvatar />
+        <CommunityAvatar selfPost={post} />
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             {post.isSelf ? <SelfMeta post={post} edited={edited} /> : <AnonMeta postedAt={post.postedAt} edited={edited} />}
@@ -370,6 +370,15 @@ function FeedSkeleton() {
 /*  Composer (ask anonymously)                                                */
 /* -------------------------------------------------------------------------- */
 
+// Aspect ratios a user can crop an attached photo to. Square first as the
+// safest, most neutral default.
+const ASPECT_RATIOS = [
+  { label: "1:1", w: 1, h: 1 },
+  { label: "4:5", w: 4, h: 5 },
+  { label: "16:9", w: 16, h: 9 },
+  { label: "9:16", w: 9, h: 16 },
+] as const
+
 function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (p: CommunityPostView) => void }) {
   const [body, setBody] = useState("")
   const [isPending, startTransition] = useTransition()
@@ -383,6 +392,10 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
+  // Keep the originally-picked file so we can re-crop to a different aspect
+  // ratio without asking the user to choose the photo again.
+  const [rawFile, setRawFile] = useState<File | null>(null)
+  const [ratio, setRatio] = useState<(typeof ASPECT_RATIOS)[number]>(ASPECT_RATIOS[0])
 
   function resetImage() {
     setPreview((prev) => {
@@ -392,6 +405,8 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
     setImageUrl(null)
     setUploading(false)
     setProgress(0)
+    setRawFile(null)
+    setRatio(ASPECT_RATIOS[0])
     if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
@@ -407,20 +422,20 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
 
   if (!open || typeof document === "undefined") return null
 
-  async function handlePickImage(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (!file.type.startsWith("image/")) {
-      setError("Please choose an image file.")
-      return
-    }
+  // Crops the raw photo to the chosen aspect ratio, then compresses + uploads.
+  // Runs on first pick and again whenever the ratio changes.
+  async function processImage(file: File, r: (typeof ASPECT_RATIOS)[number]) {
     setError(null)
-    resetImage()
-    setPreview(URL.createObjectURL(file))
+    setImageUrl(null)
     setUploading(true)
     setProgress(0)
     try {
-      const compressed = await compressImage(file)
+      const cropped = await cropImageToAspect(file, r.w, r.h)
+      setPreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return URL.createObjectURL(cropped)
+      })
+      const compressed = await compressImage(cropped)
       const uploaded = await uploadMedia(compressed, "community", file.name, setProgress)
       setImageUrl(uploaded.url)
     } catch {
@@ -429,6 +444,23 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
     } finally {
       setUploading(false)
     }
+  }
+
+  async function handlePickImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith("image/")) {
+      setError("Please choose an image file.")
+      return
+    }
+    setRawFile(file)
+    await processImage(file, ratio)
+  }
+
+  function applyRatio(r: (typeof ASPECT_RATIOS)[number]) {
+    if (uploading || r.label === ratio.label) return
+    setRatio(r)
+    if (rawFile) void processImage(rawFile, r)
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -482,23 +514,52 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
 
           {/* Image preview with upload progress + remove control */}
           {preview && (
-            <div className="relative mt-3 overflow-hidden rounded-2xl border border-border/60">
-              <img src={preview || "/placeholder.svg"} alt="Selected attachment preview" className="max-h-72 w-full object-cover" />
-              {uploading && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm">
-                  <Loader2 className="size-6 animate-spin text-foreground" />
-                  <span className="text-xs font-medium text-foreground tabular-nums">{progress}%</span>
+            <>
+              <div className="mt-3 flex justify-center">
+                <div className="relative inline-block overflow-hidden rounded-2xl border border-border/60">
+                  <img
+                    src={preview || "/placeholder.svg"}
+                    alt="Selected attachment preview"
+                    className="max-h-72 max-w-full object-contain"
+                  />
+                  {uploading && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm">
+                      <Loader2 className="size-6 animate-spin text-foreground" />
+                      <span className="text-xs font-medium text-foreground tabular-nums">{progress}%</span>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={resetImage}
+                    className="absolute right-2 top-2 rounded-full bg-background/80 p-1.5 text-foreground shadow-sm backdrop-blur transition-colors hover:bg-background"
+                    aria-label="Remove image"
+                  >
+                    <X className="size-4" />
+                  </button>
                 </div>
-              )}
-              <button
-                type="button"
-                onClick={resetImage}
-                className="absolute right-2 top-2 rounded-full bg-background/80 p-1.5 text-foreground shadow-sm backdrop-blur transition-colors hover:bg-background"
-                aria-label="Remove image"
-              >
-                <X className="size-4" />
-              </button>
-            </div>
+              </div>
+
+              {/* Aspect ratio picker */}
+              <div className="mt-3 flex items-center justify-center gap-2">
+                {ASPECT_RATIOS.map((r) => (
+                  <button
+                    key={r.label}
+                    type="button"
+                    onClick={() => applyRatio(r)}
+                    disabled={uploading}
+                    aria-pressed={ratio.label === r.label}
+                    className={cn(
+                      "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50",
+                      ratio.label === r.label
+                        ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                        : "border-border/60 text-muted-foreground hover:bg-secondary hover:text-foreground",
+                    )}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+            </>
           )}
 
           <input
