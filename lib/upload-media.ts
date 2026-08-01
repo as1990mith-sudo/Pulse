@@ -22,7 +22,7 @@ function detectType(mime: string): "image" | "video" | "audio" | "document" {
  * Falls back to the original file if anything goes wrong (e.g. unsupported
  * codec, decode failure) so a post is never blocked by compression.
  */
-export async function compressImage(file: File, maxEdge = 1600, quality = 0.82): Promise<File | Blob> {
+export async function compressImage(file: File | Blob, maxEdge = 1600, quality = 0.82): Promise<File | Blob> {
   // Animated GIFs would lose their animation if redrawn to a canvas — skip them.
   if (file.type === "image/gif") return file
   if (typeof document === "undefined") return file
@@ -56,6 +56,50 @@ export async function compressImage(file: File, maxEdge = 1600, quality = 0.82):
     // Only use the compressed version if it's actually smaller.
     if (blob && blob.size > 0 && blob.size < file.size) return blob
     return file
+  } catch {
+    return file
+  }
+}
+
+/**
+ * Center-crops an image to a target aspect ratio (e.g. 1:1, 4:5, 16:9, 9:16)
+ * and returns a re-encoded JPEG blob. Nothing is stretched — the largest
+ * centered region matching the ratio is kept. Falls back to the original file
+ * if decoding/encoding fails so an upload is never blocked.
+ */
+export async function cropImageToAspect(file: File | Blob, ratioW: number, ratioH: number): Promise<File | Blob> {
+  if (typeof document === "undefined") return file
+  try {
+    const bitmap = await createImageBitmap(file)
+    const { width, height } = bitmap
+    const targetRatio = ratioW / ratioH
+    const currentRatio = width / height
+
+    let cropW = width
+    let cropH = height
+    if (currentRatio > targetRatio) {
+      // Source is too wide — trim the sides.
+      cropW = Math.round(height * targetRatio)
+    } else {
+      // Source is too tall — trim top/bottom.
+      cropH = Math.round(width / targetRatio)
+    }
+    const sx = Math.round((width - cropW) / 2)
+    const sy = Math.round((height - cropH) / 2)
+
+    const canvas = document.createElement("canvas")
+    canvas.width = cropW
+    canvas.height = cropH
+    const ctx = canvas.getContext("2d")
+    if (!ctx) {
+      bitmap.close?.()
+      return file
+    }
+    ctx.drawImage(bitmap, sx, sy, cropW, cropH, 0, 0, cropW, cropH)
+    bitmap.close?.()
+
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), "image/jpeg", 0.92))
+    return blob && blob.size > 0 ? blob : file
   } catch {
     return file
   }
