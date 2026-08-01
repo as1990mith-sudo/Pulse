@@ -113,7 +113,7 @@ export function SelfMeta({ post, edited }: { post: CommunityPostView; edited?: b
         {edited && <EditedIndicator />}
       </p>
       <p className="text-xs text-muted-foreground">
-        {post.postedAt} · <span className="font-medium text-emerald-600 dark:text-emerald-400">only you see this</span>
+        {post.postedAt} · <span className="font-medium text-primary">only you see this</span>
       </p>
     </div>
   )
