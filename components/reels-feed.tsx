@@ -1095,7 +1095,7 @@ function CommentsSheet({
       />
       {/* Force dark tokens so the shared (token-based) CommentThread always reads
           correctly on this dark immersive sheet, regardless of app theme. */}
-      <div className="dark relative flex max-h-[82%] min-h-[52%] flex-col rounded-t-[1.75rem] border-t border-white/10 bg-neutral-950 text-white shadow-2xl animate-in slide-in-from-bottom duration-300 ease-out">
+      <div className="dark relative flex h-[70%] flex-col rounded-t-[1.75rem] border-t border-white/10 bg-neutral-950 text-white shadow-2xl animate-in slide-in-from-bottom duration-300 ease-out">
         {/* Grabber + title row */}
         <header className="relative shrink-0 px-4 pt-2.5">
           <span
