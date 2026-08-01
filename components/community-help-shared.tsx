@@ -57,10 +57,34 @@ export function useIsSaved(id: number): boolean {
  * The universal warm anonymous avatar on its own. Used both inline (inside
  * AnonIdentity) and as the standalone left-column avatar in the indented feed
  * and conversation layouts.
+ *
+ * When `selfPost` is the viewer's OWN post, we show the viewer's real profile
+ * picture instead of the anonymous avatar — the author recognises their own
+ * question, while every other viewer still sees the anonymous avatar (the
+ * author's identity data is never sent to other clients).
  */
-export function CommunityAvatar({ size = "md" }: { size?: "md" | "lg" }) {
+export function CommunityAvatar({
+  size = "md",
+  selfPost,
+}: {
+  size?: "md" | "lg"
+  selfPost?: CommunityPostView | null
+}) {
+  const ring = cn("shrink-0 ring-2 ring-border/70", size === "lg" ? "size-12" : "size-11")
+
+  if (selfPost?.isSelf) {
+    return (
+      <Avatar className={ring}>
+        {selfPost.authorImage && <AvatarImage src={selfPost.authorImage || "/placeholder.svg"} alt="Your profile" />}
+        <AvatarFallback className={cn("font-bold text-white", selfPost.authorColor)}>
+          {selfPost.authorInitials ?? "?"}
+        </AvatarFallback>
+      </Avatar>
+    )
+  }
+
   return (
-    <Avatar className={cn("shrink-0 ring-2 ring-border/70", size === "lg" ? "size-12" : "size-11")}>
+    <Avatar className={ring}>
       <AvatarImage src={ANON_AVATAR || "/placeholder.svg"} alt="Anonymous asker" />
       <AvatarFallback className="bg-muted font-bold text-muted-foreground">?</AvatarFallback>
     </Avatar>
@@ -127,7 +151,7 @@ export function SelfIdentity({
 }) {
   return (
     <div className="flex items-center gap-3">
-      <CommunityAvatar size={size} />
+      <CommunityAvatar size={size} selfPost={post} />
       <SelfMeta post={post} edited={edited} />
     </div>
   )

@@ -208,7 +208,7 @@ function PostItem({
       {/* Indented, Threads-style row: avatar in a fixed left gutter, all content
           (name, question, image, actions) flows in the column to its right. */}
       <div className="flex gap-3">
-        <CommunityAvatar />
+        <CommunityAvatar selfPost={post} />
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             {post.isSelf ? <SelfMeta post={post} edited={edited} /> : <AnonMeta postedAt={post.postedAt} edited={edited} />}
