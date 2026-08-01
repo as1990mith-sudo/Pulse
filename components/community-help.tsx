@@ -15,7 +15,6 @@ import {
   Plus,
   Send,
   Share2,
-  ShieldAlert,
   Trash2,
   X,
 } from "lucide-react"
@@ -29,167 +28,92 @@ import { linkify } from "@/lib/linkify"
 import { useAutoHideChatChrome, useChatChromeHidden } from "@/lib/chat-chrome"
 import { cn } from "@/lib/utils"
 import {
-  addCommunityComment,
   createCommunityPost,
-  deleteCommunityComment,
   deleteCommunityPost,
-  editCommunityComment,
   editCommunityPost,
-  getCommunityComments,
   getCommunityPosts,
-  setCommunityCommentLike,
-  type CommunityCommentView,
   type CommunityPostView,
 } from "@/app/actions/community"
-import { type ThreadComment } from "@/components/comment-thread"
-import { CommentSheet } from "@/components/comment-sheet"
-import { MiniChatProvider, useMiniChat } from "@/components/mini-chat"
-import { EditedIndicator } from "@/components/edited-indicator"
-
-function toThreadComment(c: CommunityCommentView): ThreadComment {
-  return {
-    id: c.id,
-    parentId: c.parentId,
-    authorId: c.userId,
-    isSelf: c.isSelf,
-    name: c.userName,
-    handle: c.handle,
-    initials: c.initials,
-    color: c.color,
-    image: c.image,
-    text: c.body,
-    likes: c.likes,
-    liked: c.liked,
-    edited: c.edited,
-    postedAt: c.postedAt,
-    createdAtMs: c.createdAtMs,
-  }
-}
-
-const ANON_AVATAR = "/community-help-avatar.png"
-const ANON_NAME = "Anonymous"
+import { MiniChatProvider } from "@/components/mini-chat"
+import { CommunityConversation } from "@/components/community-conversation"
+import {
+  ANON_AVATAR,
+  ANON_NAME,
+  AnonIdentity,
+  BibleChips,
+  SaveButton,
+  SelfIdentity,
+} from "@/components/community-help-shared"
 
 /* -------------------------------------------------------------------------- */
-/*  Anonymous identity badge (green "?" avatar + fixed name)                  */
+/*  Question text with graceful "See more" collapse                           */
 /* -------------------------------------------------------------------------- */
 
-function AnonIdentity({ postedAt, edited }: { postedAt: string; edited?: boolean }) {
-  return (
-    <div className="flex items-center gap-3">
-      <Avatar className="size-11 shrink-0 ring-2 ring-emerald-500/30">
-        <AvatarImage src={ANON_AVATAR || "/placeholder.svg"} alt="Anonymous asker" />
-        <AvatarFallback className="bg-emerald-600 font-bold text-white">?</AvatarFallback>
-      </Avatar>
-      <div className="min-w-0">
-        <p className="flex items-center gap-1.5 text-base font-bold tracking-tight text-foreground">
-          {ANON_NAME}
-          {edited && <EditedIndicator />}
-        </p>
-        <p className="text-xs text-muted-foreground">{postedAt}</p>
-      </div>
-    </div>
-  )
-}
+function QuestionText({ text, onOpen }: { text: string; onOpen: () => void }) {
+  const [expanded, setExpanded] = useState(false)
+  const [clampable, setClampable] = useState(false)
+  const ref = useRef<HTMLParagraphElement>(null)
 
-/**
- * Shown to the post's author on their OWN post: their real name + avatar, with
- * a hint that everyone else still sees it anonymously.
- */
-function SelfIdentity({ post, edited }: { post: CommunityPostView; edited?: boolean }) {
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    // Measured while the 6-line clamp is applied: overflow ⇒ offer "See more".
+    setClampable(el.scrollHeight - el.clientHeight > 4)
+  }, [text])
+
   return (
-    <div className="flex items-center gap-3">
-      <Avatar className="size-11 shrink-0 ring-2 ring-border">
-        {post.authorImage && <AvatarImage src={post.authorImage || "/placeholder.svg"} alt={post.authorName ?? ""} />}
-        <AvatarFallback className={cn("font-semibold text-white", post.authorColor ?? "bg-muted")}>
-          {post.authorInitials}
-        </AvatarFallback>
-      </Avatar>
-      <div className="min-w-0">
-        <p className="flex items-center gap-1.5 truncate text-base font-bold tracking-tight">
-          {post.authorName}
-          {edited && <EditedIndicator />}
-        </p>
-        <p className="text-xs text-muted-foreground">
-          {post.postedAt} · <span className="font-medium text-foreground">You are anonymous in this room</span>
-        </p>
-      </div>
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          onOpen()
+        }
+      }}
+      className="mt-3 cursor-pointer outline-none"
+    >
+      <p
+        ref={ref}
+        className={cn(
+          "whitespace-pre-wrap break-words text-[17px] leading-relaxed text-foreground text-pretty",
+          !expanded && "line-clamp-6",
+        )}
+      >
+        {linkify(text)}
+      </p>
+      {clampable && !expanded && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            setExpanded(true)
+          }}
+          className="mt-1 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
+        >
+          See more
+        </button>
+      )}
     </div>
   )
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Comments                                                                  */
-/* -------------------------------------------------------------------------- */
-
-function CommentSection({
-  postId,
-  open,
-  onClose,
-  onCountChange,
-}: {
-  postId: number
-  open: boolean
-  onClose: () => void
-  onCountChange: (delta: number) => void
-}) {
-  // Only fetch once the sheet is opened, so closed posts don't fetch eagerly.
-  const { data = [], mutate } = useSWR(open ? ["community-comments", postId] : null, () =>
-    getCommunityComments(postId),
-  )
-  // Tapping a helper's name/avatar opens a profile card (Follow · Message ·
-  // View profile) instead of leaving the feed.
-  const { openProfile } = useMiniChat()
-
-  return (
-    <CommentSheet
-      open={open}
-      onClose={onClose}
-      comments={data.map(toThreadComment)}
-      currentUser={null}
-      canComment
-      onAuthorClick={openProfile}
-      placeholder="Offer your help…"
-      emptyText="No replies yet"
-      emptyHint="Be the first to help out."
-      onSubmit={async (text) => {
-        const created = await addCommunityComment({ postId, body: text })
-        onCountChange(1)
-        await mutate((prev) => [...(prev ?? []), created], { revalidate: false })
-      }}
-      onLike={(commentId, liked) => void setCommunityCommentLike({ commentId, liked })}
-      onReply={async (parentId, value) => {
-        const created = await addCommunityComment({ postId, body: value, parentId })
-        onCountChange(1)
-        await mutate((prev) => [...(prev ?? []), created], { revalidate: false })
-      }}
-      onEdit={async (commentId, value) => {
-        await editCommunityComment({ commentId, body: value })
-        await mutate()
-      }}
-      onDelete={async (commentId) => {
-        await deleteCommunityComment(commentId)
-        onCountChange(-1)
-        await mutate((prev) => (prev ?? []).filter((c) => c.id !== commentId), { revalidate: false })
-      }}
-    />
-  )
-}
-
-/* -------------------------------------------------------------------------- */
-/*  Post                                                                      */
+/*  Post (feed row)                                                           */
 /* -------------------------------------------------------------------------- */
 
 function PostItem({
   post,
   onDeleted,
+  onOpen,
   highlighted = false,
 }: {
   post: CommunityPostView
   onDeleted: (id: number) => void
+  onOpen: () => void
   highlighted?: boolean
 }) {
-  const [open, setOpen] = useState(false)
-  const [count, setCount] = useState(post.commentCount)
   const [shareOpen, setShareOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -201,7 +125,6 @@ function PostItem({
   const [isPending, startTransition] = useTransition()
   const menuRef = useRef<HTMLDivElement>(null)
 
-  // Close the menu when clicking anywhere outside it.
   useEffect(() => {
     if (!menuOpen) return
     function onDown(e: PointerEvent) {
@@ -272,19 +195,15 @@ function PostItem({
   }
 
   return (
-      <article
-        id={`q-${post.id}`}
-        className={cn(
-          "scroll-mt-24 px-4 py-5 transition-colors hover:bg-secondary/20 sm:px-6",
-          highlighted && "rounded-lg ring-2 ring-primary ring-inset",
-        )}
-      >
+    <article
+      id={`q-${post.id}`}
+      className={cn(
+        "scroll-mt-24 px-4 py-5 transition-colors sm:px-6",
+        highlighted && "bg-emerald-500/5",
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
-        {post.isSelf ? (
-          <SelfIdentity post={post} edited={edited} />
-        ) : (
-          <AnonIdentity postedAt={post.postedAt} edited={edited} />
-        )}
+        {post.isSelf ? <SelfIdentity post={post} edited={edited} /> : <AnonIdentity postedAt={post.postedAt} edited={edited} />}
         <div ref={menuRef} className="relative">
           <button
             type="button"
@@ -349,55 +268,41 @@ function PostItem({
           />
           {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
           <div className="mt-2 flex items-center justify-end gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="rounded-full"
-              onClick={() => setEditing(false)}
-              disabled={isPending}
-            >
+            <Button type="button" variant="ghost" size="sm" className="rounded-full" onClick={() => setEditing(false)} disabled={isPending}>
               Cancel
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              className="gap-1.5 rounded-full"
-              onClick={saveEdit}
-              disabled={isPending || !draft.trim()}
-            >
+            <Button type="button" size="sm" className="gap-1.5 rounded-full" onClick={saveEdit} disabled={isPending || !draft.trim()}>
               {isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
               Save
             </Button>
           </div>
         </div>
       ) : (
-        <p className="mt-3 whitespace-pre-wrap break-words text-[17px] leading-relaxed text-pretty">
-          {linkify(body)}
-        </p>
+        <>
+          <QuestionText text={body} onOpen={onOpen} />
+          <BibleChips text={body} className="mt-3" />
+        </>
       )}
 
+      {/* Minimal engagement actions */}
       <div className="mt-3 flex items-center gap-1">
         <button
           type="button"
-          onClick={() => setOpen((o) => !o)}
-          className={cn(
-            "flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
-            open ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary",
-          )}
-          aria-expanded={open}
+          onClick={onOpen}
+          className="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
         >
           <CommentIcon className="size-4" />
-          {count > 0 ? `${count} ${count === 1 ? "reply" : "replies"}` : "Reply"}
+          {post.commentCount > 0 ? `${post.commentCount} ${post.commentCount === 1 ? "reply" : "replies"}` : "Reply"}
         </button>
         <button
           type="button"
           onClick={() => setShareOpen(true)}
-          className="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary"
+          className="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
         >
           <Share2 className="size-4" />
           Share
         </button>
+        <SaveButton postId={post.id} />
         {copied && (
           <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
             <Check className="size-3.5" /> Copied
@@ -405,20 +310,39 @@ function PostItem({
         )}
       </div>
 
-      <CommentSection
-        postId={post.id}
-        open={open}
-        onClose={() => setOpen(false)}
-        onCountChange={(d) => setCount((c) => Math.max(0, c + d))}
-      />
-
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
     </article>
   )
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Composer (floating "ask anonymously")                                     */
+/*  Skeleton (first load)                                                     */
+/* -------------------------------------------------------------------------- */
+
+function FeedSkeleton() {
+  return (
+    <div className="divide-y divide-border/60">
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className="animate-pulse px-4 py-5 sm:px-6">
+          <div className="flex items-center gap-3">
+            <div className="size-11 rounded-full bg-secondary" />
+            <div className="space-y-2">
+              <div className="h-3.5 w-24 rounded-full bg-secondary" />
+              <div className="h-2.5 w-16 rounded-full bg-secondary/70" />
+            </div>
+          </div>
+          <div className="mt-4 space-y-2">
+            <div className="h-4 w-11/12 rounded-full bg-secondary" />
+            <div className="h-4 w-3/4 rounded-full bg-secondary/80" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Composer (ask anonymously)                                                */
 /* -------------------------------------------------------------------------- */
 
 function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (p: CommunityPostView) => void }) {
@@ -465,7 +389,7 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
             </Avatar>
             <div>
               <p className="font-semibold text-emerald-600 dark:text-emerald-400">{ANON_NAME}</p>
-              <p className="text-xs text-muted-foreground">Your post is anonymous</p>
+              <p className="text-xs text-muted-foreground">Your identity stays private</p>
             </div>
           </div>
           <button onClick={onClose} className="rounded-full p-2 text-muted-foreground hover:bg-secondary" aria-label="Close">
@@ -477,7 +401,7 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
             ref={textareaRef}
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            placeholder="Ask anything… what's on your mind?"
+            placeholder="Ask anything… what's on your heart?"
             rows={4}
             maxLength={1000}
             className="resize-none rounded-2xl text-base"
@@ -520,37 +444,26 @@ export function CommunityHelpInfoModal({ open, onClose }: { open: boolean; onClo
           <div className="flex gap-3">
             <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 font-bold text-white">?</span>
             <p>
-          <span className="font-semibold text-foreground">Post anonymously.</span> Everyone here appears as{" "}
-          <span className="font-medium text-foreground">&ldquo;Anonymous&rdquo;</span>. Ask
-          anything and get honest opinions without revealing who you are.
+              <span className="font-semibold text-foreground">Ask anonymously.</span> Your question appears as{" "}
+              <span className="font-medium text-foreground">&ldquo;Anonymous&rdquo;</span> to everyone. Share honestly
+              without revealing who you are.
             </p>
           </div>
           <div className="flex gap-3">
             <CommentIcon className="mt-0.5 size-7 shrink-0 text-primary" />
             <p>
-              <span className="font-semibold text-foreground">Replies are public.</span> When you help someone by replying,
-              your real profile picture and name are shown and link to your profile — so be kind and constructive.
+              <span className="font-semibold text-foreground">Replies are personal.</span> When you respond to help
+              someone, your real name and photo are shown — so answers come from real, accountable people.
             </p>
           </div>
           <div className="flex gap-3">
             <Info className="mt-0.5 size-7 shrink-0 text-primary" />
             <p>
-              <span className="font-semibold text-foreground">Different from other chatrooms.</span> Regular chatrooms are
-              private group inboxes you create and invite people to. Community Help is one open, app-wide feed of questions —
-              not a private group chat.
-            </p>
-          </div>
-          <div className="flex gap-3 rounded-2xl bg-destructive/10 p-3">
-            <ShieldAlert className="mt-0.5 size-7 shrink-0 text-destructive" />
-            <p className="text-foreground">
-              <span className="font-semibold">Keep it respectful.</span> Harassment, hate speech, and offensive posts or
-              comments are not tolerated and may be removed. Anonymity is not an excuse to be hurtful.
+              <span className="font-semibold text-foreground">A safe place.</span> Be kind, be gentle, and treat every
+              question as someone reaching out for real support.
             </p>
           </div>
         </div>
-        <Button onClick={onClose} className="mt-5 w-full rounded-full">
-          Got it
-        </Button>
       </div>
     </div>,
     document.body,
@@ -571,31 +484,68 @@ export function CommunityHelp({
   embedded?: boolean
 }) {
   const { mutate } = useSWRConfig()
-  const { data: posts = initialPosts } = useSWR("community-posts", getCommunityPosts, {
+  const {
+    data: posts = initialPosts,
+    isLoading,
+    mutate: mutatePosts,
+  } = useSWR("community-posts", getCommunityPosts, {
     fallbackData: initialPosts,
     refreshInterval: 20000,
   })
   const [composerOpen, setComposerOpen] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
   const [highlightedQ, setHighlightedQ] = useState<string | null>(null)
-  // "Community" shows everyone's questions; "My Posts" narrows to the ones the
-  // signed-in user authored so they can track their own threads easily.
-  const [scope, setScope] = useState<"community" | "mine">("community")
+  const [activeId, setActiveId] = useState<number | null>(null)
   // Auto-hide the global app header as the feed scrolls (Instagram/Telegram feel).
   const onFeedScroll = useAutoHideChatChrome()
-  // Same scroll-direction signal that hides the global header — used here to
-  // collapse this room's own header in lockstep (down = hide, up = reveal).
   const chromeHidden = useChatChromeHidden()
 
-  const visiblePosts = scope === "mine" ? posts.filter((p) => p.isSelf) : posts
-  const myCount = posts.filter((p) => p.isSelf).length
+  // Pull-to-refresh (touch): pull distance while dragging + a refreshing flag.
+  const scrollerRef = useRef<HTMLDivElement>(null)
+  const touchStartY = useRef<number | null>(null)
+  const [pull, setPull] = useState(0)
+  const [refreshing, setRefreshing] = useState(false)
 
-  // Deep link: arriving with ?q=<id> from a shared link scrolls to and briefly
-  // highlights that exact question instead of just the top of the feed.
+  function handleTouchStart(e: React.TouchEvent) {
+    const el = scrollerRef.current
+    touchStartY.current = el && el.scrollTop <= 0 ? e.touches[0].clientY : null
+  }
+  function handleTouchMove(e: React.TouchEvent) {
+    if (touchStartY.current === null || refreshing) return
+    const dy = e.touches[0].clientY - touchStartY.current
+    if (dy > 0) setPull(Math.min(72, dy * 0.5))
+  }
+  async function handleTouchEnd() {
+    if (touchStartY.current === null) return
+    touchStartY.current = null
+    if (pull > 52 && !refreshing) {
+      setRefreshing(true)
+      setPull(44)
+      try {
+        await mutatePosts()
+      } finally {
+        setRefreshing(false)
+        setPull(0)
+      }
+    } else {
+      setPull(0)
+    }
+  }
+
+  const activePost = activeId === null ? null : posts.find((p) => p.id === activeId) ?? null
+  const relatedPosts = activeId === null ? [] : posts.filter((p) => p.id !== activeId).slice(0, 5)
+
+  // Deep link: arriving with ?q=<id> from a shared link opens that conversation
+  // directly (falling back to a gentle scroll+highlight if it isn't loaded).
   useEffect(() => {
     if (typeof window === "undefined") return
     const targetId = new URLSearchParams(window.location.search).get("q")
     if (!targetId) return
+    const numeric = Number(targetId)
+    if (posts.some((p) => p.id === numeric)) {
+      setActiveId(numeric)
+      return
+    }
     const t = setTimeout(() => {
       const el = document.getElementById(`q-${targetId}`)
       if (!el) return
@@ -612,26 +562,28 @@ export function CommunityHelp({
   }
 
   function handleDeleted(id: number) {
+    if (activeId === id) setActiveId(null)
+    mutate("community-posts", (prev: CommunityPostView[] | undefined) => (prev ?? []).filter((p) => p.id !== id), {
+      revalidate: false,
+    })
+  }
+
+  // Keep feed reply counts in sync when replies are added/removed in the
+  // conversation screen (optimistic, no refetch).
+  function handleCountChange(postId: number, delta: number) {
     mutate(
       "community-posts",
-      (prev: CommunityPostView[] | undefined) => (prev ?? []).filter((p) => p.id !== id),
+      (prev: CommunityPostView[] | undefined) =>
+        (prev ?? []).map((p) => (p.id === postId ? { ...p, commentCount: Math.max(0, p.commentCount + delta) } : p)),
       { revalidate: false },
     )
   }
 
   return (
     <MiniChatProvider>
-    <div className="flex h-full flex-col overflow-hidden">
-      {/* Standalone header + "Community / My Posts" filter. Both are hidden when
-          embedded in the Chat Rooms two-tab hub — there the top-level tab bar IS
-          the section header, the info (ⓘ) lives beside the tab label, and the
-          old "My Posts" concept is removed. Kept intact for the standalone
-          /chatrooms/community route (reached from shared deep links). */}
-      {!embedded && (
-        <>
-          {/* Header collapses + fades away on scroll-down and returns on scroll-up,
-              mirroring the global chrome. max-height + opacity keep it in flow so
-              the feed reclaims the space smoothly. */}
+      <div className="flex h-full flex-col overflow-hidden">
+        {/* Standalone header — hidden when embedded in the Chat Rooms hub. */}
+        {!embedded && (
           <header
             className={cn(
               "flex items-center gap-3 overflow-hidden border-b border-border/60 bg-background/95 px-4 py-3 backdrop-blur transition-[max-height,opacity,padding] duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none sm:px-6",
@@ -664,99 +616,90 @@ export function CommunityHelp({
               <p className="truncate text-sm text-muted-foreground">Ask anonymously · anyone can help</p>
             </div>
           </header>
+        )}
 
-          {/* Community / My Posts toggle */}
-          <div className="border-b border-border/60 bg-background/95 px-4 py-2.5 backdrop-blur sm:px-6">
-            <div role="tablist" aria-label="Filter questions" className="flex gap-1 rounded-full bg-secondary/60 p-1">
-              {(
-                [
-                  { key: "community", label: "Community" },
-                  { key: "mine", label: "My Posts", count: myCount },
-                ] as const
-              ).map((t) => {
-                const active = scope === t.key
-                return (
-                  <button
-                    key={t.key}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    onClick={() => setScope(t.key)}
-                    className={cn(
-                      "flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-base font-semibold transition-colors",
-                      active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {t.label}
-                    {"count" in t && (
-                      <span
-                        className={cn(
-                          "min-w-5 rounded-full px-1.5 py-0.5 text-xs font-medium tabular-nums",
-                          active
-                            ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                            : "bg-secondary text-muted-foreground",
-                        )}
-                      >
-                        {t.count}
-                      </span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
+        {/* Immersive smooth-scrolling feed with pull-to-refresh */}
+        <div
+          ref={scrollerRef}
+          onScroll={onFeedScroll}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          className="relative flex-1 overflow-y-auto scroll-smooth overscroll-contain"
+        >
+          {/* Pull-to-refresh indicator */}
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center"
+            style={{ height: pull, opacity: pull > 8 || refreshing ? 1 : 0 }}
+          >
+            <Loader2
+              className={cn("mt-2 size-5 text-muted-foreground", refreshing && "animate-spin")}
+              style={{ transform: refreshing ? undefined : `rotate(${pull * 4}deg)` }}
+            />
           </div>
-        </>
-      )}
 
-      {/* Immersive smooth-scrolling feed */}
-      <div onScroll={onFeedScroll} className="flex-1 overflow-y-auto scroll-smooth overscroll-contain">
-        {visiblePosts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 px-6 py-24 text-center">
-            <Avatar className="size-16 ring-2 ring-emerald-500/30">
-              <AvatarImage src={ANON_AVATAR || "/placeholder.svg"} alt="" />
-              <AvatarFallback className="bg-emerald-600 text-2xl font-bold text-white">?</AvatarFallback>
-            </Avatar>
-            <p className="text-lg font-semibold">{scope === "mine" ? "You haven't posted yet" : "No questions yet"}</p>
-            <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
-              {scope === "mine"
-                ? "Questions you ask will appear here so you can track the replies you get."
-                : "Be the first to ask the community something — totally anonymously."}
-            </p>
-            <Button onClick={() => setComposerOpen(true)} className="mt-2 gap-2 rounded-full">
-              <Plus className="size-4" /> Ask anonymously
-            </Button>
+          <div
+            style={{ transform: pull ? `translateY(${pull}px)` : undefined }}
+            className={cn(!pull && "transition-transform duration-300 ease-out")}
+          >
+            {isLoading && posts.length === 0 ? (
+              <FeedSkeleton />
+            ) : posts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-3 px-6 py-24 text-center">
+                <Avatar className="size-16 ring-2 ring-emerald-500/30">
+                  <AvatarImage src={ANON_AVATAR || "/placeholder.svg"} alt="" />
+                  <AvatarFallback className="bg-emerald-600 text-2xl font-bold text-white">?</AvatarFallback>
+                </Avatar>
+                <p className="text-lg font-semibold">No questions yet</p>
+                <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
+                  Be the first to ask the community something — totally anonymously.
+                </p>
+                <Button onClick={() => setComposerOpen(true)} className="mt-2 gap-2 rounded-full">
+                  <Plus className="size-4" /> Ask anonymously
+                </Button>
+              </div>
+            ) : (
+              <div className="divide-y divide-border/60 pb-28">
+                {posts.map((post) => (
+                  <PostItem
+                    key={post.id}
+                    post={post}
+                    onDeleted={handleDeleted}
+                    onOpen={() => setActiveId(post.id)}
+                    highlighted={highlightedQ === String(post.id)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="divide-y divide-border/60 pb-28">
-            {visiblePosts.map((post) => (
-              <PostItem
-                key={post.id}
-                post={post}
-                onDeleted={handleDeleted}
-                highlighted={highlightedQ === String(post.id)}
-              />
-            ))}
-          </div>
+        </div>
+
+        {/* Floating ask button — hides on scroll-down, returns on scroll-up. */}
+        <button
+          type="button"
+          onClick={() => setComposerOpen(true)}
+          className={cn(
+            "absolute bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-5 z-30 inline-flex w-fit items-center gap-2 rounded-full bg-primary px-4 py-2 text-base font-semibold text-primary-foreground shadow-lg transition-[transform,opacity] duration-300 ease-out hover:scale-105 active:scale-95 sm:right-8",
+            chromeHidden ? "pointer-events-none translate-y-[200%] opacity-0" : "translate-y-0 opacity-100",
+          )}
+        >
+          <Plus className="size-5" />
+          Ask
+        </button>
+
+        <Composer open={composerOpen} onClose={() => setComposerOpen(false)} onCreated={handleCreated} />
+        <CommunityHelpInfoModal open={infoOpen} onClose={() => setInfoOpen(false)} />
+
+        {activePost && (
+          <CommunityConversation
+            post={activePost}
+            related={relatedPosts}
+            onClose={() => setActiveId(null)}
+            onOpenRelated={(p) => setActiveId(p.id)}
+            onCountChange={handleCountChange}
+          />
         )}
       </div>
-
-      {/* Floating ask button — slides away on scroll-down and returns on
-          scroll-up, in lockstep with the header (same chrome scroll signal). */}
-      <button
-        type="button"
-        onClick={() => setComposerOpen(true)}
-        className={cn(
-          "absolute bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-5 z-30 inline-flex w-fit items-center gap-2 rounded-full bg-primary px-4 py-2 text-base font-semibold text-primary-foreground shadow-lg transition-[transform,opacity] duration-300 ease-out hover:scale-105 active:scale-95 sm:right-8",
-          chromeHidden ? "pointer-events-none translate-y-[200%] opacity-0" : "translate-y-0 opacity-100",
-        )}
-      >
-        <Plus className="size-5" />
-        Ask
-      </button>
-
-      <Composer open={composerOpen} onClose={() => setComposerOpen(false)} onCreated={handleCreated} />
-      <CommunityHelpInfoModal open={infoOpen} onClose={() => setInfoOpen(false)} />
-    </div>
     </MiniChatProvider>
   )
 }
