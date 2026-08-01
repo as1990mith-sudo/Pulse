@@ -24,6 +24,9 @@ const timeAgo = formatPostTimestamp
 export type CommunityPostView = {
   id: number
   body: string
+  // Optional attached image (Vercel Blob URL). Shown to everyone — the image is
+  // part of the anonymous question, never tied to the hidden author identity.
+  imageUrl: string | null
   postedAt: string
   createdAtMs: number
   edited: boolean
@@ -96,6 +99,7 @@ export async function getCommunityPosts(): Promise<CommunityPostView[]> {
     return {
       id: p.id,
       body: p.body,
+      imageUrl: p.imageUrl ?? null,
       postedAt: timeAgo(p.createdAt),
       createdAtMs: p.createdAt.getTime(),
       edited: !!p.editedAt,
@@ -110,22 +114,31 @@ export async function getCommunityPosts(): Promise<CommunityPostView[]> {
   })
 }
 
-/** Creates an anonymous post in the Community Help room. */
-export async function createCommunityPost(body: string): Promise<CommunityPostView> {
+/** Creates an anonymous post in the Community Help room, optionally with an image. */
+export async function createCommunityPost(
+  body: string,
+  imageUrl?: string | null,
+): Promise<CommunityPostView> {
   const user = await requireUser()
   const text = body.trim()
-  if (!text) throw new Error("Your question can't be empty.")
+  const image = imageUrl?.trim() || null
+  if (!text && !image) throw new Error("Add a question or an image.")
   if (text.length > 1000) throw new Error("Please keep it under 1000 characters.")
+  // Only accept our own Vercel Blob URLs so a client can't stash arbitrary links.
+  if (image && !/^https:\/\/[a-z0-9-]+\.public\.blob\.vercel-storage\.com\//i.test(image)) {
+    throw new Error("That image couldn't be attached.")
+  }
 
   const [row] = await db
     .insert(communityPost)
-    .values({ userId: user.id, body: text })
+    .values({ userId: user.id, body: text, imageUrl: image })
     .returning()
 
   revalidatePath("/chatrooms/community")
   return {
     id: row.id,
     body: row.body,
+    imageUrl: row.imageUrl ?? null,
     postedAt: "now",
     createdAtMs: row.createdAt.getTime(),
     edited: false,

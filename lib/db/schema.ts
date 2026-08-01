@@ -699,10 +699,11 @@ export const communityPost = pgTable("community_post", {
   id: serial("id").primaryKey(),
   userId: text("userId").notNull(), // hidden author — never exposed to clients
   body: text("body").notNull(),
+  imageUrl: text("imageUrl"), // optional attached image (Vercel Blob URL)
   deleted: boolean("deleted").notNull().default(false),
   editedAt: timestamp("editedAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
-})
+  })
 
 // Replies to a community post. Unlike posts, comments are NOT anonymous — the
 // commenter's name/profile is shown and links to their profile.

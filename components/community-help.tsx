@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   Check,
   Copy,
+  ImagePlus,
   Info,
   Loader2,
   MoreHorizontal,
@@ -25,6 +26,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { ShareSheet } from "@/components/share-sheet"
 import type { ShareTarget } from "@/lib/share-types"
 import { linkify } from "@/lib/linkify"
+import { compressImage, uploadMedia } from "@/lib/upload-media"
 import { useAutoHideChatChrome, useChatChromeHidden } from "@/lib/chat-chrome"
 import { cn } from "@/lib/utils"
 import {
@@ -39,10 +41,11 @@ import { CommunityConversation } from "@/components/community-conversation"
 import {
   ANON_AVATAR,
   ANON_NAME,
-  AnonIdentity,
+  AnonMeta,
   BibleChips,
+  CommunityAvatar,
   SaveButton,
-  SelfIdentity,
+  SelfMeta,
 } from "@/components/community-help-shared"
 
 /* -------------------------------------------------------------------------- */
@@ -202,112 +205,134 @@ function PostItem({
         highlighted && "bg-emerald-500/5",
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        {post.isSelf ? <SelfIdentity post={post} edited={edited} /> : <AnonIdentity postedAt={post.postedAt} edited={edited} />}
-        <div ref={menuRef} className="relative">
-          <button
-            type="button"
-            onClick={() => setMenuOpen((o) => !o)}
-            className={cn(
-              "rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
-              menuOpen && "bg-secondary text-foreground",
-            )}
-            aria-label="Post options"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-          >
-            <MoreHorizontal className="size-5" />
-          </button>
-          {menuOpen && (
-            <div
-              role="menu"
-              className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-2xl border border-border/60 bg-card p-1 shadow-xl duration-150 animate-in fade-in zoom-in-95"
-            >
-              {post.isSelf && (
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={startEdit}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-secondary"
-                >
-                  <Pencil className="size-4" /> Edit
-                </button>
-              )}
+      {/* Indented, Threads-style row: avatar in a fixed left gutter, all content
+          (name, question, image, actions) flows in the column to its right. */}
+      <div className="flex gap-3">
+        <CommunityAvatar />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            {post.isSelf ? <SelfMeta post={post} edited={edited} /> : <AnonMeta postedAt={post.postedAt} edited={edited} />}
+            <div ref={menuRef} className="relative">
               <button
                 type="button"
-                role="menuitem"
-                onClick={handleCopy}
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-secondary"
+                onClick={() => setMenuOpen((o) => !o)}
+                className={cn(
+                  "-mr-1 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
+                  menuOpen && "bg-secondary text-foreground",
+                )}
+                aria-label="Post options"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
               >
-                <Copy className="size-4" /> Copy text
+                <MoreHorizontal className="size-5" />
               </button>
-              {post.isSelf && (
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={handleDelete}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
+              {menuOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-2xl border border-border/60 bg-card p-1 shadow-xl duration-150 animate-in fade-in zoom-in-95"
                 >
-                  <Trash2 className="size-4" /> Delete
-                </button>
+                  {post.isSelf && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={startEdit}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-secondary"
+                    >
+                      <Pencil className="size-4" /> Edit
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={handleCopy}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-secondary"
+                  >
+                    <Copy className="size-4" /> Copy text
+                  </button>
+                  {post.isSelf && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={handleDelete}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
+                    >
+                      <Trash2 className="size-4" /> Delete
+                    </button>
+                  )}
+                </div>
               )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
 
-      {editing ? (
-        <div className="mt-3">
-          <Textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            rows={3}
-            maxLength={1000}
-            autoFocus
-            className="resize-none rounded-2xl text-[17px]"
-          />
-          {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
-          <div className="mt-2 flex items-center justify-end gap-2">
-            <Button type="button" variant="ghost" size="sm" className="rounded-full" onClick={() => setEditing(false)} disabled={isPending}>
-              Cancel
-            </Button>
-            <Button type="button" size="sm" className="gap-1.5 rounded-full" onClick={saveEdit} disabled={isPending || !draft.trim()}>
-              {isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
-              Save
-            </Button>
+          {editing ? (
+            <div className="mt-2">
+              <Textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                rows={3}
+                maxLength={1000}
+                autoFocus
+                className="resize-none rounded-2xl text-[17px]"
+              />
+              {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
+              <div className="mt-2 flex items-center justify-end gap-2">
+                <Button type="button" variant="ghost" size="sm" className="rounded-full" onClick={() => setEditing(false)} disabled={isPending}>
+                  Cancel
+                </Button>
+                <Button type="button" size="sm" className="gap-1.5 rounded-full" onClick={saveEdit} disabled={isPending || !draft.trim()}>
+                  {isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+                  Save
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {body && <QuestionText text={body} onOpen={onOpen} />}
+              <BibleChips text={body} className="mt-3" />
+            </>
+          )}
+
+          {post.imageUrl && (
+            <button
+              type="button"
+              onClick={onOpen}
+              className="mt-3 block w-full overflow-hidden rounded-2xl border border-border/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <img
+                src={post.imageUrl || "/placeholder.svg"}
+                alt="Attached to the question"
+                loading="lazy"
+                className="max-h-96 w-full object-cover"
+              />
+            </button>
+          )}
+
+          {/* Minimal engagement actions */}
+          <div className="mt-3 -ml-3 flex items-center gap-1">
+            <button
+              type="button"
+              onClick={onOpen}
+              className="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            >
+              <CommentIcon className="size-4" />
+              {post.commentCount > 0 ? `${post.commentCount} ${post.commentCount === 1 ? "reply" : "replies"}` : "Reply"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShareOpen(true)}
+              className="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            >
+              <Share2 className="size-4" />
+              Share
+            </button>
+            <SaveButton postId={post.id} />
+            {copied && (
+              <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                <Check className="size-3.5" /> Copied
+              </span>
+            )}
           </div>
         </div>
-      ) : (
-        <>
-          <QuestionText text={body} onOpen={onOpen} />
-          <BibleChips text={body} className="mt-3" />
-        </>
-      )}
-
-      {/* Minimal engagement actions */}
-      <div className="mt-3 flex items-center gap-1">
-        <button
-          type="button"
-          onClick={onOpen}
-          className="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-        >
-          <CommentIcon className="size-4" />
-          {post.commentCount > 0 ? `${post.commentCount} ${post.commentCount === 1 ? "reply" : "replies"}` : "Reply"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setShareOpen(true)}
-          className="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-        >
-          <Share2 className="size-4" />
-          Share
-        </button>
-        <SaveButton postId={post.id} />
-        {copied && (
-          <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-            <Check className="size-3.5" /> Copied
-          </span>
-        )}
       </div>
 
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
@@ -323,17 +348,17 @@ function FeedSkeleton() {
   return (
     <div className="divide-y divide-border/60">
       {[0, 1, 2, 3].map((i) => (
-        <div key={i} className="animate-pulse px-4 py-5 sm:px-6">
-          <div className="flex items-center gap-3">
-            <div className="size-11 rounded-full bg-secondary" />
+        <div key={i} className="flex animate-pulse gap-3 px-4 py-5 sm:px-6">
+          <div className="size-11 shrink-0 rounded-full bg-secondary" />
+          <div className="flex-1">
             <div className="space-y-2">
               <div className="h-3.5 w-24 rounded-full bg-secondary" />
               <div className="h-2.5 w-16 rounded-full bg-secondary/70" />
             </div>
-          </div>
-          <div className="mt-4 space-y-2">
-            <div className="h-4 w-11/12 rounded-full bg-secondary" />
-            <div className="h-4 w-3/4 rounded-full bg-secondary/80" />
+            <div className="mt-4 space-y-2">
+              <div className="h-4 w-11/12 rounded-full bg-secondary" />
+              <div className="h-4 w-3/4 rounded-full bg-secondary/80" />
+            </div>
           </div>
         </div>
       ))}
@@ -350,25 +375,71 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Attached image: a local object-URL preview while the file uploads to Blob in
+  // the background, then the final public URL once the upload resolves.
+  const [preview, setPreview] = useState<string | null>(null)
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [progress, setProgress] = useState(0)
+
+  function resetImage() {
+    setPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
+    setImageUrl(null)
+    setUploading(false)
+    setProgress(0)
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
 
   useEffect(() => {
     if (open) setTimeout(() => textareaRef.current?.focus(), 50)
     else {
       setBody("")
       setError(null)
+      resetImage()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   if (!open || typeof document === "undefined") return null
 
+  async function handlePickImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith("image/")) {
+      setError("Please choose an image file.")
+      return
+    }
+    setError(null)
+    resetImage()
+    setPreview(URL.createObjectURL(file))
+    setUploading(true)
+    setProgress(0)
+    try {
+      const compressed = await compressImage(file)
+      const uploaded = await uploadMedia(compressed, "community", file.name, setProgress)
+      setImageUrl(uploaded.url)
+    } catch {
+      setError("That image couldn't be uploaded. Please try another.")
+      resetImage()
+    } finally {
+      setUploading(false)
+    }
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const text = body.trim()
-    if (!text) return
+    if (!text && !imageUrl) return
+    if (uploading) return
     setError(null)
     startTransition(async () => {
       try {
-        const created = await createCommunityPost(text)
+        const created = await createCommunityPost(text, imageUrl)
         onCreated(created)
         onClose()
       } catch (err) {
@@ -376,6 +447,8 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
       }
     })
   }
+
+  const canPost = (!!body.trim() || !!imageUrl) && !uploading && !isPending
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
@@ -406,13 +479,54 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
             maxLength={1000}
             className="resize-none rounded-2xl text-base"
           />
-          <div className="mt-1.5 flex items-center justify-between">
+
+          {/* Image preview with upload progress + remove control */}
+          {preview && (
+            <div className="relative mt-3 overflow-hidden rounded-2xl border border-border/60">
+              <img src={preview || "/placeholder.svg"} alt="Selected attachment preview" className="max-h-72 w-full object-cover" />
+              {uploading && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm">
+                  <Loader2 className="size-6 animate-spin text-foreground" />
+                  <span className="text-xs font-medium text-foreground tabular-nums">{progress}%</span>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={resetImage}
+                className="absolute right-2 top-2 rounded-full bg-background/80 p-1.5 text-foreground shadow-sm backdrop-blur transition-colors hover:bg-background"
+                aria-label="Remove image"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+          )}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            onChange={handlePickImage}
+          />
+
+          <div className="mt-3 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!!preview}
+              className="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium text-emerald-600 transition-colors hover:bg-emerald-500/10 disabled:opacity-40 dark:text-emerald-400"
+            >
+              <ImagePlus className="size-4" />
+              Add photo
+            </button>
             <span className="text-xs text-muted-foreground">{body.length}/1000</span>
-            {error && <span className="text-xs text-destructive">{error}</span>}
           </div>
-          <Button type="submit" className="mt-3 w-full gap-2 rounded-full" disabled={isPending || !body.trim()}>
-            {isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-            Post anonymously
+
+          {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
+
+          <Button type="submit" className="mt-3 w-full gap-2 rounded-full" disabled={!canPost}>
+            {isPending || uploading ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+            {uploading ? "Uploading…" : "Post anonymously"}
           </Button>
         </form>
       </div>

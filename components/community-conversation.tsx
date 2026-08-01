@@ -117,7 +117,9 @@ function RelatedQuestions({ posts, onOpen }: { posts: CommunityPostView[]; onOpe
                 className="size-9 shrink-0 rounded-full ring-2 ring-emerald-500/20"
               />
               <span className="min-w-0 flex-1">
-                <span className="line-clamp-2 text-[15px] leading-snug text-foreground text-pretty">{p.body}</span>
+                <span className="line-clamp-2 text-[15px] leading-snug text-foreground text-pretty">
+                  {p.body || (p.imageUrl ? "Shared a photo" : "")}
+                </span>
                 <span className="mt-0.5 block text-xs text-muted-foreground">
                   {p.commentCount > 0
                     ? `${p.commentCount} ${p.commentCount === 1 ? "reply" : "replies"}`
@@ -226,9 +228,20 @@ export function CommunityConversation({
               <AnonIdentity postedAt={post.postedAt} edited={post.edited} size="lg" />
             )}
           </div>
-          <p className="mt-4 whitespace-pre-wrap break-words text-xl leading-relaxed text-foreground text-pretty">
-            {linkify(post.body)}
-          </p>
+          {post.body && (
+            <p className="mt-4 whitespace-pre-wrap break-words text-xl leading-relaxed text-foreground text-pretty">
+              {linkify(post.body)}
+            </p>
+          )}
+          {post.imageUrl && (
+            <div className="mt-4 overflow-hidden rounded-2xl border border-border/60">
+              <img
+                src={post.imageUrl || "/placeholder.svg"}
+                alt="Attached to the question"
+                className="max-h-[70vh] w-full object-contain bg-secondary/30"
+              />
+            </div>
+          )}
           <BibleChips text={post.body} className="mt-4" />
 
           <div className="mt-5 flex items-center gap-2 text-sm font-medium text-muted-foreground">
