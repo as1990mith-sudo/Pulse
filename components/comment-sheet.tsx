@@ -60,8 +60,8 @@ export type CommentSheetProps = {
   /** Hides the per-comment reply affordance (flat surfaces like QOTD). */
   allowReply?: boolean
   /**
-   * Overrides the sheet's height classes. Defaults to `max-h-[82%] min-h-[52%]`.
-   * Pass e.g. `"h-[85%]"` for a fixed-height sheet.
+   * Overrides the sheet's height classes. Defaults to a fixed `h-[70%]` so the
+   * sheet matches the Reels comment sheet. Pass e.g. `"h-[85%]"` to override.
    */
   heightClassName?: string
 }
@@ -190,7 +190,9 @@ export function CommentSheet({
       <div
         className={cn(
           "relative flex flex-col rounded-t-[1.75rem] border-t border-border bg-background text-foreground shadow-2xl animate-in slide-in-from-bottom duration-300 ease-out",
-          heightClassName ?? "max-h-[82%] min-h-[52%]",
+          // Fixed 70% height to match the Reels comment sheet across every
+          // comment surface (feed, devotional, episodes, articles, etc.).
+          heightClassName ?? "h-[70%]",
         )}
       >
         {/* Grabber + title row */}

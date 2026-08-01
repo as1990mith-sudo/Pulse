@@ -248,7 +248,6 @@ export function QuestionOfTheDay({
           onDelete={handleDelete}
           allowReply={false}
           enforceTimeWindows={false}
-          heightClassName="h-[85%]"
           placeholder="What are your thoughts on today's question?"
           emptyText="No responses yet"
           emptyHint="Be the first to share your perspective."
