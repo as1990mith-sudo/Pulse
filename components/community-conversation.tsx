@@ -114,7 +114,7 @@ function RelatedQuestions({ posts, onOpen }: { posts: CommunityPostView[]; onOpe
               <img
                 src={ANON_AVATAR || "/placeholder.svg"}
                 alt=""
-                className="size-9 shrink-0 rounded-full ring-2 ring-emerald-500/20"
+                className="size-9 shrink-0 rounded-full ring-2 ring-border/70"
               />
               <span className="min-w-0 flex-1">
                 <span className="line-clamp-2 text-[15px] leading-snug text-foreground text-pretty">

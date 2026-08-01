@@ -60,9 +60,9 @@ export function useIsSaved(id: number): boolean {
  */
 export function CommunityAvatar({ size = "md" }: { size?: "md" | "lg" }) {
   return (
-    <Avatar className={cn("shrink-0 ring-2 ring-emerald-500/30", size === "lg" ? "size-12" : "size-11")}>
+    <Avatar className={cn("shrink-0 ring-2 ring-border/70", size === "lg" ? "size-12" : "size-11")}>
       <AvatarImage src={ANON_AVATAR || "/placeholder.svg"} alt="Anonymous asker" />
-      <AvatarFallback className="bg-emerald-600 font-bold text-white">?</AvatarFallback>
+      <AvatarFallback className="bg-muted font-bold text-muted-foreground">?</AvatarFallback>
     </Avatar>
   )
 }
