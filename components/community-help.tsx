@@ -456,9 +456,9 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
       <div className="relative z-10 w-full max-w-lg rounded-t-3xl border border-border/60 bg-card p-5 shadow-2xl duration-200 animate-in slide-in-from-bottom sm:rounded-3xl">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Avatar className="size-10 ring-2 ring-emerald-500/30">
+            <Avatar className="size-10 ring-2 ring-border/70">
               <AvatarImage src={ANON_AVATAR || "/placeholder.svg"} alt="" />
-              <AvatarFallback className="bg-emerald-600 font-bold text-white">?</AvatarFallback>
+              <AvatarFallback className="bg-muted font-bold text-muted-foreground">?</AvatarFallback>
             </Avatar>
             <div>
               <p className="font-semibold text-emerald-600 dark:text-emerald-400">{ANON_NAME}</p>
@@ -711,9 +711,9 @@ export function CommunityHelp({
             >
               <ArrowLeft className="size-5" />
             </Link>
-            <Avatar className="size-9 ring-2 ring-emerald-500/30">
+            <Avatar className="size-9 ring-2 ring-border/70">
               <AvatarImage src={ANON_AVATAR || "/placeholder.svg"} alt="" />
-              <AvatarFallback className="bg-emerald-600 font-bold text-white">?</AvatarFallback>
+              <AvatarFallback className="bg-muted font-bold text-muted-foreground">?</AvatarFallback>
             </Avatar>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
@@ -760,9 +760,9 @@ export function CommunityHelp({
               <FeedSkeleton />
             ) : posts.length === 0 ? (
               <div className="flex flex-col items-center justify-center gap-3 px-6 py-24 text-center">
-                <Avatar className="size-16 ring-2 ring-emerald-500/30">
+                <Avatar className="size-16 ring-2 ring-border/70">
                   <AvatarImage src={ANON_AVATAR || "/placeholder.svg"} alt="" />
-                  <AvatarFallback className="bg-emerald-600 text-2xl font-bold text-white">?</AvatarFallback>
+                  <AvatarFallback className="bg-muted text-2xl font-bold text-muted-foreground">?</AvatarFallback>
                 </Avatar>
                 <p className="text-lg font-semibold">No questions yet</p>
                 <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
