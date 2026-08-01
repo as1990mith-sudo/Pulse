@@ -53,6 +53,48 @@ export function useIsSaved(id: number): boolean {
 /*  Anonymous identity (universal warm avatar + fixed name)                   */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * The universal warm anonymous avatar on its own. Used both inline (inside
+ * AnonIdentity) and as the standalone left-column avatar in the indented feed
+ * and conversation layouts.
+ */
+export function CommunityAvatar({ size = "md" }: { size?: "md" | "lg" }) {
+  return (
+    <Avatar className={cn("shrink-0 ring-2 ring-emerald-500/30", size === "lg" ? "size-12" : "size-11")}>
+      <AvatarImage src={ANON_AVATAR || "/placeholder.svg"} alt="Anonymous asker" />
+      <AvatarFallback className="bg-emerald-600 font-bold text-white">?</AvatarFallback>
+    </Avatar>
+  )
+}
+
+/** Name + timestamp line for an anonymous post, without the avatar. */
+export function AnonMeta({ postedAt, edited }: { postedAt: string; edited?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <p className="flex items-center gap-1.5 text-[15px] font-bold tracking-tight text-foreground">
+        {ANON_NAME}
+        {edited && <EditedIndicator />}
+      </p>
+      <p className="text-xs text-muted-foreground">{postedAt}</p>
+    </div>
+  )
+}
+
+/** Name + timestamp line shown to the author on their OWN post, without avatar. */
+export function SelfMeta({ post, edited }: { post: CommunityPostView; edited?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <p className="flex items-center gap-1.5 text-[15px] font-bold tracking-tight text-foreground">
+        You
+        {edited && <EditedIndicator />}
+      </p>
+      <p className="text-xs text-muted-foreground">
+        {post.postedAt} · <span className="font-medium text-emerald-600 dark:text-emerald-400">only you see this</span>
+      </p>
+    </div>
+  )
+}
+
 export function AnonIdentity({
   postedAt,
   edited,
@@ -64,17 +106,8 @@ export function AnonIdentity({
 }) {
   return (
     <div className="flex items-center gap-3">
-      <Avatar className={cn("shrink-0 ring-2 ring-emerald-500/30", size === "lg" ? "size-12" : "size-11")}>
-        <AvatarImage src={ANON_AVATAR || "/placeholder.svg"} alt="Anonymous asker" />
-        <AvatarFallback className="bg-emerald-600 font-bold text-white">?</AvatarFallback>
-      </Avatar>
-      <div className="min-w-0">
-        <p className="flex items-center gap-1.5 text-[15px] font-bold tracking-tight text-foreground">
-          {ANON_NAME}
-          {edited && <EditedIndicator />}
-        </p>
-        <p className="text-xs text-muted-foreground">{postedAt}</p>
-      </div>
+      <CommunityAvatar size={size} />
+      <AnonMeta postedAt={postedAt} edited={edited} />
     </div>
   )
 }
@@ -94,19 +127,8 @@ export function SelfIdentity({
 }) {
   return (
     <div className="flex items-center gap-3">
-      <Avatar className={cn("shrink-0 ring-2 ring-emerald-500/30", size === "lg" ? "size-12" : "size-11")}>
-        <AvatarImage src={ANON_AVATAR || "/placeholder.svg"} alt="" />
-        <AvatarFallback className="bg-emerald-600 font-bold text-white">?</AvatarFallback>
-      </Avatar>
-      <div className="min-w-0">
-        <p className="flex items-center gap-1.5 text-[15px] font-bold tracking-tight text-foreground">
-          You
-          {edited && <EditedIndicator />}
-        </p>
-        <p className="text-xs text-muted-foreground">
-          {post.postedAt} · <span className="font-medium text-emerald-600 dark:text-emerald-400">only you see this</span>
-        </p>
-      </div>
+      <CommunityAvatar size={size} />
+      <SelfMeta post={post} edited={edited} />
     </div>
   )
 }
