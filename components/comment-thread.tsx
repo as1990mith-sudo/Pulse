@@ -65,6 +65,13 @@ export type CommentThreadProps = {
    * response with no sub-threads). Defaults to true.
    */
   allowReply?: boolean
+  /**
+   * Visual density of each comment. "comfortable" enlarges the author name,
+   * body text and avatar for reading-focused surfaces (e.g. the Community Help
+   * conversation screen). Defaults to "default" so existing surfaces are
+   * unchanged.
+   */
+  density?: "default" | "comfortable"
 }
 
 /**
@@ -83,6 +90,7 @@ export function CommentThread({
   enforceTimeWindows = true,
   onAuthorClick,
   allowReply = true,
+  density = "default",
 }: CommentThreadProps) {
   // Group replies under their parent. Unknown parents fall back to top level.
   const { roots, repliesByParent } = useMemo(() => {
@@ -120,6 +128,7 @@ export function CommentThread({
             showCopy={showCopy}
             enforceTimeWindows={enforceTimeWindows}
             onAuthorClick={onAuthorClick}
+            density={density}
           />
         </li>
       ))}
@@ -148,6 +157,7 @@ function CommentNode({
   showCopy,
   enforceTimeWindows,
   onAuthorClick,
+  density = "default",
 }: {
   comment: ThreadComment
   depth: number
@@ -161,6 +171,7 @@ function CommentNode({
   showCopy: boolean
   enforceTimeWindows: boolean
   onAuthorClick?: (authorId: string) => void
+  density?: "default" | "comfortable"
 }) {
   const replies = repliesByParent.get(comment.id) ?? []
   const [collapsed, setCollapsed] = useState(true)
@@ -179,6 +190,7 @@ function CommentNode({
         showCopy={showCopy}
         enforceTimeWindows={enforceTimeWindows}
         onAuthorClick={onAuthorClick}
+        density={density}
       />
 
       {replies.length > 0 && (
@@ -211,6 +223,7 @@ function CommentNode({
                     showCopy={showCopy}
                     enforceTimeWindows={enforceTimeWindows}
                     onAuthorClick={onAuthorClick}
+                    density={density}
                   />
                 </li>
               ))}
@@ -234,6 +247,7 @@ function CommentItem({
   enforceTimeWindows = true,
   isReply = false,
   onAuthorClick,
+  density = "default",
 }: {
   comment: ThreadComment
   canInteract: boolean
@@ -246,6 +260,7 @@ function CommentItem({
   enforceTimeWindows?: boolean
   isReply?: boolean
   onAuthorClick?: (authorId: string) => void
+  density?: "default" | "comfortable"
 }) {
   const [liked, setLiked] = useState(comment.liked)
   const [likes, setLikes] = useState(comment.likes)
@@ -273,6 +288,7 @@ function CommentItem({
 
   const editable = comment.isSelf && (!enforceTimeWindows || canEdit(comment.createdAtMs))
   const deletable = comment.isSelf && (!enforceTimeWindows || canDelete(comment.createdAtMs))
+  const comfortable = density === "comfortable"
 
   function toggleLike() {
     if (!canInteract) return
@@ -352,7 +368,7 @@ function CommentItem({
       : {}
 
   const avatar = (
-    <Avatar className={cn("shrink-0", isReply ? "size-7" : "size-8")}>
+    <Avatar className={cn("shrink-0", isReply ? (comfortable ? "size-8" : "size-7") : comfortable ? "size-10" : "size-8")}>
       {comment.image && <AvatarImage src={comment.image || "/placeholder.svg"} alt={comment.name} />}
       <AvatarFallback className={cn("text-xs", comment.color)}>{comment.initials}</AvatarFallback>
     </Avatar>
@@ -387,7 +403,7 @@ function CommentItem({
         >
           <div className="flex flex-wrap items-center gap-x-2 text-sm">
             {/* @ts-expect-error polymorphic tag */}
-            <NameTag {...nameProps} className={cn("text-sm font-semibold", comment.authorId && "hover:underline")}>
+            <NameTag {...nameProps} className={cn(comfortable ? "text-[15px]" : "text-sm", "font-semibold", comment.authorId && "hover:underline")}>
               {comment.name}
             </NameTag>
             {comment.handle && <span className="text-xs text-muted-foreground">{comment.handle}</span>}
@@ -396,7 +412,11 @@ function CommentItem({
             {copied && <span className="text-xs text-primary">Copied</span>}
           </div>
 
-          {!editing && <p className="whitespace-pre-wrap text-pretty text-sm leading-relaxed text-foreground/90">{text}</p>}
+          {!editing && (
+            <p className={cn("whitespace-pre-wrap text-pretty leading-relaxed text-foreground/90", comfortable ? "text-[15px]" : "text-sm")}>
+              {text}
+            </p>
+          )}
         </div>
 
         {editing && (
