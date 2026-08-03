@@ -687,8 +687,15 @@ export function CommunityHelp({
   }
   function handleTouchMove(e: React.TouchEvent) {
     if (touchStartY.current === null || refreshing) return
+    const el = scrollerRef.current
     const dy = e.touches[0].clientY - touchStartY.current
-    if (dy > 0) setPull(Math.min(72, dy * 0.5))
+    // Upward drag, or the list has actually scrolled — hand control back to
+    // native scrolling so the gesture never fights momentum (the smooth feel).
+    if (dy <= 0 || (el && el.scrollTop > 0)) {
+      if (pull !== 0) setPull(0)
+      return
+    }
+    setPull(Math.min(72, dy * 0.5))
   }
   async function handleTouchEnd() {
     if (touchStartY.current === null) return
@@ -802,22 +809,27 @@ export function CommunityHelp({
           onTouchEnd={handleTouchEnd}
           className="relative flex-1 overflow-y-auto scroll-smooth overscroll-contain"
         >
-          {/* Pull-to-refresh indicator */}
+          {/* Pull-to-refresh indicator tray — expanding its height gently pushes
+              the feed down as you pull, so the list itself is never transformed
+              (that keeps native scroll momentum perfectly smooth). */}
           <div
-            className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center"
-            style={{ height: pull, opacity: pull > 8 || refreshing ? 1 : 0 }}
+            className="flex items-end justify-center overflow-hidden"
+            style={{
+              height: refreshing ? 44 : pull,
+              transition: touchStartY.current !== null ? "none" : "height 0.25s ease",
+            }}
+            aria-hidden={pull === 0 && !refreshing}
           >
             <Loader2
-              className={cn("mt-2 size-5 text-muted-foreground", refreshing && "animate-spin")}
-              style={{ transform: refreshing ? undefined : `rotate(${pull * 4}deg)` }}
+              className={cn("mb-2 size-5 text-muted-foreground", refreshing && "animate-spin")}
+              style={{
+                opacity: Math.min(1, pull / 44),
+                transform: refreshing ? undefined : `rotate(${pull * 4}deg)`,
+              }}
             />
           </div>
 
-          <div
-            style={{ transform: pull ? `translateY(${pull}px)` : undefined }}
-            className={cn(!pull && "transition-transform duration-300 ease-out")}
-          >
-            {isLoading && posts.length === 0 ? (
+          {isLoading && posts.length === 0 ? (
               <FeedSkeleton />
             ) : posts.length === 0 ? (
               <div className="flex flex-col items-center justify-center gap-3 px-6 py-24 text-center">
@@ -846,7 +858,6 @@ export function CommunityHelp({
                 ))}
               </div>
             )}
-          </div>
         </div>
 
         {/* Floating ask button — hides on scroll-down, returns on scroll-up. */}
