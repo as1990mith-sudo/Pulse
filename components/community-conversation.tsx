@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import useSWR from "swr"
-import { ArrowLeft, ChevronDown, Loader2, Send, Share2 } from "lucide-react"
+import { ArrowLeft, ChevronDown, Loader2, Send, Share2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ShareSheet } from "@/components/share-sheet"
@@ -161,6 +161,7 @@ export function CommunityConversation({
   onCountChange: (postId: number, delta: number) => void
 }) {
   const [shareOpen, setShareOpen] = useState(false)
+  const [lightboxOpen, setLightboxOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const { openProfile } = useMiniChat()
 
@@ -243,13 +244,17 @@ export function CommunityConversation({
             </p>
           )}
           {post.imageUrl && (
-            <div className="mt-4 overflow-hidden rounded-2xl border border-border/60">
+            <button
+              type="button"
+              onClick={() => setLightboxOpen(true)}
+              className="mt-4 block w-full overflow-hidden rounded-2xl border border-border/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
               <img
                 src={post.imageUrl || "/placeholder.svg"}
                 alt="Attached to the question"
-                className="max-h-[70vh] w-full object-contain bg-secondary/30"
+                className="max-h-96 w-full object-cover"
               />
-            </div>
+            </button>
           )}
           <BibleChips text={post.body} className="mt-4" />
 
@@ -311,6 +316,58 @@ export function CommunityConversation({
       />
 
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
+
+      {lightboxOpen && post.imageUrl && (
+        <ImageLightbox src={post.imageUrl} onClose={() => setLightboxOpen(false)} />
+      )}
+    </div>,
+    document.body,
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Full-screen image lightbox                                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Minimal full-screen viewer for a single attached image. Shows the image at
+ * its natural aspect ratio (object-contain) on a black backdrop; tapping the
+ * backdrop or the close button dismisses it. Rendered in its own portal so it
+ * sits above the conversation dialog.
+ */
+function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose()
+    }
+    document.addEventListener("keydown", onKey)
+    return () => document.removeEventListener("keydown", onKey)
+  }, [onClose])
+
+  if (typeof document === "undefined") return null
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Attached image"
+      onClick={onClose}
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black duration-200 animate-in fade-in"
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close"
+        className="absolute right-4 top-[calc(0.75rem+env(safe-area-inset-top))] z-10 flex size-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/20"
+      >
+        <X className="size-5" />
+      </button>
+      <img
+        src={src || "/placeholder.svg"}
+        alt="Attached to the question"
+        onClick={(e) => e.stopPropagation()}
+        className="max-h-full max-w-full object-contain"
+      />
     </div>,
     document.body,
   )
