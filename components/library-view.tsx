@@ -38,7 +38,6 @@ export function LibraryView({ library }: { library: LibraryData }) {
           </span>
           <div>
             <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">Library</h1>
-            <p className="text-sm text-muted-foreground">Your reading, kept in one place</p>
           </div>
         </div>
       </header>
@@ -49,11 +48,7 @@ export function LibraryView({ library }: { library: LibraryData }) {
         <div className="flex flex-col gap-9">
           {continueReading.length > 0 && (
             <section>
-              <SectionHeading
-                icon={<BookOpen className="size-4" />}
-                title="Continue Reading"
-                caption="Right where you stopped"
-              />
+              <SectionHeading icon={<BookOpen className="size-4" />} title="Continue Reading" />
               <div
                 data-scroll
                 className="hscroll -mx-4 flex gap-3.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0"
@@ -66,11 +61,7 @@ export function LibraryView({ library }: { library: LibraryData }) {
           )}
 
           <section>
-            <SectionHeading
-              icon={<BookMarked className="size-4" />}
-              title="Saved"
-              caption={saved.length > 0 ? `${saved.length} bookmarked` : "Bookmark articles to build your list"}
-            />
+            <SectionHeading icon={<BookMarked className="size-4" />} title="Saved" />
             {saved.length === 0 ? (
               <InlineEmpty
                 icon={<BookMarked className="size-5" />}
@@ -118,14 +109,14 @@ function SectionHeading({
 }: {
   icon: React.ReactNode
   title: string
-  caption: string
+  caption?: string
 }) {
   return (
     <div className="mb-3.5 flex items-center gap-2.5">
       <span className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground">{icon}</span>
       <div className="min-w-0">
         <h2 className="font-display text-base font-semibold leading-none tracking-tight text-foreground">{title}</h2>
-        <p className="mt-1 truncate text-xs text-muted-foreground">{caption}</p>
+        {caption && <p className="mt-1 truncate text-xs text-muted-foreground">{caption}</p>}
       </div>
     </div>
   )
