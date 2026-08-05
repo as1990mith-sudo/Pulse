@@ -473,9 +473,17 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   // Keep the originally-picked file so we can re-crop to a different aspect
-  // ratio without asking the user to choose the photo again (images only).
+  // ratio (or a new pan position) without asking the user to choose the photo
+  // again (images only).
   const [rawFile, setRawFile] = useState<File | null>(null)
   const [ratio, setRatio] = useState<(typeof ASPECT_RATIOS)[number]>(ASPECT_RATIOS[0])
+  // Natural pixel size of the picked photo + the current pan offset (0..1 on
+  // each axis, 0.5 = centered) so the user can drag the image within the frame.
+  const [imgNatural, setImgNatural] = useState<{ w: number; h: number } | null>(null)
+  const [offset, setOffset] = useState<{ x: number; y: number }>({ x: 0.5, y: 0.5 })
+  // Monotonic token so a late-finishing crop/upload can't overwrite a newer one
+  // (rapid ratio switches or pan adjustments each supersede the previous).
+  const cropTokenRef = useRef(0)
 
   function resetMedia() {
     setPreview((prev) => {
@@ -489,6 +497,10 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
     setProgress(0)
     setRawFile(null)
     setRatio(ASPECT_RATIOS[0])
+    setImgNatural(null)
+    setOffset({ x: 0.5, y: 0.5 })
+    // Invalidate any in-flight crop/upload.
+    cropTokenRef.current++
     if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
@@ -504,27 +516,36 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
 
   if (!open || typeof document === "undefined") return null
 
-  // Crops the raw photo to the chosen aspect ratio, then compresses + uploads.
-  // Runs on first pick and again whenever the ratio changes.
-  async function processImage(file: File, r: (typeof ASPECT_RATIOS)[number]) {
+  // Crops the raw photo to the chosen aspect ratio + pan offset, then
+  // compresses + uploads. Runs on first pick and again whenever the ratio or
+  // pan position changes. The on-screen preview is the live interactive frame
+  // (CropFrame), so this only produces the final blob to post — it never
+  // touches `preview`. A token guards against out-of-order results.
+  async function processImage(
+    file: File,
+    r: (typeof ASPECT_RATIOS)[number],
+    off: { x: number; y: number },
+  ) {
+    const token = ++cropTokenRef.current
     setError(null)
     setImageUrl(null)
     setUploading(true)
     setProgress(0)
     try {
-      const cropped = await cropImageToAspect(file, r.w, r.h)
-      setPreview((prev) => {
-        if (prev) URL.revokeObjectURL(prev)
-        return URL.createObjectURL(cropped)
-      })
+      const cropped = await cropImageToAspect(file, r.w, r.h, off.x, off.y)
       const compressed = await compressImage(cropped)
-      const uploaded = await uploadMedia(compressed, "community", file.name, setProgress)
+      const uploaded = await uploadMedia(compressed, "community", file.name, (p) => {
+        if (cropTokenRef.current === token) setProgress(p)
+      })
+      if (cropTokenRef.current !== token) return // superseded by a newer crop
       setImageUrl(uploaded.url)
     } catch {
-      setError("That image couldn't be uploaded. Please try another.")
-      resetMedia()
+      if (cropTokenRef.current === token) {
+        setError("That image couldn't be uploaded. Please try another.")
+        resetMedia()
+      }
     } finally {
-      setUploading(false)
+      if (cropTokenRef.current === token) setUploading(false)
     }
   }
 
@@ -567,14 +588,40 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
     }
     setRawFile(isImage ? file : null)
     setMediaKind(isImage ? "image" : "video")
-    if (isImage) await processImage(file, ratio)
-    else await processVideo(file)
+    if (isImage) {
+      // Show the original photo in the interactive crop frame right away…
+      const url = URL.createObjectURL(file)
+      setPreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return url
+      })
+      const centered = { x: 0.5, y: 0.5 }
+      setOffset(centered)
+      try {
+        setImgNatural(await loadImageSize(url))
+      } catch {
+        setImgNatural(null)
+      }
+      // …and upload a first (centered) crop in the background.
+      await processImage(file, ratio, centered)
+    } else {
+      await processVideo(file)
+    }
   }
 
+  // Switching ratio recenters the pan and re-crops.
   function applyRatio(r: (typeof ASPECT_RATIOS)[number]) {
     if (uploading || r.label === ratio.label) return
     setRatio(r)
-    if (rawFile) void processImage(rawFile, r)
+    const centered = { x: 0.5, y: 0.5 }
+    setOffset(centered)
+    if (rawFile) void processImage(rawFile, r, centered)
+  }
+
+  // Called when the user finishes dragging the photo — re-crop at the new pan.
+  function commitCrop(next: { x: number; y: number }) {
+    setOffset(next)
+    if (rawFile && mediaKind === "image") void processImage(rawFile, ratio, next)
   }
 
   function handleSubmit(e: React.FormEvent) {

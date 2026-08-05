@@ -62,18 +62,32 @@ export async function compressImage(file: File | Blob, maxEdge = 1600, quality =
 }
 
 /**
- * Center-crops an image to a target aspect ratio (e.g. 1:1, 4:5, 16:9, 9:16)
- * and returns a re-encoded JPEG blob. Nothing is stretched — the largest
- * centered region matching the ratio is kept. Falls back to the original file
- * if decoding/encoding fails so an upload is never blocked.
+ * Crops an image to a target aspect ratio (e.g. 1:1, 4:5, 16:9, 9:16) and
+ * returns a re-encoded JPEG blob. Nothing is stretched — the largest region
+ * matching the ratio is kept.
+ *
+ * `offsetX` / `offsetY` (0..1) position the crop window within the source along
+ * the axis that gets trimmed: 0 = flush to the left/top edge, 1 = flush to the
+ * right/bottom edge, 0.5 = centered (the default, matching a plain center-crop).
+ * This is what lets the user drag the photo around inside the crop frame.
+ *
+ * Falls back to the original file if decoding/encoding fails so an upload is
+ * never blocked.
  */
-export async function cropImageToAspect(file: File | Blob, ratioW: number, ratioH: number): Promise<File | Blob> {
+export async function cropImageToAspect(
+  file: File | Blob,
+  ratioW: number,
+  ratioH: number,
+  offsetX = 0.5,
+  offsetY = 0.5,
+): Promise<File | Blob> {
   if (typeof document === "undefined") return file
   try {
     const bitmap = await createImageBitmap(file)
     const { width, height } = bitmap
     const targetRatio = ratioW / ratioH
     const currentRatio = width / height
+    const clamp01 = (n: number) => Math.min(1, Math.max(0, n))
 
     let cropW = width
     let cropH = height
@@ -84,8 +98,10 @@ export async function cropImageToAspect(file: File | Blob, ratioW: number, ratio
       // Source is too tall — trim top/bottom.
       cropH = Math.round(width / targetRatio)
     }
-    const sx = Math.round((width - cropW) / 2)
-    const sy = Math.round((height - cropH) / 2)
+    // Position the crop window using the pan offset (only the trimmed axis has
+    // any slack; the other resolves to 0).
+    const sx = Math.round((width - cropW) * clamp01(offsetX))
+    const sy = Math.round((height - cropH) * clamp01(offsetY))
 
     const canvas = document.createElement("canvas")
     canvas.width = cropW

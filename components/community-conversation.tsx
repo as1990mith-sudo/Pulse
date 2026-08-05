@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import useSWR from "swr"
-import { ArrowLeft, ChevronDown, Loader2, Play, Send, Share2, X } from "lucide-react"
+import { ArrowLeft, ChevronDown, Loader2, Send, Share2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ShareSheet } from "@/components/share-sheet"
@@ -20,6 +20,7 @@ import {
   type CommunityPostView,
 } from "@/app/actions/community"
 import { CommentThread, type ThreadComment } from "@/components/comment-thread"
+import { FeedVideo } from "@/components/feed-video"
 import { useMiniChat } from "@/components/mini-chat"
 import { AnonIdentity, BibleChips, SaveButton, SelfIdentity, ANON_AVATAR } from "@/components/community-help-shared"
 
@@ -162,7 +163,6 @@ export function CommunityConversation({
 }) {
   const [shareOpen, setShareOpen] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
-  const [videoLightboxOpen, setVideoLightboxOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const { openProfile } = useMiniChat()
 
@@ -257,27 +257,7 @@ export function CommunityConversation({
               />
             </button>
           )}
-          {post.videoUrl && (
-            <button
-              type="button"
-              onClick={() => setVideoLightboxOpen(true)}
-              aria-label="Play video"
-              className="relative mt-4 block w-full overflow-hidden rounded-2xl border border-border/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <video
-                src={post.videoUrl}
-                muted
-                playsInline
-                preload="metadata"
-                className="max-h-96 w-full bg-black object-cover"
-              />
-              <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <span className="flex size-14 items-center justify-center rounded-full bg-background/70 backdrop-blur">
-                  <Play className="ml-0.5 size-6 text-foreground" />
-                </span>
-              </span>
-            </button>
-          )}
+          {post.videoUrl && <PostVideo src={post.videoUrl} />}
           <BibleChips text={post.body} className="mt-4" />
 
           <div className="mt-5 flex items-center gap-2 text-sm font-medium text-muted-foreground">
@@ -342,10 +322,6 @@ export function CommunityConversation({
       {lightboxOpen && post.imageUrl && (
         <ImageLightbox src={post.imageUrl} onClose={() => setLightboxOpen(false)} />
       )}
-
-      {videoLightboxOpen && post.videoUrl && (
-        <VideoLightbox src={post.videoUrl} onClose={() => setVideoLightboxOpen(false)} />
-      )}
     </div>,
     document.body,
   )
@@ -400,51 +376,30 @@ function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Full-screen video lightbox                                                */
+/*  Inline video player                                                       */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Full-screen player for a single attached video. Mirrors ImageLightbox: the
- * video plays at its natural aspect ratio (object-contain) on a black backdrop
- * with native controls; tapping the backdrop or the close button dismisses it.
- * Autoplays (muted) on open so the tap that opened it starts playback.
+ * Plays an attached video inline using the same custom player as the main feed
+ * (FeedVideo) — branded play button, tap-to-play/pause, ±10s skip, draggable
+ * scrubber and shared mute — instead of the browser's native fullscreen
+ * controls. Because it plays in place, the conversation's header actions and the
+ * Reply / Share / Save / Like buttons stay visible while the clip plays.
+ *
+ * The frame sizes itself to the clip's real aspect ratio once known (clamped to
+ * a sensible portrait↔landscape range) so vertical and horizontal videos both
+ * sit naturally in the thread.
  */
-function VideoLightbox({ src, onClose }: { src: string; onClose: () => void }) {
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose()
-    }
-    document.addEventListener("keydown", onKey)
-    return () => document.removeEventListener("keydown", onKey)
-  }, [onClose])
-
-  if (typeof document === "undefined") return null
-
-  return createPortal(
+function PostVideo({ src }: { src: string }) {
+  const [ratio, setRatio] = useState<number | null>(null)
+  // Clamp between 9:16 and 16:9 so an extreme clip can't create a giant frame.
+  const aspect = ratio ? Math.min(16 / 9, Math.max(9 / 16, ratio)) : 4 / 5
+  return (
     <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Attached video"
-      onClick={onClose}
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black duration-200 animate-in fade-in"
+      className="relative mt-4 w-full overflow-hidden rounded-2xl border border-border/60 bg-black"
+      style={{ aspectRatio: String(aspect), maxHeight: "70vh" }}
     >
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Close"
-        className="absolute right-4 top-[calc(0.75rem+env(safe-area-inset-top))] z-10 flex size-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/20"
-      >
-        <X className="size-5" />
-      </button>
-      <video
-        src={src}
-        controls
-        autoPlay
-        playsInline
-        onClick={(e) => e.stopPropagation()}
-        className="max-h-full max-w-full object-contain"
-      />
-    </div>,
-    document.body,
+      <FeedVideo src={src} className="h-full w-full object-cover" onAspectRatio={setRatio} />
+    </div>
   )
 }

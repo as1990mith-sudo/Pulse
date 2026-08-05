@@ -44,6 +44,7 @@ export function FeedVideo({
   poster,
   trimStart,
   trimEnd,
+  onAspectRatio,
 }: {
   src: string
   className?: string
@@ -53,6 +54,9 @@ export function FeedVideo({
    *  viewers only ever see the trimmed selection — the file itself is untouched. */
   trimStart?: number
   trimEnd?: number
+  /** Fires once real dimensions are known so a parent can size its frame to the
+   *  clip's natural aspect ratio (width / height). */
+  onAspectRatio?: (ratio: number) => void
 }) {
   const ref = useRef<HTMLVideoElement>(null)
   const seekRef = useRef<HTMLDivElement>(null)
@@ -266,6 +270,9 @@ export function FeedVideo({
         }}
         onLoadedMetadata={(e) => {
           const el = e.currentTarget
+          if (onAspectRatio && el.videoWidth > 0 && el.videoHeight > 0) {
+            onAspectRatio(el.videoWidth / el.videoHeight)
+          }
           const real = el.duration && isFinite(el.duration) ? el.duration : 0
           // Finalize the trim window against the real duration, then expose the
           // trimmed length as the video's duration so all controls treat the
