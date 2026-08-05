@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -10,11 +10,12 @@ import {
   Heart,
   MessageCircle,
   Pencil,
+  RotateCcw,
   Share2,
 } from "lucide-react"
 import type { ArticleCard, ArticleCommentView, ArticleDetail } from "@/lib/article-types"
 import type { CurrentUser } from "@/lib/session"
-import { recordArticleView, setArticleLike } from "@/app/actions/articles"
+import { recordArticleView, saveReadingProgress, setArticleLike } from "@/app/actions/articles"
 import { ArticleComments, countComments } from "@/components/articles/article-comments"
 import { ArticleRow } from "@/components/articles/article-card"
 import { AuthorAvatar } from "@/components/articles/author-avatar"
@@ -44,6 +45,8 @@ export function ArticleReader({
   const [saved, setSaved] = useState(article.saved)
   const [shareOpen, setShareOpen] = useState(false)
   const [showComments, setShowComments] = useState(false)
+  const [resumed, setResumed] = useState(false)
+  const resumeHandledRef = useRef(false)
   const [, startTransition] = useTransition()
 
   const commentCount = countComments(comments)
@@ -52,6 +55,67 @@ export function ArticleReader({
   useEffect(() => {
     void recordArticleView(article.id)
   }, [article.id])
+
+  /**
+   * Reading-progress engine (signed-in only):
+   *  - Tracks the furthest scroll depth and persists it (debounced, plus a final
+   *    flush on hide/unmount) so the Library's Continue Reading + History stay live.
+   *  - On open, jumps the reader straight back to where they previously stopped.
+   */
+  useEffect(() => {
+    if (!signedIn) return
+    let maxPercent = article.readingProgress ?? 0
+    let saveTimer: ReturnType<typeof setTimeout> | null = null
+
+    const computePercent = () => {
+      const max = document.documentElement.scrollHeight - window.innerHeight
+      if (max <= 0) return 100
+      return Math.round((window.scrollY / max) * 100)
+    }
+    const flush = () => void saveReadingProgress({ articleId: article.id, percent: maxPercent })
+    const onScroll = () => {
+      const p = computePercent()
+      if (p > maxPercent) maxPercent = p
+      if (saveTimer) clearTimeout(saveTimer)
+      saveTimer = setTimeout(flush, 800)
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flush()
+    }
+
+    window.addEventListener("scroll", onScroll, { passive: true })
+    document.addEventListener("visibilitychange", onVisibility)
+    window.addEventListener("pagehide", flush)
+
+    // Resume: scroll back to the saved position once, after layout settles.
+    let restoreTimer: ReturnType<typeof setTimeout> | null = null
+    const start = article.readingProgress
+    if (!resumeHandledRef.current && start >= 5 && start < 90) {
+      resumeHandledRef.current = true
+      restoreTimer = setTimeout(() => {
+        const max = document.documentElement.scrollHeight - window.innerHeight
+        if (max > 0) {
+          window.scrollTo({ top: (start / 100) * max, behavior: "smooth" })
+          setResumed(true)
+          setTimeout(() => setResumed(false), 4500)
+        }
+      }, 350)
+    }
+
+    return () => {
+      window.removeEventListener("scroll", onScroll)
+      document.removeEventListener("visibilitychange", onVisibility)
+      window.removeEventListener("pagehide", flush)
+      if (saveTimer) clearTimeout(saveTimer)
+      if (restoreTimer) clearTimeout(restoreTimer)
+      flush()
+    }
+  }, [signedIn, article.id, article.readingProgress])
+
+  function startOver() {
+    setResumed(false)
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
 
   function toggleLike() {
     if (!signedIn) return router.push("/login")
@@ -261,6 +325,22 @@ export function ArticleReader({
             ))}
           </div>
         </section>
+      )}
+
+      {/* Resume toast — confirms the jump-back and offers to start from the top. */}
+      {resumed && (
+        <div className="fixed inset-x-0 bottom-6 z-40 flex justify-center px-4 duration-300 animate-in fade-in slide-in-from-bottom-4">
+          <div className="flex items-center gap-3 rounded-full border border-border/60 bg-card/95 py-2 pl-4 pr-2 text-sm shadow-elevated backdrop-blur">
+            <span className="font-medium text-foreground">Picked up where you left off</span>
+            <button
+              onClick={startOver}
+              className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-secondary/70"
+            >
+              <RotateCcw className="size-3.5" />
+              Start over
+            </button>
+          </div>
+        </div>
       )}
 
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />

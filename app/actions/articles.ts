@@ -10,6 +10,7 @@ import {
   articleComment,
   articleCommentReport,
   articleFollow,
+  articleReadingProgress,
   like,
   notification,
   savedItem,
@@ -39,6 +40,8 @@ import type {
   ArticleDetail,
   ArticleStatus,
   FeaturedWriter,
+  LibraryArticleCard,
+  LibraryData,
   WriterStats,
 } from "@/lib/article-types"
 
@@ -244,8 +247,9 @@ export async function getArticle(id: string): Promise<ArticleDetail | null> {
   let liked = false
   let saved = false
   let followingWriter = false
+  let readingProgress = 0
   if (viewer) {
-    const [likedSet, savedRows, followRows] = await Promise.all([
+    const [likedSet, savedRows, followRows, progressRows] = await Promise.all([
       getLikedSet(viewer.id, "article", [row.id]),
       db
         .select({ id: savedItem.id })
@@ -259,13 +263,19 @@ export async function getArticle(id: string): Promise<ArticleDetail | null> {
         .from(articleFollow)
         .where(and(eq(articleFollow.writerId, row.authorId), eq(articleFollow.followerId, viewer.id)))
         .limit(1),
+      db
+        .select({ percent: articleReadingProgress.percent })
+        .from(articleReadingProgress)
+        .where(and(eq(articleReadingProgress.userId, viewer.id), eq(articleReadingProgress.articleId, row.id)))
+        .limit(1),
     ])
     liked = likedSet.has(row.id)
     saved = savedRows.length > 0
     followingWriter = followRows.length > 0
+    readingProgress = progressRows[0]?.percent ?? 0
   }
 
-  return { ...card, bodyHtml: row.bodyHtml, liked, saved, followingWriter, isAuthor }
+  return { ...card, bodyHtml: row.bodyHtml, liked, saved, followingWriter, isAuthor, readingProgress }
 }
 
 /** Up to 4 more published articles by the same author (excludes the current). */
@@ -704,6 +714,93 @@ export async function recordArticleView(id: string): Promise<void> {
     .update(article)
     .set({ viewCount: sql`${article.viewCount} + 1` })
     .where(eq(article.id, numId))
+}
+
+/** Depth (0-100) at/above which an article counts as finished reading. */
+const READ_COMPLETE_THRESHOLD = 90
+
+/**
+ * Records how far the signed-in reader has scrolled through an article. Upserts
+ * one row per (user, article): `percent` only ever grows (furthest depth) so
+ * flicking back up never loses progress, `completed` latches once the end is
+ * reached, and `lastReadAt` always refreshes so the Library can order by recency.
+ * A no-op for signed-out readers.
+ */
+export async function saveReadingProgress(input: { articleId: string; percent: number }): Promise<void> {
+  const viewer = await getSessionUser()
+  if (!viewer) return
+  const numId = Number(input.articleId)
+  if (!Number.isFinite(numId)) return
+  const pct = Math.max(0, Math.min(100, Math.round(input.percent)))
+  const completed = pct >= READ_COMPLETE_THRESHOLD
+
+  await db
+    .insert(articleReadingProgress)
+    .values({ userId: viewer.id, articleId: numId, percent: pct, completed, lastReadAt: new Date() })
+    .onConflictDoUpdate({
+      target: [articleReadingProgress.userId, articleReadingProgress.articleId],
+      set: {
+        percent: sql`GREATEST(${articleReadingProgress.percent}, ${pct})`,
+        completed: sql`${articleReadingProgress.completed} OR ${completed}`,
+        lastReadAt: new Date(),
+      },
+    })
+}
+
+/**
+ * The signed-in reader's personalised Library: articles they've started but not
+ * finished ("Continue Reading"), everything they've opened ("Reading History",
+ * with a completed flag), and the articles they've bookmarked ("Saved"). All
+ * scoped to the viewer; signed-out users get empty lists.
+ */
+export async function getLibraryArticles(): Promise<LibraryData> {
+  const viewer = await getSessionUser()
+  if (!viewer) return { continueReading: [], history: [], saved: [] }
+
+  // Progress rows joined to their (published) article, most-recently-read first.
+  const progressRows = await db
+    .select({ art: article, percent: articleReadingProgress.percent, completed: articleReadingProgress.completed, lastReadAt: articleReadingProgress.lastReadAt })
+    .from(articleReadingProgress)
+    .innerJoin(article, eq(article.id, articleReadingProgress.articleId))
+    .where(and(eq(articleReadingProgress.userId, viewer.id), eq(article.status, "published")))
+    .orderBy(desc(articleReadingProgress.lastReadAt))
+    .limit(40)
+
+  const cards = await toCards(progressRows.map((r) => r.art))
+  const cardById = new Map(cards.map((c) => [c.id, c]))
+  const enriched: LibraryArticleCard[] = progressRows
+    .map((r) => {
+      const card = cardById.get(String(r.art.id))
+      if (!card) return null
+      return { ...card, percent: r.percent, completed: r.completed, lastReadAt: r.lastReadAt.toISOString() }
+    })
+    .filter((c): c is LibraryArticleCard => c !== null)
+
+  const continueReading = enriched.filter((c) => !c.completed && c.percent > 0 && c.percent < READ_COMPLETE_THRESHOLD).slice(0, 12)
+  const history = enriched.slice(0, 30)
+
+  // Saved articles (bookmarks), newest-saved first, resolved to full cards.
+  const savedRows = await db
+    .select({ key: savedItem.itemKey })
+    .from(savedItem)
+    .where(and(eq(savedItem.userId, viewer.id), eq(savedItem.itemType, "article")))
+    .orderBy(desc(savedItem.createdAt))
+  const savedIds = savedRows.map((r) => Number(r.key)).filter((n) => Number.isFinite(n))
+  let saved: ArticleCard[] = []
+  if (savedIds.length > 0) {
+    const savedArticleRows = await db
+      .select()
+      .from(article)
+      .where(and(inArray(article.id, savedIds), eq(article.status, "published")))
+    const savedCards = await toCards(savedArticleRows)
+    const savedCardById = new Map(savedCards.map((c) => [c.id, c]))
+    // Preserve the saved-at ordering (the query above doesn't guarantee it).
+    saved = savedIds
+      .map((id) => savedCardById.get(String(id)))
+      .filter((c): c is ArticleCard => Boolean(c))
+  }
+
+  return { continueReading, history, saved }
 }
 
 // --- Writes: engagement ----------------------------------------------------
