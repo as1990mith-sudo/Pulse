@@ -60,6 +60,28 @@ export type ArticleDetail = ArticleCard & {
   followingWriter: boolean
   /** Whether the current viewer is the author (enables edit controls). */
   isAuthor: boolean
+  /** Furthest scroll depth (0-100) the viewer previously reached, for resuming. */
+  readingProgress: number
+}
+
+/** An article card enriched with the viewer's reading state (for the Library). */
+export type LibraryArticleCard = ArticleCard & {
+  /** Furthest scroll depth reached, 0-100. */
+  percent: number
+  /** True once the reader finished (reached the end). */
+  completed: boolean
+  /** ISO timestamp of the most recent read. */
+  lastReadAt: string
+}
+
+/** The personalised Library payload for the signed-in reader. */
+export type LibraryData = {
+  /** Started but not finished, most recent first. */
+  continueReading: LibraryArticleCard[]
+  /** Everything opened before (completed + in-progress), most recent first. */
+  history: LibraryArticleCard[]
+  /** Bookmarked articles, most recently saved first. */
+  saved: ArticleCard[]
 }
 
 /** A threaded comment on an article. */

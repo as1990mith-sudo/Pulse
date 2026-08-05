@@ -1,22 +1,22 @@
 import type { Metadata } from "next"
 import { SiteHeader } from "@/components/site-header"
 import { LibraryView } from "@/components/library-view"
-import { getLibrary } from "@/app/actions/store"
+import { getLibraryArticles } from "@/app/actions/articles"
 
 export const metadata: Metadata = {
   title: "Library · Frequency",
-  description: "Your purchased books and courses, ready to read and learn.",
+  description: "Continue reading, revisit, and manage the articles you care about.",
 }
 
 export const dynamic = "force-dynamic"
 
 export default async function LibraryPage() {
-  const { books, courses } = await getLibrary()
+  const library = await getLibraryArticles()
   return (
     <div className="min-h-screen">
       <SiteHeader />
       <main>
-        <LibraryView books={books} courses={courses} />
+        <LibraryView library={library} />
       </main>
     </div>
   )

@@ -33,6 +33,9 @@ export type CommunityPostView = {
   createdAtMs: number
   edited: boolean
   commentCount: number
+  // Like count + whether the signed-in viewer has liked this post.
+  likes: number
+  liked: boolean
   // True when the signed-in user authored this post. Used to allow self-delete
   // and to reveal the author's own identity to themselves only.
   isSelf: boolean
@@ -85,6 +88,8 @@ export async function getCommunityPosts(): Promise<CommunityPostView[]> {
     for (const c of comments) countMap.set(c.postId, (countMap.get(c.postId) ?? 0) + 1)
   }
 
+  const likedSet = await getLikedSet(viewerId, "community_post", ids)
+
   // The author can see their own posts de-anonymized, so resolve the viewer's
   // current name + avatar once (only needed for their own posts).
   let viewer: { name: string; image: string | null } | null = null
@@ -107,6 +112,8 @@ export async function getCommunityPosts(): Promise<CommunityPostView[]> {
       createdAtMs: p.createdAt.getTime(),
       edited: !!p.editedAt,
       commentCount: countMap.get(p.id) ?? 0,
+      likes: p.likes,
+      liked: likedSet.has(p.id),
       isSelf,
       authorName: isSelf && viewer ? viewer.name : null,
       authorHandle: isSelf && viewer ? getHandle(viewer.name) : null,
@@ -153,6 +160,8 @@ export async function createCommunityPost(
     createdAtMs: row.createdAt.getTime(),
     edited: false,
     commentCount: 0,
+    likes: 0,
+    liked: false,
     isSelf: true,
     authorName: user.name,
     authorHandle: getHandle(user.name),
@@ -296,6 +305,21 @@ export async function setCommunityCommentLike(input: { commentId: number; liked:
   if (!changed) return
   const next = Math.max(0, row.likes + (input.liked ? 1 : -1))
   await db.update(communityComment).set({ likes: next }).where(eq(communityComment.id, input.commentId))
+  revalidatePath("/chatrooms/community")
+}
+
+/** Toggle a like on an anonymous community post. Idempotent — persists per-user state. */
+export async function setCommunityPostLike(input: { postId: number; liked: boolean }) {
+  const user = await requireUser()
+  const [row] = await db
+    .select({ likes: communityPost.likes })
+    .from(communityPost)
+    .where(eq(communityPost.id, input.postId))
+  if (!row) return
+  const { changed } = await setLike(user.id, "community_post", input.postId, input.liked)
+  if (!changed) return
+  const next = Math.max(0, row.likes + (input.liked ? 1 : -1))
+  await db.update(communityPost).set({ likes: next }).where(eq(communityPost.id, input.postId))
   revalidatePath("/chatrooms/community")
 }
 

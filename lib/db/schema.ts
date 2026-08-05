@@ -701,6 +701,7 @@ export const communityPost = pgTable("community_post", {
   body: text("body").notNull(),
   imageUrl: text("imageUrl"), // optional attached image (Vercel Blob URL)
   videoUrl: text("videoUrl"), // optional attached video (Vercel Blob URL)
+  likes: integer("likes").notNull().default(0),
   deleted: boolean("deleted").notNull().default(false),
   editedAt: timestamp("editedAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
@@ -1004,6 +1005,26 @@ export const articleFollow = pgTable(
   },
   (t) => ({
     uniq: uniqueIndex("article_follow_writer_follower_unique").on(t.writerId, t.followerId),
+  }),
+)
+
+// Per-user reading progress for an article. One row per (user, article), upserted
+// as the reader scrolls. Powers the Library's "Continue Reading" (in-progress) and
+// "Reading History" (everything opened, with a completed flag) sections.
+export const articleReadingProgress = pgTable(
+  "article_reading_progress",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("userId").notNull(),
+    articleId: integer("articleId").notNull(),
+    // Furthest scroll depth reached, 0-100. Used to restore position + show bars.
+    percent: integer("percent").notNull().default(0),
+    // True once the reader reaches (near) the end — differentiates finished reads.
+    completed: boolean("completed").notNull().default(false),
+    lastReadAt: timestamp("lastReadAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    uniq: uniqueIndex("article_reading_progress_user_article_unique").on(t.userId, t.articleId),
   }),
 )
 
