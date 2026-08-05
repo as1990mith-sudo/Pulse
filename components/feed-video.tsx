@@ -45,6 +45,7 @@ export function FeedVideo({
   trimStart,
   trimEnd,
   onAspectRatio,
+  onExpand,
 }: {
   src: string
   className?: string
@@ -57,6 +58,11 @@ export function FeedVideo({
   /** Fires once real dimensions are known so a parent can size its frame to the
    *  clip's natural aspect ratio (width / height). */
   onAspectRatio?: (ratio: number) => void
+  /** When provided, tapping the video surface (and the poster / center play
+   *  affordances) calls this instead of toggling play — used by the community
+   *  feed so tapping anywhere on the clip opens the full post. The bottom
+   *  control bar still handles play/pause, seek, and mute. */
+  onExpand?: () => void
 }) {
   const ref = useRef<HTMLVideoElement>(null)
   const seekRef = useRef<HTMLDivElement>(null)
@@ -161,6 +167,11 @@ export function FeedVideo({
     }
   }
 
+  // Tapping the video surface / poster / center affordance: expand when a
+  // parent opted in (community feed), otherwise the default play/pause toggle.
+  const surfaceClick = onExpand ?? togglePlay
+  const surfaceLabel = onExpand ? "Open post" : "Play video"
+
   function toggleMute() {
     const el = ref.current
     const next = !muted
@@ -254,7 +265,7 @@ export function FeedVideo({
         muted={muted}
         preload="metadata"
         className={cn("h-full w-full", className)}
-        onClick={togglePlay}
+        onClick={surfaceClick}
         onPlay={() => {
           setPlaying(true)
           setStarted(true)
@@ -323,8 +334,8 @@ export function FeedVideo({
       {!started && (
         <button
           type="button"
-          onClick={togglePlay}
-          aria-label="Play video"
+          onClick={surfaceClick}
+          aria-label={surfaceLabel}
           className="absolute inset-0 flex items-center justify-center bg-gradient-to-t from-black/45 via-black/15 to-black/25"
         >
           <span className="flex size-16 items-center justify-center rounded-full bg-white/15 text-white shadow-lg ring-1 ring-white/25 backdrop-blur-md transition-transform duration-200 group-hover:scale-105">
@@ -337,8 +348,8 @@ export function FeedVideo({
       {started && !playing && (
         <button
           type="button"
-          onClick={togglePlay}
-          aria-label="Play video"
+          onClick={surfaceClick}
+          aria-label={surfaceLabel}
           className="absolute inset-0 flex items-center justify-center"
         >
           <span className="flex size-16 items-center justify-center rounded-full bg-black/45 text-white ring-1 ring-white/20 backdrop-blur-md transition-transform duration-200 hover:scale-105">
