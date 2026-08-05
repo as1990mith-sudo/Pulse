@@ -15,7 +15,7 @@ export function SavedView({ items }: { items: SavedItemView[] }) {
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-6 sm:px-6">
       <header className="mb-6 flex items-center gap-3">
-        <span className="flex size-11 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+        <span className="flex size-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
           <Bookmark className="size-6" />
         </span>
         <div>

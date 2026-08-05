@@ -79,7 +79,7 @@ export function ReportReasonModal({ open, onClose, subjectLabel, onSubmit }: Rep
       <div className="relative z-10 m-3 w-full max-w-sm overflow-hidden rounded-3xl border border-white/10 bg-popover/90 p-5 shadow-2xl backdrop-blur-xl animate-in fade-in-0 zoom-in-95 duration-150">
         {submitted ? (
           <div className="flex flex-col items-center gap-3 py-4 text-center">
-            <span className="flex size-12 items-center justify-center rounded-full bg-primary/15 text-primary">
+            <span className="flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
               <Check className="size-6" />
             </span>
             <h3 className="text-base font-bold">Report submitted</h3>

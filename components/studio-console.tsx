@@ -1470,7 +1470,7 @@ export function MusicPanel({
             <div className="flex items-center gap-3">
               <span
                 className={cn(
-                  "relative flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary ring-1 ring-inset ring-primary/20",
+                  "relative flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground ring-1 ring-inset ring-primary/20",
                   playing && "animate-pulse",
                 )}
               >

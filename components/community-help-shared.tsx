@@ -1,12 +1,12 @@
 "use client"
 
-import { useCallback, useSyncExternalStore } from "react"
-import { BookOpen, Bookmark } from "lucide-react"
+import { useCallback, useState, useSyncExternalStore, useTransition } from "react"
+import { BookOpen, Bookmark, Heart } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { EditedIndicator } from "@/components/edited-indicator"
 import { detectBibleRefs } from "@/lib/bible-refs"
 import { cn } from "@/lib/utils"
-import type { CommunityPostView } from "@/app/actions/community"
+import { setCommunityPostLike, type CommunityPostView } from "@/app/actions/community"
 
 /**
  * Shared building blocks for the Community Help feed and the dedicated
@@ -187,13 +187,67 @@ export function BibleChips({ text, className }: { text: string; className?: stri
 /*  Save button (bookmark)                                                    */
 /* -------------------------------------------------------------------------- */
 
-export function SaveButton({
+/**
+ * Like toggle for an anonymous post. Optimistic: flips the heart + count
+ * instantly, then persists via the server action, rolling back on failure so
+ * the UI never drifts. Shared by the feed card ("inline") and the open
+ * conversation's top bar ("icon"), which shows the heart with no label.
+ */
+export function LikeButton({
   postId,
+  initialLikes,
+  initialLiked,
   variant = "inline",
 }: {
   postId: number
+  initialLikes: number
+  initialLiked: boolean
   variant?: "inline" | "icon"
 }) {
+  const [liked, setLiked] = useState(initialLiked)
+  const [likes, setLikes] = useState(initialLikes)
+  const [, startTransition] = useTransition()
+
+  function toggle(e: React.MouseEvent) {
+    e.stopPropagation()
+    const next = !liked
+    setLiked(next)
+    setLikes((n) => Math.max(0, n + (next ? 1 : -1)))
+    startTransition(async () => {
+      try {
+        await setCommunityPostLike({ postId, liked: next })
+      } catch {
+        setLiked(!next)
+        setLikes((n) => Math.max(0, n + (next ? -1 : 1)))
+      }
+    })
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-pressed={liked}
+      aria-label={liked ? "Unlike" : "Like"}
+      className={cn(
+        "flex items-center gap-1.5 rounded-full font-medium transition-colors",
+        variant === "inline" ? "px-2 py-1.5 text-sm" : "p-2",
+        liked ? "text-rose-500" : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+      )}
+    >
+      <Heart className={cn("size-5", variant === "inline" && "size-4", liked && "fill-current")} />
+      {variant === "inline" && (likes > 0 ? likes : "Like")}
+    </button>
+  )
+}
+
+export function SaveButton({
+  postId,
+  variant = "inline",
+  }: {
+  postId: number
+  variant?: "inline" | "icon"
+  }) {
   const saved = useIsSaved(postId)
   return (
     <button
@@ -204,13 +258,13 @@ export function SaveButton({
       }}
       aria-pressed={saved}
       aria-label={saved ? "Remove from saved" : "Save question"}
-      className={cn(
-        "flex items-center gap-2 rounded-full text-sm font-medium transition-colors",
-        variant === "inline" ? "px-3 py-1.5" : "p-2",
-        saved
-          ? "text-emerald-600 dark:text-emerald-400"
-          : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-      )}
+  className={cn(
+  "flex items-center gap-1.5 rounded-full text-sm font-medium transition-colors",
+  variant === "inline" ? "px-2 py-1.5" : "p-2",
+  saved
+  ? "text-emerald-600 dark:text-emerald-400"
+  : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+  )}
     >
       <Bookmark className={cn("size-4", saved && "fill-current")} />
       {variant === "inline" && (saved ? "Saved" : "Save")}

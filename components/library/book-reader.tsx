@@ -105,7 +105,7 @@ function ReaderFallback({
 }) {
   return (
     <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-      <span className="mb-4 flex size-16 items-center justify-center rounded-full bg-primary/15 text-primary">
+      <span className="mb-4 flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground">
         <BookOpen className="size-8" />
       </span>
       <h2 className="text-lg font-semibold text-foreground">

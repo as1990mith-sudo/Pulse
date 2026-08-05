@@ -56,7 +56,7 @@ export function MentionPrivacyControl({ initialValue }: { initialValue: MentionP
   return (
     <Card className="p-5">
       <div className="mb-4 flex items-center gap-2">
-        <span className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <span className="flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground">
           <AtSign className="size-5" />
         </span>
         <div>

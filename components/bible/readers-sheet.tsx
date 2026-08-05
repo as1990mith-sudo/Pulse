@@ -95,7 +95,7 @@ export function BibleReadersSheet() {
         <div className="flex flex-col items-center gap-3 px-5 pb-3 pt-3">
           <div className="h-1.5 w-10 rounded-full bg-muted-foreground/30" aria-hidden />
           <div className="flex w-full items-center gap-2">
-            <span className="flex size-9 items-center justify-center rounded-full bg-primary/15 text-primary">
+            <span className="flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground">
               <Users className="size-4" />
             </span>
             <div className="min-w-0 flex-1">

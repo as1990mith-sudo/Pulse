@@ -25,7 +25,7 @@ export function ComingSoon({
 
       <div className="relative max-w-2xl space-y-6">
         <div className="flex items-center gap-4">
-          <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
+          <div className="flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground ring-1 ring-inset ring-primary/20">
             <Icon className="size-7" />
           </div>
           <Badge variant="secondary" className="gap-1.5 rounded-full px-3 py-1">

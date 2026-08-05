@@ -79,7 +79,7 @@ export function MiniPanelShell({
           <GripHorizontal className="size-4" />
         </div>
         <div className="flex items-center gap-2.5">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Icon className="size-[18px]" strokeWidth={2.1} />
           </span>
           <div className="min-w-0 flex-1">

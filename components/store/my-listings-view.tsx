@@ -25,7 +25,7 @@ export function MyListingsView({ listings }: { listings: StoreProduct[] }) {
 
       <header className="mb-6 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="flex size-11 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+          <span className="flex size-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
             <Store className="size-6" />
           </span>
           <div>
@@ -185,7 +185,7 @@ function ConfirmDelete({
 function EmptyListings() {
   return (
     <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-border/60 bg-secondary/20 px-6 py-20 text-center">
-      <span className="mb-4 flex size-16 items-center justify-center rounded-full bg-primary/15 text-primary">
+      <span className="mb-4 flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground">
         <Store className="size-8" />
       </span>
       <h2 className="text-lg font-semibold text-foreground">No listings yet</h2>

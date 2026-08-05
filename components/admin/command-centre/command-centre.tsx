@@ -215,7 +215,7 @@ export function CommandCentre({
               href={a.href}
               className="group flex flex-col items-center gap-2 rounded-2xl border border-border/60 bg-card/60 p-4 text-center transition-colors hover:border-primary/40 hover:bg-card"
             >
-              <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary transition-transform group-hover:scale-105">
+              <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-transform group-hover:scale-105">
                 <a.icon className="size-5" />
               </span>
               <span className="text-xs font-medium leading-tight text-foreground">{a.label}</span>

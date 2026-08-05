@@ -8,13 +8,12 @@ import {
   ArrowLeft,
   Check,
   Copy,
-  Heart,
   ImagePlus,
   Info,
   Loader2,
+  Maximize2,
   MoreHorizontal,
   Pencil,
-  Play,
   Plus,
   Send,
   Share2,
@@ -36,17 +35,18 @@ import {
   deleteCommunityPost,
   editCommunityPost,
   getCommunityPosts,
-  setCommunityPostLike,
   type CommunityPostView,
 } from "@/app/actions/community"
 import { MiniChatProvider } from "@/components/mini-chat"
 import { CommunityConversation } from "@/components/community-conversation"
+import { FeedVideo } from "@/components/feed-video"
 import {
   ANON_AVATAR,
   ANON_NAME,
   AnonMeta,
   BibleChips,
   CommunityAvatar,
+  LikeButton,
   SaveButton,
   SelfMeta,
 } from "@/components/community-help-shared"
@@ -105,54 +105,36 @@ function QuestionText({ text, onOpen }: { text: string; onOpen: () => void }) {
   )
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Feed video                                                                */
+/* -------------------------------------------------------------------------- */
+
 /**
- * Like toggle for an anonymous post. Optimistic: flips the heart + count
- * instantly, then persists via the server action. On failure it rolls back so
- * the UI never drifts from the stored state.
+ * A post's attached video in the feed. Uses the shared FeedVideo player so the
+ * clip auto-plays when it scrolls into view (and pauses when it leaves) — the
+ * same behavior as the reels/mind feed — instead of showing a static poster
+ * that only played on tap. The frame self-sizes to the clip's real aspect ratio
+ * (clamped portrait↔landscape). Because tapping the frame now controls playback,
+ * a small corner button remains for opening the full thread.
  */
-function LikeButton({
-  postId,
-  initialLikes,
-  initialLiked,
-}: {
-  postId: number
-  initialLikes: number
-  initialLiked: boolean
-}) {
-  const [liked, setLiked] = useState(initialLiked)
-  const [likes, setLikes] = useState(initialLikes)
-  const [, startTransition] = useTransition()
-
-  function toggle(e: React.MouseEvent) {
-    e.stopPropagation()
-    const next = !liked
-    setLiked(next)
-    setLikes((n) => Math.max(0, n + (next ? 1 : -1)))
-    startTransition(async () => {
-      try {
-        await setCommunityPostLike({ postId, liked: next })
-      } catch {
-        // Roll back on failure.
-        setLiked(!next)
-        setLikes((n) => Math.max(0, n + (next ? -1 : 1)))
-      }
-    })
-  }
-
+function FeedPostVideo({ src, onOpen }: { src: string; onOpen: () => void }) {
+  const [ratio, setRatio] = useState<number | null>(null)
+  const aspect = ratio ? Math.min(16 / 9, Math.max(9 / 16, ratio)) : 4 / 5
   return (
-    <button
-      type="button"
-      onClick={toggle}
-      aria-pressed={liked}
-      aria-label={liked ? "Unlike" : "Like"}
-      className={cn(
-        "flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
-        liked ? "text-rose-500" : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-      )}
+    <div
+      className="relative mt-3 w-full overflow-hidden rounded-2xl border border-border/60 bg-black"
+      style={{ aspectRatio: String(aspect), maxHeight: "24rem" }}
     >
-      <Heart className={cn("size-4", liked && "fill-current")} />
-      {likes > 0 ? likes : "Like"}
-    </button>
+      <FeedVideo src={src} className="h-full w-full object-cover" onAspectRatio={setRatio} />
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label="Open post"
+        className="absolute right-2 top-2 z-10 flex size-8 items-center justify-center rounded-full bg-black/50 text-white ring-1 ring-white/20 backdrop-blur transition-colors hover:bg-black/70"
+      >
+        <Maximize2 className="size-4" />
+      </button>
+    </div>
   )
 }
 
@@ -361,35 +343,15 @@ function PostItem({
             </button>
           )}
 
-          {post.videoUrl && (
-            <button
-              type="button"
-              onClick={onOpen}
-              className="relative mt-3 block w-full overflow-hidden rounded-2xl border border-border/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Open video"
-            >
-              <video
-                src={post.videoUrl}
-                muted
-                playsInline
-                preload="metadata"
-                className="max-h-96 w-full bg-black object-cover"
-              />
-              <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <span className="flex size-14 items-center justify-center rounded-full bg-background/70 backdrop-blur">
-                  <Play className="ml-0.5 size-6 text-foreground" />
-                </span>
-              </span>
-            </button>
-          )}
+          {post.videoUrl && <FeedPostVideo src={post.videoUrl} onOpen={onOpen} />}
 
-          {/* Minimal engagement actions */}
-          <div className="mt-3 -ml-3 flex items-center gap-1">
+          {/* Minimal engagement actions — kept tight so the row never scrolls */}
+          <div className="mt-3 -ml-2 flex items-center gap-0.5">
             <LikeButton postId={post.id} initialLikes={post.likes} initialLiked={post.liked} />
             <button
               type="button"
               onClick={onOpen}
-              className="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              className="flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             >
               <CommentIcon className="size-4" />
               {post.commentCount > 0 ? `${post.commentCount} ${post.commentCount === 1 ? "reply" : "replies"}` : "Reply"}
@@ -397,7 +359,7 @@ function PostItem({
             <button
               type="button"
               onClick={() => setShareOpen(true)}
-              className="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              className="flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             >
               <Share2 className="size-4" />
               Share

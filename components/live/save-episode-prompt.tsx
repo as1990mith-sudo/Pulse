@@ -40,7 +40,7 @@ export function SaveEpisodePrompt({
       >
         {!confirmingDiscard ? (
           <>
-            <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-primary/15 text-primary">
+            <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
               <Film className="size-6" />
             </div>
             <h2 id="save-episode-title" className="text-lg font-semibold text-white text-balance">
