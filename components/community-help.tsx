@@ -8,7 +8,6 @@ import {
   ArrowLeft,
   Check,
   Copy,
-  Heart,
   ImagePlus,
   Info,
   Loader2,
@@ -36,7 +35,6 @@ import {
   deleteCommunityPost,
   editCommunityPost,
   getCommunityPosts,
-  setCommunityPostLike,
   type CommunityPostView,
 } from "@/app/actions/community"
 import { MiniChatProvider } from "@/components/mini-chat"
@@ -47,6 +45,7 @@ import {
   AnonMeta,
   BibleChips,
   CommunityAvatar,
+  LikeButton,
   SaveButton,
   SelfMeta,
 } from "@/components/community-help-shared"
@@ -102,57 +101,6 @@ function QuestionText({ text, onOpen }: { text: string; onOpen: () => void }) {
         </button>
       )}
     </div>
-  )
-}
-
-/**
- * Like toggle for an anonymous post. Optimistic: flips the heart + count
- * instantly, then persists via the server action. On failure it rolls back so
- * the UI never drifts from the stored state.
- */
-function LikeButton({
-  postId,
-  initialLikes,
-  initialLiked,
-}: {
-  postId: number
-  initialLikes: number
-  initialLiked: boolean
-}) {
-  const [liked, setLiked] = useState(initialLiked)
-  const [likes, setLikes] = useState(initialLikes)
-  const [, startTransition] = useTransition()
-
-  function toggle(e: React.MouseEvent) {
-    e.stopPropagation()
-    const next = !liked
-    setLiked(next)
-    setLikes((n) => Math.max(0, n + (next ? 1 : -1)))
-    startTransition(async () => {
-      try {
-        await setCommunityPostLike({ postId, liked: next })
-      } catch {
-        // Roll back on failure.
-        setLiked(!next)
-        setLikes((n) => Math.max(0, n + (next ? -1 : 1)))
-      }
-    })
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={toggle}
-      aria-pressed={liked}
-      aria-label={liked ? "Unlike" : "Like"}
-      className={cn(
-        "flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
-        liked ? "text-rose-500" : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-      )}
-    >
-      <Heart className={cn("size-4", liked && "fill-current")} />
-      {likes > 0 ? likes : "Like"}
-    </button>
   )
 }
 
@@ -383,13 +331,13 @@ function PostItem({
             </button>
           )}
 
-          {/* Minimal engagement actions */}
-          <div className="mt-3 -ml-3 flex items-center gap-1">
+          {/* Minimal engagement actions — kept tight so the row never scrolls */}
+          <div className="mt-3 -ml-2 flex items-center gap-0.5">
             <LikeButton postId={post.id} initialLikes={post.likes} initialLiked={post.liked} />
             <button
               type="button"
               onClick={onOpen}
-              className="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              className="flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             >
               <CommentIcon className="size-4" />
               {post.commentCount > 0 ? `${post.commentCount} ${post.commentCount === 1 ? "reply" : "replies"}` : "Reply"}
@@ -397,7 +345,7 @@ function PostItem({
             <button
               type="button"
               onClick={() => setShareOpen(true)}
-              className="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              className="flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             >
               <Share2 className="size-4" />
               Share

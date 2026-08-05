@@ -22,7 +22,7 @@ import {
 import { CommentThread, type ThreadComment } from "@/components/comment-thread"
 import { FeedVideo } from "@/components/feed-video"
 import { useMiniChat } from "@/components/mini-chat"
-import { AnonIdentity, BibleChips, SaveButton, SelfIdentity, ANON_AVATAR } from "@/components/community-help-shared"
+import { AnonIdentity, BibleChips, LikeButton, SaveButton, SelfIdentity, ANON_AVATAR } from "@/components/community-help-shared"
 
 function toThreadComment(c: CommunityCommentView): ThreadComment {
   return {
@@ -219,6 +219,7 @@ export function CommunityConversation({
           <ArrowLeft className="size-5" />
         </button>
         <h1 className="flex-1 text-base font-bold tracking-tight">Conversation</h1>
+        <LikeButton postId={post.id} initialLikes={post.likes} initialLiked={post.liked} variant="icon" />
         <button
           type="button"
           onClick={() => setShareOpen(true)}
