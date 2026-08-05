@@ -16,6 +16,7 @@ export type LikeTarget =
   | "devotional"
   | "devotional_comment"
   | "community_comment"
+  | "community_post"
   | "dream_reply"
   | "article"
   | "article_comment"

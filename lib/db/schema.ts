@@ -701,6 +701,7 @@ export const communityPost = pgTable("community_post", {
   body: text("body").notNull(),
   imageUrl: text("imageUrl"), // optional attached image (Vercel Blob URL)
   videoUrl: text("videoUrl"), // optional attached video (Vercel Blob URL)
+  likes: integer("likes").notNull().default(0),
   deleted: boolean("deleted").notNull().default(false),
   editedAt: timestamp("editedAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
