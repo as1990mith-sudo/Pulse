@@ -27,6 +27,8 @@ export type CommunityPostView = {
   // Optional attached image (Vercel Blob URL). Shown to everyone — the image is
   // part of the anonymous question, never tied to the hidden author identity.
   imageUrl: string | null
+  // Optional attached video (Vercel Blob URL). Same principle as imageUrl.
+  videoUrl: string | null
   postedAt: string
   createdAtMs: number
   edited: boolean
@@ -100,6 +102,7 @@ export async function getCommunityPosts(): Promise<CommunityPostView[]> {
       id: p.id,
       body: p.body,
       imageUrl: p.imageUrl ?? null,
+      videoUrl: p.videoUrl ?? null,
       postedAt: timeAgo(p.createdAt),
       createdAtMs: p.createdAt.getTime(),
       edited: !!p.editedAt,
@@ -114,24 +117,30 @@ export async function getCommunityPosts(): Promise<CommunityPostView[]> {
   })
 }
 
-/** Creates an anonymous post in the Community Help room, optionally with an image. */
+/** Creates an anonymous post in the Community Help room, optionally with an image or video. */
 export async function createCommunityPost(
   body: string,
   imageUrl?: string | null,
+  videoUrl?: string | null,
 ): Promise<CommunityPostView> {
   const user = await requireUser()
   const text = body.trim()
   const image = imageUrl?.trim() || null
-  if (!text && !image) throw new Error("Add a question or an image.")
+  const video = videoUrl?.trim() || null
+  if (!text && !image && !video) throw new Error("Add a question, an image, or a video.")
   if (text.length > 1000) throw new Error("Please keep it under 1000 characters.")
   // Only accept our own Vercel Blob URLs so a client can't stash arbitrary links.
-  if (image && !/^https:\/\/[a-z0-9-]+\.public\.blob\.vercel-storage\.com\//i.test(image)) {
+  const blobUrl = /^https:\/\/[a-z0-9-]+\.public\.blob\.vercel-storage\.com\//i
+  if (image && !blobUrl.test(image)) {
     throw new Error("That image couldn't be attached.")
+  }
+  if (video && !blobUrl.test(video)) {
+    throw new Error("That video couldn't be attached.")
   }
 
   const [row] = await db
     .insert(communityPost)
-    .values({ userId: user.id, body: text, imageUrl: image })
+    .values({ userId: user.id, body: text, imageUrl: image, videoUrl: video })
     .returning()
 
   revalidatePath("/chatrooms/community")
@@ -139,6 +148,7 @@ export async function createCommunityPost(
     id: row.id,
     body: row.body,
     imageUrl: row.imageUrl ?? null,
+    videoUrl: row.videoUrl ?? null,
     postedAt: "now",
     createdAtMs: row.createdAt.getTime(),
     edited: false,

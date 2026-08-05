@@ -13,6 +13,7 @@ import {
   Loader2,
   MoreHorizontal,
   Pencil,
+  Play,
   Plus,
   Send,
   Share2,
@@ -307,6 +308,28 @@ function PostItem({
             </button>
           )}
 
+          {post.videoUrl && (
+            <button
+              type="button"
+              onClick={onOpen}
+              className="relative mt-3 block w-full overflow-hidden rounded-2xl border border-border/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Open video"
+            >
+              <video
+                src={post.videoUrl}
+                muted
+                playsInline
+                preload="metadata"
+                className="max-h-96 w-full bg-black object-cover"
+              />
+              <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <span className="flex size-14 items-center justify-center rounded-full bg-background/70 backdrop-blur">
+                  <Play className="ml-0.5 size-6 text-foreground" />
+                </span>
+              </span>
+            </button>
+          )}
+
           {/* Minimal engagement actions */}
           <div className="mt-3 -ml-3 flex items-center gap-1">
             <button
@@ -386,23 +409,28 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Attached image: a local object-URL preview while the file uploads to Blob in
-  // the background, then the final public URL once the upload resolves.
+  // Attached media (image OR video): a local object-URL preview while the file
+  // uploads to Blob in the background, then the final public URL once the
+  // upload resolves.
+  const [mediaKind, setMediaKind] = useState<"image" | "video" | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [imageUrl, setImageUrl] = useState<string | null>(null)
+  const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   // Keep the originally-picked file so we can re-crop to a different aspect
-  // ratio without asking the user to choose the photo again.
+  // ratio without asking the user to choose the photo again (images only).
   const [rawFile, setRawFile] = useState<File | null>(null)
   const [ratio, setRatio] = useState<(typeof ASPECT_RATIOS)[number]>(ASPECT_RATIOS[0])
 
-  function resetImage() {
+  function resetMedia() {
     setPreview((prev) => {
       if (prev) URL.revokeObjectURL(prev)
       return null
     })
+    setMediaKind(null)
     setImageUrl(null)
+    setVideoUrl(null)
     setUploading(false)
     setProgress(0)
     setRawFile(null)
@@ -415,7 +443,7 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
     else {
       setBody("")
       setError(null)
-      resetImage()
+      resetMedia()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
@@ -440,21 +468,53 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
       setImageUrl(uploaded.url)
     } catch {
       setError("That image couldn't be uploaded. Please try another.")
-      resetImage()
+      resetMedia()
     } finally {
       setUploading(false)
     }
   }
 
-  async function handlePickImage(e: React.ChangeEvent<HTMLInputElement>) {
+  // Videos aren't cropped/compressed in the browser — they upload as-is (Blob
+  // multipart parallelizes large files) with a live progress indicator.
+  async function processVideo(file: File) {
+    setError(null)
+    setVideoUrl(null)
+    setUploading(true)
+    setProgress(0)
+    setPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return URL.createObjectURL(file)
+    })
+    try {
+      const uploaded = await uploadMedia(file, "community", file.name, setProgress)
+      setVideoUrl(uploaded.url)
+    } catch {
+      setError("That video couldn't be uploaded. Please try another.")
+      resetMedia()
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function handlePickMedia(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    if (!file.type.startsWith("image/")) {
-      setError("Please choose an image file.")
+    const isImage = file.type.startsWith("image/")
+    const isVideo = file.type.startsWith("video/")
+    if (!isImage && !isVideo) {
+      setError("Please choose an image or a video file.")
       return
     }
-    setRawFile(file)
-    await processImage(file, ratio)
+    // Guard against absurdly large uploads. Images are recompressed anyway; the
+    // cap really matters for video.
+    if (isVideo && file.size > 128 * 1024 * 1024) {
+      setError("That video is too large. Please choose one under 128 MB.")
+      return
+    }
+    setRawFile(isImage ? file : null)
+    setMediaKind(isImage ? "image" : "video")
+    if (isImage) await processImage(file, ratio)
+    else await processVideo(file)
   }
 
   function applyRatio(r: (typeof ASPECT_RATIOS)[number]) {
@@ -466,12 +526,12 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const text = body.trim()
-    if (!text && !imageUrl) return
+    if (!text && !imageUrl && !videoUrl) return
     if (uploading) return
     setError(null)
     startTransition(async () => {
       try {
-        const created = await createCommunityPost(text, imageUrl)
+        const created = await createCommunityPost(text, imageUrl, videoUrl)
         onCreated(created)
         onClose()
       } catch (err) {
@@ -480,7 +540,7 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
     })
   }
 
-  const canPost = (!!body.trim() || !!imageUrl) && !uploading && !isPending
+  const canPost = (!!body.trim() || !!imageUrl || !!videoUrl) && !uploading && !isPending
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
@@ -512,16 +572,25 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
             className="resize-none rounded-2xl text-base"
           />
 
-          {/* Image preview with upload progress + remove control */}
+          {/* Media preview (image or video) with upload progress + remove control */}
           {preview && (
             <>
               <div className="mt-3 flex justify-center">
                 <div className="relative inline-block overflow-hidden rounded-2xl border border-border/60">
-                  <img
-                    src={preview || "/placeholder.svg"}
-                    alt="Selected attachment preview"
-                    className="max-h-72 max-w-full object-contain"
-                  />
+                  {mediaKind === "video" ? (
+                    <video
+                      src={preview}
+                      controls
+                      playsInline
+                      className="max-h-72 max-w-full object-contain bg-black"
+                    />
+                  ) : (
+                    <img
+                      src={preview || "/placeholder.svg"}
+                      alt="Selected attachment preview"
+                      className="max-h-72 max-w-full object-contain"
+                    />
+                  )}
                   {uploading && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm">
                       <Loader2 className="size-6 animate-spin text-foreground" />
@@ -530,44 +599,46 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
                   )}
                   <button
                     type="button"
-                    onClick={resetImage}
+                    onClick={resetMedia}
                     className="absolute right-2 top-2 rounded-full bg-background/80 p-1.5 text-foreground shadow-sm backdrop-blur transition-colors hover:bg-background"
-                    aria-label="Remove image"
+                    aria-label="Remove attachment"
                   >
                     <X className="size-4" />
                   </button>
                 </div>
               </div>
 
-              {/* Aspect ratio picker */}
-              <div className="mt-3 flex items-center justify-center gap-2">
-                {ASPECT_RATIOS.map((r) => (
-                  <button
-                    key={r.label}
-                    type="button"
-                    onClick={() => applyRatio(r)}
-                    disabled={uploading}
-                    aria-pressed={ratio.label === r.label}
-                    className={cn(
-                      "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50",
-                      ratio.label === r.label
-                        ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                        : "border-border/60 text-muted-foreground hover:bg-secondary hover:text-foreground",
-                    )}
-                  >
-                    {r.label}
-                  </button>
-                ))}
-              </div>
+              {/* Aspect ratio picker — images only (video can't be cropped here) */}
+              {mediaKind === "image" && (
+                <div className="mt-3 flex items-center justify-center gap-2">
+                  {ASPECT_RATIOS.map((r) => (
+                    <button
+                      key={r.label}
+                      type="button"
+                      onClick={() => applyRatio(r)}
+                      disabled={uploading}
+                      aria-pressed={ratio.label === r.label}
+                      className={cn(
+                        "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50",
+                        ratio.label === r.label
+                          ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                          : "border-border/60 text-muted-foreground hover:bg-secondary hover:text-foreground",
+                      )}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </>
           )}
 
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,video/*"
             className="sr-only"
-            onChange={handlePickImage}
+            onChange={handlePickMedia}
           />
 
           <div className="mt-3 flex items-center justify-between">
@@ -578,7 +649,7 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
               className="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium text-emerald-600 transition-colors hover:bg-emerald-500/10 disabled:opacity-40 dark:text-emerald-400"
             >
               <ImagePlus className="size-4" />
-              Add photo
+              Add photo or video
             </button>
             <span className="text-xs text-muted-foreground">{body.length}/1000</span>
           </div>

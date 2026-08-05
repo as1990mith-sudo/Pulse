@@ -700,6 +700,7 @@ export const communityPost = pgTable("community_post", {
   userId: text("userId").notNull(), // hidden author — never exposed to clients
   body: text("body").notNull(),
   imageUrl: text("imageUrl"), // optional attached image (Vercel Blob URL)
+  videoUrl: text("videoUrl"), // optional attached video (Vercel Blob URL)
   deleted: boolean("deleted").notNull().default(false),
   editedAt: timestamp("editedAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
