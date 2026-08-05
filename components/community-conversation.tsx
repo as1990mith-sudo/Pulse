@@ -99,7 +99,7 @@ function ReplyComposer({ onSubmit }: { onSubmit: (text: string) => Promise<void>
 /* -------------------------------------------------------------------------- */
 
 function RelatedQuestions({ posts, onOpen }: { posts: CommunityPostView[]; onOpen: (p: CommunityPostView) => void }) {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
   if (posts.length === 0) return null
   return (
     <section className="mt-8 border-t border-border/60 px-4 pt-6 sm:px-6">
@@ -109,7 +109,7 @@ function RelatedQuestions({ posts, onOpen }: { posts: CommunityPostView[]; onOpe
         aria-expanded={open}
         className="mb-3 flex w-full items-center justify-between gap-2 text-sm font-bold uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
       >
-        <span>More from the community</span>
+        <span>More</span>
         <ChevronDown className={cn("size-4 shrink-0 transition-transform duration-300", open ? "rotate-180" : "rotate-0")} />
       </button>
       <ul className={cn("space-y-1", !open && "hidden")}>
