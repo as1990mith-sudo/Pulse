@@ -454,7 +454,136 @@ const ASPECT_RATIOS = [
   { label: "4:5", w: 4, h: 5 },
   { label: "16:9", w: 16, h: 9 },
   { label: "9:16", w: 9, h: 16 },
-] as const
+  ] as const
+
+/** Resolve an image's natural pixel dimensions from an object URL. */
+function loadImageSize(url: string): Promise<{ w: number; h: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight })
+    img.onerror = reject
+    img.src = url
+  })
+}
+
+/**
+ * Interactive crop frame. Shows the photo scaled to *cover* a box of the chosen
+ * aspect ratio; the user drags to reposition it, and whatever fills the frame is
+ * exactly what gets cropped. The drag maps to a normalized pan offset (0..1 per
+ * axis) that mirrors `cropImageToAspect`'s math: on the trimmed axis, offset 0 =
+ * top/left edge, 1 = bottom/right edge. Only the over-flowing axis can move.
+ */
+function CropFrame({
+  src,
+  ratio,
+  natural,
+  offset,
+  onCommit,
+  uploading,
+  progress,
+  onRemove,
+}: {
+  src: string
+  ratio: (typeof ASPECT_RATIOS)[number]
+  natural: { w: number; h: number } | null
+  offset: { x: number; y: number }
+  onCommit: (next: { x: number; y: number }) => void
+  uploading: boolean
+  progress: number
+  onRemove: () => void
+}) {
+  const frameRef = useRef<HTMLDivElement>(null)
+  // Live offset during a drag (committed on pointer up to trigger the re-crop).
+  const [live, setLive] = useState(offset)
+  const drag = useRef<{ startX: number; startY: number; base: { x: number; y: number } } | null>(null)
+  const clamp01 = (n: number) => Math.min(1, Math.max(0, n))
+
+  useEffect(() => {
+    setLive(offset)
+  }, [offset])
+
+  const frameRatio = ratio.w / ratio.h
+  const imgRatio = natural ? natural.w / natural.h : frameRatio
+  // Which axis overflows the frame (that's the one the user can pan).
+  const canPanX = imgRatio > frameRatio + 1e-3
+  const canPanY = imgRatio < frameRatio - 1e-3
+
+  // Convert the current offset into a CSS object-position percentage.
+  const posX = canPanX ? clamp01(live.x) * 100 : 50
+  const posY = canPanY ? clamp01(live.y) * 100 : 50
+
+  function onPointerDown(e: React.PointerEvent) {
+    if (uploading || (!canPanX && !canPanY)) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    drag.current = { startX: e.clientX, startY: e.clientY, base: live }
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    const d = drag.current
+    const frame = frameRef.current
+    if (!d || !frame) return
+    const rect = frame.getBoundingClientRect()
+    // Dragging right should reveal the left of the photo, so invert the delta.
+    // Scale by the overflow amount so a full-width drag spans the whole range.
+    const overflowX = rect.width * (imgRatio / frameRatio - 1)
+    const overflowY = rect.height * (frameRatio / imgRatio - 1)
+    const nx = canPanX && overflowX > 0 ? clamp01(d.base.x - (e.clientX - d.startX) / overflowX) : live.x
+    const ny = canPanY && overflowY > 0 ? clamp01(d.base.y - (e.clientY - d.startY) / overflowY) : live.y
+    setLive({ x: nx, y: ny })
+  }
+
+  function onPointerUp(e: React.PointerEvent) {
+    if (!drag.current) return
+    drag.current = null
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    } catch {}
+    // Only re-crop if the pan actually changed.
+    if (Math.abs(live.x - offset.x) > 1e-3 || Math.abs(live.y - offset.y) > 1e-3) onCommit(live)
+  }
+
+  const canPan = canPanX || canPanY
+
+  return (
+    <div className="mt-3 flex justify-center">
+      <div
+        ref={frameRef}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        style={{ aspectRatio: `${ratio.w} / ${ratio.h}` }}
+        className={cn(
+          "relative w-full max-w-xs touch-none select-none overflow-hidden rounded-2xl border border-border/60 bg-secondary",
+          canPan && !uploading ? "cursor-grab active:cursor-grabbing" : "",
+        )}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src || "/placeholder.svg"}
+          alt="Selected attachment preview"
+          draggable={false}
+          style={{ objectPosition: `${posX}% ${posY}%` }}
+          className="pointer-events-none h-full w-full object-cover"
+        />
+        {uploading && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm">
+            <Loader2 className="size-6 animate-spin text-foreground" />
+            <span className="text-xs font-medium text-foreground tabular-nums">{progress}%</span>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={onRemove}
+          className="absolute right-2 top-2 rounded-full bg-background/80 p-1.5 text-foreground shadow-sm backdrop-blur transition-colors hover:bg-background"
+          aria-label="Remove attachment"
+        >
+          <X className="size-4" />
+        </button>
+      </div>
+    </div>
+  )
+}
 
 function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (p: CommunityPostView) => void }) {
   const [body, setBody] = useState("")
@@ -676,60 +805,61 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
           {/* Media preview (image or video) with upload progress + remove control */}
           {preview && (
             <>
-              <div className="mt-3 flex justify-center">
-                <div className="relative inline-block overflow-hidden rounded-2xl border border-border/60">
-                  {mediaKind === "video" ? (
-                    <video
-                      src={preview}
-                      controls
-                      playsInline
-                      className="max-h-72 max-w-full object-contain bg-black"
-                    />
-                  ) : (
-                    <img
-                      src={preview || "/placeholder.svg"}
-                      alt="Selected attachment preview"
-                      className="max-h-72 max-w-full object-contain"
-                    />
-                  )}
-                  {uploading && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm">
-                      <Loader2 className="size-6 animate-spin text-foreground" />
-                      <span className="text-xs font-medium text-foreground tabular-nums">{progress}%</span>
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    onClick={resetMedia}
-                    className="absolute right-2 top-2 rounded-full bg-background/80 p-1.5 text-foreground shadow-sm backdrop-blur transition-colors hover:bg-background"
-                    aria-label="Remove attachment"
-                  >
-                    <X className="size-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Aspect ratio picker — images only (video can't be cropped here) */}
-              {mediaKind === "image" && (
-                <div className="mt-3 flex items-center justify-center gap-2">
-                  {ASPECT_RATIOS.map((r) => (
+              {mediaKind === "video" ? (
+                <div className="mt-3 flex justify-center">
+                  <div className="relative inline-block overflow-hidden rounded-2xl border border-border/60">
+                    <video src={preview} controls playsInline className="max-h-72 max-w-full object-contain bg-black" />
+                    {uploading && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm">
+                        <Loader2 className="size-6 animate-spin text-foreground" />
+                        <span className="text-xs font-medium text-foreground tabular-nums">{progress}%</span>
+                      </div>
+                    )}
                     <button
-                      key={r.label}
                       type="button"
-                      onClick={() => applyRatio(r)}
-                      disabled={uploading}
-                      aria-pressed={ratio.label === r.label}
-                      className={cn(
-                        "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50",
-                        ratio.label === r.label
-                          ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                          : "border-border/60 text-muted-foreground hover:bg-secondary hover:text-foreground",
-                      )}
+                      onClick={resetMedia}
+                      className="absolute right-2 top-2 rounded-full bg-background/80 p-1.5 text-foreground shadow-sm backdrop-blur transition-colors hover:bg-background"
+                      aria-label="Remove attachment"
                     >
-                      {r.label}
+                      <X className="size-4" />
                     </button>
-                  ))}
+                  </div>
                 </div>
+              ) : (
+                <>
+                  <CropFrame
+                    src={preview}
+                    ratio={ratio}
+                    natural={imgNatural}
+                    offset={offset}
+                    onCommit={commitCrop}
+                    uploading={uploading}
+                    progress={progress}
+                    onRemove={resetMedia}
+                  />
+
+                  {/* Aspect ratio picker — images only (video can't be cropped here) */}
+                  <div className="mt-3 flex items-center justify-center gap-2">
+                    {ASPECT_RATIOS.map((r) => (
+                      <button
+                        key={r.label}
+                        type="button"
+                        onClick={() => applyRatio(r)}
+                        disabled={uploading}
+                        aria-pressed={ratio.label === r.label}
+                        className={cn(
+                          "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50",
+                          ratio.label === r.label
+                            ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                            : "border-border/60 text-muted-foreground hover:bg-secondary hover:text-foreground",
+                        )}
+                      >
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-center text-xs text-muted-foreground">Drag the photo to reposition it</p>
+                </>
               )}
             </>
           )}
