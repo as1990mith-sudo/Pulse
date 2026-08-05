@@ -11,7 +11,6 @@ import {
   ImagePlus,
   Info,
   Loader2,
-  Maximize2,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -112,10 +111,10 @@ function QuestionText({ text, onOpen }: { text: string; onOpen: () => void }) {
 /**
  * A post's attached video in the feed. Uses the shared FeedVideo player so the
  * clip auto-plays when it scrolls into view (and pauses when it leaves) — the
- * same behavior as the reels/mind feed — instead of showing a static poster
- * that only played on tap. The frame self-sizes to the clip's real aspect ratio
- * (clamped portrait↔landscape). Because tapping the frame now controls playback,
- * a small corner button remains for opening the full thread.
+ * same behavior as the reels/mind feed. The frame self-sizes to the clip's real
+ * aspect ratio (clamped portrait↔landscape). Tapping anywhere on the video opens
+ * the full post (via FeedVideo's onExpand); playback is driven by the clip's own
+ * bottom control bar.
  */
 function FeedPostVideo({ src, onOpen }: { src: string; onOpen: () => void }) {
   const [ratio, setRatio] = useState<number | null>(null)
@@ -125,15 +124,7 @@ function FeedPostVideo({ src, onOpen }: { src: string; onOpen: () => void }) {
       className="relative mt-3 w-full overflow-hidden rounded-2xl border border-border/60 bg-black"
       style={{ aspectRatio: String(aspect), maxHeight: "24rem" }}
     >
-      <FeedVideo src={src} className="h-full w-full object-cover" onAspectRatio={setRatio} />
-      <button
-        type="button"
-        onClick={onOpen}
-        aria-label="Open post"
-        className="absolute right-2 top-2 z-10 flex size-8 items-center justify-center rounded-full bg-black/50 text-white ring-1 ring-white/20 backdrop-blur transition-colors hover:bg-black/70"
-      >
-        <Maximize2 className="size-4" />
-      </button>
+      <FeedVideo src={src} className="h-full w-full object-cover" onAspectRatio={setRatio} onExpand={onOpen} />
     </div>
   )
 }
