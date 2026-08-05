@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import useSWR from "swr"
-import { Mic, NotebookPen, Pencil, Trash2, Video, X } from "lucide-react"
+import { ChevronDown, Mic, NotebookPen, Pencil, Trash2, Video, X } from "lucide-react"
 import {
   deleteLiveNote,
   getLiveNotes,
@@ -82,12 +82,28 @@ export function LiveNotesBrowser({
 }
 
 function HostGroup({ group, onOpen }: { group: LiveNoteHostGroup; onOpen: (n: GroupedLiveNote) => void }) {
+  const [open, setOpen] = useState(true)
   return (
     <section>
-      <h2 className="mb-2 px-1 font-display text-lg font-semibold tracking-tight text-foreground">
-        {group.hostName}
+      <h2 className="mb-2 px-1">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="tap-scale flex w-full items-center justify-between gap-3 rounded-xl py-1 text-left transition-colors"
+        >
+          <span className="flex min-w-0 items-baseline gap-2">
+            <span className="truncate font-display text-lg font-semibold tracking-tight text-foreground">
+              {group.hostName}
+            </span>
+            <span className="shrink-0 text-xs font-medium text-muted-foreground">{group.notes.length}</span>
+          </span>
+          <ChevronDown
+            className={cn("size-5 shrink-0 text-muted-foreground transition-transform duration-300", open ? "rotate-180" : "rotate-0")}
+          />
+        </button>
       </h2>
-      <ul className="space-y-2">
+      <ul className={cn("space-y-2", !open && "hidden")}>
         {group.notes.map((note) => (
           <li key={note.id}>
             <button

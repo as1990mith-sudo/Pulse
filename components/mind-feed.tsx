@@ -807,8 +807,10 @@ export function MindFeed({
             key={t.id}
             onClick={() => setTab(t.id)}
             className={cn(
-              "relative flex-1 whitespace-nowrap px-3 py-4 text-[15px] font-semibold transition-colors",
-              tab === t.id ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+              "relative flex-1 whitespace-nowrap px-3 py-4 font-display text-[15px] tracking-tight transition-all",
+              tab === t.id
+                ? "font-bold text-foreground"
+                : "font-medium text-muted-foreground hover:text-foreground",
             )}
             aria-pressed={tab === t.id}
           >

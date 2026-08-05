@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import useSWR from "swr"
-import { ArrowLeft, ChevronDown, Loader2, Send, Share2, X } from "lucide-react"
+import { ArrowLeft, ChevronDown, Loader2, Play, Send, Share2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ShareSheet } from "@/components/share-sheet"
@@ -162,6 +162,7 @@ export function CommunityConversation({
 }) {
   const [shareOpen, setShareOpen] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [videoLightboxOpen, setVideoLightboxOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const { openProfile } = useMiniChat()
 
@@ -256,6 +257,27 @@ export function CommunityConversation({
               />
             </button>
           )}
+          {post.videoUrl && (
+            <button
+              type="button"
+              onClick={() => setVideoLightboxOpen(true)}
+              aria-label="Play video"
+              className="relative mt-4 block w-full overflow-hidden rounded-2xl border border-border/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <video
+                src={post.videoUrl}
+                muted
+                playsInline
+                preload="metadata"
+                className="max-h-96 w-full bg-black object-cover"
+              />
+              <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <span className="flex size-14 items-center justify-center rounded-full bg-background/70 backdrop-blur">
+                  <Play className="ml-0.5 size-6 text-foreground" />
+                </span>
+              </span>
+            </button>
+          )}
           <BibleChips text={post.body} className="mt-4" />
 
           <div className="mt-5 flex items-center gap-2 text-sm font-medium text-muted-foreground">
@@ -320,6 +342,10 @@ export function CommunityConversation({
       {lightboxOpen && post.imageUrl && (
         <ImageLightbox src={post.imageUrl} onClose={() => setLightboxOpen(false)} />
       )}
+
+      {videoLightboxOpen && post.videoUrl && (
+        <VideoLightbox src={post.videoUrl} onClose={() => setVideoLightboxOpen(false)} />
+      )}
     </div>,
     document.body,
   )
@@ -365,6 +391,56 @@ function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
       <img
         src={src || "/placeholder.svg"}
         alt="Attached to the question"
+        onClick={(e) => e.stopPropagation()}
+        className="max-h-full max-w-full object-contain"
+      />
+    </div>,
+    document.body,
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Full-screen video lightbox                                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Full-screen player for a single attached video. Mirrors ImageLightbox: the
+ * video plays at its natural aspect ratio (object-contain) on a black backdrop
+ * with native controls; tapping the backdrop or the close button dismisses it.
+ * Autoplays (muted) on open so the tap that opened it starts playback.
+ */
+function VideoLightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose()
+    }
+    document.addEventListener("keydown", onKey)
+    return () => document.removeEventListener("keydown", onKey)
+  }, [onClose])
+
+  if (typeof document === "undefined") return null
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Attached video"
+      onClick={onClose}
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black duration-200 animate-in fade-in"
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close"
+        className="absolute right-4 top-[calc(0.75rem+env(safe-area-inset-top))] z-10 flex size-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/20"
+      >
+        <X className="size-5" />
+      </button>
+      <video
+        src={src}
+        controls
+        autoPlay
+        playsInline
         onClick={(e) => e.stopPropagation()}
         className="max-h-full max-w-full object-contain"
       />
