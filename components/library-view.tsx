@@ -33,7 +33,7 @@ export function LibraryView({ library }: { library: LibraryData }) {
     <div className="mx-auto w-full max-w-4xl px-4 pb-24 pt-6 sm:px-6">
       <header className="mb-7">
         <div className="flex items-center gap-3">
-          <span className="flex size-11 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+          <span className="flex size-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
             <BookMarked className="size-6" />
           </span>
           <div>
@@ -122,7 +122,7 @@ function SectionHeading({
 }) {
   return (
     <div className="mb-3.5 flex items-center gap-2.5">
-      <span className="flex size-7 items-center justify-center rounded-full bg-primary/12 text-primary">{icon}</span>
+      <span className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground">{icon}</span>
       <div className="min-w-0">
         <h2 className="font-display text-base font-semibold leading-none tracking-tight text-foreground">{title}</h2>
         <p className="mt-1 truncate text-xs text-muted-foreground">{caption}</p>
@@ -325,7 +325,7 @@ function InlineEmpty({ icon, message }: { icon: React.ReactNode; message: string
 function EmptyLibrary() {
   return (
     <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-border/60 bg-secondary/20 px-6 py-20 text-center">
-      <span className="mb-4 flex size-16 items-center justify-center rounded-full bg-primary/15 text-primary">
+      <span className="mb-4 flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground">
         <Sparkles className="size-8" />
       </span>
       <h2 className="font-display text-lg font-semibold text-foreground">Your Library is waiting</h2>

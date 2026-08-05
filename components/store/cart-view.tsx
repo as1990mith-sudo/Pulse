@@ -43,7 +43,7 @@ export function CartView() {
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-28 pt-6 sm:px-6">
       <header className="mb-6 flex items-center gap-3">
-        <span className="flex size-11 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+        <span className="flex size-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
           <ShoppingCart className="size-6" />
         </span>
         <div>
@@ -145,7 +145,7 @@ export function CartView() {
 function EmptyCart() {
   return (
     <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-border/60 bg-secondary/20 px-6 py-20 text-center">
-      <span className="mb-4 flex size-16 items-center justify-center rounded-full bg-primary/15 text-primary">
+      <span className="mb-4 flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground">
         <ShoppingCart className="size-8" />
       </span>
       <h2 className="text-lg font-semibold text-foreground">Your cart is empty</h2>
@@ -166,7 +166,7 @@ function EmptyCart() {
 function CheckoutSuccess() {
   return (
     <div className="flex flex-col items-center justify-center rounded-3xl border border-border/60 bg-secondary/20 px-6 py-20 text-center">
-      <span className="mb-4 flex size-16 items-center justify-center rounded-full bg-primary/15 text-primary motion-pop">
+      <span className="mb-4 flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground motion-pop">
         <Check className="size-8" />
       </span>
       <h2 className="text-lg font-semibold text-foreground">Purchase complete</h2>

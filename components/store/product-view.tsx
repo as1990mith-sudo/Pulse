@@ -322,7 +322,7 @@ function PurchaseSuccess({ title, isCourse }: { title: string; isCourse: boolean
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-background/60 backdrop-blur-md animate-in fade-in duration-300">
       <div className="mx-6 flex max-w-sm flex-col items-center gap-3 rounded-3xl border border-border/60 bg-popover/95 p-8 text-center shadow-floating animate-in zoom-in-95 slide-in-from-bottom-4 duration-500 [animation-timing-function:cubic-bezier(0.34,1.56,0.64,1)]">
-        <span className="flex size-16 items-center justify-center rounded-full bg-primary/15 text-primary motion-pop">
+        <span className="flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground motion-pop">
           <Check className="size-8" />
         </span>
         <h3 className="text-lg font-semibold text-foreground">Added to your Library</h3>

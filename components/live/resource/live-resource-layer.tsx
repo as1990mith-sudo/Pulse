@@ -127,7 +127,7 @@ export function DesktopResourceDock() {
     >
       <div className="flex flex-col gap-2 border-b border-white/8 bg-white/[0.03] px-4 py-3">
         <div className="flex items-center gap-2.5">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Icon className="size-[18px]" strokeWidth={2.1} />
           </span>
           <h2 className="min-w-0 flex-1 truncate text-[15px] font-bold leading-tight text-white">{meta.title}</h2>

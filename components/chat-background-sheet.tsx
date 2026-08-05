@@ -55,7 +55,7 @@ export function ChatBackgroundSheet({
             className="relative z-10 m-3 w-full max-w-sm overflow-hidden rounded-3xl border border-white/10 bg-zinc-900/95 p-5 text-white shadow-2xl backdrop-blur-xl"
           >
             <div className="mb-4 flex items-center gap-2">
-              <span className="flex size-9 items-center justify-center rounded-xl bg-primary/15 text-primary">
+              <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
                 <ImageIcon className="size-[18px]" />
               </span>
               <div>

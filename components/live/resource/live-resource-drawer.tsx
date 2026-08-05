@@ -75,7 +75,7 @@ export function LiveResourceDrawer() {
                       onClick={() => openPanel(entry.id)}
                       className="flex w-full items-center gap-3.5 rounded-2xl border border-white/8 bg-white/[0.03] p-3.5 text-left transition-colors hover:border-white/15 hover:bg-white/[0.07]"
                     >
-                      <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
+                      <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
                         <Icon className="size-5" strokeWidth={2.1} />
                       </span>
                       <span className="min-w-0 flex-1">

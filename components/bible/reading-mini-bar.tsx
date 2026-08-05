@@ -107,7 +107,7 @@ export function ReadingMiniBar({
           className="tap-scale flex min-w-0 items-center gap-2 rounded-full border border-border/60 bg-secondary/40 py-1.5 pl-2 pr-3 text-sm font-semibold transition-colors hover:bg-secondary/70"
           aria-label={`${book} chapter ${chapter}. Tap to open reading controls.`}
         >
-          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
             <BookOpen className="size-3.5" />
           </span>
           <span className="truncate">

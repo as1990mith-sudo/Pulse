@@ -172,7 +172,7 @@ export function BibleReaderIndicator({
           </span>
         ) : (
           <span
-            className="flex size-5 items-center justify-center rounded-full bg-primary/15 text-primary"
+            className="flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground"
             aria-hidden
           >
             {isBook ? <Users className="size-3" /> : <Globe className="size-3" />}

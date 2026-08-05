@@ -768,7 +768,7 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
           <div className="relative z-10 m-3 w-full max-w-sm overflow-hidden rounded-3xl border border-border/70 bg-card p-5 shadow-2xl">
             {reportDone ? (
               <div className="flex flex-col items-center gap-3 py-4 text-center">
-                <span className="flex size-11 items-center justify-center rounded-full bg-primary/15 text-primary">
+                <span className="flex size-11 items-center justify-center rounded-full bg-primary text-primary-foreground">
                   <Shield className="size-6" />
                 </span>
                 <h3 className="text-base font-bold">Report submitted</h3>

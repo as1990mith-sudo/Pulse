@@ -24,7 +24,7 @@ export default async function DevotionalPage() {
       <div className="min-h-screen">
         <SiteHeader />
         <main className="mx-auto flex w-full max-w-3xl flex-col items-center justify-center gap-3 px-4 py-24 text-center sm:px-6">
-          <span className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <span className="flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
             <BookHeart className="size-6" />
           </span>
           <h1 className="text-2xl font-bold tracking-tight">No devotional yet</h1>
@@ -109,7 +109,7 @@ export default async function DevotionalPage() {
           {/* Attribution + order CTA. */}
           <div className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-card p-6 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
                 <BookHeart className="size-5" />
               </span>
               <div className="space-y-0.5">

@@ -69,7 +69,7 @@ export function AnnouncementBanner({
       {/* Header + publish entry point */}
       <div className="flex items-center justify-between gap-3 px-4 sm:px-0">
         <div className="flex items-center gap-2">
-          <span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
             <CalendarPlus className="size-5" />
           </span>
           <div className="leading-tight">
@@ -103,7 +103,7 @@ export function AnnouncementBanner({
         </div>
       ) : (
         <Card className="mx-4 flex flex-col items-center gap-3 border-dashed bg-card/50 p-8 text-center sm:mx-0">
-          <span className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <span className="flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
             <CalendarPlus className="size-6" />
           </span>
           <div className="space-y-1">
@@ -509,7 +509,7 @@ function AdminMessageDialog({ announcement: a, onClose }: { announcement: Announ
       <Card className="w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="flex size-8 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <span className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
               <MessageSquare className="size-4" />
             </span>
             <div className="leading-tight">
@@ -651,7 +651,7 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
       <Card className="my-auto w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="flex size-8 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <span className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
               <Megaphone className="size-4" />
             </span>
             <div className="leading-tight">

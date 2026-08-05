@@ -143,7 +143,7 @@ function PresenceInfoDialog({ onClose }: { onClose: () => void }) {
           {/* Public */}
           <div className="rounded-2xl border border-border/70 bg-card p-4">
             <div className="flex items-center gap-2.5">
-              <span className="flex size-9 items-center justify-center rounded-full bg-primary/15 text-primary">
+              <span className="flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground">
                 <Globe className="size-5" />
               </span>
               <h3 className="font-semibold">Public</h3>

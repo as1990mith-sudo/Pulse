@@ -157,7 +157,7 @@ export function ArticlesHub({
       {isDefaultView && editorsPicks.length > 0 && (
         <section className="mb-7">
           <div className="mb-3 flex items-center gap-2">
-            <span className="flex size-6 items-center justify-center rounded-full bg-primary/12 text-primary">
+            <span className="flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
               <Sparkles className="size-3.5" />
             </span>
             <h2 className="font-display text-sm font-semibold tracking-tight text-foreground">Editor&apos;s Pick</h2>
