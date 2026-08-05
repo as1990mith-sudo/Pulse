@@ -775,7 +775,7 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
       <button className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} aria-label="Close" />
-      <div className="relative z-10 w-full max-w-lg rounded-t-3xl border border-border/60 bg-card p-5 shadow-2xl duration-200 animate-in slide-in-from-bottom sm:rounded-3xl">
+      <div className="relative z-10 flex max-h-[100dvh] w-full max-w-lg flex-col rounded-t-3xl border border-border/60 bg-card p-5 shadow-2xl duration-200 animate-in slide-in-from-bottom sm:max-h-[90dvh] sm:rounded-3xl">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Avatar className="size-10 ring-2 ring-border/70">
@@ -791,7 +791,7 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
             <X className="size-5" />
           </button>
         </div>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
           <Textarea
             ref={textareaRef}
             value={body}
