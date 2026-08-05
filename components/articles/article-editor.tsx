@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react"
 import { ARTICLE_CATEGORIES } from "@/lib/article-types"
+import { ARTICLE_MIN_WORDS, countWords } from "@/lib/article-sanitize"
 import { saveArticle, publishArticle } from "@/app/actions/articles"
 import { uploadMedia } from "@/lib/upload-media"
 import { CropModal } from "@/components/media-editor/crop-modal"
@@ -60,6 +61,9 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
   // Tracks unsaved edits so leaving the page can prompt to save or discard.
   const [dirty, setDirty] = useState(false)
   const [confirmBack, setConfirmBack] = useState(false)
+  // Live word count of the body — drives the counter UI and the publish gate.
+  const [words, setWords] = useState(0)
+  const meetsMinimum = words >= ARTICLE_MIN_WORDS
   // @mention autocomplete for the rich body. Inserts inline mention anchors at
   // the caret; the publish action re-derives the mention list from the HTML.
   const mentions = useEditableMentionAutocomplete(editorRef)
@@ -68,8 +72,14 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
   useEffect(() => {
     if (editorRef.current && seed?.bodyHtml) {
       editorRef.current.innerHTML = seed.bodyHtml
+      setWords(countWords(seed.bodyHtml))
     }
   }, [seed?.bodyHtml])
+
+  // Recount words from the live editor (called on every input).
+  function recountWords() {
+    setWords(countWords(editorRef.current?.innerHTML ?? ""))
+  }
 
   function exec(command: string, value?: string) {
     editorRef.current?.focus()
@@ -86,6 +96,7 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
       '<blockquote class="verse">"For God so loved the world…" — John 3:16</blockquote><p><br/></p>'
     document.execCommand("insertHTML", false, html)
     setDirty(true)
+    recountWords()
   }
 
   function addLink() {
@@ -217,14 +228,22 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
   }
 
   function handlePublish() {
+    // Notify and stop before touching the server if the piece is too short.
+    const count = countWords(currentBody())
+    if (count < ARTICLE_MIN_WORDS) {
+      setError(
+        `Articles need at least ${ARTICLE_MIN_WORDS} words to publish. You have ${count} — add ${ARTICLE_MIN_WORDS - count} more.`,
+      )
+      return
+    }
     startPublishing(async () => {
       const id = await persist()
       if (!id) return
       try {
         await publishArticle(id)
         router.push(`/articles/${id}`)
-      } catch {
-        setError("Could not publish. Please try again.")
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not publish. Please try again.")
       }
     })
   }
@@ -359,8 +378,29 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
         />
       </div>
 
+      {/* Word-count meter — publishing is gated at the minimum. */}
+      <div className="mt-4 flex items-center gap-3">
+        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+          <div
+            className={cn(
+              "h-full rounded-full transition-all duration-300",
+              meetsMinimum ? "bg-primary" : "bg-muted-foreground/50",
+            )}
+            style={{ width: `${Math.min(100, (words / ARTICLE_MIN_WORDS) * 100)}%` }}
+          />
+        </div>
+        <span
+          className={cn(
+            "shrink-0 text-xs font-medium tabular-nums",
+            meetsMinimum ? "text-primary" : "text-muted-foreground",
+          )}
+        >
+          {meetsMinimum ? `${words} words` : `${words} / ${ARTICLE_MIN_WORDS}`}
+        </span>
+      </div>
+
       {/* Toolbar */}
-      <div className="sticky top-0 z-10 -mx-4 mt-5 flex items-center gap-0.5 overflow-x-auto border-y border-border bg-background/95 px-4 py-2 backdrop-blur">
+      <div className="sticky top-0 z-10 -mx-4 mt-3 flex items-center gap-0.5 overflow-x-auto border-y border-border bg-background/95 px-4 py-2 backdrop-blur">
         <ToolbarButton onClick={() => exec("bold")} label="Bold">
           <Bold className="size-4" />
         </ToolbarButton>
@@ -412,7 +452,10 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
           ref={editorRef}
           contentEditable
           suppressContentEditableWarning
-          onInput={() => setDirty(true)}
+          onInput={() => {
+            setDirty(true)
+            recountWords()
+          }}
           onKeyDown={(e) => mentions.onKeyDown(e)}
           data-placeholder="Tell your story…"
           className="article-editor article-prose mt-5 min-h-[40vh] outline-none"

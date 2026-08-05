@@ -22,7 +22,7 @@ export default async function ArticlesPage() {
       <main>
         <ArticlesHub
           featured={hub.featured}
-          featuredWriters={hub.featuredWriters}
+          editorsPicks={hub.editorsPicks}
           initialFeed={feed.items}
           initialNextOffset={feed.nextOffset}
           categories={hub.categories}

@@ -174,8 +174,15 @@ export function deriveExcerpt(html: string, max = 200): string {
   return text.slice(0, max).replace(/\s+\S*$/, "") + "…"
 }
 
+/** Minimum word count an article must reach before it can be published. */
+export const ARTICLE_MIN_WORDS = 500
+
+/** Counts the words in a rich-text body (tags stripped). */
+export function countWords(html: string): number {
+  return htmlToPlainText(html).split(/\s+/).filter(Boolean).length
+}
+
 /** Reading-time estimate in whole minutes (~220 wpm), floored at 1. */
 export function estimateReadMinutes(html: string): number {
-  const words = htmlToPlainText(html).split(/\s+/).filter(Boolean).length
-  return Math.max(1, Math.round(words / 220))
+  return Math.max(1, Math.round(countWords(html) / 220))
 }

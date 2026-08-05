@@ -18,6 +18,8 @@ import {
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { getLikedSet, setLike } from "@/lib/likes"
 import {
+  ARTICLE_MIN_WORDS,
+  countWords,
   deriveExcerpt,
   estimateReadMinutes,
   htmlToPlainText,
@@ -143,11 +145,11 @@ async function toCards(rows: ArticleRow[]): Promise<ArticleCard[]> {
  */
 export async function getArticleHub(): Promise<{
   featured: ArticleCard | null
-  featuredWriters: FeaturedWriter[]
+  editorsPicks: ArticleCard[]
   latest: ArticleCard[]
   categories: string[]
 }> {
-  const [featuredRows, latestRows, writers] = await Promise.all([
+  const [featuredRows, latestRows, pickRows] = await Promise.all([
     db
       .select()
       .from(article)
@@ -160,17 +162,27 @@ export async function getArticleHub(): Promise<{
       .where(eq(article.status, "published"))
       .orderBy(desc(article.publishedAt))
       .limit(30),
-    getFeaturedWriters(),
+    // Editor's Pick: curated standouts — hand-flagged featured first, then the
+    // best-performing pieces by engagement. A generous limit lets us drop the
+    // hero article and still fill the rail.
+    db
+      .select()
+      .from(article)
+      .where(eq(article.status, "published"))
+      .orderBy(desc(article.featured), desc(article.likeCount), desc(article.viewCount), desc(article.publishedAt))
+      .limit(9),
   ])
 
   // Fall back to the newest published article when nothing is flagged featured.
   const featuredRow = featuredRows[0] ?? latestRows[0] ?? null
   const [featuredCard] = featuredRow ? await toCards([featuredRow]) : [null]
   const latest = await toCards(latestRows.filter((r) => r.id !== featuredRow?.id))
+  // Exclude the hero from the picks rail so it isn't shown twice.
+  const editorsPicks = await toCards(pickRows.filter((r) => r.id !== featuredRow?.id).slice(0, 6))
 
   return {
     featured: featuredCard ?? null,
-    featuredWriters: writers,
+    editorsPicks,
     latest,
     categories: [...ARTICLE_CATEGORIES],
   }
@@ -536,7 +548,15 @@ export async function saveArticle(input: {
     : "General"
   const tags = (input.tags ?? []).map((t) => t.trim()).filter(Boolean).slice(0, 8)
   const status: ArticleStatus = input.status ?? "draft"
-  if (status === "published" && !plain) throw new Error("Add some content before publishing.")
+  if (status === "published") {
+    if (!plain) throw new Error("Add some content before publishing.")
+    const words = countWords(bodyHtml)
+    if (words < ARTICLE_MIN_WORDS) {
+      throw new Error(
+        `Articles must be at least ${ARTICLE_MIN_WORDS} words to publish. Yours has ${words} word${words === 1 ? "" : "s"}.`,
+      )
+    }
+  }
 
   const authorName = user.name
   const authorHandle = getHandle(user.name)
@@ -616,6 +636,12 @@ export async function publishArticle(id: string): Promise<{ id: string }> {
   const [row] = await db.select().from(article).where(eq(article.id, numId)).limit(1)
   if (!row || row.authorId !== user.id) throw new Error("Article not found.")
   if (!htmlToPlainText(row.bodyHtml)) throw new Error("Add some content before publishing.")
+  const words = countWords(row.bodyHtml)
+  if (words < ARTICLE_MIN_WORDS) {
+    throw new Error(
+      `Articles must be at least ${ARTICLE_MIN_WORDS} words to publish. Yours has ${words} word${words === 1 ? "" : "s"}.`,
+    )
+  }
   const firstPublish = !row.publishedAt
   await db
     .update(article)

@@ -1,26 +1,25 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { Loader2, PenLine, Search, UserRound, Users, X } from "lucide-react"
-import type { ArticleCard, FeaturedWriter } from "@/lib/article-types"
+import { Clock, Loader2, PenLine, Search, Sparkles, X } from "lucide-react"
+import type { ArticleCard } from "@/lib/article-types"
 import { getArticleFeed } from "@/app/actions/articles"
 import { ArticleRow, FeaturedArticleCard } from "@/components/articles/article-card"
 import { AuthorAvatar } from "@/components/articles/author-avatar"
-import { WriterFollowButton } from "@/components/articles/writer-follow-button"
 import { cn } from "@/lib/utils"
 
 const PAGE = 12
 
 export function ArticlesHub({
   featured,
-  featuredWriters,
+  editorsPicks,
   initialFeed,
   initialNextOffset,
   categories,
 }: {
   featured: ArticleCard | null
-  featuredWriters: FeaturedWriter[]
+  editorsPicks: ArticleCard[]
   initialFeed: ArticleCard[]
   initialNextOffset: number | null
   categories: string[]
@@ -147,52 +146,30 @@ export function ArticlesHub({
         ))}
       </div>
 
-      {/* Featured writers rail */}
-      {isDefaultView && featuredWriters.length > 0 && (
-        <section className="mb-6">
-          <div className="mb-2.5 flex items-center gap-2">
-            <Users className="size-4 text-primary" />
-            <h2 className="text-sm font-semibold text-foreground">Featured writers</h2>
-          </div>
-          <div data-scroll className="hscroll -mx-4 flex gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
-            {featuredWriters.map((w) => (
-              <div
-                key={w.author.id}
-                className="flex w-36 shrink-0 flex-col items-center gap-2 rounded-2xl border border-border/50 bg-card/60 p-3.5 text-center shadow-soft"
-              >
-                <AuthorAvatar author={w.author} size={52} link />
-                <div className="min-w-0">
-                  <Link
-                    href={`/u/${w.author.id}`}
-                    className="block truncate text-sm font-semibold text-foreground hover:text-primary"
-                  >
-                    {w.author.name}
-                  </Link>
-                  <p className="truncate text-[11px] text-muted-foreground">
-                    {w.articleCount} article{w.articleCount === 1 ? "" : "s"}
-                  </p>
-                </div>
-                {w.isSelf ? (
-                  <Link
-                    href={`/u/${w.author.id}`}
-                    className="tap-scale inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary px-4 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-secondary/70"
-                  >
-                    <UserRound className="size-3.5" />
-                    Profile
-                  </Link>
-                ) : (
-                  <WriterFollowButton writerId={w.author.id} initialFollowing={w.followingWriter} size="sm" />
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
       {/* Featured article */}
       {showFeatured && (
         <section className="mb-6">
           <FeaturedArticleCard article={featured} />
+        </section>
+      )}
+
+      {/* Editor's Pick rail — curated standout articles */}
+      {isDefaultView && editorsPicks.length > 0 && (
+        <section className="mb-7">
+          <div className="mb-3 flex items-center gap-2">
+            <span className="flex size-6 items-center justify-center rounded-full bg-primary/12 text-primary">
+              <Sparkles className="size-3.5" />
+            </span>
+            <h2 className="font-display text-sm font-semibold tracking-tight text-foreground">Editor&apos;s Pick</h2>
+            <span className="ml-auto text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              Curated
+            </span>
+          </div>
+          <div data-scroll className="hscroll -mx-4 flex gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+            {editorsPicks.map((a) => (
+              <EditorsPickCard key={a.id} article={a} />
+            ))}
+          </div>
         </section>
       )}
 
@@ -226,6 +203,49 @@ export function ArticlesHub({
         Write
       </Link>
     </div>
+  )
+}
+
+/**
+ * A compact, premium cover card for the Editor's Pick rail. Cover fills the
+ * card with a bottom gradient; category, title, author and read time sit over
+ * it so each pick reads at a glance without taking much vertical space.
+ */
+function EditorsPickCard({ article }: { article: ArticleCard }) {
+  return (
+    <Link
+      href={`/articles/${article.id}`}
+      className="tap-scale group relative flex aspect-[3/4] w-44 shrink-0 flex-col justify-end overflow-hidden rounded-2xl border border-border/50 bg-card shadow-elevated ring-1 ring-white/5 sm:w-48"
+    >
+      {article.coverUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={article.coverUrl || "/placeholder.svg"}
+          alt=""
+          className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+      ) : (
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/30 via-secondary/40 to-card" />
+      )}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
+      <div className="relative p-3">
+        <span className="inline-flex rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white backdrop-blur-sm">
+          {article.category}
+        </span>
+        <h3 className="mt-1.5 line-clamp-2 text-pretty font-display text-sm font-semibold leading-snug text-white">
+          {article.title}
+        </h3>
+        <div className="mt-2 flex items-center gap-1.5 text-[11px] text-white/80">
+          <AuthorAvatar author={article.author} size={16} ring />
+          <span className="max-w-20 truncate font-medium">{article.author.name}</span>
+          <span aria-hidden>·</span>
+          <span className="flex items-center gap-0.5">
+            <Clock className="size-2.5" />
+            {article.readMinutes}m
+          </span>
+        </div>
+      </div>
+    </Link>
   )
 }
 
