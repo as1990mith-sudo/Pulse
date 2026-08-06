@@ -17,6 +17,8 @@ import {
   Send,
   Share2,
   Trash2,
+  User,
+  VenetianMask,
   X,
 } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
@@ -42,12 +44,11 @@ import { FeedVideo } from "@/components/feed-video"
 import {
   ANON_AVATAR,
   ANON_NAME,
-  AnonMeta,
   BibleChips,
   CommunityAvatar,
   LikeButton,
+  PostMeta,
   SaveButton,
-  SelfMeta,
 } from "@/components/community-help-shared"
 
 /* -------------------------------------------------------------------------- */
@@ -235,10 +236,10 @@ function PostItem({
       {/* Indented, Threads-style row: avatar in a fixed left gutter, all content
           (name, question, image, actions) flows in the column to its right. */}
       <div className="flex gap-3">
-        <CommunityAvatar selfPost={post} />
+        <CommunityAvatar post={post} />
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
-            {post.isSelf ? <SelfMeta post={post} edited={edited} /> : <AnonMeta postedAt={post.postedAt} edited={edited} />}
+            <PostMeta post={post} edited={edited} />
             <div ref={menuRef} className="relative">
               <button
                 type="button"
@@ -336,33 +337,34 @@ function PostItem({
 
           {post.videoUrl && <FeedPostVideo src={post.videoUrl} onOpen={onOpen} />}
 
-          {/* Minimal engagement actions — kept tight so the row never scrolls */}
-          <div className="mt-3 -ml-2 flex items-center gap-0.5">
-            <LikeButton postId={post.id} initialLikes={post.likes} initialLiked={post.liked} />
+          {/* Engagement actions — spread evenly across the row with slightly
+              larger, easier-to-tap icons (Like · Reply · Share · Save). */}
+          <div className="mt-3 flex items-center justify-between pr-1">
+            <LikeButton postId={post.id} initialLikes={post.likes} initialLiked={post.liked} variant="row" />
             <button
               type="button"
               onClick={onOpen}
               aria-label="Reply"
-              className="flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[15px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             >
-              <CommentIcon className="size-4" />
+              <CommentIcon className="size-[22px]" />
               {post.commentCount > 0 && <span className="tabular-nums">{post.commentCount}</span>}
             </button>
             <button
               type="button"
               onClick={() => setShareOpen(true)}
               aria-label="Share"
-              className="flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[15px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             >
-              <Share2 className="size-4" />
+              <Share2 className="size-[22px]" />
             </button>
-            <SaveButton postId={post.id} />
-            {copied && (
-              <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                <Check className="size-3.5" /> Copied
-              </span>
-            )}
+            <SaveButton postId={post.id} variant="row" />
           </div>
+          {copied && (
+            <span className="mt-2 flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              <Check className="size-3.5" /> Copied
+            </span>
+          )}
         </div>
       </div>
 
@@ -541,6 +543,9 @@ function CropFrame({
 
 function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (p: CommunityPostView) => void }) {
   const [body, setBody] = useState("")
+  // The author's identity choice for this post. Anonymous by default so the
+  // room stays a safe place to ask; the user can opt to post identifiably.
+  const [anonymous, setAnonymous] = useState(true)
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -592,6 +597,7 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
     else {
       setBody("")
       setError(null)
+      setAnonymous(true)
       resetMedia()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -715,7 +721,7 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
     setError(null)
     startTransition(async () => {
       try {
-        const created = await createCommunityPost(text, imageUrl, videoUrl)
+        const created = await createCommunityPost(text, imageUrl, videoUrl, anonymous)
         onCreated(created)
         onClose()
       } catch (err) {
@@ -732,17 +738,61 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
       <div className="relative z-10 flex max-h-[100dvh] w-full max-w-lg flex-col rounded-t-3xl border border-border/60 bg-card p-5 shadow-2xl duration-200 animate-in slide-in-from-bottom sm:max-h-[90dvh] sm:rounded-3xl">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Avatar className="size-10 ring-2 ring-border/70">
-              <AvatarImage src={ANON_AVATAR || "/placeholder.svg"} alt="" />
-              <AvatarFallback className="bg-muted font-bold text-muted-foreground">?</AvatarFallback>
-            </Avatar>
+            {anonymous ? (
+              <Avatar className="size-10 ring-2 ring-border/70">
+                <AvatarImage src={ANON_AVATAR || "/placeholder.svg"} alt="" />
+                <AvatarFallback className="bg-muted font-bold text-muted-foreground">?</AvatarFallback>
+              </Avatar>
+            ) : (
+              <span className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary ring-2 ring-border/70">
+                <User className="size-5" />
+              </span>
+            )}
             <div>
-              <p className="font-semibold text-emerald-600 dark:text-emerald-400">{ANON_NAME}</p>
-              <p className="text-xs text-muted-foreground">Your identity stays private</p>
+              <p className={cn("font-semibold", anonymous ? "text-emerald-600 dark:text-emerald-400" : "text-foreground")}>
+                {anonymous ? ANON_NAME : "Posting as yourself"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {anonymous ? "Your identity stays private" : "Your name and photo will be shown"}
+              </p>
             </div>
           </div>
           <button onClick={onClose} className="rounded-full p-2 text-muted-foreground hover:bg-secondary" aria-label="Close">
             <X className="size-5" />
+          </button>
+        </div>
+
+        {/* Identity choice — anonymous (default) or identifiable. */}
+        <div
+          role="radiogroup"
+          aria-label="Post identity"
+          className="mb-4 grid grid-cols-2 gap-1 rounded-full border border-border/60 bg-secondary/40 p-1"
+        >
+          <button
+            type="button"
+            role="radio"
+            aria-checked={anonymous}
+            onClick={() => setAnonymous(true)}
+            className={cn(
+              "flex items-center justify-center gap-2 rounded-full px-3 py-2 text-sm font-semibold transition-colors",
+              anonymous ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <VenetianMask className="size-4" />
+            Anonymous
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={!anonymous}
+            onClick={() => setAnonymous(false)}
+            className={cn(
+              "flex items-center justify-center gap-2 rounded-full px-3 py-2 text-sm font-semibold transition-colors",
+              !anonymous ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <User className="size-4" />
+            Show my name
           </button>
         </div>
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
@@ -843,7 +893,7 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
 
           <Button type="submit" className="mt-3 w-full gap-2 rounded-full" disabled={!canPost}>
             {isPending || uploading ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-            {uploading ? "Uploading…" : "Post anonymously"}
+            {uploading ? "Uploading…" : anonymous ? "Post anonymously" : "Post as yourself"}
           </Button>
         </form>
       </div>
