@@ -55,7 +55,7 @@ import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { useLivePresence } from "@/lib/use-live-presence"
 import { ShareSheet } from "@/components/share-sheet"
 import { ConversationVideo } from "@/components/conversation/conversation-video"
-import { CoverUpload, SQUARE_PORTRAIT_RATIOS } from "@/components/admin/cover-upload"
+import { CoverUpload, SQUARE_RATIO } from "@/components/admin/cover-upload"
 import { CoverArt } from "@/components/cover-art"
 import { MarqueeTitle } from "@/components/marquee-title"
 import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
@@ -1186,14 +1186,14 @@ export function VideoStudioConsole({
 
               {/* Cover artwork — both Broadcast and Conversation carry a cover
                   (the room's identity, shown in the header + opened in the
-                  full-screen lightbox when tapped). Both offer 1:1 / 4:5 crops
-                  so the cover matches the square/portrait art used everywhere it
-                  appears (catalogue, cards, lightbox). */}
+                  full-screen lightbox when tapped). Locked to a 1:1 crop so the
+                  cover matches the square art used everywhere it appears
+                  (catalogue, cards, lightbox). */}
               <CoverUpload
                 value={cover}
                 onChange={setCover}
                 label={orientation === "landscape" ? "Room cover" : "Broadcast cover"}
-                ratios={SQUARE_PORTRAIT_RATIOS}
+                ratios={SQUARE_RATIO}
                 allowFit
               />
 

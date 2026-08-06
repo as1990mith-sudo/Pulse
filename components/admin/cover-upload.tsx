@@ -7,13 +7,20 @@ import { uploadMedia } from "@/lib/upload-media"
 import { CropModal, type AspectOption } from "@/components/media-editor/crop-modal"
 
 /**
- * Crop preset for square + portrait covers (Question of the Day, live-stream
- * cover art). Lets the admin frame the same image as either 1:1 or 4:5.
+ * Crop preset for square + portrait covers (Question of the Day). Lets the
+ * admin frame the same image as either 1:1 or 4:5.
  */
 export const SQUARE_PORTRAIT_RATIOS: AspectOption[] = [
   { label: "1:1", value: 1 },
   { label: "4:5", value: 4 / 5 },
 ]
+
+/**
+ * Square-only preset for live meeting cover art (broadcast, conversation, and
+ * audio rooms). A single ratio hides the aspect-ratio chip bar, so the host
+ * only chooses Fit/Fill + zoom and every live cover stays a consistent 1:1.
+ */
+export const SQUARE_RATIO: AspectOption[] = [{ label: "1:1", value: 1 }]
 
 /** Default single-ratio preset used by ordinary landscape covers. */
 const DEFAULT_RATIOS: AspectOption[] = [{ label: "16:9", value: 16 / 9 }]

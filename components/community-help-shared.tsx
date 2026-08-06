@@ -284,7 +284,7 @@ export function LikeButton({
       className={cn(
         "flex items-center gap-1.5 rounded-full font-medium transition-colors",
         variant === "inline" && "px-2 py-1.5 text-sm",
-        variant === "row" && "px-2.5 py-1.5 text-[15px]",
+        variant === "row" && "px-2 py-1.5 text-sm",
         variant === "icon" && "p-2",
         liked ? "text-rose-500" : "text-muted-foreground hover:bg-secondary hover:text-foreground",
       )}
@@ -292,7 +292,6 @@ export function LikeButton({
       <Heart
         className={cn(
           variant === "inline" ? "size-4" : "size-5",
-          variant === "row" && "size-[22px]",
           liked && "fill-current",
         )}
       />
@@ -321,12 +320,12 @@ export function SaveButton({
       className={cn(
         "flex items-center gap-1.5 rounded-full text-sm font-medium transition-colors",
         variant === "inline" && "px-2 py-1.5",
-        variant === "row" && "px-2.5 py-1.5",
+        variant === "row" && "px-2 py-1.5",
         variant === "icon" && "p-2",
         saved ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground hover:bg-secondary hover:text-foreground",
       )}
     >
-      <Bookmark className={cn(variant === "row" ? "size-[22px]" : variant === "icon" ? "size-5" : "size-4", saved && "fill-current")} />
+      <Bookmark className={cn(variant === "row" || variant === "icon" ? "size-5" : "size-4", saved && "fill-current")} />
     </button>
   )
 }

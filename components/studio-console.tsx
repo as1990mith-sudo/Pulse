@@ -72,7 +72,7 @@ import { LiveBadge } from "@/components/live-badge"
 import { ReactionLayer } from "@/components/live-reactions"
 import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
 import { BackExitMenu } from "@/components/live-back-menu"
-import { CoverUpload, SQUARE_PORTRAIT_RATIOS } from "@/components/admin/cover-upload"
+import { CoverUpload, SQUARE_RATIO } from "@/components/admin/cover-upload"
 import { AudioFormatSelector } from "@/components/audio-format-selector"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -627,7 +627,7 @@ export function StudioConsole({
               value={cover}
               onChange={setCover}
               label="Cover artwork (required)"
-              ratios={SQUARE_PORTRAIT_RATIOS}
+              ratios={SQUARE_RATIO}
               allowFit
             />
 
