@@ -915,19 +915,20 @@ function MediaSlide({
   const chosen = item.aspectRatio ?? ratio
 
   let framedAspect: number | null
-  // Images taller than the 4:5 preview frame (e.g. a 9:16 crop) are shown
-  // CONTAINED inside a 4:5 card — the full vertical composition is visible with
-  // no further cropping. Exact 4:5 / 1:1 / 16:9 crops fill their own card.
+  // Images taller than the 1:1 preview frame (e.g. a 4:5 or 9:16 crop) are shown
+  // CONTAINED inside a 1:1 card — the full vertical composition is visible with
+  // no further cropping. Exact 1:1 / 16:9 crops fill their own card.
   let imageTall = false
   if (item.type === "video") {
     // Videos in the feed are restricted to a fixed set of card shapes:
-    // 4:5 (0.8), 1:1 (1) and 16:9 (1.7778). A clip in any other ratio — most
-    // notably vertical 9:16 — is presented in a 4:5 card and center-cropped
-    // with object-cover. The untouched full ratio is only revealed when the
-    // clip is expanded into the immersive viewer (which uses object-contain).
-    const ALLOWED_VIDEO_ASPECTS = [4 / 5, 1, 16 / 9]
+    // 1:1 (1) and 16:9 (1.7778). A clip in any other ratio — most notably
+    // vertical 9:16 or portrait 4:5 — is presented in a 1:1 card and
+    // center-cropped with object-cover. The untouched full ratio is only
+    // revealed when the clip is expanded into the immersive viewer (which uses
+    // object-contain).
+    const ALLOWED_VIDEO_ASPECTS = [1, 16 / 9]
     const allowed = chosen != null && ALLOWED_VIDEO_ASPECTS.some((a) => Math.abs(chosen - a) < 0.02)
-    framedAspect = allowed ? (chosen as number) : 4 / 5
+    framedAspect = allowed ? (chosen as number) : 1
   } else {
     imageTall = chosen != null && chosen < FEED_PREVIEW_MIN_RATIO - 0.01
     framedAspect = imageTall ? FEED_PREVIEW_MIN_RATIO : chosen
@@ -941,7 +942,7 @@ function MediaSlide({
       ? ratio != null && framedAspect != null && Math.abs(ratio - framedAspect) > 0.01
       : imageTall
   const frameStyle: React.CSSProperties = {
-    aspectRatio: framedAspect ? String(framedAspect) : "4 / 5",
+    aspectRatio: framedAspect ? String(framedAspect) : "1 / 1",
     maxHeight: feed ? "min(85svh, 46rem)" : "46rem",
   }
 

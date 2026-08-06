@@ -56,12 +56,12 @@ export function useMediaAspect(url: string | undefined, type: "image" | "video")
   return ratio
 }
 
-// Aspect ratio of the contained feed preview for tall/portrait media (4:5).
-// Anything TALLER (smaller ratio) than this gets cropped into the frame; media
-// this wide or wider keeps its natural ratio.
-export const FEED_PREVIEW_MIN_RATIO = 4 / 5
+// Aspect ratio of the contained feed preview for tall/portrait media (1:1).
+// Anything TALLER (smaller ratio) than this square frame gets contained inside
+// it; media this wide or wider keeps its natural ratio.
+export const FEED_PREVIEW_MIN_RATIO = 1
 
-/** True when the media is taller than the 4:5 feed-preview frame. */
+/** True when the media is taller than the 1:1 feed-preview frame. */
 export function isTallMedia(ratio: number | null): boolean {
   return ratio != null && ratio < FEED_PREVIEW_MIN_RATIO
 }
