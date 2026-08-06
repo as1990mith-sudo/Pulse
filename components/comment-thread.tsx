@@ -392,7 +392,10 @@ function CommentItem({
   )
 
   return (
-    <div className="flex gap-2.5">
+    // items-start keeps the avatar top-aligned with the author name. Without it
+    // the column stretches to the full comment height and the button-wrapped
+    // (clickable) avatar gets vertically centered, drifting below the name.
+    <div className="flex items-start gap-2.5">
       {popsProfile ? (
         <button
           type="button"
