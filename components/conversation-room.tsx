@@ -399,13 +399,14 @@ export function ConversationRoom({
   const [musicLoop, setMusicLoopState] = useState(false)
   const [musicError, setMusicError] = useState<string | null>(null)
   const [musicOpen, setMusicOpen] = useState(false)
-  const anyoneSpeaking = speakers.some((s) => s.isSpeaking)
 
-  // Duck the music under active speakers (a calm ambient bed during prayer).
+  // Ducking removed: the background music always plays at the host's chosen
+  // volume and is never lowered under active speakers. We still hold it at base
+  // (a no-op ramp) so any level left over from a prior session is normalised.
   useEffect(() => {
     if (musicActiveIndex === null || !musicPlaying) return
-    duckMusic(prayerActive ? false : anyoneSpeaking)
-  }, [anyoneSpeaking, musicActiveIndex, musicPlaying, prayerActive, duckMusic])
+    duckMusic(false)
+  }, [musicActiveIndex, musicPlaying, duckMusic])
 
   // Mix a playlist track into the broadcast and mark it now-playing.
   async function playMusicTrack(index: number) {
