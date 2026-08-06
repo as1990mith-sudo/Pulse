@@ -54,6 +54,12 @@ export type CommentThreadProps = {
    */
   enforceTimeWindows?: boolean
   /**
+   * Fine-grained override for the DELETE window only. When omitted it inherits
+   * `enforceTimeWindows`. Community Help sets this to false so authors can
+   * always remove their own replies while editing still respects its window.
+   */
+  enforceDeleteWindow?: boolean
+  /**
    * When provided, tapping a comment author's name/avatar calls this instead of
    * navigating to their profile page. Used by Community Help to pop a profile
    * card (Follow · Message · View profile) without leaving the feed.
@@ -88,10 +94,13 @@ export function CommentThread({
   onDelete,
   showCopy = true,
   enforceTimeWindows = true,
+  enforceDeleteWindow,
   onAuthorClick,
   allowReply = true,
   density = "default",
 }: CommentThreadProps) {
+  // Delete window inherits the edit/general window unless explicitly overridden.
+  const deleteWindow = enforceDeleteWindow ?? enforceTimeWindows
   // Group replies under their parent. Unknown parents fall back to top level.
   const { roots, repliesByParent } = useMemo(() => {
     const ids = new Set(comments.map((c) => c.id))
@@ -127,6 +136,7 @@ export function CommentThread({
             onDelete={onDelete}
             showCopy={showCopy}
             enforceTimeWindows={enforceTimeWindows}
+            enforceDeleteWindow={deleteWindow}
             onAuthorClick={onAuthorClick}
             density={density}
           />
@@ -156,6 +166,7 @@ function CommentNode({
   onDelete,
   showCopy,
   enforceTimeWindows,
+  enforceDeleteWindow,
   onAuthorClick,
   density = "default",
 }: {
@@ -170,6 +181,7 @@ function CommentNode({
   onDelete: (commentId: number) => Promise<void> | void
   showCopy: boolean
   enforceTimeWindows: boolean
+  enforceDeleteWindow: boolean
   onAuthorClick?: (authorId: string) => void
   density?: "default" | "comfortable"
 }) {
@@ -189,6 +201,7 @@ function CommentNode({
         onDelete={onDelete}
         showCopy={showCopy}
         enforceTimeWindows={enforceTimeWindows}
+        enforceDeleteWindow={enforceDeleteWindow}
         onAuthorClick={onAuthorClick}
         density={density}
       />
@@ -222,6 +235,7 @@ function CommentNode({
                     onDelete={onDelete}
                     showCopy={showCopy}
                     enforceTimeWindows={enforceTimeWindows}
+                    enforceDeleteWindow={enforceDeleteWindow}
                     onAuthorClick={onAuthorClick}
                     density={density}
                   />
@@ -245,6 +259,7 @@ function CommentItem({
   onDelete,
   showCopy,
   enforceTimeWindows = true,
+  enforceDeleteWindow,
   isReply = false,
   onAuthorClick,
   density = "default",
@@ -258,6 +273,7 @@ function CommentItem({
   onDelete: (commentId: number) => Promise<void> | void
   showCopy: boolean
   enforceTimeWindows?: boolean
+  enforceDeleteWindow?: boolean
   isReply?: boolean
   onAuthorClick?: (authorId: string) => void
   density?: "default" | "comfortable"
@@ -286,8 +302,9 @@ function CommentItem({
     return () => document.removeEventListener("pointerdown", onDown)
   }, [menuOpen])
 
+  const deleteWindow = enforceDeleteWindow ?? enforceTimeWindows
   const editable = comment.isSelf && (!enforceTimeWindows || canEdit(comment.createdAtMs))
-  const deletable = comment.isSelf && (!enforceTimeWindows || canDelete(comment.createdAtMs))
+  const deletable = comment.isSelf && (!deleteWindow || canDelete(comment.createdAtMs))
   const comfortable = density === "comfortable"
 
   function toggleLike() {

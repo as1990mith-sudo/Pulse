@@ -23,7 +23,7 @@ import { CommentThread, type ThreadComment } from "@/components/comment-thread"
 import { FeedVideo } from "@/components/feed-video"
 import { setImmersiveViewerOpen } from "@/lib/video-handoff"
 import { useMiniChat } from "@/components/mini-chat"
-import { AnonIdentity, BibleChips, LikeButton, SaveButton, SelfIdentity, ANON_AVATAR } from "@/components/community-help-shared"
+import { BibleChips, LikeButton, PostIdentity, SaveButton, ANON_AVATAR } from "@/components/community-help-shared"
 
 function toThreadComment(c: CommunityCommentView): ThreadComment {
   return {
@@ -246,9 +246,7 @@ export function CommunityConversation({
         {/* Anonymous question */}
         <div className="px-4 pt-5 sm:px-6">
           <div className="flex items-start justify-between gap-3">
-            {post.isSelf ? <SelfIdentity post={post} edited={post.edited} size="lg" /> : (
-              <AnonIdentity postedAt={post.postedAt} edited={post.edited} size="lg" />
-            )}
+            <PostIdentity post={post} edited={post.edited} size="lg" />
           </div>
           {post.body && (
             <p className="mt-4 whitespace-pre-wrap break-words text-xl leading-relaxed text-foreground text-pretty">
@@ -295,6 +293,7 @@ export function CommunityConversation({
               comments={comments.map(toThreadComment)}
               canInteract
               density="comfortable"
+              enforceDeleteWindow={false}
               onAuthorClick={openProfile}
               onLike={(commentId, liked) => void setCommunityCommentLike({ commentId, liked })}
               onReply={async (parentId, value) => {

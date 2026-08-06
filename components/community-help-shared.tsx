@@ -58,26 +58,27 @@ export function useIsSaved(id: number): boolean {
  * AnonIdentity) and as the standalone left-column avatar in the indented feed
  * and conversation layouts.
  *
- * When `selfPost` is the viewer's OWN post, we show the viewer's real profile
- * picture instead of the anonymous avatar — the author recognises their own
- * question, while every other viewer still sees the anonymous avatar (the
- * author's identity data is never sent to other clients).
+ * Identity is revealed when the post is identifiable (`anonymous === false`,
+ * shown to everyone) or when the viewer is the author (`isSelf`, shown only to
+ * them) — in both cases we render the author's real profile picture. Otherwise
+ * the universal anonymous avatar is shown and no author identity is exposed.
  */
 export function CommunityAvatar({
   size = "md",
-  selfPost,
+  post,
 }: {
   size?: "md" | "lg"
-  selfPost?: CommunityPostView | null
+  post?: CommunityPostView | null
 }) {
   const ring = cn("shrink-0 ring-2 ring-border/70", size === "lg" ? "size-12" : "size-11")
 
-  if (selfPost?.isSelf) {
+  const reveal = post && (post.isSelf || !post.anonymous) && (post.authorImage || post.authorInitials)
+  if (reveal) {
     return (
       <Avatar className={ring}>
-        {selfPost.authorImage && <AvatarImage src={selfPost.authorImage || "/placeholder.svg"} alt="Your profile" />}
-        <AvatarFallback className={cn("font-bold text-white", selfPost.authorColor)}>
-          {selfPost.authorInitials ?? "?"}
+        {post.authorImage && <AvatarImage src={post.authorImage || "/placeholder.svg"} alt={post.authorName ?? "Author"} />}
+        <AvatarFallback className={cn("font-bold text-white", post.authorColor)}>
+          {post.authorInitials ?? "?"}
         </AvatarFallback>
       </Avatar>
     )
@@ -119,6 +120,57 @@ export function SelfMeta({ post, edited }: { post: CommunityPostView; edited?: b
   )
 }
 
+/**
+ * Name + handle + timestamp line for an IDENTIFIABLE post (the author chose to
+ * show who they are), rendered without the avatar. Shown to every viewer.
+ */
+export function IdentityMeta({ post, edited }: { post: CommunityPostView; edited?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <p className="flex items-center gap-1.5 text-[15px] font-bold tracking-tight text-foreground">
+        <span className="truncate">{post.authorName ?? "Member"}</span>
+        {post.isSelf && <span className="shrink-0 text-xs font-medium text-primary">· you</span>}
+        {edited && <EditedIndicator />}
+      </p>
+      <p className="truncate text-xs text-muted-foreground">
+        {post.authorHandle ? `${post.authorHandle} · ` : ""}
+        {post.postedAt}
+      </p>
+    </div>
+  )
+}
+
+/**
+ * Chooses the correct meta line (name/timestamp) for a post based on the
+ * author's anonymity choice and whether the viewer is the author:
+ *  - identifiable post → real name + handle (everyone)
+ *  - anonymous + author → "You · only you see this"
+ *  - anonymous + others → "Anonymous"
+ */
+export function PostMeta({ post, edited }: { post: CommunityPostView; edited?: boolean }) {
+  if (!post.anonymous) return <IdentityMeta post={post} edited={edited} />
+  if (post.isSelf) return <SelfMeta post={post} edited={edited} />
+  return <AnonMeta postedAt={post.postedAt} edited={edited} />
+}
+
+/** Avatar + meta combined, for the conversation header. Mirrors PostMeta logic. */
+export function PostIdentity({
+  post,
+  edited,
+  size = "md",
+}: {
+  post: CommunityPostView
+  edited?: boolean
+  size?: "md" | "lg"
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <CommunityAvatar size={size} post={post} />
+      <PostMeta post={post} edited={edited} />
+    </div>
+  )
+}
+
 export function AnonIdentity({
   postedAt,
   edited,
@@ -151,7 +203,7 @@ export function SelfIdentity({
 }) {
   return (
     <div className="flex items-center gap-3">
-      <CommunityAvatar size={size} selfPost={post} />
+      <CommunityAvatar size={size} post={post} />
       <SelfMeta post={post} edited={edited} />
     </div>
   )
@@ -202,7 +254,7 @@ export function LikeButton({
   postId: number
   initialLikes: number
   initialLiked: boolean
-  variant?: "inline" | "icon"
+  variant?: "inline" | "icon" | "row"
 }) {
   const [liked, setLiked] = useState(initialLiked)
   const [likes, setLikes] = useState(initialLikes)
@@ -231,12 +283,20 @@ export function LikeButton({
       aria-label={liked ? "Unlike" : "Like"}
       className={cn(
         "flex items-center gap-1.5 rounded-full font-medium transition-colors",
-        variant === "inline" ? "px-2 py-1.5 text-sm" : "p-2",
+        variant === "inline" && "px-2 py-1.5 text-sm",
+        variant === "row" && "px-2.5 py-1.5 text-[15px]",
+        variant === "icon" && "p-2",
         liked ? "text-rose-500" : "text-muted-foreground hover:bg-secondary hover:text-foreground",
       )}
     >
-      <Heart className={cn("size-5", variant === "inline" && "size-4", liked && "fill-current")} />
-      {variant === "inline" && likes > 0 && <span className="tabular-nums">{likes}</span>}
+      <Heart
+        className={cn(
+          variant === "inline" ? "size-4" : "size-5",
+          variant === "row" && "size-[22px]",
+          liked && "fill-current",
+        )}
+      />
+      {variant !== "icon" && likes > 0 && <span className="tabular-nums">{likes}</span>}
     </button>
   )
 }
@@ -244,10 +304,10 @@ export function LikeButton({
 export function SaveButton({
   postId,
   variant = "inline",
-  }: {
+}: {
   postId: number
-  variant?: "inline" | "icon"
-  }) {
+  variant?: "inline" | "icon" | "row"
+}) {
   const saved = useIsSaved(postId)
   return (
     <button
@@ -258,15 +318,15 @@ export function SaveButton({
       }}
       aria-pressed={saved}
       aria-label={saved ? "Remove from saved" : "Save question"}
-  className={cn(
-  "flex items-center gap-1.5 rounded-full text-sm font-medium transition-colors",
-  variant === "inline" ? "px-2 py-1.5" : "p-2",
-  saved
-  ? "text-emerald-600 dark:text-emerald-400"
-  : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-  )}
+      className={cn(
+        "flex items-center gap-1.5 rounded-full text-sm font-medium transition-colors",
+        variant === "inline" && "px-2 py-1.5",
+        variant === "row" && "px-2.5 py-1.5",
+        variant === "icon" && "p-2",
+        saved ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+      )}
     >
-      <Bookmark className={cn("size-4", saved && "fill-current")} />
+      <Bookmark className={cn(variant === "row" ? "size-[22px]" : variant === "icon" ? "size-5" : "size-4", saved && "fill-current")} />
     </button>
   )
 }

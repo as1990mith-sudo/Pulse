@@ -700,15 +700,19 @@ export const savedItem = pgTable("saved_item", {
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
-// --- Community Help (Jodel-style anonymous Q&A room) -----------------------
-// A single global room every user can post to. Posts are ANONYMOUS — the author
-// id is kept only for moderation/rate-limiting and is never sent to the client.
+// --- Community Help (Jodel-style Q&A room) ---------------------------------
+// A single global room every user can post to. Each post carries an `anonymous`
+// flag chosen by the author at post time: when true the author id is kept only
+// for moderation and is never exposed to other clients; when false the author's
+// name + avatar are shown to everyone (an identifiable post).
 export const communityPost = pgTable("community_post", {
   id: serial("id").primaryKey(),
-  userId: text("userId").notNull(), // hidden author — never exposed to clients
+  userId: text("userId").notNull(), // author — exposed to others only when anonymous=false
   body: text("body").notNull(),
   imageUrl: text("imageUrl"), // optional attached image (Vercel Blob URL)
   videoUrl: text("videoUrl"), // optional attached video (Vercel Blob URL)
+  // Author's choice at post time. Defaults to true so legacy posts stay anonymous.
+  anonymous: boolean("anonymous").notNull().default(true),
   likes: integer("likes").notNull().default(0),
   deleted: boolean("deleted").notNull().default(false),
   editedAt: timestamp("editedAt"),

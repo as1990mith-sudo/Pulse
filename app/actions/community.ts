@@ -39,8 +39,12 @@ export type CommunityPostView = {
   // True when the signed-in user authored this post. Used to allow self-delete
   // and to reveal the author's own identity to themselves only.
   isSelf: boolean
-  // Author identity — ONLY populated for the author's own posts (isSelf). For
-  // everyone else these stay null so posts render anonymously to viewers.
+  // Whether the author chose to post anonymously. When false the post is
+  // identifiable and the author fields below are populated for EVERY viewer.
+  anonymous: boolean
+  // Author identity — populated for identifiable posts (anonymous=false, shown
+  // to everyone) and for the author's own posts (isSelf, shown only to them).
+  // For anonymous posts viewed by anyone else these stay null.
   authorName: string | null
   authorHandle: string | null
   authorInitials: string | null
@@ -90,19 +94,28 @@ export async function getCommunityPosts(): Promise<CommunityPostView[]> {
 
   const likedSet = await getLikedSet(viewerId, "community_post", ids)
 
-  // The author can see their own posts de-anonymized, so resolve the viewer's
-  // current name + avatar once (only needed for their own posts).
-  let viewer: { name: string; image: string | null } | null = null
-  if (viewerId && posts.some((p) => p.userId === viewerId)) {
-    const [row] = await db
-      .select({ name: userTable.name, image: userTable.image })
+  // Resolve profiles for every author whose identity may be shown: identifiable
+  // posts (anonymous=false, revealed to everyone) plus the viewer's own posts
+  // (revealed only to them). Anonymous posts by others are never resolved, so
+  // their author identity is never sent to the client.
+  const revealIds = [
+    ...new Set(posts.filter((p) => !p.anonymous || p.userId === viewerId).map((p) => p.userId)),
+  ]
+  const profileMap = new Map<string, { name: string; image: string | null }>()
+  if (revealIds.length) {
+    const rows = await db
+      .select({ id: userTable.id, name: userTable.name, image: userTable.image })
       .from(userTable)
-      .where(eq(userTable.id, viewerId))
-    if (row) viewer = row
+      .where(inArray(userTable.id, revealIds))
+    for (const r of rows) profileMap.set(r.id, { name: r.name, image: r.image })
   }
 
   return posts.map((p) => {
     const isSelf = viewerId === p.userId
+    // Identity is visible when the post is identifiable (to everyone) or when
+    // the viewer is the author (to themselves).
+    const reveal = !p.anonymous || isSelf
+    const profile = reveal ? profileMap.get(p.userId) ?? null : null
     return {
       id: p.id,
       body: p.body,
@@ -115,20 +128,26 @@ export async function getCommunityPosts(): Promise<CommunityPostView[]> {
       likes: p.likes,
       liked: likedSet.has(p.id),
       isSelf,
-      authorName: isSelf && viewer ? viewer.name : null,
-      authorHandle: isSelf && viewer ? getHandle(viewer.name) : null,
-      authorInitials: isSelf && viewer ? getInitials(viewer.name) : null,
-      authorColor: isSelf ? getAvatarColor(p.userId) : null,
-      authorImage: isSelf && viewer ? viewer.image : null,
+      anonymous: p.anonymous,
+      authorName: profile ? profile.name : null,
+      authorHandle: profile ? getHandle(profile.name) : null,
+      authorInitials: profile ? getInitials(profile.name) : null,
+      authorColor: reveal ? getAvatarColor(p.userId) : null,
+      authorImage: profile ? profile.image : null,
     }
   })
 }
 
-/** Creates an anonymous post in the Community Help room, optionally with an image or video. */
+/**
+ * Creates a post in the Community Help room, optionally with an image or video.
+ * `anonymous` is the author's choice: true (default) hides their identity from
+ * other members; false posts it identifiably with their name + avatar.
+ */
 export async function createCommunityPost(
   body: string,
   imageUrl?: string | null,
   videoUrl?: string | null,
+  anonymous = true,
 ): Promise<CommunityPostView> {
   const user = await requireUser()
   const text = body.trim()
@@ -147,7 +166,7 @@ export async function createCommunityPost(
 
   const [row] = await db
     .insert(communityPost)
-    .values({ userId: user.id, body: text, imageUrl: image, videoUrl: video })
+    .values({ userId: user.id, body: text, imageUrl: image, videoUrl: video, anonymous })
     .returning()
 
   revalidatePath("/chatrooms/community")
@@ -163,6 +182,7 @@ export async function createCommunityPost(
     likes: 0,
     liked: false,
     isSelf: true,
+    anonymous: row.anonymous,
     authorName: user.name,
     authorHandle: getHandle(user.name),
     authorInitials: getInitials(user.name),
