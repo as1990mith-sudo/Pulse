@@ -715,6 +715,7 @@ export function ConversationRoom({
               onChange={setSetupCover}
               label="Room cover"
               ratios={SQUARE_PORTRAIT_RATIOS}
+              allowFit
             />
 
             <label className="block space-y-1.5">

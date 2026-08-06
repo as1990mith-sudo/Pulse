@@ -23,6 +23,7 @@ export function CoverUpload({
   onChange,
   label = "Cover image",
   ratios = DEFAULT_RATIOS,
+  allowFit = false,
 }: {
   value: string | null
   onChange: (url: string | null) => void
@@ -32,6 +33,12 @@ export function CoverUpload({
    * preview's aspect so what's shown matches how the image was framed.
    */
   ratios?: AspectOption[]
+  /**
+   * Enables the editor's "Fit whole flyer" mode, letting the uploader show the
+   * entire image inside the frame (blurred letterbox fill) and drag it freely,
+   * instead of only cover-cropping. Used for live-meeting cover art.
+   */
+  allowFit?: boolean
 }) {
   // Preview aspect follows the first fixed ratio (e.g. 1:1 or 4:5); falls back
   // to 16:9 when the preset only offers a free crop.
@@ -129,6 +136,7 @@ export function CoverUpload({
           imageSrc={cropSrc}
           title="Crop cover"
           ratios={ratios}
+          allowFit={allowFit}
           onCancel={closeCropper}
           onApply={handleCropped}
         />

@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from "react"
 import { createPortal } from "react-dom"
 import Cropper, { type Area } from "react-easy-crop"
-import { Check, Loader2, X, ZoomIn } from "lucide-react"
-import { getCroppedBlob } from "@/lib/media-edit"
+import { Check, Loader2, Maximize, Minimize, X, ZoomIn } from "lucide-react"
+import { getCroppedBlob, getFittedBlob } from "@/lib/media-edit"
 import { cn } from "@/lib/utils"
 
 export type AspectOption = { label: string; value: number | null; hint?: string }
@@ -29,22 +29,33 @@ const MIN_ASPECT = 9 / 16
  * renders the selected region to a JPEG Blob via canvas and hands it back;
  * "Cancel" discards. Pass a single-entry `ratios` (e.g. the article 4:5) to
  * lock the shape while still letting the user choose which part is framed.
+ *
+ * When `allowFit` is set, a Fill/Fit toggle appears. "Fit" lets the user zoom
+ * out until the WHOLE image is visible and drag it anywhere in the frame — the
+ * letterbox is filled with a blurred copy of the image. This is for live-meeting
+ * flyers, where the admin wants the entire poster shown and freely positioned
+ * rather than cropped to fill.
  */
 export function CropModal({
   imageSrc,
   ratios = DEFAULT_RATIOS,
   title = "Crop photo",
+  allowFit = false,
   onCancel,
   onApply,
 }: {
   imageSrc: string
   ratios?: AspectOption[]
   title?: string
+  allowFit?: boolean
   onCancel: () => void
   onApply: (blob: Blob) => void
 }) {
   const [crop, setCrop] = useState({ x: 0, y: 0 })
   const [zoom, setZoom] = useState(1)
+  // "Fit" (contain the whole image) vs "Fill" (cover-crop). Only reachable when
+  // allowFit is set; when it is, we default to Fit so a flyer shows in full.
+  const [fit, setFit] = useState(allowFit)
   const [ratio, setRatio] = useState<AspectOption>(ratios[0])
   // The image's natural aspect, used to back the "Free" option (crop box tracks
   // the whole image shape rather than forcing a fixed ratio).
@@ -68,11 +79,36 @@ export function CropModal({
   const effectiveAspect = ratio.value ?? Math.max(mediaAspect, MIN_ASPECT)
   const showRatioBar = ratios.length > 1
 
+  // react-easy-crop's zoom is relative to a cover fit (1 = image just covers the
+  // frame). The zoom at which the whole image is instead *contained* in the
+  // frame is the ratio of the two fits — symmetric in the aspects. In Fit mode
+  // that becomes the minimum zoom so the user can reveal the entire flyer.
+  const containZoom = Math.max(
+    0.1,
+    Math.min(effectiveAspect / mediaAspect, mediaAspect / effectiveAspect),
+  )
+  const minZoom = fit ? containZoom : 1
+
+  // Reset framing whenever the mode, chosen ratio, or the loaded image changes:
+  // Fit starts fully zoomed-out (whole image visible); Fill starts at cover.
+  // Scoped to allowFit so every other cropper (e.g. the feed photo editor)
+  // keeps its original behavior of preserving zoom/position across ratios.
+  useEffect(() => {
+    if (!allowFit) return
+    setZoom(fit ? containZoom : 1)
+    setCrop({ x: 0, y: 0 })
+    // containZoom is derived from effectiveAspect + mediaAspect, so those two
+    // driving the reset is sufficient (and avoids fighting manual zooms).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allowFit, fit, effectiveAspect, mediaAspect])
+
   async function apply() {
     if (!croppedAreaPixels) return
     setWorking(true)
     try {
-      const blob = await getCroppedBlob(imageSrc, croppedAreaPixels)
+      const blob = fit
+        ? await getFittedBlob(imageSrc, croppedAreaPixels)
+        : await getCroppedBlob(imageSrc, croppedAreaPixels)
       onApply(blob)
     } catch {
       setWorking(false)
@@ -112,10 +148,15 @@ export function CropModal({
           crop={crop}
           zoom={zoom}
           aspect={effectiveAspect}
-          minZoom={1}
+          minZoom={minZoom}
           maxZoom={4}
-          restrictPosition
-          showGrid
+          // Fit mode lets the image sit inside the frame (with letterbox), so
+          // it must be free to move past the edges; Fill keeps it edge-to-edge.
+          // objectFit stays the default "contain": both the fill-mode crop math
+          // and the fit-mode contain-zoom derivation assume the crop box is
+          // inscribed in the fully-contained media at zoom 1.
+          restrictPosition={!fit}
+          showGrid={!fit}
           onCropChange={setCrop}
           onZoomChange={setZoom}
           onCropComplete={onCropComplete}
@@ -125,12 +166,47 @@ export function CropModal({
 
       {/* Controls */}
       <div className="space-y-4 bg-black px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-5">
+        {allowFit && (
+          <div className="flex items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => setFit(true)}
+              aria-pressed={fit}
+              className={cn(
+                "flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold leading-none transition-colors active:scale-95",
+                fit ? "bg-white text-black" : "bg-white/10 text-white/80 hover:bg-white/20",
+              )}
+            >
+              <Minimize className="size-4" />
+              Fit whole flyer
+            </button>
+            <button
+              type="button"
+              onClick={() => setFit(false)}
+              aria-pressed={!fit}
+              className={cn(
+                "flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold leading-none transition-colors active:scale-95",
+                !fit ? "bg-white text-black" : "bg-white/10 text-white/80 hover:bg-white/20",
+              )}
+            >
+              <Maximize className="size-4" />
+              Fill frame
+            </button>
+          </div>
+        )}
+
+        {allowFit && (
+          <p className="text-center text-xs text-white/50">
+            {fit ? "Drag to reposition · pinch or use the slider to resize" : "Drag to reposition · the image fills the frame"}
+          </p>
+        )}
+
         {/* Zoom slider (pinch/scroll also work on the cropper itself) */}
         <div className="flex items-center gap-3">
           <ZoomIn className="size-4 shrink-0 text-white/60" />
           <input
             type="range"
-            min={1}
+            min={minZoom}
             max={4}
             step={0.01}
             value={zoom}

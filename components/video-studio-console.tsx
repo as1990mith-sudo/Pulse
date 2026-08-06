@@ -1193,6 +1193,7 @@ export function VideoStudioConsole({
                 onChange={setCover}
                 label={orientation === "landscape" ? "Room cover" : "Broadcast cover"}
                 ratios={SQUARE_PORTRAIT_RATIOS}
+                allowFit
               />
 
               {/* Discussion topic — Conversation rooms only. */}

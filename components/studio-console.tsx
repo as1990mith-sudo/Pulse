@@ -628,6 +628,7 @@ export function StudioConsole({
               onChange={setCover}
               label="Cover artwork (required)"
               ratios={SQUARE_PORTRAIT_RATIOS}
+              allowFit
             />
 
             <label className="block space-y-1.5">
