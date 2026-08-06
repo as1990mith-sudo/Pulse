@@ -1396,7 +1396,7 @@ export function PostCard({
                 the edited info icon stays fixed (shrink-0) and is never clipped. */}
             <span className={cn("flex min-w-0 items-center gap-1 text-muted-foreground", feed ? "text-sm" : "text-xs")}>
               <span className="truncate">
-                {post.handle} �� {post.postedAt}
+                {post.handle} &middot; {post.postedAt}
               </span>
               {edited && <EditedIndicator />}
             </span>
