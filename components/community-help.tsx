@@ -235,8 +235,11 @@ function PostItem({
       )}
     >
       {/* Indented, Threads-style row: avatar in a fixed left gutter, all content
-          (name, question, image, actions) flows in the column to its right. */}
-      <div className="flex gap-3">
+          (name, question, image, actions) flows in the column to its right.
+          items-start keeps the avatar top-aligned with the name — without it the
+          gutter stretches to the full post height and the button-wrapped
+          (clickable) avatar centers, drifting down beside the body text. */}
+      <div className="flex items-start gap-3">
         <CommunityAvatar post={post} onAuthorClick={openProfile} />
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
