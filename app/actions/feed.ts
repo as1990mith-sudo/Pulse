@@ -135,6 +135,16 @@ export type FeedPostView = {
   comments: FeedCommentView[]
 }
 
+/** Returns the set of userIds the given user follows (empty if signed out). */
+async function getFollowingSet(userId: string | null): Promise<Set<string>> {
+  if (!userId) return new Set()
+  const rows = await db
+    .select({ followingId: follow.followingId })
+    .from(follow)
+    .where(eq(follow.followerId, userId))
+  return new Set(rows.map((r) => r.followingId))
+}
+
 /** Returns the set of postIds the given user has reposted (empty if signed out). */
 async function getRepostedSet(userId: string | null): Promise<Set<number>> {
   if (!userId) return new Set()
@@ -227,41 +237,46 @@ export async function getFeed(): Promise<FeedPostView[]> {
   const session = await auth.api.getSession({ headers: await headers() })
   const currentUserId = session?.user?.id ?? null
 
-  const followingIds = currentUserId
-    ? new Set(
-        (
-          await db
-            .select({ followingId: follow.followingId })
-            .from(follow)
-            .where(eq(follow.followerId, currentUserId))
-        ).map((r) => r.followingId),
-      )
-    : new Set<string>()
-
   // Only main-feed posts. Room posts (iTestify testimonies, Question of the Day
   // responses) carry a non-null `channel` and are excluded here so they render
-  // exclusively inside their own community rooms.
+  // exclusively inside their own community rooms. Posts come back newest-first;
+  // the client decides presentation per tab ("For you" shuffles from this
+  // deterministic order, "Following" stays newest-first).
   const posts = await db.select().from(feedPost).where(isNull(feedPost.channel)).orderBy(desc(feedPost.createdAt))
-  const comments = await db.select().from(feedComment).orderBy(asc(feedComment.createdAt))
-  const repostedSet = await getRepostedSet(currentUserId)
-  const savedSet = await getSavedPostSet(currentUserId)
-  const saveCounts = await getPostSaveCounts(posts.map((p) => p.id))
-  const shareCounts = await getPostShareCounts(posts.map((p) => p.id))
-  const likedPostSet = await getLikedSet(currentUserId, "post", posts.map((p) => p.id))
-  const likedCommentSet = await getLikedSet(currentUserId, "feed_comment", comments.map((c) => c.id))
+  if (posts.length === 0) return []
+  const postIds = posts.map((p) => p.id)
 
-  const infoMap = await getUserInfoMap([
-    ...posts.map((p) => p.userId),
-    ...comments.map((c) => c.userId),
+  // Everything below depends only on the loaded post ids (or on nothing but the
+  // viewer), so fire it all in parallel instead of a sequential waterfall. The
+  // comments query is scoped to these posts — never a full-table scan.
+  const [followingIds, comments, repostedSet, savedSet, saveCounts, shareCounts, likedPostSet] = await Promise.all([
+    getFollowingSet(currentUserId),
+    db.select().from(feedComment).where(inArray(feedComment.postId, postIds)).orderBy(asc(feedComment.createdAt)),
+    getRepostedSet(currentUserId),
+    getSavedPostSet(currentUserId),
+    getPostSaveCounts(postIds),
+    getPostShareCounts(postIds),
+    getLikedSet(currentUserId, "post", postIds),
   ])
 
-  // Posts are returned newest-first. The client decides presentation per tab:
-  // "For you" gets a per-session shuffle (fresh on every load/reopen, stable
-  // while open) and "Following" stays strictly newest-first. Keeping the server
-  // order deterministic is what lets the client shuffle reproducibly.
-  const ordered = [...posts].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+  // These two depend on the comment rows, so run them together after.
+  const [infoMap, likedCommentSet] = await Promise.all([
+    getUserInfoMap([...posts.map((p) => p.userId), ...comments.map((c) => c.userId)]),
+    getLikedSet(currentUserId, "feed_comment", comments.map((c) => c.id)),
+  ])
 
-  return ordered.map((p) => ({
+  // Group comments by post in a single pass (O(n)) so building each post's
+  // thread is a Map lookup instead of re-filtering the whole comment list per
+  // post (which was O(posts × comments)).
+  const commentsByPost = new Map<number, FeedCommentView[]>()
+  for (const c of comments) {
+    const view = toCommentView(c, infoMap, currentUserId, likedCommentSet)
+    const arr = commentsByPost.get(c.postId)
+    if (arr) arr.push(view)
+    else commentsByPost.set(c.postId, [view])
+  }
+
+  return posts.map((p) => ({
     id: p.id,
     authorId: p.userId,
     user: infoMap.get(p.userId)?.name ?? p.authorName,
@@ -286,9 +301,7 @@ export async function getFeed(): Promise<FeedPostView[]> {
     isFollowing: followingIds.has(p.userId),
     isSelf: currentUserId === p.userId,
     mentionedMe: currentUserId ? (p.mentions ?? []).some((m) => m.userId === currentUserId) : false,
-    comments: comments
-      .filter((c) => c.postId === p.id)
-      .map((c) => toCommentView(c, infoMap, currentUserId, likedCommentSet)),
+    comments: commentsByPost.get(p.id) ?? [],
   }))
 }
 
