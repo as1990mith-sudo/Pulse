@@ -105,16 +105,20 @@ export function AnonMeta({ postedAt, edited }: { postedAt: string; edited?: bool
   )
 }
 
-/** Name + timestamp line shown to the author on their OWN post, without avatar. */
+/**
+ * Name + timestamp line shown to the author on their OWN anonymous post, without
+ * avatar. The name stays "Anonymous" (matching how everyone else sees it) with a
+ * subtle "You" marker so the author still recognises their own post.
+ */
 export function SelfMeta({ post, edited }: { post: CommunityPostView; edited?: boolean }) {
   return (
     <div className="min-w-0">
       <p className="flex items-center gap-1.5 text-[15px] font-bold tracking-tight text-foreground">
-        You
+        {ANON_NAME}
         {edited && <EditedIndicator />}
       </p>
       <p className="text-xs text-muted-foreground">
-        {post.postedAt} · <span className="font-medium text-primary">only you see this</span>
+        {post.postedAt} · <span className="font-medium text-primary">You</span>
       </p>
     </div>
   )
