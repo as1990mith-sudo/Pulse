@@ -50,7 +50,7 @@ export function ChatRoomsTabs({
         <div
           role="tablist"
           aria-label="Chat Rooms sections"
-          className="mx-auto grid h-11 w-full max-w-md grid-cols-2 gap-1 rounded-full border border-primary/15 bg-gradient-to-b from-card/80 to-card/40 p-1 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06),0_8px_24px_-12px_rgba(0,0,0,0.6)] backdrop-blur-xl"
+          className="mx-auto grid h-11 w-full max-w-md grid-cols-2 gap-1 rounded-full border border-border/60 bg-secondary/40 p-1"
         >
           {/* Community Help segment: the tab selector plus an adjacent info (ⓘ)
               button. The info icon is the segment's only icon (it replaces the
@@ -61,7 +61,7 @@ export function ChatRoomsTabs({
             className={cn(
               "flex h-full items-center justify-center rounded-full transition-all duration-300",
               tab === "community"
-                ? "bg-gradient-to-b from-primary to-primary/85 text-primary-foreground shadow-[0_2px_10px_-2px_color-mix(in_oklab,var(--primary)_60%,transparent),inset_0_1px_0_0_rgba(255,255,255,0.25)]"
+                ? "bg-card text-foreground shadow-sm"
                 : "text-muted-foreground",
             )}
           >
@@ -99,7 +99,7 @@ export function ChatRoomsTabs({
             className={cn(
               "group relative flex h-full items-center justify-center gap-1.5 rounded-full text-[13px] font-medium tracking-wide transition-all duration-300",
               tab === "itestify"
-                ? "bg-gradient-to-b from-primary to-primary/85 font-semibold text-primary-foreground shadow-[0_2px_10px_-2px_color-mix(in_oklab,var(--primary)_60%,transparent),inset_0_1px_0_0_rgba(255,255,255,0.25)]"
+                ? "bg-card font-semibold text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >

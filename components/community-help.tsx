@@ -337,26 +337,27 @@ function PostItem({
 
           {post.videoUrl && <FeedPostVideo src={post.videoUrl} onOpen={onOpen} />}
 
-          {/* Engagement actions — spread evenly across the row with slightly
-              larger, easier-to-tap icons (Like · Reply · Share · Save). */}
-          <div className="mt-3 flex items-center justify-between pr-1">
+          {/* Engagement actions — evenly distributed within a bounded width so
+              they read as a tidy group (not clustered, not stretched edge to
+              edge), with comfortably sized icons (Like · Reply · Share · Save). */}
+          <div className="mt-3 flex max-w-[16rem] items-center justify-between">
             <LikeButton postId={post.id} initialLikes={post.likes} initialLiked={post.liked} variant="row" />
             <button
               type="button"
               onClick={onOpen}
               aria-label="Reply"
-              className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[15px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              className="flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             >
-              <CommentIcon className="size-[22px]" />
+              <CommentIcon className="size-5" />
               {post.commentCount > 0 && <span className="tabular-nums">{post.commentCount}</span>}
             </button>
             <button
               type="button"
               onClick={() => setShareOpen(true)}
               aria-label="Share"
-              className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[15px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              className="flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             >
-              <Share2 className="size-[22px]" />
+              <Share2 className="size-5" />
             </button>
             <SaveButton postId={post.id} variant="row" />
           </div>
