@@ -33,7 +33,7 @@ import { LiveChat } from "@/components/live-chat"
 import { ActionSheet, type SheetAction } from "@/components/action-sheet"
 import { CoverArt } from "@/components/cover-art"
 import { MarqueeTitle } from "@/components/marquee-title"
-import { CoverUpload, SQUARE_PORTRAIT_RATIOS } from "@/components/admin/cover-upload"
+import { CoverUpload, SQUARE_RATIO } from "@/components/admin/cover-upload"
 import { AudioFormatSelector } from "@/components/audio-format-selector"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { ParticipantGrid, type GridParticipant } from "@/components/conversation/participant-grid"
@@ -712,12 +712,12 @@ export function ConversationRoom({
             <AudioFormatSelector active="conversation" />
 
             <CoverUpload
-              value={setupCover}
-              onChange={setSetupCover}
-              label="Room cover"
-              ratios={SQUARE_PORTRAIT_RATIOS}
-              allowFit
-            />
+                value={setupCover}
+                onChange={setSetupCover}
+                label="Room cover"
+                ratios={SQUARE_RATIO}
+                allowFit
+              />
 
             <label className="block space-y-1.5">
               <span className="text-sm font-medium">Room name</span>
