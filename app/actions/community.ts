@@ -45,6 +45,9 @@ export type CommunityPostView = {
   // Author identity — populated for identifiable posts (anonymous=false, shown
   // to everyone) and for the author's own posts (isSelf, shown only to them).
   // For anonymous posts viewed by anyone else these stay null.
+  // authorId is exposed under the same rules so an identifiable author's
+  // profile can be opened; it stays null for anonymous posts by others.
+  authorId: string | null
   authorName: string | null
   authorHandle: string | null
   authorInitials: string | null
@@ -129,6 +132,7 @@ export async function getCommunityPosts(): Promise<CommunityPostView[]> {
       liked: likedSet.has(p.id),
       isSelf,
       anonymous: p.anonymous,
+      authorId: reveal ? p.userId : null,
       authorName: profile ? profile.name : null,
       authorHandle: profile ? getHandle(profile.name) : null,
       authorInitials: profile ? getInitials(profile.name) : null,
@@ -183,6 +187,7 @@ export async function createCommunityPost(
     liked: false,
     isSelf: true,
     anonymous: row.anonymous,
+    authorId: user.id,
     authorName: user.name,
     authorHandle: getHandle(user.name),
     authorInitials: getInitials(user.name),

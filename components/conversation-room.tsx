@@ -19,6 +19,7 @@ import {
   Palette,
   Radio,
   Settings2,
+  Share2,
   Sparkles,
   UserMinus,
   UserPlus,
@@ -30,6 +31,8 @@ import {
 import { BackExitMenu } from "@/components/live-back-menu"
 import { SaveEpisodePrompt } from "@/components/live/save-episode-prompt"
 import { LiveChat } from "@/components/live-chat"
+import { ShareSheet } from "@/components/share-sheet"
+import type { ShareTarget } from "@/lib/share-types"
 import { ActionSheet, type SheetAction } from "@/components/action-sheet"
 import { CoverArt } from "@/components/cover-art"
 import { MarqueeTitle } from "@/components/marquee-title"
@@ -508,6 +511,9 @@ export function ConversationRoom({
   // ── Host per-participant actions ─────────────────────────────────────────
   const [actionTarget, setActionTarget] = useState<GridParticipant | null>(null)
   const [chatOpen, setChatOpen] = useState(false)
+  // Share sheet — opened from the host "Invite people" control and from the
+  // participant dock share button. Lets anyone share the meeting link.
+  const [shareOpen, setShareOpen] = useState(false)
   // Study-resources drawer opener (present on every live). Sits in the dock
   // just before the chat button.
   const resources = useLiveResourcesOptional()
@@ -550,7 +556,7 @@ export function ConversationRoom({
   const hostControlActions: SheetAction[] = useMemo(() => {
     if (!isHost) return []
     return [
-      { label: "Invite people", icon: UserPlus, onClick: () => void inviteToRoom() },
+      { label: "Invite people", icon: UserPlus, onClick: () => setShareOpen(true) },
       { label: "Background music", icon: Music, onClick: () => setMusicOpen(true) },
       { label: "Room theme", icon: Palette, onClick: () => setThemeOpen(true) },
       {
@@ -575,20 +581,16 @@ export function ConversationRoom({
     setThemeState(id)
     if (roomName) void setLiveTheme({ roomName, theme: id }).catch(() => {})
   }
-  // Invite: share the room link via the native share sheet, falling back to
-  // copying it to the clipboard.
-  async function inviteToRoom() {
-    if (!roomName) return
-    const url = `${window.location.origin}/live/${roomName}`
-    try {
-      if (navigator.share) {
-        await navigator.share({ title, text: `Join "${title}" on Frequency`, url })
-      } else {
-        await navigator.clipboard.writeText(url)
-      }
-    } catch {
-      /* user dismissed the share sheet — no-op */
-    }
+  // The meeting link shared from both the host "Invite people" control and the
+  // participant dock share button. `type: "live"` + roomName mirrors how the
+  // audio listener screen builds its share target.
+  const shareTarget: ShareTarget = {
+    type: "live",
+    key: roomName ?? title,
+    title,
+    subtitle: `Join "${title}" live on Frequency`,
+    url: roomName ? `/live/${roomName}` : "/live",
+    image: cover ?? null,
   }
 
   function leaveRoom() {
@@ -1045,7 +1047,17 @@ export function ConversationRoom({
         <DockButton label="Chat" onClick={() => setChatOpen((v) => !v)} active={chatOpen}>
           <MessageSquare />
         </DockButton>
+
+        {/* Share the meeting link — available to everyone, sitting right next
+            to the chat button. */}
+        <DockButton label="Share" onClick={() => setShareOpen(true)} active={shareOpen}>
+          <Share2 />
+        </DockButton>
       </div>
+
+      {/* Share the meeting link — opened by the host "Invite people" control
+          and by the participant dock share button. */}
+      <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
 
       {/* Prayer overlay + toast */}
       <PrayerOverlay active={prayerActive} endedAt={prayerEndedAt} />
