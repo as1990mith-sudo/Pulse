@@ -1048,11 +1048,14 @@ export function ConversationRoom({
           <MessageSquare />
         </DockButton>
 
-        {/* Share the meeting link — available to everyone, sitting right next
-            to the chat button. */}
-        <DockButton label="Share" onClick={() => setShareOpen(true)} active={shareOpen}>
-          <Share2 />
-        </DockButton>
+        {/* Share the meeting link — participants only. The host already shares
+            via the "Invite people" control in their host menu, so a dedicated
+            dock button would be redundant for them. */}
+        {!isHost && (
+          <DockButton label="Share" onClick={() => setShareOpen(true)} active={shareOpen}>
+            <Share2 />
+          </DockButton>
+        )}
       </div>
 
       {/* Share the meeting link — opened by the host "Invite people" control
