@@ -425,12 +425,18 @@ export function useLiveVideo({
       // Studio-grade microphone capture for the host. The browser's voice-call
       // DSP (auto-gain, noise gate, echo canceller) is tuned for compressing
       // speech on a call and makes phone mics sound thin and "pumpy"; disabling
-      // it preserves full dynamic range and tone at a clean 48 kHz stereo.
+      // it preserves full dynamic range and tone at a clean 48 kHz.
+      //
+      // The mic is captured MONO (channelCount: 1). A mic is a single-capsule
+      // mono source; asking it for a 2-channel capture makes some devices put
+      // the voice in only the LEFT channel (right silent), which the stereo
+      // encoder relays faithfully — so viewers hear the host in one ear only.
+      // Mono capture is rendered to both ears equally.
       audioCaptureDefaults: {
         autoGainControl: false,
         echoCancellation: false,
         noiseSuppression: false,
-        channelCount: 2,
+        channelCount: 1,
         sampleRate: 48000,
       },
       publishDefaults: {
@@ -443,12 +449,13 @@ export function useLiveVideo({
         // Keep resolution sharp (rather than dropping to a blurry frame) when
         // the encoder is bandwidth-constrained — faces stay legible.
         degradationPreference: "maintain-resolution",
-        // Encode the host mic at the highest-fidelity music profile (128 kbps
-        // stereo) instead of the default 24 kbps speech codec. DTX off avoids
-        // swirl/dropouts on music and room tone; RED adds packet-loss
+        // High-fidelity voice: 96 kbps MONO (far above the default 24 kbps
+        // speech codec) — clean and full without forcing a stereo image onto a
+        // mono mic. forceStereo is intentionally NOT set here; stereo is opted
+        // into per-track for the genuinely-stereo background music below. DTX
+        // off avoids swirl/dropouts on room tone; RED adds packet-loss
         // resilience.
-        audioPreset: AudioPresets.musicHighQualityStereo,
-        forceStereo: true,
+        audioPreset: AudioPresets.musicHighQuality,
         dtx: false,
         red: true,
       },
@@ -825,12 +832,14 @@ export function useLiveVideo({
       const [mediaTrack] = dest.stream.getAudioTracks()
       const localTrack = new LocalAudioTrack(mediaTrack)
       // Publish background music with a high-quality stereo preset so it stays
-      // clear and crisp. DTX (discontinuous transmission) and RED (redundancy)
-      // are meant for speech and muddy sustained music, so disable both, and
-      // keep the browser's speech DSP off since this is a clean mixed feed.
+      // clear and crisp. forceStereo is set explicitly here (the room defaults
+      // are now mono, tuned for the voice mic) so the music keeps its real
+      // stereo image. DTX (discontinuous transmission) and RED (redundancy) are
+      // meant for speech and muddy sustained music, so disable both.
       await room.localParticipant.publishTrack(localTrack, {
         name: "background-music",
         audioPreset: AudioPresets.musicHighQualityStereo,
+        forceStereo: true,
         dtx: false,
         red: false,
       })
