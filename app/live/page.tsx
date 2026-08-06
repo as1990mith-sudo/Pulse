@@ -84,7 +84,7 @@ export default async function LivePage() {
       <SiteHeader />
       <main>
         {/* Live now */}
-        <div className="mx-auto w-full max-w-6xl space-y-16 px-4 py-16 sm:px-6">
+        <div className="mx-auto w-full max-w-6xl space-y-16 px-4 pb-16 pt-6 sm:px-6">
           <section className="space-y-6">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <SectionHeading

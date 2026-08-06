@@ -169,9 +169,10 @@ export function EpisodeCatalog({
     )
   }
 
-  // Whether the active view renders as a video grid: upload Video tab, or the
-  // Live tab with the Video subtab selected.
-  const showsVideoGrid = tab === "video" || (tab === "live" && liveKind === "video")
+  // Whether the active view renders as a YouTube-style video grid. Only the
+  // (uploads) Video tab uses the grid; Live recordings — video AND audio — use
+  // the same compact cover-art row list so both kinds list identically.
+  const showsVideoGrid = tab === "video"
   // Search placeholder noun for the active view.
   const searchNoun = tab === "live" ? `live ${liveKind}` : tab
 
