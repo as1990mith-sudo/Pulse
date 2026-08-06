@@ -1050,12 +1050,36 @@ export function CommunityHelp({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Treat the expanded conversation as a navigable screen: opening it pushes a
+  // history entry so the phone/browser Back button returns to the feed preview
+  // (just closing the overlay) instead of navigating away from Community Help.
+  const conversationOpen = activeId !== null
+  useEffect(() => {
+    if (!conversationOpen || typeof window === "undefined") return
+    window.history.pushState({ chConversation: true }, "")
+    const onPop = () => setActiveId(null)
+    window.addEventListener("popstate", onPop)
+    return () => window.removeEventListener("popstate", onPop)
+  }, [conversationOpen])
+
+  // Closing via the UI (X button / backdrop / delete) consumes the history entry
+  // we pushed so the Back button doesn't need an extra press; the popstate
+  // handler above then clears activeId. Falls back to a direct clear otherwise.
+  function closeConversation() {
+    const state = typeof window !== "undefined" ? (window.history.state as { chConversation?: boolean } | null) : null
+    if (state?.chConversation) {
+      window.history.back()
+    } else {
+      setActiveId(null)
+    }
+  }
+
   function handleCreated(post: CommunityPostView) {
     mutate("community-posts", (prev: CommunityPostView[] | undefined) => [post, ...(prev ?? [])], { revalidate: false })
   }
 
   function handleDeleted(id: number) {
-    if (activeId === id) setActiveId(null)
+    if (activeId === id) closeConversation()
     mutate("community-posts", (prev: CommunityPostView[] | undefined) => (prev ?? []).filter((p) => p.id !== id), {
       revalidate: false,
     })
@@ -1191,7 +1215,7 @@ export function CommunityHelp({
           <CommunityConversation
             post={activePost}
             related={relatedPosts}
-            onClose={() => setActiveId(null)}
+            onClose={closeConversation}
             onOpenRelated={(p) => setActiveId(p.id)}
             onCountChange={handleCountChange}
           />

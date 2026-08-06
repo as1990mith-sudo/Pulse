@@ -107,17 +107,19 @@ export function EpisodeRow({ show, owned = false, queue }: { show: Show; owned?:
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div className="flex items-center gap-1.5">
-          <Badge variant="outline" className="border-border/50 px-1.5 py-0 text-[10px] font-medium text-muted-foreground">
-            {show.category}
-          </Badge>
-          {owned && isPrivate && (
-            <Badge variant="outline" className="gap-1 border-border/50 px-1.5 py-0 text-[10px] text-muted-foreground">
-              <Lock className="size-2.5" /> Private
-            </Badge>
-          )}
-          {show.status === "live" && <ListenerCount count={show.listeners} />}
-        </div>
+        {/* Category is intentionally not shown here — it's an optional/auto
+            defaulted field (e.g. "Episode") that only duplicated the tagline
+            below. We keep just the privacy + live-listener meta. */}
+        {((owned && isPrivate) || show.status === "live") && (
+          <div className="flex items-center gap-1.5">
+            {owned && isPrivate && (
+              <Badge variant="outline" className="gap-1 border-border/50 px-1.5 py-0 text-[10px] text-muted-foreground">
+                <Lock className="size-2.5" /> Private
+              </Badge>
+            )}
+            {show.status === "live" && <ListenerCount count={show.listeners} />}
+          </div>
+        )}
         <MarqueeTitle
           text={show.title}
           className={cn(
@@ -128,7 +130,12 @@ export function EpisodeRow({ show, owned = false, queue }: { show: Show; owned?:
         {isActive ? (
           <p className="text-xs font-medium leading-tight text-primary/80">Now playing</p>
         ) : (
-          <p className="line-clamp-1 text-xs leading-tight text-muted-foreground">{show.tagline}</p>
+          // Hide the tagline when it's just the category fallback (tagline ||
+          // category) so we don't reintroduce "Episode" / the category label.
+          show.tagline &&
+          show.tagline !== show.category && (
+            <p className="line-clamp-1 text-xs leading-tight text-muted-foreground">{show.tagline}</p>
+          )
         )}
       </div>
     </>
