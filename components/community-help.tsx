@@ -38,7 +38,7 @@ import {
   getCommunityPosts,
   type CommunityPostView,
 } from "@/app/actions/community"
-import { MiniChatProvider } from "@/components/mini-chat"
+import { MiniChatProvider, useMiniChat } from "@/components/mini-chat"
 import { CommunityConversation } from "@/components/community-conversation"
 import { FeedVideo } from "@/components/feed-video"
 import {
@@ -145,6 +145,7 @@ function PostItem({
   onOpen: () => void
   highlighted?: boolean
 }) {
+  const { openProfile } = useMiniChat()
   const [shareOpen, setShareOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -236,10 +237,10 @@ function PostItem({
       {/* Indented, Threads-style row: avatar in a fixed left gutter, all content
           (name, question, image, actions) flows in the column to its right. */}
       <div className="flex gap-3">
-        <CommunityAvatar post={post} />
+        <CommunityAvatar post={post} onAuthorClick={openProfile} />
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
-            <PostMeta post={post} edited={edited} />
+            <PostMeta post={post} edited={edited} onAuthorClick={openProfile} />
             <div ref={menuRef} className="relative">
               <button
                 type="button"
