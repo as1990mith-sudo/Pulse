@@ -246,7 +246,7 @@ export function CommunityConversation({
         {/* Anonymous question */}
         <div className="px-4 pt-5 sm:px-6">
           <div className="flex items-start justify-between gap-3">
-            <PostIdentity post={post} edited={post.edited} size="lg" />
+            <PostIdentity post={post} edited={post.edited} size="lg" onAuthorClick={openProfile} />
           </div>
           {post.body && (
             <p className="mt-4 whitespace-pre-wrap break-words text-xl leading-relaxed text-foreground text-pretty">

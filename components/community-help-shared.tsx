@@ -66,15 +66,18 @@ export function useIsSaved(id: number): boolean {
 export function CommunityAvatar({
   size = "md",
   post,
+  onAuthorClick,
 }: {
   size?: "md" | "lg"
   post?: CommunityPostView | null
+  /** When set and the post is identifiable, the avatar becomes a profile link. */
+  onAuthorClick?: (authorId: string) => void
 }) {
   const ring = cn("shrink-0 ring-2 ring-border/70", size === "lg" ? "size-12" : "size-11")
 
   const reveal = post && (post.isSelf || !post.anonymous) && (post.authorImage || post.authorInitials)
   if (reveal) {
-    return (
+    const avatar = (
       <Avatar className={ring}>
         {post.authorImage && <AvatarImage src={post.authorImage || "/placeholder.svg"} alt={post.authorName ?? "Author"} />}
         <AvatarFallback className={cn("font-bold text-white", post.authorColor)}>
@@ -82,6 +85,23 @@ export function CommunityAvatar({
         </AvatarFallback>
       </Avatar>
     )
+    // Only identifiable posts expose a tappable profile — never anonymous ones.
+    if (!post.anonymous && post.authorId && onAuthorClick) {
+      return (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onAuthorClick(post.authorId!)
+          }}
+          className="rounded-full transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          aria-label={`View ${post.authorName ?? "member"}'s profile`}
+        >
+          {avatar}
+        </button>
+      )
+    }
+    return avatar
   }
 
   return (
@@ -128,11 +148,34 @@ export function SelfMeta({ post, edited }: { post: CommunityPostView; edited?: b
  * Name + handle + timestamp line for an IDENTIFIABLE post (the author chose to
  * show who they are), rendered without the avatar. Shown to every viewer.
  */
-export function IdentityMeta({ post, edited }: { post: CommunityPostView; edited?: boolean }) {
+export function IdentityMeta({
+  post,
+  edited,
+  onAuthorClick,
+}: {
+  post: CommunityPostView
+  edited?: boolean
+  onAuthorClick?: (authorId: string) => void
+}) {
+  const clickable = post.authorId && onAuthorClick
+  const name = <span className="truncate">{post.authorName ?? "Member"}</span>
   return (
     <div className="min-w-0">
       <p className="flex items-center gap-1.5 text-[15px] font-bold tracking-tight text-foreground">
-        <span className="truncate">{post.authorName ?? "Member"}</span>
+        {clickable ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onAuthorClick!(post.authorId!)
+            }}
+            className="truncate rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {post.authorName ?? "Member"}
+          </button>
+        ) : (
+          name
+        )}
         {post.isSelf && <span className="shrink-0 text-xs font-medium text-primary">· you</span>}
         {edited && <EditedIndicator />}
       </p>
@@ -151,8 +194,16 @@ export function IdentityMeta({ post, edited }: { post: CommunityPostView; edited
  *  - anonymous + author → "You · only you see this"
  *  - anonymous + others → "Anonymous"
  */
-export function PostMeta({ post, edited }: { post: CommunityPostView; edited?: boolean }) {
-  if (!post.anonymous) return <IdentityMeta post={post} edited={edited} />
+export function PostMeta({
+  post,
+  edited,
+  onAuthorClick,
+}: {
+  post: CommunityPostView
+  edited?: boolean
+  onAuthorClick?: (authorId: string) => void
+}) {
+  if (!post.anonymous) return <IdentityMeta post={post} edited={edited} onAuthorClick={onAuthorClick} />
   if (post.isSelf) return <SelfMeta post={post} edited={edited} />
   return <AnonMeta postedAt={post.postedAt} edited={edited} />
 }
@@ -162,15 +213,17 @@ export function PostIdentity({
   post,
   edited,
   size = "md",
+  onAuthorClick,
 }: {
   post: CommunityPostView
   edited?: boolean
   size?: "md" | "lg"
+  onAuthorClick?: (authorId: string) => void
 }) {
   return (
     <div className="flex items-center gap-3">
-      <CommunityAvatar size={size} post={post} />
-      <PostMeta post={post} edited={edited} />
+      <CommunityAvatar size={size} post={post} onAuthorClick={onAuthorClick} />
+      <PostMeta post={post} edited={edited} onAuthorClick={onAuthorClick} />
     </div>
   )
 }
