@@ -4,7 +4,12 @@ import { useEffect, useRef, useState, useCallback } from "react"
 import { Play, Pause, Volume2, VolumeX, RotateCcw, RotateCw } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getSharedMuted, setSharedMuted, useSharedMute } from "@/lib/shared-mute"
-import { rememberVideoPosition, getImmersiveViewerOpen, useImmersiveViewerOpen } from "@/lib/video-handoff"
+import {
+  rememberVideoPosition,
+  getVideoPosition,
+  getImmersiveViewerOpen,
+  useImmersiveViewerOpen,
+} from "@/lib/video-handoff"
 
 /**
  * A feed video with a modern, minimal custom control bar.
@@ -46,6 +51,8 @@ export function FeedVideo({
   trimEnd,
   onAspectRatio,
   onExpand,
+  resume = false,
+  ignoreViewerGate = false,
 }: {
   src: string
   className?: string
@@ -63,6 +70,13 @@ export function FeedVideo({
    *  feed so tapping anywhere on the clip opens the full post. The bottom
    *  control bar still handles play/pause, seek, and mute. */
   onExpand?: () => void
+  /** Start from the position the same clip (by src) last reached inline, so
+   *  expanding a playing preview continues instead of restarting. */
+  resume?: boolean
+  /** This player owns playback (e.g. the expanded post overlay), so it should
+   *  keep playing even while the immersive-viewer pause gate is active — that
+   *  gate exists to silence the *inline* feed clip behind it, not this one. */
+  ignoreViewerGate?: boolean
 }) {
   const ref = useRef<HTMLVideoElement>(null)
   const seekRef = useRef<HTMLDivElement>(null)
@@ -99,8 +113,9 @@ export function FeedVideo({
 
   // Try to play with sound; if the browser blocks it, fall back to muted.
   const attemptPlay = useCallback((el: HTMLVideoElement) => {
-    // Never autoplay while the expanded reel viewer owns playback.
-    if (getImmersiveViewerOpen()) return
+    // Never autoplay while another player owns playback (expanded reel viewer or
+    // the community post overlay) — unless this instance IS that owner.
+    if (!ignoreViewerGate && getImmersiveViewerOpen()) return
     // Never start outside the trimmed window.
     if (el.currentTime < windowStartRef.current || el.currentTime >= windowEndRef.current) {
       try {
@@ -117,7 +132,7 @@ export function FeedVideo({
         el.play().catch(() => {})
       }
     })
-  }, [])
+  }, [ignoreViewerGate])
 
   useEffect(() => {
     const el = ref.current
@@ -147,13 +162,15 @@ export function FeedVideo({
   useEffect(() => {
     const el = ref.current
     if (!el) return
+    // The owner instance (e.g. the expanded post overlay) ignores the gate.
+    if (ignoreViewerGate) return
     if (viewerOpen) {
       programmaticPauseRef.current = true
       el.pause()
     } else if (inViewRef.current && !userPausedRef.current) {
       attemptPlay(el)
     }
-  }, [viewerOpen, attemptPlay])
+  }, [viewerOpen, attemptPlay, ignoreViewerGate])
 
   function togglePlay() {
     const el = ref.current
@@ -293,10 +310,16 @@ export function FeedVideo({
           windowStartRef.current = ws
           windowEndRef.current = we > ws ? we : real
           setDuration(Math.max(0, windowEndRef.current - ws))
-          // Seek to the window start so the trimmed first frame is the thumbnail.
+          // Seek to the window start so the trimmed first frame is the thumbnail —
+          // unless we're resuming a hand-off, in which case continue from the
+          // position the inline preview last reached (clamped to the window).
           if (!started) {
+            const handoff = resume ? getVideoPosition(src) : undefined
+            const resumeAt =
+              handoff != null && handoff >= ws && handoff < windowEndRef.current ? handoff : ws > 0 ? ws : 0.1
             try {
-              el.currentTime = ws > 0 ? ws : 0.1
+              el.currentTime = resumeAt
+              setCurrent(Math.max(0, resumeAt - ws))
             } catch {
               /* seek not ready yet — the media fragment still covers this */
             }

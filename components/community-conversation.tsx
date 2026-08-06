@@ -21,6 +21,7 @@ import {
 } from "@/app/actions/community"
 import { CommentThread, type ThreadComment } from "@/components/comment-thread"
 import { FeedVideo } from "@/components/feed-video"
+import { setImmersiveViewerOpen } from "@/lib/video-handoff"
 import { useMiniChat } from "@/components/mini-chat"
 import { AnonIdentity, BibleChips, LikeButton, SaveButton, SelfIdentity, ANON_AVATAR } from "@/components/community-help-shared"
 
@@ -186,6 +187,15 @@ export function CommunityConversation({
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0 })
   }, [post.id])
+
+  // While this overlay is open it owns video playback. Raise the shared
+  // immersive-viewer flag so the inline feed clip behind it pauses instead of
+  // playing on in the background; the overlay's own player opts out of the gate
+  // and resumes from where the preview left off. Lower the flag on close.
+  useEffect(() => {
+    setImmersiveViewerOpen(true)
+    return () => setImmersiveViewerOpen(false)
+  }, [])
 
   if (typeof document === "undefined") return null
 
@@ -400,7 +410,7 @@ function PostVideo({ src }: { src: string }) {
       className="relative mt-4 w-full overflow-hidden rounded-2xl border border-border/60 bg-black"
       style={{ aspectRatio: String(aspect), maxHeight: "70vh" }}
     >
-      <FeedVideo src={src} className="h-full w-full object-cover" onAspectRatio={setRatio} />
+      <FeedVideo src={src} className="h-full w-full object-cover" onAspectRatio={setRatio} resume ignoreViewerGate />
     </div>
   )
 }

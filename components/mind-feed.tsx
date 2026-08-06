@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react"
+import { memo, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import useSWR, { mutate as globalMutate } from "swr"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -191,6 +191,27 @@ function toThreadComment(c: FeedCommentView): ThreadComment {
   }
 }
 
+/**
+ * Memoized list row for the feed. MindFeed holds a lot of high-frequency state
+ * (composer draft on every keystroke, upload progress, menus, tab), and without
+ * memoization every one of those updates re-rendered every PostCard — each of
+ * which mounts media/video. Because the props here are all stable (the `post`
+ * object identity only changes when the feed data actually changes, and the
+ * other props are a prop, a constant, and a rarely-flipped boolean), memo lets
+ * React skip the entire PostCard subtree on unrelated parent updates.
+ */
+const FeedPostItem = memo(function FeedPostItem({
+  post,
+  currentUser,
+  highlighted,
+}: {
+  post: FeedPostView
+  currentUser: CurrentUser | null
+  highlighted: boolean
+}) {
+  return <PostCard post={post} currentUser={currentUser} variant="feed" highlighted={highlighted} />
+})
+
 export function MindFeed({
   posts,
   currentUser,
@@ -239,12 +260,18 @@ export function MindFeed({
     textareaRef: composeTextareaRef,
   })
 
-  // Poll the feed so new tweets and comments from others appear without a manual
-  // refresh. The server-rendered posts seed the initial data.
+  // Poll the feed so new posts and comments from others appear without a manual
+  // refresh. The server-rendered posts seed the initial data so first paint is
+  // instant. A 5s poll re-ran the whole (expensive) feed query constantly and
+  // caused visible lag; 20s keeps the feed fresh while cutting that churn ~4x.
+  // `keepPreviousData` avoids a flash/reflow on each revalidation, and
+  // `dedupingInterval` collapses overlapping requests (focus + interval).
   const { data: livePosts, mutate: mutateFeed } = useSWR("feed", () => getFeed(), {
     fallbackData: posts,
-    refreshInterval: 5000,
+    refreshInterval: 20000,
     revalidateOnFocus: true,
+    keepPreviousData: true,
+    dedupingInterval: 8000,
   })
   const allPosts = livePosts ?? posts
 
@@ -834,10 +861,9 @@ export function MindFeed({
           <ul className="stagger flex flex-col gap-2 border-b border-border/60 bg-border/40">
             {visiblePosts.map((post) => (
               <li key={post.id}>
-                <PostCard
+                <FeedPostItem
                   post={post}
                   currentUser={currentUser}
-                  variant="feed"
                   highlighted={highlightedPost === String(post.id)}
                 />
               </li>
@@ -889,19 +915,20 @@ function MediaSlide({
   const chosen = item.aspectRatio ?? ratio
 
   let framedAspect: number | null
-  // Images taller than the 4:5 preview frame (e.g. a 9:16 crop) are shown
-  // CONTAINED inside a 4:5 card — the full vertical composition is visible with
-  // no further cropping. Exact 4:5 / 1:1 / 16:9 crops fill their own card.
+  // Images taller than the 1:1 preview frame (e.g. a 4:5 or 9:16 crop) are shown
+  // CONTAINED inside a 1:1 card — the full vertical composition is visible with
+  // no further cropping. Exact 1:1 / 16:9 crops fill their own card.
   let imageTall = false
   if (item.type === "video") {
     // Videos in the feed are restricted to a fixed set of card shapes:
-    // 4:5 (0.8), 1:1 (1) and 16:9 (1.7778). A clip in any other ratio — most
-    // notably vertical 9:16 — is presented in a 4:5 card and center-cropped
-    // with object-cover. The untouched full ratio is only revealed when the
-    // clip is expanded into the immersive viewer (which uses object-contain).
-    const ALLOWED_VIDEO_ASPECTS = [4 / 5, 1, 16 / 9]
+    // 1:1 (1) and 16:9 (1.7778). A clip in any other ratio — most notably
+    // vertical 9:16 or portrait 4:5 — is presented in a 1:1 card and
+    // center-cropped with object-cover. The untouched full ratio is only
+    // revealed when the clip is expanded into the immersive viewer (which uses
+    // object-contain).
+    const ALLOWED_VIDEO_ASPECTS = [1, 16 / 9]
     const allowed = chosen != null && ALLOWED_VIDEO_ASPECTS.some((a) => Math.abs(chosen - a) < 0.02)
-    framedAspect = allowed ? (chosen as number) : 4 / 5
+    framedAspect = allowed ? (chosen as number) : 1
   } else {
     imageTall = chosen != null && chosen < FEED_PREVIEW_MIN_RATIO - 0.01
     framedAspect = imageTall ? FEED_PREVIEW_MIN_RATIO : chosen
@@ -915,7 +942,7 @@ function MediaSlide({
       ? ratio != null && framedAspect != null && Math.abs(ratio - framedAspect) > 0.01
       : imageTall
   const frameStyle: React.CSSProperties = {
-    aspectRatio: framedAspect ? String(framedAspect) : "4 / 5",
+    aspectRatio: framedAspect ? String(framedAspect) : "1 / 1",
     maxHeight: feed ? "min(85svh, 46rem)" : "46rem",
   }
 
@@ -1377,7 +1404,7 @@ export function PostCard({
                 the edited info icon stays fixed (shrink-0) and is never clipped. */}
             <span className={cn("flex min-w-0 items-center gap-1 text-muted-foreground", feed ? "text-sm" : "text-xs")}>
               <span className="truncate">
-                {post.handle} · {post.postedAt}
+                {post.handle} �� {post.postedAt}
               </span>
               {edited && <EditedIndicator />}
             </span>

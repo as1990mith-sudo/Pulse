@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, serial, integer, jsonb, uniqueIndex, primaryKey } from "drizzle-orm/pg-core"
+import { pgTable, text, timestamp, boolean, serial, integer, jsonb, index, uniqueIndex, primaryKey } from "drizzle-orm/pg-core"
 
 // --- Better Auth required tables -------------------------------------------
 // Column names are camelCase to match Better Auth's defaults. Do not rename.
@@ -110,19 +110,27 @@ export const follow = pgTable("follow", {
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
-export const feedComment = pgTable("feed_comment", {
-  id: serial("id").primaryKey(),
-  postId: integer("postId").notNull(),
-  // When set, this comment is a reply to another comment (threaded replies).
-  parentId: integer("parentId"),
-  userId: text("userId").notNull(),
-  authorName: text("authorName").notNull(),
-  authorHandle: text("authorHandle").notNull(),
-  text: text("text").notNull(),
-  likes: integer("likes").notNull().default(0),
-  editedAt: timestamp("editedAt"),
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-})
+export const feedComment = pgTable(
+  "feed_comment",
+  {
+    id: serial("id").primaryKey(),
+    postId: integer("postId").notNull(),
+    // When set, this comment is a reply to another comment (threaded replies).
+    parentId: integer("parentId"),
+    userId: text("userId").notNull(),
+    authorName: text("authorName").notNull(),
+    authorHandle: text("authorHandle").notNull(),
+    text: text("text").notNull(),
+    likes: integer("likes").notNull().default(0),
+    editedAt: timestamp("editedAt"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  // The feed loads comments scoped to the posts on screen
+  // (WHERE postId IN (...)); this index keeps that lookup off a full-table scan.
+  (t) => ({
+    postIdx: index("feed_comment_post_idx").on(t.postId),
+  }),
+)
 
 export const devotionalComment = pgTable("devotional_comment", {
   id: serial("id").primaryKey(),
