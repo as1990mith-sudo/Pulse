@@ -514,12 +514,13 @@ export function VideoStudioConsole({
   // removed, so this stays inert unless a legacy session reports it.
   const prayerActive = prayerStartedAt != null
 
-  // Duck the background music under the host's own speech — but never during
-  // Prayer Mode, so worship/instrumental music keeps playing naturally.
+  // Ducking removed: the background music always stays at the host's chosen
+  // volume and is never lowered under speech. We still hold it at base (a no-op
+  // ramp) so any level left over from a prior session is normalised.
   useEffect(() => {
     if (musicActiveIndex === null || !musicPlaying) return
-    duckMusic(prayerActive ? false : localSpeaking)
-  }, [localSpeaking, musicActiveIndex, musicPlaying, prayerActive, duckMusic])
+    duckMusic(false)
+  }, [musicActiveIndex, musicPlaying, duckMusic])
 
   async function goLive() {
     setError(null)
@@ -1193,6 +1194,7 @@ export function VideoStudioConsole({
                 onChange={setCover}
                 label={orientation === "landscape" ? "Room cover" : "Broadcast cover"}
                 ratios={SQUARE_PORTRAIT_RATIOS}
+                allowFit
               />
 
               {/* Discussion topic — Conversation rooms only. */}

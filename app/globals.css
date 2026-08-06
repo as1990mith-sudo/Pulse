@@ -754,6 +754,13 @@
    48px nav row plus a 16px gradient fade (~64px), so reserve 4.25rem to keep the
    last item comfortably clear of the footer across every page. */
 body.has-bottom-nav {
+  /* Height the footer nav occupies (pill + fade + the bottom safe-area inset it
+     sits inside). Exposed as a variable so other bottom-pinned chrome (the
+     live/audio/video minimised mini-players) can dock just ABOVE the footer
+     instead of covering it. Only set while the nav is actually visible — on
+     immersive routes the class is absent and the value falls back to 0, letting
+     those bars sit flush at the bottom edge. */
+  --bottom-nav-height: calc(4.25rem + env(safe-area-inset-bottom));
   padding-bottom: calc(4.25rem + env(safe-area-inset-bottom));
 }
 

@@ -349,19 +349,26 @@ export function useLiveAudio() {
       // (auto-gain, noise gate, echo canceller) is what makes phone mics sound
       // thin and "pumpy" — it's tuned for compressing speech on a call, not for
       // a clean broadcast. Turning it off preserves the full dynamic range and
-      // tone, and we ask for a full 48 kHz stereo signal.
+      // tone, at a full 48 kHz.
+      //
+      // The mic is captured MONO (channelCount: 1). A microphone is a single-
+      // capsule mono source; asking a mono mic for a 2-channel capture makes
+      // some devices place the voice in only the LEFT channel (right silent),
+      // which the stereo encoder then relays faithfully — so listeners hear the
+      // speaker in one ear only. Mono capture is rendered to both ears equally.
       audioCaptureDefaults: {
         autoGainControl: false,
         echoCancellation: false,
         noiseSuppression: false,
-        channelCount: 2,
+        channelCount: 1,
         sampleRate: 48000,
       },
       publishDefaults: {
-        // Encode the mic at the highest-fidelity music profile (128 kbps
-        // stereo) instead of the default 24 kbps speech codec.
-        audioPreset: AudioPresets.musicHighQualityStereo,
-        forceStereo: true,
+        // High-fidelity voice: 96 kbps MONO (far above the default 24 kbps
+        // speech codec) — clean and full without forcing a stereo image onto a
+        // mono mic. forceStereo is intentionally NOT set here; stereo is opted
+        // into per-track for the genuinely-stereo background music below.
+        audioPreset: AudioPresets.musicHighQuality,
         // DTX chops the stream during "silence" (adds swirl/dropouts on music
         // and room tone); RED adds packet-loss resilience. Studio audio wants
         // DTX off and RED on.
@@ -631,7 +638,17 @@ export function useLiveAudio() {
       bass.connect(dest)
       const [mediaTrack] = dest.stream.getAudioTracks()
       const localTrack = new LocalAudioTrack(mediaTrack)
-      await room.localParticipant.publishTrack(localTrack, { name: "background-music" })
+      // Background music IS a real stereo source, so opt this track into
+      // full-stereo, highest-quality publishing. The room-wide defaults are now
+      // mono (tuned for the voice mic), so stereo is requested here per-track to
+      // preserve the music's stereo image for every listener.
+      await room.localParticipant.publishTrack(localTrack, {
+        name: "background-music",
+        audioPreset: AudioPresets.musicHighQualityStereo,
+        forceStereo: true,
+        dtx: false,
+        red: true,
+      })
       musicTrackRef.current = localTrack
       musicStreamRef.current = dest.stream
 

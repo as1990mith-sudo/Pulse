@@ -361,7 +361,13 @@ function deriveDescriptor(session: Session, meta: LiveMeta | null): LiveDescript
 /** Persistent bar pinned to the bottom while a session is minimised. */
 function MiniPlayer({ meta, onExpand }: { meta: LiveMeta; onExpand: () => void }) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-[55] px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+    <div
+      className="fixed inset-x-0 z-[55] px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+      // Dock just above the footer nav when it's visible (var set on
+      // body.has-bottom-nav), otherwise flush to the bottom edge on immersive
+      // routes where the nav is hidden. Keeps the footer usable.
+      style={{ bottom: "var(--bottom-nav-height, 0px)" }}
+    >
       <button
         type="button"
         onClick={onExpand}

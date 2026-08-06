@@ -168,9 +168,23 @@ export function FeedVideo({
       programmaticPauseRef.current = true
       el.pause()
     } else if (inViewRef.current && !userPausedRef.current) {
+      // Reverse hand-off: while the expanded player owned playback it advanced
+      // the shared position for this src. Seek the inline preview there before
+      // resuming so closing the expand continues from where it reached (not the
+      // stale spot where the preview paused). For any other clip this resolves
+      // to its own last position — a harmless no-op.
+      const handoff = getVideoPosition(src)
+      if (handoff != null && handoff >= windowStartRef.current && handoff < windowEndRef.current) {
+        try {
+          el.currentTime = handoff
+          setCurrent(Math.max(0, handoff - windowStartRef.current))
+        } catch {
+          /* not seekable yet — attemptPlay clamps into the window anyway */
+        }
+      }
       attemptPlay(el)
     }
-  }, [viewerOpen, attemptPlay, ignoreViewerGate])
+  }, [viewerOpen, attemptPlay, ignoreViewerGate, src])
 
   function togglePlay() {
     const el = ref.current

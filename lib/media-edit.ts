@@ -59,6 +59,58 @@ export async function getCroppedBlob(
 }
 
 /**
+ * Renders a "fit" cover: the WHOLE image contained inside the crop frame
+ * exactly as the user positioned it (react-easy-crop with restrictPosition off
+ * and zoom below cover), with any letterbox bands filled by a blurred, zoomed
+ * copy of the same image instead of black bars. Used for live-meeting flyers
+ * where nothing should be cropped off.
+ *
+ * `cropPixels` is the crop rectangle in the image's natural pixel space; when
+ * the frame extends past the image its x/y go negative and width/height exceed
+ * the image, which is exactly what produces the letterbox we fill.
+ */
+export async function getFittedBlob(
+  imageSrc: string,
+  cropPixels: Area,
+  quality = 0.92,
+): Promise<Blob> {
+  const image = await loadImage(imageSrc)
+  const canvas = document.createElement("canvas")
+  const ctx = canvas.getContext("2d")
+  if (!ctx) throw new Error("Canvas unavailable.")
+
+  const W = Math.max(1, Math.round(cropPixels.width))
+  const H = Math.max(1, Math.round(cropPixels.height))
+  canvas.width = W
+  canvas.height = H
+
+  const natW = image.naturalWidth
+  const natH = image.naturalHeight
+
+  // 1) Blurred, cover-scaled background (slightly over-scanned so the blur's
+  //    transparent edge fringe never shows) fills any letterbox with the
+  //    flyer's own colors.
+  const coverScale = Math.max(W / natW, H / natH) * 1.18
+  const bw = natW * coverScale
+  const bh = natH * coverScale
+  ctx.filter = "blur(28px)"
+  ctx.drawImage(image, (W - bw) / 2, (H - bh) / 2, bw, bh)
+  ctx.filter = "none"
+
+  // 2) The flyer itself at 1:1 image-pixel scale, translated so the framed
+  //    region lands on the canvas (image px (ix,iy) → (ix - x, iy - y)).
+  ctx.drawImage(image, -cropPixels.x, -cropPixels.y, natW, natH)
+
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error("Fit failed."))),
+      "image/jpeg",
+      quality,
+    )
+  })
+}
+
+/**
  * Grabs a single frame from a video at `timeSec` and returns it as a JPEG Blob,
  * used for the "pick a cover frame" step. Loads the video muted/off-DOM, seeks
  * to the requested time, then paints the current frame to a canvas.

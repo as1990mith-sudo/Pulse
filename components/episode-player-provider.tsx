@@ -1264,7 +1264,13 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
       {/* Docked mini-player while minimised — for AUDIO only. Video uses the
           in-app floating video window (`videoMini`) instead. */}
       {current && minimized && !isVideo && (
-        <div className="fixed inset-x-0 bottom-0 z-[55] px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        <div
+          className="fixed inset-x-0 z-[55] px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+          // Dock just above the footer nav when it's visible (var set on
+          // body.has-bottom-nav), otherwise flush to the bottom edge on
+          // immersive routes where the nav is hidden. Keeps the footer usable.
+          style={{ bottom: "var(--bottom-nav-height, 0px)" }}
+        >
           <div className="mx-auto flex w-full max-w-2xl items-center gap-2 rounded-2xl border border-white/15 bg-zinc-900/95 p-2 text-left shadow-2xl ring-1 ring-black/40 backdrop-blur-xl">
             <button
               type="button"

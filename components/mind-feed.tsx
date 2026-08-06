@@ -949,25 +949,17 @@ function MediaSlide({
   if (item.type === "video") {
     return (
       <div className="relative w-full overflow-hidden bg-black" style={frameStyle}>
+        {/* Autoplays inline in view. Tapping anywhere on the video expands it
+            into the immersive vertical viewer (via onExpand); the clip's own
+            bottom control bar still drives play/pause, seek, and mute. */}
         <FeedVideo
           src={item.url}
           poster={item.coverImageUrl}
           trimStart={item.trimStart}
           trimEnd={item.trimEnd}
           className="h-full w-full object-cover"
+          onExpand={onOpenVideo}
         />
-        {/* Expand into the immersive vertical viewer. Kept separate from the
-            frame tap so inline play/pause still works. */}
-        {onOpenVideo && (
-          <button
-            type="button"
-            onClick={onOpenVideo}
-            aria-label="Open video full screen"
-            className="absolute right-2 top-2 z-10 flex size-9 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm transition-colors hover:bg-black/75"
-          >
-            <Maximize2 className="size-4" />
-          </button>
-        )}
       </div>
     )
   }
@@ -1404,7 +1396,7 @@ export function PostCard({
                 the edited info icon stays fixed (shrink-0) and is never clipped. */}
             <span className={cn("flex min-w-0 items-center gap-1 text-muted-foreground", feed ? "text-sm" : "text-xs")}>
               <span className="truncate">
-                {post.handle} �� {post.postedAt}
+                {post.handle} &middot; {post.postedAt}
               </span>
               {edited && <EditedIndicator />}
             </span>
