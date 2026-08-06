@@ -342,18 +342,19 @@ function PostItem({
             <button
               type="button"
               onClick={onOpen}
+              aria-label="Reply"
               className="flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             >
               <CommentIcon className="size-4" />
-              {post.commentCount > 0 ? `${post.commentCount} ${post.commentCount === 1 ? "reply" : "replies"}` : "Reply"}
+              {post.commentCount > 0 && <span className="tabular-nums">{post.commentCount}</span>}
             </button>
             <button
               type="button"
               onClick={() => setShareOpen(true)}
+              aria-label="Share"
               className="flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             >
               <Share2 className="size-4" />
-              Share
             </button>
             <SaveButton postId={post.id} />
             {copied && (

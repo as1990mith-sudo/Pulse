@@ -236,7 +236,7 @@ export function LikeButton({
       )}
     >
       <Heart className={cn("size-5", variant === "inline" && "size-4", liked && "fill-current")} />
-      {variant === "inline" && (likes > 0 ? likes : "Like")}
+      {variant === "inline" && likes > 0 && <span className="tabular-nums">{likes}</span>}
     </button>
   )
 }
@@ -267,7 +267,6 @@ export function SaveButton({
   )}
     >
       <Bookmark className={cn("size-4", saved && "fill-current")} />
-      {variant === "inline" && (saved ? "Saved" : "Save")}
     </button>
   )
 }
