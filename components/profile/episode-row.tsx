@@ -35,8 +35,12 @@ export function EpisodeRow({ show, owned = false, queue }: { show: Show; owned?:
   // Optimistic privacy state so the menu label flips instantly on toggle.
   const [isPrivate, setIsPrivate] = useState(Boolean(show.isPrivate))
 
+  // Live video recordings are portrait replays that must open the dedicated
+  // /live/[id] watch experience — never the in-app audio player. Audio (live or
+  // uploaded) still plays inline. This mirrors VideoCard's isLiveReplay guard.
+  const isVideoReplay = show.source === "live" && Boolean(show.videoUrl)
   // On-demand episodes launch the in-app player instead of navigating.
-  const playable = isPlayable(show) && Boolean(queue && queue.length > 0)
+  const playable = isPlayable(show) && Boolean(queue && queue.length > 0) && !isVideoReplay
   const isActive = activeId === show.id
 
   function handleTogglePrivacy() {
