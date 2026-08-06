@@ -137,6 +137,21 @@ export function EpisodeRow({ show, owned = false, queue }: { show: Show; owned?:
             <p className="line-clamp-1 text-xs leading-tight text-muted-foreground">{show.tagline}</p>
           )
         )}
+        {/* Views + duration sit directly under the title (not beside it) for
+            on-demand rows. Live rows show listener count in the meta above. */}
+        {show.status !== "live" && (
+          <div className="mt-0.5 flex items-center gap-3 text-[11px] tabular-nums text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <Eye className="size-3" />
+              {new Intl.NumberFormat("en", { notation: "compact" }).format(show.listeners)}
+            </span>
+            {show.duration && (
+              <span className="inline-flex items-center gap-1">
+                <Clock className="size-3" /> {show.duration}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </>
   )
@@ -160,17 +175,6 @@ export function EpisodeRow({ show, owned = false, queue }: { show: Show; owned?:
       </OpenTag>
 
       <div className="flex shrink-0 items-center gap-1">
-        {show.status !== "live" && (
-          <span className="mr-1 inline-flex items-center gap-1 text-[11px] tabular-nums text-muted-foreground">
-            <Eye className="size-3" />{" "}
-            {new Intl.NumberFormat("en", { notation: "compact" }).format(show.listeners)}
-          </span>
-        )}
-        {show.status !== "live" && show.duration && (
-          <span className="mr-1 inline-flex items-center gap-1 text-[11px] tabular-nums text-muted-foreground">
-            <Clock className="size-3" /> {show.duration}
-          </span>
-        )}
         {playable ? (
           <button
             type="button"
