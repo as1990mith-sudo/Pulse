@@ -89,6 +89,9 @@ export const feedPost = pgTable("feed_post", {
   reposts: integer("reposts").notNull().default(0),
   // Set the first time the author edits the post; drives the "· edited" label.
   editedAt: timestamp("editedAt"),
+  // Soft-delete flag. Deleted posts are hidden from every user-facing read but
+  // remain in the table for recovery/audit.
+  deleted: boolean("deleted").notNull().default(false),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 

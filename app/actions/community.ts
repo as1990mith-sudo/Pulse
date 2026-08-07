@@ -73,18 +73,17 @@ export type CommunityCommentView = {
   isSelf: boolean
 }
 
-/** Newest-first feed of anonymous community posts with reply counts. */
-export async function getCommunityPosts(): Promise<CommunityPostView[]> {
-  const session = await auth.api.getSession({ headers: await headers() })
-  const viewerId = session?.user?.id ?? null
-
-  const posts = await db
-    .select()
-    .from(communityPost)
-    .where(eq(communityPost.deleted, false))
-    .orderBy(desc(communityPost.createdAt))
-    .limit(200)
-
+/**
+ * Shared mapper: turns raw community_post rows into client views for a given
+ * viewer. Resolves reply counts, per-viewer like state, and author identity
+ * under the anonymity rules (identifiable posts reveal to everyone; anonymous
+ * posts reveal only to their own author). Reused by the room feed and by the
+ * per-user profile timelines so they all stay consistent.
+ */
+async function buildCommunityPostViews(
+  posts: (typeof communityPost.$inferSelect)[],
+  viewerId: string | null,
+): Promise<CommunityPostView[]> {
   const ids = posts.map((p) => p.id)
   const countMap = new Map<number, number>()
   if (ids.length) {
@@ -140,6 +139,71 @@ export async function getCommunityPosts(): Promise<CommunityPostView[]> {
       authorImage: profile ? profile.image : null,
     }
   })
+}
+
+/** Newest-first feed of anonymous community posts with reply counts. */
+export async function getCommunityPosts(): Promise<CommunityPostView[]> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  const viewerId = session?.user?.id ?? null
+
+  const posts = await db
+    .select()
+    .from(communityPost)
+    .where(eq(communityPost.deleted, false))
+    .orderBy(desc(communityPost.createdAt))
+    .limit(200)
+
+  return buildCommunityPostViews(posts, viewerId)
+}
+
+/**
+ * A user's PUBLIC (identifiable) Community Help posts, newest-first — powers the
+ * profile "Posts" timeline. Anonymous posts are excluded here so they never
+ * appear in the public identity timeline. Visible to every viewer.
+ */
+export async function getPublicCommunityPostsByUser(userId: string): Promise<CommunityPostView[]> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  const viewerId = session?.user?.id ?? null
+
+  const posts = await db
+    .select()
+    .from(communityPost)
+    .where(
+      and(
+        eq(communityPost.userId, userId),
+        eq(communityPost.anonymous, false),
+        eq(communityPost.deleted, false),
+      ),
+    )
+    .orderBy(desc(communityPost.createdAt))
+
+  return buildCommunityPostViews(posts, viewerId)
+}
+
+/**
+ * A user's OWN anonymous Community Help posts, newest-first — powers the profile
+ * "Anonymous" timeline. Strictly owner-only: if the viewer isn't the profile
+ * owner we return nothing, so other members get no signal that any anonymous
+ * posts exist or how many there are.
+ */
+export async function getAnonymousCommunityPostsByUser(userId: string): Promise<CommunityPostView[]> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  const viewerId = session?.user?.id ?? null
+  if (!viewerId || viewerId !== userId) return []
+
+  const posts = await db
+    .select()
+    .from(communityPost)
+    .where(
+      and(
+        eq(communityPost.userId, userId),
+        eq(communityPost.anonymous, true),
+        eq(communityPost.deleted, false),
+      ),
+    )
+    .orderBy(desc(communityPost.createdAt))
+
+  return buildCommunityPostViews(posts, viewerId)
 }
 
 /**

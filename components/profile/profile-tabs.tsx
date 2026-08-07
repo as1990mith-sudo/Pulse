@@ -1,16 +1,15 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { Mic, Images, AlignLeft, ArrowLeft, Plus, Info, Newspaper, PenLine } from "lucide-react"
+import { Mic, ArrowLeft, Plus, Info, Newspaper, PenLine, MessageSquareText, VenetianMask } from "lucide-react"
 import Link from "next/link"
 import type { Show } from "@/lib/data"
-import type { FeedPostView } from "@/app/actions/feed"
-import type { CurrentUser } from "@/lib/session"
+import type { CommunityPostView } from "@/app/actions/community"
 import type { ArticleCard as ArticleCardType } from "@/lib/article-types"
 import { EpisodeCatalog } from "@/components/episode-catalog"
 import { UploadEpisode } from "@/components/upload-episode"
-import { ProfilePostsGrid } from "@/components/profile/profile-posts-grid"
+import { ProfileThreads } from "@/components/profile/profile-threads"
 import { ArticleRow } from "@/components/articles/article-card"
 import {
   DropdownMenu,
@@ -19,40 +18,40 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
-type TabKey = "media" | "text" | "articles" | "catalogue"
+type TabKey = "posts" | "anonymous" | "articles" | "catalogue"
 
 export function ProfileTabs({
   name,
   isSelf,
   episodes,
-  posts,
+  communityPosts,
+  anonymousPosts,
   articles,
-  currentUser,
 }: {
   name: string
   isSelf: boolean
   episodes: Show[]
-  posts: FeedPostView[]
+  // Public (identifiable) Community Help posts — the "Posts" timeline.
+  communityPosts: CommunityPostView[]
+  // The owner's own anonymous Community Help posts — only ever passed for isSelf.
+  anonymousPosts: CommunityPostView[]
   articles: ArticleCardType[]
-  currentUser: CurrentUser | null
 }) {
-  // Split posts into two feeds: media posts (an image or video attached) and
-  // text-only posts (no media). Reposts are no longer a thing.
-  const { mediaPosts, textPosts } = useMemo(() => {
-    const mediaPosts: FeedPostView[] = []
-    const textPosts: FeedPostView[] = []
-    for (const p of posts) {
-      if (p.media.length > 0) mediaPosts.push(p)
-      else textPosts.push(p)
-    }
-    return { mediaPosts, textPosts }
-  }, [posts])
-
-  // Tab order: Media posts, Text posts, Catalogue. Saved bookmarks live on their
-  // own page reached from the side menu.
+  // Tab order: Posts, Anonymous (owner-only), Articles, Catalogue. The Anonymous
+  // tab is omitted entirely for other viewers so there's no trace of anonymous
+  // activity on someone else's profile.
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; count: number }[] = [
-    { key: "media", label: "Media", icon: <Images className="size-4" />, count: mediaPosts.length },
-    { key: "text", label: "Text", icon: <AlignLeft className="size-4" />, count: textPosts.length },
+    { key: "posts", label: "Posts", icon: <MessageSquareText className="size-4" />, count: communityPosts.length },
+    ...(isSelf
+      ? [
+          {
+            key: "anonymous" as const,
+            label: "Anonymous",
+            icon: <VenetianMask className="size-4" />,
+            count: anonymousPosts.length,
+          },
+        ]
+      : []),
     { key: "articles", label: "Articles", icon: <Newspaper className="size-4" />, count: articles.length },
     { key: "catalogue", label: "Catalogue", icon: <Mic className="size-4" />, count: episodes.length },
   ]
@@ -60,16 +59,17 @@ export function ProfileTabs({
   // Initialize the active tab from the URL (?tab=…). This makes the selection
   // survive navigation: opening a Catalogue item routes to /live/[id], and the
   // browser/router back button restores /u/[id]?tab=catalogue, so the profile
-  // reopens on Catalogue instead of resetting to Media.
+  // reopens on Catalogue instead of resetting to Posts.
   const searchParams = useSearchParams()
   const tabFromUrl = ((): TabKey => {
     const t = searchParams.get("tab")
-    return t === "text" || t === "articles" || t === "catalogue" || t === "media" ? t : "media"
+    if (t === "anonymous") return isSelf ? "anonymous" : "posts"
+    return t === "articles" || t === "catalogue" || t === "posts" ? t : "posts"
   })()
   const [tab, setTab] = useState<TabKey>(tabFromUrl)
   // The tab the user was on before opening Catalogue, so the back arrow can
   // return them exactly where they were.
-  const [prevTab, setPrevTab] = useState<TabKey>("media")
+  const [prevTab, setPrevTab] = useState<TabKey>("posts")
   // Whether the inline upload form is open (triggered from the header + button).
   const [uploadOpen, setUploadOpen] = useState(false)
   const catalogueOpen = tab === "catalogue"
@@ -95,9 +95,9 @@ export function ProfileTabs({
     setTab(key)
     // Reflect the tab in the URL (without a navigation) so it's restored when
     // the user returns from an opened item. Next.js syncs replaceState with
-    // useSearchParams. Media is the default, so it needs no query param.
+    // useSearchParams. Posts is the default, so it needs no query param.
     if (typeof window !== "undefined") {
-      const url = key === "media" ? window.location.pathname : `${window.location.pathname}?tab=${key}`
+      const url = key === "posts" ? window.location.pathname : `${window.location.pathname}?tab=${key}`
       window.history.replaceState(null, "", url)
     }
   }
@@ -159,33 +159,41 @@ export function ProfileTabs({
               ))}
             </div>
           )
-        ) : tab === "text" ? (
-          textPosts.length === 0 ? (
+        ) : tab === "anonymous" ? (
+          anonymousPosts.length === 0 ? (
             <EmptyState
-              icon={<AlignLeft className="size-6" />}
-              title="No text posts yet"
+              icon={<VenetianMask className="size-6" />}
+              title="No anonymous posts yet"
+              message="Questions and prayers you share anonymously on Community Help stay private to you and appear here. Only you can see this tab."
+            />
+          ) : (
+            <ProfileThreads posts={anonymousPosts} mode="anonymous" />
+          )
+        ) : tab === "posts" ? (
+          communityPosts.length === 0 ? (
+            <EmptyState
+              icon={<MessageSquareText className="size-6" />}
+              title="No posts yet"
               message={
                 isSelf
-                  ? "Text-only posts you share from the Post tab will show up here."
-                  : `${name} hasn't shared any text posts yet.`
+                  ? "Public posts you share on Community Help will show up here as a timeline."
+                  : `${name} hasn't shared any public posts yet.`
+              }
+              action={
+                isSelf ? (
+                  <Link
+                    href="/chatrooms/community"
+                    className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+                  >
+                    <Plus className="size-4" /> Post to Community Help
+                  </Link>
+                ) : null
               }
             />
           ) : (
-            <ProfilePostsGrid posts={textPosts} currentUser={currentUser} />
+            <ProfileThreads posts={communityPosts} mode="posts" />
           )
-        ) : mediaPosts.length === 0 ? (
-          <EmptyState
-            icon={<Images className="size-6" />}
-            title="No media posts yet"
-            message={
-              isSelf
-                ? "Posts with a photo or video will show up here."
-                : `${name} hasn't shared any photos or videos yet.`
-            }
-          />
-        ) : (
-          <ProfilePostsGrid posts={mediaPosts} currentUser={currentUser} />
-        )}
+        ) : null}
       </div>
 
       {/* Catalogue opens full-screen, hiding the app/profile header. Only a back

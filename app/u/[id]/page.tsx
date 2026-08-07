@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation"
 import { getProfile } from "@/lib/profile"
 import { getEpisodesByUser } from "@/lib/content"
-import { getPostsByUser } from "@/app/actions/feed"
+import { getPublicCommunityPostsByUser, getAnonymousCommunityPostsByUser } from "@/app/actions/community"
 import { getActiveStatusForUser } from "@/app/actions/status"
 import { getWriterArticles } from "@/app/actions/articles"
 import { getCurrentUser } from "@/lib/session"
@@ -19,9 +19,13 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
   const profile = await getProfile(id)
   if (!profile) notFound()
 
-  const [episodes, posts, currentUser, statusGroup, articles] = await Promise.all([
+  const [episodes, communityPosts, anonymousPosts, currentUser, statusGroup, articles] = await Promise.all([
     getEpisodesByUser(id, profile.isSelf),
-    getPostsByUser(id),
+    // Public (identifiable) Community Help posts power the "Posts" timeline for
+    // every viewer. Anonymous posts are fetched only for the owner's own
+    // profile — the server action returns nothing for anyone else.
+    getPublicCommunityPostsByUser(id),
+    profile.isSelf ? getAnonymousCommunityPostsByUser(id) : Promise.resolve([]),
     getCurrentUser(),
     getActiveStatusForUser(id),
     getWriterArticles(id),
@@ -104,9 +108,9 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
           name={profile.name}
           isSelf={profile.isSelf}
           episodes={episodes}
-          posts={posts}
+          communityPosts={communityPosts}
+          anonymousPosts={anonymousPosts}
           articles={articles}
-          currentUser={currentUser}
         />
       </main>
     </div>
