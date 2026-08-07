@@ -242,7 +242,11 @@ export async function getFeed(): Promise<FeedPostView[]> {
   // exclusively inside their own community rooms. Posts come back newest-first;
   // the client decides presentation per tab ("For you" shuffles from this
   // deterministic order, "Following" stays newest-first).
-  const posts = await db.select().from(feedPost).where(isNull(feedPost.channel)).orderBy(desc(feedPost.createdAt))
+  const posts = await db
+    .select()
+    .from(feedPost)
+    .where(and(isNull(feedPost.channel), eq(feedPost.deleted, false)))
+    .orderBy(desc(feedPost.createdAt))
   if (posts.length === 0) return []
   const postIds = posts.map((p) => p.id)
 
@@ -329,7 +333,7 @@ export async function getChannelFeed(channel: string): Promise<FeedPostView[]> {
   const posts = await db
     .select()
     .from(feedPost)
-    .where(eq(feedPost.channel, channel))
+    .where(and(eq(feedPost.channel, channel), eq(feedPost.deleted, false)))
     .orderBy(desc(feedPost.createdAt))
   if (posts.length === 0) return []
 
@@ -410,7 +414,13 @@ export async function searchPosts(query: string): Promise<FeedPostView[]> {
   const posts = await db
     .select()
     .from(feedPost)
-    .where(and(isNull(feedPost.channel), or(ilike(feedPost.text, like), ilike(feedPost.authorName, like))))
+    .where(
+      and(
+        isNull(feedPost.channel),
+        eq(feedPost.deleted, false),
+        or(ilike(feedPost.text, like), ilike(feedPost.authorName, like)),
+      ),
+    )
     .orderBy(desc(feedPost.createdAt))
     .limit(50)
 
@@ -485,7 +495,7 @@ export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
   const posts = await db
     .select()
     .from(feedPost)
-    .where(and(eq(feedPost.userId, userId), isNull(feedPost.channel)))
+    .where(and(eq(feedPost.userId, userId), isNull(feedPost.channel), eq(feedPost.deleted, false)))
     .orderBy(desc(feedPost.createdAt))
   const comments = await db.select().from(feedComment).orderBy(asc(feedComment.createdAt))
   const repostedSet = await getRepostedSet(currentUserId)
@@ -549,7 +559,10 @@ export async function getRepostsByUser(userId: string): Promise<FeedPostView[]> 
   const orderById = new Map(repostRows.map((r, i) => [r.postId, i]))
   const postIds = repostRows.map((r) => r.postId)
 
-  const posts = await db.select().from(feedPost).where(inArray(feedPost.id, postIds))
+  const posts = await db
+    .select()
+    .from(feedPost)
+    .where(and(inArray(feedPost.id, postIds), eq(feedPost.deleted, false)))
   const comments = await db.select().from(feedComment).orderBy(asc(feedComment.createdAt))
   const repostedSet = await getRepostedSet(currentUserId)
   const savedSet = await getSavedPostSet(currentUserId)
