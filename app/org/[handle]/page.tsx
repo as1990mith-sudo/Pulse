@@ -89,27 +89,23 @@ export default async function OrganizationPage({ params }: { params: Promise<{ h
           )}
 
           {/* Primary actions */}
-          <div className="mt-4 flex w-full flex-col gap-2">
+          <div className="mt-4 flex w-full flex-col items-center gap-3">
             {org.isOwner ? (
-              <div className="flex w-full items-center gap-2">
+              <>
                 <OrgVerifyButton
                   organizationId={org.id}
                   status={org.verificationStatus}
                   verified={org.verified}
-                  className="h-11 flex-1"
                 />
-                {websiteHost && (
-                  <WebsiteButton href={org.website!} host={websiteHost} />
-                )}
-              </div>
+                {websiteHost && <WebsiteButton href={org.website!} host={websiteHost} />}
+              </>
             ) : (
               <div className="flex w-full items-center gap-2">
                 <OrgSubscribeButton
                   organizationId={org.id}
-                  organizationName={org.name}
                   initialSubscribed={org.isSubscribed}
                   initialNotify={org.notify}
-                  className="h-11 flex-1"
+                  className="flex-1"
                 />
                 {websiteHost && <WebsiteButton href={org.website!} host={websiteHost} />}
               </div>
