@@ -68,18 +68,32 @@ export function ProfileThreads({
 /* -------------------------------------------------------------------------- */
 
 function ThreadMedia({ post }: { post: CommunityPostView }) {
+  // FeedVideo positions its player as `absolute inset-0`, so it must live inside
+  // a `relative` box with an explicit height. We seed a 16:9 frame and update it
+  // to the clip's true aspect ratio once known (capped so tall clips can't take
+  // over the timeline) — mirroring the community feed's post media.
+  const [ratio, setRatio] = useState(16 / 9)
+
   if (post.imageUrl) {
     return (
       <div className="mt-3 overflow-hidden rounded-2xl border border-border/60">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={post.imageUrl || "/placeholder.svg"} alt="" loading="lazy" className="w-full object-cover" />
+        <img
+          src={post.imageUrl || "/placeholder.svg"}
+          alt=""
+          loading="lazy"
+          className="max-h-[32rem] w-full object-cover"
+        />
       </div>
     )
   }
   if (post.videoUrl) {
     return (
-      <div className="mt-3 overflow-hidden rounded-2xl border border-border/60">
-        <FeedVideo src={post.videoUrl} className="w-full" />
+      <div
+        className="relative mt-3 w-full overflow-hidden rounded-2xl border border-border/60 bg-black"
+        style={{ aspectRatio: String(ratio), maxHeight: "32rem" }}
+      >
+        <FeedVideo src={post.videoUrl} className="h-full w-full object-cover" onAspectRatio={setRatio} />
       </div>
     )
   }
