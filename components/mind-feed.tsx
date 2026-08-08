@@ -29,7 +29,6 @@ import {
   Maximize2,
   AtSign,
   UserX,
-  Radio,
 } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import {
@@ -593,29 +592,8 @@ export function MindFeed({
   return (
     <PullToRefresh onRefresh={refreshFeed}>
       {/* The main feed is the organisation / ministry discovery feed: only
-          organisation accounts may publish here. Individuals get a read-only
-          discovery note instead of a composer. The composer is also only
+          organisation accounts may publish here. The composer is also only
           relevant to the scrolling post feeds (For you / Following). */}
-      {(tab === "for-you" || tab === "following") && currentUser.accountType !== "organization" && (
-        <div className="border-y border-border/60 bg-gradient-to-b from-card/50 to-background px-4 py-4 sm:px-5">
-          <div className="flex items-start gap-3 rounded-xl border border-border/60 bg-card/40 p-4">
-            <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <Radio className="size-4.5" />
-            </span>
-            <div className="space-y-1.5">
-              <p className="text-sm font-semibold">Discover what ministries are sharing</p>
-              <p className="text-pretty text-xs leading-relaxed text-muted-foreground">
-                The main feed is for churches, ministries and Christian organisations. To share testimonies, ask
-                questions or start discussions, head to{" "}
-                <Link href="/chatrooms" className="font-medium text-primary underline-offset-2 hover:underline">
-                  Community Help
-                </Link>
-                .
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
       {(tab === "for-you" || tab === "following") && currentUser.accountType === "organization" && (
       <div className="border-y border-border/60 bg-gradient-to-b from-card/60 to-background px-4 py-5 sm:px-5">
         <form onSubmit={publish} className="flex gap-4">
