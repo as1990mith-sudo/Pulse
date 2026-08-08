@@ -2,12 +2,13 @@ import { notFound } from "next/navigation"
 import Link from "next/link"
 import { Globe, MapPin, ShieldQuestion } from "lucide-react"
 import { getOrganizationByHandle, getOrganizationPosts, getOrganizationSubscribers } from "@/app/actions/organizations"
-import { getEpisodesByUser } from "@/lib/content"
+import { getOrganizationEvents, getOrganizationCatalogue } from "@/app/actions/org-content"
 import { getWriterArticles } from "@/app/actions/articles"
 import { SiteHeader } from "@/components/site-header"
 import { OrgTabs } from "@/components/org/org-tabs"
 import { OrgSubscribeButton } from "@/components/org/org-subscribe-button"
 import { OrgVerifyButton } from "@/components/org/org-verify-button"
+import { OrgManageSheet } from "@/components/org/org-manage-sheet"
 import { AvatarWithBadge, VerifiedBadge } from "@/components/org/verified-badge"
 
 export default async function OrganizationPage({ params }: { params: Promise<{ handle: string }> }) {
@@ -15,10 +16,11 @@ export default async function OrganizationPage({ params }: { params: Promise<{ h
   const org = await getOrganizationByHandle(handle)
   if (!org) notFound()
 
-  const [posts, subscribers, episodes, articles] = await Promise.all([
+  const [posts, subscribers, events, catalogue, articles] = await Promise.all([
     getOrganizationPosts(org.id),
     getOrganizationSubscribers(org.id),
-    getEpisodesByUser(org.ownerId, org.isOwner),
+    getOrganizationEvents(org.id),
+    getOrganizationCatalogue(org.id),
     getWriterArticles(org.ownerId),
   ])
 
@@ -95,20 +97,27 @@ export default async function OrganizationPage({ params }: { params: Promise<{ h
           <div className="mt-4 flex w-full flex-col items-center gap-3">
             {org.isOwner ? (
               <>
-                <OrgVerifyButton
-                  organizationId={org.id}
-                  status={org.verificationStatus}
-                  verified={org.verified}
-                />
+                <div className="flex w-full max-w-[240px] items-center gap-2">
+                  <OrgManageSheet org={org} />
+                  {/* Verify control only when not yet verified; a verified org
+                      already shows the badge on its logo and name. */}
+                  {!org.verified && (
+                    <OrgVerifyButton
+                      organizationId={org.id}
+                      status={org.verificationStatus}
+                      verified={org.verified}
+                    />
+                  )}
+                </div>
                 {websiteHost && <WebsiteButton href={org.website!} host={websiteHost} />}
               </>
             ) : (
-              <div className="flex w-full items-center gap-2">
+              <div className="flex w-full max-w-[240px] items-center gap-2">
                 <OrgSubscribeButton
                   organizationId={org.id}
                   initialSubscribed={org.isSubscribed}
                   initialNotify={org.notify}
-                  className="flex-1"
+                  className="flex-1 basis-0"
                 />
                 {websiteHost && <WebsiteButton href={org.website!} host={websiteHost} />}
               </div>
@@ -118,7 +127,14 @@ export default async function OrganizationPage({ params }: { params: Promise<{ h
       </header>
 
       <main className="mx-auto w-full max-w-4xl px-4 py-4 sm:px-6">
-        <OrgTabs org={org} posts={posts} articles={articles} episodes={episodes} subscribers={subscribers} />
+        <OrgTabs
+          org={org}
+          posts={posts}
+          articles={articles}
+          events={events}
+          catalogue={catalogue}
+          subscribers={subscribers}
+        />
       </main>
     </div>
   )
@@ -131,11 +147,11 @@ function WebsiteButton({ href, host }: { href: string; host: string }) {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex h-11 items-center justify-center gap-1.5 rounded-full border border-border bg-background px-4 text-sm font-semibold transition hover:bg-muted"
+      className="inline-flex h-10 flex-1 basis-0 items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3 text-sm font-semibold transition hover:bg-muted"
       title={`Visit ${host}`}
     >
-      <Globe className="size-4" />
-      <span className="max-w-28 truncate">Visit Website</span>
+      <Globe className="size-4 shrink-0" />
+      <span className="truncate">Website</span>
     </Link>
   )
 }

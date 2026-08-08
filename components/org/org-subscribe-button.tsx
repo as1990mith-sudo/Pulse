@@ -63,7 +63,7 @@ export function OrgSubscribeButton({
         onClick={onToggle}
         disabled={pending}
         variant={subscribed ? "outline" : "default"}
-        className="h-11 flex-1 rounded-full text-sm font-semibold"
+        className="h-10 flex-1 rounded-full text-sm font-semibold"
       >
         {subscribed ? (
           <>
@@ -84,7 +84,7 @@ export function OrgSubscribeButton({
           aria-label={notify ? "Turn off notifications" : "Turn on notifications"}
           aria-pressed={notify}
           className={cn(
-            "flex size-11 shrink-0 items-center justify-center rounded-full border transition-colors",
+            "flex size-10 shrink-0 items-center justify-center rounded-full border transition-colors",
             notify
               ? "border-primary bg-primary/10 text-primary"
               : "border-border/60 text-muted-foreground hover:text-foreground",

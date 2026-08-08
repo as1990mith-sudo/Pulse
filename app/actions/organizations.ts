@@ -1,6 +1,6 @@
 "use server"
 
-import { and, count, desc, eq, ilike, inArray, or } from "drizzle-orm"
+import { and, count, desc, eq, ilike, inArray, or, type SQL } from "drizzle-orm"
 import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
@@ -388,6 +388,184 @@ export async function listOrganizations(query?: string): Promise<OrganizationVie
   // Browsing (no query): most-subscribed first so discovery never feels empty.
   if (!q) views.sort((a, b) => b.subscriberCount - a.subscriberCount || a.name.localeCompare(b.name))
   return views
+}
+
+export type DiscoverBucket = "subscribed" | "nearby" | "featured" | "new"
+
+export type DiscoverOrganizationView = OrganizationView & { bucket: DiscoverBucket }
+
+export type DiscoverParams = {
+  query?: string
+  category?: OrgCategory | "all"
+  reach?: OrgReach | "all"
+  // "nearby" limits results to organisations that match the viewer's location.
+  scope?: "all" | "nearby"
+}
+
+/** The viewer's saved location (or null everywhere when signed out / unset). */
+export async function getMyLocation(): Promise<{ country: string | null; city: string | null; region: string | null }> {
+  const viewerId = await getViewerId()
+  if (!viewerId) return { country: null, city: null, region: null }
+  const rows = await db
+    .select({ country: userTable.country, city: userTable.city, region: userTable.region })
+    .from(userTable)
+    .where(eq(userTable.id, viewerId))
+    .limit(1)
+  const r = rows[0]
+  return { country: r?.country ?? null, city: r?.city ?? null, region: r?.region ?? null }
+}
+
+/** Whether two location strings refer to the same place (loose, case-insensitive). */
+function sameePlace(a?: string | null, b?: string | null): boolean {
+  const x = a?.trim().toLowerCase()
+  const y = b?.trim().toLowerCase()
+  return !!x && !!y && x === y
+}
+
+/**
+ * Ranked organisation discovery. For a signed-in viewer, results are ordered
+ * subscribed → nearby (matching their city/country) → featured (verified) →
+ * new, and each row is tagged with the bucket it fell into so the UI can group
+ * them. Optional search + category/reach/scope filters narrow the set first.
+ */
+export async function discoverOrganizations(params: DiscoverParams = {}): Promise<DiscoverOrganizationView[]> {
+  const viewerId = await getViewerId()
+  const q = (params.query ?? "").trim()
+  const category = params.category && params.category !== "all" ? params.category : null
+  const reach = params.reach && params.reach !== "all" ? params.reach : null
+  const scope = params.scope ?? "all"
+
+  const conditions: SQL[] = []
+  if (q) {
+    const search = or(
+      ilike(organization.name, `%${q}%`),
+      ilike(organization.description, `%${q}%`),
+      ilike(organization.category, `%${q}%`),
+      ilike(organization.city, `%${q}%`),
+      ilike(organization.country, `%${q}%`),
+    )
+    if (search) conditions.push(search)
+  }
+  if (category) conditions.push(eq(organization.category, category))
+  if (reach) conditions.push(eq(organization.reach, reach))
+
+  const base = db.select().from(organization)
+  const rows = await (conditions.length ? base.where(and(...conditions)) : base)
+    .orderBy(desc(organization.createdAt))
+    .limit(100)
+
+  if (rows.length === 0) return []
+
+  const ids = rows.map((r) => r.id)
+  const [countRows, mySubs, myLoc] = await Promise.all([
+    db
+      .select({ id: subscription.organizationId, value: count() })
+      .from(subscription)
+      .where(inArray(subscription.organizationId, ids))
+      .groupBy(subscription.organizationId),
+    viewerId
+      ? db
+          .select()
+          .from(subscription)
+          .where(and(eq(subscription.userId, viewerId), inArray(subscription.organizationId, ids)))
+      : Promise.resolve([] as (typeof subscription.$inferSelect)[]),
+    getMyLocation(),
+  ])
+  const countMap = new Map(countRows.map((r) => [r.id, Number(r.value)]))
+  const subMap = new Map(mySubs.map((s) => [s.organizationId, s]))
+
+  const hasLoc = !!(myLoc.city || myLoc.country)
+  const isNearby = (org: OrgRow) =>
+    hasLoc && !org.onlineOnly && (sameePlace(org.city, myLoc.city) || sameePlace(org.country, myLoc.country))
+
+  let views: DiscoverOrganizationView[] = rows.map((org) => {
+    const subscribed = subMap.has(org.id)
+    const nearby = isNearby(org)
+    const bucket: DiscoverBucket = subscribed ? "subscribed" : nearby ? "nearby" : org.verified ? "featured" : "new"
+    return {
+      id: org.id,
+      ownerId: org.ownerId,
+      name: org.name,
+      handle: org.handle,
+      category: org.category as OrgCategory,
+      categoryOther: org.categoryOther,
+      categoryLabel: orgCategoryLabel(org.category, org.categoryOther),
+      description: org.description,
+      logo: org.logo,
+      initials: getInitials(org.name),
+      color: getAvatarColor(org.id),
+      reach: org.reach as OrgReach,
+      reachLabel: orgReachLabel(org.reach),
+      onlineOnly: org.onlineOnly,
+      country: org.country,
+      city: org.city,
+      region: org.region,
+      locationLabel: orgLocationLabel(org.onlineOnly, org.city, org.region, org.country),
+      website: org.website,
+      socials: (org.socials as OrgSocials | null) ?? null,
+      mission: org.mission,
+      vision: org.vision,
+      history: org.history,
+      beliefs: org.beliefs,
+      contactEmail: org.contactEmail,
+      contactPhone: org.contactPhone,
+      verified: org.verified,
+      verificationStatus: org.verificationStatus as OrganizationView["verificationStatus"],
+      subscriberCount: countMap.get(org.id) ?? 0,
+      isOwner: viewerId === org.ownerId,
+      isSubscribed: subscribed,
+      notify: subMap.get(org.id)?.notify ?? false,
+      bucket,
+    }
+  })
+
+  // "Nearby" scope: only keep subscribed + nearby organisations.
+  if (scope === "nearby") views = views.filter((v) => v.bucket === "subscribed" || v.bucket === "nearby")
+
+  const order: Record<DiscoverBucket, number> = { subscribed: 0, nearby: 1, featured: 2, new: 3 }
+  views.sort((a, b) => {
+    if (order[a.bucket] !== order[b.bucket]) return order[a.bucket] - order[b.bucket]
+    // Within a tier: most-subscribed first, then alphabetical.
+    return b.subscriberCount - a.subscriberCount || a.name.localeCompare(b.name)
+  })
+  return views
+}
+
+/** Save the current user's optional location (used by discovery + onboarding). */
+export async function updateMyLocation(input: { country?: string | null; city?: string | null; region?: string | null }) {
+  const user = await requireUser()
+  await db
+    .update(userTable)
+    .set({
+      country: input.country?.trim() || null,
+      city: input.city?.trim() || null,
+      region: input.region?.trim() || null,
+      updatedAt: new Date(),
+    })
+    .where(eq(userTable.id, user.id))
+  revalidatePath("/discover")
+  return { ok: true }
+}
+
+/** Marks the post-signup onboarding as complete (or skipped) for the user. */
+export async function completeOnboarding() {
+  const user = await requireUser()
+  await db.update(userTable).set({ onboardedAt: new Date() }).where(eq(userTable.id, user.id))
+  return { ok: true }
+}
+
+/** Whether the current user still needs the onboarding subscribe step. */
+export async function needsOnboarding(): Promise<boolean> {
+  const viewerId = await getViewerId()
+  if (!viewerId) return false
+  const rows = await db
+    .select({ onboardedAt: userTable.onboardedAt, accountType: userTable.accountType })
+    .from(userTable)
+    .where(eq(userTable.id, viewerId))
+    .limit(1)
+  const r = rows[0]
+  if (!r || r.accountType === "organization") return false
+  return !r.onboardedAt
 }
 
 export type OrgPostMedia = { type: "image" | "video"; url: string }
