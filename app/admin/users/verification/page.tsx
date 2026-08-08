@@ -1,8 +1,12 @@
 import type { Metadata } from "next"
-import { ComingSoon } from "@/components/admin/coming-soon"
+import { requirePermission } from "@/lib/admin-auth"
+import { listOrganizationsForReview } from "@/app/actions/admin-verification"
+import { VerificationConsole } from "@/components/admin/verification-console"
 
 export const metadata: Metadata = { title: "Verification · Frequency Admin" }
 
-export default function Page() {
-  return <ComingSoon title={"Verification"} description={"Review and grant verified status to trusted accounts and creators."} />
+export default async function Page() {
+  await requirePermission("users.moderate")
+  const rows = await listOrganizationsForReview()
+  return <VerificationConsole initialRows={rows} />
 }
