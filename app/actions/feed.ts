@@ -5,7 +5,17 @@ import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { feedComment, feedPost, follow, like, repost, savedItem, share, user as userTable } from "@/lib/db/schema"
+import {
+  feedComment,
+  feedPost,
+  follow,
+  like,
+  organization,
+  repost,
+  savedItem,
+  share,
+  user as userTable,
+} from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { formatPostTimestamp } from "@/lib/format-timestamp"
 import { getLikedSet, setLike } from "@/lib/likes"
@@ -679,6 +689,27 @@ export async function createPost(input: {
   channel?: string | null
 }) {
   const user = await requireUser()
+
+  const channel = input.channel?.trim() || null
+
+  // Main-feed posting is organisation-only: the main feed is now the
+  // organisation / ministry discovery feed. Individuals can still post to
+  // community rooms (channels like itestify / qotd), so this gate only applies
+  // to main-feed posts (channel === null). When an organisation account posts,
+  // we attribute the post to the organisation it owns.
+  let organizationId: string | null = null
+  if (channel === null) {
+    const [owned] = await db
+      .select({ id: organization.id })
+      .from(organization)
+      .where(eq(organization.ownerId, user.id))
+      .limit(1)
+    if (!owned) {
+      throw new Error("Only ministry / organisation accounts can post to the main feed.")
+    }
+    organizationId = owned.id
+  }
+
   // Resolve @mentions (privacy-checked); blocked ones become inert text.
   const { text, allowed: mentions } = await resolveTextMentions(user.id, input.text.trim())
 
@@ -690,8 +721,6 @@ export async function createPost(input: {
   }
   if (!text && media.length === 0) throw new Error("Post cannot be empty.")
 
-  const channel = input.channel?.trim() || null
-
   // Mirror the first item into the legacy columns so older readers still work.
   const first = media[0] ?? null
 
@@ -699,6 +728,7 @@ export async function createPost(input: {
     .insert(feedPost)
     .values({
       userId: user.id,
+      organizationId,
       authorName: user.name,
       authorHandle: getHandle(user.name),
       text,
