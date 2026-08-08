@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { BadgeCheck, Globe, MapPin, ShieldQuestion } from "lucide-react"
+import { Globe, MapPin, ShieldQuestion } from "lucide-react"
 import { getOrganizationByHandle, getOrganizationPosts, getOrganizationSubscribers } from "@/app/actions/organizations"
 import { getEpisodesByUser } from "@/lib/content"
 import { getWriterArticles } from "@/app/actions/articles"
@@ -8,6 +8,7 @@ import { SiteHeader } from "@/components/site-header"
 import { OrgTabs } from "@/components/org/org-tabs"
 import { OrgSubscribeButton } from "@/components/org/org-subscribe-button"
 import { OrgVerifyButton } from "@/components/org/org-verify-button"
+import { AvatarWithBadge, VerifiedBadge } from "@/components/org/verified-badge"
 
 export default async function OrganizationPage({ params }: { params: Promise<{ handle: string }> }) {
   const { handle } = await params
@@ -40,24 +41,26 @@ export default async function OrganizationPage({ params }: { params: Promise<{ h
 
         <div className="relative mx-auto flex w-full max-w-md flex-col items-center px-4 pb-5 pt-4 text-center sm:px-6">
           {/* Logo */}
-          <div className="rounded-2xl bg-background p-1 shadow-xl ring-1 ring-border/50">
-            <span
-              className={`flex size-20 items-center justify-center overflow-hidden rounded-xl text-2xl font-bold ${!org.logo ? org.color : ""}`}
-            >
-              {org.logo ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={org.logo || "/placeholder.svg"} alt={org.name} className="size-full object-cover" />
-              ) : (
-                org.initials
-              )}
-            </span>
-          </div>
+          <AvatarWithBadge verified={org.verified} badgeSize="lg">
+            <div className="rounded-2xl bg-background p-1 shadow-xl ring-1 ring-border/50">
+              <span
+                className={`flex size-20 items-center justify-center overflow-hidden rounded-xl text-2xl font-bold ${!org.logo ? org.color : ""}`}
+              >
+                {org.logo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={org.logo || "/placeholder.svg"} alt={org.name} className="size-full object-cover" />
+                ) : (
+                  org.initials
+                )}
+              </span>
+            </div>
+          </AvatarWithBadge>
 
           {/* Name + verification badge */}
           <div className="mt-3 flex items-center gap-1.5">
             <h1 className="text-balance text-xl font-bold tracking-tight">{org.name}</h1>
             {org.verified ? (
-              <BadgeCheck className="size-5 shrink-0 text-primary" aria-label="Verified ministry" />
+              <VerifiedBadge size="md" />
             ) : (
               <ShieldQuestion
                 className="size-5 shrink-0 text-muted-foreground/50"
