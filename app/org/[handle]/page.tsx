@@ -103,12 +103,12 @@ export default async function OrganizationPage({ params }: { params: Promise<{ h
                 {websiteHost && <WebsiteButton href={org.website!} host={websiteHost} />}
               </>
             ) : (
-              <div className="flex w-full items-center gap-2">
+              <div className="flex w-full max-w-xs items-center gap-2">
                 <OrgSubscribeButton
                   organizationId={org.id}
                   initialSubscribed={org.isSubscribed}
                   initialNotify={org.notify}
-                  className="flex-1"
+                  className="flex-1 basis-0"
                 />
                 {websiteHost && <WebsiteButton href={org.website!} host={websiteHost} />}
               </div>
@@ -131,11 +131,11 @@ function WebsiteButton({ href, host }: { href: string; host: string }) {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex h-11 items-center justify-center gap-1.5 rounded-full border border-border bg-background px-4 text-sm font-semibold transition hover:bg-muted"
+      className="inline-flex h-10 flex-1 basis-0 items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3 text-sm font-semibold transition hover:bg-muted"
       title={`Visit ${host}`}
     >
-      <Globe className="size-4" />
-      <span className="max-w-28 truncate">Visit Website</span>
+      <Globe className="size-4 shrink-0" />
+      <span className="truncate">Website</span>
     </Link>
   )
 }
