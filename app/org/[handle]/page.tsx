@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import { Globe, MapPin, ShieldQuestion } from "lucide-react"
-import { getOrganizationByHandle, getOrganizationPosts, getOrganizationSubscribers } from "@/app/actions/organizations"
+import { getOrganizationByHandle, getOrganizationPosts } from "@/app/actions/organizations"
 import { getOrganizationEvents, getOrganizationCatalogue } from "@/app/actions/org-content"
 import { getWriterArticles } from "@/app/actions/articles"
 import { SiteHeader } from "@/components/site-header"
@@ -16,9 +16,8 @@ export default async function OrganizationPage({ params }: { params: Promise<{ h
   const org = await getOrganizationByHandle(handle)
   if (!org) notFound()
 
-  const [posts, subscribers, events, catalogue, articles] = await Promise.all([
+  const [posts, events, catalogue, articles] = await Promise.all([
     getOrganizationPosts(org.id),
-    getOrganizationSubscribers(org.id),
     getOrganizationEvents(org.id),
     getOrganizationCatalogue(org.id),
     getWriterArticles(org.ownerId),
@@ -127,14 +126,7 @@ export default async function OrganizationPage({ params }: { params: Promise<{ h
       </header>
 
       <main className="mx-auto w-full max-w-4xl px-4 py-4 sm:px-6">
-        <OrgTabs
-          org={org}
-          posts={posts}
-          articles={articles}
-          events={events}
-          catalogue={catalogue}
-          subscribers={subscribers}
-        />
+        <OrgTabs org={org} posts={posts} articles={articles} events={events} catalogue={catalogue} />
       </main>
     </div>
   )

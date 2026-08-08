@@ -90,13 +90,15 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
       >
         <Settings2 className="size-4" /> Manage
       </SheetTrigger>
-      <SheetContent side="bottom" className="max-h-[90svh] overflow-y-auto rounded-t-2xl">
+      <SheetContent side="bottom" className="max-h-[92svh] gap-0 overflow-y-auto rounded-t-2xl">
         <SheetHeader className="text-left">
           <SheetTitle>Manage organisation</SheetTitle>
-          <SheetDescription>Update your details so people can find, understand and reach your ministry.</SheetDescription>
+          <SheetDescription className="text-pretty text-xs leading-snug">
+            Update your details so people can find, understand and reach your ministry.
+          </SheetDescription>
         </SheetHeader>
 
-        <div className="mx-auto flex w-full max-w-lg flex-col gap-6 py-4">
+        <div className="mx-auto flex w-full max-w-lg flex-col gap-5 px-4 pb-4">
           <Field label="Short description">
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="A sentence about your ministry" />
           </Field>
@@ -181,7 +183,7 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
             </p>
           )}
 
-          <div className="sticky bottom-0 -mx-1 flex gap-3 border-t border-border/60 bg-background/95 px-1 py-3 backdrop-blur">
+          <div className="sticky bottom-0 -mx-4 mt-1 flex gap-3 border-t border-border/60 bg-background/95 px-4 py-3 backdrop-blur">
             <Button type="button" variant="outline" onClick={() => setOpen(false)} className="flex-1 rounded-full">
               Cancel
             </Button>
@@ -197,8 +199,8 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-1.5">
-      <label className="text-sm font-medium">{label}</label>
+    <div className="space-y-1">
+      <label className="text-xs font-medium text-muted-foreground">{label}</label>
       {children}
     </div>
   )
@@ -206,8 +208,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-3">
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</h3>
+    <div className="space-y-2.5">
+      <h3 className="text-[0.7rem] font-semibold uppercase tracking-wider text-muted-foreground/80">{title}</h3>
       {children}
     </div>
   )

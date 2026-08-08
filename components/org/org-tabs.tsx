@@ -14,12 +14,11 @@ import {
   PenLine,
   Phone,
   Repeat2,
-  Users,
 } from "lucide-react"
 import type { ArticleCard as ArticleCardType } from "@/lib/article-types"
 import type { OrganizationView } from "@/lib/org-types"
 import { AvatarWithBadge } from "@/components/org/verified-badge"
-import type { OrgPostView, OrgSubscriberView } from "@/app/actions/organizations"
+import type { OrgPostView } from "@/app/actions/organizations"
 import type { EventView, CatalogueItemView } from "@/app/actions/org-content"
 import { OrgEventsTab } from "@/components/org/org-events-tab"
 import { OrgCatalogueTab } from "@/components/org/org-catalogue-tab"
@@ -27,7 +26,7 @@ import { ArticleRow } from "@/components/articles/article-card"
 import { FeedVideo } from "@/components/feed-video"
 import { cn } from "@/lib/utils"
 
-type TabKey = "posts" | "about" | "events" | "articles" | "catalogue" | "subscribers"
+type TabKey = "posts" | "about" | "events" | "articles" | "catalogue"
 
 const SOCIAL_LABELS: Record<string, string> = {
   instagram: "Instagram",
@@ -43,14 +42,12 @@ export function OrgTabs({
   articles,
   events,
   catalogue,
-  subscribers,
 }: {
   org: OrganizationView
   posts: OrgPostView[]
   articles: ArticleCardType[]
   events: { upcoming: EventView[]; past: EventView[] }
   catalogue: CatalogueItemView[]
-  subscribers: OrgSubscriberView[]
 }) {
   const eventCount = events.upcoming.length + events.past.length
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; count?: number }[] = [
@@ -59,7 +56,6 @@ export function OrgTabs({
     { key: "events", label: "Events", icon: <Calendar className="size-4" />, count: eventCount },
     { key: "articles", label: "Articles", icon: <Newspaper className="size-4" />, count: articles.length },
     { key: "catalogue", label: "Catalogue", icon: <Mic className="size-4" />, count: catalogue.length },
-    { key: "subscribers", label: "Subscribers", icon: <Users className="size-4" />, count: org.subscriberCount },
   ]
 
   const [tab, setTab] = useState<TabKey>("posts")
@@ -108,10 +104,8 @@ export function OrgTabs({
           <OrgEventsTab org={org} events={events} />
         ) : tab === "articles" ? (
           <ArticlesTab org={org} articles={articles} />
-        ) : tab === "catalogue" ? (
-          <OrgCatalogueTab org={org} items={catalogue} />
         ) : (
-          <SubscribersTab org={org} subscribers={subscribers} />
+          <OrgCatalogueTab org={org} items={catalogue} />
         )}
       </div>
     </section>
@@ -143,40 +137,50 @@ function PostsTab({ org, posts }: { org: OrganizationView; posts: OrgPostView[] 
     )
   }
   return (
-    <div className="flex flex-col gap-4">
+    <ul className="-mx-4 divide-y divide-border/60 sm:-mx-6">
       {posts.map((p) => (
-        <OrgPostCard key={p.id} org={org} post={p} />
+        <li key={p.id}>
+          <OrgPostThread org={org} post={p} />
+        </li>
       ))}
-    </div>
+    </ul>
   )
 }
 
-function OrgPostCard({ org, post }: { org: OrganizationView; post: OrgPostView }) {
+// X (Twitter)-style thread row, matching the Community Help / individual-profile
+// post timeline: edge-to-edge, avatar + inline name/time header, body, media
+// and an engagement row — instead of a boxed card.
+function OrgPostThread({ org, post }: { org: OrganizationView; post: OrgPostView }) {
   return (
-    <article className="rounded-2xl border border-border/60 bg-card p-4">
-      <header className="flex items-center gap-3">
-        <OrgAvatar org={org} className="size-9 text-sm" />
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">{org.name}</p>
-          <p className="text-xs text-muted-foreground">
-            {post.postedAt}
-            {post.edited ? " · edited" : ""}
-          </p>
+    <article className="flex gap-3 px-4 py-4 transition-colors hover:bg-secondary/30 sm:px-6">
+      <OrgAvatar org={org} className="size-11" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 text-[15px]">
+          <span className="truncate font-bold tracking-tight text-foreground">{org.name}</span>
+          <span className="text-muted-foreground">·</span>
+          <span className="shrink-0 text-sm text-muted-foreground">{post.postedAt}</span>
+          {post.edited && <span className="shrink-0 text-sm text-muted-foreground">· edited</span>}
         </div>
-      </header>
 
-      {post.text && <p className="mt-3 whitespace-pre-wrap text-pretty text-sm leading-relaxed">{post.text}</p>}
+        {post.text && (
+          <p className="mt-1 whitespace-pre-wrap text-pretty text-[15px] leading-relaxed text-foreground">
+            {post.text}
+          </p>
+        )}
 
-      {post.media.length > 0 && <OrgPostMedia media={post.media} />}
+        {post.media.length > 0 && <OrgPostMedia media={post.media} />}
 
-      <footer className="mt-3 flex items-center gap-5 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5">
-          <Heart className="size-4" /> {post.likes}
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <Repeat2 className="size-4" /> {post.reposts}
-        </span>
-      </footer>
+        <div className="mt-2 flex items-center gap-6 text-muted-foreground">
+          <span className="flex items-center gap-1.5 text-sm">
+            <Heart className="size-5" />
+            {post.likes > 0 && <span className="tabular-nums">{post.likes}</span>}
+          </span>
+          <span className="flex items-center gap-1.5 text-sm">
+            <Repeat2 className="size-5" />
+            {post.reposts > 0 && <span className="tabular-nums">{post.reposts}</span>}
+          </span>
+        </div>
+      </div>
     </article>
   )
 }
@@ -331,50 +335,6 @@ function ArticlesTab({ org, articles }: { org: OrganizationView; articles: Artic
       {articles.map((a) => (
         <ArticleRow key={a.id} article={a} />
       ))}
-    </div>
-  )
-}
-
-function SubscribersTab({ org, subscribers }: { org: OrganizationView; subscribers: OrgSubscriberView[] }) {
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 gap-3">
-        <StatCard label="Subscribers" value={org.subscriberCount} />
-        <StatCard label="Reach" value={org.reachLabel} />
-      </div>
-
-      {subscribers.length === 0 ? (
-        <EmptyState
-          icon={<Users className="size-6" />}
-          title="No subscribers yet"
-          message={
-            org.isOwner
-              ? "As people subscribe to your ministry, they'll appear here."
-              : `Be the first to subscribe to ${org.name}.`
-          }
-        />
-      ) : (
-        <div className="flex flex-col divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/60 bg-card">
-          {subscribers.map((s) => (
-            <Link key={s.id} href={`/u/${s.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40">
-              <Avatar initials={s.initials} color={s.color} image={s.image} name={s.name} />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{s.name}</p>
-                <p className="truncate text-xs text-muted-foreground">{s.handle}</p>
-              </div>
-            </Link>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function StatCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-2xl border border-border/60 bg-card p-4">
-      <p className="text-2xl font-bold tracking-tight">{value}</p>
-      <p className="mt-0.5 text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
     </div>
   )
 }
