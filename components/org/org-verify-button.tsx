@@ -2,9 +2,10 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { BadgeCheck, Clock, ShieldCheck } from "lucide-react"
+import { Clock, ShieldCheck } from "lucide-react"
 import { requestVerification } from "@/app/actions/organizations"
 import type { OrgVerificationStatus } from "@/lib/org-types"
+import { VerifiedBadge } from "@/components/org/verified-badge"
 
 /**
  * Owner-only verification control. Reflects the current review status and lets
@@ -24,11 +25,8 @@ export function OrgVerifyButton({
   const [local, setLocal] = useState<OrgVerificationStatus>(status)
 
   if (verified || local === "approved") {
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary">
-        <BadgeCheck className="size-4" /> Verified ministry
-      </span>
-    )
+    // Verified: show the badge alone, no label.
+    return <VerifiedBadge size="lg" />
   }
 
   if (local === "pending") {

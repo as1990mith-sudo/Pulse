@@ -19,6 +19,7 @@ import {
 import type { Show } from "@/lib/data"
 import type { ArticleCard as ArticleCardType } from "@/lib/article-types"
 import type { OrganizationView } from "@/lib/org-types"
+import { AvatarWithBadge } from "@/components/org/verified-badge"
 import type { OrgPostView, OrgSubscriberView } from "@/app/actions/organizations"
 import { EpisodeCatalog } from "@/components/episode-catalog"
 import { ArticleRow } from "@/components/articles/article-card"
@@ -397,7 +398,11 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
 }
 
 function OrgAvatar({ org, className }: { org: OrganizationView; className?: string }) {
-  return <Avatar initials={org.initials} color={org.color} image={org.logo} name={org.name} className={className} />
+  return (
+    <AvatarWithBadge verified={org.verified} badgeSize="sm">
+      <Avatar initials={org.initials} color={org.color} image={org.logo} name={org.name} className={className} />
+    </AvatarWithBadge>
+  )
 }
 
 function Avatar({

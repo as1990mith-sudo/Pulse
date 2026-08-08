@@ -78,6 +78,7 @@ import { EngagementSheet } from "@/components/engagement-sheet"
 import { PullToRefresh } from "@/components/pull-to-refresh"
 import type { ShareTarget } from "@/lib/share-types"
 import { cn } from "@/lib/utils"
+import { AvatarWithBadge, VerifiedBadge } from "@/components/org/verified-badge"
 import { haptic } from "@/lib/haptics"
 
 /** Posts can be edited only within this window after publishing. */
@@ -1403,17 +1404,25 @@ export function PostCard({
       <div className={cn("flex items-center justify-between gap-2", feed ? "px-4 py-3" : "px-3 py-3")}>
         <div className="flex min-w-0 items-center gap-3">
           <Link href={`/u/${post.authorId}`} aria-label={`View ${post.user}'s profile`} className="shrink-0">
-            <Avatar className={cn(feed ? "size-12 ring-2 ring-border/60" : "size-9")}>
-              {post.authorImage && <AvatarImage src={post.authorImage || "/placeholder.svg"} alt={post.user} />}
-              <AvatarFallback className={cn(feed ? "text-sm" : "text-xs", post.color)}>{post.initials}</AvatarFallback>
-            </Avatar>
+            <AvatarWithBadge verified={post.orgVerified} badgeSize={feed ? "md" : "sm"}>
+              <Avatar className={cn(feed ? "size-12 ring-2 ring-border/60" : "size-9")}>
+                {post.authorImage && <AvatarImage src={post.authorImage || "/placeholder.svg"} alt={post.user} />}
+                <AvatarFallback className={cn(feed ? "text-sm" : "text-xs", post.color)}>
+                  {post.initials}
+                </AvatarFallback>
+              </Avatar>
+            </AvatarWithBadge>
           </Link>
           <div className="flex min-w-0 flex-col leading-tight">
             <Link
               href={`/u/${post.authorId}`}
-              className={cn("truncate font-semibold hover:underline", feed ? "text-base" : "text-sm")}
+              className={cn(
+                "flex min-w-0 items-center gap-1 font-semibold hover:underline",
+                feed ? "text-base" : "text-sm",
+              )}
             >
-              {post.user}
+              <span className="truncate">{post.user}</span>
+              {post.orgVerified && <VerifiedBadge size="sm" className="shrink-0" />}
             </Link>
             {/* Flex row so the handle/time can truncate on long usernames while
                 the edited info icon stays fixed (shrink-0) and is never clipped. */}

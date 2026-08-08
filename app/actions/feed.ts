@@ -122,6 +122,10 @@ export type FeedPostView = {
   initials: string
   color: string
   authorImage: string | null
+  // When the author is a verified organisation account, surface it so the badge
+  // renders on the avatar/name. orgHandle links to the organisation profile.
+  orgVerified: boolean
+  orgHandle: string | null
   postedAt: string
   createdAtMs: number
   text: string
@@ -229,14 +233,36 @@ function toCommentView(
  * but we resolve the *current* name here so renaming a user retroactively
  * updates the author name shown on all of their past posts and comments.
  */
-async function getUserInfoMap(userIds: string[]): Promise<Map<string, { name: string; image: string | null }>> {
+type UserInfo = {
+  name: string
+  image: string | null
+  // Present when this user owns a verified organisation account.
+  orgVerified: boolean
+  orgHandle: string | null
+}
+
+async function getUserInfoMap(userIds: string[]): Promise<Map<string, UserInfo>> {
   const unique = [...new Set(userIds)]
   if (unique.length === 0) return new Map()
+  // Left-join the organisation each user owns (if any) so a single lookup gives
+  // us both the author's identity and their verified-organisation status.
   const rows = await db
-    .select({ id: userTable.id, name: userTable.name, image: userTable.image })
+    .select({
+      id: userTable.id,
+      name: userTable.name,
+      image: userTable.image,
+      orgVerified: organization.verified,
+      orgHandle: organization.handle,
+    })
     .from(userTable)
+    .leftJoin(organization, eq(organization.ownerId, userTable.id))
     .where(inArray(userTable.id, unique))
-  return new Map(rows.map((r) => [r.id, { name: r.name, image: r.image }]))
+  return new Map(
+    rows.map((r) => [
+      r.id,
+      { name: r.name, image: r.image, orgVerified: r.orgVerified ?? false, orgHandle: r.orgHandle ?? null },
+    ]),
+  )
 }
 
 // Relative for the first 24h, then an absolute dd/mm/yy date. Shared helper so
@@ -298,6 +324,8 @@ export async function getFeed(): Promise<FeedPostView[]> {
     initials: getInitials(infoMap.get(p.userId)?.name ?? p.authorName),
     color: getAvatarColor(p.userId),
     authorImage: infoMap.get(p.userId)?.image ?? null,
+    orgVerified: infoMap.get(p.userId)?.orgVerified ?? false,
+    orgHandle: infoMap.get(p.userId)?.orgHandle ?? null,
     postedAt: timeAgo(p.createdAt),
     createdAtMs: p.createdAt.getTime(),
     text: p.text,
@@ -373,6 +401,8 @@ export async function getChannelFeed(channel: string): Promise<FeedPostView[]> {
     initials: getInitials(infoMap.get(p.userId)?.name ?? p.authorName),
     color: getAvatarColor(p.userId),
     authorImage: infoMap.get(p.userId)?.image ?? null,
+    orgVerified: infoMap.get(p.userId)?.orgVerified ?? false,
+    orgHandle: infoMap.get(p.userId)?.orgHandle ?? null,
     postedAt: timeAgo(p.createdAt),
     createdAtMs: p.createdAt.getTime(),
     text: p.text,
@@ -462,6 +492,8 @@ export async function searchPosts(query: string): Promise<FeedPostView[]> {
     initials: getInitials(infoMap.get(p.userId)?.name ?? p.authorName),
     color: getAvatarColor(p.userId),
     authorImage: infoMap.get(p.userId)?.image ?? null,
+    orgVerified: infoMap.get(p.userId)?.orgVerified ?? false,
+    orgHandle: infoMap.get(p.userId)?.orgHandle ?? null,
     postedAt: timeAgo(p.createdAt),
     createdAtMs: p.createdAt.getTime(),
     text: p.text,
@@ -528,6 +560,8 @@ export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
     initials: getInitials(infoMap.get(p.userId)?.name ?? p.authorName),
     color: getAvatarColor(p.userId),
     authorImage: infoMap.get(p.userId)?.image ?? null,
+    orgVerified: infoMap.get(p.userId)?.orgVerified ?? false,
+    orgHandle: infoMap.get(p.userId)?.orgHandle ?? null,
     postedAt: timeAgo(p.createdAt),
     createdAtMs: p.createdAt.getTime(),
     text: p.text,
@@ -608,6 +642,8 @@ export async function getRepostsByUser(userId: string): Promise<FeedPostView[]> 
     initials: getInitials(infoMap.get(p.userId)?.name ?? p.authorName),
     color: getAvatarColor(p.userId),
     authorImage: infoMap.get(p.userId)?.image ?? null,
+    orgVerified: infoMap.get(p.userId)?.orgVerified ?? false,
+    orgHandle: infoMap.get(p.userId)?.orgHandle ?? null,
     postedAt: timeAgo(p.createdAt),
     createdAtMs: p.createdAt.getTime(),
     text: p.text,
