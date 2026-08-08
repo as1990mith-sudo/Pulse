@@ -84,14 +84,11 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>
-        <button
-          type="button"
-          aria-label="Manage organisation"
-          className="flex size-10 shrink-0 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <Settings2 className="size-4" />
-        </button>
+      <SheetTrigger
+        aria-label="Manage organisation"
+        className="flex size-10 shrink-0 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
+        <Settings2 className="size-4" />
       </SheetTrigger>
       <SheetContent side="bottom" className="max-h-[90svh] overflow-y-auto rounded-t-2xl">
         <SheetHeader className="text-left">

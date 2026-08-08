@@ -16,12 +16,13 @@ import {
   Repeat2,
   Users,
 } from "lucide-react"
-import type { Show } from "@/lib/data"
 import type { ArticleCard as ArticleCardType } from "@/lib/article-types"
 import type { OrganizationView } from "@/lib/org-types"
 import { AvatarWithBadge } from "@/components/org/verified-badge"
 import type { OrgPostView, OrgSubscriberView } from "@/app/actions/organizations"
-import { EpisodeCatalog } from "@/components/episode-catalog"
+import type { EventView, CatalogueItemView } from "@/app/actions/org-content"
+import { OrgEventsTab } from "@/components/org/org-events-tab"
+import { OrgCatalogueTab } from "@/components/org/org-catalogue-tab"
 import { ArticleRow } from "@/components/articles/article-card"
 import { FeedVideo } from "@/components/feed-video"
 import { cn } from "@/lib/utils"
@@ -40,21 +41,24 @@ export function OrgTabs({
   org,
   posts,
   articles,
-  episodes,
+  events,
+  catalogue,
   subscribers,
 }: {
   org: OrganizationView
   posts: OrgPostView[]
   articles: ArticleCardType[]
-  episodes: Show[]
+  events: { upcoming: EventView[]; past: EventView[] }
+  catalogue: CatalogueItemView[]
   subscribers: OrgSubscriberView[]
 }) {
+  const eventCount = events.upcoming.length + events.past.length
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; count?: number }[] = [
     { key: "posts", label: "Posts", icon: <MessageSquareText className="size-4" />, count: posts.length },
     { key: "about", label: "About", icon: <Info className="size-4" /> },
-    { key: "events", label: "Events", icon: <Calendar className="size-4" /> },
+    { key: "events", label: "Events", icon: <Calendar className="size-4" />, count: eventCount },
     { key: "articles", label: "Articles", icon: <Newspaper className="size-4" />, count: articles.length },
-    { key: "catalogue", label: "Catalogue", icon: <Mic className="size-4" />, count: episodes.length },
+    { key: "catalogue", label: "Catalogue", icon: <Mic className="size-4" />, count: catalogue.length },
     { key: "subscribers", label: "Subscribers", icon: <Users className="size-4" />, count: org.subscriberCount },
   ]
 
@@ -101,23 +105,11 @@ export function OrgTabs({
         ) : tab === "about" ? (
           <AboutTab org={org} />
         ) : tab === "events" ? (
-          <EventsTab name={org.name} />
+          <OrgEventsTab org={org} events={events} />
         ) : tab === "articles" ? (
           <ArticlesTab org={org} articles={articles} />
         ) : tab === "catalogue" ? (
-          episodes.length === 0 ? (
-            <EmptyState
-              icon={<Mic className="size-6" />}
-              title="No episodes yet"
-              message={
-                org.isOwner
-                  ? "Audio and video resources you publish will appear here."
-                  : `${org.name} hasn't published any resources yet.`
-              }
-            />
-          ) : (
-            <EpisodeCatalog episodes={episodes} owned={org.isOwner} />
-          )
+          <OrgCatalogueTab org={org} items={catalogue} />
         ) : (
           <SubscribersTab org={org} subscribers={subscribers} />
         )}
@@ -307,16 +299,6 @@ function AboutTab({ org }: { org: OrganizationView }) {
         </div>
       )}
     </div>
-  )
-}
-
-function EventsTab({ name }: { name: string }) {
-  return (
-    <EmptyState
-      icon={<Calendar className="size-6" />}
-      title="Events coming soon"
-      message={`Conferences, gatherings, prayer meetings and ministry activities from ${name} will appear here once events launch on Frequency.`}
-    />
   )
 }
 
