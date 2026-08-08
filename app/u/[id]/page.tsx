@@ -1,4 +1,7 @@
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
+import { eq } from "drizzle-orm"
+import { db } from "@/lib/db"
+import { organization } from "@/lib/db/schema"
 import { getProfile } from "@/lib/profile"
 import { getEpisodesByUser } from "@/lib/content"
 import { getPublicCommunityPostsByUser, getAnonymousCommunityPostsByUser } from "@/app/actions/community"
@@ -16,6 +19,17 @@ import { ProfileBio } from "@/components/profile/profile-bio"
 
 export default async function ProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+
+  // Organisation accounts have their own dedicated profile surface. If this
+  // user owns an organisation, send every visitor (owner or not) to the
+  // organisation profile instead of the personal /u/[id] page.
+  const [ownedOrg] = await db
+    .select({ handle: organization.handle })
+    .from(organization)
+    .where(eq(organization.ownerId, id))
+    .limit(1)
+  if (ownedOrg) redirect(`/org/${ownedOrg.handle}`)
+
   const profile = await getProfile(id)
   if (!profile) notFound()
 
