@@ -11,6 +11,10 @@ export const user = pgTable("user", {
   image: text("image"),
   // Short user-written profile bio (max 25 words, enforced in the action).
   bio: text("bio"),
+  // Account type: "individual" (normal Frequency user) or "organization" (a
+  // church/ministry account that owns an organization profile). Drives feed
+  // posting permission and which profile surface a user gets.
+  accountType: text("accountType").notNull().default("individual"),
   // Who may @mention this user: "everyone" | "followers" | "none". Enforced
   // server-side; blocked mentions render as plain text and send no notification.
   mentionPrivacy: text("mentionPrivacy").notNull().default("everyone"),
@@ -65,6 +69,9 @@ export const verification = pgTable("verification", {
 export const feedPost = pgTable("feed_post", {
   id: serial("id").primaryKey(),
   userId: text("userId").notNull(),
+  // When set, this main-feed post was published by an organisation account and
+  // is attributed to that organisation's profile. Null = legacy/personal post.
+  organizationId: text("organizationId"),
   authorName: text("authorName").notNull(),
   authorHandle: text("authorHandle").notNull(),
   text: text("text").notNull(),
@@ -112,6 +119,79 @@ export const follow = pgTable("follow", {
   followingId: text("followingId").notNull(),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
+
+// --- Organisation / Ministry ecosystem -------------------------------------
+// An official church/ministry/organisation presence. Owned by a single user
+// account whose accountType is "organization". This is the home of ministry
+// communication and is discovered + subscribed to by individual users.
+export const organization = pgTable(
+  "organization",
+  {
+    id: text("id").primaryKey(),
+    // The user account that manages this organisation.
+    ownerId: text("ownerId").notNull(),
+    name: text("name").notNull(),
+    // URL-safe unique handle used at /org/[handle].
+    handle: text("handle").notNull().unique(),
+    // One of: church | ministry | prayer_ministry | mission | youth_group |
+    // bible_teaching | christian_media | other.
+    category: text("category").notNull(),
+    // Free-text specification when category === "other".
+    categoryOther: text("categoryOther"),
+    description: text("description"),
+    logo: text("logo"),
+    // Reach identity: local | regional | global | online_only.
+    reach: text("reach").notNull().default("local"),
+    onlineOnly: boolean("onlineOnly").notNull().default(false),
+    // Optional location. All nullable; online-only orgs typically leave blank.
+    country: text("country"),
+    city: text("city"),
+    region: text("region"),
+    website: text("website"),
+    // Future-ready social links: { instagram, youtube, facebook, twitter, other }.
+    socials: jsonb("socials").$type<{
+      instagram?: string
+      youtube?: string
+      facebook?: string
+      twitter?: string
+      other?: string
+    }>(),
+    // About tab fields.
+    mission: text("mission"),
+    vision: text("vision"),
+    history: text("history"),
+    beliefs: text("beliefs"),
+    contactEmail: text("contactEmail"),
+    contactPhone: text("contactPhone"),
+    // Trust / verification. verified drives the badge; verificationStatus tracks
+    // the review lifecycle: none | pending | approved | rejected.
+    verified: boolean("verified").notNull().default(false),
+    verificationStatus: text("verificationStatus").notNull().default("none"),
+    verificationNote: text("verificationNote"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    ownerIdx: index("organization_owner_idx").on(t.ownerId),
+    categoryIdx: index("organization_category_idx").on(t.category),
+  }),
+)
+
+// A user's subscription to an organisation. "Subscribe" is the org-facing
+// equivalent of Follow. notify toggles per-organisation notifications.
+export const subscription = pgTable(
+  "subscription",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("userId").notNull(),
+    organizationId: text("organizationId").notNull(),
+    notify: boolean("notify").notNull().default(true),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    userOrgIdx: uniqueIndex("subscription_user_org_idx").on(t.userId, t.organizationId),
+  }),
+)
 
 export const feedComment = pgTable(
   "feed_comment",
