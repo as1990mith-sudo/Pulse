@@ -103,7 +103,7 @@ export default async function OrganizationPage({ params }: { params: Promise<{ h
                 {websiteHost && <WebsiteButton href={org.website!} host={websiteHost} />}
               </>
             ) : (
-              <div className="flex w-full max-w-xs items-center gap-2">
+              <div className="flex w-full max-w-[240px] items-center gap-2">
                 <OrgSubscribeButton
                   organizationId={org.id}
                   initialSubscribed={org.isSubscribed}
