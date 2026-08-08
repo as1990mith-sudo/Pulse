@@ -10,6 +10,7 @@ import {
   AlignLeft,
   BookOpen,
   Bookmark,
+  Compass,
   ChevronDown,
   ChevronRight,
   Contrast,
@@ -314,6 +315,7 @@ export function AppMenu() {
               {/* Scrollable menu body */}
               <div className="mt-2 flex-1 overflow-y-auto overscroll-contain px-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
                 <Section>
+                  <DrawerItem href="/discover" icon={Compass} label="Discover Ministries" onNavigate={navigate} />
                   <DrawerItem href="/bible" icon={BookOpen} label="Bible" onNavigate={navigate} />
                   <DrawerItem href="/live-notes" icon={NotebookPen} label="Live Notes" onNavigate={navigate} />
                   <DrawerItem href="/articles" icon={Newspaper} label="Articles" onNavigate={navigate} />

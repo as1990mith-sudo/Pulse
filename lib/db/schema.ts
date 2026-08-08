@@ -18,6 +18,14 @@ export const user = pgTable("user", {
   // Who may @mention this user: "everyone" | "followers" | "none". Enforced
   // server-side; blocked mentions render as plain text and send no notification.
   mentionPrivacy: text("mentionPrivacy").notNull().default("everyone"),
+  // Optional self-reported location, used to surface nearby organisations in
+  // discovery. All nullable — matched against organisation country/city text.
+  country: text("country"),
+  city: text("city"),
+  region: text("region"),
+  // Set once the user completes (or skips) the post-signup onboarding flow that
+  // invites them to subscribe to at least one organisation. Null = not yet done.
+  onboardedAt: timestamp("onboardedAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 })
@@ -190,6 +198,51 @@ export const subscription = pgTable(
   },
   (t) => ({
     userOrgIdx: uniqueIndex("subscription_user_org_idx").on(t.userId, t.organizationId),
+  }),
+)
+
+// An event published by an organisation: conferences, gatherings, prayer
+// meetings, services. Rendered on the org profile's Events tab, upcoming first.
+export const event = pgTable(
+  "event",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organizationId").notNull(),
+    title: text("title").notNull(),
+    description: text("description"),
+    startsAt: timestamp("startsAt").notNull(),
+    endsAt: timestamp("endsAt"),
+    // Physical venue name/address; null for purely-online events.
+    locationName: text("locationName"),
+    // Join link for online/hybrid events.
+    onlineUrl: text("onlineUrl"),
+    cover: text("cover"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("event_org_idx").on(t.organizationId),
+  }),
+)
+
+// A catalogue resource published by an organisation: audio, video or document.
+// Rendered on the org profile's Catalogue tab, newest first.
+export const catalogueItem = pgTable(
+  "catalogue_item",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organizationId").notNull(),
+    title: text("title").notNull(),
+    description: text("description"),
+    // "audio" | "video" | "document".
+    kind: text("kind").notNull().default("audio"),
+    url: text("url").notNull(),
+    cover: text("cover"),
+    // Free-text duration label, e.g. "42 min".
+    duration: text("duration"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("catalogue_org_idx").on(t.organizationId),
   }),
 )
 

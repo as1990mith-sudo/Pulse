@@ -2,12 +2,13 @@ import { notFound } from "next/navigation"
 import Link from "next/link"
 import { Globe, MapPin, ShieldQuestion } from "lucide-react"
 import { getOrganizationByHandle, getOrganizationPosts, getOrganizationSubscribers } from "@/app/actions/organizations"
-import { getEpisodesByUser } from "@/lib/content"
+import { getOrganizationEvents, getOrganizationCatalogue } from "@/app/actions/org-content"
 import { getWriterArticles } from "@/app/actions/articles"
 import { SiteHeader } from "@/components/site-header"
 import { OrgTabs } from "@/components/org/org-tabs"
 import { OrgSubscribeButton } from "@/components/org/org-subscribe-button"
 import { OrgVerifyButton } from "@/components/org/org-verify-button"
+import { OrgManageSheet } from "@/components/org/org-manage-sheet"
 import { AvatarWithBadge, VerifiedBadge } from "@/components/org/verified-badge"
 
 export default async function OrganizationPage({ params }: { params: Promise<{ handle: string }> }) {
@@ -15,10 +16,11 @@ export default async function OrganizationPage({ params }: { params: Promise<{ h
   const org = await getOrganizationByHandle(handle)
   if (!org) notFound()
 
-  const [posts, subscribers, episodes, articles] = await Promise.all([
+  const [posts, subscribers, events, catalogue, articles] = await Promise.all([
     getOrganizationPosts(org.id),
     getOrganizationSubscribers(org.id),
-    getEpisodesByUser(org.ownerId, org.isOwner),
+    getOrganizationEvents(org.id),
+    getOrganizationCatalogue(org.id),
     getWriterArticles(org.ownerId),
   ])
 
@@ -95,11 +97,14 @@ export default async function OrganizationPage({ params }: { params: Promise<{ h
           <div className="mt-4 flex w-full flex-col items-center gap-3">
             {org.isOwner ? (
               <>
-                <OrgVerifyButton
-                  organizationId={org.id}
-                  status={org.verificationStatus}
-                  verified={org.verified}
-                />
+                <div className="flex w-full max-w-[240px] items-center gap-2">
+                  <OrgVerifyButton
+                    organizationId={org.id}
+                    status={org.verificationStatus}
+                    verified={org.verified}
+                  />
+                  <OrgManageSheet org={org} />
+                </div>
                 {websiteHost && <WebsiteButton href={org.website!} host={websiteHost} />}
               </>
             ) : (
@@ -118,7 +123,14 @@ export default async function OrganizationPage({ params }: { params: Promise<{ h
       </header>
 
       <main className="mx-auto w-full max-w-4xl px-4 py-4 sm:px-6">
-        <OrgTabs org={org} posts={posts} articles={articles} episodes={episodes} subscribers={subscribers} />
+        <OrgTabs
+          org={org}
+          posts={posts}
+          articles={articles}
+          events={events}
+          catalogue={catalogue}
+          subscribers={subscribers}
+        />
       </main>
     </div>
   )

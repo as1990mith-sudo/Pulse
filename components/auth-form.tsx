@@ -114,7 +114,9 @@ export function AuthForm({ mode, googleEnabled = false }: { mode: "sign-in" | "s
       return
     }
 
-    router.push("/feed")
+    // Individuals land on a skippable onboarding step that invites them to
+    // subscribe to at least one organisation before entering the feed.
+    router.push("/welcome")
     router.refresh()
   }
 
