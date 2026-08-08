@@ -8,9 +8,11 @@ const SIZES = {
 } as const
 
 /**
- * The official verification badge for a verified organisation. A filled
- * primary badge with a light check — the same mark used everywhere an
- * organisation appears (profile header, feed posts, discovery, etc.).
+ * The official verification badge for a verified organisation. A fixed blue
+ * badge with a white check — the same mark used everywhere an organisation
+ * appears (profile header, feed posts, discovery, etc.). The colours are
+ * intentionally hard-coded (not theme tokens) so the badge reads as the
+ * universal "verified" blue regardless of light/dark theme.
  */
 export function VerifiedBadge({
   size = "md",
@@ -25,7 +27,7 @@ export function VerifiedBadge({
     <BadgeCheck
       role="img"
       aria-label={label}
-      className={cn("shrink-0 fill-primary text-primary-foreground", SIZES[size], className)}
+      className={cn("shrink-0 fill-[#1d9bf0] text-white", SIZES[size], className)}
     />
   )
 }
