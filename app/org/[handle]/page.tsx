@@ -98,12 +98,16 @@ export default async function OrganizationPage({ params }: { params: Promise<{ h
             {org.isOwner ? (
               <>
                 <div className="flex w-full max-w-[240px] items-center gap-2">
-                  <OrgVerifyButton
-                    organizationId={org.id}
-                    status={org.verificationStatus}
-                    verified={org.verified}
-                  />
                   <OrgManageSheet org={org} />
+                  {/* Verify control only when not yet verified; a verified org
+                      already shows the badge on its logo and name. */}
+                  {!org.verified && (
+                    <OrgVerifyButton
+                      organizationId={org.id}
+                      status={org.verificationStatus}
+                      verified={org.verified}
+                    />
+                  )}
                 </div>
                 {websiteHost && <WebsiteButton href={org.website!} host={websiteHost} />}
               </>
