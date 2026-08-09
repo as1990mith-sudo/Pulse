@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   Check,
   Copy,
+  Flame,
   ImagePlus,
   Info,
   Loader2,
@@ -930,23 +931,33 @@ export function CommunityHelpInfoModal({ open, onClose }: { open: boolean; onClo
           <div className="flex gap-3">
             <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 font-bold text-white">?</span>
             <p>
-              <span className="font-semibold text-foreground">Ask anonymously.</span> Your question appears as{" "}
-              <span className="font-medium text-foreground">&ldquo;Anonymous&rdquo;</span> to everyone. Share honestly
-              without revealing who you are.
+              <span className="font-semibold text-foreground">Ask anonymously.</span> Tap{" "}
+              <span className="font-medium text-foreground">Ask</span> to post a question or prayer request. It appears
+              as <span className="font-medium text-foreground">&ldquo;Anonymous&rdquo;</span> to everyone, so you can
+              share honestly without revealing who you are.
             </p>
           </div>
           <div className="flex gap-3">
             <CommentIcon className="mt-0.5 size-7 shrink-0 text-primary" />
             <p>
-              <span className="font-semibold text-foreground">Replies are personal.</span> When you respond to help
-              someone, your real name and photo are shown — so answers come from real, accountable people.
+              <span className="font-semibold text-foreground">Replies are personal.</span> When you answer to help
+              someone, your real name and photo are shown — so encouragement comes from real, accountable people the
+              community can trust.
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <Flame className="mt-0.5 size-7 shrink-0 text-primary" />
+            <p>
+              <span className="font-semibold text-foreground">Testimonies live in iTestify.</span> Switch to the{" "}
+              <span className="font-medium text-foreground">iTestify</span> tab to celebrate answered prayers and share
+              what God has done.
             </p>
           </div>
           <div className="flex gap-3">
             <Info className="mt-0.5 size-7 shrink-0 text-primary" />
             <p>
-              <span className="font-semibold text-foreground">A safe place.</span> Be kind, be gentle, and treat every
-              question as someone reaching out for real support.
+              <span className="font-semibold text-foreground">A safe, respectful space.</span> Be kind and gentle, keep
+              things confidential, and treat every question as someone genuinely reaching out for support.
             </p>
           </div>
         </div>
