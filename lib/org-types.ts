@@ -61,6 +61,7 @@ export type OrganizationView = {
   categoryLabel: string
   description: string | null
   logo: string | null
+  cover: string | null
   initials: string
   color: string
   reach: OrgReach

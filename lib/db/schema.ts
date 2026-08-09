@@ -148,6 +148,9 @@ export const organization = pgTable(
     categoryOther: text("categoryOther"),
     description: text("description"),
     logo: text("logo"),
+    // Wide cover / banner image shown behind the profile hero. Optional; when
+    // absent the hero falls back to a blurred crop of the logo.
+    cover: text("cover"),
     // Reach identity: local | regional | global | online_only.
     reach: text("reach").notNull().default("local"),
     onlineOnly: boolean("onlineOnly").notNull().default(false),

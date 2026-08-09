@@ -76,19 +76,13 @@ export function OrgHero({ org }: { org: OrganizationView }) {
         {/* Primary actions */}
         <div className="mt-6 flex w-full flex-col items-center gap-3 animate-in fade-in slide-in-from-bottom-2 delay-100 duration-500">
           {org.isOwner ? (
-            <>
-              <div className="flex w-full max-w-[260px] items-center gap-2">
-                <OrgManageSheet org={org} />
-                {!org.verified && (
-                  <OrgVerifyButton organizationId={org.id} status={org.verificationStatus} verified={org.verified} />
-                )}
-              </div>
-              {websiteHost && (
-                <div className="w-full max-w-[260px]">
-                  <WebsiteButton href={org.website!} host={websiteHost} full />
-                </div>
+            <div className="flex w-full max-w-[380px] items-center justify-center gap-2.5">
+              <OrgManageSheet org={org} />
+              {websiteHost && <WebsiteButton href={org.website!} host={websiteHost} />}
+              {!org.verified && (
+                <OrgVerifyButton organizationId={org.id} status={org.verificationStatus} verified={org.verified} />
               )}
-            </>
+            </div>
           ) : (
             <div className="flex w-full max-w-[360px] items-center justify-center gap-2.5">
               <OrgSubscribeButton
@@ -116,18 +110,30 @@ export function OrgHero({ org }: { org: OrganizationView }) {
 
 /** Blurred-logo cover that fades into the page — or an ambient glow if no logo. */
 function CinematicCover({ org }: { org: OrganizationView }) {
+  const coverSrc = org.cover ?? org.logo
+
   return (
     <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-52 overflow-hidden sm:h-60">
-      {org.logo ? (
+      {coverSrc ? (
         <>
+          {/* A dedicated cover renders crisp and photographic; a logo-derived
+              fallback stays heavily blurred so it reads as ambient art. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={org.logo || "/placeholder.svg"}
+            src={coverSrc || "/placeholder.svg"}
             alt=""
-            className="h-full w-full scale-125 object-cover opacity-40 blur-2xl saturate-125"
+            className={cn(
+              "h-full w-full object-cover",
+              org.cover ? "scale-105 opacity-90 saturate-110" : "scale-125 opacity-40 blur-2xl saturate-125",
+            )}
           />
           {/* Darken + fade to the page background at the bottom. */}
-          <div className="absolute inset-0 bg-gradient-to-b from-background/50 via-background/30 to-background" />
+          <div
+            className={cn(
+              "absolute inset-0 bg-gradient-to-b to-background",
+              org.cover ? "from-background/20 via-background/40" : "from-background/50 via-background/30",
+            )}
+          />
           {/* Edge vignette so the cover melts into the page rather than sitting
               as a rectangular banner. */}
           <div

@@ -58,6 +58,7 @@ async function buildOrganizationView(org: OrgRow, viewerId: string | null): Prom
     categoryLabel: orgCategoryLabel(org.category, org.categoryOther),
     description: org.description,
     logo: org.logo,
+    cover: org.cover,
     initials: getInitials(org.name),
     color: getAvatarColor(org.id),
     reach: org.reach as OrgReach,
@@ -195,6 +196,7 @@ export type UpdateOrganizationInput = Partial<{
   categoryOther: string | null
   description: string | null
   logo: string | null
+  cover: string | null
   reach: OrgReach
   onlineOnly: boolean
   country: string | null
@@ -229,6 +231,7 @@ export async function updateOrganization(orgId: string, input: UpdateOrganizatio
       "categoryOther",
       "description",
       "logo",
+      "cover",
       "reach",
       "onlineOnly",
       "country",
@@ -360,6 +363,7 @@ export async function listOrganizations(query?: string): Promise<OrganizationVie
     categoryLabel: orgCategoryLabel(org.category, org.categoryOther),
     description: org.description,
     logo: org.logo,
+    cover: org.cover,
     initials: getInitials(org.name),
     color: getAvatarColor(org.id),
     reach: org.reach as OrgReach,
@@ -492,6 +496,7 @@ export async function discoverOrganizations(params: DiscoverParams = {}): Promis
       categoryLabel: orgCategoryLabel(org.category, org.categoryOther),
       description: org.description,
       logo: org.logo,
+      cover: org.cover,
       initials: getInitials(org.name),
       color: getAvatarColor(org.id),
       reach: org.reach as OrgReach,
