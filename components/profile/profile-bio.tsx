@@ -104,7 +104,7 @@ export function ProfileBio({ bio, editable }: { bio: string | null; editable: bo
         <button
           onClick={() => setEditing(true)}
           aria-label="Edit bio"
-          className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground opacity-0 transition-all hover:bg-secondary hover:text-foreground focus:opacity-100 group-hover/bio:opacity-100"
+          className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
         >
           <Pencil className="size-3.5" />
         </button>
