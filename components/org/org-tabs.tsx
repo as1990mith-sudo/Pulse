@@ -466,7 +466,7 @@ function AboutTab({ org }: { org: OrganizationView }) {
         <div className="flex flex-col gap-6">
           {sections.map((s) => (
             <section key={s.label} className="flex flex-col gap-2">
-              <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
+              <h3 className="font-display text-lg font-semibold tracking-tight text-foreground">
                 {s.label}
               </h3>
               <p className="whitespace-pre-wrap text-pretty text-[15px] leading-relaxed text-foreground/90">
@@ -479,7 +479,7 @@ function AboutTab({ org }: { org: OrganizationView }) {
 
       {contactRows.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
+          <h3 className="font-display text-lg font-semibold tracking-tight text-foreground">
             Contact &amp; links
           </h3>
           <div className="overflow-hidden rounded-2xl border border-border/50 bg-card/40">
