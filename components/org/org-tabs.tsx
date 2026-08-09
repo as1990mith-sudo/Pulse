@@ -475,34 +475,43 @@ function AboutTab({ org }: { org: OrganizationView }) {
 }
 
 function ArticlesTab({ org, articles }: { org: OrganizationView; articles: ArticleCardType[] }) {
-  if (articles.length === 0) {
-    return (
-      <EmptyState
-        icon={<Newspaper className="size-6" />}
-        title="No articles yet"
-        message={
-          org.isOwner
-            ? "Publish written resources and teachings for your community."
-            : `${org.name} hasn't published any articles yet.`
-        }
-        action={
-          org.isOwner ? (
-            <Link
-              href="/articles/write"
-              className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
-            >
-              <PenLine className="size-4" /> Write an article
-            </Link>
-          ) : null
-        }
-      />
-    )
-  }
   return (
-    <div className="flex flex-col gap-3">
-      {articles.map((a) => (
-        <ArticleRow key={a.id} article={a} />
-      ))}
+    <div className="animate-in fade-in duration-300">
+      {/* Editorial section intro sets the tone before the list/empty state. */}
+      <div className="mb-5">
+        <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">Articles</h2>
+        <p className="mt-1 text-pretty text-sm leading-relaxed text-muted-foreground">
+          Teaching, insights and resources from {org.name}.
+        </p>
+      </div>
+
+      {articles.length === 0 ? (
+        <EmptyState
+          icon={<Newspaper className="size-6" />}
+          title="No articles published yet"
+          message={
+            org.isOwner
+              ? "New teaching and resources you publish will appear here."
+              : "New teaching and resources will appear here when published."
+          }
+          action={
+            org.isOwner ? (
+              <Link
+                href="/articles/write"
+                className="tap-scale mt-1 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+              >
+                <PenLine className="size-4" /> Write an article
+              </Link>
+            ) : null
+          }
+        />
+      ) : (
+        <div className="flex flex-col gap-3">
+          {articles.map((a) => (
+            <ArticleRow key={a.id} article={a} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -561,12 +570,18 @@ function EmptyState({
   action?: React.ReactNode
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-muted/30 px-6 py-16 text-center">
-      <span className="flex size-12 items-center justify-center rounded-full bg-secondary text-muted-foreground">
-        {icon}
+    <div className="flex flex-col items-center justify-center gap-4 px-6 py-20 text-center animate-in fade-in duration-500">
+      {/* Quiet, haloed glyph rather than a boxed CMS-style empty card. */}
+      <span className="relative flex size-14 items-center justify-center">
+        <span aria-hidden className="absolute inset-0 rounded-full bg-primary/5 blur-md" />
+        <span className="relative flex size-14 items-center justify-center rounded-full bg-secondary/60 text-muted-foreground/80 ring-1 ring-border/40">
+          {icon}
+        </span>
       </span>
-      <p className="font-medium">{title}</p>
-      <p className="max-w-sm text-pretty text-sm text-muted-foreground">{message}</p>
+      <div className="space-y-1.5">
+        <p className="font-display text-base font-semibold tracking-tight text-foreground">{title}</p>
+        <p className="mx-auto max-w-xs text-pretty text-sm leading-relaxed text-muted-foreground">{message}</p>
+      </div>
       {action}
     </div>
   )

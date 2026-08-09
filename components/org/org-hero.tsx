@@ -34,16 +34,19 @@ export function OrgHero({ org }: { org: OrganizationView }) {
 
         {/* Identity */}
         <div className="mt-4 flex flex-col items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
-          <div className="flex items-center gap-1.5">
-            <h1 className="text-balance font-display text-[26px] font-bold leading-tight tracking-tight sm:text-3xl">
-              {org.name}
-            </h1>
+          {/* Badge lives inline in the text flow so it hugs the final word even
+              when the name wraps, instead of drifting to the line's far edge. */}
+          <h1 className="text-balance font-display text-[26px] font-bold leading-tight tracking-tight sm:text-3xl">
+            {org.name}
             {org.verified ? (
-              <VerifiedBadge size="md" className="translate-y-px" />
+              <VerifiedBadge size="md" className="ml-1.5 inline-block translate-y-0.5" />
             ) : (
-              <ShieldQuestion className="size-5 shrink-0 text-muted-foreground/50" aria-label="Not yet verified" />
+              <ShieldQuestion
+                className="ml-1.5 inline-block size-5 translate-y-0.5 text-muted-foreground/50"
+                aria-label="Not yet verified"
+              />
             )}
-          </div>
+          </h1>
 
           {/* Metadata: type · reach on one line, location beneath — subtle
               separators instead of a stack of pills. */}
