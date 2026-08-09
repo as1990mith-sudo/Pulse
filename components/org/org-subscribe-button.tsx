@@ -17,12 +17,15 @@ export function OrgSubscribeButton({
   initialSubscribed,
   initialNotify,
   showNotify = true,
+  compact = false,
   className,
 }: {
   organizationId: string
   initialSubscribed: boolean
   initialNotify: boolean
   showNotify?: boolean
+  /** Smaller height/text so it can sit inline with other header actions. */
+  compact?: boolean
   className?: string
 }) {
   const router = useRouter()
@@ -63,7 +66,7 @@ export function OrgSubscribeButton({
         onClick={onToggle}
         disabled={pending}
         variant={subscribed ? "outline" : "default"}
-        className="h-10 flex-1 rounded-full text-sm font-semibold"
+        className={cn("flex-1 rounded-full font-semibold", compact ? "h-9 px-3 text-xs" : "h-10 text-sm")}
       >
         {subscribed ? (
           <>
@@ -84,7 +87,8 @@ export function OrgSubscribeButton({
           aria-label={notify ? "Turn off notifications" : "Turn on notifications"}
           aria-pressed={notify}
           className={cn(
-            "flex size-10 shrink-0 items-center justify-center rounded-full border transition-colors",
+            "flex shrink-0 items-center justify-center rounded-full border transition-colors",
+            compact ? "size-9" : "size-10",
             notify
               ? "border-primary bg-primary/10 text-primary"
               : "border-border/60 text-muted-foreground hover:text-foreground",
