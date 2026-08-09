@@ -982,6 +982,15 @@ export function CommunityHelp({
   const [infoOpen, setInfoOpen] = useState(false)
   const [highlightedQ, setHighlightedQ] = useState<string | null>(null)
   const [activeId, setActiveId] = useState<number | null>(null)
+  // One-shot flag consumed by the history effect below: true only for the
+  // conversation opened directly by an incoming ?q=<id> deep link (e.g. tapping
+  // a post on someone's profile). In that case the current history entry already
+  // represents this view, so we must NOT push another one.
+  const openedViaDeepLinkRef = useRef(false)
+  // Stays true while that deep-linked conversation is the active screen, so the
+  // in-UI close button also returns to the origin page (the profile) rather than
+  // peeling back to the Community Help feed the user never intended to visit.
+  const deepLinkCloseRef = useRef(false)
   // Auto-hide the global app header as the feed scrolls (Instagram/Telegram feel).
   const onFeedScroll = useAutoHideChatChrome()
   const chromeHidden = useChatChromeHidden()
@@ -1036,6 +1045,8 @@ export function CommunityHelp({
     if (!targetId) return
     const numeric = Number(targetId)
     if (posts.some((p) => p.id === numeric)) {
+      openedViaDeepLinkRef.current = true
+      deepLinkCloseRef.current = true
       setActiveId(numeric)
       return
     }
@@ -1056,6 +1067,16 @@ export function CommunityHelp({
   const conversationOpen = activeId !== null
   useEffect(() => {
     if (!conversationOpen || typeof window === "undefined") return
+    // Deep-linked open: the current history entry IS this conversation view, so
+    // adding another would make Back merely peel the overlay onto the feed. Skip
+    // the push so Back returns to the origin page (the profile) in a single step.
+    // Applies to the initial open only; later in-feed opens push as normal.
+    if (openedViaDeepLinkRef.current) {
+      openedViaDeepLinkRef.current = false
+      return
+    }
+    // A normal in-feed open is not a deep-link screen anymore.
+    deepLinkCloseRef.current = false
     window.history.pushState({ chConversation: true }, "")
     const onPop = () => setActiveId(null)
     window.addEventListener("popstate", onPop)
@@ -1068,6 +1089,13 @@ export function CommunityHelp({
   function closeConversation() {
     const state = typeof window !== "undefined" ? (window.history.state as { chConversation?: boolean } | null) : null
     if (state?.chConversation) {
+      // In-feed open: pop the entry we pushed, returning to the feed preview.
+      window.history.back()
+    } else if (deepLinkCloseRef.current && typeof window !== "undefined" && window.history.length > 1) {
+      // Deep-linked open (e.g. from a profile): go back to the origin page so
+      // closing matches the hardware Back button. Fall back to just clearing the
+      // overlay when there's no in-app history (a fresh external share link).
+      deepLinkCloseRef.current = false
       window.history.back()
     } else {
       setActiveId(null)
