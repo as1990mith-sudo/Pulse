@@ -178,56 +178,48 @@ export function EpisodeCatalog({
 
   return (
     <div className="space-y-4">
-      {/* Audio / Live segmented toggle. The top-level "Video" (uploads) tab is
-          hidden from the front end for now — restore its entry below to
-          re-enable it. Live recordings still expose their own Video subtab. */}
-      <div
-        role="tablist"
-        aria-label="Filter episodes by type"
-        className="flex items-center gap-1 rounded-full border border-border/60 bg-card p-1"
-      >
-        {(
-          [
-            { key: "audio", label: "Audio", icon: Headphones, count: counts.audio },
-            // { key: "video", label: "Video", icon: Video, count: counts.video },
-            { key: "live", label: "Live", icon: Radio, count: counts.live },
-          ] as const
-        ).map(({ key, label, icon: Icon, count }) => {
-          const active = tab === key
-          return (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => selectTab(key)}
-              className={`flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium transition-colors ${
-                active
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Icon className="size-4" />
-              {label}
-              <span
-                className={`rounded-full px-1.5 text-xs ${
-                  active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"
-                }`}
+      {/* Audio / Live section nav — editorial underline style matching the
+          Articles hub. The top-level "Video" (uploads) tab is hidden for now;
+          restore its entry below to re-enable it. Live recordings still expose
+          their own Video subtab. */}
+      <div role="tablist" aria-label="Filter episodes by type" className="-mx-4 border-b border-border/50 px-4 sm:-mx-6 sm:px-6">
+        <div className="flex items-center gap-6">
+          {(
+            [
+              { key: "audio", label: "Audio", icon: Headphones, count: counts.audio },
+              // { key: "video", label: "Video", icon: Video, count: counts.video },
+              { key: "live", label: "Live", icon: Radio, count: counts.live },
+            ] as const
+          ).map(({ key, label, icon: Icon, count }) => {
+            const active = tab === key
+            return (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => selectTab(key)}
+                className={cn(
+                  "-mb-px flex items-center gap-2 border-b-2 py-3 text-sm font-medium transition-colors",
+                  active
+                    ? "border-primary text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
               >
-                {count}
-              </span>
-            </button>
-          )
-        })}
+                <Icon className={cn("size-4", active && "text-primary")} />
+                {label}
+                <span className={cn("text-xs tabular-nums", active ? "text-primary" : "text-muted-foreground/60")}>
+                  {count}
+                </span>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
-      {/* Live subtoggle: Video / Audio. Recordings never mix across the two. */}
+      {/* Live subtoggle: Video / Audio — quieter secondary underline row. */}
       {tab === "live" && (
-        <div
-          role="tablist"
-          aria-label="Filter live recordings by media type"
-          className="flex items-center gap-1 rounded-full bg-secondary p-1"
-        >
+        <div role="tablist" aria-label="Filter live recordings by media type" className="flex items-center gap-5">
           {(
             [
               { key: "video", label: "Video", icon: Video, count: liveCounts.video },
@@ -242,17 +234,14 @@ export function EpisodeCatalog({
                 role="tab"
                 aria-selected={active}
                 onClick={() => selectLiveKind(key)}
-                className={`flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-                  active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                }`}
+                className={cn(
+                  "flex items-center gap-1.5 text-[13px] font-medium transition-colors",
+                  active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                )}
               >
-                <Icon className="size-4" />
+                <Icon className={cn("size-3.5", active && "text-primary")} />
                 {label}
-                <span
-                  className={`rounded-full px-1.5 text-xs ${
-                    active ? "bg-muted text-muted-foreground" : "bg-background/60 text-muted-foreground"
-                  }`}
-                >
+                <span className={cn("text-xs tabular-nums", active ? "text-primary" : "text-muted-foreground/60")}>
                   {count}
                 </span>
               </button>
@@ -262,14 +251,14 @@ export function EpisodeCatalog({
       )}
 
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={`Search ${searchNoun} episodes by title…`}
           aria-label="Search episodes by title"
-          className="w-full rounded-full border border-border/60 bg-card py-2 pl-9 pr-4 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
+          className="w-full rounded-xl border border-border/50 bg-card/40 py-2.5 pl-10 pr-4 text-sm outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary/60 focus:bg-card"
         />
       </div>
 

@@ -124,50 +124,45 @@ export function OrgEpisodeCatalog({
 
   return (
     <div className="space-y-4">
-      {/* Audio / Live / Documents segmented toggle (mirrors EpisodeCatalog).
-          Tight padding + truncation keeps all three pills on one row. */}
+      {/* Audio / Live / Documents section nav — editorial underline style
+          matching the Articles hub (thin orange active underline + counts). */}
       <div
         role="tablist"
         aria-label="Filter resources by type"
-        className="flex items-center gap-1 rounded-full border border-border/60 bg-card p-1"
+        className="-mx-4 border-b border-border/50 px-4 sm:-mx-6 sm:px-6"
       >
-        {KIND_ORDER.map((k) => {
-          const active = tab === k
-          const Icon = KIND_ICON[k]
-          return (
-            <button
-              key={k}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => setTab(k)}
-              className={cn(
-                "flex min-w-0 flex-1 items-center justify-center gap-1 rounded-full px-2 py-2 text-xs font-medium transition-colors",
-                active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <Icon className="size-4 shrink-0" />
-              <span className="truncate">{KIND_META[k].label}</span>
-              <span
+        <div className="flex items-center gap-6">
+          {KIND_ORDER.map((k) => {
+            const active = tab === k
+            const Icon = KIND_ICON[k]
+            return (
+              <button
+                key={k}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setTab(k)}
                 className={cn(
-                  "shrink-0 rounded-full px-1.5 text-[11px]",
-                  active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground",
+                  "-mb-px flex min-w-0 items-center gap-2 border-b-2 py-3 text-sm font-medium transition-colors",
+                  active
+                    ? "border-primary text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
                 )}
               >
-                {counts[k]}
-              </span>
-            </button>
-          )
-        })}
+                <Icon className={cn("size-4 shrink-0", active && "text-primary")} />
+                <span className="truncate">{KIND_META[k].label}</span>
+                <span className={cn("text-xs tabular-nums", active ? "text-primary" : "text-muted-foreground/60")}>
+                  {counts[k]}
+                </span>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
-      {/* Live subtoggle: Video / Audio — recordings never mix across the two. */}
+      {/* Live subtoggle: Video / Audio — quieter secondary underline row. */}
       {tab === "video" && (
-        <div
-          role="tablist"
-          aria-label="Filter live recordings by media type"
-          className="flex items-center gap-1 rounded-full bg-secondary p-1"
-        >
+        <div role="tablist" aria-label="Filter live recordings by media type" className="flex items-center gap-5">
           {(
             [
               { key: "video", label: "Video", icon: Radio, count: liveCounts.video },
@@ -183,18 +178,13 @@ export function OrgEpisodeCatalog({
                 aria-selected={active}
                 onClick={() => setLiveKind(key)}
                 className={cn(
-                  "flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
-                  active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                  "flex items-center gap-1.5 text-[13px] font-medium transition-colors",
+                  active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                <Icon className="size-4" />
+                <Icon className={cn("size-3.5", active && "text-primary")} />
                 {label}
-                <span
-                  className={cn(
-                    "rounded-full px-1.5 text-xs",
-                    active ? "bg-muted text-muted-foreground" : "bg-background/60 text-muted-foreground",
-                  )}
-                >
+                <span className={cn("text-xs tabular-nums", active ? "text-primary" : "text-muted-foreground/60")}>
                   {count}
                 </span>
               </button>
@@ -205,14 +195,14 @@ export function OrgEpisodeCatalog({
 
       {/* Title search for the active view. */}
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={`Search ${searchNoun} resources by title…`}
           aria-label="Search resources by title"
-          className="w-full rounded-full border border-border/60 bg-card py-2 pl-9 pr-4 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
+          className="w-full rounded-xl border border-border/50 bg-card/40 py-2.5 pl-10 pr-4 text-sm outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary/60 focus:bg-card"
         />
       </div>
 
