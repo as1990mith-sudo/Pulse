@@ -5,6 +5,7 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { SkinProvider, SKIN_INIT_SCRIPT } from '@/components/skin-provider'
 import { LiveSessionProvider } from '@/components/live-session'
 import { EpisodePlayerProvider } from '@/components/episode-player-provider'
+import { LiveProcessingProvider } from '@/components/live-processing-provider'
 import { AutoRefresh } from '@/components/auto-refresh'
 import { PresenceHeartbeat } from '@/components/presence-heartbeat'
 import { BottomNav } from '@/components/bottom-nav'
@@ -102,15 +103,20 @@ export default function RootLayout({
                 {/* Reports the signed-in user as online (no-op when signed out)
                     so the admin dashboard shows a true real-time presence count. */}
                 <PresenceHeartbeat />
-                {/* The whole app shell gently slides right (micro-parallax) when
-                    the left navigation drawer opens. */}
-                <div id="app-shell" className="app-shell">
-                  {children}
-                  {/* Persistent, flagship-quality tab bar. Lives in the layout so
-                      it never remounts on navigation — the active capsule morphs
-                      between tabs and per-tab state/scroll are preserved. */}
-                  <BottomNav />
-                </div>
+                {/* Drives non-blocking background upload + processing of saved
+                    live replays. Lives here so uploads keep running (and their
+                    status dock stays visible) as the host navigates anywhere. */}
+                <LiveProcessingProvider>
+                  {/* The whole app shell gently slides right (micro-parallax) when
+                      the left navigation drawer opens. */}
+                  <div id="app-shell" className="app-shell">
+                    {children}
+                    {/* Persistent, flagship-quality tab bar. Lives in the layout so
+                        it never remounts on navigation — the active capsule morphs
+                        between tabs and per-tab state/scroll are preserved. */}
+                    <BottomNav />
+                  </div>
+                </LiveProcessingProvider>
                 {process.env.NODE_ENV === 'production' && <Analytics />}
               </EpisodePlayerProvider>
             </LiveSessionProvider>

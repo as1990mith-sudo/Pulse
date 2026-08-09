@@ -1,52 +1,95 @@
 import Link from "next/link"
-import { Video, Mic, ArrowRight } from "lucide-react"
+import { ChevronRight, Mic, Video } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
-import { LiveBadge } from "@/components/live-badge"
-import { GoLiveToggle } from "@/components/go-live-toggle"
+import { GoLiveHero } from "@/components/go-live-toggle"
 import { getLiveStreams } from "@/app/actions/live"
 
-/** A large entry card for one show type (video / audio) that deep-links into
-    the browse page pre-filtered to that type, showing the current live count. */
-function ShowTypeCard({
+/**
+ * The full-width LIVE status pill at the top of the Live tab. Shows a pulsing
+ * dot and a live count, and links straight into the browse experience.
+ */
+function LiveStatusPill({ count }: { count: number }) {
+  const label =
+    count === 0
+      ? "No streams on air right now"
+      : `${count} ${count === 1 ? "stream" : "streams"} on air right now`
+  return (
+    <Link
+      href="/live/browse"
+      className="group flex items-center gap-3 rounded-full border border-border/60 bg-card px-4 py-3 transition-colors hover:border-live/50 hover:bg-card/80 sm:px-5"
+    >
+      <span className="relative flex size-2.5 shrink-0 items-center justify-center">
+        {count > 0 && (
+          <span className="absolute inset-0 animate-ping rounded-full bg-live/70" aria-hidden="true" />
+        )}
+        <span className="relative size-2.5 rounded-full bg-live" />
+      </span>
+      <span className="text-xs font-bold uppercase tracking-[0.2em] text-live">Live</span>
+      <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground sm:text-base">{label}</span>
+      <ChevronRight className="size-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+    </Link>
+  )
+}
+
+/**
+ * One channel card (Video / Audio) in the YOUR CHANNELS row. Uses a colored
+ * top-edge glow + accent icon + accent "Browse shows" link, and deep-links into
+ * the browse page pre-filtered to that show type.
+ */
+function ChannelCard({
   href,
   label,
-  description,
   count,
   icon: Icon,
   accent,
 }: {
   href: string
   label: string
-  description?: string
   count: number
   icon: typeof Video
-  accent: string
+  accent: "video" | "audio"
 }) {
+  // Video → amber (--primary), Audio → red (--live). Both already in the theme.
+  const isVideo = accent === "video"
+  const accentText = isVideo ? "text-primary" : "text-live"
+  const glow = isVideo
+    ? "before:bg-[linear-gradient(90deg,transparent,var(--primary),transparent)]"
+    : "before:bg-[linear-gradient(90deg,transparent,var(--live),transparent)]"
+
   return (
     <Link
       href={href}
-      className="group relative flex flex-col justify-between gap-4 overflow-hidden rounded-2xl border border-border/60 bg-card p-4 transition-colors hover:border-border sm:gap-6 sm:p-7"
+      className={`group relative flex flex-col overflow-hidden rounded-3xl border border-border/60 bg-card p-4 transition-colors hover:border-border sm:p-5
+        before:absolute before:inset-x-4 before:top-0 before:h-px before:content-[''] ${glow}`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <span className={`flex size-10 items-center justify-center rounded-xl sm:size-12 ${accent}`}>
-          <Icon className="size-5 sm:size-6" />
-        </span>
-        {count > 0 && <LiveBadge />}
+      <span
+        className={`flex size-11 items-center justify-center rounded-2xl ${
+          isVideo ? "bg-primary/15 text-primary" : "bg-live/15 text-live"
+        }`}
+      >
+        <Icon className="size-5" />
+      </span>
+
+      <h3 className="mt-5 text-lg font-bold tracking-tight sm:text-xl">{label}</h3>
+
+      <div className="mt-3 flex items-start gap-2 text-sm leading-snug text-muted-foreground">
+        {count > 0 ? (
+          <span className="tabular-nums">
+            <span className="text-2xl font-bold text-foreground">{count}</span>{" "}
+            {count === 1 ? "show live" : "shows live"}
+          </span>
+        ) : (
+          <>
+            <span className="mt-2 h-px w-4 shrink-0 bg-border" aria-hidden="true" />
+            <span className="text-pretty">Nothing live. Start one below.</span>
+          </>
+        )}
       </div>
-      <div className="space-y-1.5">
-        <h3 className="text-lg font-bold tracking-tight sm:text-xl">{label}</h3>
-        {description && <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>}
-      </div>
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <span className="text-sm font-medium tabular-nums">
-          <span className="text-2xl font-bold">{count}</span>{" "}
-          <span className="text-muted-foreground">{count === 1 ? "show live" : "shows live"}</span>
-        </span>
-        <span className="flex items-center gap-1 text-sm font-semibold text-primary">
-          Browse
-          <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-        </span>
-      </div>
+
+      <span className={`mt-6 flex items-center gap-1.5 text-sm font-bold ${accentText}`}>
+        Browse shows
+        <ChevronRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+      </span>
     </Link>
   )
 }
@@ -55,51 +98,42 @@ export default async function LivePage() {
   const streams = await getLiveStreams()
   const videoCount = streams.filter((s) => s.mode === "video").length
   const audioCount = streams.filter((s) => s.mode === "audio").length
+  const totalCount = videoCount + audioCount
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background">
       <SiteHeader />
       <main>
-        {/* Live now */}
-        <div className="mx-auto w-full max-w-6xl space-y-16 px-4 pb-16 pt-6 sm:px-6">
-          <section className="space-y-6">
-            <div className="flex flex-wrap items-center justify-end gap-4">
-              <Link
-                href="/live/browse"
-                className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-card px-4 py-2 text-sm font-medium transition-colors hover:border-border hover:bg-accent"
-              >
-                <LiveBadge />
-                Check ongoing live streams
-                <ArrowRight className="size-4" />
-              </Link>
-            </div>
+        <div className="mx-auto w-full max-w-2xl space-y-8 px-4 pb-20 pt-5 sm:px-6">
+          <LiveStatusPill count={totalCount} />
 
-            {/* Two entry points into the browse experience — one per show type,
-                always side by side (even on phones). */}
-            <div className="grid grid-cols-2 gap-3 sm:gap-5">
-              <ShowTypeCard
+          <section className="space-y-3">
+            <h2 className="px-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              Your channels
+            </h2>
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+              <ChannelCard
                 href="/live/browse?type=video"
                 label="Video shows"
                 count={videoCount}
                 icon={Video}
-                accent="bg-primary/15 text-primary"
+                accent="video"
               />
-              <ShowTypeCard
+              <ChannelCard
                 href="/live/browse?type=audio"
                 label="Audio shows"
                 count={audioCount}
                 icon={Mic}
-                accent="bg-live/15 text-live"
+                accent="audio"
               />
             </div>
           </section>
 
-          {/* Host CTA — pick audio or video, then open the studio in that mode.
-              The id anchor lets "Creator Studio" in the side menu deep-link
-              straight down to this go-live selector. scroll-mt clears the
-              sticky header so the section isn't hidden beneath it. */}
+          {/* Host CTA — the flagship "go live" panel. The id anchor lets the
+              side menu's "Creator Studio" deep-link straight to it. scroll-mt
+              clears the sticky header. */}
           <div id="go-live" className="scroll-mt-24">
-            <GoLiveToggle />
+            <GoLiveHero />
           </div>
         </div>
       </main>

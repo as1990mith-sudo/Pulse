@@ -3,13 +3,14 @@
 import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Clock, Download, Eye, Globe, Loader2, Lock, MoreVertical, Play, Trash2 } from "lucide-react"
+import { AlertTriangle, Clock, Download, Eye, Globe, Loader2, Lock, MoreVertical, Play, RotateCw, Trash2 } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { deleteEpisode, setEpisodePrivacy } from "@/app/actions/shows"
 import { Badge } from "@/components/ui/badge"
 import { LiveBadge, ListenerCount } from "@/components/live-badge"
 import { MarqueeTitle } from "@/components/marquee-title"
 import { isPlayable, useEpisodePlayer } from "@/components/episode-player-provider"
+import { useLiveProcessing } from "@/components/live-processing-provider"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,12 +36,23 @@ export function EpisodeRow({ show, owned = false, queue }: { show: Show; owned?:
   // Optimistic privacy state so the menu label flips instantly on toggle.
   const [isPrivate, setIsPrivate] = useState(Boolean(show.isPrivate))
 
+  // Post-live background processing states. While "processing", the complete
+  // recording is still uploading, so the row is a non-playable placeholder.
+  // "failed" shows a Retry the host can trigger (the provider owns the in-memory
+  // blob for the current session; a page reload clears it, so retry re-opens the
+  // studio's save path is not possible — instead we surface the failure clearly).
+  const isProcessing = show.processingStatus === "processing"
+  const isFailed = show.processingStatus === "failed"
+  const { retry: retryProcessing, isRetryable } = useLiveProcessing()
+
   // Live video recordings are portrait replays that must open the dedicated
   // /live/[id] watch experience — never the in-app audio player. Audio (live or
   // uploaded) still plays inline. This mirrors VideoCard's isLiveReplay guard.
   const isVideoReplay = show.source === "live" && Boolean(show.videoUrl)
-  // On-demand episodes launch the in-app player instead of navigating.
-  const playable = isPlayable(show) && Boolean(queue && queue.length > 0) && !isVideoReplay
+  // On-demand episodes launch the in-app player instead of navigating. A row
+  // that is still processing (or failed) is never playable.
+  const playable =
+    isPlayable(show) && Boolean(queue && queue.length > 0) && !isVideoReplay && !isProcessing && !isFailed
   const isActive = activeId === show.id
 
   function handleTogglePrivacy() {
@@ -104,6 +116,17 @@ export function EpisodeRow({ show, owned = false, queue }: { show: Show; owned?:
             <span className="h-2 w-0.5 animate-pulse rounded-full bg-primary [animation-delay:-0.4s]" />
           </span>
         )}
+        {/* Processing / failed overlays on the cover placeholder */}
+        {isProcessing && (
+          <span className="absolute inset-0 flex items-center justify-center bg-black/60" aria-hidden="true">
+            <Loader2 className="size-4 animate-spin text-white" />
+          </span>
+        )}
+        {isFailed && (
+          <span className="absolute inset-0 flex items-center justify-center bg-black/60" aria-hidden="true">
+            <AlertTriangle className="size-4 text-destructive" />
+          </span>
+        )}
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -127,7 +150,15 @@ export function EpisodeRow({ show, owned = false, queue }: { show: Show; owned?:
             isActive ? "text-primary" : "group-hover:text-live",
           )}
         />
-        {isActive ? (
+        {isProcessing ? (
+          <p className="flex items-center gap-1.5 text-xs font-medium leading-tight text-primary/90">
+            <Loader2 className="size-3 animate-spin" /> Processing replay…
+          </p>
+        ) : isFailed ? (
+          <p className="flex items-center gap-1.5 text-xs font-medium leading-tight text-destructive">
+            <AlertTriangle className="size-3" /> Processing failed
+          </p>
+        ) : isActive ? (
           <p className="text-xs font-medium leading-tight text-primary/80">Now playing</p>
         ) : (
           // Hide the tagline when it's just the category fallback (tagline ||
@@ -139,7 +170,7 @@ export function EpisodeRow({ show, owned = false, queue }: { show: Show; owned?:
         )}
         {/* Views + duration sit directly under the title (not beside it) for
             on-demand rows. Live rows show listener count in the meta above. */}
-        {show.status !== "live" && (
+        {show.status !== "live" && !isProcessing && !isFailed && (
           <div className="mt-0.5 flex items-center gap-3 text-[11px] tabular-nums text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               <Eye className="size-3" />
@@ -175,7 +206,35 @@ export function EpisodeRow({ show, owned = false, queue }: { show: Show; owned?:
       </OpenTag>
 
       <div className="flex shrink-0 items-center gap-1">
-        {playable ? (
+        {isProcessing ? (
+          // Non-interactive placeholder while the full recording uploads.
+          <span
+            aria-label="Replay is processing"
+            className="flex size-9 items-center justify-center rounded-full bg-secondary text-muted-foreground"
+          >
+            <Loader2 className="size-4 animate-spin" />
+          </span>
+        ) : isFailed ? (
+          // Retry is only actionable for the in-memory job from this session;
+          // otherwise the control is a static failed indicator (host can delete).
+          isRetryable(show.episodeId) ? (
+            <button
+              type="button"
+              onClick={() => retryProcessing(show.episodeId)}
+              aria-label={`Retry processing ${show.title}`}
+              className="flex h-9 items-center gap-1.5 rounded-full bg-destructive/15 px-3 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/25"
+            >
+              <RotateCw className="size-3.5" /> Retry
+            </button>
+          ) : (
+            <span
+              aria-label="Processing failed"
+              className="flex size-9 items-center justify-center rounded-full bg-destructive/15 text-destructive"
+            >
+              <AlertTriangle className="size-4" />
+            </span>
+          )
+        ) : playable ? (
           <button
             type="button"
             onClick={() => play(show, queue!)}

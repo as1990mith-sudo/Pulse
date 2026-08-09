@@ -80,6 +80,12 @@ function episodeToShow(row: typeof episode.$inferSelect, views = 0, hostImage?: 
     likes: row.likes,
     isPrivate: row.isPrivate,
     source: row.source === "live" ? "live" : "upload",
+    processingStatus:
+      row.processingStatus === "processing" || row.processingStatus === "failed"
+        ? row.processingStatus
+        : "ready",
+    processingError: row.processingError || undefined,
+    processingStartedAt: row.processingStartedAt ? row.processingStartedAt.toISOString() : undefined,
   }
 }
 
@@ -88,6 +94,24 @@ function episodeToShow(row: typeof episode.$inferSelect, views = 0, hostImage?: 
  * only included when the viewer is the host themselves (`includePrivate`).
  */
 export async function getEpisodesByUser(userId: string, includePrivate = false): Promise<Show[]> {
+  // Watchdog: when the host loads their own catalogue, flip any background
+  // upload that has been "processing" for over 30 minutes to "failed" so a
+  // crashed/closed uploader can never leave a row stuck in "Processing…".
+  if (includePrivate) {
+    const cutoff = new Date(Date.now() - 30 * 60 * 1000)
+    await db
+      .update(episode)
+      .set({ processingStatus: "failed", processingError: "Processing timed out" })
+      .where(
+        and(
+          eq(episode.hostUserId, userId),
+          eq(episode.processingStatus, "processing"),
+          lte(episode.processingStartedAt, cutoff),
+        ),
+      )
+      .catch(() => {})
+  }
+
   const rows = await db
     .select()
     .from(episode)
