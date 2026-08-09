@@ -213,7 +213,7 @@ function OrgPostMedia({ media }: { media: OrgPostView["media"] }) {
           className="mt-3 block w-full overflow-hidden rounded-2xl border border-border/60"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={m.url || "/placeholder.svg"} alt="" loading="lazy" className="max-h-[32rem] w-full object-cover" />
+          <img src={m.url || "/placeholder.svg"} alt="" loading="lazy" className="max-h-96 w-full object-cover" />
         </button>
         {lightbox}
       </>
