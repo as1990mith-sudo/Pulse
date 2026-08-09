@@ -226,6 +226,12 @@ export function useLiveVideo({
   const recordChunksRef = useRef<Blob[]>([])
   const recordMimeRef = useRef<string>("video/webm")
   const recordingStartedRef = useRef(false)
+  // True from the moment `stopRecording()` begins finalizing the take until the
+  // recorder's `onstop` has flushed the last chunk. While this is set, `cleanup`
+  // must NOT tear the recorder/compositor down: doing so ends the recorded
+  // canvas+audio tracks mid-finalize, which can truncate the final blob so the
+  // saved replay comes back empty. `stopRecording` owns the teardown instead.
+  const finalizingRef = useRef(false)
   const compositorRef = useRef<LiveCompositor | null>(null)
   const recordAspectRef = useRef(recordAspect)
   recordAspectRef.current = recordAspect
@@ -379,18 +385,25 @@ export function useLiveVideo({
   }
 
   const cleanup = useCallback(() => {
-    // Stop any in-progress recording so the camera/mic tracks are released.
-    if (recorderRef.current && recorderRef.current.state !== "inactive") {
-      try {
-        recorderRef.current.stop()
-      } catch {
-        /* already stopped */
+    // When a save is finalizing the recording (host ended the session and we're
+    // awaiting the last chunk), leave the recorder AND compositor alone —
+    // `stopRecording` tears them down once `onstop` fires. Tearing them down
+    // here would end the recorded tracks mid-finalize and empty the blob. We
+    // still disconnect the room below so the live session ends for everyone.
+    if (!finalizingRef.current) {
+      // Stop any in-progress recording so the camera/mic tracks are released.
+      if (recorderRef.current && recorderRef.current.state !== "inactive") {
+        try {
+          recorderRef.current.stop()
+        } catch {
+          /* already stopped */
+        }
       }
-    }
-    // Tear down the composite canvas/audio graph if it's still running.
-    if (compositorRef.current) {
-      compositorRef.current.stop()
-      compositorRef.current = null
+      // Tear down the composite canvas/audio graph if it's still running.
+      if (compositorRef.current) {
+        compositorRef.current.stop()
+        compositorRef.current = null
+      }
     }
     const room = roomRef.current
     if (room) {
