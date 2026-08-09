@@ -219,16 +219,17 @@ function PublicThread({
       <CommunityAvatar post={post} />
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-1.5 text-[15px]">
-            <span className="truncate font-bold tracking-tight text-foreground">
+          {/* Display name on top, then handle · date stacked beneath it. */}
+          <div className="flex min-w-0 flex-col">
+            <span className="truncate text-[15px] font-bold leading-tight tracking-tight text-foreground">
               {post.authorName ?? "Member"}
             </span>
-            {post.authorHandle && (
-              <span className="truncate text-sm text-muted-foreground">{post.authorHandle}</span>
-            )}
-            <span className="text-muted-foreground">·</span>
-            <span className="shrink-0 text-sm text-muted-foreground">{post.postedAt}</span>
-            {post.edited && <EditedIndicator />}
+            <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">
+              {post.authorHandle && <span className="truncate">{post.authorHandle}</span>}
+              {post.authorHandle && <span aria-hidden>·</span>}
+              <span className="shrink-0">{post.postedAt}</span>
+              {post.edited && <EditedIndicator />}
+            </div>
           </div>
 
           {/* Overflow menu — Copy for everyone, Edit/Delete for the author. */}
