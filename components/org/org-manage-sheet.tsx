@@ -4,26 +4,29 @@ import { useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import {
+  AtSign,
   Building2,
+  Camera,
   Check,
-  Facebook,
   Globe,
-  Instagram,
+  ImagePlus,
   Link2,
   Loader2,
   Mail,
   MapPin,
   Phone,
+  Play,
   Settings2,
-  Twitter,
+  Trash2,
+  Users,
   X,
-  Youtube,
 } from "lucide-react"
 import { updateOrganization } from "@/app/actions/organizations"
 import { orgLocationLabel, type OrganizationView } from "@/lib/org-types"
 import { VerifiedBadge } from "@/components/org/verified-badge"
 import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
+import { compressImage, uploadMedia } from "@/lib/upload-media"
 import { cn } from "@/lib/utils"
 
 const DESC_MAX = 280
@@ -32,6 +35,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const URL_RE = /^(https?:\/\/)?([\w-]+\.)+[\w-]{2,}(\/\S*)?$/i
 
 type Snapshot = {
+  logo: string
+  cover: string
   description: string
   onlineOnly: boolean
   city: string
@@ -53,6 +58,8 @@ type Snapshot = {
 
 function snapshotFromOrg(org: OrganizationView): Snapshot {
   return {
+    logo: org.logo ?? "",
+    cover: org.cover ?? "",
     description: org.description ?? "",
     onlineOnly: org.onlineOnly,
     city: org.city ?? "",
@@ -91,6 +98,8 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
 
   const initial = useRef<Snapshot>(snapshotFromOrg(org))
 
+  const [logo, setLogo] = useState(initial.current.logo)
+  const [cover, setCover] = useState(initial.current.cover)
   const [description, setDescription] = useState(initial.current.description)
   const [onlineOnly, setOnlineOnly] = useState(initial.current.onlineOnly)
   const [city, setCity] = useState(initial.current.city)
@@ -110,6 +119,8 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
   const [beliefs, setBeliefs] = useState(initial.current.beliefs)
 
   const current: Snapshot = {
+    logo,
+    cover,
     description,
     onlineOnly,
     city,
@@ -154,6 +165,8 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
 
   function reset() {
     const s = initial.current
+    setLogo(s.logo)
+    setCover(s.cover)
     setDescription(s.description)
     setOnlineOnly(s.onlineOnly)
     setCity(s.city)
@@ -185,6 +198,8 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
     startTransition(async () => {
       try {
         await updateOrganization(org.id, {
+          logo: logo.trim() || null,
+          cover: cover.trim() || null,
           description: description.trim() || null,
           onlineOnly,
           city: onlineOnly ? null : city.trim() || null,
@@ -282,6 +297,19 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
               {/* Form column */}
               <div className="min-h-0 overflow-y-auto px-5 py-6 sm:px-8 sm:py-7">
                 <div className="mx-auto flex w-full max-w-lg flex-col gap-8">
+                  {/* Brand imagery */}
+                  <Section title="Brand" hint="Your profile picture and cover art appear at the top of your public page.">
+                    <BrandImages
+                      orgName={org.name}
+                      initials={org.initials}
+                      color={org.color}
+                      logo={logo}
+                      cover={cover}
+                      onLogo={setLogo}
+                      onCover={setCover}
+                    />
+                  </Section>
+
                   {/* About */}
                   <Section title="About" hint="A concise, editorial summary of who you are.">
                     <Field
@@ -398,16 +426,16 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
                   <Section title="Social links" hint="Optional — link the channels you're active on.">
                     <div className="grid gap-3 sm:grid-cols-2">
                       <Field label="Instagram">
-                        <IconInput icon={<Instagram className="size-4" />} value={instagram} onChange={setInstagram} placeholder="instagram.com/…" />
+                        <IconInput icon={<Camera className="size-4" />} value={instagram} onChange={setInstagram} placeholder="instagram.com/…" />
                       </Field>
                       <Field label="YouTube">
-                        <IconInput icon={<Youtube className="size-4" />} value={youtube} onChange={setYoutube} placeholder="youtube.com/@…" />
+                        <IconInput icon={<Play className="size-4" />} value={youtube} onChange={setYoutube} placeholder="youtube.com/@…" />
                       </Field>
                       <Field label="Facebook">
-                        <IconInput icon={<Facebook className="size-4" />} value={facebook} onChange={setFacebook} placeholder="facebook.com/…" />
+                        <IconInput icon={<Users className="size-4" />} value={facebook} onChange={setFacebook} placeholder="facebook.com/…" />
                       </Field>
                       <Field label="X / Twitter">
-                        <IconInput icon={<Twitter className="size-4" />} value={twitter} onChange={setTwitter} placeholder="x.com/…" />
+                        <IconInput icon={<AtSign className="size-4" />} value={twitter} onChange={setTwitter} placeholder="x.com/…" />
                       </Field>
                       <div className="sm:col-span-2">
                         <Field label="Other link">
@@ -455,6 +483,8 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
                 <div className="min-h-0 flex-1 overflow-y-auto px-7 pb-8">
                   <ProfilePreview
                     org={org}
+                    logo={logo}
+                    cover={cover}
                     description={description}
                     onlineOnly={onlineOnly}
                     city={city}
@@ -520,6 +550,8 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
 
 function ProfilePreview({
   org,
+  logo,
+  cover,
   description,
   onlineOnly,
   city,
@@ -529,6 +561,8 @@ function ProfilePreview({
   contactEmail,
 }: {
   org: OrganizationView
+  logo: string
+  cover: string
   description: string
   onlineOnly: boolean
   city: string
@@ -539,15 +573,23 @@ function ProfilePreview({
 }) {
   const location = orgLocationLabel(onlineOnly, city, region, country)
   const websiteHost = website.trim() ? website.trim().replace(/^https?:\/\//, "").replace(/\/$/, "") : null
+  const coverSrc = cover.trim() || logo.trim()
 
   return (
     <div className="overflow-hidden rounded-3xl border border-border/60 bg-card shadow-xl shadow-black/30">
-      {/* Cover derived from the logo, echoing the real profile hero. */}
+      {/* Cover — a dedicated cover renders crisp; the logo fallback stays blurred. */}
       <div className="relative h-24 overflow-hidden">
-        {org.logo ? (
+        {coverSrc ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={org.logo || "/placeholder.svg"} alt="" className="size-full scale-125 object-cover opacity-40 blur-2xl" />
+            <img
+              src={coverSrc || "/placeholder.svg"}
+              alt=""
+              className={cn(
+                "size-full object-cover",
+                cover.trim() ? "opacity-90" : "scale-125 opacity-40 blur-2xl",
+              )}
+            />
             <div className="absolute inset-0 bg-gradient-to-b from-transparent to-card" />
           </>
         ) : (
@@ -566,12 +608,12 @@ function ProfilePreview({
           <span
             className={cn(
               "flex size-16 items-center justify-center overflow-hidden rounded-2xl text-xl font-bold text-white",
-              !org.logo && org.color,
+              !logo.trim() && org.color,
             )}
           >
-            {org.logo ? (
+            {logo.trim() ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={org.logo || "/placeholder.svg"} alt={org.name} className="size-full object-cover" />
+              <img src={logo || "/placeholder.svg"} alt={org.name} className="size-full object-cover" />
             ) : (
               org.initials
             )}
@@ -711,5 +753,192 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
       </div>
       {children}
     </section>
+  )
+}
+
+/* ------------------------------ Brand images ------------------------------ */
+
+/**
+ * Shared upload logic for a single image field. Compresses in the browser
+ * (covers keep a larger long edge than square avatars) then uploads straight
+ * to Blob via the signed-token flow. Failures surface inline and never block
+ * the rest of the form.
+ */
+function useImageUpload(kind: "cover" | "avatar", onChange: (url: string) => void) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  async function onSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = "" // allow re-selecting the same file
+    if (!file) return
+    if (!file.type.startsWith("image/")) {
+      setError("Please choose an image file.")
+      return
+    }
+    setError(null)
+    setBusy(true)
+    try {
+      const compressed = await compressImage(file, kind === "cover" ? 1920 : 640, 0.85)
+      const { url } = await uploadMedia(compressed, kind === "cover" ? "covers" : "avatars", file.name)
+      onChange(url)
+    } catch {
+      setError("Upload failed. Please try again.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return { busy, error, inputRef, onSelect }
+}
+
+function BrandImages({
+  orgName,
+  initials,
+  color,
+  logo,
+  cover,
+  onLogo,
+  onCover,
+}: {
+  orgName: string
+  initials: string
+  color: string
+  logo: string
+  cover: string
+  onLogo: (url: string) => void
+  onCover: (url: string) => void
+}) {
+  const coverUp = useImageUpload("cover", onCover)
+  const logoUp = useImageUpload("avatar", onLogo)
+  const coverSrc = cover.trim() || logo.trim()
+
+  return (
+    <div>
+      <div className="relative">
+        {/* Cover art */}
+        <div className="relative aspect-[16/6] w-full overflow-hidden rounded-2xl border border-border/50 bg-muted/40">
+          {coverSrc ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={coverSrc || "/placeholder.svg"}
+                alt=""
+                className={cn("size-full object-cover", cover.trim() ? "" : "scale-125 opacity-50 blur-xl")}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent" />
+            </>
+          ) : (
+            <div className="flex size-full items-center justify-center">
+              <span className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                <ImagePlus className="size-4" /> Add cover art
+              </span>
+            </div>
+          )}
+
+          <input ref={coverUp.inputRef} type="file" accept="image/*" className="sr-only" onChange={coverUp.onSelect} />
+
+          <div className="absolute right-2.5 top-2.5 flex items-center gap-1.5">
+            <ImageActionButton
+              onClick={() => coverUp.inputRef.current?.click()}
+              busy={coverUp.busy}
+              icon={<Camera className="size-3.5" />}
+              label={cover.trim() ? "Change" : "Upload"}
+            />
+            {cover.trim() && !coverUp.busy && (
+              <ImageActionButton
+                onClick={() => onCover("")}
+                icon={<Trash2 className="size-3.5" />}
+                label="Remove"
+                destructive
+              />
+            )}
+          </div>
+        </div>
+
+        {/* Profile picture, overlapping the cover's lower-left corner */}
+        <div className="absolute -bottom-5 left-4">
+          <div className="relative">
+            <div className="rounded-2xl bg-card p-1 shadow-lg ring-1 ring-border/60">
+              <span
+                className={cn(
+                  "flex size-16 items-center justify-center overflow-hidden rounded-xl text-lg font-bold text-white",
+                  !logo.trim() && color,
+                )}
+              >
+                {logo.trim() ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={logo || "/placeholder.svg"} alt={orgName} className="size-full object-cover" />
+                ) : (
+                  initials
+                )}
+              </span>
+            </div>
+            <input ref={logoUp.inputRef} type="file" accept="image/*" className="sr-only" onChange={logoUp.onSelect} />
+            <button
+              type="button"
+              onClick={() => logoUp.inputRef.current?.click()}
+              disabled={logoUp.busy}
+              aria-label="Change profile picture"
+              className="absolute -bottom-1 -right-1 flex size-7 items-center justify-center rounded-full border border-card bg-primary text-primary-foreground shadow-md transition-transform active:scale-95 disabled:opacity-70"
+            >
+              {logoUp.busy ? <Loader2 className="size-3.5 animate-spin" /> : <Camera className="size-3.5" />}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Helper row (leaves clearance for the overlapping avatar) */}
+      <div className="mt-7 flex flex-wrap items-center justify-between gap-2 pl-1">
+        <p className="text-xs text-muted-foreground">
+          {logo.trim() ? "Profile picture set" : "Add a profile picture"} — a square image works best.
+        </p>
+        {logo.trim() && !logoUp.busy && (
+          <button
+            type="button"
+            onClick={() => onLogo("")}
+            className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-destructive"
+          >
+            <Trash2 className="size-3.5" /> Remove picture
+          </button>
+        )}
+      </div>
+
+      {(coverUp.error || logoUp.error) && (
+        <p className="mt-2 text-xs text-destructive" role="alert">
+          {coverUp.error ?? logoUp.error}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function ImageActionButton({
+  onClick,
+  busy,
+  icon,
+  label,
+  destructive,
+}: {
+  onClick: () => void
+  busy?: boolean
+  icon: React.ReactNode
+  label: string
+  destructive?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold text-white shadow-md backdrop-blur transition-colors disabled:opacity-70",
+        destructive ? "bg-black/50 hover:bg-destructive" : "bg-black/50 hover:bg-black/70",
+      )}
+    >
+      {busy ? <Loader2 className="size-3.5 animate-spin" /> : icon}
+      {label}
+    </button>
   )
 }
