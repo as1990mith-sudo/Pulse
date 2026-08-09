@@ -102,7 +102,7 @@ export function OrgTabs({
   return (
     <section className="mt-2">
       <div
-        className="relative -mx-4 grid border-t border-border/60 sm:-mx-6"
+        className="relative -mx-4 grid border-b border-border/50 sm:-mx-6"
         style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
       >
         {tabs.map((t) => (
@@ -112,19 +112,20 @@ export function OrgTabs({
             aria-pressed={tab === t.key}
             title={t.label}
             className={cn(
-              "flex items-center justify-center gap-2 py-3 text-xs font-semibold uppercase tracking-wider transition-colors",
-              tab === t.key ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+              "flex items-center justify-center gap-2 py-3.5 text-[13px] font-medium tracking-tight transition-colors duration-200",
+              tab === t.key ? "text-foreground" : "text-muted-foreground/70 hover:text-foreground",
             )}
           >
-            {t.icon}
+            <span className={cn("transition-transform duration-200", tab === t.key && "scale-105")}>{t.icon}</span>
             <span className={cn("whitespace-nowrap", tab !== t.key && "sr-only")}>
               {t.label}
               {t.count ? ` ${t.count}` : ""}
             </span>
           </button>
         ))}
+        {/* Thin, brand-accented active indicator that glides between tabs. */}
         <span
-          className="absolute -top-px left-0 h-0.5 bg-foreground transition-transform duration-300 ease-out"
+          className="absolute -bottom-px left-0 h-0.5 rounded-full bg-primary shadow-[0_0_12px_var(--primary)] transition-transform duration-300 ease-out"
           style={{ width: `${100 / tabs.length}%`, transform: `translateX(${activeIndex * 100}%)` }}
           aria-hidden
         />
