@@ -24,6 +24,7 @@ import { OrgEventsTab } from "@/components/org/org-events-tab"
 import { OrgCatalogueTab } from "@/components/org/org-catalogue-tab"
 import { ArticleRow } from "@/components/articles/article-card"
 import { FeedVideo } from "@/components/feed-video"
+import { ImageLightbox } from "@/components/image-lightbox"
 import { cn } from "@/lib/utils"
 
 type TabKey = "posts" | "about" | "events" | "articles" | "catalogue"
@@ -186,33 +187,63 @@ function OrgPostThread({ org, post }: { org: OrganizationView; post: OrgPostView
 }
 
 function OrgPostMedia({ media }: { media: OrgPostView["media"] }) {
-  // Single item takes a framed 16:9 box; multiple items form a compact grid.
+  // Which image (if any) is expanded in the lightbox. Videos keep their own
+  // inline player and are never lightbox targets.
+  const [active, setActive] = useState<string | null>(null)
+
+  const lightbox = active ? <ImageLightbox src={active} onClose={() => setActive(null)} /> : null
+
+  // Single item: keep the image's own aspect ratio (capped) like the Community
+  // Help timeline, rather than forcing a 16:9 crop. Images open in a lightbox.
   if (media.length === 1) {
     const m = media[0]
-    return (
-      <div className="relative mt-3 aspect-video w-full overflow-hidden rounded-xl border border-border/60 bg-black">
-        {m.type === "video" ? (
+    if (m.type === "video") {
+      return (
+        <div className="relative mt-3 aspect-video w-full overflow-hidden rounded-2xl border border-border/60 bg-black">
           <FeedVideo src={m.url} className="h-full w-full object-cover" />
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={m.url || "/placeholder.svg"} alt="" loading="lazy" className="h-full w-full object-cover" />
-        )}
-      </div>
+        </div>
+      )
+    }
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => setActive(m.url)}
+          aria-label="Open image"
+          className="mt-3 block w-full overflow-hidden rounded-2xl border border-border/60"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={m.url || "/placeholder.svg"} alt="" loading="lazy" className="max-h-[32rem] w-full object-cover" />
+        </button>
+        {lightbox}
+      </>
     )
   }
+
+  // Multiple items: compact square grid; each image opens in the lightbox.
   return (
-    <div className="mt-3 grid grid-cols-2 gap-1.5">
-      {media.slice(0, 4).map((m, i) => (
-        <div key={i} className="relative aspect-square overflow-hidden rounded-lg border border-border/60 bg-black">
-          {m.type === "video" ? (
-            <FeedVideo src={m.url} className="h-full w-full object-cover" />
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={m.url || "/placeholder.svg"} alt="" loading="lazy" className="h-full w-full object-cover" />
-          )}
-        </div>
-      ))}
-    </div>
+    <>
+      <div className="mt-3 grid grid-cols-2 gap-1.5">
+        {media.slice(0, 4).map((m, i) => (
+          <div key={i} className="relative aspect-square overflow-hidden rounded-xl border border-border/60 bg-black">
+            {m.type === "video" ? (
+              <FeedVideo src={m.url} className="h-full w-full object-cover" />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setActive(m.url)}
+                aria-label="Open image"
+                className="block h-full w-full"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={m.url || "/placeholder.svg"} alt="" loading="lazy" className="h-full w-full object-cover" />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      {lightbox}
+    </>
   )
 }
 
@@ -341,7 +372,10 @@ function ArticlesTab({ org, articles }: { org: OrganizationView; articles: Artic
 
 function OrgAvatar({ org, className }: { org: OrganizationView; className?: string }) {
   return (
-    <AvatarWithBadge verified={org.verified} badgeSize="sm">
+    // `self-start` keeps the badge pinned to the avatar's own bottom-right;
+    // without it the wrapper stretches to the flex row's full height and the
+    // absolutely-positioned badge drops to the bottom of the post.
+    <AvatarWithBadge verified={org.verified} badgeSize="sm" className="self-start">
       <Avatar initials={org.initials} color={org.color} image={org.logo} name={org.name} className={className} />
     </AvatarWithBadge>
   )
