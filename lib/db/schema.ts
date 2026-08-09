@@ -327,6 +327,11 @@ export const episode = pgTable("episode", {
   // Recorded/uploaded video for video episodes, uploaded to Blob. When set, the
   // episode is treated as a video episode in the catalogue; otherwise audio.
   videoUrl: text("videoUrl"),
+  // Persisted media kind ("video" | "audio"). Required because a live recording
+  // that is still uploading in the background has NO media url yet, so the kind
+  // can't be inferred from videoUrl — without this a processing video replay
+  // would be misfiled under the Live › Audio subtab. Defaults to "audio".
+  mediaKind: text("mediaKind").notNull().default("audio"),
   // Optional named playlist a video episode belongs to (e.g. "Sunday Sermons").
   // Null means the video is ungrouped. Used to organize the Video catalogue.
   playlist: text("playlist"),

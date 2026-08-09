@@ -74,7 +74,10 @@ function episodeToShow(row: typeof episode.$inferSelect, views = 0, hostImage?: 
     description: row.description,
     audioUrl: row.audioUrl || undefined,
     videoUrl: row.videoUrl || undefined,
-    mediaType: row.videoUrl ? "video" : "audio",
+    // Prefer the persisted media kind — a still-processing live replay has no
+    // media url yet, so inferring from videoUrl alone would misfile it under
+    // Audio. Fall back to the url for any legacy row without a stored kind.
+    mediaType: row.mediaKind === "video" || row.mediaKind === "audio" ? row.mediaKind : row.videoUrl ? "video" : "audio",
     playlist: row.playlist || undefined,
     episodeId: row.id,
     likes: row.likes,
@@ -117,8 +120,16 @@ export async function getEpisodesByUser(userId: string, includePrivate = false):
     .from(episode)
     .where(
       includePrivate
-        ? eq(episode.hostUserId, userId)
-        : and(eq(episode.hostUserId, userId), eq(episode.isPrivate, false)),
+        ? // The host sees ALL their own episodes, including "processing" and
+          // "failed" placeholders (with a processing notice / retry).
+          eq(episode.hostUserId, userId)
+        : // Public visitors only see finished, non-private replays — never a
+          // half-uploaded "processing" row or a "failed" one.
+          and(
+            eq(episode.hostUserId, userId),
+            eq(episode.isPrivate, false),
+            eq(episode.processingStatus, "ready"),
+          ),
     )
     .orderBy(desc(episode.createdAt))
 

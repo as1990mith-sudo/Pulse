@@ -88,11 +88,16 @@ export function EpisodeRow({ show, owned = false, queue }: { show: Show; owned?:
     })
   }
 
-  // The cover + text block: a play trigger for on-demand episodes, otherwise a link.
-  const openProps = playable
-    ? { onClick: () => play(show, queue!) }
-    : ({ href } as const)
-  const OpenTag: any = playable ? "button" : Link
+  // The cover + text block: a play trigger for on-demand episodes, otherwise a
+  // link. A processing/failed replay has no media yet, so it's a NON-interactive
+  // placeholder — never a link to /live/[id] (which would be an empty watch page).
+  const isPlaceholder = isProcessing || isFailed
+  const openProps = isPlaceholder
+    ? {}
+    : playable
+      ? { onClick: () => play(show, queue!) }
+      : ({ href } as const)
+  const OpenTag: any = isPlaceholder ? "div" : playable ? "button" : Link
 
   const inner = (
     <>
