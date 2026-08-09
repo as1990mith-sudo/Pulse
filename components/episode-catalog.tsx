@@ -224,7 +224,7 @@ export function EpisodeCatalog({
         <div
           role="tablist"
           aria-label="Filter live recordings by media type"
-          className="inline-flex items-center gap-1 self-start rounded-full border border-border/50 bg-card/40 p-1"
+          className="mx-auto inline-flex items-center gap-1 rounded-full border border-border/50 bg-card/40 p-1"
         >
           {(
             [
