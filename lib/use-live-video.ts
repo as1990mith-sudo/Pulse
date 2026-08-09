@@ -226,6 +226,12 @@ export function useLiveVideo({
   const recordChunksRef = useRef<Blob[]>([])
   const recordMimeRef = useRef<string>("video/webm")
   const recordingStartedRef = useRef(false)
+  // True from the moment `stopRecording()` begins finalizing the take until the
+  // recorder's `onstop` has flushed the last chunk. While this is set, `cleanup`
+  // must NOT tear the recorder/compositor down: doing so ends the recorded
+  // canvas+audio tracks mid-finalize, which can truncate the final blob so the
+  // saved replay comes back empty. `stopRecording` owns the teardown instead.
+  const finalizingRef = useRef(false)
   const compositorRef = useRef<LiveCompositor | null>(null)
   const recordAspectRef = useRef(recordAspect)
   recordAspectRef.current = recordAspect
@@ -379,18 +385,25 @@ export function useLiveVideo({
   }
 
   const cleanup = useCallback(() => {
-    // Stop any in-progress recording so the camera/mic tracks are released.
-    if (recorderRef.current && recorderRef.current.state !== "inactive") {
-      try {
-        recorderRef.current.stop()
-      } catch {
-        /* already stopped */
+    // When a save is finalizing the recording (host ended the session and we're
+    // awaiting the last chunk), leave the recorder AND compositor alone —
+    // `stopRecording` tears them down once `onstop` fires. Tearing them down
+    // here would end the recorded tracks mid-finalize and empty the blob. We
+    // still disconnect the room below so the live session ends for everyone.
+    if (!finalizingRef.current) {
+      // Stop any in-progress recording so the camera/mic tracks are released.
+      if (recorderRef.current && recorderRef.current.state !== "inactive") {
+        try {
+          recorderRef.current.stop()
+        } catch {
+          /* already stopped */
+        }
       }
-    }
-    // Tear down the composite canvas/audio graph if it's still running.
-    if (compositorRef.current) {
-      compositorRef.current.stop()
-      compositorRef.current = null
+      // Tear down the composite canvas/audio graph if it's still running.
+      if (compositorRef.current) {
+        compositorRef.current.stop()
+        compositorRef.current = null
+      }
     }
     const room = roomRef.current
     if (room) {
@@ -1011,10 +1024,18 @@ export function useLiveVideo({
    * captured). Safe to call multiple times.
    */
   const stopRecording = useCallback((): Promise<Blob | null> => {
+    // Claim ownership of teardown so a concurrent `cleanup()`/`disconnect()`
+    // (the console calls both when the host ends the session) doesn't kill the
+    // recorder and compositor before the final chunk is flushed.
+    finalizingRef.current = true
     return new Promise((resolve) => {
       const rec = recorderRef.current
       const assemble = () =>
         recordChunksRef.current.length > 0 ? new Blob(recordChunksRef.current, { type: recordMimeRef.current }) : null
+      const done = (blob: Blob | null) => {
+        finalizingRef.current = false
+        resolve(blob)
+      }
       const tearDownCompositor = () => {
         if (compositorRef.current) {
           compositorRef.current.stop()
@@ -1023,27 +1044,40 @@ export function useLiveVideo({
       }
       if (!rec || rec.state === "inactive") {
         tearDownCompositor()
-        resolve(assemble())
+        done(assemble())
         return
+      }
+      // Flush any buffered data before stopping so the tail isn't lost.
+      try {
+        rec.requestData()
+      } catch {
+        /* not all implementations support requestData */
       }
       rec.onstop = () => {
         recorderRef.current = null
         tearDownCompositor()
-        resolve(assemble())
+        done(assemble())
       }
       try {
         rec.stop()
       } catch {
         tearDownCompositor()
-        resolve(assemble())
+        done(assemble())
       }
     })
   }, [])
 
-  // Kick off recording once the host's camera is live and painting.
+  // Start recording as soon as the host is connected — NOT gated on the camera.
+  // The compositor records the composited canvas (which always yields a video
+  // track and draws placeholder tiles when a camera is off) and re-scans audio
+  // every second, so it captures the whole session even if the host starts with
+  // their camera off or their self-view hasn't painted yet. Gating on
+  // `camOn && localVideoReady` was why camera-off / slow-attach video sessions
+  // produced an empty recording and silently failed to save. `startRecording`
+  // is idempotent, so re-runs when the camera later turns on are no-ops.
   useEffect(() => {
-    if (isHost && connected && camOn && localVideoReady) startRecording()
-  }, [isHost, connected, camOn, localVideoReady, startRecording])
+    if (isHost && connected) startRecording()
+  }, [isHost, connected, startRecording])
 
   return {
     localVideoRef,
