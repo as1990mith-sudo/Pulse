@@ -161,6 +161,7 @@ export function LiveProcessingProvider({ children }: { children: React.ReactNode
         category: input.category,
         duration: input.duration,
         cover: input.cover,
+        mediaKind: input.mediaKind,
       })
       if (!created.ok) {
         patchJob(localId, { status: "failed", error: created.error })

@@ -73,6 +73,10 @@ export async function createProcessingEpisode(input: {
   category: string
   duration: string
   cover: string | null
+  // Whether the recording being processed is a video or audio replay. Persisted
+  // so the catalogue can file it under the right Live subtab BEFORE the media
+  // url exists (a processing row has no videoUrl/audioUrl yet).
+  mediaKind: "video" | "audio"
 }): Promise<CreateProcessingResult> {
   const user = await requireUser()
 
@@ -95,6 +99,7 @@ export async function createProcessingEpisode(input: {
       description: "",
       audioUrl: null,
       videoUrl: null,
+      mediaKind: input.mediaKind === "video" ? "video" : "audio",
       source: "live",
       processingStatus: "processing",
       processingStartedAt: new Date(),
