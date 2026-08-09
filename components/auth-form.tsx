@@ -533,7 +533,7 @@ function AccountTypeCard({
   )
 }
 
-function OrgDetailsForm(props: {
+export function OrgDetailsForm(props: {
   onSubmit: (e: React.FormEvent) => void
   loading: boolean
   error: string | null

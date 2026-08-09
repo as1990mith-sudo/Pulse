@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import {
   ArrowLeft,
@@ -32,6 +32,7 @@ import { ArticleRow } from "@/components/articles/article-card"
 import { FeedVideo } from "@/components/feed-video"
 import { ImageLightbox } from "@/components/image-lightbox"
 import { ShareSheet } from "@/components/share-sheet"
+import { renderMessageBody } from "@/lib/rich-text"
 import { cn } from "@/lib/utils"
 
 type TabKey = "posts" | "about" | "events" | "articles" | "catalogue"
@@ -88,10 +89,20 @@ export function OrgTabs({
     return (["audio", "video", "document"] as CatalogueKind[]).find((k) => counts[k] > 0) ?? "audio"
   })
   const catalogueOpen = tab === "catalogue"
-  const activeIndex = Math.max(
-    0,
-    tabs.findIndex((t) => t.key === tab),
-  )
+
+  // Horizontal tab scroller: the labels no longer squeeze to fit, so trailing
+  // tabs (e.g. Catalogue) live off-screen until scrolled to. Whenever the active
+  // tab changes we glide it toward the centre so the selection is always in view
+  // — the momentum/smooth easing gives it a premium, native-app feel.
+  const tabScrollerRef = useRef<HTMLDivElement>(null)
+  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  useEffect(() => {
+    const el = tabRefs.current[tab]
+    const scroller = tabScrollerRef.current
+    if (!el || !scroller) return
+    const target = el.offsetLeft - (scroller.clientWidth - el.clientWidth) / 2
+    scroller.scrollTo({ left: Math.max(0, target), behavior: "smooth" })
+  }, [tab])
 
   // Catalogue opens as an immersive full-screen view, so lock background scroll
   // while it's open and restore it on close.
@@ -111,34 +122,55 @@ export function OrgTabs({
 
   return (
     <section className="mt-2">
+      {/* Edge-faded, horizontally scrollable tab bar. The mask softly dissolves
+          tabs at both edges so off-screen tabs (e.g. Catalogue) read as "there's
+          more" rather than being hard-cropped. */}
       <div
-        className="relative -mx-4 grid border-b border-border/50 sm:-mx-6"
-        style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+        className="relative -mx-4 border-b border-border/50 sm:-mx-6"
+        style={{
+          maskImage:
+            "linear-gradient(to right, transparent, black 20px, black calc(100% - 20px), transparent)",
+          WebkitMaskImage:
+            "linear-gradient(to right, transparent, black 20px, black calc(100% - 20px), transparent)",
+        }}
       >
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => selectTab(t.key)}
-            aria-pressed={tab === t.key}
-            title={t.label}
-            className={cn(
-              "flex items-center justify-center gap-2 py-3.5 text-[13px] font-medium tracking-tight transition-colors duration-200",
-              tab === t.key ? "text-foreground" : "text-muted-foreground/70 hover:text-foreground",
-            )}
-          >
-            <span className={cn("transition-transform duration-200", tab === t.key && "scale-105")}>{t.icon}</span>
-            <span className={cn("whitespace-nowrap uppercase tracking-wide", tab !== t.key && "sr-only")}>
-              {t.label}
-              {t.count ? ` ${t.count}` : ""}
-            </span>
-          </button>
-        ))}
-        {/* Thin, brand-accented active indicator that glides between tabs. */}
-        <span
-          className="absolute -bottom-px left-0 h-0.5 rounded-full bg-primary shadow-[0_0_12px_var(--primary)] transition-transform duration-300 ease-out"
-          style={{ width: `${100 / tabs.length}%`, transform: `translateX(${activeIndex * 100}%)` }}
-          aria-hidden
-        />
+        <div
+          ref={tabScrollerRef}
+          role="tablist"
+          className="flex overflow-x-auto scroll-smooth px-4 sm:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              ref={(el) => {
+                tabRefs.current[t.key] = el
+              }}
+              role="tab"
+              onClick={() => selectTab(t.key)}
+              aria-selected={tab === t.key}
+              title={t.label}
+              className={cn(
+                "relative flex shrink-0 items-center gap-2 whitespace-nowrap px-4 py-3.5 text-[13px] font-medium uppercase tracking-wide transition-colors duration-200",
+                tab === t.key ? "text-foreground" : "text-muted-foreground/70 hover:text-foreground",
+              )}
+            >
+              <span className={cn("transition-transform duration-200", tab === t.key && "scale-105")}>{t.icon}</span>
+              <span>
+                {t.label}
+                {t.count ? ` ${t.count}` : ""}
+              </span>
+              {/* Per-tab underline that fades/scales in under the active tab. */}
+              <span
+                className={cn(
+                  "absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-primary shadow-[0_0_12px_var(--primary)] transition-all duration-300 ease-out",
+                  tab === t.key ? "scale-x-100 opacity-100" : "scale-x-0 opacity-0",
+                )}
+                aria-hidden
+              />
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Catalogue renders as a full-screen overlay below; other tabs render inline. */}
@@ -257,7 +289,7 @@ function OrgPostThread({ org, post }: { org: OrganizationView; post: OrgPostView
 
         {post.text && (
           <p className="mt-1 whitespace-pre-wrap text-pretty text-[15px] leading-relaxed text-foreground">
-            {post.text}
+            {renderMessageBody(post.text, { link: true, mention: true })}
           </p>
         )}
 

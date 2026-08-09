@@ -29,10 +29,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
-// The stored `video` kind is surfaced as "Live" in the UI (Radio icon), mirroring
-// the individual-profile Catalogue whose middle tab is Live rather than Video.
+// The stored `audio` kind is surfaced as "Uploads" (manually added resources)
+// and `video` as "Live" (Radio icon), mirroring the individual-profile
+// Catalogue whose top tabs are Uploads · Live rather than Audio · Video.
 const KIND_META: Record<CatalogueKind, { label: string; icon: React.ReactNode }> = {
-  audio: { label: "Audio", icon: <Headphones className="size-4" /> },
+  audio: { label: "Uploads", icon: <Headphones className="size-4" /> },
   video: { label: "Live", icon: <Radio className="size-4" /> },
   document: { label: "Documents", icon: <FileText className="size-4" /> },
 }

@@ -10,6 +10,7 @@ import {
   AlignLeft,
   BookOpen,
   Bookmark,
+  Building2,
   Compass,
   ChevronDown,
   ChevronRight,
@@ -36,6 +37,7 @@ import {
 } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
 import { getUnreadCount } from "@/app/actions/notifications"
+import { getMyOrganization } from "@/app/actions/organizations"
 import { SKINS, useSkin } from "@/components/skin-provider"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { startMenuFlow } from "@/lib/menu-flow"
@@ -85,6 +87,15 @@ export function AppMenu() {
     refreshInterval: 20000,
   })
   const notificationCount = unread ?? 0
+
+  // Whether the signed-in member already owns an organisation. When they don't,
+  // we surface a "Create organisation" entry — the in-app recovery path for the
+  // two-step org sign-up, so a member who never finished it (or simply wants a
+  // page now) is never left without a way to become an organisation.
+  const { data: myOrg } = useSWR(signedIn ? "my-organization" : null, () => getMyOrganization(), {
+    revalidateOnFocus: false,
+  })
+  const ownsOrg = !!myOrg
 
   const [mounted, setMounted] = useState(false)
   const [open, setOpen] = useState(false) // portal present (enter + exit)
@@ -342,6 +353,14 @@ export function AppMenu() {
 
                 <Section label="Preferences">
                   <AppearanceItem />
+                  {signedIn && !ownsOrg && (
+                    <DrawerItem
+                      href="/create-organisation"
+                      icon={Building2}
+                      label="Create organisation"
+                      onNavigate={navigate}
+                    />
+                  )}
                   {signedIn && (
                     <DrawerItem href="/settings/privacy" icon={ShieldCheck} label="Privacy" onNavigate={navigate} />
                   )}

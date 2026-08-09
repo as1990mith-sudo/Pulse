@@ -130,7 +130,14 @@ export async function createOrganization(input: CreateOrganizationInput): Promis
     .from(organization)
     .where(eq(organization.ownerId, user.id))
     .limit(1)
-  if (existing.length > 0) return { handle: existing[0].handle }
+  if (existing.length > 0) {
+    // An org row already exists for this owner. Make sure the account is also
+    // flagged as an organisation — otherwise a partially-applied earlier attempt
+    // could leave it recognised as an individual (the account-type flip and the
+    // org row must always agree).
+    await db.update(userTable).set({ accountType: "organization" }).where(eq(userTable.id, user.id))
+    return { handle: existing[0].handle }
+  }
 
   const name = input.name.trim()
   if (!name) throw new Error("Organisation name is required.")

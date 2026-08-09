@@ -59,22 +59,12 @@ export function ChatRoomsTabs({
               keep the markup valid and accessible. */}
           <div
             className={cn(
-              "-mb-px flex flex-1 items-center justify-center gap-1 border-b-2 transition-colors",
+              "-mb-px flex flex-1 items-center justify-center gap-1.5 border-b-2 transition-colors",
               tab === "community" ? "border-primary" : "border-transparent",
             )}
           >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={tab === "community"}
-              onClick={() => switchTab("community")}
-              className={cn(
-                "flex items-center whitespace-nowrap py-3 text-xs font-medium transition-colors",
-                tab === "community" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              Community Help
-            </button>
+            {/* Info (ⓘ) sits *before* the label so it reads as a leading marker
+                for the section header. */}
             <button
               type="button"
               onClick={() => setInfoOpen(true)}
@@ -82,6 +72,18 @@ export function ChatRoomsTabs({
               className="rounded-full p-0.5 text-muted-foreground transition-colors hover:text-foreground"
             >
               <Info className="size-4" />
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === "community"}
+              onClick={() => switchTab("community")}
+              className={cn(
+                "flex items-center whitespace-nowrap py-3 text-base font-semibold tracking-tight transition-colors",
+                tab === "community" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              Community Help
             </button>
           </div>
 
@@ -92,7 +94,7 @@ export function ChatRoomsTabs({
             aria-selected={tab === "itestify"}
             onClick={() => switchTab("itestify")}
             className={cn(
-              "-mb-px flex flex-1 items-center justify-center gap-1.5 border-b-2 py-3 text-xs font-medium transition-colors",
+              "-mb-px flex flex-1 items-center justify-center gap-1.5 border-b-2 py-3 text-base font-semibold tracking-tight transition-colors",
               tab === "itestify"
                 ? "border-primary text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground",
