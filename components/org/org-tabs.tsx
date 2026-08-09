@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import {
+  ArrowLeft,
   Bookmark,
   Calendar,
   Globe,
@@ -24,7 +25,7 @@ import type { OrgPostView } from "@/app/actions/organizations"
 import type { EventView, CatalogueItemView } from "@/app/actions/org-content"
 import type { ShareTarget } from "@/lib/share-types"
 import { OrgEventsTab } from "@/components/org/org-events-tab"
-import { OrgCatalogueTab } from "@/components/org/org-catalogue-tab"
+import { OrgEpisodeCatalog, NewCatalogueDialog } from "@/components/org/org-catalogue-tab"
 import { ArticleRow } from "@/components/articles/article-card"
 import { FeedVideo } from "@/components/feed-video"
 import { ImageLightbox } from "@/components/image-lightbox"
@@ -73,10 +74,30 @@ export function OrgTabs({
   ]
 
   const [tab, setTab] = useState<TabKey>("posts")
+  // The tab the user was on before opening Catalogue, so the back arrow returns
+  // them exactly where they were (mirrors the individual-profile Catalogue).
+  const [prevTab, setPrevTab] = useState<TabKey>("posts")
+  const catalogueOpen = tab === "catalogue"
   const activeIndex = Math.max(
     0,
     tabs.findIndex((t) => t.key === tab),
   )
+
+  // Catalogue opens as an immersive full-screen view, so lock background scroll
+  // while it's open and restore it on close.
+  useEffect(() => {
+    if (!catalogueOpen) return
+    const previous = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = previous
+    }
+  }, [catalogueOpen])
+
+  function selectTab(key: TabKey) {
+    if (key === "catalogue" && tab !== "catalogue") setPrevTab(tab)
+    setTab(key)
+  }
 
   return (
     <section className="mt-2">
@@ -87,7 +108,7 @@ export function OrgTabs({
         {tabs.map((t) => (
           <button
             key={t.key}
-            onClick={() => setTab(t.key)}
+            onClick={() => selectTab(t.key)}
             aria-pressed={tab === t.key}
             title={t.label}
             className={cn(
@@ -109,6 +130,7 @@ export function OrgTabs({
         />
       </div>
 
+      {/* Catalogue renders as a full-screen overlay below; other tabs render inline. */}
       <div key={tab} className="animate-in fade-in slide-in-from-bottom-1 pt-4 duration-300">
         {tab === "posts" ? (
           <PostsTab org={org} posts={posts} />
@@ -118,10 +140,46 @@ export function OrgTabs({
           <OrgEventsTab org={org} events={events} />
         ) : tab === "articles" ? (
           <ArticlesTab org={org} articles={articles} />
-        ) : (
-          <OrgCatalogueTab org={org} items={catalogue} />
-        )}
+        ) : null}
       </div>
+
+      {/* Immersive Catalogue overlay — same layout as the individual-profile
+          Catalogue: a back arrow + title header (owner add tool top-right) and
+          a scrollable body with the toggle/search/rows. */}
+      {catalogueOpen && (
+        <div className="fixed left-0 top-0 z-50 flex h-[100dvh] w-screen flex-col bg-background animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border/60 bg-background/80 px-4 py-3 backdrop-blur-xl">
+            <button
+              type="button"
+              onClick={() => selectTab(prevTab)}
+              aria-label="Back"
+              className="tap-scale -ml-1 flex size-9 items-center justify-center rounded-full text-foreground transition-colors hover:bg-secondary/60"
+            >
+              <ArrowLeft className="size-5" />
+            </button>
+            <h2 className="flex-1 text-base font-semibold">Catalogue</h2>
+            {org.isOwner && <NewCatalogueDialog organizationId={org.id} />}
+          </header>
+
+          <div data-scroll className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
+            <div className="mx-auto w-full max-w-4xl">
+              {catalogue.length === 0 ? (
+                <EmptyState
+                  icon={<Mic className="size-6" />}
+                  title="No resources yet"
+                  message={
+                    org.isOwner
+                      ? "Publish sermons, worship sets, teachings and documents. Use the + button above to add your first resource."
+                      : `${org.name} hasn't published any resources yet.`
+                  }
+                />
+              ) : (
+                <OrgEpisodeCatalog items={catalogue} isOwner={org.isOwner} orgId={org.id} />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
