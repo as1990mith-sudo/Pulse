@@ -108,15 +108,22 @@ export default async function OrganizationPage({ params }: { params: Promise<{ h
                     />
                   )}
                 </div>
-                {websiteHost && <WebsiteButton href={org.website!} host={websiteHost} />}
+                {websiteHost && (
+                  <div className="w-full max-w-[240px]">
+                    <WebsiteButton href={org.website!} host={websiteHost} />
+                  </div>
+                )}
               </>
             ) : (
-              <div className="flex w-full max-w-[240px] items-center gap-2">
+              // Single compact row: subscribe pill grows, notify bell + website
+              // sit beside it so all controls are side by side and balanced.
+              <div className="flex w-full max-w-[340px] items-center justify-center gap-2">
                 <OrgSubscribeButton
                   organizationId={org.id}
                   initialSubscribed={org.isSubscribed}
                   initialNotify={org.notify}
-                  className="flex-1 basis-0"
+                  compact
+                  className="min-w-0 flex-1"
                 />
                 {websiteHost && <WebsiteButton href={org.website!} host={websiteHost} />}
               </div>
@@ -139,7 +146,7 @@ function WebsiteButton({ href, host }: { href: string; host: string }) {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex h-10 flex-1 basis-0 items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3 text-sm font-semibold transition hover:bg-muted"
+      className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3 text-xs font-semibold transition hover:bg-muted"
       title={`Visit ${host}`}
     >
       <Globe className="size-4 shrink-0" />

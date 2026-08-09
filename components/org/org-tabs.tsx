@@ -1,30 +1,35 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import {
+  ArrowLeft,
+  Bookmark,
   Calendar,
   Globe,
   Heart,
   Info,
   Mail,
+  MessageCircle,
   MessageSquareText,
   Mic,
   Newspaper,
   PenLine,
   Phone,
-  Repeat2,
+  Share2,
 } from "lucide-react"
 import type { ArticleCard as ArticleCardType } from "@/lib/article-types"
 import type { OrganizationView } from "@/lib/org-types"
 import { AvatarWithBadge } from "@/components/org/verified-badge"
 import type { OrgPostView } from "@/app/actions/organizations"
 import type { EventView, CatalogueItemView } from "@/app/actions/org-content"
+import type { ShareTarget } from "@/lib/share-types"
 import { OrgEventsTab } from "@/components/org/org-events-tab"
-import { OrgCatalogueTab } from "@/components/org/org-catalogue-tab"
+import { OrgEpisodeCatalog, NewCatalogueDialog } from "@/components/org/org-catalogue-tab"
 import { ArticleRow } from "@/components/articles/article-card"
 import { FeedVideo } from "@/components/feed-video"
 import { ImageLightbox } from "@/components/image-lightbox"
+import { ShareSheet } from "@/components/share-sheet"
 import { cn } from "@/lib/utils"
 
 type TabKey = "posts" | "about" | "events" | "articles" | "catalogue"
@@ -35,6 +40,15 @@ const SOCIAL_LABELS: Record<string, string> = {
   facebook: "Facebook",
   twitter: "X / Twitter",
   other: "Website",
+}
+
+// Maps a social key to its brand logo asset in /public/brands. Keys without an
+// entry (e.g. "other") fall back to the generic Globe icon.
+const SOCIAL_BRAND_ICON: Record<string, string> = {
+  instagram: "/brands/instagram.svg",
+  youtube: "/brands/youtube.svg",
+  facebook: "/brands/facebook.svg",
+  twitter: "/brands/x.svg",
 }
 
 export function OrgTabs({
@@ -60,10 +74,30 @@ export function OrgTabs({
   ]
 
   const [tab, setTab] = useState<TabKey>("posts")
+  // The tab the user was on before opening Catalogue, so the back arrow returns
+  // them exactly where they were (mirrors the individual-profile Catalogue).
+  const [prevTab, setPrevTab] = useState<TabKey>("posts")
+  const catalogueOpen = tab === "catalogue"
   const activeIndex = Math.max(
     0,
     tabs.findIndex((t) => t.key === tab),
   )
+
+  // Catalogue opens as an immersive full-screen view, so lock background scroll
+  // while it's open and restore it on close.
+  useEffect(() => {
+    if (!catalogueOpen) return
+    const previous = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = previous
+    }
+  }, [catalogueOpen])
+
+  function selectTab(key: TabKey) {
+    if (key === "catalogue" && tab !== "catalogue") setPrevTab(tab)
+    setTab(key)
+  }
 
   return (
     <section className="mt-2">
@@ -74,7 +108,7 @@ export function OrgTabs({
         {tabs.map((t) => (
           <button
             key={t.key}
-            onClick={() => setTab(t.key)}
+            onClick={() => selectTab(t.key)}
             aria-pressed={tab === t.key}
             title={t.label}
             className={cn(
@@ -96,6 +130,7 @@ export function OrgTabs({
         />
       </div>
 
+      {/* Catalogue renders as a full-screen overlay below; other tabs render inline. */}
       <div key={tab} className="animate-in fade-in slide-in-from-bottom-1 pt-4 duration-300">
         {tab === "posts" ? (
           <PostsTab org={org} posts={posts} />
@@ -105,10 +140,46 @@ export function OrgTabs({
           <OrgEventsTab org={org} events={events} />
         ) : tab === "articles" ? (
           <ArticlesTab org={org} articles={articles} />
-        ) : (
-          <OrgCatalogueTab org={org} items={catalogue} />
-        )}
+        ) : null}
       </div>
+
+      {/* Immersive Catalogue overlay — same layout as the individual-profile
+          Catalogue: a back arrow + title header (owner add tool top-right) and
+          a scrollable body with the toggle/search/rows. */}
+      {catalogueOpen && (
+        <div className="fixed left-0 top-0 z-50 flex h-[100dvh] w-screen flex-col bg-background animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border/60 bg-background/80 px-4 py-3 backdrop-blur-xl">
+            <button
+              type="button"
+              onClick={() => selectTab(prevTab)}
+              aria-label="Back"
+              className="tap-scale -ml-1 flex size-9 items-center justify-center rounded-full text-foreground transition-colors hover:bg-secondary/60"
+            >
+              <ArrowLeft className="size-5" />
+            </button>
+            <h2 className="flex-1 text-base font-semibold">Catalogue</h2>
+            {org.isOwner && <NewCatalogueDialog organizationId={org.id} />}
+          </header>
+
+          <div data-scroll className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
+            <div className="mx-auto w-full max-w-4xl">
+              {catalogue.length === 0 ? (
+                <EmptyState
+                  icon={<Mic className="size-6" />}
+                  title="No resources yet"
+                  message={
+                    org.isOwner
+                      ? "Publish sermons, worship sets, teachings and documents. Use the + button above to add your first resource."
+                      : `${org.name} hasn't published any resources yet.`
+                  }
+                />
+              ) : (
+                <OrgEpisodeCatalog items={catalogue} isOwner={org.isOwner} orgId={org.id} />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
@@ -171,18 +242,69 @@ function OrgPostThread({ org, post }: { org: OrganizationView; post: OrgPostView
 
         {post.media.length > 0 && <OrgPostMedia media={post.media} />}
 
-        <div className="mt-2 flex items-center gap-6 text-muted-foreground">
-          <span className="flex items-center gap-1.5 text-sm">
-            <Heart className="size-5" />
-            {post.likes > 0 && <span className="tabular-nums">{post.likes}</span>}
-          </span>
-          <span className="flex items-center gap-1.5 text-sm">
-            <Repeat2 className="size-5" />
-            {post.reposts > 0 && <span className="tabular-nums">{post.reposts}</span>}
-          </span>
-        </div>
+        <OrgPostActions org={org} post={post} />
       </div>
     </article>
+  )
+}
+
+// Engagement row matching the Community Help timeline: Like · Reply · Save ·
+// Share, evenly spaced within a bounded width. Like/Save keep local optimistic
+// state (org posts have no per-post backend for these yet); Share opens the
+// shared ShareSheet with a link back to the organisation.
+function OrgPostActions({ org, post }: { org: OrganizationView; post: OrgPostView }) {
+  const [liked, setLiked] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
+
+  const likeCount = post.likes + (liked ? 1 : 0)
+
+  const shareTarget: ShareTarget = {
+    type: "post",
+    key: `org-post-${post.id}`,
+    title: org.name,
+    subtitle: post.text ? post.text.slice(0, 80) : null,
+    url: `/org/${org.handle}`,
+    image: post.media[0]?.url ?? org.logo ?? null,
+    downloadUrl: post.media[0]?.type === "image" ? post.media[0]?.url : null,
+    downloadKind: post.media[0]?.type === "image" ? "image" : null,
+  }
+
+  const actionClass =
+    "flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+
+  return (
+    <>
+      <div className="mt-3 flex max-w-[16rem] items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setLiked((v) => !v)}
+          aria-label={liked ? "Unlike" : "Like"}
+          aria-pressed={liked}
+          className={cn(actionClass, liked && "text-rose-500 hover:text-rose-500")}
+        >
+          <Heart className={cn("size-5", liked && "fill-current")} />
+          {likeCount > 0 && <span className="tabular-nums">{likeCount}</span>}
+        </button>
+        <button type="button" aria-label="Reply" className={actionClass}>
+          <MessageCircle className="size-5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setSaved((v) => !v)}
+          aria-label={saved ? "Remove from saved" : "Save"}
+          aria-pressed={saved}
+          className={cn(actionClass, saved && "text-foreground")}
+        >
+          <Bookmark className={cn("size-5", saved && "fill-current")} />
+        </button>
+        <button type="button" onClick={() => setShareOpen(true)} aria-label="Share" className={actionClass}>
+          <Share2 className="size-5" />
+        </button>
+      </div>
+
+      <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
+    </>
   )
 }
 
@@ -300,36 +422,50 @@ function AboutTab({ org }: { org: OrganizationView }) {
                 href={org.website}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-primary hover:underline"
+                className="inline-flex items-center gap-2 text-sky-400 hover:underline"
               >
                 <Globe className="size-4 shrink-0" />
                 <span className="truncate">{org.website.replace(/^https?:\/\//, "")}</span>
               </a>
             )}
             {org.contactEmail && (
-              <a href={`mailto:${org.contactEmail}`} className="inline-flex items-center gap-2 hover:underline">
-                <Mail className="size-4 shrink-0 text-muted-foreground" />
+              <a
+                href={`mailto:${org.contactEmail}`}
+                className="inline-flex items-center gap-2 text-sky-400 hover:underline"
+              >
+                <Mail className="size-4 shrink-0" />
                 <span className="truncate">{org.contactEmail}</span>
               </a>
             )}
             {org.contactPhone && (
-              <a href={`tel:${org.contactPhone}`} className="inline-flex items-center gap-2 hover:underline">
-                <Phone className="size-4 shrink-0 text-muted-foreground" />
+              <a
+                href={`tel:${org.contactPhone}`}
+                className="inline-flex items-center gap-2 text-sky-400 hover:underline"
+              >
+                <Phone className="size-4 shrink-0" />
                 <span className="truncate">{org.contactPhone}</span>
               </a>
             )}
-            {socials.map(([key, url]) => (
-              <a
-                key={key}
-                href={/^https?:\/\//.test(url) ? url : `https://${url}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-primary hover:underline"
-              >
-                <Globe className="size-4 shrink-0" />
-                <span className="truncate">{SOCIAL_LABELS[key] ?? key}</span>
-              </a>
-            ))}
+            {socials.map(([key, url]) => {
+              const brandIcon = SOCIAL_BRAND_ICON[key]
+              return (
+                <a
+                  key={key}
+                  href={/^https?:\/\//.test(url) ? url : `https://${url}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-sky-400 hover:underline"
+                >
+                  {brandIcon ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={brandIcon || "/placeholder.svg"} alt="" aria-hidden className="size-4 shrink-0" />
+                  ) : (
+                    <Globe className="size-4 shrink-0" />
+                  )}
+                  <span className="truncate">{SOCIAL_LABELS[key] ?? key}</span>
+                </a>
+              )
+            })}
           </div>
         </div>
       )}
