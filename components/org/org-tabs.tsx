@@ -137,7 +137,7 @@ export function OrgTabs({
         <div
           ref={tabScrollerRef}
           role="tablist"
-          className="flex overflow-x-auto scroll-smooth px-4 sm:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="flex overflow-x-auto scroll-smooth pl-1.5 pr-4 sm:pl-3 sm:pr-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           style={{ WebkitOverflowScrolling: "touch" }}
         >
           {tabs.map((t) => (
