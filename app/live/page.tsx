@@ -1,32 +1,9 @@
 import Link from "next/link"
-import { Radio, Video, Mic, ArrowRight } from "lucide-react"
+import { Video, Mic, ArrowRight } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
 import { LiveBadge } from "@/components/live-badge"
 import { GoLiveToggle } from "@/components/go-live-toggle"
 import { getLiveStreams } from "@/app/actions/live"
-
-function SectionHeading({
-  eyebrow,
-  title,
-  description,
-  icon: Icon,
-}: {
-  eyebrow: string
-  title: string
-  description: string
-  icon?: typeof Radio
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-live">
-        {Icon && <Icon className="size-3.5" />}
-        {eyebrow}
-      </span>
-      <h2 className="text-2xl font-bold tracking-tight sm:text-3xl text-balance">{title}</h2>
-      <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
-    </div>
-  )
-}
 
 /** A large entry card for one show type (video / audio) that deep-links into
     the browse page pre-filtered to that type, showing the current live count. */
@@ -86,13 +63,7 @@ export default async function LivePage() {
         {/* Live now */}
         <div className="mx-auto w-full max-w-6xl space-y-16 px-4 pb-16 pt-6 sm:px-6">
           <section className="space-y-6">
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <SectionHeading
-                eyebrow="On air"
-                icon={Radio}
-                title="Live right now"
-                description="Jump into a stream and listen in real time, or open the studio to start your own."
-              />
+            <div className="flex flex-wrap items-center justify-end gap-4">
               <Link
                 href="/live/browse"
                 className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-card px-4 py-2 text-sm font-medium transition-colors hover:border-border hover:bg-accent"
