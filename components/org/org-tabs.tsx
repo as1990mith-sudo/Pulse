@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import {
   ArrowLeft,
+  ArrowUpRight,
   Bookmark,
   Calendar,
   Globe,
@@ -399,76 +400,110 @@ function AboutTab({ org }: { org: OrganizationView }) {
     )
   }
 
+  const contactRows: {
+    key: string
+    href: string
+    external: boolean
+    label: string
+    value: string
+    icon: React.ReactNode
+  }[] = []
+
+  if (org.website) {
+    contactRows.push({
+      key: "website",
+      href: org.website,
+      external: true,
+      label: "Website",
+      value: org.website.replace(/^https?:\/\//, "").replace(/\/$/, ""),
+      icon: <Globe className="size-4" />,
+    })
+  }
+  if (org.contactEmail) {
+    contactRows.push({
+      key: "email",
+      href: `mailto:${org.contactEmail}`,
+      external: false,
+      label: "Email",
+      value: org.contactEmail,
+      icon: <Mail className="size-4" />,
+    })
+  }
+  if (org.contactPhone) {
+    contactRows.push({
+      key: "phone",
+      href: `tel:${org.contactPhone}`,
+      external: false,
+      label: "Phone",
+      value: org.contactPhone,
+      icon: <Phone className="size-4" />,
+    })
+  }
+  for (const [key, url] of socials) {
+    const brandIcon = SOCIAL_BRAND_ICON[key]
+    contactRows.push({
+      key,
+      href: /^https?:\/\//.test(url) ? url : `https://${url}`,
+      external: true,
+      label: SOCIAL_LABELS[key] ?? key,
+      value: url.replace(/^https?:\/\//, "").replace(/\/$/, ""),
+      icon: brandIcon ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={brandIcon || "/placeholder.svg"} alt="" aria-hidden className="size-4" />
+      ) : (
+        <Globe className="size-4" />
+      ),
+    })
+  }
+
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-8">
       {org.description && (
-        <p className="text-pretty text-sm leading-relaxed text-muted-foreground">{org.description}</p>
+        <p className="text-pretty text-[15px] leading-relaxed text-foreground/90">{org.description}</p>
       )}
 
-      {sections.map((s) => (
-        <div key={s.label} className="rounded-2xl border border-border/60 bg-card p-4">
-          <h3 className="text-sm font-semibold">{s.label}</h3>
-          <p className="mt-1.5 whitespace-pre-wrap text-pretty text-sm leading-relaxed text-muted-foreground">
-            {s.value}
-          </p>
+      {sections.length > 0 && (
+        <div className="flex flex-col gap-6">
+          {sections.map((s) => (
+            <section key={s.label} className="flex flex-col gap-2">
+              <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
+                {s.label}
+              </h3>
+              <p className="whitespace-pre-wrap text-pretty text-[15px] leading-relaxed text-foreground/90">
+                {s.value}
+              </p>
+            </section>
+          ))}
         </div>
-      ))}
+      )}
 
-      {(hasContact || socials.length > 0) && (
-        <div className="rounded-2xl border border-border/60 bg-card p-4">
-          <h3 className="text-sm font-semibold">Contact & links</h3>
-          <div className="mt-3 flex flex-col gap-2.5 text-sm">
-            {org.website && (
-              <a
-                href={org.website}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-sky-400 hover:underline"
-              >
-                <Globe className="size-4 shrink-0" />
-                <span className="truncate">{org.website.replace(/^https?:\/\//, "")}</span>
-              </a>
-            )}
-            {org.contactEmail && (
-              <a
-                href={`mailto:${org.contactEmail}`}
-                className="inline-flex items-center gap-2 text-sky-400 hover:underline"
-              >
-                <Mail className="size-4 shrink-0" />
-                <span className="truncate">{org.contactEmail}</span>
-              </a>
-            )}
-            {org.contactPhone && (
-              <a
-                href={`tel:${org.contactPhone}`}
-                className="inline-flex items-center gap-2 text-sky-400 hover:underline"
-              >
-                <Phone className="size-4 shrink-0" />
-                <span className="truncate">{org.contactPhone}</span>
-              </a>
-            )}
-            {socials.map(([key, url]) => {
-              const brandIcon = SOCIAL_BRAND_ICON[key]
-              return (
+      {contactRows.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
+            Contact &amp; links
+          </h3>
+          <div className="overflow-hidden rounded-2xl border border-border/50 bg-card/40">
+            <div className="divide-y divide-border/40">
+              {contactRows.map((row) => (
                 <a
-                  key={key}
-                  href={/^https?:\/\//.test(url) ? url : `https://${url}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-sky-400 hover:underline"
+                  key={row.key}
+                  href={row.href}
+                  {...(row.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                  className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-secondary/40"
                 >
-                  {brandIcon ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={brandIcon || "/placeholder.svg"} alt="" aria-hidden className="size-4 shrink-0" />
-                  ) : (
-                    <Globe className="size-4 shrink-0" />
-                  )}
-                  <span className="truncate">{SOCIAL_LABELS[key] ?? key}</span>
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/60 text-muted-foreground transition-colors group-hover:text-foreground">
+                    {row.icon}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[13px] font-medium text-foreground">{row.label}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{row.value}</span>
+                  </span>
+                  <ArrowUpRight className="size-4 shrink-0 text-muted-foreground/40 transition-colors group-hover:text-primary" />
                 </a>
-              )
-            })}
+              ))}
+            </div>
           </div>
-        </div>
+        </section>
       )}
     </div>
   )
