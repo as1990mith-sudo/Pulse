@@ -32,7 +32,7 @@ export function ImageLightbox({
       role="dialog"
       aria-modal="true"
       aria-label={alt}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 py-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <button
@@ -47,7 +47,7 @@ export function ImageLightbox({
       <img
         src={src || "/placeholder.svg"}
         alt={alt}
-        className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
+        className="max-h-[90vh] w-full object-contain"
         onClick={(e) => e.stopPropagation()}
       />
     </div>,
