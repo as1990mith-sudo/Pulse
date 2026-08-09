@@ -44,8 +44,7 @@ import {
 } from "@/app/actions/live"
 import { LIVE_CATEGORIES } from "@/lib/live-categories"
 import { useLiveVideo, isMedianApp, openNativeAppSettings, type RemotePeer } from "@/lib/use-live-video"
-import { uploadMedia } from "@/lib/upload-media"
-import { publishShow } from "@/app/actions/shows"
+import { useLiveProcessing } from "@/components/live-processing-provider"
 import { ReactionLayer } from "@/components/live-reactions"
 import { LiveChat } from "@/components/live-chat"
 import { MusicPanel, type Track } from "@/components/studio-console"
@@ -301,8 +300,9 @@ export function VideoStudioConsole({
   // Confirmation gate before a host ends the live session, so a mis-tap on the
   // back menu can't drop everyone out of the broadcast.
   const [endConfirmOpen, setEndConfirmOpen] = useState(false)
-  // While the finished recording is being saved (uploaded + auto-published).
-  const [saving, setSaving] = useState(false)
+  // Hands a saved recording to the app-level background processor so the upload
+  // + publish happen off-screen and the host is never held on a saving screen.
+  const { enqueue: enqueueLiveReplay } = useLiveProcessing()
   // After the room has ended for everyone, the host is asked whether to save the
   // session as an episode. Holds the metadata needed to publish if they say yes.
   const [saveDecision, setSaveDecision] = useState<{ duration: string } | null>(null)
@@ -572,46 +572,31 @@ export function VideoStudioConsole({
     setSaveDecision({ duration: formatElapsed(elapsed) })
   }
 
-  // Host chose to save the just-ended session: upload the recording to Blob and
-  // publish it as a "live" video episode (files under the catalogue's
-  // Live → Video tab). The room is already closed, so this runs freely without
-  // holding anyone in the room.
-  async function handleSaveEpisode() {
+  // Host chose to save the just-ended session. Instead of blocking on a saving
+  // screen, we hand the recording to the app-level background processor: it
+  // immediately adds a "Processing…" entry to the Live Catalogue and uploads the
+  // COMPLETE recording in the background, then flips the entry to a playable
+  // replay and notifies the host. The host exits the studio right away and can
+  // keep using Frequency while it finishes.
+  function handleSaveEpisode() {
     const dec = saveDecision
     setSaveDecision(null)
     if (!dec) {
       onExit?.()
       return
     }
-    setSaving(true)
-    let videoUrl: string | null = null
-    try {
-      const blob = await (recordingPromiseRef.current ?? Promise.resolve(null))
-      if (blob && blob.size > 0) {
-        const ext = blob.type.includes("mp4") ? "mp4" : "webm"
-        const file = new File([blob], `live-session.${ext}`, { type: blob.type })
-        const data = await uploadMedia(file, "episodes")
-        videoUrl = data.url
-      }
-    } catch {
-      /* keep going — a recording/upload failure must not trap the host */
-    }
-    if (videoUrl) {
-      await publishShow({
-        title,
-        tagline: "",
-        category,
-        duration: dec.duration,
-        description: "",
-        // Carry over the cover art chosen at setup so the saved video episode
-        // shows its poster in the catalogue instead of a blank thumbnail.
-        cover,
-        videoUrl,
-        source: "live",
-      }).catch(() => {})
-    }
+    const blobPromise = recordingPromiseRef.current ?? Promise.resolve(null)
     recordingPromiseRef.current = null
-    setSaving(false)
+    void enqueueLiveReplay({
+      title,
+      category,
+      duration: dec.duration,
+      // Carry over the cover art chosen at setup so the replay shows its poster.
+      cover,
+      mediaKind: "video",
+      fileBaseName: "live-session",
+      blobPromise,
+    })
     onExit?.()
   }
 
@@ -1444,17 +1429,6 @@ export function VideoStudioConsole({
       {/* Post-end save decision. Shown once the room has already closed for
           everyone; choosing "Yes" runs the upload/publish below. */}
       {saveDecision && <SaveEpisodePrompt onSave={() => void handleSaveEpisode()} onDiscard={handleDiscardEpisode} />}
-
-      {/* Saving overlay while the finished recording uploads + auto-publishes. */}
-      {saving && (
-        <div className="fixed inset-0 z-[70] flex flex-col items-center justify-center gap-3 bg-black/80 backdrop-blur-sm px-6 text-center">
-          <Loader2 className="size-8 animate-spin text-white" />
-          <p className="text-sm font-medium text-white">Saving your live recording…</p>
-          <p className="max-w-xs text-xs text-white/60 text-pretty">
-            Publishing it to your catalogue under Live. This can take a moment for longer sessions.
-          </p>
-        </div>
-      )}
 
       {/* End-session confirmation — a host must confirm before the whole
           broadcast is torn down for everyone watching. */}

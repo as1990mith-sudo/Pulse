@@ -45,6 +45,14 @@ export type Show = {
   // session, "upload" for a manually uploaded file. Drives the catalogue's
   // separate Live tab so the two never mix.
   source?: "upload" | "live"
+  // Post-live background processing state. "ready" (or undefined) is a normal,
+  // playable episode. "processing" is a placeholder shown while the host's
+  // complete recording uploads in the background (not yet playable). "failed"
+  // means the upload failed/stalled and the host can retry.
+  processingStatus?: "ready" | "processing" | "failed"
+  processingError?: string
+  // When the background upload began — used to show an estimated wait.
+  processingStartedAt?: string
 }
 
 export type DevotionalComment = {

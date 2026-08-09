@@ -343,6 +343,18 @@ export const episode = pgTable("episode", {
   // When true the episode is hidden from everyone except its host (the owner).
   // Hosts toggle this from the episode menu on their own catalogue.
   isPrivate: boolean("isPrivate").notNull().default(false),
+  // Post-live processing lifecycle for recordings that upload in the background.
+  // "ready" (default) — normal, fully-uploaded episode; playable.
+  // "processing" — placeholder shown in the catalogue while the host's complete
+  //   recording uploads in the background; videoUrl/audioUrl stays null so a
+  //   partial replay can never be played.
+  // "failed" — the background upload failed or stalled; host can retry.
+  processingStatus: text("processingStatus").notNull().default("ready"),
+  // When the background upload began — used to estimate completion and to detect
+  // stalled jobs that should be reconciled to "failed".
+  processingStartedAt: timestamp("processingStartedAt"),
+  // Last error message from a failed background upload, shown with Retry.
+  processingError: text("processingError"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
