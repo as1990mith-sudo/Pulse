@@ -183,7 +183,7 @@ export function EpisodeCatalog({
           restore its entry below to re-enable it. Live recordings still expose
           their own Video subtab. */}
       <div role="tablist" aria-label="Filter episodes by type" className="-mx-4 border-b border-border/50 px-4 sm:-mx-6 sm:px-6">
-        <div className="flex items-center gap-6">
+        <div className="flex items-center">
           {(
             [
               { key: "audio", label: "Audio", icon: Headphones, count: counts.audio },
@@ -200,7 +200,7 @@ export function EpisodeCatalog({
                 aria-selected={active}
                 onClick={() => selectTab(key)}
                 className={cn(
-                  "-mb-px flex items-center gap-2 border-b-2 py-3 text-sm font-medium transition-colors",
+                  "-mb-px flex flex-1 items-center justify-center gap-2 border-b-2 py-3 text-sm font-medium transition-colors",
                   active
                     ? "border-primary text-foreground"
                     : "border-transparent text-muted-foreground hover:text-foreground",
@@ -219,7 +219,7 @@ export function EpisodeCatalog({
 
       {/* Live subtoggle: Video / Audio — quieter secondary underline row. */}
       {tab === "live" && (
-        <div role="tablist" aria-label="Filter live recordings by media type" className="flex items-center gap-5">
+        <div role="tablist" aria-label="Filter live recordings by media type" className="flex items-center">
           {(
             [
               { key: "video", label: "Video", icon: Video, count: liveCounts.video },
@@ -235,7 +235,7 @@ export function EpisodeCatalog({
                 aria-selected={active}
                 onClick={() => selectLiveKind(key)}
                 className={cn(
-                  "flex items-center gap-1.5 text-[13px] font-medium transition-colors",
+                  "flex flex-1 items-center justify-center gap-1.5 text-[13px] font-medium transition-colors",
                   active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
               >
