@@ -77,8 +77,14 @@ export function OrgHero({ org }: { org: OrganizationView }) {
         <div className="mt-6 flex w-full flex-col items-center gap-3 animate-in fade-in slide-in-from-bottom-2 delay-100 duration-500">
           {org.isOwner ? (
             <div className="flex w-full max-w-[380px] items-center justify-center gap-2.5">
-              <OrgManageSheet org={org} />
-              {websiteHost && <WebsiteButton href={org.website!} host={websiteHost} />}
+              <div className="flex flex-1">
+                <OrgManageSheet org={org} />
+              </div>
+              {websiteHost && (
+                <div className="flex flex-1">
+                  <WebsiteButton href={org.website!} host={websiteHost} full />
+                </div>
+              )}
               {!org.verified && (
                 <OrgVerifyButton organizationId={org.id} status={org.verificationStatus} verified={org.verified} />
               )}
