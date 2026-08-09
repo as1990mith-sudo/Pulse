@@ -224,7 +224,7 @@ export function EpisodeCatalog({
         <div
           role="tablist"
           aria-label="Filter live recordings by media type"
-          className="mx-auto inline-flex items-center gap-1 rounded-full border border-border/50 bg-card/40 p-1"
+          className="mx-auto flex w-fit items-center gap-1 rounded-full border border-border/50 bg-card/40 p-1"
         >
           {(
             [
@@ -301,6 +301,11 @@ export function EpisodeCatalog({
         </div>
       )}
 
+      {/* Keyed fade wrapper: re-mounts whenever the active tab / live subtab /
+          playlist changes so the content cross-fades in, matching the Articles
+          hub's `animate-in fade-in duration-500` page-transition feel. The
+          search query is intentionally excluded so typing doesn't re-animate. */}
+      <div key={`${tab}-${liveKind}-${playlist}`} className="animate-in fade-in duration-500">
       {filtered.length === 0 ? (
         <p className="px-1 py-8 text-center text-sm text-muted-foreground">
           {query ? `No ${searchNoun} episodes match “${query}”.` : `No ${searchNoun} episodes yet.`}
@@ -349,6 +354,7 @@ export function EpisodeCatalog({
           ))}
         </div>
       )}
+      </div>
     </div>
   )
 }

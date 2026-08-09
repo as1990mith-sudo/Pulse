@@ -1192,6 +1192,13 @@ export function CommunityHelp({
             />
           </div>
 
+          {/* Keyed fade wrapper: cross-fades between the skeleton, empty state
+              and loaded feed using the same `animate-in fade-in duration-500`
+              transition as the Articles hub. */}
+          <div
+            key={isLoading && posts.length === 0 ? "loading" : posts.length === 0 ? "empty" : "list"}
+            className="animate-in fade-in duration-500"
+          >
           {isLoading && posts.length === 0 ? (
               <FeedSkeleton />
             ) : posts.length === 0 ? (
@@ -1221,6 +1228,7 @@ export function CommunityHelp({
                 ))}
               </div>
             )}
+          </div>
         </div>
 
         {/* Floating ask button — hides on scroll-down, returns on scroll-up. */}
