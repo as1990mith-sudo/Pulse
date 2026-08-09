@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Clock, FileText, Headphones, Loader2, MoreVertical, Play, Plus, Search, Trash2, Video } from "lucide-react"
+import { Clock, FileText, Headphones, Loader2, MoreVertical, Play, Plus, Radio, Search, Trash2 } from "lucide-react"
 import {
   createCatalogueItem,
   deleteCatalogueItem,
@@ -29,20 +29,38 @@ import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
+// The stored `video` kind is surfaced as "Live" in the UI (Radio icon), mirroring
+// the individual-profile Catalogue whose middle tab is Live rather than Video.
 const KIND_META: Record<CatalogueKind, { label: string; icon: React.ReactNode }> = {
   audio: { label: "Audio", icon: <Headphones className="size-4" /> },
-  video: { label: "Video", icon: <Video className="size-4" /> },
-  document: { label: "Document", icon: <FileText className="size-4" /> },
+  video: { label: "Live", icon: <Radio className="size-4" /> },
+  document: { label: "Documents", icon: <FileText className="size-4" /> },
 }
 
 // Icon components for the segmented toggle (need the component, not an element).
 const KIND_ICON: Record<CatalogueKind, React.ComponentType<{ className?: string }>> = {
   audio: Headphones,
-  video: Video,
+  video: Radio,
   document: FileText,
 }
 
+// Tab order: Audio · Live · Documents (Video is folded into Live).
 const KIND_ORDER: CatalogueKind[] = ["audio", "video", "document"]
+
+type LiveKind = "video" | "audio"
+
+/**
+ * Best-effort split of a Live resource into its media kind so the Live tab can
+ * offer the same Video / Audio sub-toggle as the profile Catalogue. Org
+ * catalogue rows don't store a media sub-kind, so we infer it from the link
+ * (and fall back to "video" when a cover image is present).
+ */
+function liveMediaKind(item: CatalogueItemView): LiveKind {
+  const u = item.url.toLowerCase()
+  if (/youtube|youtu\.be|vimeo|\.mp4|\.webm|\.mov|\.m3u8/.test(u)) return "video"
+  if (/\.mp3|\.wav|\.m4a|\.aac|soundcloud|spotify|anchor|podcast|audiomack/.test(u)) return "audio"
+  return item.cover ? "video" : "audio"
+}
 
 /**
  * The organisation Catalogue — a mirror of the individual-profile Catalogue
@@ -61,6 +79,8 @@ export function OrgEpisodeCatalog({
   orgId: string
 }) {
   const [query, setQuery] = useState("")
+  // Video / Audio subtab within the Live tab (mirrors the profile Catalogue).
+  const [liveKind, setLiveKind] = useState<LiveKind>("video")
 
   const counts = useMemo(() => {
     let audio = 0
@@ -74,20 +94,38 @@ export function OrgEpisodeCatalog({
     return { audio, video, document }
   }, [items])
 
+  // Live recordings split by inferred media kind, for the Live subtab counters.
+  const liveCounts = useMemo(() => {
+    let video = 0
+    let audio = 0
+    for (const it of items) {
+      if (it.kind !== "video") continue
+      if (liveMediaKind(it) === "video") video++
+      else audio++
+    }
+    return { video, audio }
+  }, [items])
+
   // Default to the first kind that actually has items so the view isn't empty.
   const [tab, setTab] = useState<CatalogueKind>(() => KIND_ORDER.find((k) => counts[k] > 0) ?? "audio")
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return items.filter((it) => it.kind === tab && (!q || it.title.toLowerCase().includes(q)))
-  }, [items, tab, query])
+    return items.filter((it) => {
+      if (it.kind !== tab) return false
+      if (q && !it.title.toLowerCase().includes(q)) return false
+      // In the Live tab, only show recordings matching the chosen subtab kind.
+      if (tab === "video" && liveMediaKind(it) !== liveKind) return false
+      return true
+    })
+  }, [items, tab, query, liveKind])
 
-  const showsVideoGrid = tab === "video"
-  const searchNoun = KIND_META[tab].label.toLowerCase()
+  const searchNoun = tab === "video" ? `live ${liveKind}` : KIND_META[tab].label.toLowerCase()
 
   return (
     <div className="space-y-4">
-      {/* Audio / Video / Document segmented toggle (mirrors EpisodeCatalog). */}
+      {/* Audio / Live / Documents segmented toggle (mirrors EpisodeCatalog).
+          Tight padding + truncation keeps all three pills on one row. */}
       <div
         role="tablist"
         aria-label="Filter resources by type"
@@ -104,15 +142,15 @@ export function OrgEpisodeCatalog({
               aria-selected={active}
               onClick={() => setTab(k)}
               className={cn(
-                "flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium transition-colors",
+                "flex min-w-0 flex-1 items-center justify-center gap-1 rounded-full px-2 py-2 text-xs font-medium transition-colors",
                 active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
               )}
             >
-              <Icon className="size-4" />
-              {KIND_META[k].label}
+              <Icon className="size-4 shrink-0" />
+              <span className="truncate">{KIND_META[k].label}</span>
               <span
                 className={cn(
-                  "rounded-full px-1.5 text-xs",
+                  "shrink-0 rounded-full px-1.5 text-[11px]",
                   active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground",
                 )}
               >
@@ -122,6 +160,48 @@ export function OrgEpisodeCatalog({
           )
         })}
       </div>
+
+      {/* Live subtoggle: Video / Audio — recordings never mix across the two. */}
+      {tab === "video" && (
+        <div
+          role="tablist"
+          aria-label="Filter live recordings by media type"
+          className="flex items-center gap-1 rounded-full bg-secondary p-1"
+        >
+          {(
+            [
+              { key: "video", label: "Video", icon: Radio, count: liveCounts.video },
+              { key: "audio", label: "Audio", icon: Headphones, count: liveCounts.audio },
+            ] as const
+          ).map(({ key, label, icon: Icon, count }) => {
+            const active = liveKind === key
+            return (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setLiveKind(key)}
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+                  active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Icon className="size-4" />
+                {label}
+                <span
+                  className={cn(
+                    "rounded-full px-1.5 text-xs",
+                    active ? "bg-muted text-muted-foreground" : "bg-background/60 text-muted-foreground",
+                  )}
+                >
+                  {count}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* Title search for the active view. */}
       <div className="relative">
@@ -140,15 +220,9 @@ export function OrgEpisodeCatalog({
         <p className="px-1 py-8 text-center text-sm text-muted-foreground">
           {query ? `No ${searchNoun} resources match “${query}”.` : `No ${searchNoun} resources yet.`}
         </p>
-      ) : showsVideoGrid ? (
-        // Video → YouTube-style grid of 16:9 thumbnail cards.
-        <div className="-mx-4 grid grid-cols-1 gap-y-3 sm:mx-0 sm:grid-cols-2 sm:gap-x-2 lg:grid-cols-3">
-          {filtered.map((it) => (
-            <OrgCatalogueVideoCard key={it.id} item={it} orgId={orgId} isOwner={isOwner} />
-          ))}
-        </div>
       ) : (
-        // Audio & Document → compact edge-to-edge divided list.
+        // Every view uses the same compact edge-to-edge divided list, exactly
+        // like the profile Catalogue's Live subtab (video & audio alike).
         <div className="-mx-4 divide-y divide-border/60 border-y border-border/60 sm:-mx-6">
           {filtered.map((it) => (
             <OrgCatalogueRow key={it.id} item={it} orgId={orgId} isOwner={isOwner} />
@@ -242,109 +316,6 @@ function OrgCatalogueRow({ item, orgId, isOwner }: { item: CatalogueItemView; or
             <DropdownMenuTrigger
               aria-label={`More options for ${item.title}`}
               className="flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground data-[state=open]:bg-secondary data-[state=open]:text-foreground"
-            >
-              <MoreVertical className="size-4" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              {confirming ? (
-                <DropdownMenuItem variant="destructive" closeOnClick={false} onClick={handleDelete} disabled={isPending}>
-                  {isPending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-                  Confirm delete
-                </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem variant="destructive" closeOnClick={false} onClick={() => setConfirming(true)}>
-                  <Trash2 className="size-4" /> Delete
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// VideoCard-style thumbnail card for video resources.
-function OrgCatalogueVideoCard({
-  item,
-  orgId,
-  isOwner,
-}: {
-  item: CatalogueItemView
-  orgId: string
-  isOwner: boolean
-}) {
-  const router = useRouter()
-  const [confirming, setConfirming] = useState(false)
-  const [isPending, startTransition] = useTransition()
-  const href = externalHref(item.url)
-
-  function handleDelete() {
-    startTransition(async () => {
-      await deleteCatalogueItem({ id: item.id, organizationId: orgId })
-      setConfirming(false)
-      router.refresh()
-    })
-  }
-
-  return (
-    <div className="group relative flex items-start gap-2 rounded-none pr-4 transition-colors hover:bg-card/60 sm:rounded-xl sm:pr-0">
-      <a
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label={`Watch ${item.title}`}
-        className="relative block aspect-video w-32 shrink-0 overflow-hidden rounded-none bg-secondary sm:w-40 sm:rounded-xl"
-      >
-        {item.cover ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={item.cover || "/placeholder.svg"}
-            alt={`${item.title} thumbnail`}
-            className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
-          />
-        ) : (
-          <div className="flex size-full items-center justify-center text-muted-foreground">
-            <Play className="size-7" />
-          </div>
-        )}
-
-        {/* Hover play affordance */}
-        <span className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/25">
-          <span className="flex size-10 scale-90 items-center justify-center rounded-full bg-background/90 text-foreground opacity-0 shadow-md backdrop-blur transition-all group-hover:scale-100 group-hover:opacity-100">
-            <Play className="size-4 translate-x-px" />
-          </span>
-        </span>
-
-        {item.duration && (
-          <span className="absolute bottom-1 right-1 inline-flex items-center gap-1 rounded-md bg-black/80 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-white">
-            <Clock className="size-2.5" /> {item.duration}
-          </span>
-        )}
-      </a>
-
-      <div className="flex min-w-0 flex-1 items-start gap-1 py-0.5">
-        <a
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex max-h-[72px] min-w-0 flex-1 flex-col overflow-hidden text-left sm:max-h-[90px]"
-        >
-          <h3 className="line-clamp-2 font-display text-sm font-semibold leading-snug tracking-tight transition-colors group-hover:text-primary">
-            {item.title}
-          </h3>
-          {item.description && <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{item.description}</p>}
-        </a>
-
-        {isOwner && (
-          <DropdownMenu
-            onOpenChange={(open) => {
-              if (!open) setConfirming(false)
-            }}
-          >
-            <DropdownMenuTrigger
-              aria-label={`More options for ${item.title}`}
-              className="-mr-1 flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground data-[state=open]:bg-secondary"
             >
               <MoreVertical className="size-4" />
             </DropdownMenuTrigger>
