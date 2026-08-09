@@ -37,6 +37,15 @@ const SOCIAL_LABELS: Record<string, string> = {
   other: "Website",
 }
 
+// Maps a social key to its brand logo asset in /public/brands. Keys without an
+// entry (e.g. "other") fall back to the generic Globe icon.
+const SOCIAL_BRAND_ICON: Record<string, string> = {
+  instagram: "/brands/instagram.svg",
+  youtube: "/brands/youtube.svg",
+  facebook: "/brands/facebook.svg",
+  twitter: "/brands/x.svg",
+}
+
 export function OrgTabs({
   org,
   posts,
@@ -318,18 +327,26 @@ function AboutTab({ org }: { org: OrganizationView }) {
                 <span className="truncate">{org.contactPhone}</span>
               </a>
             )}
-            {socials.map(([key, url]) => (
-              <a
-                key={key}
-                href={/^https?:\/\//.test(url) ? url : `https://${url}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-primary hover:underline"
-              >
-                <Globe className="size-4 shrink-0" />
-                <span className="truncate">{SOCIAL_LABELS[key] ?? key}</span>
-              </a>
-            ))}
+            {socials.map(([key, url]) => {
+              const brandIcon = SOCIAL_BRAND_ICON[key]
+              return (
+                <a
+                  key={key}
+                  href={/^https?:\/\//.test(url) ? url : `https://${url}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-primary hover:underline"
+                >
+                  {brandIcon ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={brandIcon || "/placeholder.svg"} alt="" aria-hidden className="size-4 shrink-0" />
+                  ) : (
+                    <Globe className="size-4 shrink-0" />
+                  )}
+                  <span className="truncate">{SOCIAL_LABELS[key] ?? key}</span>
+                </a>
+              )
+            })}
           </div>
         </div>
       )}
