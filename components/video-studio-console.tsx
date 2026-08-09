@@ -603,7 +603,9 @@ export function VideoStudioConsole({
         category,
         duration: dec.duration,
         description: "",
-        cover: null,
+        // Carry over the cover art chosen at setup so the saved video episode
+        // shows its poster in the catalogue instead of a blank thumbnail.
+        cover,
         videoUrl,
         source: "live",
       }).catch(() => {})
