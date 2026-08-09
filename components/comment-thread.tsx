@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { type SheetAction } from "@/components/action-sheet"
 import { canEdit, canDelete } from "@/lib/interactions"
+import { renderMessageBody } from "@/lib/rich-text"
 import { cn } from "@/lib/utils"
 
 /**
@@ -434,7 +435,7 @@ function CommentItem({
 
           {!editing && (
             <p className={cn("whitespace-pre-wrap text-pretty leading-relaxed text-foreground/90", comfortable ? "text-[15px]" : "text-sm")}>
-              {text}
+              {renderMessageBody(text, { link: true, mention: true })}
             </p>
           )}
         </div>

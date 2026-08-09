@@ -32,6 +32,7 @@ import { ArticleRow } from "@/components/articles/article-card"
 import { FeedVideo } from "@/components/feed-video"
 import { ImageLightbox } from "@/components/image-lightbox"
 import { ShareSheet } from "@/components/share-sheet"
+import { renderMessageBody } from "@/lib/rich-text"
 import { cn } from "@/lib/utils"
 
 type TabKey = "posts" | "about" | "events" | "articles" | "catalogue"
@@ -288,7 +289,7 @@ function OrgPostThread({ org, post }: { org: OrganizationView; post: OrgPostView
 
         {post.text && (
           <p className="mt-1 whitespace-pre-wrap text-pretty text-[15px] leading-relaxed text-foreground">
-            {post.text}
+            {renderMessageBody(post.text, { link: true, mention: true })}
           </p>
         )}
 
