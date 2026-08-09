@@ -41,20 +41,14 @@ function ChannelCard({
   label,
   count,
   icon: Icon,
-  accent,
 }: {
   href: string
   label: string
   count: number
   icon: typeof Video
-  accent: "video" | "audio"
 }) {
-  // Video → amber (--primary), Audio → red (--live). Both already in the theme.
-  const isVideo = accent === "video"
-  const accentText = isVideo ? "text-primary" : "text-live"
-  const glow = isVideo
-    ? "before:bg-[linear-gradient(90deg,transparent,var(--primary),transparent)]"
-    : "before:bg-[linear-gradient(90deg,transparent,var(--live),transparent)]"
+  // Single red (--live) accent for the whole Live tab — no per-type coloring.
+  const glow = "before:bg-[linear-gradient(90deg,transparent,var(--live),transparent)]"
 
   return (
     <Link
@@ -62,11 +56,7 @@ function ChannelCard({
       className={`group relative flex flex-col overflow-hidden rounded-3xl border border-border/60 bg-card p-4 transition-colors hover:border-border sm:p-5
         before:absolute before:inset-x-4 before:top-0 before:h-px before:content-[''] ${glow}`}
     >
-      <span
-        className={`flex size-10 items-center justify-center rounded-2xl ${
-          isVideo ? "bg-primary/15 text-primary" : "bg-live/15 text-live"
-        }`}
-      >
+      <span className="flex size-10 items-center justify-center rounded-2xl bg-live/15 text-live">
         <Icon className="size-5" />
       </span>
 
@@ -86,7 +76,7 @@ function ChannelCard({
         )}
       </div>
 
-      <span className={`mt-4 flex items-center gap-1.5 text-sm font-bold ${accentText}`}>
+      <span className="mt-4 flex items-center gap-1.5 text-sm font-bold text-live">
         Browse shows
         <ChevronRight className="size-4 transition-transform group-hover:translate-x-0.5" />
       </span>
@@ -116,20 +106,8 @@ export default async function LivePage() {
               Your channels
             </h2>
             <div className="grid grid-cols-2 gap-3 sm:gap-4">
-              <ChannelCard
-                href="/live/browse?type=video"
-                label="Video shows"
-                count={videoCount}
-                icon={Video}
-                accent="video"
-              />
-              <ChannelCard
-                href="/live/browse?type=audio"
-                label="Audio shows"
-                count={audioCount}
-                icon={Mic}
-                accent="audio"
-              />
+              <ChannelCard href="/live/browse?type=video" label="Video shows" count={videoCount} icon={Video} />
+              <ChannelCard href="/live/browse?type=audio" label="Audio shows" count={audioCount} icon={Mic} />
             </div>
           </section>
 

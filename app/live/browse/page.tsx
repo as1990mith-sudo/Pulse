@@ -24,37 +24,35 @@ export default async function LiveBrowsePage({
   return (
     <div className="min-h-screen">
       <SiteHeader />
-      <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
+      <main className="mx-auto w-full max-w-6xl px-4 py-4 sm:px-6 sm:py-5">
         <Link
           href="/live"
-          className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="size-4" />
           Back to Live
         </Link>
 
-        <div className="mb-6 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-          <div className="flex flex-col gap-1">
-            <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-live">
-              <span className="relative flex size-2 items-center justify-center">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-live">
+              <span className="relative flex size-1.5 items-center justify-center">
                 <span className="absolute inset-0 animate-ping rounded-full bg-live/70" aria-hidden="true" />
-                <span className="relative size-2 rounded-full bg-live" />
+                <span className="relative size-1.5 rounded-full bg-live" />
               </span>
               On air
             </span>
-            <h1 className="text-2xl font-bold tracking-tight text-balance sm:text-3xl">Ongoing live streams</h1>
-            <p className="text-sm text-muted-foreground text-pretty">
+            <h1 className="text-xl font-bold tracking-tight text-balance sm:text-2xl">Ongoing live streams</h1>
+            <p className="text-[13px] text-muted-foreground text-pretty">
               Browse everything live right now, or filter by category.
             </p>
           </div>
 
           {/* Show-type toggle — swaps the whole page between video and audio.
-              Accent-aware to match the main Live tab: Video → amber (--primary),
-              Audio → red (--live). */}
-          <div className="inline-flex w-full gap-1 rounded-2xl border border-border/60 bg-card p-1 sm:w-auto">
+              Single red (--live) accent for the whole Live tab. */}
+          <div className="inline-flex w-full gap-1 rounded-xl border border-border/60 bg-card p-1 sm:w-auto">
             {tabs.map((t) => {
               const active = t.value === type
-              const isVideo = t.value === "video"
               const Icon = t.icon
               return (
                 <Link
@@ -62,15 +60,11 @@ export default async function LiveBrowsePage({
                   href={`/live/browse?type=${t.value}`}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors sm:flex-none",
-                    active
-                      ? isVideo
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-live text-white"
-                      : "text-muted-foreground hover:text-foreground",
+                    "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-semibold transition-colors sm:flex-none",
+                    active ? "bg-live text-white" : "text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  <Icon className={cn("size-4", !active && (isVideo ? "text-primary" : "text-live"))} />
+                  <Icon className={cn("size-4", !active && "text-live")} />
                   {t.label}
                 </Link>
               )

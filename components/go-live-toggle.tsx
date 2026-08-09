@@ -5,9 +5,9 @@ import { Mic, Video } from "lucide-react"
 import { haptic } from "@/lib/haptics"
 
 /**
- * Warm, decorative equalizer that sits behind the Go-live actions. Bars fade
- * from amber (video accent) to red (live accent), mirroring the two CTAs. The
- * heights come from a fixed pattern so the SSR/CSR markup matches (no random).
+ * Decorative equalizer that sits behind the Go-live actions. Bars fade from a
+ * deep to a bright red — a single accent for the whole Live tab. The heights
+ * come from a fixed pattern so the SSR/CSR markup matches (no random).
  */
 function GoLiveWaveform() {
   // A pleasing, non-random pattern of relative bar heights (0–1).
@@ -23,7 +23,7 @@ function GoLiveWaveform() {
       {bars.map((h, i) => (
         <span
           key={i}
-          className="flex-1 rounded-full bg-gradient-to-t from-live/80 to-primary/70"
+          className="flex-1 rounded-full bg-gradient-to-t from-live/80 to-live/40"
           style={{ height: `${Math.round(h * 100)}%` }}
         />
       ))}
