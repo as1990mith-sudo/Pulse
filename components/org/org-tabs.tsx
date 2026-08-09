@@ -364,21 +364,27 @@ function AboutTab({ org }: { org: OrganizationView }) {
                 href={org.website}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-primary hover:underline"
+                className="inline-flex items-center gap-2 text-sky-400 hover:underline"
               >
                 <Globe className="size-4 shrink-0" />
                 <span className="truncate">{org.website.replace(/^https?:\/\//, "")}</span>
               </a>
             )}
             {org.contactEmail && (
-              <a href={`mailto:${org.contactEmail}`} className="inline-flex items-center gap-2 hover:underline">
-                <Mail className="size-4 shrink-0 text-muted-foreground" />
+              <a
+                href={`mailto:${org.contactEmail}`}
+                className="inline-flex items-center gap-2 text-sky-400 hover:underline"
+              >
+                <Mail className="size-4 shrink-0" />
                 <span className="truncate">{org.contactEmail}</span>
               </a>
             )}
             {org.contactPhone && (
-              <a href={`tel:${org.contactPhone}`} className="inline-flex items-center gap-2 hover:underline">
-                <Phone className="size-4 shrink-0 text-muted-foreground" />
+              <a
+                href={`tel:${org.contactPhone}`}
+                className="inline-flex items-center gap-2 text-sky-400 hover:underline"
+              >
+                <Phone className="size-4 shrink-0" />
                 <span className="truncate">{org.contactPhone}</span>
               </a>
             )}
@@ -390,7 +396,7 @@ function AboutTab({ org }: { org: OrganizationView }) {
                   href={/^https?:\/\//.test(url) ? url : `https://${url}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-primary hover:underline"
+                  className="inline-flex items-center gap-2 text-sky-400 hover:underline"
                 >
                   {brandIcon ? (
                     // eslint-disable-next-line @next/next/no-img-element
