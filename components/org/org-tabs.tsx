@@ -506,7 +506,7 @@ function ArticlesTab({ org, articles }: { org: OrganizationView; articles: Artic
           }
         />
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col divide-y divide-border/40">
           {articles.map((a) => (
             <ArticleRow key={a.id} article={a} />
           ))}
