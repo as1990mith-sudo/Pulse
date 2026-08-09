@@ -3,28 +3,32 @@
 import { useState } from "react"
 import Link from "next/link"
 import {
+  Bookmark,
   Calendar,
   Globe,
   Heart,
   Info,
   Mail,
+  MessageCircle,
   MessageSquareText,
   Mic,
   Newspaper,
   PenLine,
   Phone,
-  Repeat2,
+  Share2,
 } from "lucide-react"
 import type { ArticleCard as ArticleCardType } from "@/lib/article-types"
 import type { OrganizationView } from "@/lib/org-types"
 import { AvatarWithBadge } from "@/components/org/verified-badge"
 import type { OrgPostView } from "@/app/actions/organizations"
 import type { EventView, CatalogueItemView } from "@/app/actions/org-content"
+import type { ShareTarget } from "@/lib/share-types"
 import { OrgEventsTab } from "@/components/org/org-events-tab"
 import { OrgCatalogueTab } from "@/components/org/org-catalogue-tab"
 import { ArticleRow } from "@/components/articles/article-card"
 import { FeedVideo } from "@/components/feed-video"
 import { ImageLightbox } from "@/components/image-lightbox"
+import { ShareSheet } from "@/components/share-sheet"
 import { cn } from "@/lib/utils"
 
 type TabKey = "posts" | "about" | "events" | "articles" | "catalogue"
@@ -180,18 +184,69 @@ function OrgPostThread({ org, post }: { org: OrganizationView; post: OrgPostView
 
         {post.media.length > 0 && <OrgPostMedia media={post.media} />}
 
-        <div className="mt-2 flex items-center gap-6 text-muted-foreground">
-          <span className="flex items-center gap-1.5 text-sm">
-            <Heart className="size-5" />
-            {post.likes > 0 && <span className="tabular-nums">{post.likes}</span>}
-          </span>
-          <span className="flex items-center gap-1.5 text-sm">
-            <Repeat2 className="size-5" />
-            {post.reposts > 0 && <span className="tabular-nums">{post.reposts}</span>}
-          </span>
-        </div>
+        <OrgPostActions org={org} post={post} />
       </div>
     </article>
+  )
+}
+
+// Engagement row matching the Community Help timeline: Like · Reply · Save ·
+// Share, evenly spaced within a bounded width. Like/Save keep local optimistic
+// state (org posts have no per-post backend for these yet); Share opens the
+// shared ShareSheet with a link back to the organisation.
+function OrgPostActions({ org, post }: { org: OrganizationView; post: OrgPostView }) {
+  const [liked, setLiked] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
+
+  const likeCount = post.likes + (liked ? 1 : 0)
+
+  const shareTarget: ShareTarget = {
+    type: "post",
+    key: `org-post-${post.id}`,
+    title: org.name,
+    subtitle: post.text ? post.text.slice(0, 80) : null,
+    url: `/org/${org.handle}`,
+    image: post.media[0]?.url ?? org.logo ?? null,
+    downloadUrl: post.media[0]?.type === "image" ? post.media[0]?.url : null,
+    downloadKind: post.media[0]?.type === "image" ? "image" : null,
+  }
+
+  const actionClass =
+    "flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+
+  return (
+    <>
+      <div className="mt-3 flex max-w-[16rem] items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setLiked((v) => !v)}
+          aria-label={liked ? "Unlike" : "Like"}
+          aria-pressed={liked}
+          className={cn(actionClass, liked && "text-rose-500 hover:text-rose-500")}
+        >
+          <Heart className={cn("size-5", liked && "fill-current")} />
+          {likeCount > 0 && <span className="tabular-nums">{likeCount}</span>}
+        </button>
+        <button type="button" aria-label="Reply" className={actionClass}>
+          <MessageCircle className="size-5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setSaved((v) => !v)}
+          aria-label={saved ? "Remove from saved" : "Save"}
+          aria-pressed={saved}
+          className={cn(actionClass, saved && "text-foreground")}
+        >
+          <Bookmark className={cn("size-5", saved && "fill-current")} />
+        </button>
+        <button type="button" onClick={() => setShareOpen(true)} aria-label="Share" className={actionClass}>
+          <Share2 className="size-5" />
+        </button>
+      </div>
+
+      <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
+    </>
   )
 }
 
