@@ -49,12 +49,10 @@ export default async function LiveBrowsePage({
           </div>
 
           {/* Show-type toggle — swaps the whole page between video and audio.
-              Accent-aware to match the main Live tab: Video → amber (--primary),
-              Audio → red (--live). */}
+              Single red (--live) accent for the whole Live tab. */}
           <div className="inline-flex w-full gap-1 rounded-xl border border-border/60 bg-card p-1 sm:w-auto">
             {tabs.map((t) => {
               const active = t.value === type
-              const isVideo = t.value === "video"
               const Icon = t.icon
               return (
                 <Link
@@ -63,14 +61,10 @@ export default async function LiveBrowsePage({
                   aria-current={active ? "page" : undefined}
                   className={cn(
                     "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-semibold transition-colors sm:flex-none",
-                    active
-                      ? isVideo
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-live text-white"
-                      : "text-muted-foreground hover:text-foreground",
+                    active ? "bg-live text-white" : "text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  <Icon className={cn("size-4", !active && (isVideo ? "text-primary" : "text-live"))} />
+                  <Icon className={cn("size-4", !active && "text-live")} />
                   {t.label}
                 </Link>
               )

@@ -37,17 +37,11 @@ export function LiveBrowse({
   const rail = [ALL, ...LIVE_CATEGORIES]
   const countFor = (c: string) => (c === ALL ? streams.length : (counts.get(c) ?? 0))
 
-  // Accent-aware styling to match the main Live tab: Video → amber (--primary),
-  // Audio → red (--live). Every active/emphasis surface below flips with type.
-  const isVideo = type === "video"
-  const activeChip = isVideo ? "bg-primary text-primary-foreground" : "bg-live text-white"
-  const activeChipBadge = isVideo
-    ? "bg-primary-foreground/20 text-primary-foreground"
-    : "bg-white/20 text-white"
-  const accentSoft = isVideo ? "bg-primary/15 text-primary" : "bg-live/15 text-live"
-  const accentGlow = isVideo
-    ? "before:bg-[linear-gradient(90deg,transparent,var(--primary),transparent)]"
-    : "before:bg-[linear-gradient(90deg,transparent,var(--live),transparent)]"
+  // Single red (--live) accent for the whole Live tab — no per-type coloring.
+  const activeChip = "bg-live text-white"
+  const activeChipBadge = "bg-white/20 text-white"
+  const accentSoft = "bg-live/15 text-live"
+  const accentGlow = "before:bg-[linear-gradient(90deg,transparent,var(--live),transparent)]"
 
   return (
     <div className="lg:flex lg:gap-6">
@@ -110,7 +104,7 @@ export function LiveBrowse({
                 <span
                   className={cn(
                     "shrink-0 text-xs tabular-nums",
-                    active ? (isVideo ? "text-primary-foreground/70" : "text-white/70") : "text-muted-foreground/60",
+                    active ? "text-white/70" : "text-muted-foreground/60",
                   )}
                 >
                   {countFor(c)}
