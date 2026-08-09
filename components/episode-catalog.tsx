@@ -173,8 +173,9 @@ export function EpisodeCatalog({
   // (uploads) Video tab uses the grid; Live recordings — video AND audio — use
   // the same compact cover-art row list so both kinds list identically.
   const showsVideoGrid = tab === "video"
-  // Search placeholder noun for the active view.
-  const searchNoun = tab === "live" ? `live ${liveKind}` : tab
+  // Search placeholder noun for the active view. The "audio" tab is surfaced as
+  // "Uploads", so its noun reads "uploaded" rather than "audio".
+  const searchNoun = tab === "live" ? `live ${liveKind}` : tab === "audio" ? "uploaded" : tab
 
   return (
     <div className="space-y-4">
@@ -186,7 +187,7 @@ export function EpisodeCatalog({
         <div className="flex items-center">
           {(
             [
-              { key: "audio", label: "Audio", icon: Headphones, count: counts.audio },
+              { key: "audio", label: "Uploads", icon: Headphones, count: counts.audio },
               // { key: "video", label: "Video", icon: Video, count: counts.video },
               { key: "live", label: "Live", icon: Radio, count: counts.live },
             ] as const
