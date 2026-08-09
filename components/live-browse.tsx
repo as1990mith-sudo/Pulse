@@ -37,6 +37,18 @@ export function LiveBrowse({
   const rail = [ALL, ...LIVE_CATEGORIES]
   const countFor = (c: string) => (c === ALL ? streams.length : (counts.get(c) ?? 0))
 
+  // Accent-aware styling to match the main Live tab: Video → amber (--primary),
+  // Audio → red (--live). Every active/emphasis surface below flips with type.
+  const isVideo = type === "video"
+  const activeChip = isVideo ? "bg-primary text-primary-foreground" : "bg-live text-white"
+  const activeChipBadge = isVideo
+    ? "bg-primary-foreground/20 text-primary-foreground"
+    : "bg-white/20 text-white"
+  const accentSoft = isVideo ? "bg-primary/15 text-primary" : "bg-live/15 text-live"
+  const accentGlow = isVideo
+    ? "before:bg-[linear-gradient(90deg,transparent,var(--primary),transparent)]"
+    : "before:bg-[linear-gradient(90deg,transparent,var(--live),transparent)]"
+
   return (
     <div className="lg:flex lg:gap-6">
       {/* ── Mobile / tablet: horizontal scrolling category chips ─────────────
@@ -60,16 +72,14 @@ export function LiveBrowse({
                 onClick={() => setCategory(c)}
                 className={cn(
                   "flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors",
-                  active
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-secondary text-muted-foreground hover:text-foreground",
+                  active ? activeChip : "bg-secondary text-muted-foreground hover:text-foreground",
                 )}
               >
                 <span>{c}</span>
                 <span
                   className={cn(
                     "min-w-4 rounded-full px-1.5 text-center text-xs tabular-nums",
-                    active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-background/60 text-foreground/70",
+                    active ? activeChipBadge : "bg-background/60 text-foreground/70",
                   )}
                 >
                   {count}
@@ -93,16 +103,14 @@ export function LiveBrowse({
                 aria-pressed={active}
                 className={cn(
                   "flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors",
-                  active
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                  active ? activeChip : "text-muted-foreground hover:bg-accent hover:text-foreground",
                 )}
               >
                 <span className="truncate">{c}</span>
                 <span
                   className={cn(
                     "shrink-0 text-xs tabular-nums",
-                    active ? "text-primary-foreground/70" : "text-muted-foreground/60",
+                    active ? (isVideo ? "text-primary-foreground/70" : "text-white/70") : "text-muted-foreground/60",
                   )}
                 >
                   {countFor(c)}
@@ -117,11 +125,16 @@ export function LiveBrowse({
           the desktop rail. Columns scale up with viewport width. ─────────── */}
       <div className="min-w-0 flex-1">
         <div className="mb-4 flex items-center gap-2.5">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-secondary">
-            <Icon className="size-4 text-foreground" />
+          <span className={cn("flex size-9 items-center justify-center rounded-xl", accentSoft)}>
+            <Icon className="size-5" />
           </span>
-          <h2 className="text-lg font-semibold">{category === ALL ? "All shows" : category}</h2>
-          <span className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-muted-foreground tabular-nums">
+          <h2 className="text-lg font-bold tracking-tight">{category === ALL ? "All shows" : category}</h2>
+          <span
+            className={cn(
+              "ml-0.5 rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums",
+              filtered.length > 0 ? accentSoft : "bg-secondary text-muted-foreground",
+            )}
+          >
             {filtered.length} live
           </span>
         </div>
@@ -133,13 +146,19 @@ export function LiveBrowse({
             ))}
           </div>
         ) : (
-          <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border/60 bg-card/40 p-8 text-center">
-            <span className="flex size-14 items-center justify-center rounded-full bg-secondary">
-              <Icon className="size-6 text-muted-foreground" />
+          <div
+            className={cn(
+              "relative flex min-h-72 flex-col items-center justify-center gap-4 overflow-hidden rounded-3xl border border-border/60 bg-card p-8 text-center",
+              "before:absolute before:inset-x-8 before:top-0 before:h-px before:content-['']",
+              accentGlow,
+            )}
+          >
+            <span className={cn("flex size-16 items-center justify-center rounded-2xl", accentSoft)}>
+              <Icon className="size-7" />
             </span>
-            <div className="space-y-1">
-              <p className="font-medium text-foreground">Nothing live here yet</p>
-              <p className="text-sm text-muted-foreground text-pretty">
+            <div className="space-y-1.5">
+              <p className="text-base font-bold tracking-tight text-foreground">Nothing live here yet</p>
+              <p className="mx-auto max-w-xs text-sm text-muted-foreground text-pretty">
                 No {type} shows live{category === ALL ? " right now" : ` in ${category}`}. Check back soon.
               </p>
             </div>
