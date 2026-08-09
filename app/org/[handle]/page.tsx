@@ -108,18 +108,28 @@ export default async function OrganizationPage({ params }: { params: Promise<{ h
                     />
                   )}
                 </div>
-                {websiteHost && <WebsiteButton href={org.website!} host={websiteHost} />}
+                {websiteHost && (
+                  <div className="w-full max-w-[240px]">
+                    <WebsiteButton href={org.website!} host={websiteHost} />
+                  </div>
+                )}
               </>
             ) : (
-              <div className="flex w-full max-w-[240px] items-center gap-2">
+              <>
+                {/* Row 1: subscribe pill grows, notify bell is a fixed circle */}
                 <OrgSubscribeButton
                   organizationId={org.id}
                   initialSubscribed={org.isSubscribed}
                   initialNotify={org.notify}
-                  className="flex-1 basis-0"
+                  className="w-full max-w-[240px]"
                 />
-                {websiteHost && <WebsiteButton href={org.website!} host={websiteHost} />}
-              </div>
+                {/* Row 2: website spans the same width so the rows line up */}
+                {websiteHost && (
+                  <div className="w-full max-w-[240px]">
+                    <WebsiteButton href={org.website!} host={websiteHost} />
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -139,7 +149,7 @@ function WebsiteButton({ href, host }: { href: string; host: string }) {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex h-10 flex-1 basis-0 items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3 text-sm font-semibold transition hover:bg-muted"
+      className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3 text-sm font-semibold transition hover:bg-muted"
       title={`Visit ${host}`}
     >
       <Globe className="size-4 shrink-0" />
