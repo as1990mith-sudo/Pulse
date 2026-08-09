@@ -9,7 +9,7 @@ import { FeedVideo } from "@/components/feed-video"
 import { ShareSheet } from "@/components/share-sheet"
 import type { ShareTarget } from "@/lib/share-types"
 import { EditedIndicator } from "@/components/edited-indicator"
-import { linkify } from "@/lib/linkify"
+import { renderMessageBody } from "@/lib/rich-text"
 import { cn } from "@/lib/utils"
 import {
   ANON_AVATAR,
@@ -325,7 +325,7 @@ function PublicThread({
           <>
             {post.body && (
               <p className="mt-1 whitespace-pre-wrap text-pretty text-[15px] leading-relaxed text-foreground">
-                {linkify(post.body)}
+                {renderMessageBody(post.body, { link: true, mention: true })}
               </p>
             )}
 
@@ -471,7 +471,7 @@ function AnonymousThread({
           <>
             {post.body && (
               <p className="mt-1 whitespace-pre-wrap text-pretty text-[15px] leading-relaxed text-foreground">
-                {linkify(post.body)}
+                {renderMessageBody(post.body, { link: true, mention: true })}
               </p>
             )}
             <BibleChips text={post.body} className="mt-3" />

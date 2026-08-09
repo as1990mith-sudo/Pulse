@@ -27,7 +27,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ShareSheet } from "@/components/share-sheet"
 import type { ShareTarget } from "@/lib/share-types"
-import { linkify } from "@/lib/linkify"
+import { renderMessageBody } from "@/lib/rich-text"
 import { compressImage, cropImageToAspect, uploadMedia } from "@/lib/upload-media"
 import { useAutoHideChatChrome, useChatChromeHidden } from "@/lib/chat-chrome"
 import { cn } from "@/lib/utils"
@@ -87,7 +87,7 @@ function QuestionText({ text, onOpen }: { text: string; onOpen: () => void }) {
           !expanded && "line-clamp-6",
         )}
       >
-        {linkify(text)}
+        {renderMessageBody(text, { link: true, mention: true })}
       </p>
       {clampable && !expanded && (
         <button
