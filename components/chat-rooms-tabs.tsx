@@ -44,66 +44,61 @@ export function ChatRoomsTabs({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Top-level segmented control. Stays static (always visible) — only the
+      {/* Top-level tab bar — editorial underline style matching the Catalogue
+          tabs: a bottom border baseline with the active tab carrying a
+          `border-primary` underline. Stays static (always visible) — only the
           global app header hides/reveals on scroll. */}
-      <div className="shrink-0 overflow-hidden border-b border-border/60 bg-background/95 px-4 pb-2.5 pt-3 backdrop-blur sm:px-6">
+      <div className="shrink-0 overflow-hidden border-b border-border/60 bg-background/95 px-4 pt-1 backdrop-blur sm:px-6">
         <div
           role="tablist"
           aria-label="Chat Rooms sections"
-          className="mx-auto grid h-11 w-full max-w-md grid-cols-2 gap-1 rounded-full border border-border/60 bg-secondary/40 p-1"
+          className="mx-auto flex w-full max-w-md"
         >
-          {/* Community Help segment: the tab selector plus an adjacent info (ⓘ)
-              button. The info icon is the segment's only icon (it replaces the
-              old HelpCircle logo), and the label stays on a single line. Both
-              live inside one rounded segment that carries the active gradient
-              pill; sibling buttons (not nested) keep it valid and accessible. */}
+          {/* Community Help tab: the tab selector plus an adjacent info (ⓘ)
+              button, both sharing one underline. Sibling buttons (not nested)
+              keep the markup valid and accessible. */}
           <div
             className={cn(
-              "flex h-full items-center justify-center rounded-full transition-all duration-300",
-              tab === "community"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground",
+              "-mb-px flex flex-1 items-center justify-center gap-1 border-b-2 transition-colors",
+              tab === "community" ? "border-primary" : "border-transparent",
             )}
           >
-            <button
-              type="button"
-              onClick={() => setInfoOpen(true)}
-              aria-label="How Community Help works"
-              className={cn(
-                "flex h-full items-center rounded-full pl-4 pr-1.5 transition-opacity",
-                tab === "community" ? "opacity-90 hover:opacity-100" : "hover:text-foreground",
-              )}
-            >
-              <Info className={cn("size-4 transition-transform duration-300", tab === "community" && "scale-110")} />
-            </button>
             <button
               type="button"
               role="tab"
               aria-selected={tab === "community"}
               onClick={() => switchTab("community")}
               className={cn(
-                "inline-flex h-full items-center whitespace-nowrap rounded-full pr-4 text-[13px] font-medium tracking-wide transition-colors",
-                tab === "community" ? "font-semibold" : "hover:text-foreground",
+                "flex items-center whitespace-nowrap py-3 text-xs font-medium transition-colors",
+                tab === "community" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
               )}
             >
               Community Help
             </button>
+            <button
+              type="button"
+              onClick={() => setInfoOpen(true)}
+              aria-label="How Community Help works"
+              className="rounded-full p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Info className="size-4" />
+            </button>
           </div>
 
-          {/* iTestify segment */}
+          {/* iTestify tab */}
           <button
             type="button"
             role="tab"
             aria-selected={tab === "itestify"}
             onClick={() => switchTab("itestify")}
             className={cn(
-              "group relative flex h-full items-center justify-center gap-1.5 rounded-full text-[13px] font-medium tracking-wide transition-all duration-300",
+              "-mb-px flex flex-1 items-center justify-center gap-1.5 border-b-2 py-3 text-xs font-medium transition-colors",
               tab === "itestify"
-                ? "bg-card font-semibold text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground",
             )}
           >
-            <Flame className={cn("size-4 transition-transform duration-300", tab === "itestify" && "scale-110")} />
+            <Flame className="size-4" />
             iTestify
           </button>
         </div>
