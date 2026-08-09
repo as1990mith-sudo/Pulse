@@ -24,7 +24,7 @@ import type { ArticleCard as ArticleCardType } from "@/lib/article-types"
 import type { OrganizationView } from "@/lib/org-types"
 import { AvatarWithBadge } from "@/components/org/verified-badge"
 import type { OrgPostView } from "@/app/actions/organizations"
-import type { EventView, CatalogueItemView } from "@/app/actions/org-content"
+import type { EventView, CatalogueItemView, CatalogueKind } from "@/app/actions/org-content"
 import type { ShareTarget } from "@/lib/share-types"
 import { OrgEventsTab } from "@/components/org/org-events-tab"
 import { OrgEpisodeCatalog, NewCatalogueDialog } from "@/components/org/org-catalogue-tab"
@@ -79,6 +79,14 @@ export function OrgTabs({
   // The tab the user was on before opening Catalogue, so the back arrow returns
   // them exactly where they were (mirrors the individual-profile Catalogue).
   const [prevTab, setPrevTab] = useState<TabKey>("posts")
+  // Active Catalogue kind (Audio / Live / Documents), lifted here so the header's
+  // upload dialog can tailor itself to the current tab — and hide on Live, which
+  // can't be manually uploaded. Defaults to the first kind that has items.
+  const [catalogueKind, setCatalogueKind] = useState<CatalogueKind>(() => {
+    const counts = { audio: 0, video: 0, document: 0 }
+    for (const it of catalogue) counts[it.kind]++
+    return (["audio", "video", "document"] as CatalogueKind[]).find((k) => counts[k] > 0) ?? "audio"
+  })
   const catalogueOpen = tab === "catalogue"
   const activeIndex = Math.max(
     0,
@@ -161,7 +169,11 @@ export function OrgTabs({
               <ArrowLeft className="size-5" />
             </button>
             <h2 className="flex-1 text-base font-semibold">Catalogue</h2>
-            {org.isOwner && <NewCatalogueDialog organizationId={org.id} />}
+            {/* Live recordings publish automatically, so hide the upload tool
+                on the Live tab — only Audio & Documents can be added manually. */}
+            {org.isOwner && catalogueKind !== "video" && (
+              <NewCatalogueDialog organizationId={org.id} activeKind={catalogueKind} />
+            )}
           </header>
 
           <div data-scroll className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">

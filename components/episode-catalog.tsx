@@ -332,8 +332,14 @@ export function EpisodeCatalog({
                   )}
                 </div>
                 <div className="-mx-4 grid grid-cols-1 gap-y-3 sm:mx-0 sm:grid-cols-2 sm:gap-x-2 lg:grid-cols-3">
-                  {section.items.map((show) => (
-                    <VideoCard key={show.id} show={show} owned={owned} queue={queue} flush />
+                  {section.items.map((show, i) => (
+                    <div
+                      key={show.id}
+                      className="animate-in fade-in slide-in-from-bottom-1 duration-500"
+                      style={{ animationDelay: `${Math.min(i, 8) * 45}ms`, animationFillMode: "both" }}
+                    >
+                      <VideoCard show={show} owned={owned} queue={queue} flush />
+                    </div>
                   ))}
                 </div>
               </section>
@@ -341,16 +347,28 @@ export function EpisodeCatalog({
           </div>
         ) : (
           <div className="-mx-4 grid grid-cols-1 gap-y-3 sm:mx-0 sm:grid-cols-2 sm:gap-x-2 lg:grid-cols-3">
-            {filtered.map((show) => (
-              <VideoCard key={show.id} show={show} owned={owned} queue={queue} flush />
+            {filtered.map((show, i) => (
+              <div
+                key={show.id}
+                className="animate-in fade-in slide-in-from-bottom-1 duration-500"
+                style={{ animationDelay: `${Math.min(i, 8) * 45}ms`, animationFillMode: "both" }}
+              >
+                <VideoCard show={show} owned={owned} queue={queue} flush />
+              </div>
             ))}
           </div>
         )
       ) : (
         // Audio keeps the compact edge-to-edge divided list.
         <div className="-mx-4 divide-y divide-border/60 border-y border-border/60 sm:-mx-6">
-          {filtered.map((show) => (
-            <EpisodeRow key={show.id} show={show} owned={owned} queue={queue} />
+          {filtered.map((show, i) => (
+            <div
+              key={show.id}
+              className="animate-in fade-in slide-in-from-bottom-1 duration-500"
+              style={{ animationDelay: `${Math.min(i, 8) * 45}ms`, animationFillMode: "both" }}
+            >
+              <EpisodeRow show={show} owned={owned} queue={queue} />
+            </div>
           ))}
         </div>
       )}

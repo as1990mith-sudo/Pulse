@@ -73,10 +73,16 @@ export function OrgEpisodeCatalog({
   items,
   isOwner,
   orgId,
+  tab,
+  onTabChange,
 }: {
   items: CatalogueItemView[]
   isOwner: boolean
   orgId: string
+  // Active kind is owned by the parent (OrgTabs) so the header's upload dialog
+  // can tailor itself to — and be hidden on — the current tab.
+  tab: CatalogueKind
+  onTabChange: (kind: CatalogueKind) => void
 }) {
   const [query, setQuery] = useState("")
   // Video / Audio subtab within the Live tab (mirrors the profile Catalogue).
@@ -105,9 +111,6 @@ export function OrgEpisodeCatalog({
     }
     return { video, audio }
   }, [items])
-
-  // Default to the first kind that actually has items so the view isn't empty.
-  const [tab, setTab] = useState<CatalogueKind>(() => KIND_ORDER.find((k) => counts[k] > 0) ?? "audio")
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -141,7 +144,7 @@ export function OrgEpisodeCatalog({
                 type="button"
                 role="tab"
                 aria-selected={active}
-                onClick={() => setTab(k)}
+                onClick={() => onTabChange(k)}
                 className={cn(
                   "-mb-px flex flex-1 min-w-0 items-center justify-center gap-2 border-b-2 py-3 text-sm font-medium transition-colors",
                   active
@@ -332,15 +335,49 @@ function OrgCatalogueRow({ item, orgId, isOwner }: { item: CatalogueItemView; or
  * The "add resource" form. Its trigger is a compact circular + button intended
  * for the Catalogue overlay header (mirrors the profile Catalogue's upload +).
  */
-export function NewCatalogueDialog({ organizationId }: { organizationId: string }) {
+// Copy + field configuration for each uploadable resource type. Live is never
+// here: recordings are auto-published from finished live sessions, so they can't
+// be added manually. The dialog is scoped to whichever Catalogue tab is active.
+const UPLOAD_META = {
+  audio: {
+    title: "Add audio",
+    description: "Publish a sermon, teaching or worship set to your catalogue.",
+    titlePlaceholder: "Message title",
+    linkLabel: "Audio link",
+    linkPlaceholder: "youtube.com/… or an audio file URL",
+    submit: "Add audio",
+    showMedia: true,
+  },
+  document: {
+    title: "Add document",
+    description: "Publish a document, PDF or study guide to your catalogue.",
+    titlePlaceholder: "Document title",
+    linkLabel: "Document link",
+    linkPlaceholder: "Link to a PDF, Google Doc, etc.",
+    submit: "Add document",
+    showMedia: false,
+  },
+} satisfies Record<"audio" | "document", Record<string, unknown>>
+
+export function NewCatalogueDialog({
+  organizationId,
+  activeKind,
+}: {
+  organizationId: string
+  activeKind: CatalogueKind
+}) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
+  // The resource kind follows the active Catalogue tab. Live is not uploadable,
+  // so the parent hides this dialog on the Live tab; the fallback is defensive.
+  const kind: "audio" | "document" = activeKind === "document" ? "document" : "audio"
+  const meta = UPLOAD_META[kind]
+
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
-  const [kind, setKind] = useState<CatalogueKind>("audio")
   const [url, setUrl] = useState("")
   const [cover, setCover] = useState("")
   const [duration, setDuration] = useState("")
@@ -361,7 +398,6 @@ export function NewCatalogueDialog({ organizationId }: { organizationId: string 
         setOpen(false)
         setTitle("")
         setDescription("")
-        setKind("audio")
         setUrl("")
         setCover("")
         setDuration("")
@@ -378,7 +414,7 @@ export function NewCatalogueDialog({ organizationId }: { organizationId: string 
         render={
           <button
             type="button"
-            aria-label="Add resource"
+            aria-label={meta.submit}
             className="tap-scale flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-transform hover:scale-105"
           >
             <Plus className="size-5" />
@@ -387,44 +423,30 @@ export function NewCatalogueDialog({ organizationId }: { organizationId: string 
       />
       <DialogContent className="max-h-[90svh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add resource</DialogTitle>
-          <DialogDescription>Publish a sermon, teaching, worship set or document to your catalogue.</DialogDescription>
+          <DialogTitle className="flex items-center gap-2">
+            <span className="text-muted-foreground">{KIND_META[kind].icon}</span>
+            {meta.title}
+          </DialogTitle>
+          <DialogDescription>{meta.description}</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4 py-2">
-          <Field label="Type">
-            <div className="grid grid-cols-3 gap-2">
-              {(Object.keys(KIND_META) as CatalogueKind[]).map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => setKind(k)}
-                  className={cn(
-                    "flex flex-col items-center gap-1 rounded-xl border py-3 text-xs font-medium transition-colors",
-                    kind === k
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border/60 text-muted-foreground hover:bg-muted",
-                  )}
-                >
-                  {KIND_META[k].icon}
-                  {KIND_META[k].label}
-                </button>
-              ))}
-            </div>
-          </Field>
           <Field label="Title">
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Message title" />
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={meta.titlePlaceholder} />
           </Field>
-          <Field label="Link">
-            <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="youtube.com/… or a file URL" />
+          <Field label={meta.linkLabel}>
+            <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={meta.linkPlaceholder} />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Cover image URL (optional)">
-              <Input value={cover} onChange={(e) => setCover(e.target.value)} placeholder="https://…" />
-            </Field>
-            <Field label="Duration (optional)">
-              <Input value={duration} onChange={(e) => setDuration(e.target.value)} placeholder="42 min" />
-            </Field>
-          </div>
+          {/* Cover art + duration only make sense for audio; documents skip them. */}
+          {meta.showMedia && (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Cover image URL (optional)">
+                <Input value={cover} onChange={(e) => setCover(e.target.value)} placeholder="https://…" />
+              </Field>
+              <Field label="Duration (optional)">
+                <Input value={duration} onChange={(e) => setDuration(e.target.value)} placeholder="42 min" />
+              </Field>
+            </div>
+          )}
           <Field label="Description (optional)">
             <Textarea
               value={description}
@@ -444,7 +466,7 @@ export function NewCatalogueDialog({ organizationId }: { organizationId: string 
             Cancel
           </Button>
           <Button className="rounded-full" onClick={submit} disabled={pending}>
-            {pending ? "Adding..." : "Add resource"}
+            {pending ? "Adding..." : meta.submit}
           </Button>
         </DialogFooter>
       </DialogContent>
