@@ -46,7 +46,7 @@ export function GoLiveHero() {
   }
 
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-live/30 bg-card">
+    <section className="relative flex h-full w-full flex-col overflow-hidden rounded-3xl border border-live/30 bg-card">
       {/* Ambient red glow */}
       <div
         aria-hidden="true"
@@ -54,21 +54,22 @@ export function GoLiveHero() {
       />
       <GoLiveWaveform />
 
-      <div className="relative flex flex-col gap-6 p-6 sm:p-8">
+      <div className="relative flex h-full flex-col p-5 sm:p-7">
         <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-live">
           <span className="size-2 rounded-full bg-live" />
           Go live
         </span>
 
-        <h2 className="max-w-[14ch] text-balance text-4xl font-extrabold leading-[0.98] tracking-tight sm:text-5xl">
+        <h2 className="mt-4 max-w-[14ch] text-balance text-[clamp(1.75rem,8vw,3rem)] font-extrabold leading-[0.98] tracking-tight">
           Your audience is waiting on frequency.
         </h2>
 
-        <div className="mt-2 flex items-stretch gap-3">
+        {/* mt-auto pins the actions to the bottom of the (flexible) panel. */}
+        <div className="mt-auto flex items-stretch gap-3 pt-6">
           <button
             type="button"
             onClick={() => go("video")}
-            className="group flex flex-1 items-center justify-center gap-2.5 rounded-2xl bg-live px-5 py-4 text-base font-bold text-live-foreground shadow-lg shadow-live/25 transition-all hover:opacity-95 active:scale-[0.98]"
+            className="group flex flex-1 items-center justify-center gap-2.5 rounded-2xl bg-live px-5 py-3.5 text-base font-bold text-live-foreground shadow-lg shadow-live/25 transition-all hover:opacity-95 active:scale-[0.98]"
           >
             <Video className="size-5 shrink-0" />
             Video live
@@ -76,7 +77,7 @@ export function GoLiveHero() {
           <button
             type="button"
             onClick={() => go("audio")}
-            className="group flex flex-1 items-center justify-center gap-2.5 rounded-2xl border border-border/70 bg-background/40 px-5 py-4 text-base font-bold text-foreground backdrop-blur transition-all hover:border-border hover:bg-background/60 active:scale-[0.98]"
+            className="group flex flex-1 items-center justify-center gap-2.5 rounded-2xl border border-border/70 bg-background/40 px-5 py-3.5 text-base font-bold text-foreground backdrop-blur transition-all hover:border-border hover:bg-background/60 active:scale-[0.98]"
           >
             <Mic className="size-5 shrink-0" />
             Audio live

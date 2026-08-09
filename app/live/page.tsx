@@ -63,16 +63,16 @@ function ChannelCard({
         before:absolute before:inset-x-4 before:top-0 before:h-px before:content-[''] ${glow}`}
     >
       <span
-        className={`flex size-11 items-center justify-center rounded-2xl ${
+        className={`flex size-10 items-center justify-center rounded-2xl ${
           isVideo ? "bg-primary/15 text-primary" : "bg-live/15 text-live"
         }`}
       >
         <Icon className="size-5" />
       </span>
 
-      <h3 className="mt-5 text-lg font-bold tracking-tight sm:text-xl">{label}</h3>
+      <h3 className="mt-3 text-lg font-bold tracking-tight sm:text-xl">{label}</h3>
 
-      <div className="mt-3 flex items-start gap-2 text-sm leading-snug text-muted-foreground">
+      <div className="mt-2 flex items-start gap-2 text-sm leading-snug text-muted-foreground">
         {count > 0 ? (
           <span className="tabular-nums">
             <span className="text-2xl font-bold text-foreground">{count}</span>{" "}
@@ -86,7 +86,7 @@ function ChannelCard({
         )}
       </div>
 
-      <span className={`mt-6 flex items-center gap-1.5 text-sm font-bold ${accentText}`}>
+      <span className={`mt-4 flex items-center gap-1.5 text-sm font-bold ${accentText}`}>
         Browse shows
         <ChevronRight className="size-4 transition-transform group-hover:translate-x-0.5" />
       </span>
@@ -101,13 +101,17 @@ export default async function LivePage() {
   const totalCount = videoCount + audioCount
 
   return (
-    <div className="min-h-screen bg-background">
+    // Fixed to the viewport height so the whole Live tab fits on one screen with
+    // no scrolling. The sticky header takes its natural height at the top and
+    // <main> fills the rest; the Go-live hero is the flexible region that
+    // absorbs any leftover space.
+    <div className="flex h-[calc(100svh-var(--bottom-nav-height,0px))] flex-col overflow-hidden bg-background">
       <SiteHeader />
-      <main>
-        <div className="mx-auto w-full max-w-2xl space-y-8 px-4 pb-20 pt-5 sm:px-6">
+      <main className="flex min-h-0 flex-1 flex-col">
+        <div className="mx-auto flex h-full w-full max-w-2xl flex-col gap-4 px-4 pb-4 pt-4 sm:px-6">
           <LiveStatusPill count={totalCount} />
 
-          <section className="space-y-3">
+          <section className="space-y-2.5">
             <h2 className="px-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               Your channels
             </h2>
@@ -129,10 +133,10 @@ export default async function LivePage() {
             </div>
           </section>
 
-          {/* Host CTA — the flagship "go live" panel. The id anchor lets the
-              side menu's "Creator Studio" deep-link straight to it. scroll-mt
-              clears the sticky header. */}
-          <div id="go-live" className="scroll-mt-24">
+          {/* Host CTA — the flagship "go live" panel. Grows to fill the remaining
+              height so the two actions always sit just above the bottom nav. The
+              id anchor lets the side menu's "Creator Studio" deep-link here. */}
+          <div id="go-live" className="flex min-h-0 flex-1 scroll-mt-24">
             <GoLiveHero />
           </div>
         </div>
