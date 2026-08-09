@@ -94,7 +94,7 @@ function ThreadMedia({ post, onOpen }: { post: CommunityPostView; onOpen?: () =>
           src={post.imageUrl || "/placeholder.svg"}
           alt=""
           loading="lazy"
-          className="max-h-[32rem] w-full object-cover"
+          className="max-h-[22rem] w-full object-cover"
         />
       </Frame>
     )
@@ -103,7 +103,7 @@ function ThreadMedia({ post, onOpen }: { post: CommunityPostView; onOpen?: () =>
     return (
       <div
         className="relative mt-3 w-full overflow-hidden rounded-2xl border border-border/60 bg-black"
-        style={{ aspectRatio: String(ratio), maxHeight: "32rem" }}
+        style={{ aspectRatio: String(ratio), maxHeight: "22rem" }}
       >
         {/* onExpand makes a tap anywhere on the clip open the post (like the
             community feed) instead of just toggling play/pause. */}
@@ -386,6 +386,17 @@ function AnonymousThread({
   const [draft, setDraft] = useState(post.body)
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    function onDown(e: PointerEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
+    }
+    document.addEventListener("pointerdown", onDown)
+    return () => document.removeEventListener("pointerdown", onDown)
+  }, [menuOpen])
 
   function save() {
     const body = draft.trim()
@@ -426,12 +437,64 @@ function AnonymousThread({
         className="size-11 shrink-0 rounded-full object-cover ring-2 ring-border/70"
       />
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5 text-[15px]">
-          <span className="font-bold tracking-tight text-foreground">{ANON_NAME}</span>
-          <span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-            Only you can see this
-          </span>
-          {post.edited && <EditedIndicator />}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[15px]">
+            <span className="font-bold tracking-tight text-foreground">{ANON_NAME}</span>
+            <span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+              Only you can see this
+            </span>
+            {post.edited && <EditedIndicator />}
+          </div>
+
+          {/* Overflow menu — owner-only Edit/Delete (anonymous posts are always
+              the viewer's own). Hidden while editing. */}
+          {!editing && (
+            <div ref={menuRef} className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setMenuOpen((o) => !o)}
+                className={cn(
+                  "-mr-1 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
+                  menuOpen && "bg-secondary text-foreground",
+                )}
+                aria-label="Post options"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+              >
+                <MoreHorizontal className="size-5" />
+              </button>
+              {menuOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-2xl border border-border/60 bg-card p-1 shadow-xl duration-150 animate-in fade-in zoom-in-95"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false)
+                      setEditing(true)
+                    }}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-secondary"
+                  >
+                    <Pencil className="size-4" /> Edit
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false)
+                      remove()
+                    }}
+                    disabled={pending}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-60"
+                  >
+                    <Trash2 className="size-4" /> Delete
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {editing ? (
@@ -477,25 +540,6 @@ function AnonymousThread({
             <BibleChips text={post.body} className="mt-3" />
             <ThreadMedia post={post} />
             <p className="mt-2 text-xs text-muted-foreground">Posted {post.postedAt}</p>
-
-            {/* Owner-only controls. */}
-            <div className="mt-2 flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setEditing(true)}
-                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-              >
-                <Pencil className="size-4" /> Edit
-              </button>
-              <button
-                type="button"
-                onClick={remove}
-                disabled={pending}
-                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-60"
-              >
-                <Trash2 className="size-4" /> Delete
-              </button>
-            </div>
           </>
         )}
 
