@@ -95,18 +95,23 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <SkinProvider>
-            <LiveSessionProvider>
-              <EpisodePlayerProvider>
-                {/* Keeps server-rendered data (feed, adverts, live status, …)
-                    continuously fresh so users never have to manually reload. */}
-                <AutoRefresh />
-                {/* Reports the signed-in user as online (no-op when signed out)
-                    so the admin dashboard shows a true real-time presence count. */}
-                <PresenceHeartbeat />
-                {/* Drives non-blocking background upload + processing of saved
-                    live replays. Lives here so uploads keep running (and their
-                    status dock stays visible) as the host navigates anywhere. */}
-                <LiveProcessingProvider>
+            {/* Drives non-blocking background upload + processing of saved live
+                replays. MUST wrap LiveSessionProvider: the live studio consoles
+                (which call useLiveProcessing().enqueue to save a replay) are
+                rendered *by* LiveSessionProvider as a sibling of the app tree, so
+                this provider has to be their ancestor. When it wasn't, the video
+                console silently got the no-op fallback and video replays were
+                never saved. Placed high so uploads (and their status dock) keep
+                running as the host navigates anywhere. */}
+            <LiveProcessingProvider>
+              <LiveSessionProvider>
+                <EpisodePlayerProvider>
+                  {/* Keeps server-rendered data (feed, adverts, live status, …)
+                      continuously fresh so users never have to manually reload. */}
+                  <AutoRefresh />
+                  {/* Reports the signed-in user as online (no-op when signed out)
+                      so the admin dashboard shows a true real-time presence count. */}
+                  <PresenceHeartbeat />
                   {/* The whole app shell gently slides right (micro-parallax) when
                       the left navigation drawer opens. */}
                   <div id="app-shell" className="app-shell">
@@ -116,10 +121,10 @@ export default function RootLayout({
                         between tabs and per-tab state/scroll are preserved. */}
                     <BottomNav />
                   </div>
-                </LiveProcessingProvider>
-                {process.env.NODE_ENV === 'production' && <Analytics />}
-              </EpisodePlayerProvider>
-            </LiveSessionProvider>
+                  {process.env.NODE_ENV === 'production' && <Analytics />}
+                </EpisodePlayerProvider>
+              </LiveSessionProvider>
+            </LiveProcessingProvider>
           </SkinProvider>
         </ThemeProvider>
       </body>
