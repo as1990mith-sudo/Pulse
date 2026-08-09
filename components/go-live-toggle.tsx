@@ -1,94 +1,85 @@
 "use client"
 
-import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowRight, Mic, Video } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { Mic, Video } from "lucide-react"
 import { haptic } from "@/lib/haptics"
 
-type Mode = "audio" | "video"
+/**
+ * Warm, decorative equalizer that sits behind the Go-live actions. Bars fade
+ * from amber (video accent) to red (live accent), mirroring the two CTAs. The
+ * heights come from a fixed pattern so the SSR/CSR markup matches (no random).
+ */
+function GoLiveWaveform() {
+  // A pleasing, non-random pattern of relative bar heights (0–1).
+  const bars = [
+    0.35, 0.55, 0.28, 0.7, 0.42, 0.9, 0.5, 0.33, 0.62, 0.8, 0.45, 0.6, 0.3, 0.75, 0.5, 0.38, 0.68, 0.85, 0.4, 0.58,
+    0.32, 0.72, 0.48, 0.9, 0.55, 0.36, 0.64, 0.78, 0.44, 0.6, 0.3, 0.5, 0.7, 0.4, 0.82, 0.52, 0.34, 0.66, 0.46, 0.6,
+  ]
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-x-0 bottom-0 flex h-28 items-end justify-between gap-[3px] px-6 opacity-70"
+    >
+      {bars.map((h, i) => (
+        <span
+          key={i}
+          className="flex-1 rounded-full bg-gradient-to-t from-live/80 to-primary/70"
+          style={{ height: `${Math.round(h * 100)}%` }}
+        />
+      ))}
+    </div>
+  )
+}
 
 /**
- * Immersive "Go live" entry point for the Live tab. A glassy segmented control
- * lets the host pick Audio or Video before opening the studio in that mode
- * (`/studio?mode=audio|video`). The active segment slides under the selection
- * and is filled with the skin accent.
+ * The flagship "Go live" panel on the Live tab. A red-glow bordered hero with a
+ * big display headline and two large actions — a filled "Video live" and an
+ * outlined "Audio live" — layered over a warm waveform. Each button opens the
+ * studio directly in that mode (`/studio?mode=video|audio`).
  */
-export function GoLiveToggle() {
+export function GoLiveHero() {
   const router = useRouter()
-  const [mode, setMode] = useState<Mode>("video")
 
-  const openStudio = () => {
+  const go = (mode: "video" | "audio") => {
     haptic("medium")
-    // Audio opens the studio at its format-selection setup (defaults to
-    // Podcast); the format is chosen there, not on this landing screen.
     router.push(`/studio?mode=${mode}`)
   }
 
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-border/60 bg-card">
-      {/* Ambient accent glow */}
+    <section className="relative overflow-hidden rounded-3xl border border-live/30 bg-card">
+      {/* Ambient red glow */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -right-24 -top-24 size-64 rounded-full bg-live/20 blur-3xl"
+        className="pointer-events-none absolute -left-16 -top-20 size-64 rounded-full bg-live/20 blur-3xl"
       />
-      <div className="relative flex flex-col gap-8 p-8 md:p-12">
-        <div className="max-w-xl space-y-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-live">Go live</span>
-          <h2 className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">
-            Your audience is waiting. Choose how you want to go on air.
-          </h2>
-        </div>
+      <GoLiveWaveform />
 
-        {/* Segmented mode toggle */}
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-          <div
-            role="tablist"
-            aria-label="Choose live mode"
-            className="relative grid w-full max-w-sm grid-cols-2 gap-1 rounded-2xl border border-border/60 bg-secondary/50 p-1 backdrop-blur"
-          >
-            {/* Sliding active indicator */}
-            <span
-              aria-hidden="true"
-              className={cn(
-                "absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-xl bg-live shadow-lg shadow-live/30 transition-transform duration-300 ease-out",
-                mode === "video" ? "translate-x-0" : "translate-x-[calc(100%+0.25rem)]",
-              )}
-            />
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === "video"}
-              onClick={() => setMode("video")}
-              className={cn(
-                "relative z-10 flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition-colors duration-200",
-                mode === "video" ? "text-live-foreground" : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <Video className="size-4" /> Video Live
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === "audio"}
-              onClick={() => setMode("audio")}
-              className={cn(
-                "relative z-10 flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition-colors duration-200",
-                mode === "audio" ? "text-live-foreground" : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <Mic className="size-4" /> Audio Live
-            </button>
-          </div>
+      <div className="relative flex flex-col gap-6 p-6 sm:p-8">
+        <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-live">
+          <span className="size-2 rounded-full bg-live" />
+          Go live
+        </span>
 
+        <h2 className="max-w-[14ch] text-balance text-4xl font-extrabold leading-[0.98] tracking-tight sm:text-5xl">
+          Your audience is waiting on frequency.
+        </h2>
+
+        <div className="mt-2 flex items-stretch gap-3">
           <button
             type="button"
-            onClick={openStudio}
-            className="group inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-live px-6 py-3 font-semibold text-live-foreground transition-all hover:opacity-90 active:scale-[0.98]"
+            onClick={() => go("video")}
+            className="group flex flex-1 items-center justify-center gap-2.5 rounded-2xl bg-live px-5 py-4 text-base font-bold text-live-foreground shadow-lg shadow-live/25 transition-all hover:opacity-95 active:scale-[0.98]"
           >
-            {mode === "video" ? <Video className="size-4 shrink-0" /> : <Mic className="size-4 shrink-0" />}
-            <span className="whitespace-nowrap">{mode === "video" ? "Start Video Live" : "Start Audio Live"}</span>
-            <ArrowRight className="size-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
+            <Video className="size-5 shrink-0" />
+            Video live
+          </button>
+          <button
+            type="button"
+            onClick={() => go("audio")}
+            className="group flex flex-1 items-center justify-center gap-2.5 rounded-2xl border border-border/70 bg-background/40 px-5 py-4 text-base font-bold text-foreground backdrop-blur transition-all hover:border-border hover:bg-background/60 active:scale-[0.98]"
+          >
+            <Mic className="size-5 shrink-0" />
+            Audio live
           </button>
         </div>
       </div>
