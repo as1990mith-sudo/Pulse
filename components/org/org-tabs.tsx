@@ -5,8 +5,8 @@ import Link from "next/link"
 import {
   ArrowLeft,
   ArrowUpRight,
-  BookOpen,
   Bookmark,
+  Building2,
   Calendar,
   Globe,
   Heart,
@@ -70,7 +70,7 @@ export function OrgTabs({
   const eventCount = events.upcoming.length + events.past.length
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; count?: number }[] = [
     { key: "posts", label: "Posts", icon: <MessageSquareText className="size-4" />, count: posts.length },
-    { key: "about", label: "About", icon: <BookOpen className="size-4" /> },
+    { key: "about", label: "About", icon: <Building2 className="size-4" /> },
     { key: "events", label: "Events", icon: <Calendar className="size-4" />, count: eventCount },
     { key: "articles", label: "Articles", icon: <Newspaper className="size-4" />, count: articles.length },
     { key: "catalogue", label: "Catalogue", icon: <Mic className="size-4" />, count: catalogue.length },
