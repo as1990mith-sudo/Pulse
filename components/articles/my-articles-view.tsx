@@ -105,7 +105,7 @@ export function MyArticlesView({ initial }: { initial: ArticleCard[] }) {
       <nav
         data-scroll
         aria-label="Article status"
-        className="hscroll -mx-4 mt-5 flex items-center gap-6 overflow-x-auto border-b border-border/40 px-4 sm:mx-0 sm:px-0"
+        className="-mx-4 mt-5 flex items-center border-b border-border/40 px-4 sm:mx-0 sm:px-0"
       >
         {TABS.map(({ key, label }) => {
           const active = tab === key
@@ -116,7 +116,7 @@ export function MyArticlesView({ initial }: { initial: ArticleCard[] }) {
               onClick={() => setTab(key)}
               aria-current={active ? "true" : undefined}
               className={cn(
-                "relative shrink-0 whitespace-nowrap pb-2.5 pt-1 text-sm transition-colors duration-200",
+                "relative flex-1 whitespace-nowrap pb-2.5 pt-1 text-center text-sm transition-colors duration-200",
                 active ? "font-semibold text-foreground" : "font-medium text-muted-foreground/70 hover:text-foreground",
               )}
             >

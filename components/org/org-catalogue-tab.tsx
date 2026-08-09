@@ -131,7 +131,7 @@ export function OrgEpisodeCatalog({
         aria-label="Filter resources by type"
         className="-mx-4 border-b border-border/50 px-4 sm:-mx-6 sm:px-6"
       >
-        <div className="flex items-center gap-6">
+        <div className="flex items-center">
           {KIND_ORDER.map((k) => {
             const active = tab === k
             const Icon = KIND_ICON[k]
@@ -143,7 +143,7 @@ export function OrgEpisodeCatalog({
                 aria-selected={active}
                 onClick={() => setTab(k)}
                 className={cn(
-                  "-mb-px flex min-w-0 items-center gap-2 border-b-2 py-3 text-sm font-medium transition-colors",
+                  "-mb-px flex flex-1 min-w-0 items-center justify-center gap-2 border-b-2 py-3 text-sm font-medium transition-colors",
                   active
                     ? "border-primary text-foreground"
                     : "border-transparent text-muted-foreground hover:text-foreground",
@@ -162,7 +162,7 @@ export function OrgEpisodeCatalog({
 
       {/* Live subtoggle: Video / Audio — quieter secondary underline row. */}
       {tab === "video" && (
-        <div role="tablist" aria-label="Filter live recordings by media type" className="flex items-center gap-5">
+        <div role="tablist" aria-label="Filter live recordings by media type" className="flex items-center">
           {(
             [
               { key: "video", label: "Video", icon: Radio, count: liveCounts.video },
@@ -178,7 +178,7 @@ export function OrgEpisodeCatalog({
                 aria-selected={active}
                 onClick={() => setLiveKind(key)}
                 className={cn(
-                  "flex items-center gap-1.5 text-[13px] font-medium transition-colors",
+                  "flex flex-1 items-center justify-center gap-1.5 text-[13px] font-medium transition-colors",
                   active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
               >
