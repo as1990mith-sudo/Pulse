@@ -7,13 +7,33 @@ import {
   Room,
   RoomEvent,
   Track,
-  VideoPresets,
+  VideoPresets43,
   type LocalTrackPublication,
   type RemoteTrack,
   type RemoteTrackPublication,
   type RemoteParticipant,
 } from "livekit-client"
 import { LiveCompositor, type CompositorSource } from "@/lib/live-compositor"
+
+/**
+ * The single source of truth for the camera capture format, pinned identically
+ * to EVERY camera path (initial host publish, guest publish, and the front/back
+ * flip). Keeping the constraints identical is what stops the framing from
+ * jumping between paths.
+ *
+ * Phone front cameras are natively 4:3. Requesting a 16:9 resolution (e.g. 720p)
+ * makes the browser crop the sensor top-and-bottom, which narrows the field of
+ * view so the subject looks "zoomed in". A 4:3 request instead uses the WHOLE
+ * sensor — the wider "far out" framing the user wants as the constant — and
+ * 1440x1080 keeps it crisp for excellent quality.
+ *
+ * The Android bug came from the flip: `restartTrack` does a fresh getUserMedia
+ * and does NOT inherit the room's `videoCaptureDefaults`, so when it carried
+ * only `{ facingMode }` (no resolution) the camera fell back to a different
+ * native default and the framing changed. We now pass this resolution on the
+ * flip too, so front-camera framing is byte-for-byte identical every time.
+ */
+const CAPTURE_RESOLUTION = VideoPresets43.h1080.resolution
 
 /** Reject a promise if it doesn't settle within `ms`, with a friendly message. */
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
@@ -428,12 +448,13 @@ export function useLiveVideo({
     const room = new Room({
       adaptiveStream: true,
       dynacast: true,
-      // Force a proper HD capture. Android Chrome otherwise defaults to a low
-      // ~480p (sometimes 640x480) capture, which is why Android publishers
-      // looked far worse than iOS Safari — Safari already captures 720p by
-      // default. Requesting 720p explicitly puts both platforms on par.
+      // Force a proper HD capture at the shared full-sensor 4:3 format (see
+      // CAPTURE_RESOLUTION). Android Chrome otherwise defaults to a low ~480p
+      // capture; requesting 1440x1080 explicitly gives a crisp, wide "far out"
+      // frame on every device. The camera flip requests this SAME format, so
+      // the framing never changes between the initial publish and a flip.
       videoCaptureDefaults: {
-        resolution: VideoPresets.h720.resolution,
+        resolution: CAPTURE_RESOLUTION,
       },
       // Studio-grade microphone capture for the host. The browser's voice-call
       // DSP (auto-gain, noise gate, echo canceller) is tuned for compressing
@@ -454,11 +475,12 @@ export function useLiveVideo({
       },
       publishDefaults: {
         // Simulcast so viewers on weak networks still receive a lower layer,
-        // while good connections get the full 720p feed.
-        videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360],
-        // Publish the primary layer at 720p's healthy bitrate instead of the
-        // conservative default, so the image isn't over-compressed on Android.
-        videoEncoding: VideoPresets.h720.encoding,
+        // while good connections get the full-quality feed. 4:3 layers match
+        // the 4:3 capture so every layer keeps the same framing.
+        videoSimulcastLayers: [VideoPresets43.h360, VideoPresets43.h540],
+        // Publish the primary layer at the 1440x1080 preset's healthy bitrate
+        // (~2.3 Mbps) so the image is sharp and not over-compressed on Android.
+        videoEncoding: VideoPresets43.h1080.encoding,
         // Keep resolution sharp (rather than dropping to a blurry frame) when
         // the encoder is bandwidth-constrained — faces stay legible.
         degradationPreference: "maintain-resolution",
@@ -527,7 +549,10 @@ export function useLiveVideo({
           try {
             await room.localParticipant.setMicrophoneEnabled(true)
             setMicOn(true)
-            await room.localParticipant.setCameraEnabled(true, { facingMode: "user" })
+            await room.localParticipant.setCameraEnabled(true, {
+              facingMode: "user",
+              resolution: CAPTURE_RESOLUTION,
+            })
             setCamOn(true)
             attachLocalVideo(room)
           } catch {
@@ -735,7 +760,10 @@ export function useLiveVideo({
       // flips" symptom. A fresh acquisition actually moves to the other camera.
       if (track) {
         try {
-          await track.restartTrack({ facingMode: next })
+          // Pass the SAME resolution as the initial publish. `restartTrack`
+          // replaces the capture constraints wholesale, so omitting it is what
+          // made the framing change after a flip on Android.
+          await track.restartTrack({ facingMode: next, resolution: CAPTURE_RESOLUTION })
         } catch {
           // The facing restart failed (e.g. this device doesn't expose a camera
           // tagged with the requested facingMode). Fall back to enumerating the
@@ -757,7 +785,10 @@ export function useLiveVideo({
           }
         }
       } else {
-        await room.localParticipant.setCameraEnabled(true, { facingMode: next })
+        await room.localParticipant.setCameraEnabled(true, {
+          facingMode: next,
+          resolution: CAPTURE_RESOLUTION,
+        })
       }
       syncActualFacing()
       setCamOn(true)
