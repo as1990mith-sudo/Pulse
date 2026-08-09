@@ -1,7 +1,6 @@
 import Link from "next/link"
 import { Clock, Heart, MessageCircle } from "lucide-react"
 import type { ArticleCard as ArticleCardType } from "@/lib/article-types"
-import { cn } from "@/lib/utils"
 import { AuthorAvatar } from "@/components/articles/author-avatar"
 
 function formatDate(iso: string | null): string {
@@ -16,31 +15,34 @@ function compact(n: number): string {
   return (n / 1_000_000).toFixed(1).replace(/\.0$/, "") + "m"
 }
 
-/** A horizontal article row for the hub feed + search results. */
+/**
+ * An editorial article row for the hub feed + search results. Borderless by
+ * design — articles read as one connected collection separated by hairline
+ * dividers (the parent applies `divide-y`), not isolated cards.
+ */
 export function ArticleRow({ article }: { article: ArticleCardType }) {
   return (
     <Link
       href={`/articles/${article.id}`}
-      className="tap-scale group flex gap-3 rounded-2xl border border-border bg-card p-3 shadow-elevated ring-1 ring-white/5 transition-colors hover:border-primary/40 hover:bg-secondary/40 sm:gap-4 sm:p-4"
+      className="tap-scale group flex gap-4 py-5 transition-opacity active:opacity-80 sm:gap-5"
     >
       <div className="min-w-0 flex-1">
-        <div className="mb-1.5 flex items-center gap-2">
-          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-primary">
-            {article.category}
-          </span>
-        </div>
-        <h3 className="line-clamp-2 text-pretty font-display text-[15px] font-semibold leading-snug text-foreground group-hover:text-primary">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">
+          {article.category}
+        </span>
+        <h3 className="mt-1.5 line-clamp-2 text-pretty font-display text-base font-semibold leading-snug text-foreground transition-colors group-hover:text-primary sm:text-lg">
           {article.title}
         </h3>
-        <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">{article.excerpt}</p>
-        <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted-foreground">
+        <p className="mt-1.5 line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">{article.excerpt}</p>
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <AuthorAvatar author={article.author} size={18} />
-            <span className="max-w-28 truncate font-medium text-foreground/80">{article.author.name}</span>
+            <span className="max-w-28 truncate font-medium text-foreground/70">{article.author.name}</span>
           </span>
+          <span aria-hidden className="text-border">·</span>
           <span className="flex items-center gap-1">
             <Clock className="size-3" />
-            {article.readMinutes}m
+            {article.readMinutes} min
           </span>
           <span className="flex items-center gap-1">
             <Heart className="size-3" />
@@ -49,12 +51,12 @@ export function ArticleRow({ article }: { article: ArticleCardType }) {
         </div>
       </div>
       {article.coverUrl ? (
-        <div className="relative shrink-0 overflow-hidden rounded-xl">
+        <div className="relative size-24 shrink-0 overflow-hidden rounded-xl sm:size-28">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={article.coverUrl || "/placeholder.svg"}
             alt=""
-            className="size-20 object-cover sm:size-24"
+            className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
         </div>
       ) : null}
@@ -62,48 +64,47 @@ export function ArticleRow({ article }: { article: ArticleCardType }) {
   )
 }
 
-/** A large, hero-style card for the hub's featured article. */
+/**
+ * The cinematic cover-story hero. A tall, immersive image on mobile with a
+ * deep bottom-up scrim so the headline stays legible over busy artwork; the
+ * only UI over the image is a small eyebrow, the title and byline.
+ */
 export function FeaturedArticleCard({ article }: { article: ArticleCardType }) {
   return (
     <Link
       href={`/articles/${article.id}`}
-      className="tap-scale group relative block overflow-hidden rounded-3xl border border-border/50 bg-card shadow-elevated"
+      className="tap-scale group relative flex aspect-[4/5] w-full flex-col justify-end overflow-hidden rounded-3xl bg-card shadow-elevated sm:aspect-[16/9]"
     >
       {article.coverUrl ? (
-        <div className="relative aspect-[16/10] w-full overflow-hidden sm:aspect-[16/8]">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={article.coverUrl || "/placeholder.svg"}
-            alt=""
-            className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
-        </div>
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={article.coverUrl || "/placeholder.svg"}
+          alt=""
+          className="absolute inset-0 size-full object-cover transition-transform duration-[600ms] ease-out group-hover:scale-[1.04]"
+        />
       ) : (
-        <div className="aspect-[16/9] w-full bg-gradient-to-br from-primary/25 via-card to-card" />
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/30 via-card to-card" />
       )}
-      <div className={cn("p-4 sm:p-5", article.coverUrl && "absolute inset-x-0 bottom-0")}>
-        <span className="inline-flex rounded-full bg-primary px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-primary-foreground">
-          Featured
-        </span>
-        <h2
-          className={cn(
-            "mt-2 text-pretty font-display text-xl font-bold leading-tight sm:text-2xl",
-            article.coverUrl ? "text-white" : "text-foreground",
-          )}
-        >
+      {/* Cinematic scrim: strong at the base, feathering out toward the top. */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/5" />
+
+      <div className="relative p-5 sm:p-6">
+        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em]">
+          <span className="text-primary">Featured</span>
+          <span className="text-white/40" aria-hidden>·</span>
+          <span className="text-white/70">{article.category}</span>
+        </div>
+        <h2 className="mt-2.5 max-w-xl text-balance font-display text-2xl font-bold leading-[1.08] text-white sm:text-[32px]">
           {article.title}
         </h2>
-        <div
-          className={cn(
-            "mt-2.5 flex items-center gap-2 text-[13px]",
-            article.coverUrl ? "text-white/85" : "text-muted-foreground",
-          )}
-        >
-          <AuthorAvatar author={article.author} size={22} ring={!!article.coverUrl} />
-          <span className="font-medium">{article.author.name}</span>
-          <span aria-hidden>·</span>
-          <span>{article.readMinutes} min read</span>
+        <div className="mt-3.5 flex items-center gap-2 text-[13px] text-white/75">
+          <AuthorAvatar author={article.author} size={24} ring />
+          <span className="font-medium text-white">{article.author.name}</span>
+          <span aria-hidden className="text-white/40">·</span>
+          <span className="flex items-center gap-1">
+            <Clock className="size-3.5" />
+            {article.readMinutes} min read
+          </span>
         </div>
       </div>
     </Link>

@@ -6,7 +6,6 @@ import { Clock, Loader2, PenLine, Search, Sparkles, X } from "lucide-react"
 import type { ArticleCard } from "@/lib/article-types"
 import { getArticleFeed } from "@/app/actions/articles"
 import { ArticleRow, FeaturedArticleCard } from "@/components/articles/article-card"
-import { AuthorAvatar } from "@/components/articles/author-avatar"
 import { cn } from "@/lib/utils"
 
 const PAGE = 12
@@ -31,6 +30,9 @@ export function ArticlesHub({
   const [items, setItems] = useState<ArticleCard[]>(initialFeed)
   const [nextOffset, setNextOffset] = useState<number | null>(initialNextOffset)
   const [loading, setLoading] = useState(false)
+  // Collapse the Write FAB to an icon while scrolling down so it never blocks
+  // article content; expand it again at rest / when scrolling up.
+  const [fabExpanded, setFabExpanded] = useState(true)
   const sentinel = useRef<HTMLDivElement>(null)
   // Identifies the current query so out-of-order responses are ignored.
   const queryRef = useRef(0)
@@ -79,6 +81,26 @@ export function ArticlesHub({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [category, debounced])
 
+  // Collapse/expand the Write FAB based on scroll direction.
+  useEffect(() => {
+    let lastY = window.scrollY
+    let ticking = false
+    const onScroll = () => {
+      if (ticking) return
+      ticking = true
+      requestAnimationFrame(() => {
+        const y = window.scrollY
+        if (y < 80) setFabExpanded(true)
+        else if (y > lastY + 6) setFabExpanded(false)
+        else if (y < lastY - 6) setFabExpanded(true)
+        lastY = y
+        ticking = false
+      })
+    }
+    window.addEventListener("scroll", onScroll, { passive: true })
+    return () => window.removeEventListener("scroll", onScroll)
+  }, [])
+
   // Infinite scroll.
   useEffect(() => {
     const el = sentinel.current
@@ -97,22 +119,23 @@ export function ArticlesHub({
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-24 pt-4 sm:px-6">
-      {/* Search */}
-      <div className="mb-4 flex items-center gap-2">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      {/* Search — refined surface with a soft focus ring; the My Articles
+          control sits beside it as a quiet ghost button so it never competes. */}
+      <div className="mb-6 flex items-center gap-2.5">
+        <div className="group relative flex-1 rounded-xl bg-secondary/30 ring-1 ring-inset ring-border/50 transition-shadow duration-200 focus-within:ring-primary/50 focus-within:ring-offset-0 focus-within:shadow-[0_0_0_4px_color-mix(in_oklab,var(--primary)_12%,transparent)]">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-foreground" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search articles"
-            className="w-full rounded-2xl border border-border/60 bg-secondary/40 py-2.5 pl-10 pr-9 text-sm text-foreground shadow-soft outline-none backdrop-blur-md transition-colors placeholder:text-muted-foreground focus:border-primary/50"
+            className="w-full rounded-xl bg-transparent py-2.5 pl-10 pr-9 text-sm text-foreground outline-none placeholder:text-muted-foreground"
           />
           {search && (
             <button
               type="button"
               onClick={() => setSearch("")}
               aria-label="Clear search"
-              className="absolute right-2.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+              className="absolute right-2.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
             >
               <X className="size-4" />
             </button>
@@ -120,52 +143,64 @@ export function ArticlesHub({
         </div>
         <Link
           href="/articles/mine"
-          className="tap-scale flex shrink-0 items-center gap-1.5 rounded-2xl border border-border/60 bg-secondary/40 px-3.5 py-2.5 text-sm font-semibold text-foreground shadow-soft transition-colors hover:bg-secondary/70"
+          aria-label="My articles"
+          className="tap-scale flex size-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
         >
-          <PenLine className="size-4" />
-          <span className="hidden sm:inline">My Articles</span>
+          <PenLine className="size-[18px]" />
         </Link>
       </div>
 
-      {/* Category chips */}
-      <div data-scroll className="hscroll -mx-4 mb-5 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
-        {["All", ...categories].map((c) => (
-          <button
-            key={c}
-            type="button"
-            onClick={() => setCategory(c)}
-            className={cn(
-              "shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors",
-              category === c
-                ? "border-primary bg-primary text-primary-foreground shadow-soft"
-                : "border-border/60 bg-secondary/40 text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {c}
-          </button>
-        ))}
-      </div>
+      {/* Category navigation — editorial section nav with a thin orange
+          underline for the active section rather than a filled pill. */}
+      <nav
+        data-scroll
+        aria-label="Article categories"
+        className="hscroll -mx-4 mb-6 flex items-center gap-6 overflow-x-auto border-b border-border/40 px-4 sm:mx-0 sm:px-0"
+      >
+        {["All", ...categories].map((c) => {
+          const active = category === c
+          return (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setCategory(c)}
+              aria-current={active ? "true" : undefined}
+              className={cn(
+                "relative shrink-0 whitespace-nowrap pb-2.5 pt-1 text-sm transition-colors duration-200",
+                active ? "font-semibold text-foreground" : "font-medium text-muted-foreground/70 hover:text-foreground",
+              )}
+            >
+              {c}
+              <span
+                className={cn(
+                  "absolute inset-x-0 -bottom-px h-0.5 origin-center rounded-full bg-primary transition-all duration-300 ease-out",
+                  active ? "scale-x-100 opacity-100" : "scale-x-0 opacity-0",
+                )}
+                aria-hidden
+              />
+            </button>
+          )
+        })}
+      </nav>
 
       {/* Featured article */}
       {showFeatured && (
-        <section className="mb-6">
+        <section className="mb-9 animate-in fade-in duration-500">
           <FeaturedArticleCard article={featured} />
         </section>
       )}
 
       {/* Editor's Pick rail — curated standout articles */}
       {isDefaultView && editorsPicks.length > 0 && (
-        <section className="mb-7">
-          <div className="mb-3 flex items-center gap-2">
-            <span className="flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
-              <Sparkles className="size-3.5" />
-            </span>
-            <h2 className="font-display text-sm font-semibold tracking-tight text-foreground">Editor&apos;s Pick</h2>
-            <span className="ml-auto text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        <section className="mb-9">
+          <div className="mb-4 flex items-baseline gap-2.5">
+            <Sparkles className="size-4 shrink-0 translate-y-0.5 text-primary" />
+            <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">Editor&apos;s Pick</h2>
+            <span className="ml-auto text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground/70">
               Curated
             </span>
           </div>
-          <div data-scroll className="hscroll -mx-4 flex gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+          <div data-scroll className="hscroll -mx-4 flex gap-3.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
             {editorsPicks.map((a) => (
               <EditorsPickCard key={a.id} article={a} />
             ))}
@@ -173,13 +208,15 @@ export function ArticlesHub({
         </section>
       )}
 
-      {/* Feed */}
+      {/* Feed — an editorial collection separated by hairline dividers. */}
       <section>
-        {isDefaultView && <h2 className="mb-3 text-sm font-semibold text-foreground">Latest articles</h2>}
+        {isDefaultView && (
+          <h2 className="mb-1 font-display text-lg font-semibold tracking-tight text-foreground">Latest articles</h2>
+        )}
         {items.length === 0 && !loading ? (
           <EmptyState search={debounced} />
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col divide-y divide-border/40">
             {items.map((a) => (
               <ArticleRow key={a.id} article={a} />
             ))}
@@ -193,14 +230,24 @@ export function ArticlesHub({
         {nextOffset != null && <div ref={sentinel} className="h-10" aria-hidden />}
       </section>
 
-      {/* Write FAB */}
+      {/* Write FAB — collapses to an icon on scroll-down. */}
       <Link
         href="/articles/write"
         aria-label="Write an article"
-        className="tap-scale fixed bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] right-4 z-30 flex items-center gap-2 rounded-full bg-primary px-5 py-3.5 font-semibold text-primary-foreground shadow-floating sm:right-6"
+        className={cn(
+          "tap-scale fixed bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] right-4 z-30 flex items-center rounded-full bg-primary py-3.5 font-semibold text-primary-foreground shadow-floating transition-all duration-300 ease-out sm:right-6",
+          fabExpanded ? "gap-2 pl-4 pr-5" : "gap-0 px-3.5",
+        )}
       >
-        <PenLine className="size-5" />
-        Write
+        <PenLine className="size-5 shrink-0" />
+        <span
+          className={cn(
+            "overflow-hidden whitespace-nowrap transition-all duration-300 ease-out",
+            fabExpanded ? "max-w-20 opacity-100" : "max-w-0 opacity-0",
+          )}
+        >
+          Write
+        </span>
       </Link>
     </div>
   )
@@ -215,7 +262,7 @@ function EditorsPickCard({ article }: { article: ArticleCard }) {
   return (
     <Link
       href={`/articles/${article.id}`}
-      className="tap-scale group relative flex aspect-[3/4] w-44 shrink-0 flex-col justify-end overflow-hidden rounded-2xl border border-border/50 bg-card shadow-elevated ring-1 ring-white/5 sm:w-48"
+      className="tap-scale group relative flex aspect-[3/4] w-40 shrink-0 flex-col justify-end overflow-hidden rounded-2xl bg-card shadow-elevated sm:w-44"
     >
       {article.coverUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -227,22 +274,18 @@ function EditorsPickCard({ article }: { article: ArticleCard }) {
       ) : (
         <div className="absolute inset-0 bg-gradient-to-br from-primary/30 via-secondary/40 to-card" />
       )}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
-      <div className="relative p-3">
-        <span className="inline-flex rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white backdrop-blur-sm">
+      {/* Deep scrim keeps the title readable even over busy promo artwork. */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/5" />
+      <div className="relative p-3.5">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/70">
           {article.category}
         </span>
-        <h3 className="mt-1.5 line-clamp-2 text-pretty font-display text-sm font-semibold leading-snug text-white">
+        <h3 className="mt-1 line-clamp-3 text-pretty font-display text-sm font-semibold leading-snug text-white">
           {article.title}
         </h3>
-        <div className="mt-2 flex items-center gap-1.5 text-[11px] text-white/80">
-          <AuthorAvatar author={article.author} size={16} ring />
-          <span className="max-w-20 truncate font-medium">{article.author.name}</span>
-          <span aria-hidden>·</span>
-          <span className="flex items-center gap-0.5">
-            <Clock className="size-2.5" />
-            {article.readMinutes}m
-          </span>
+        <div className="mt-2 flex items-center gap-1 text-[11px] text-white/60">
+          <Clock className="size-2.5" />
+          {article.readMinutes} min
         </div>
       </div>
     </Link>
@@ -251,18 +294,23 @@ function EditorsPickCard({ article }: { article: ArticleCard }) {
 
 function EmptyState({ search }: { search: string }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-border/60 bg-secondary/20 px-6 py-14 text-center">
-      <PenLine className="mb-3 size-7 text-muted-foreground" />
-      <p className="text-sm font-medium text-foreground">
-        {search ? `No articles match "${search}"` : "No articles published yet"}
-      </p>
-      <p className="mt-1 text-sm text-muted-foreground">
-        {search ? "Try a different search or category." : "Be the first to share your writing with the community."}
+    <div className="flex flex-col items-center justify-center px-6 py-20 text-center animate-in fade-in duration-500">
+      <span className="relative mb-4 flex size-14 items-center justify-center">
+        <span aria-hidden className="absolute inset-0 rounded-full bg-primary/5 blur-md" />
+        <span className="relative flex size-14 items-center justify-center rounded-full bg-secondary/50 text-muted-foreground/80 ring-1 ring-border/40">
+          <PenLine className="size-6" />
+        </span>
+      </span>
+      <p className="font-display text-base font-semibold tracking-tight text-foreground">No articles here yet</p>
+      <p className="mt-1.5 max-w-xs text-pretty text-sm leading-relaxed text-muted-foreground">
+        {search
+          ? `Nothing matches “${search}”. Try a different search or category.`
+          : "New teaching, insights and stories will appear here."}
       </p>
       {!search && (
         <Link
           href="/articles/write"
-          className="tap-scale mt-4 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-soft"
+          className="tap-scale mt-5 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-soft"
         >
           <PenLine className="size-4" />
           Write an article
