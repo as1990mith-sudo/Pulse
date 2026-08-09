@@ -1024,10 +1024,18 @@ export function useLiveVideo({
    * captured). Safe to call multiple times.
    */
   const stopRecording = useCallback((): Promise<Blob | null> => {
+    // Claim ownership of teardown so a concurrent `cleanup()`/`disconnect()`
+    // (the console calls both when the host ends the session) doesn't kill the
+    // recorder and compositor before the final chunk is flushed.
+    finalizingRef.current = true
     return new Promise((resolve) => {
       const rec = recorderRef.current
       const assemble = () =>
         recordChunksRef.current.length > 0 ? new Blob(recordChunksRef.current, { type: recordMimeRef.current }) : null
+      const done = (blob: Blob | null) => {
+        finalizingRef.current = false
+        resolve(blob)
+      }
       const tearDownCompositor = () => {
         if (compositorRef.current) {
           compositorRef.current.stop()
@@ -1036,27 +1044,40 @@ export function useLiveVideo({
       }
       if (!rec || rec.state === "inactive") {
         tearDownCompositor()
-        resolve(assemble())
+        done(assemble())
         return
+      }
+      // Flush any buffered data before stopping so the tail isn't lost.
+      try {
+        rec.requestData()
+      } catch {
+        /* not all implementations support requestData */
       }
       rec.onstop = () => {
         recorderRef.current = null
         tearDownCompositor()
-        resolve(assemble())
+        done(assemble())
       }
       try {
         rec.stop()
       } catch {
         tearDownCompositor()
-        resolve(assemble())
+        done(assemble())
       }
     })
   }, [])
 
-  // Kick off recording once the host's camera is live and painting.
+  // Start recording as soon as the host is connected — NOT gated on the camera.
+  // The compositor records the composited canvas (which always yields a video
+  // track and draws placeholder tiles when a camera is off) and re-scans audio
+  // every second, so it captures the whole session even if the host starts with
+  // their camera off or their self-view hasn't painted yet. Gating on
+  // `camOn && localVideoReady` was why camera-off / slow-attach video sessions
+  // produced an empty recording and silently failed to save. `startRecording`
+  // is idempotent, so re-runs when the camera later turns on are no-ops.
   useEffect(() => {
-    if (isHost && connected && camOn && localVideoReady) startRecording()
-  }, [isHost, connected, camOn, localVideoReady, startRecording])
+    if (isHost && connected) startRecording()
+  }, [isHost, connected, startRecording])
 
   return {
     localVideoRef,
