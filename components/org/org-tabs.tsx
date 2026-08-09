@@ -189,7 +189,13 @@ export function OrgTabs({
                   }
                 />
               ) : (
-                <OrgEpisodeCatalog items={catalogue} isOwner={org.isOwner} orgId={org.id} />
+                <OrgEpisodeCatalog
+                  items={catalogue}
+                  isOwner={org.isOwner}
+                  orgId={org.id}
+                  tab={catalogueKind}
+                  onTabChange={setCatalogueKind}
+                />
               )}
             </div>
           </div>
