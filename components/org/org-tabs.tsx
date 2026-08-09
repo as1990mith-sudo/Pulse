@@ -5,6 +5,7 @@ import Link from "next/link"
 import {
   ArrowLeft,
   ArrowUpRight,
+  BookOpen,
   Bookmark,
   Calendar,
   Globe,
@@ -68,7 +69,7 @@ export function OrgTabs({
   const eventCount = events.upcoming.length + events.past.length
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; count?: number }[] = [
     { key: "posts", label: "Posts", icon: <MessageSquareText className="size-4" />, count: posts.length },
-    { key: "about", label: "About", icon: <Info className="size-4" /> },
+    { key: "about", label: "About", icon: <BookOpen className="size-4" /> },
     { key: "events", label: "Events", icon: <Calendar className="size-4" />, count: eventCount },
     { key: "articles", label: "Articles", icon: <Newspaper className="size-4" />, count: articles.length },
     { key: "catalogue", label: "Catalogue", icon: <Mic className="size-4" />, count: catalogue.length },
@@ -118,7 +119,7 @@ export function OrgTabs({
             )}
           >
             <span className={cn("transition-transform duration-200", tab === t.key && "scale-105")}>{t.icon}</span>
-            <span className={cn("whitespace-nowrap", tab !== t.key && "sr-only")}>
+            <span className={cn("whitespace-nowrap uppercase tracking-wide", tab !== t.key && "sr-only")}>
               {t.label}
               {t.count ? ` ${t.count}` : ""}
             </span>
