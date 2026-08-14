@@ -356,10 +356,16 @@ export function useLiveAudio() {
       // some devices place the voice in only the LEFT channel (right silent),
       // which the stereo encoder then relays faithfully — so listeners hear the
       // speaker in one ear only. Mono capture is rendered to both ears equally.
+      // Echo cancellation, noise suppression and auto gain are ENABLED so a
+      // speaker's own voice never returns to them when other participants are
+      // unmuted on loudspeakers. The browser's acoustic echo canceller strips
+      // the speaker-bleed at capture, which is what prevents the self-feedback
+      // loop without muting anyone or requiring headphones. Genuine background
+      // music rides a SEPARATE dedicated track, so mic DSP never touches it.
       audioCaptureDefaults: {
-        autoGainControl: false,
-        echoCancellation: false,
-        noiseSuppression: false,
+        autoGainControl: true,
+        echoCancellation: true,
+        noiseSuppression: true,
         channelCount: 1,
         sampleRate: 48000,
       },
@@ -381,6 +387,16 @@ export function useLiveAudio() {
         room
           .on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub: RemoteTrackPublication, participant: RemoteParticipant) => {
             if (track.kind === Track.Kind.Audio) {
+              // Idempotent attach: fires only for REMOTE tracks (local mic is
+              // never routed back to our own speaker). `track.attach()` mints a
+              // fresh element each call, so on a re-subscribe / reconnect / track
+              // renegotiation the previous element for this speaker would linger
+              // in the DOM still playing — a duplicate/echoing voice. Detach any
+              // existing elements for this track and remove the prior per-speaker
+              // element first, so one speaker == one live playback element.
+              track.detach().forEach((prev) => prev.remove())
+              const stale = audioElsRef.current.get(participant.identity)
+              if (stale) stale.remove()
               const el = track.attach()
               el.autoplay = true
               // Honour the listener's current mute preference for late joiners.

@@ -89,7 +89,18 @@ export function DmCall({
         setError("Calling is not configured.")
         return
       }
-      const room = new Room({ adaptiveStream: true, dynacast: true })
+      const room = new Room({
+        adaptiveStream: true,
+        dynacast: true,
+        // Enable acoustic echo cancellation (plus noise suppression / auto gain)
+        // so a participant on loudspeaker never hears their own voice returned
+        // through the other caller's mic. Matches the global live-audio policy.
+        audioCaptureDefaults: {
+          autoGainControl: true,
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      })
       roomRef.current = room
 
       room
