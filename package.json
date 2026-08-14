@@ -16,6 +16,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
+    "fix-webm-duration": "^1.0.6",
     "livekit-client": "^2.19.2",
     "livekit-server-sdk": "^2.15.5",
     "lucide-react": "^1.16.0",
