@@ -116,7 +116,7 @@ export function CommunityAvatar({
 export function AnonMeta({ postedAt, edited }: { postedAt: string; edited?: boolean }) {
   return (
     <div className="min-w-0">
-      <p className="flex items-center gap-1.5 text-[15px] font-bold tracking-tight text-foreground">
+      <p className="flex items-center gap-1.5 text-sm font-bold tracking-tight text-foreground">
         {ANON_NAME}
         {edited && <EditedIndicator />}
       </p>
@@ -133,7 +133,7 @@ export function AnonMeta({ postedAt, edited }: { postedAt: string; edited?: bool
 export function SelfMeta({ post, edited }: { post: CommunityPostView; edited?: boolean }) {
   return (
     <div className="min-w-0">
-      <p className="flex items-center gap-1.5 text-[15px] font-bold tracking-tight text-foreground">
+      <p className="flex items-center gap-1.5 text-sm font-bold tracking-tight text-foreground">
         {ANON_NAME}
         {edited && <EditedIndicator />}
       </p>
@@ -161,7 +161,7 @@ export function IdentityMeta({
   const name = <span className="truncate">{post.authorName ?? "Member"}</span>
   return (
     <div className="min-w-0">
-      <p className="flex items-center gap-1.5 text-[15px] font-bold tracking-tight text-foreground">
+      <p className="flex items-center gap-1.5 text-sm font-bold tracking-tight text-foreground">
         {clickable ? (
           <button
             type="button"
@@ -179,10 +179,9 @@ export function IdentityMeta({
         {post.isSelf && <span className="shrink-0 text-xs font-medium text-primary">· you</span>}
         {edited && <EditedIndicator />}
       </p>
-      <p className="truncate text-xs text-muted-foreground">
-        {post.authorHandle ? `${post.authorHandle} · ` : ""}
-        {post.postedAt}
-      </p>
+      {/* Username/handle intentionally omitted — only the display name and
+          timestamp are shown. */}
+      <p className="truncate text-xs text-muted-foreground">{post.postedAt}</p>
     </div>
   )
 }
