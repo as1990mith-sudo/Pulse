@@ -407,7 +407,7 @@ function PostVideo({ src }: { src: string }) {
   return (
     <div
       className="relative mt-4 w-full overflow-hidden rounded-2xl border border-border/60 bg-black"
-      style={{ aspectRatio: String(aspect), maxHeight: "70vh" }}
+      style={{ aspectRatio: String(aspect), maxHeight: "24rem" }}
     >
       <FeedVideo src={src} className="h-full w-full object-cover" onAspectRatio={setRatio} resume ignoreViewerGate />
     </div>
