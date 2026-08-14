@@ -14,6 +14,7 @@ import {
   type RemoteParticipant,
 } from "livekit-client"
 import { LiveCompositor, type CompositorSource } from "@/lib/live-compositor"
+import { fixRecordedVideoDuration } from "@/lib/webm-duration"
 
 /**
  * The single source of truth for the camera capture format, pinned identically
@@ -246,6 +247,11 @@ export function useLiveVideo({
   const recordChunksRef = useRef<Blob[]>([])
   const recordMimeRef = useRef<string>("video/webm")
   const recordingStartedRef = useRef(false)
+  // Wall-clock timestamp (ms) when recording actually started. The composite is
+  // captured in real time, so `Date.now() - start` at stop is the true video
+  // length — which we inject into the WebM header before upload so the replay
+  // reports its real duration instead of a broken ~0s.
+  const recordStartMsRef = useRef(0)
   // True from the moment `stopRecording()` begins finalizing the take until the
   // recorder's `onstop` has flushed the last chunk. While this is set, `cleanup`
   // must NOT tear the recorder/compositor down: doing so ends the recorded
@@ -1048,6 +1054,7 @@ export function useLiveVideo({
     }
     recorderRef.current = rec
     recordingStartedRef.current = true
+    recordStartMsRef.current = Date.now()
   }, [])
 
   /**
@@ -1065,7 +1072,19 @@ export function useLiveVideo({
         recordChunksRef.current.length > 0 ? new Blob(recordChunksRef.current, { type: recordMimeRef.current }) : null
       const done = (blob: Blob | null) => {
         finalizingRef.current = false
-        resolve(blob)
+        if (!blob) {
+          resolve(null)
+          return
+        }
+        // The composite records in real time, so elapsed wall-clock === video
+        // length. Inject it into the WebM header before handing the blob to the
+        // uploader; if the patch fails, fall back to the raw blob so saving is
+        // never blocked.
+        const durationMs = recordStartMsRef.current > 0 ? Date.now() - recordStartMsRef.current : 0
+        void fixRecordedVideoDuration(blob, durationMs).then(
+          (fixed) => resolve(fixed),
+          () => resolve(blob),
+        )
       }
       const tearDownCompositor = () => {
         if (compositorRef.current) {
