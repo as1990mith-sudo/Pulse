@@ -114,23 +114,35 @@ function QuestionText({ text, onOpen }: { text: string; onOpen: () => void }) {
  * A post's attached video in the feed. Uses the shared FeedVideo player so the
  * clip auto-plays when it scrolls into view (and pauses when it leaves) — the
  * same behavior as the reels/mind feed. The frame mirrors the clip's REAL
- * aspect ratio (reported via onAspectRatio) so a 16:9 video shows as a full
- * 16:9 frame instead of being cropped into a fixed portrait box. The ratio is
- * clamped between 16:9 (landscape) and 4:5 (portrait) so an extreme clip can't
- * produce a giant frame, and `object-contain` guarantees nothing is cropped —
- * the whole frame is always visible. Tapping opens the full post (onExpand).
+ * aspect ratio (reported via onAspectRatio), clamped between 16:9 (landscape)
+ * and 4:5 (portrait) so an extreme clip can't produce a giant frame.
+ *
+ * Fit vs fill:
+ *  - Landscape / within-range clips → `object-contain` so a 16:9 video shows
+ *    its full frame with nothing cropped.
+ *  - Taller-than-4:5 portrait clips (e.g. 9:16) → `object-cover` so they FILL
+ *    the clamped 4:5 card (cropping the excess) instead of being letterboxed
+ *    with bars on the sides. Tapping opens the full post (onExpand).
  */
 function FeedPostVideo({ src, onOpen }: { src: string; onOpen: () => void }) {
   // Default to 16:9 before metadata loads (matches the common case), then
   // settle onto the clip's true ratio once known.
   const [ratio, setRatio] = useState<number>(16 / 9)
   const aspect = Math.min(16 / 9, Math.max(4 / 5, ratio))
+  // The clip is taller than the frame it's displayed in whenever its true ratio
+  // is narrower than the (clamped) frame ratio — fill those so no bars show.
+  const fill = ratio < aspect - 0.01
   return (
     <div
       className="relative mt-3 w-full overflow-hidden rounded-2xl border border-border/60 bg-black"
       style={{ aspectRatio: String(aspect), maxHeight: "24rem" }}
     >
-      <FeedVideo src={src} className="h-full w-full object-contain" onAspectRatio={setRatio} onExpand={onOpen} />
+      <FeedVideo
+        src={src}
+        className={`h-full w-full ${fill ? "object-cover" : "object-contain"}`}
+        onAspectRatio={setRatio}
+        onExpand={onOpen}
+      />
     </div>
   )
 }
