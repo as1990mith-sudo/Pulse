@@ -42,10 +42,9 @@ export default async function LiveBrowsePage({
               </span>
               On air
             </span>
-            <h1 className="text-xl font-bold tracking-tight text-balance sm:text-2xl">Ongoing live streams</h1>
-            <p className="text-[13px] text-muted-foreground text-pretty">
-              Browse everything live right now, or filter by category.
-            </p>
+            <h1 className="font-display text-xl font-semibold tracking-tight text-balance sm:text-2xl">
+              Ongoing live streams
+            </h1>
           </div>
 
           {/* Show-type toggle — swaps the whole page between video and audio.
