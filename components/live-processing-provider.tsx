@@ -26,9 +26,12 @@ export type LiveReplayJobInput = {
   mediaKind: "video" | "audio"
   fileBaseName: string
   blobPromise: Promise<Blob | null>
+  // Live wall-clock length in seconds. Used to validate the recording spans the
+  // whole session (not a truncated few-seconds clip) before publishing.
+  expectedDurationSec?: number
 }
 
-type JobStatus = "preparing" | "uploading" | "finalizing" | "ready" | "failed"
+type JobStatus = "preparing" | "verifying" | "uploading" | "finalizing" | "ready" | "failed"
 
 type Job = {
   localId: string
@@ -39,6 +42,7 @@ type Job = {
   progress: number // 0..100 upload progress
   startedAt: number
   error?: string
+  expectedDurationSec?: number
   // The resolved recording, kept in memory so Retry can re-upload it.
   blob: Blob | null
 }
@@ -78,6 +82,77 @@ function formatEta(bytesRemaining: number): string | null {
   return `about ${mins} min left`
 }
 
+type ProbeResult = { ok: true; durationSec: number } | { ok: false; reason: string }
+
+/**
+ * Mandatory pre-publish validation. Decodes the recording in an offscreen
+ * <video> and verifies it is a real, playable media file BEFORE the replay is
+ * ever marked Ready — so a corrupt, empty, or truncated upload can never
+ * replace/become the final replay. We check that:
+ *   1. the file decodes (metadata loads) — i.e. it's a valid, finalised file;
+ *   2. it reports a finite duration greater than zero;
+ *   3. it carries a video track with real pixel dimensions (kind === video);
+ *   4. the duration is consistent with the actual live length — at least half
+ *      of the wall-clock session — which rejects a "few seconds" clip that
+ *      slipped through.
+ * A decode timeout also fails validation rather than publishing blind.
+ */
+async function probeVideoBlob(
+  blob: Blob,
+  mediaKind: "video" | "audio",
+  expectedDurationSec?: number,
+): Promise<ProbeResult> {
+  if (typeof document === "undefined") return { ok: true, durationSec: 0 } // SSR guard; never runs client-side
+  const url = URL.createObjectURL(blob)
+  const el = document.createElement(mediaKind === "video" ? "video" : "audio") as HTMLMediaElement & {
+    videoWidth?: number
+    videoHeight?: number
+  }
+  el.preload = "metadata"
+  el.muted = true
+  el.src = url
+
+  try {
+    const duration = await new Promise<number>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("timeout")), 20000)
+      el.onloadedmetadata = () => {
+        clearTimeout(timer)
+        resolve(el.duration)
+      }
+      el.onerror = () => {
+        clearTimeout(timer)
+        reject(new Error("decode-error"))
+      }
+    })
+
+    if (!Number.isFinite(duration) || duration <= 0) {
+      return { ok: false, reason: "The recording has no valid duration." }
+    }
+    if (mediaKind === "video" && !(el.videoWidth && el.videoWidth > 0)) {
+      return { ok: false, reason: "The recording is missing a video track." }
+    }
+    // Truncation guard: only enforced for sessions long enough to judge (>20s),
+    // with generous slack so mild encoder/wall-clock drift never false-fails.
+    if (expectedDurationSec && expectedDurationSec > 20 && duration < expectedDurationSec * 0.5) {
+      return {
+        ok: false,
+        reason: `The recording is incomplete (${Math.round(duration)}s of ~${expectedDurationSec}s).`,
+      }
+    }
+    return { ok: true, durationSec: duration }
+  } catch (e) {
+    const reason =
+      e instanceof Error && e.message === "timeout"
+        ? "The recording could not be verified in time."
+        : "The recording could not be decoded."
+    return { ok: false, reason }
+  } finally {
+    el.removeAttribute("src")
+    el.load?.()
+    URL.revokeObjectURL(url)
+  }
+}
+
 export function LiveProcessingProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const [jobs, setJobs] = useState<Job[]>([])
@@ -108,6 +183,20 @@ export function LiveProcessingProvider({ children }: { children: React.ReactNode
       }
 
       try {
+        // ── Mandatory validation ────────────────────────────────────────────
+        // Verify the recording is a valid, playable, complete media file BEFORE
+        // uploading or publishing. A corrupt/truncated blob fails here and the
+        // DB row stays unpublished (processing → failed, retryable) rather than
+        // ever becoming a broken replay.
+        patchJob(job.localId, { status: "verifying", progress: 0 })
+        const probe = await probeVideoBlob(blob, job.mediaKind, job.expectedDurationSec)
+        if (!probe.ok) {
+          patchJob(job.localId, { status: "failed", error: probe.reason })
+          if (job.episodeId) await failProcessing({ episodeId: job.episodeId, error: probe.reason })
+          router.refresh()
+          return
+        }
+
         patchJob(job.localId, { status: "uploading", progress: 0 })
         const ext = blob.type.includes("mp4") ? "mp4" : blob.type.includes("webm") ? "webm" : job.mediaKind === "video" ? "webm" : "webm"
         const file = new File([blob], `${job.title || "live"}.${ext}`.replace(/[^\w.-]+/g, "-"), {
@@ -151,6 +240,7 @@ export function LiveProcessingProvider({ children }: { children: React.ReactNode
         status: "preparing",
         progress: 0,
         startedAt: Date.now(),
+        expectedDurationSec: input.expectedDurationSec,
         blob: null,
       }
       setJobs((prev) => [...prev, job])
@@ -200,7 +290,13 @@ export function LiveProcessingProvider({ children }: { children: React.ReactNode
   // Warn the host before they fully close the tab/app while an upload is still
   // in flight — closing loses the in-memory recording (client-side limitation).
   useEffect(() => {
-    const hasActive = jobs.some((j) => j.status === "preparing" || j.status === "uploading" || j.status === "finalizing")
+    const hasActive = jobs.some(
+      (j) =>
+        j.status === "preparing" ||
+        j.status === "verifying" ||
+        j.status === "uploading" ||
+        j.status === "finalizing",
+    )
     if (!hasActive) return
     const handler = (e: BeforeUnloadEvent) => {
       e.preventDefault()
@@ -247,7 +343,11 @@ function ProcessingCard({
   onDismiss: () => void
   retryable: boolean
 }) {
-  const active = job.status === "preparing" || job.status === "uploading" || job.status === "finalizing"
+  const active =
+    job.status === "preparing" ||
+    job.status === "verifying" ||
+    job.status === "uploading" ||
+    job.status === "finalizing"
   const elapsedMin = Math.floor((Date.now() - job.startedAt) / 60000)
   // Rough remaining-bytes estimate for the ETA line during upload.
   const eta = job.status === "uploading" && job.progress < 100 ? `${100 - job.progress}% to go` : null
@@ -288,6 +388,8 @@ function ProcessingCard({
               "Your live replay is now ready in your Live Catalogue."
             ) : job.status === "failed" ? (
               job.error || "Something went wrong while uploading."
+            ) : job.status === "verifying" || job.status === "finalizing" ? (
+              "Processing video… finishing your replay."
             ) : slow ? (
               "Your live replay is still processing. We'll notify you when it's ready."
             ) : (

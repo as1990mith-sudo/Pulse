@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Pause, Play, RotateCcw, RotateCw, Gauge, Maximize, Minimize, ChevronDown, X, PictureInPicture2, Volume2, VolumeX } from "lucide-react"
+import { Pause, Play, RotateCcw, RotateCw, Maximize, Minimize, ChevronDown, X, PictureInPicture2, Volume2, VolumeX } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { cn } from "@/lib/utils"
 import { useSharedPlayback, formatTime } from "@/lib/hooks/use-shared-playback"
@@ -199,6 +199,16 @@ export function LiveReplayPlayer({
 
   if (!mediaUrl) return null
 
+  // ── Unified control language ───────────────────────────────────────────────
+  // Every control shares ONE visual system: a soft glass circle with identical
+  // dimensions, corner radius, ring, blur and interaction feedback. Hierarchy
+  // comes from POSITION and the single solid primary play button — never from
+  // mixing shapes, sizes or surfaces. `controlBase` carries the shared motion +
+  // focus behaviour; `glass` is the translucent secondary surface.
+  const controlBase =
+    "flex items-center justify-center rounded-full text-white outline-none transition-[transform,background-color,box-shadow] duration-200 ease-out active:scale-90 focus-visible:ring-2 focus-visible:ring-white/70"
+  const glass = "bg-white/10 ring-1 ring-white/20 backdrop-blur-md hover:bg-white/20"
+
   return (
     <div className={cn("relative isolate", isReel && "h-full w-full")}>
       <div
@@ -278,30 +288,35 @@ export function LiveReplayPlayer({
               controlsVisible ? "opacity-100" : "pointer-events-none opacity-0",
             )}
           >
-            {/* Legibility scrims top & bottom. */}
-            <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/55 to-transparent" />
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-black/65 to-transparent" />
+            {/* Legibility scrims top & bottom — soft, so the frame reads clean. */}
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/55 to-transparent" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-black/70 to-transparent" />
 
-            {/* Top-left: minimize chevron (matches standard player). */}
-            {onMinimize && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onMinimize()
-                }}
-                aria-label="Minimize player"
-                className="absolute left-3 top-3 z-20 flex items-center justify-center text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-transform active:scale-90"
-              >
-                <ChevronDown className="size-7" />
-              </button>
-            )}
-
-            {/* Top-right: speed (reel only) + mute + Picture-in-Picture + close.
-                In reel mode the speed control lives up here so it never collides
-                with the creator/title overlay pinned to the bottom-left. */}
-            <div className="absolute right-3 top-3 z-20 flex items-center gap-3">
-              {isReel && (
+            {/* ── Top bar ── minimize (left) · secondary actions (right).
+                Speed, mute, PiP and close all share the same glass circle so the
+                row reads as one system. Slides gently down from the top edge. */}
+            <div
+              className={cn(
+                "absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-2 pt-[max(0.75rem,env(safe-area-inset-top))] pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] transition-transform duration-300 ease-out",
+                controlsVisible ? "translate-y-0" : "-translate-y-2",
+              )}
+            >
+              <div className="flex items-center gap-2">
+                {onMinimize && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onMinimize()
+                    }}
+                    aria-label="Minimize player"
+                    className={cn(controlBase, glass, "size-10")}
+                  >
+                    <ChevronDown className="size-5" />
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={(e) => {
@@ -309,168 +324,168 @@ export function LiveReplayPlayer({
                     cycleSpeed()
                     revealControls()
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-black/45 px-3 py-1.5 text-xs font-semibold text-white/90 backdrop-blur-md transition-colors hover:bg-black/65"
-                  aria-label="Change playback speed"
+                  aria-label={`Playback speed ${speed}x`}
+                  className={cn(controlBase, glass, "size-10 text-[11px] font-bold tabular-nums")}
                 >
-                  <Gauge className="size-3.5" />
-                  {speed}x
+                  {speed}×
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setMuted(!muted)
-                  revealControls()
-                }}
-                aria-label={muted ? "Unmute" : "Mute"}
-                className="flex items-center justify-center text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-transform active:scale-90"
-              >
-                {muted ? <VolumeX className="size-6" /> : <Volume2 className="size-6" />}
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  void togglePip()
-                  revealControls()
-                }}
-                aria-label="Picture in Picture"
-                className={cn(
-                  "flex items-center justify-center text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-transform active:scale-90",
-                  isPip && "text-primary",
-                )}
-              >
-                <PictureInPicture2 className="size-6" />
-              </button>
-              {onClose && (
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation()
-                    onClose()
+                    setMuted(!muted)
+                    revealControls()
                   }}
-                  aria-label="Close replay"
-                  className="flex items-center justify-center text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-transform active:scale-90"
+                  aria-label={muted ? "Unmute" : "Mute"}
+                  className={cn(controlBase, glass, "size-10")}
                 >
-                  <X className="size-7" />
+                  {muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
                 </button>
-              )}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void togglePip()
+                    revealControls()
+                  }}
+                  aria-label="Picture in Picture"
+                  className={cn(controlBase, glass, "size-10", isPip && "bg-white/25")}
+                >
+                  <PictureInPicture2 className="size-5" />
+                </button>
+                {onClose && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onClose()
+                    }}
+                    aria-label="Close replay"
+                    className={cn(controlBase, glass, "size-10")}
+                  >
+                    <X className="size-5" />
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* Center transport: rewind / play / forward. */}
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <div className="pointer-events-auto flex items-center justify-center gap-8">
+            {/* ── Center transport ── rewind · play/pause (PRIMARY) · forward.
+                The solid white play button is the single strongest element; the
+                skip controls flank it in the shared subtle glass. */}
+            <div
+              className={cn(
+                "pointer-events-none absolute inset-0 flex items-center justify-center transition-transform duration-300 ease-out",
+                controlsVisible ? "scale-100" : "scale-95",
+              )}
+            >
+              <div className="pointer-events-auto flex items-center justify-center gap-5 sm:gap-7">
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation()
                     rewind()
                     revealControls()
                   }}
-                  className="flex items-center justify-center text-white/85 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-colors hover:text-white active:scale-90"
                   aria-label="Rewind 15 seconds"
+                  className={cn(controlBase, glass, "relative size-11 sm:size-12")}
                 >
-                  <RotateCcw className="size-8" />
+                  <RotateCcw className="size-6" />
+                  <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold">15</span>
                 </button>
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation()
                     toggle()
                     revealControls()
                   }}
-                  className="flex size-14 shrink-0 items-center justify-center rounded-full bg-white/70 text-black shadow-lg shadow-black/20 backdrop-blur-sm transition-transform hover:scale-105 active:scale-95"
                   aria-label={playing ? "Pause replay" : "Play replay"}
+                  className={cn(
+                    controlBase,
+                    "size-16 bg-white text-black shadow-lg shadow-black/30 hover:scale-105 sm:size-[4.5rem]",
+                  )}
                 >
-                  {playing ? <Pause className="size-6" /> : <Play className="size-6 translate-x-0.5" />}
+                  {playing ? (
+                    <Pause className="size-7 fill-current" />
+                  ) : (
+                    <Play className="size-7 translate-x-0.5 fill-current" />
+                  )}
                 </button>
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation()
                     forward()
                     revealControls()
                   }}
-                  className="flex items-center justify-center text-white/85 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-colors hover:text-white active:scale-90"
                   aria-label="Forward 15 seconds"
+                  className={cn(controlBase, glass, "relative size-11 sm:size-12")}
                 >
-                  <RotateCw className="size-8" />
+                  <RotateCw className="size-6" />
+                  <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold">15</span>
                 </button>
               </div>
             </div>
 
-            {/* Base cluster: (page-only speed + fullscreen row) above the scrubber.
-                In reel mode the speed control moved to the top-right and
-                fullscreen is redundant, so this bottom cluster shrinks to just
-                the time + scrubber — leaving room for the reel's creator/title
-                and action rail to sit clear above it. */}
-            <div className="absolute inset-x-0 bottom-0 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-              {!isReel && (
-                <div className="mb-2 flex items-center justify-between">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      cycleSpeed()
-                      revealControls()
-                    }}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-black/45 px-3 py-1.5 text-xs font-semibold text-white/90 backdrop-blur-md transition-colors hover:bg-black/65"
-                    aria-label="Change playback speed"
-                  >
-                    <Gauge className="size-3.5" />
-                    {speed}x
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      void toggleFullscreen()
-                      revealControls()
-                    }}
-                    aria-label={isFullscreen ? "Exit fullscreen" : "Expand to fullscreen"}
-                    className="flex items-center justify-center text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)] transition-transform active:scale-90"
-                  >
-                    {isFullscreen ? <Minimize className="size-6" /> : <Maximize className="size-6" />}
-                  </button>
-                </div>
+            {/* ── Bottom cluster ── the primary timeline + fullscreen anchor.
+                Time labels sit above an elegant scrubber; fullscreen shares the
+                exact control language and is aligned as a deliberate primary
+                action to the right. Slides gently up from the bottom edge. */}
+            <div
+              className={cn(
+                "absolute inset-x-0 bottom-0 z-30 pb-[max(0.875rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] transition-transform duration-300 ease-out",
+                controlsVisible ? "translate-y-0" : "translate-y-2",
               )}
-
-              <div className="relative z-30 mb-1.5 flex items-center justify-between text-[11px] font-medium tabular-nums text-white/85">
+            >
+              <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium tabular-nums text-white/85">
                 <span>{formatTime(current)}</span>
                 <span>-{formatTime(Math.max(0, duration - current))}</span>
               </div>
-              {/* Seek slider. The interactive <input> is a tall (h-8) invisible
-                  hit area centered over a thin visual track, so it is easy to
-                  grab and drag. It sits at z-30 (above the reel's creator/title
-                  and action-rail overlays) and uses touch-action:none so a
-                  horizontal drag scrubs instead of triggering the reel's
-                  vertical scroll-snap. */}
-              <div
-                className="group relative z-30 h-8 w-full"
-                style={{ touchAction: "none" }}
-                onClick={(e) => e.stopPropagation()}
-                onPointerDown={(e) => e.stopPropagation()}
-              >
-                <div className="pointer-events-none absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-white/25" />
+              <div className="flex items-center gap-3">
+                {/* Scrubber: thin & elegant at rest, thicker with a thumb during
+                    interaction, over a generous h-8 hit area. touch-action:none
+                    keeps a horizontal drag scrubbing instead of scrolling the reel. */}
                 <div
-                  className="pointer-events-none absolute left-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-primary"
-                  style={{ width: `${pct}%` }}
-                />
-                <div
-                  className="pointer-events-none absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary shadow-[0_1px_3px_rgba(0,0,0,0.5)]"
-                  style={{ left: `${pct}%` }}
-                />
-                <input
-                  type="range"
-                  min={0}
-                  max={duration || 0}
-                  step={0.1}
-                  value={current}
-                  onChange={(e) => {
-                    seekTo(Number(e.target.value))
+                  className="group relative h-8 flex-1 cursor-pointer"
+                  style={{ touchAction: "none" }}
+                  onClick={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <div className="pointer-events-none absolute inset-x-0 top-1/2 h-[3px] -translate-y-1/2 overflow-hidden rounded-full bg-white/25 transition-[height] duration-200 ease-out group-hover:h-[5px] group-focus-within:h-[5px]">
+                    <div className="h-full rounded-full bg-white" style={{ width: `${pct}%` }} />
+                  </div>
+                  <div
+                    className="pointer-events-none absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 scale-0 rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.5)] transition-transform duration-200 ease-out group-hover:scale-100 group-focus-within:scale-100 group-active:scale-100"
+                    style={{ left: `${pct}%` }}
+                  />
+                  <input
+                    type="range"
+                    min={0}
+                    max={duration || 0}
+                    step={0.1}
+                    value={current}
+                    onChange={(e) => {
+                      seekTo(Number(e.target.value))
+                      revealControls()
+                    }}
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    style={{ touchAction: "none" }}
+                    aria-label="Seek"
+                  />
+                </div>
+                {/* Fullscreen — primary action, identical control weight. */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void toggleFullscreen()
                     revealControls()
                   }}
-                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                  style={{ touchAction: "none" }}
-                  aria-label="Seek"
-                />
+                  aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                  className={cn(controlBase, glass, "size-10 shrink-0")}
+                >
+                  {isFullscreen ? <Minimize className="size-5" /> : <Maximize className="size-5" />}
+                </button>
               </div>
             </div>
           </div>

@@ -264,6 +264,13 @@ export function useLiveVideo({
   // Ordered roster (host first) mirrored into a ref so the compositor's draw
   // loop can read the current tiles without React re-renders.
   const peersRef = useRef<RemotePeer[]>([])
+  // Screen wake lock held for the whole recording. Without it the host's phone
+  // dims and locks after the usual OS idle timeout while they're live but not
+  // tapping — which backgrounds the page, pausing rAF and suspending audio, and
+  // was a major cause of replays truncating to a few seconds. The lock keeps the
+  // page active so the capture pipeline runs end-to-end. The browser auto-
+  // releases it when the page is genuinely hidden; we re-acquire on return.
+  const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null)
 
   const [connected, setConnected] = useState(false)
   const [micOn, setMicOn] = useState(initialMicOn)
@@ -425,6 +432,26 @@ export function useLiveVideo({
     document.body.appendChild(el)
   }
 
+  // Acquire a screen wake lock (idempotent). No-op where unsupported; recording
+  // still proceeds without it.
+  const requestWakeLock = useCallback(async () => {
+    try {
+      const nav = navigator as Navigator & {
+        wakeLock?: { request: (type: "screen") => Promise<{ release: () => Promise<void> }> }
+      }
+      if (!nav.wakeLock || wakeLockRef.current) return
+      wakeLockRef.current = await nav.wakeLock.request("screen")
+    } catch {
+      /* wake lock unavailable or denied — recording still proceeds */
+    }
+  }, [])
+
+  const releaseWakeLock = useCallback(() => {
+    const wl = wakeLockRef.current
+    wakeLockRef.current = null
+    if (wl) void wl.release().catch(() => {})
+  }, [])
+
   const cleanup = useCallback(() => {
     // When a save is finalizing the recording (host ended the session and we're
     // awaiting the last chunk), leave the recorder AND compositor alone —
@@ -462,7 +489,8 @@ export function useLiveVideo({
     if (musicElRef.current) musicElRef.current.pause()
     audioElsRef.current.forEach((el) => el.remove())
     audioElsRef.current.clear()
-  }, [])
+    releaseWakeLock()
+  }, [releaseWakeLock])
 
   const connect = useCallback(async () => {
     if (roomRef.current || !token || !serverUrl) return
@@ -1080,7 +1108,10 @@ export function useLiveVideo({
     recorderRef.current = rec
     recordingStartedRef.current = true
     recordStartMsRef.current = Date.now()
-  }, [])
+    // Keep the screen/page awake so a dimming phone can't background the tab and
+    // truncate the recording.
+    void requestWakeLock()
+  }, [requestWakeLock])
 
   /**
    * Stop recording and resolve the assembled video blob (or null if nothing was
@@ -1097,6 +1128,7 @@ export function useLiveVideo({
         recordChunksRef.current.length > 0 ? new Blob(recordChunksRef.current, { type: recordMimeRef.current }) : null
       const done = (blob: Blob | null) => {
         finalizingRef.current = false
+        releaseWakeLock()
         if (!blob) {
           resolve(null)
           return
@@ -1140,7 +1172,7 @@ export function useLiveVideo({
         done(assemble())
       }
     })
-  }, [])
+  }, [releaseWakeLock])
 
   // Start recording as soon as the host is connected — NOT gated on the camera.
   // The compositor records the composited canvas (which always yields a video
@@ -1153,6 +1185,19 @@ export function useLiveVideo({
   useEffect(() => {
     if (isHost && connected) startRecording()
   }, [isHost, connected, startRecording])
+
+  // The screen wake lock is auto-released by the browser whenever the page is
+  // hidden. Re-acquire it the moment the host returns while still recording, so
+  // the screen won't dim/lock again for the rest of the session.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && recordingStartedRef.current && !finalizingRef.current) {
+        void requestWakeLock()
+      }
+    }
+    document.addEventListener("visibilitychange", onVisible)
+    return () => document.removeEventListener("visibilitychange", onVisible)
+  }, [requestWakeLock])
 
   return {
     localVideoRef,

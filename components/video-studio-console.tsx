@@ -305,7 +305,7 @@ export function VideoStudioConsole({
   const { enqueue: enqueueLiveReplay } = useLiveProcessing()
   // After the room has ended for everyone, the host is asked whether to save the
   // session as an episode. Holds the metadata needed to publish if they say yes.
-  const [saveDecision, setSaveDecision] = useState<{ duration: string } | null>(null)
+  const [saveDecision, setSaveDecision] = useState<{ duration: string; durationSec: number } | null>(null)
   // In-flight recording finalization, started the instant the host ends the live
   // so it never blocks the room from closing for participants.
   const recordingPromiseRef = useRef<Promise<Blob | null> | null>(null)
@@ -571,7 +571,7 @@ export function VideoStudioConsole({
     recordingPromiseRef.current = stopRecording().catch(() => null)
     if (roomName) void endBroadcast({ roomName }).catch(() => {})
     disconnect()
-    setSaveDecision({ duration: formatElapsed(elapsed) })
+    setSaveDecision({ duration: formatElapsed(elapsed), durationSec: Math.round(elapsed) })
   }
 
   // Host chose to save the just-ended session. Instead of blocking on a saving
@@ -598,6 +598,9 @@ export function VideoStudioConsole({
       mediaKind: "video",
       fileBaseName: "live-session",
       blobPromise,
+      // The live wall-clock length, used to validate the recording isn't a
+      // truncated few-seconds clip before the replay is published.
+      expectedDurationSec: dec.durationSec,
     })
     onExit?.()
   }

@@ -93,6 +93,23 @@ export class LiveCompositor {
   private connected = new Map<string, MediaStreamAudioSourceNode>()
   private audioTimer: ReturnType<typeof setInterval> | null = null
 
+  /** The captured recording stream + its canvas video track. */
+  private stream: MediaStream | null = null
+  private videoTrack: (MediaStreamTrack & { requestFrame?: () => void }) | null = null
+  /**
+   * Background-safe draw clock. `requestAnimationFrame` is PAUSED by the browser
+   * whenever the page is hidden (host locks their phone, switches apps, screen
+   * dims) — which froze the canvas, so `captureStream` stopped emitting frames
+   * and the recording truncated to "only a few seconds". This timer keeps
+   * drawing + pushing frames even while hidden (throttled to ~1s in background,
+   * which is enough to keep the video track advancing so the replay spans the
+   * whole session). In the foreground rAF still drives smooth 30fps and this
+   * timer's draws are skipped by the same cadence guard.
+   */
+  private bgTimer: ReturnType<typeof setInterval> | null = null
+  /** Resume the suspended AudioContext when the page returns to foreground. */
+  private onVisibility: (() => void) | null = null
+
   constructor(opts: CompositorOptions) {
     this.opts = opts
     const canvas = document.createElement("canvas")
@@ -115,6 +132,10 @@ export class LiveCompositor {
     const stream = (this.canvas as HTMLCanvasElement & { captureStream: (fps?: number) => MediaStream }).captureStream(
       TARGET_FPS,
     )
+    this.stream = stream
+    this.videoTrack = (stream.getVideoTracks()[0] ?? null) as
+      | (MediaStreamTrack & { requestFrame?: () => void })
+      | null
 
     // --- Audio graph: mix every track into one destination node. ---
     try {
@@ -124,6 +145,8 @@ export class LiveCompositor {
       this.dest = this.audioCtx.createMediaStreamDestination()
       this.reconcileAudio()
       // Re-scan periodically so guests who join/leave mid-stream are mixed in.
+      // reconcileAudio() also resumes the context if the browser suspended it
+      // (which it does whenever the page is backgrounded on mobile).
       this.audioTimer = setInterval(() => this.reconcileAudio(), 1000)
       const mixed = this.dest.stream.getAudioTracks()[0]
       if (mixed) stream.addTrack(mixed)
@@ -141,18 +164,66 @@ export class LiveCompositor {
     const draw = (ts: number) => {
       this.raf = requestAnimationFrame(draw)
       if (this.lastDrawTs === 0 || ts - this.lastDrawTs >= FRAME_INTERVAL_MS - 1) {
-        this.lastDrawTs = ts
-        this.drawFrame()
+        this.maybeDraw(ts)
       }
     }
     this.raf = requestAnimationFrame(draw)
+
+    // Background-safe fallback clock. When the page is hidden, rAF is paused
+    // entirely, so without this the canvas would freeze and the capture stream
+    // would stop producing frames — the root cause of replays truncating to a
+    // few seconds. Background timers still fire (throttled to ~1s), so we keep
+    // redrawing and explicitly pushing a frame to the track. The cadence guard
+    // means this is a no-op while rAF is actively driving the foreground.
+    this.bgTimer = setInterval(() => {
+      const now = typeof performance !== "undefined" ? performance.now() : Date.now()
+      // Only step in when rAF appears starved (hidden tab) — ~200ms since the
+      // last draw. In the foreground rAF keeps lastDrawTs fresh so we skip.
+      if (now - this.lastDrawTs >= 200) this.maybeDraw(now)
+    }, 250)
+
+    // Resume the AudioContext the instant we return to the foreground (mobile
+    // browsers auto-suspend it when hidden) so mixed audio never drops out.
+    this.onVisibility = () => {
+      if (this.audioCtx && this.audioCtx.state === "suspended") void this.audioCtx.resume().catch(() => {})
+      const now = typeof performance !== "undefined" ? performance.now() : Date.now()
+      this.maybeDraw(now)
+    }
+    document.addEventListener("visibilitychange", this.onVisibility)
+
     return stream
+  }
+
+  /**
+   * Draw one composite frame and push it into the capture track. Called from
+   * both the rAF loop (foreground) and the background timer (hidden), guarded so
+   * it never draws faster than TARGET_FPS. `requestFrame()` forces the canvas
+   * track to emit even when the browser isn't auto-sampling (e.g. while hidden),
+   * which is what keeps the recorded video advancing through a backgrounded
+   * stretch instead of stopping.
+   */
+  private maybeDraw(ts: number) {
+    this.lastDrawTs = ts
+    this.drawFrame()
+    try {
+      this.videoTrack?.requestFrame?.()
+    } catch {
+      /* requestFrame unsupported (auto-sampling handles it) */
+    }
   }
 
   stop() {
     if (this.raf) cancelAnimationFrame(this.raf)
     this.raf = 0
     this.lastDrawTs = 0
+    if (this.bgTimer) clearInterval(this.bgTimer)
+    this.bgTimer = null
+    if (this.onVisibility) {
+      document.removeEventListener("visibilitychange", this.onVisibility)
+      this.onVisibility = null
+    }
+    this.videoTrack = null
+    this.stream = null
     if (this.audioTimer) clearInterval(this.audioTimer)
     this.audioTimer = null
     this.connected.forEach((node) => {
@@ -173,6 +244,9 @@ export class LiveCompositor {
   /** Connect any audio tracks not already wired into the mix. */
   private reconcileAudio() {
     if (!this.audioCtx || !this.dest) return
+    // Keep the mix alive: mobile browsers suspend the AudioContext when the page
+    // is backgrounded, which would silence the recording. This runs every ~1s.
+    if (this.audioCtx.state === "suspended") void this.audioCtx.resume().catch(() => {})
     const tracks = this.opts.getAudioTracks().filter((t) => t.readyState === "live")
     const seen = new Set<string>()
     for (const track of tracks) {
