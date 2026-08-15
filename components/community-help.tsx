@@ -1227,7 +1227,7 @@ export function CommunityHelp({
                 </Button>
               </div>
             ) : (
-              <div className="divide-y divide-border/60 pb-28">
+              <div className="divide-y-4 divide-border pb-28">
                 {posts.map((post) => (
                   <PostItem
                     key={post.id}
