@@ -402,6 +402,8 @@ function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
  */
 function PostVideo({ src }: { src: string }) {
   const [ratio, setRatio] = useState<number | null>(null)
+  // Tapping the inline clip opens a full-screen viewer with the premium player.
+  const [fullscreen, setFullscreen] = useState(false)
   // Clamp between 9:16 and 16:9 so an extreme clip can't create a giant frame.
   const aspect = ratio ? Math.min(16 / 9, Math.max(9 / 16, ratio)) : 4 / 5
   return (
@@ -409,7 +411,75 @@ function PostVideo({ src }: { src: string }) {
       className="relative mt-4 w-full overflow-hidden rounded-2xl border border-border/60 bg-black"
       style={{ aspectRatio: String(aspect), maxHeight: "24rem" }}
     >
-      <FeedVideo src={src} className="h-full w-full object-cover" onAspectRatio={setRatio} resume ignoreViewerGate />
+      {/* While the full-screen viewer is open the inline clip is unmounted so
+          only one <video> plays. Both instances share a playback position by
+          `src`, so remounting with `resume` on close continues seamlessly. */}
+      {!fullscreen && (
+        <FeedVideo
+          src={src}
+          className="h-full w-full object-cover"
+          onAspectRatio={setRatio}
+          resume
+          ignoreViewerGate
+          onExpand={() => setFullscreen(true)}
+        />
+      )}
+      {fullscreen && <VideoLightbox src={src} onClose={() => setFullscreen(false)} />}
     </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Full-screen video viewer                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Full-screen viewer for an attached video. Renders the shared FeedVideo player
+ * (branded play button, ±10s skip, draggable scrubber, shared mute) letterboxed
+ * with object-contain on a black backdrop, so the clip fills the screen while
+ * keeping its true aspect ratio. Tapping the video toggles play/pause; the
+ * backdrop, close button, or Escape dismisses it. Rendered in its own portal so
+ * it sits above the conversation dialog.
+ *
+ * `resume` continues from wherever the inline preview reached (shared by src),
+ * and `ignoreViewerGate` lets this player own playback while the conversation's
+ * immersive-viewer gate is active.
+ */
+function VideoLightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose()
+    }
+    document.addEventListener("keydown", onKey)
+    return () => document.removeEventListener("keydown", onKey)
+  }, [onClose])
+
+  if (typeof document === "undefined") return null
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Attached video"
+      onClick={onClose}
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black duration-200 animate-in fade-in"
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close"
+        className="absolute right-4 top-[calc(0.75rem+env(safe-area-inset-top))] z-10 flex size-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/20"
+      >
+        <X className="size-5" />
+      </button>
+      {/* Stop backdrop clicks so tapping the video toggles play instead of closing. */}
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative h-full max-h-[100dvh] w-full max-w-[100vw]"
+      >
+        <FeedVideo src={src} className="h-full w-full object-contain" resume ignoreViewerGate />
+      </div>
+    </div>,
+    document.body,
   )
 }
