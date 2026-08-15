@@ -97,6 +97,16 @@ export class LiveCompositor {
   private stream: MediaStream | null = null
   private videoTrack: (MediaStreamTrack & { requestFrame?: () => void }) | null = null
   /**
+   * Whether we're driving the capture track by hand via `requestFrame()`
+   * (manual mode, `captureStream(0)`). In manual mode WE decide exactly when a
+   * frame is emitted, so the recording keeps advancing in both the foreground
+   * and while backgrounded. In auto mode (the fallback) the browser samples the
+   * canvas itself and `requestFrame()` MUST NOT be called — doing so on an
+   * auto-mode track stops the browser's sampling on Chromium/Android and
+   * truncated every recording to ~1 second.
+   */
+  private manual = false
+  /**
    * Background-safe draw clock. `requestAnimationFrame` is PAUSED by the browser
    * whenever the page is hidden (host locks their phone, switches apps, screen
    * dims) — which froze the canvas, so `captureStream` stopped emitting frames
@@ -129,13 +139,26 @@ export class LiveCompositor {
 
   /** Begin compositing + audio mixing and return the combined recording stream. */
   start(): MediaStream {
-    const stream = (this.canvas as HTMLCanvasElement & { captureStream: (fps?: number) => MediaStream }).captureStream(
-      TARGET_FPS,
-    )
+    const canvasEl = this.canvas as HTMLCanvasElement & { captureStream: (fps?: number) => MediaStream }
+
+    // Prefer MANUAL capture mode: captureStream(0) yields a track we advance
+    // frame-by-frame via requestFrame(). This is the only mode that reliably
+    // records the WHOLE session — our paced draw loop pushes 30fps in the
+    // foreground and the background timer keeps pushing frames while hidden, so
+    // the recording never freezes. We feature-detect requestFrame and fall back
+    // to auto mode (browser-sampled at TARGET_FPS, no requestFrame) only where
+    // manual mode isn't available.
+    let stream = canvasEl.captureStream(0)
+    let track = (stream.getVideoTracks()[0] ?? null) as (MediaStreamTrack & { requestFrame?: () => void }) | null
+    this.manual = typeof track?.requestFrame === "function"
+    if (!this.manual) {
+      // Release the probe track before creating the auto-mode stream.
+      track?.stop()
+      stream = canvasEl.captureStream(TARGET_FPS)
+      track = (stream.getVideoTracks()[0] ?? null) as (MediaStreamTrack & { requestFrame?: () => void }) | null
+    }
     this.stream = stream
-    this.videoTrack = (stream.getVideoTracks()[0] ?? null) as
-      | (MediaStreamTrack & { requestFrame?: () => void })
-      | null
+    this.videoTrack = track
 
     // --- Audio graph: mix every track into one destination node. ---
     try {
@@ -161,6 +184,10 @@ export class LiveCompositor {
     // rAF tick (which would drop us to ~20fps); it lands cleanly on every
     // second tick for an even 30fps cadence.
     this.lastDrawTs = 0
+    // Prime the very first frame synchronously so the capture track (especially
+    // in manual mode) emits content the instant the recorder starts, guaranteeing
+    // the replay opens at 00:00 with real video rather than a blank gap.
+    this.maybeDraw(typeof performance !== "undefined" ? performance.now() : Date.now())
     const draw = (ts: number) => {
       this.raf = requestAnimationFrame(draw)
       if (this.lastDrawTs === 0 || ts - this.lastDrawTs >= FRAME_INTERVAL_MS - 1) {
@@ -205,10 +232,15 @@ export class LiveCompositor {
   private maybeDraw(ts: number) {
     this.lastDrawTs = ts
     this.drawFrame()
-    try {
-      this.videoTrack?.requestFrame?.()
-    } catch {
-      /* requestFrame unsupported (auto-sampling handles it) */
+    // ONLY push a frame in manual mode. In auto mode the browser samples the
+    // canvas on its own; calling requestFrame() there stops that sampling on
+    // Chromium/Android and truncates the recording to ~1s.
+    if (this.manual) {
+      try {
+        this.videoTrack?.requestFrame?.()
+      } catch {
+        /* ignore — a failed frame request just skips one frame */
+      }
     }
   }
 
