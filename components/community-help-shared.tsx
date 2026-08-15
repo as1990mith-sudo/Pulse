@@ -176,12 +176,10 @@ export function IdentityMeta({
         ) : (
           name
         )}
-        {post.isSelf && <span className="shrink-0 text-xs font-medium text-primary">· you</span>}
+        {/* "· you" self marker intentionally removed. */}
+        <span className="shrink-0 text-xs font-normal text-muted-foreground">· {post.postedAt}</span>
         {edited && <EditedIndicator />}
       </p>
-      {/* Username/handle intentionally omitted — only the display name and
-          timestamp are shown. */}
-      <p className="truncate text-xs text-muted-foreground">{post.postedAt}</p>
     </div>
   )
 }
