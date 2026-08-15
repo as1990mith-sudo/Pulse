@@ -69,7 +69,8 @@ export function LiveBrowse({
               )}
             >
               <span>{c}</span>
-              <span className="text-xs tabular-nums text-muted-foreground/60">{count}</span>
+              {/* Only surface the tally when something is actually live. */}
+              {count > 0 && <span className="text-xs tabular-nums text-muted-foreground/60">{count}</span>}
               <span
                 className={cn(
                   "absolute inset-x-0 -bottom-px h-0.5 origin-center rounded-full bg-live transition-all duration-300 ease-out",
@@ -99,14 +100,16 @@ export function LiveBrowse({
                 )}
               >
                 <span className="truncate">{c}</span>
-                <span
-                  className={cn(
-                    "shrink-0 text-xs tabular-nums",
-                    active ? "text-white/70" : "text-muted-foreground/60",
-                  )}
-                >
-                  {countFor(c)}
-                </span>
+                {countFor(c) > 0 && (
+                  <span
+                    className={cn(
+                      "shrink-0 text-xs tabular-nums",
+                      active ? "text-white/70" : "text-muted-foreground/60",
+                    )}
+                  >
+                    {countFor(c)}
+                  </span>
+                )}
               </button>
             )
           })}
@@ -116,21 +119,20 @@ export function LiveBrowse({
       {/* ── Stream grid — full width on mobile, fills remaining space beside
           the desktop rail. Columns scale up with viewport width. ─────────── */}
       <div className="min-w-0 flex-1">
-        <div className="mb-3 flex items-center gap-2">
-          <span className={cn("flex size-7 items-center justify-center rounded-lg", accentSoft)}>
-            <Icon className="size-4" />
-          </span>
-          <h2 className="font-display text-lg font-semibold tracking-tight">
+        {/* Editorial section header — a plain font-display title with a quiet
+            uppercase tally on the right, mirroring the Articles "Editor's Pick"
+            header rather than an icon chip + filled pill. */}
+        <div className="mb-4 flex items-baseline gap-2.5">
+          <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">
             {category === ALL ? "All shows" : category}
           </h2>
-          <span
-            className={cn(
-              "ml-0.5 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums",
-              filtered.length > 0 ? accentSoft : "bg-secondary text-muted-foreground",
-            )}
-          >
-            {filtered.length} live
-          </span>
+          {/* Hide the tally entirely when nothing is live — the empty state
+              below already communicates that there are no live shows. */}
+          {filtered.length > 0 && (
+            <span className="ml-auto text-[10px] font-medium uppercase tracking-[0.16em] text-live/80 tabular-nums">
+              {filtered.length} live
+            </span>
+          )}
         </div>
 
         {filtered.length > 0 ? (
@@ -151,7 +153,9 @@ export function LiveBrowse({
               <Icon className="size-5" />
             </span>
             <div className="space-y-1">
-              <p className="text-sm font-bold tracking-tight text-foreground">Nothing live here yet</p>
+              <p className="font-display text-base font-semibold tracking-tight text-foreground">
+                Nothing live here yet
+              </p>
               <p className="mx-auto max-w-xs text-[13px] text-muted-foreground text-pretty">
                 No {type} shows live{category === ALL ? " right now" : ` in ${category}`}. Check back soon.
               </p>
