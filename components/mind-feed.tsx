@@ -1402,12 +1402,11 @@ export function PostCard({
               <span className="truncate">{post.user}</span>
               {post.orgVerified && <VerifiedBadge size="sm" className="shrink-0" />}
             </Link>
-            {/* Flex row so the handle/time can truncate on long usernames while
-                the edited info icon stays fixed (shrink-0) and is never clipped. */}
+            {/* Username/handle intentionally omitted — only the display name
+                (above) and the date are shown. Flex row lets the date truncate
+                while the edited info icon stays fixed (shrink-0). */}
             <span className={cn("flex min-w-0 items-center gap-1 text-muted-foreground", feed ? "text-sm" : "text-xs")}>
-              <span className="truncate">
-                {post.handle} &middot; {post.postedAt}
-              </span>
+              <span className="truncate">{post.postedAt}</span>
               {edited && <EditedIndicator />}
             </span>
           </div>
