@@ -185,7 +185,9 @@ export function StudioConsole({
   const [musicTracks, setMusicTracks] = useState<Track[]>([])
   const [musicActiveIndex, setMusicActiveIndex] = useState<number | null>(null)
   const [musicPlaying, setMusicPlayingState] = useState(false)
-  const [musicVolume, setMusicVolumeState] = useState(0.4)
+  // Clear default (0.8) so background music isn't muffled by the mic's echo
+  // cancellation, which suppresses the host's own loudspeaker output.
+  const [musicVolume, setMusicVolumeState] = useState(0.8)
   const [musicMixing, setMusicMixing] = useState(false)
   const [musicError, setMusicError] = useState<string | null>(null)
   // Loop the current track instead of advancing to the next one when it ends.

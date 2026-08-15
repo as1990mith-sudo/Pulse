@@ -193,7 +193,10 @@ export function useLiveAudio() {
   const musicGainRef = useRef<GainNode | null>(null)
   // The host's intended (non-ducked) music volume. Ducking ramps the live gain
   // down toward a fraction of this while someone speaks, then back up to it.
-  const musicBaseVolumeRef = useRef(0.4)
+  // Clear default level (0.8). With mic echo cancellation on, the host's own
+  // loudspeaker output is treated as echo and suppressed, so a low base made
+  // background music sound muffled to the host.
+  const musicBaseVolumeRef = useRef(0.8)
   // Low-shelf EQ that lifts the low end so the broadcast music has more bass.
   const musicBassRef = useRef<BiquadFilterNode | null>(null)
   const musicElRef = useRef<HTMLAudioElement | null>(null)

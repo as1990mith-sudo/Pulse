@@ -325,7 +325,9 @@ export function VideoStudioConsole({
   const [musicTracks, setMusicTracks] = useState<Track[]>([])
   const [musicActiveIndex, setMusicActiveIndex] = useState<number | null>(null)
   const [musicPlaying, setMusicPlayingState] = useState(false)
-  const [musicVolume, setMusicVolumeState] = useState(0.4)
+  // Default to a clear 0.8. Mic echo cancellation suppresses the host's own
+  // speaker output, so the old 0.4 default made background music sound muffled.
+  const [musicVolume, setMusicVolumeState] = useState(0.8)
   const [musicMixing, setMusicMixing] = useState(false)
   const [musicLoop, setMusicLoopState] = useState(false)
   const [musicError, setMusicError] = useState<string | null>(null)

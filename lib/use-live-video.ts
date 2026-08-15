@@ -873,7 +873,11 @@ export function useLiveVideo({
     if (!musicSourceRef.current) {
       const source = ctx.createMediaElementSource(el)
       const gain = ctx.createGain()
-      gain.gain.value = 0.4
+      // Start at the host's intended base level (not a hardcoded 0.4). With mic
+      // echo cancellation on, the host's own speaker output is treated as echo
+      // and suppressed, so a low starting gain made the background music sound
+      // muffled/suppressed to the host. Initialising at the base keeps it clear.
+      gain.gain.value = musicBaseVolumeRef.current
       const bass = ctx.createBiquadFilter()
       bass.type = "lowshelf"
       // A gentle low-shelf lift keeps warmth without muddying the mids. The old
