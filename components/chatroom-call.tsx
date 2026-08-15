@@ -81,12 +81,26 @@ export function ChatroomCall({
         setError("Calling is not configured for this app.")
         return
       }
-      const room = new Room({ adaptiveStream: true, dynacast: true })
+      const room = new Room({
+        adaptiveStream: true,
+        dynacast: true,
+        // Acoustic echo cancellation on so no participant hears their own voice
+        // returned via another caller's speaker/mic. Matches the global policy.
+        audioCaptureDefaults: {
+          autoGainControl: true,
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      })
       roomRef.current = room
 
       room
         .on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub: RemoteTrackPublication, _p: RemoteParticipant) => {
           if (track.kind === Track.Kind.Audio && audioContainerRef.current) {
+            // Idempotent: detach any element already bound to this remote track
+            // before appending a fresh one, so a re-subscribe / reconnect can't
+            // leave a second element playing the same voice (duplicate audio).
+            track.detach().forEach((prev) => prev.remove())
             const el = track.attach()
             el.autoplay = true
             audioContainerRef.current.appendChild(el)

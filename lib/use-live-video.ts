@@ -403,10 +403,25 @@ export function useLiveVideo({
     [attachPeerVideo],
   )
 
+  // Attaches a REMOTE participant's audio to a single <audio> element. Only ever
+  // called for remote tracks (RoomEvent.TrackSubscribed and the post-connect
+  // remote-participant sweep both fire for remotes only), so the local mic can
+  // never be routed back into our own speaker here.
+  //
+  // Idempotent by design: `track.attach()` mints a NEW element on every call, so
+  // the post-connect sweep + a TrackSubscribed event (or a reconnect / track
+  // renegotiation) would otherwise leave a first element orphaned in the DOM,
+  // still playing — a duplicate/echoing second voice. We first detach every
+  // existing element bound to this track and drop any prior map entry, so a
+  // single track always resolves to exactly one live playback element.
   function attachRemoteAudio(track: RemoteTrack, participant: RemoteParticipant) {
+    const key = participant.identity + ":" + track.sid
+    track.detach().forEach((prev) => prev.remove())
+    const stale = audioElsRef.current.get(key)
+    if (stale) stale.remove()
     const el = track.attach()
     el.autoplay = true
-    audioElsRef.current.set(participant.identity + ":" + track.sid, el)
+    audioElsRef.current.set(key, el)
     document.body.appendChild(el)
   }
 
@@ -462,10 +477,16 @@ export function useLiveVideo({
       videoCaptureDefaults: {
         resolution: CAPTURE_RESOLUTION,
       },
-      // Studio-grade microphone capture for the host. The browser's voice-call
-      // DSP (auto-gain, noise gate, echo canceller) is tuned for compressing
-      // speech on a call and makes phone mics sound thin and "pumpy"; disabling
-      // it preserves full dynamic range and tone at a clean 48 kHz.
+      // Microphone capture DSP. Echo cancellation, noise suppression and auto
+      // gain control are ENABLED. This is the foundational fix for self-voice
+      // feedback: when a remote participant is unmuted, their device plays our
+      // voice out of their speaker and their mic re-captures it — without AEC
+      // that returns to us as echo/delayed self-voice. The browser's acoustic
+      // echo canceller removes that speaker-bleed at the capture stage, so the
+      // system works even on phone/laptop/Bluetooth speakers (never relying on
+      // participants wearing headphones). Genuine background music is published
+      // on a SEPARATE dedicated track (see the music track below), so enabling
+      // mic DSP here does not degrade music fidelity.
       //
       // The mic is captured MONO (channelCount: 1). A mic is a single-capsule
       // mono source; asking it for a 2-channel capture makes some devices put
@@ -473,9 +494,9 @@ export function useLiveVideo({
       // encoder relays faithfully — so viewers hear the host in one ear only.
       // Mono capture is rendered to both ears equally.
       audioCaptureDefaults: {
-        autoGainControl: false,
-        echoCancellation: false,
-        noiseSuppression: false,
+        autoGainControl: true,
+        echoCancellation: true,
+        noiseSuppression: true,
         channelCount: 1,
         sampleRate: 48000,
       },
@@ -852,7 +873,11 @@ export function useLiveVideo({
     if (!musicSourceRef.current) {
       const source = ctx.createMediaElementSource(el)
       const gain = ctx.createGain()
-      gain.gain.value = 0.4
+      // Start at the host's intended base level (not a hardcoded 0.4). With mic
+      // echo cancellation on, the host's own speaker output is treated as echo
+      // and suppressed, so a low starting gain made the background music sound
+      // muffled/suppressed to the host. Initialising at the base keeps it clear.
+      gain.gain.value = musicBaseVolumeRef.current
       const bass = ctx.createBiquadFilter()
       bass.type = "lowshelf"
       // A gentle low-shelf lift keeps warmth without muddying the mids. The old
