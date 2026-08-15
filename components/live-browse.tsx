@@ -69,7 +69,8 @@ export function LiveBrowse({
               )}
             >
               <span>{c}</span>
-              <span className="text-xs tabular-nums text-muted-foreground/60">{count}</span>
+              {/* Only surface the tally when something is actually live. */}
+              {count > 0 && <span className="text-xs tabular-nums text-muted-foreground/60">{count}</span>}
               <span
                 className={cn(
                   "absolute inset-x-0 -bottom-px h-0.5 origin-center rounded-full bg-live transition-all duration-300 ease-out",
@@ -99,14 +100,16 @@ export function LiveBrowse({
                 )}
               >
                 <span className="truncate">{c}</span>
-                <span
-                  className={cn(
-                    "shrink-0 text-xs tabular-nums",
-                    active ? "text-white/70" : "text-muted-foreground/60",
-                  )}
-                >
-                  {countFor(c)}
-                </span>
+                {countFor(c) > 0 && (
+                  <span
+                    className={cn(
+                      "shrink-0 text-xs tabular-nums",
+                      active ? "text-white/70" : "text-muted-foreground/60",
+                    )}
+                  >
+                    {countFor(c)}
+                  </span>
+                )}
               </button>
             )
           })}
@@ -123,14 +126,13 @@ export function LiveBrowse({
           <h2 className="font-display text-lg font-semibold tracking-tight">
             {category === ALL ? "All shows" : category}
           </h2>
-          <span
-            className={cn(
-              "ml-0.5 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums",
-              filtered.length > 0 ? accentSoft : "bg-secondary text-muted-foreground",
-            )}
-          >
-            {filtered.length} live
-          </span>
+          {/* Hide the tally entirely when nothing is live — the empty state
+              below already communicates that there are no live shows. */}
+          {filtered.length > 0 && (
+            <span className={cn("ml-0.5 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums", accentSoft)}>
+              {filtered.length} live
+            </span>
+          )}
         </div>
 
         {filtered.length > 0 ? (
