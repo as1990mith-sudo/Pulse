@@ -119,17 +119,17 @@ export function LiveBrowse({
       {/* ── Stream grid — full width on mobile, fills remaining space beside
           the desktop rail. Columns scale up with viewport width. ─────────── */}
       <div className="min-w-0 flex-1">
-        <div className="mb-3 flex items-center gap-2">
-          <span className={cn("flex size-7 items-center justify-center rounded-lg", accentSoft)}>
-            <Icon className="size-4" />
-          </span>
-          <h2 className="font-display text-lg font-semibold tracking-tight">
+        {/* Editorial section header — a plain font-display title with a quiet
+            uppercase tally on the right, mirroring the Articles "Editor's Pick"
+            header rather than an icon chip + filled pill. */}
+        <div className="mb-4 flex items-baseline gap-2.5">
+          <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">
             {category === ALL ? "All shows" : category}
           </h2>
           {/* Hide the tally entirely when nothing is live — the empty state
               below already communicates that there are no live shows. */}
           {filtered.length > 0 && (
-            <span className={cn("ml-0.5 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums", accentSoft)}>
+            <span className="ml-auto text-[10px] font-medium uppercase tracking-[0.16em] text-live/80 tabular-nums">
               {filtered.length} live
             </span>
           )}
@@ -153,7 +153,9 @@ export function LiveBrowse({
               <Icon className="size-5" />
             </span>
             <div className="space-y-1">
-              <p className="text-sm font-bold tracking-tight text-foreground">Nothing live here yet</p>
+              <p className="font-display text-base font-semibold tracking-tight text-foreground">
+                Nothing live here yet
+              </p>
               <p className="mx-auto max-w-xs text-[13px] text-muted-foreground text-pretty">
                 No {type} shows live{category === ALL ? " right now" : ` in ${category}`}. Check back soon.
               </p>
