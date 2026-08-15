@@ -79,7 +79,7 @@ function QuestionText({ text, onOpen }: { text: string; onOpen: () => void }) {
           onOpen()
         }
       }}
-      className="mt-3 cursor-pointer outline-none"
+      className="mt-[7px] cursor-pointer outline-none"
     >
       <p
         ref={ref}
