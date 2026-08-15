@@ -161,6 +161,7 @@ export function IdentityMeta({
   const name = <span className="truncate">{post.authorName ?? "Member"}</span>
   return (
     <div className="min-w-0">
+      {/* Display name + timestamp on the first line. */}
       <p className="flex items-center gap-1.5 text-sm font-bold tracking-tight text-foreground">
         {clickable ? (
           <button
@@ -180,6 +181,10 @@ export function IdentityMeta({
         <span className="shrink-0 text-xs font-normal text-muted-foreground">· {post.postedAt}</span>
         {edited && <EditedIndicator />}
       </p>
+      {/* Username handle stacked below the display name. */}
+      {post.authorHandle && (
+        <p className="truncate text-xs font-normal leading-tight text-muted-foreground">{post.authorHandle}</p>
+      )}
     </div>
   )
 }

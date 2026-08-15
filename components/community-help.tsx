@@ -113,20 +113,24 @@ function QuestionText({ text, onOpen }: { text: string; onOpen: () => void }) {
 /**
  * A post's attached video in the feed. Uses the shared FeedVideo player so the
  * clip auto-plays when it scrolls into view (and pauses when it leaves) — the
- * same behavior as the reels/mind feed. The frame is ALWAYS a fixed 4:5 portrait
- * so every post video looks identical regardless of the clip's real dimensions
- * (previously the frame self-sized to each clip's aspect ratio, so some posts
- * rendered 4:5 and others 16:9). FeedVideo's `object-cover` crops the clip to
- * fill this frame cleanly. Tapping anywhere on the video opens the full post
- * (via FeedVideo's onExpand); playback is driven by the clip's own control bar.
+ * same behavior as the reels/mind feed. The frame mirrors the clip's REAL
+ * aspect ratio (reported via onAspectRatio) so a 16:9 video shows as a full
+ * 16:9 frame instead of being cropped into a fixed portrait box. The ratio is
+ * clamped between 16:9 (landscape) and 4:5 (portrait) so an extreme clip can't
+ * produce a giant frame, and `object-contain` guarantees nothing is cropped —
+ * the whole frame is always visible. Tapping opens the full post (onExpand).
  */
 function FeedPostVideo({ src, onOpen }: { src: string; onOpen: () => void }) {
+  // Default to 16:9 before metadata loads (matches the common case), then
+  // settle onto the clip's true ratio once known.
+  const [ratio, setRatio] = useState<number>(16 / 9)
+  const aspect = Math.min(16 / 9, Math.max(4 / 5, ratio))
   return (
     <div
       className="relative mt-3 w-full overflow-hidden rounded-2xl border border-border/60 bg-black"
-      style={{ aspectRatio: "4 / 5", maxHeight: "24rem" }}
+      style={{ aspectRatio: String(aspect), maxHeight: "24rem" }}
     >
-      <FeedVideo src={src} className="h-full w-full object-cover" onExpand={onOpen} />
+      <FeedVideo src={src} className="h-full w-full object-contain" onAspectRatio={setRatio} onExpand={onOpen} />
     </div>
   )
 }
