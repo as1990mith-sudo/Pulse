@@ -2,6 +2,7 @@
 // client-safe module (not the "use server" actions file) so both the audio and
 // video studio consoles can import it for their category dropdowns.
 export const LIVE_CATEGORIES = [
+  "Religion & Spirituality",
   "Health & Fitness",
   "Family",
   "Leisure",
