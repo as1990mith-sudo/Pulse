@@ -118,9 +118,10 @@ export function AnonMeta({ postedAt, edited }: { postedAt: string; edited?: bool
     <div className="min-w-0">
       <p className="flex items-center gap-1.5 text-sm font-bold tracking-tight text-foreground">
         {ANON_NAME}
+        {/* Date moved inline next to the name (was on its own line below). */}
+        <span className="shrink-0 text-xs font-normal text-muted-foreground">· {postedAt}</span>
         {edited && <EditedIndicator />}
       </p>
-      <p className="text-xs text-muted-foreground">{postedAt}</p>
     </div>
   )
 }
@@ -135,10 +136,9 @@ export function SelfMeta({ post, edited }: { post: CommunityPostView; edited?: b
     <div className="min-w-0">
       <p className="flex items-center gap-1.5 text-sm font-bold tracking-tight text-foreground">
         {ANON_NAME}
+        {/* "You" marker removed; date moved inline next to the name. */}
+        <span className="shrink-0 text-xs font-normal text-muted-foreground">· {post.postedAt}</span>
         {edited && <EditedIndicator />}
-      </p>
-      <p className="text-xs text-muted-foreground">
-        {post.postedAt} · <span className="font-medium text-primary">You</span>
       </p>
     </div>
   )
