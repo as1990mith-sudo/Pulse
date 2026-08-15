@@ -39,50 +39,48 @@ export function LiveBrowse({
 
   // Single red (--live) accent for the whole Live tab — no per-type coloring.
   const activeChip = "bg-live text-white"
-  const activeChipBadge = "bg-white/20 text-white"
   const accentSoft = "bg-live/15 text-live"
   const accentGlow = "before:bg-[linear-gradient(90deg,transparent,var(--live),transparent)]"
 
   return (
     <div className="lg:flex lg:gap-6">
-      {/* ── Mobile / tablet: horizontal scrolling category chips ─────────────
-          A single edge-to-edge, swipeable row of pills. No wasted half-width
-          rail and no truncated labels — each chip sizes to its full name. */}
-      <div className="-mx-4 mb-4 sm:-mx-6 lg:hidden">
-        <div
-          className="flex gap-1.5 overflow-x-auto px-4 pb-0.5 sm:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          role="tablist"
-          aria-label="Live categories"
-        >
-          {rail.map((c) => {
-            const active = category === c
-            const count = countFor(c)
-            return (
-              <button
-                key={c}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setCategory(c)}
+      {/* ── Mobile / tablet: editorial section nav ───────────────────────────
+          Matches the Articles design language — a swipeable text nav with a
+          thin underline for the active category rather than filled pills. The
+          live tally rides alongside each label as a quiet muted number. */}
+      <nav
+        className="hscroll -mx-4 mb-5 flex items-center gap-6 overflow-x-auto border-b border-border/40 px-4 sm:-mx-6 sm:px-6 lg:hidden"
+        role="tablist"
+        aria-label="Live categories"
+      >
+        {rail.map((c) => {
+          const active = category === c
+          const count = countFor(c)
+          return (
+            <button
+              key={c}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setCategory(c)}
+              className={cn(
+                "relative flex shrink-0 items-center gap-1.5 whitespace-nowrap pb-2.5 pt-1 text-sm transition-colors duration-200",
+                active ? "font-semibold text-foreground" : "font-medium text-muted-foreground/70 hover:text-foreground",
+              )}
+            >
+              <span>{c}</span>
+              <span className="text-xs tabular-nums text-muted-foreground/60">{count}</span>
+              <span
                 className={cn(
-                  "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-medium whitespace-nowrap transition-colors",
-                  active ? activeChip : "bg-secondary text-muted-foreground hover:text-foreground",
+                  "absolute inset-x-0 -bottom-px h-0.5 origin-center rounded-full bg-live transition-all duration-300 ease-out",
+                  active ? "scale-x-100 opacity-100" : "scale-x-0 opacity-0",
                 )}
-              >
-                <span>{c}</span>
-                <span
-                  className={cn(
-                    "min-w-4 rounded-full px-1.5 text-center text-[11px] tabular-nums",
-                    active ? activeChipBadge : "bg-background/60 text-foreground/70",
-                  )}
-                >
-                  {count}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
+                aria-hidden
+              />
+            </button>
+          )
+        })}
+      </nav>
 
       {/* ── Desktop: vertical, independently scrollable, sticky rail ───────── */}
       <aside className="sticky top-24 hidden h-[calc(100vh-8rem)] w-52 shrink-0 overflow-y-auto pb-6 lg:block">
@@ -122,7 +120,9 @@ export function LiveBrowse({
           <span className={cn("flex size-7 items-center justify-center rounded-lg", accentSoft)}>
             <Icon className="size-4" />
           </span>
-          <h2 className="text-base font-bold tracking-tight">{category === ALL ? "All shows" : category}</h2>
+          <h2 className="font-display text-lg font-semibold tracking-tight">
+            {category === ALL ? "All shows" : category}
+          </h2>
           <span
             className={cn(
               "ml-0.5 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums",
