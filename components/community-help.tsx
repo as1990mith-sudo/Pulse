@@ -84,7 +84,7 @@ function QuestionText({ text, onOpen }: { text: string; onOpen: () => void }) {
       <p
         ref={ref}
         className={cn(
-          "whitespace-pre-wrap break-words text-[17px] leading-relaxed text-foreground text-pretty",
+          "whitespace-pre-wrap break-words text-[14px] leading-relaxed text-foreground text-pretty",
           !expanded && "line-clamp-6",
         )}
       >
