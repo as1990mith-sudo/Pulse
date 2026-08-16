@@ -120,7 +120,10 @@ export async function startRoomVideoEgress(input: {
           videoCodec: VideoCodec.H264_HIGH,
           videoBitrate: 12000,
           keyFrameInterval: 2,
-          audioBitrate: 128,
+          // 192 kbps AAC keeps headroom ABOVE the host's 128 kbps Opus mic feed
+          // so the recording's audio re-encode preserves the voice cleanly
+          // rather than compressing an already-compressed source.
+          audioBitrate: 192,
         })
       : new EncodingOptions({
           width: 1080,
@@ -129,7 +132,10 @@ export async function startRoomVideoEgress(input: {
           videoCodec: VideoCodec.H264_HIGH,
           videoBitrate: 12000,
           keyFrameInterval: 2,
-          audioBitrate: 128,
+          // 192 kbps AAC keeps headroom ABOVE the host's 128 kbps Opus mic feed
+          // so the recording's audio re-encode preserves the voice cleanly
+          // rather than compressing an already-compressed source.
+          audioBitrate: 192,
         })
   const layout = input.orientation === "landscape" ? "grid" : "speaker"
 
