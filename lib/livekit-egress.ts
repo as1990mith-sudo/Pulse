@@ -100,11 +100,11 @@ export async function startRoomVideoEgress(input: {
   // soft and blocky.
   //
   // Two things matter for replay sharpness here:
-  //  1. BITRATE HEADROOM. Egress re-encodes the host's ~6 Mbps published feed.
-  //     Re-encoding at the SAME bitrate compounds compression artifacts, so we
-  //     record at 8 Mbps — comfortably above the source — so the MP4 preserves
-  //     the incoming detail rather than degrading it. (Extra headroom on a
-  //     mostly-static preaching shot barely grows the file.)
+  //  1. BITRATE HEADROOM. Egress re-encodes the host's up-to-8 Mbps published
+  //     feed. Re-encoding at the SAME bitrate compounds compression artifacts,
+  //     so we record at 12 Mbps — comfortably above the source — so the MP4
+  //     preserves the incoming detail rather than degrading it. (Extra headroom
+  //     on a mostly-static preaching shot barely grows the file.)
   //  2. H.264 HIGH PROFILE. The High profile packs noticeably more detail per
   //     bit than Main (better transforms/entropy coding) and is universally
   //     supported for playback, so the same bitrate simply looks sharper.
@@ -118,7 +118,7 @@ export async function startRoomVideoEgress(input: {
           height: 1080,
           framerate: 30,
           videoCodec: VideoCodec.H264_HIGH,
-          videoBitrate: 8000,
+          videoBitrate: 12000,
           keyFrameInterval: 2,
           audioBitrate: 128,
         })
@@ -127,7 +127,7 @@ export async function startRoomVideoEgress(input: {
           height: 1920,
           framerate: 30,
           videoCodec: VideoCodec.H264_HIGH,
-          videoBitrate: 8000,
+          videoBitrate: 12000,
           keyFrameInterval: 2,
           audioBitrate: 128,
         })
