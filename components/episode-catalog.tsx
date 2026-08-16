@@ -169,10 +169,11 @@ export function EpisodeCatalog({
     )
   }
 
-  // Whether the active view renders as a YouTube-style video grid. Only the
-  // (uploads) Video tab uses the grid; Live recordings — video AND audio — use
-  // the same compact cover-art row list so both kinds list identically.
-  const showsVideoGrid = tab === "video"
+  // Whether the active view renders as a YouTube-style video grid. Both the
+  // (uploads) Video tab AND Live → Video use it, so live video recordings list
+  // as proper video episodes (poster thumbnail + duration badge + title/meta)
+  // rather than the compact audio row. Live → Audio still uses the compact list.
+  const showsVideoGrid = tab === "video" || (tab === "live" && liveKind === "video")
   // Search placeholder noun for the active view. The "audio" tab is surfaced as
   // "Uploads", so its noun reads "uploaded" rather than "audio".
   const searchNoun = tab === "live" ? `live ${liveKind}` : tab === "audio" ? "uploaded" : tab
