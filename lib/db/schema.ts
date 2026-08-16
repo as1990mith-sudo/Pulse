@@ -576,6 +576,14 @@ export const liveStream = pgTable("live_stream", {
   // whole room shares the same tiling: "compact" (3×3, 9), "balanced" (2×3, 6),
   // or "focus" (2×2, 4). Only meaningful for "landscape" (Conversation) video.
   gridLayout: text("gridLayout").notNull().default("balanced"), // "compact" | "balanced" | "focus"
+  // ── Server-side recording (LiveKit Egress) ───────────────────────────────
+  // Video replays are recorded server-side by LiveKit Egress (NOT captured on
+  // the host's device), which composites the room and uploads a finalized MP4
+  // to object storage. egressId is the running egress we stop when the stream
+  // ends; replayEpisodeId is the placeholder catalogue episode the egress-ended
+  // webhook finalizes with the stored MP4's URL + true duration.
+  egressId: text("egressId"),
+  replayEpisodeId: integer("replayEpisodeId"),
 })
 
 // Call-in requests (listener -> host) and invites (host -> listener) for a live

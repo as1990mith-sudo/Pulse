@@ -16,6 +16,8 @@ import {
   removeParticipant,
   muteParticipantAudio,
 } from "@/lib/livekit"
+import { isEgressConfigured, startRoomVideoEgress, stopRoomEgress } from "@/lib/livekit-egress"
+import { createProcessingEpisode, deleteProcessingEpisode } from "@/app/actions/live-processing"
 import { notifyFollowers, notifyUser } from "@/app/actions/notifications"
 
 // Host + up to 11 guests = 12 on stage.
@@ -37,14 +39,46 @@ async function requireUser() {
  * run at the top of every read path so abandoned streams never linger as live
  * (which is what previously stranded a dropped host and orphaned the row).
  */
+/**
+ * Stops the LiveKit Egress recording (if any) for a room and clears the id so it
+ * isn't stopped twice. Best-effort: the egress-ended webhook finalizes the
+ * replay regardless of how the egress stopped, so a failure here is harmless.
+ */
+async function stopEgressForRoom(roomName: string): Promise<void> {
+  try {
+    const [row] = await db
+      .select({ egressId: liveStream.egressId })
+      .from(liveStream)
+      .where(eq(liveStream.roomName, roomName))
+      .limit(1)
+    if (row?.egressId) {
+      await stopRoomEgress(row.egressId)
+      await db.update(liveStream).set({ egressId: null }).where(eq(liveStream.roomName, roomName))
+    }
+  } catch {
+    /* best-effort — webhook still finalizes the replay */
+  }
+}
+
 async function endStaleStreams(): Promise<void> {
   // Best-effort cleanup that runs at the top of read paths — swallow errors so a
   // transient DB failure (or the DB being unreachable) can't crash the page that
   // just wanted to list streams. The next read will retry the cleanup.
   try {
+    // Stop egress for any abandoned VIDEO host (closed tab / lost connection)
+    // before ending the rows, so the replay finalizes promptly rather than
+    // waiting on LiveKit's room-empty timeout. This is exactly the case that
+    // used to truncate device-side recordings.
+    const stale = await db
+      .select({ roomName: liveStream.roomName, egressId: liveStream.egressId })
+      .from(liveStream)
+      .where(and(eq(liveStream.status, "live"), lt(liveStream.lastSeenAt, new Date(Date.now() - STALE_AFTER_MS))))
+    for (const s of stale) {
+      if (s.egressId) await stopRoomEgress(s.egressId)
+    }
     await db
       .update(liveStream)
-      .set({ status: "ended", endedAt: new Date() })
+      .set({ status: "ended", endedAt: new Date(), egressId: null })
       .where(and(eq(liveStream.status, "live"), lt(liveStream.lastSeenAt, new Date(Date.now() - STALE_AFTER_MS))))
   } catch (err) {
     console.error("[v0] endStaleStreams cleanup failed:", err)
@@ -171,6 +205,44 @@ export async function startBroadcast(input: {
     status: "live",
   })
 
+  // ── Server-side replay recording (VIDEO only) ────────────────────────────
+  // Kick off LiveKit Egress so the replay is recorded on LiveKit's servers, not
+  // the host's device. We create the placeholder catalogue episode up front and
+  // hand its id to the egress (encoded in the object key) so the egress-ended
+  // webhook can finalize it. This is wrapped so ANY failure here (egress/storage
+  // misconfig, transient error) never blocks the host from going live — they
+  // simply go live without a recording rather than being stuck.
+  if (mode === "video" && isEgressConfigured()) {
+    let placeholderId: number | null = null
+    try {
+      const created = await createProcessingEpisode({
+        title,
+        category,
+        duration: "",
+        cover: input.cover ?? null,
+        mediaKind: "video",
+      })
+      if (created.ok) {
+        placeholderId = created.episodeId
+        const { egressId } = await startRoomVideoEgress({ roomName, episodeId: created.episodeId, orientation })
+        await db
+          .update(liveStream)
+          .set({ egressId, replayEpisodeId: created.episodeId })
+          .where(eq(liveStream.roomName, roomName))
+      }
+    } catch (err) {
+      console.log("[v0] egress start failed; going live without recording:", (err as Error)?.message)
+      // Roll back the placeholder so it doesn't linger as a stuck "processing" row.
+      if (placeholderId != null) {
+        try {
+          await deleteProcessingEpisode(placeholderId)
+        } catch {
+          /* best-effort cleanup */
+        }
+      }
+    }
+  }
+
   const token = await createAccessToken({
     roomName,
     identity: user.id,
@@ -199,6 +271,8 @@ export async function endBroadcast(input: { roomName: string }): Promise<void> {
   // may end the live for everyone too.
   const { isController } = await getGridControl(input.roomName, user.id)
   if (!isController) return
+  // Stop the server-side recording first so the replay finalizes promptly.
+  await stopEgressForRoom(input.roomName)
   await db
     .update(liveStream)
     .set({ status: "ended", endedAt: new Date() })
@@ -1286,6 +1360,7 @@ export async function getCallState(input: { roomName: string }): Promise<{
   if (stream && stream.status === "live" && stream.endRequestAt) {
     const remainingMs = END_REQUEST_WINDOW_MS - (Date.now() - stream.endRequestAt.getTime())
     if (remainingMs <= 0) {
+      await stopEgressForRoom(input.roomName)
       await db
         .update(liveStream)
         .set({
@@ -1294,6 +1369,7 @@ export async function getCallState(input: { roomName: string }): Promise<{
           endRequestAt: null,
           endRequestById: null,
           endRequestByName: null,
+          egressId: null,
         })
         .where(and(eq(liveStream.roomName, input.roomName), eq(liveStream.status, "live")))
       revalidatePath("/live")
@@ -1585,6 +1661,7 @@ export async function resolveEndSession(input: {
   if ((await getHostId(input.roomName)) !== user.id)
     return { ok: false, error: "Only the host can answer this request." }
   if (input.approve) {
+    await stopEgressForRoom(input.roomName)
     await db
       .update(liveStream)
       .set({
@@ -1593,6 +1670,7 @@ export async function resolveEndSession(input: {
         endRequestAt: null,
         endRequestById: null,
         endRequestByName: null,
+        egressId: null,
       })
       .where(and(eq(liveStream.roomName, input.roomName), eq(liveStream.status, "live")))
     revalidatePath("/live")
