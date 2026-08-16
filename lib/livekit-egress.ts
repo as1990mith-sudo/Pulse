@@ -3,8 +3,9 @@ import {
   EgressClient,
   EncodedFileOutput,
   EncodedFileType,
-  EncodingOptionsPreset,
+  EncodingOptions,
   S3Upload,
+  VideoCodec,
 } from "livekit-server-sdk"
 import { LIVEKIT_URL, isLiveKitConfigured } from "@/lib/livekit"
 import { getStorageConfig, isStorageConfigured } from "@/lib/storage"
@@ -92,10 +93,34 @@ export async function startRoomVideoEgress(input: {
 
   // Portrait broadcasts record vertically; landscape (Conversation grid) records
   // 16:9. "speaker" focuses the active publisher; "grid" tiles everyone.
+  //
+  // We set an EXPLICIT high-bitrate EncodingOptions instead of the stock
+  // PORTRAIT_H264_1080P_30 / H264_1080P_30 presets. Those presets re-encode the
+  // recording at a modest bitrate (~3 Mbps), which is what made the replay look
+  // soft and blocky. 6 Mbps at 30 fps with a 2s keyframe interval keeps the MP4
+  // crisp and smooth without ballooning file size, and matching the output
+  // dimensions to the orientation avoids letterboxing/rescale quality loss.
+  // (video_bitrate is in kbps; audio_bitrate too.)
   const encodingOptions =
     input.orientation === "landscape"
-      ? EncodingOptionsPreset.H264_1080P_30
-      : EncodingOptionsPreset.PORTRAIT_H264_1080P_30
+      ? new EncodingOptions({
+          width: 1920,
+          height: 1080,
+          framerate: 30,
+          videoCodec: VideoCodec.H264_MAIN,
+          videoBitrate: 6000,
+          keyFrameInterval: 2,
+          audioBitrate: 128,
+        })
+      : new EncodingOptions({
+          width: 1080,
+          height: 1920,
+          framerate: 30,
+          videoCodec: VideoCodec.H264_MAIN,
+          videoBitrate: 6000,
+          keyFrameInterval: 2,
+          audioBitrate: 128,
+        })
   const layout = input.orientation === "landscape" ? "grid" : "speaker"
 
   const client = egressClient()
