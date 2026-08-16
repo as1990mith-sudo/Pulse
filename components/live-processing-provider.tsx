@@ -332,6 +332,46 @@ export function LiveProcessingProvider({ children }: { children: React.ReactNode
   )
 }
 
+/**
+ * A minimal circular progress ring drawn with two stacked SVG circles. When
+ * `indeterminate`, it spins a short arc (preparing/verifying, where there's no
+ * byte-level progress yet); otherwise it sweeps to `value` (0–100).
+ */
+function ProgressRing({
+  value,
+  indeterminate = false,
+  className,
+  children,
+}: {
+  value: number
+  indeterminate?: boolean
+  className?: string
+  children?: React.ReactNode
+}) {
+  const r = 15
+  const c = 2 * Math.PI * r
+  const pct = Math.max(0, Math.min(100, value))
+  return (
+    <span className={cn("relative flex size-9 shrink-0 items-center justify-center", className)}>
+      <svg viewBox="0 0 36 36" className={cn("size-9 -rotate-90", indeterminate && "animate-spin")}>
+        <circle cx="18" cy="18" r={r} fill="none" strokeWidth="2.5" className="stroke-secondary" />
+        <circle
+          cx="18"
+          cy="18"
+          r={r}
+          fill="none"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          className="stroke-primary transition-[stroke-dashoffset] duration-300 ease-out"
+          strokeDasharray={c}
+          strokeDashoffset={indeterminate ? c * 0.75 : c * (1 - pct / 100)}
+        />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center">{children}</span>
+    </span>
+  )
+}
+
 function ProcessingCard({
   job,
   onRetry,
@@ -348,66 +388,62 @@ function ProcessingCard({
     job.status === "verifying" ||
     job.status === "uploading" ||
     job.status === "finalizing"
-  const elapsedMin = Math.floor((Date.now() - job.startedAt) / 60000)
-  // Rough remaining-bytes estimate for the ETA line during upload.
-  const eta = job.status === "uploading" && job.progress < 100 ? `${100 - job.progress}% to go` : null
-  const slow = job.status === "uploading" && elapsedMin >= 3
+  // Displayed progress: uploading uses real bytes; finalizing is effectively
+  // complete; preparing/verifying have no measurable progress (indeterminate).
+  const indeterminate = job.status === "preparing" || job.status === "verifying"
+  const displayPct = job.status === "finalizing" ? 100 : job.progress
+  // Auto-dismiss the success state so the ready card disappears on its own —
+  // it's a transient system status, not a banner that lingers.
+  useEffect(() => {
+    if (job.status !== "ready") return
+    const t = setTimeout(onDismiss, 3500)
+    return () => clearTimeout(t)
+  }, [job.status, onDismiss])
+
+  const label =
+    job.status === "ready"
+      ? "Replay ready"
+      : job.status === "failed"
+        ? "Processing failed"
+        : "Processing replay"
 
   return (
-    <div className="pointer-events-auto w-full max-w-md overflow-hidden rounded-2xl border border-border/60 bg-card/95 shadow-2xl shadow-black/40 backdrop-blur">
-      <div className="flex items-start gap-3 p-3.5">
-        <span
-          className={cn(
-            "mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full",
-            job.status === "ready"
-              ? "bg-primary/15 text-primary"
-              : job.status === "failed"
-                ? "bg-destructive/15 text-destructive"
-                : "bg-secondary text-foreground",
-          )}
-        >
-          {job.status === "ready" ? (
-            <CheckCircle2 className="size-4.5" />
-          ) : job.status === "failed" ? (
-            <AlertTriangle className="size-4.5" />
-          ) : (
-            <Loader2 className="size-4.5 animate-spin" />
-          )}
-        </span>
+    <div className="pointer-events-auto w-full max-w-sm overflow-hidden rounded-2xl border border-border/50 bg-card/90 shadow-xl shadow-black/30 ring-1 ring-white/5 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className="flex items-center gap-3 p-3">
+        {job.status === "ready" ? (
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+            <CheckCircle2 className="size-5" />
+          </span>
+        ) : job.status === "failed" ? (
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-destructive/15 text-destructive">
+            <AlertTriangle className="size-5" />
+          </span>
+        ) : (
+          <ProgressRing value={displayPct} indeterminate={indeterminate}>
+            {indeterminate ? (
+              <Loader2 className="size-3.5 animate-spin text-primary" />
+            ) : (
+              <span className="text-[10px] font-semibold tabular-nums text-foreground">{displayPct}</span>
+            )}
+          </ProgressRing>
+        )}
 
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold leading-tight">
-            {job.status === "ready"
-              ? "Replay ready"
-              : job.status === "failed"
-                ? "Processing failed"
-                : "Processing your replay…"}
-          </p>
-          <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted-foreground">
-            {job.status === "ready" ? (
-              "Your live replay is now ready in your Live Catalogue."
-            ) : job.status === "failed" ? (
-              job.error || "Something went wrong while uploading."
-            ) : job.status === "verifying" || job.status === "finalizing" ? (
-              "Processing video… finishing your replay."
-            ) : slow ? (
-              "Your live replay is still processing. We'll notify you when it's ready."
-            ) : (
-              <>
-                {job.title}
-                {eta ? ` · ${eta}` : ""}
-              </>
+          <p
+            className={cn(
+              "text-[11px] font-medium uppercase tracking-wide",
+              job.status === "ready"
+                ? "text-primary"
+                : job.status === "failed"
+                  ? "text-destructive"
+                  : "text-muted-foreground",
             )}
+          >
+            {label}
           </p>
-
-          {active && (
-            <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-secondary">
-              <div
-                className="h-full rounded-full bg-primary transition-[width] duration-300"
-                style={{ width: `${job.status === "finalizing" ? 100 : job.progress}%` }}
-              />
-            </div>
-          )}
+          <p className="mt-0.5 truncate text-sm font-semibold leading-tight text-foreground">
+            {job.status === "failed" ? job.error || "Something went wrong while uploading." : job.title}
+          </p>
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
@@ -415,7 +451,7 @@ function ProcessingCard({
             <button
               type="button"
               onClick={onRetry}
-              className="flex h-8 items-center gap-1.5 rounded-full bg-destructive/15 px-2.5 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/25"
+              className="flex h-8 items-center gap-1.5 rounded-full bg-destructive/15 px-3 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/25"
             >
               <RotateCw className="size-3.5" /> Retry
             </button>

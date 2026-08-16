@@ -122,7 +122,7 @@ export function BottomNav() {
           lift it off the page for a premium feel. */}
       <nav
         aria-label="Primary"
-        className="pointer-events-auto flex w-full items-stretch justify-around gap-1 rounded-full border border-border/60 bg-background/70 p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.12)] ring-1 ring-foreground/5 backdrop-blur-xl supports-[backdrop-filter]:bg-background/55"
+        className="pointer-events-auto flex w-full items-stretch justify-around gap-1 rounded-full border border-border/50 bg-background/65 p-1.5 shadow-[0_6px_24px_rgba(0,0,0,0.18)] ring-1 ring-white/5 backdrop-blur-xl supports-[backdrop-filter]:bg-background/50"
       >
         {TABS.map((tab, i) => {
           const active = i === activeIndex

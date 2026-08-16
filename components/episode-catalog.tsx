@@ -179,7 +179,7 @@ export function EpisodeCatalog({
   const searchNoun = tab === "live" ? `live ${liveKind}` : tab === "audio" ? "uploaded" : tab
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Audio / Live section nav — editorial underline style matching the
           Articles hub. The top-level "Video" (uploads) tab is hidden for now;
           restore its entry below to re-enable it. Live recordings still expose
@@ -202,15 +202,20 @@ export function EpisodeCatalog({
                 aria-selected={active}
                 onClick={() => selectTab(key)}
                 className={cn(
-                  "-mb-px flex flex-1 items-center justify-center gap-2 border-b-2 py-3 text-sm font-medium transition-colors",
+                  "-mb-px flex flex-1 items-center justify-center gap-2 border-b-2 py-3.5 text-sm font-medium tracking-tight transition-colors",
                   active
                     ? "border-primary text-foreground"
                     : "border-transparent text-muted-foreground hover:text-foreground",
                 )}
               >
-                <Icon className="size-4" />
+                <Icon className={cn("size-4 transition-colors", active ? "text-primary" : "")} />
                 {label}
-                <span className={cn("text-xs tabular-nums", active ? "text-foreground" : "text-muted-foreground/60")}>
+                <span
+                  className={cn(
+                    "text-xs tabular-nums transition-colors",
+                    active ? "text-primary" : "text-muted-foreground/50",
+                  )}
+                >
                   {count}
                 </span>
               </button>
@@ -226,7 +231,7 @@ export function EpisodeCatalog({
         <div
           role="tablist"
           aria-label="Filter live recordings by media type"
-          className="mx-auto flex w-fit items-center gap-1 rounded-full border border-border/50 bg-card/40 p-1"
+          className="mx-auto flex w-fit items-center gap-1 rounded-full border border-border/40 bg-card/30 p-1"
         >
           {(
             [
@@ -243,18 +248,18 @@ export function EpisodeCatalog({
                 aria-selected={active}
                 onClick={() => selectLiveKind(key)}
                 className={cn(
-                  "flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors",
+                  "flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[13px] font-medium transition-[background-color,color,box-shadow] duration-200",
                   active
-                    ? "bg-secondary text-foreground shadow-sm"
+                    ? "bg-card text-foreground shadow-sm ring-1 ring-border/60"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                <Icon className="size-3.5" />
+                <Icon className={cn("size-3.5 transition-colors", active ? "text-primary" : "")} />
                 {label}
                 <span
                   className={cn(
-                    "rounded-full px-1.5 text-[11px] tabular-nums",
-                    active ? "bg-background/70 text-foreground" : "text-muted-foreground/60",
+                    "min-w-4 rounded-full px-1 text-center text-[10px] tabular-nums transition-colors",
+                    active ? "bg-primary/15 text-primary" : "text-muted-foreground/50",
                   )}
                 >
                   {count}
@@ -265,15 +270,15 @@ export function EpisodeCatalog({
         </div>
       )}
 
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <div className="group relative">
+        <Search className="pointer-events-none absolute left-4 top-1/2 size-[18px] -translate-y-1/2 text-muted-foreground/70 transition-colors group-focus-within:text-primary" />
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={`Search ${searchNoun} episodes by title…`}
           aria-label="Search episodes by title"
-          className="w-full rounded-xl border border-border/50 bg-card/40 py-2.5 pl-10 pr-4 text-sm outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary/60 focus:bg-card"
+          className="w-full rounded-2xl border border-border/40 bg-card/30 py-3 pl-11 pr-4 text-sm outline-none transition-[background-color,border-color,box-shadow] duration-200 placeholder:text-muted-foreground/60 focus:border-primary/40 focus:bg-card/60 focus:ring-4 focus:ring-primary/10"
         />
       </div>
 

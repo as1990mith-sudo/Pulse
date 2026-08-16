@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Clock, Globe, Loader2, Lock, MoreVertical, Play, Trash2 } from "lucide-react"
+import { Globe, Loader2, Lock, MoreVertical, Play, Trash2 } from "lucide-react"
 import type { Show } from "@/lib/data"
 import { deleteEpisode, setEpisodePrivacy } from "@/app/actions/shows"
 import { isPlayable, useEpisodePlayer } from "@/components/episode-player-provider"
@@ -108,25 +108,22 @@ export function VideoCard({
     // cover-art thumbnail on the left, then title / @username / views · date.
     <div
       className={cn(
-        "group relative flex items-start gap-2 transition-colors hover:bg-card/60",
-        // Flush rows are full-bleed rectangles; keep the right text off the
-        // screen edge with padding while the thumbnail hugs the left border.
-        flush ? "rounded-none pr-4 sm:rounded-xl sm:pr-0" : "rounded-xl",
+        "group relative flex items-start gap-3.5 rounded-xl px-1 py-1 transition-[background-color,transform] duration-200 hover:bg-card/50 active:scale-[0.99] active:bg-card/70",
+        // Flush rows keep the thumbnail hugging the left border while the text
+        // stays clear of the screen edge with right padding.
+        flush ? "pr-4 sm:pr-1" : "",
       )}
     >
       <OpenTag
         {...openProps}
         aria-label={playable ? `Play ${show.title}` : `Watch ${show.title}`}
         className={cn(
-          "relative block shrink-0 overflow-hidden bg-secondary",
-          // Livestream replays are portrait recordings, so their list thumbnail
-          // is a 4:5 poster showing the uploaded cover art cropped to fill
-          // (object-cover below), consistent and never distorted. It's kept
-          // deliberately compact (w-24/w-28 → 120px/140px tall) so the list row
-          // stays sleek. Uploaded videos keep the wider 16:9 thumbnail.
-          isLiveReplay ? "aspect-[4/5] w-24 sm:w-28" : "aspect-video w-32 sm:w-40",
-          // Perfect rectangle (no rounding) when immersive; rounded card otherwise.
-          flush ? "rounded-none sm:rounded-xl" : "rounded-xl",
+          "relative block shrink-0 overflow-hidden rounded-lg bg-secondary ring-1 ring-white/5",
+          // A single, consistent cinematic 16:9 thumbnail for every catalogue
+          // item — live replays and uploads alike — cropped to fill
+          // (object-cover below) so cards never distort and the list reads as a
+          // deliberate, uniform media library rather than mixed proportions.
+          "aspect-video w-36 sm:w-44",
         )}
       >
         {hasCover ? (
@@ -157,15 +154,15 @@ export function VideoCard({
           </span>
         </span>
 
-        {/* Duration badge */}
+        {/* Duration badge — small, translucent, sits quietly over the artwork */}
         {show.duration && (
-          <span className="absolute bottom-1 right-1 inline-flex items-center gap-1 rounded-md bg-black/80 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-white">
-            <Clock className="size-2.5" /> {show.duration}
+          <span className="absolute bottom-1.5 right-1.5 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-white backdrop-blur-sm">
+            {show.duration}
           </span>
         )}
 
         {owned && isPrivate && (
-          <span className="absolute left-1 top-1 inline-flex items-center gap-1 rounded-md bg-black/75 px-1.5 py-0.5 text-[10px] font-medium text-white">
+          <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
             <Lock className="size-2.5" /> Private
           </span>
         )}
@@ -178,21 +175,19 @@ export function VideoCard({
           {...openProps}
           className={cn(
             "flex min-w-0 flex-1 flex-col overflow-hidden text-left",
-            // Cap the text column to the thumbnail's height so the row never
-            // grows taller than its poster: 4:5 for live replays (w-24→120px,
-            // w-28→140px), 16:9 otherwise (72px/90px).
-            isLiveReplay ? "max-h-[120px] sm:max-h-[140px]" : "max-h-[72px] sm:max-h-[90px]",
+            // Cap the text column to the 16:9 thumbnail's height (w-36→81px,
+            // w-44→99px) so the row never grows taller than its artwork.
+            "max-h-[81px] sm:max-h-[99px]",
           )}
         >
-          {/* Title wraps to at most two lines (YouTube-style) and truncates with
-              an ellipsis. The column is capped to the thumbnail's height
-              (aspect-video of w-32/w-40 = 72px/90px) with overflow-hidden, so the
-              title + @username + views·date never grow taller than the thumbnail. */}
-          <h3 className="line-clamp-2 font-display text-sm font-semibold leading-snug tracking-tight transition-colors group-hover:text-primary">
+          {/* Three deliberate levels of hierarchy: the title is the loudest
+              (wraps to two lines, YouTube-style), the @handle is secondary, and
+              views · date is quiet tertiary metadata. */}
+          <h3 className="line-clamp-2 font-display text-[15px] font-semibold leading-snug tracking-tight text-foreground transition-colors group-hover:text-primary">
             {show.title}
           </h3>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">{show.host.handle}</p>
-          {meta && <p className="mt-0.5 truncate text-xs text-muted-foreground">{meta}</p>}
+          <p className="mt-1 truncate text-xs font-medium text-muted-foreground">{show.host.handle}</p>
+          {meta && <p className="mt-0.5 truncate text-[11px] tabular-nums text-muted-foreground/70">{meta}</p>}
         </OpenTag>
 
         {owned && (
