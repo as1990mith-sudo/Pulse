@@ -125,6 +125,17 @@ async function probeVideoBlob(
       }
     })
 
+    // [v0-diag] TEMPORARY: the decoded truth about the assembled/stored asset —
+    // what the browser video element actually reports for the uploaded blob.
+    console.log("[v0-diag] probe decoded blob", {
+      decodedDurationSec: Number.isFinite(duration) ? Math.round(duration) : String(duration),
+      videoWidth: el.videoWidth ?? 0,
+      videoHeight: el.videoHeight ?? 0,
+      expectedDurationSec: expectedDurationSec ?? "(none)",
+      blobType: blob.type,
+      blobBytes: blob.size,
+    })
+
     if (!Number.isFinite(duration) || duration <= 0) {
       return { ok: false, reason: "The recording has no valid duration." }
     }
@@ -206,6 +217,20 @@ export function LiveProcessingProvider({ children }: { children: React.ReactNode
         const { url } = await uploadMedia(file, "episodes", undefined, (pct) =>
           patchJob(job.localId, { progress: pct }),
         )
+        // [v0-diag] TEMPORARY: the stored asset URL + size that were persisted.
+        // Fetch a HEAD to confirm Content-Length + range support on the CDN.
+        console.log("[v0-diag] uploaded to storage", { url, uploadedBytes: file.size, type: file.type })
+        try {
+          const head = await fetch(url, { method: "HEAD" })
+          console.log("[v0-diag] storage HEAD", {
+            status: head.status,
+            contentLength: head.headers.get("content-length"),
+            contentType: head.headers.get("content-type"),
+            acceptRanges: head.headers.get("accept-ranges"),
+          })
+        } catch {
+          /* diagnostics only */
+        }
 
         patchJob(job.localId, { status: "finalizing", progress: 100 })
         if (job.episodeId) {

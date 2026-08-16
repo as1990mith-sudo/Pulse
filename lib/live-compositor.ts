@@ -107,6 +107,14 @@ export class LiveCompositor {
    */
   private manual = false
   /**
+   * [v0-diag] TEMPORARY diagnostic counter — total composite frames actually
+   * drawn+pushed since start(). Read by the recorder's heartbeat log to prove
+   * whether the canvas kept advancing for the whole session or froze early.
+   * Remove with the rest of the [v0-diag] instrumentation once the root cause
+   * is confirmed on a real device.
+   */
+  framesDrawn = 0
+  /**
    * Background-safe draw clock. `requestAnimationFrame` is PAUSED by the browser
    * whenever the page is hidden (host locks their phone, switches apps, screen
    * dims) — which froze the canvas, so `captureStream` stopped emitting frames
@@ -159,6 +167,21 @@ export class LiveCompositor {
     }
     this.stream = stream
     this.videoTrack = track
+
+    // [v0-diag] TEMPORARY: record which capture mode we landed on + the track's
+    // real settings. Manual vs auto is a prime suspect for the ~1s truncation.
+    try {
+      const s = (track?.getSettings?.() ?? {}) as MediaTrackSettings
+      console.log("[v0-diag] compositor.start capture mode:", this.manual ? "MANUAL (captureStream 0)" : "AUTO (captureStream 30)", {
+        trackReadyState: track?.readyState,
+        frameRate: s.frameRate,
+        width: s.width,
+        height: s.height,
+        aspect: this.opts.aspect,
+      })
+    } catch {
+      /* diagnostics only */
+    }
 
     // --- Audio graph: mix every track into one destination node. ---
     try {
@@ -232,6 +255,7 @@ export class LiveCompositor {
   private maybeDraw(ts: number) {
     this.lastDrawTs = ts
     this.drawFrame()
+    this.framesDrawn++ // [v0-diag] TEMPORARY frame counter
     // ONLY push a frame in manual mode. In auto mode the browser samples the
     // canvas on its own; calling requestFrame() there stops that sampling on
     // Chromium/Android and truncates the recording to ~1s.

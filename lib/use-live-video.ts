@@ -259,6 +259,11 @@ export function useLiveVideo({
   // saved replay comes back empty. `stopRecording` owns the teardown instead.
   const finalizingRef = useRef(false)
   const compositorRef = useRef<LiveCompositor | null>(null)
+  // [v0-diag] TEMPORARY: heartbeat interval + running chunk tally so ONE test
+  // session shows, in the console, exactly when/if chunk generation stalls.
+  const diagHeartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const diagChunkCountRef = useRef(0)
+  const diagChunkBytesRef = useRef(0)
   const recordAspectRef = useRef(recordAspect)
   recordAspectRef.current = recordAspect
   // Ordered roster (host first) mirrored into a ref so the compositor's draw
@@ -1095,8 +1100,30 @@ export function useLiveVideo({
       return
     }
     recordChunksRef.current = []
+    // [v0-diag] TEMPORARY: reset per-session diagnostic tallies + log config.
+    diagChunkCountRef.current = 0
+    diagChunkBytesRef.current = 0
+    console.log("[v0-diag] MediaRecorder starting", {
+      mimeChosen: mime || "(browser default)",
+      isTypeSupported_mp4: typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("video/mp4"),
+      streamVideoTracks: stream.getVideoTracks().length,
+      streamAudioTracks: stream.getAudioTracks().length,
+      timesliceMs: 1000,
+    })
     rec.ondataavailable = (e) => {
-      if (e.data && e.data.size > 0) recordChunksRef.current.push(e.data)
+      if (e.data && e.data.size > 0) {
+        recordChunksRef.current.push(e.data)
+        // [v0-diag] TEMPORARY: tally each chunk as it arrives.
+        diagChunkCountRef.current++
+        diagChunkBytesRef.current += e.data.size
+        if (diagChunkCountRef.current <= 5 || diagChunkCountRef.current % 15 === 0) {
+          console.log("[v0-diag] chunk", diagChunkCountRef.current, {
+            sizeBytes: e.data.size,
+            totalBytes: diagChunkBytesRef.current,
+            elapsedSec: recordStartMsRef.current ? Math.round((Date.now() - recordStartMsRef.current) / 1000) : 0,
+          })
+        }
+      }
     }
     try {
       rec.start(1000) // gather data in 1s slices so a crash still yields most of the take
@@ -1108,6 +1135,22 @@ export function useLiveVideo({
     recorderRef.current = rec
     recordingStartedRef.current = true
     recordStartMsRef.current = Date.now()
+    // [v0-diag] TEMPORARY heartbeat: every 10s, print elapsed wall-clock vs.
+    // chunks received vs. composite frames drawn vs. recorder state. This single
+    // log line is the decisive signal — it shows whether chunk generation keeps
+    // pace with the session or stalls (and at what second it stalls).
+    if (diagHeartbeatRef.current) clearInterval(diagHeartbeatRef.current)
+    diagHeartbeatRef.current = setInterval(() => {
+      const elapsedSec = Math.round((Date.now() - recordStartMsRef.current) / 1000)
+      console.log("[v0-diag] heartbeat", {
+        elapsedSec,
+        chunks: diagChunkCountRef.current,
+        totalBytes: diagChunkBytesRef.current,
+        framesDrawn: compositorRef.current?.framesDrawn ?? 0,
+        recorderState: recorderRef.current?.state ?? "(none)",
+        pageHidden: typeof document !== "undefined" ? document.hidden : "n/a",
+      })
+    }, 10000)
     // Keep the screen/page awake so a dimming phone can't background the tab and
     // truncate the recording.
     void requestWakeLock()
@@ -1122,6 +1165,11 @@ export function useLiveVideo({
     // (the console calls both when the host ends the session) doesn't kill the
     // recorder and compositor before the final chunk is flushed.
     finalizingRef.current = true
+    // [v0-diag] TEMPORARY: stop the heartbeat now that we're finalizing.
+    if (diagHeartbeatRef.current) {
+      clearInterval(diagHeartbeatRef.current)
+      diagHeartbeatRef.current = null
+    }
     return new Promise((resolve) => {
       const rec = recorderRef.current
       const assemble = () =>
@@ -1129,6 +1177,18 @@ export function useLiveVideo({
       const done = (blob: Blob | null) => {
         finalizingRef.current = false
         releaseWakeLock()
+        const durationMs = recordStartMsRef.current > 0 ? Date.now() - recordStartMsRef.current : 0
+        // [v0-diag] TEMPORARY: the finalisation summary — chunks assembled, raw
+        // blob size/type, wall-clock length, and composite frames drawn. This is
+        // the "LIVE RECORDING → CHUNKS → FINALISATION" evidence for the report.
+        console.log("[v0-diag] stopRecording finalise", {
+          chunksAssembled: recordChunksRef.current.length,
+          rawBlobBytes: blob?.size ?? 0,
+          rawBlobType: blob?.type ?? "(none)",
+          wallClockSec: Math.round(durationMs / 1000),
+          framesDrawn: compositorRef.current?.framesDrawn ?? "(compositor gone)",
+          expectedFramesAt30fps: Math.round((durationMs / 1000) * 30),
+        })
         if (!blob) {
           resolve(null)
           return
@@ -1137,9 +1197,19 @@ export function useLiveVideo({
         // length. Inject it into the WebM header before handing the blob to the
         // uploader; if the patch fails, fall back to the raw blob so saving is
         // never blocked.
-        const durationMs = recordStartMsRef.current > 0 ? Date.now() - recordStartMsRef.current : 0
         void fixRecordedVideoDuration(blob, durationMs).then(
-          (fixed) => resolve(fixed),
+          (fixed) => {
+            // [v0-diag] TEMPORARY: did the WebM duration patch run / change size?
+            console.log("[v0-diag] duration-fix", {
+              applied: fixed !== blob,
+              blobType: blob.type,
+              beforeBytes: blob.size,
+              afterBytes: fixed.size,
+              injectedMs: durationMs,
+              note: blob.type.includes("webm") ? "webm → patch attempted" : "non-webm (mp4) → NOT patched",
+            })
+            resolve(fixed)
+          },
           () => resolve(blob),
         )
       }
