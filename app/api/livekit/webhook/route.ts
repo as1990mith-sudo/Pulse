@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { episode, notification } from "@/lib/db/schema"
 import { buildPublicUrl } from "@/lib/storage"
-import { episodeIdFromKey } from "@/lib/livekit-egress"
+import { episodeIdFromKey, replayObjectKey } from "@/lib/livekit-egress"
 
 // livekit-server-sdk needs Node crypto; this must not run on the edge.
 export const runtime = "nodejs"
@@ -85,7 +85,11 @@ export async function POST(req: Request) {
   if (isComplete && hasUsableFile) {
     // duration is nanoseconds (bigint) on the proto; convert to seconds.
     const durationSec = Number(file!.duration ?? 0) / 1_000_000_000
-    const publicUrl = buildPublicUrl(key)
+    // Use the full object key for the public URL. LiveKit echoes the full
+    // filepath in `filename`, but if it ever returns just a basename (no slash),
+    // rebuild the canonical key from the room name so the URL still resolves.
+    const fullKey = key.includes("/") ? key : replayObjectKey(episodeId, info.roomName ?? "")
+    const publicUrl = buildPublicUrl(fullKey)
 
     await db
       .update(episode)

@@ -1128,11 +1128,6 @@ export function useLiveVideo({
     // (the console calls both when the host ends the session) doesn't kill the
     // recorder and compositor before the final chunk is flushed.
     finalizingRef.current = true
-    // [v0-diag] TEMPORARY: stop the heartbeat now that we're finalizing.
-    if (diagHeartbeatRef.current) {
-      clearInterval(diagHeartbeatRef.current)
-      diagHeartbeatRef.current = null
-    }
     return new Promise((resolve) => {
       const rec = recorderRef.current
       const assemble = () =>
@@ -1141,17 +1136,6 @@ export function useLiveVideo({
         finalizingRef.current = false
         releaseWakeLock()
         const durationMs = recordStartMsRef.current > 0 ? Date.now() - recordStartMsRef.current : 0
-        // [v0-diag] TEMPORARY: the finalisation summary — chunks assembled, raw
-        // blob size/type, wall-clock length, and composite frames drawn. This is
-        // the "LIVE RECORDING → CHUNKS → FINALISATION" evidence for the report.
-        console.log("[v0-diag] stopRecording finalise", {
-          chunksAssembled: recordChunksRef.current.length,
-          rawBlobBytes: blob?.size ?? 0,
-          rawBlobType: blob?.type ?? "(none)",
-          wallClockSec: Math.round(durationMs / 1000),
-          framesDrawn: compositorRef.current?.framesDrawn ?? "(compositor gone)",
-          expectedFramesAt30fps: Math.round((durationMs / 1000) * 30),
-        })
         if (!blob) {
           resolve(null)
           return
@@ -1161,18 +1145,7 @@ export function useLiveVideo({
         // uploader; if the patch fails, fall back to the raw blob so saving is
         // never blocked.
         void fixRecordedVideoDuration(blob, durationMs).then(
-          (fixed) => {
-            // [v0-diag] TEMPORARY: did the WebM duration patch run / change size?
-            console.log("[v0-diag] duration-fix", {
-              applied: fixed !== blob,
-              blobType: blob.type,
-              beforeBytes: blob.size,
-              afterBytes: fixed.size,
-              injectedMs: durationMs,
-              note: blob.type.includes("webm") ? "webm → patch attempted" : "non-webm (mp4) → NOT patched",
-            })
-            resolve(fixed)
-          },
+          (fixed) => resolve(fixed),
           () => resolve(blob),
         )
       }
