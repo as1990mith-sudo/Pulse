@@ -196,6 +196,7 @@ export function useLiveVideo({
   initialMicOn = true,
   initialCamOn = true,
   recordAspect = "portrait",
+  recordOnServer = false,
   onAskUnmute,
 }: {
   token: string | null
@@ -215,6 +216,11 @@ export function useLiveVideo({
   // stream; "landscape" mirrors a grid meeting. The recording composites every
   // participant tile into this frame so the replay matches the live view.
   recordAspect?: "portrait" | "landscape"
+  // When true, the replay is being recorded SERVER-SIDE by LiveKit Egress, so
+  // this hook must NOT run its own client-side MediaRecorder capture. This is
+  // the permanent recording path; the client canvas/MediaRecorder capture below
+  // is retained only as a fallback for when egress is unavailable.
+  recordOnServer?: boolean
   // Fired when the host asks this client to unmute (received over the data
   // channel). The UI shows a prompt; we never open the mic without consent.
   onAskUnmute?: () => void
@@ -1129,6 +1135,7 @@ export function useLiveVideo({
       const done = (blob: Blob | null) => {
         finalizingRef.current = false
         releaseWakeLock()
+        const durationMs = recordStartMsRef.current > 0 ? Date.now() - recordStartMsRef.current : 0
         if (!blob) {
           resolve(null)
           return
@@ -1137,7 +1144,6 @@ export function useLiveVideo({
         // length. Inject it into the WebM header before handing the blob to the
         // uploader; if the patch fails, fall back to the raw blob so saving is
         // never blocked.
-        const durationMs = recordStartMsRef.current > 0 ? Date.now() - recordStartMsRef.current : 0
         void fixRecordedVideoDuration(blob, durationMs).then(
           (fixed) => resolve(fixed),
           () => resolve(blob),
@@ -1183,8 +1189,12 @@ export function useLiveVideo({
   // produced an empty recording and silently failed to save. `startRecording`
   // is idempotent, so re-runs when the camera later turns on are no-ops.
   useEffect(() => {
+    // When the replay is recorded server-side by egress, skip the client-side
+    // capture entirely — running both would double-record and re-introduce the
+    // old truncated device-side blob.
+    if (recordOnServer) return
     if (isHost && connected) startRecording()
-  }, [isHost, connected, startRecording])
+  }, [isHost, connected, startRecording, recordOnServer])
 
   // The screen wake lock is auto-released by the browser whenever the page is
   // hidden. Re-acquire it the moment the host returns while still recording, so

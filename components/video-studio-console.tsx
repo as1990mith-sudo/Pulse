@@ -32,6 +32,7 @@ import {
   startBroadcast,
   endBroadcast,
   joinBroadcast,
+  discardRoomReplay,
   getCallState,
   respondToCallRequest,
   removeFromStage,
@@ -291,6 +292,10 @@ export function VideoStudioConsole({
   const [roomTopic, setRoomTopic] = useState<string>(resumeStream?.topic ?? "")
   const [roomName, setRoomName] = useState<string | null>(resumeStream?.roomName ?? null)
   const [creds, setCreds] = useState<{ token: string; serverUrl: string } | null>(null)
+  // True when the replay is recorded SERVER-SIDE by LiveKit Egress. Set from the
+  // go-live / resume result. When true the client skips its own MediaRecorder
+  // capture and the replay enqueue — egress + the webhook produce the replay.
+  const [recordOnServer, setRecordOnServer] = useState(false)
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [elapsed, setElapsed] = useState(0)
@@ -373,6 +378,8 @@ export function VideoStudioConsole({
     autoPublish: orientation === "landscape",
     // Record the composite in the same shape the audience watched in.
     recordAspect: orientation === "landscape" ? "landscape" : "portrait",
+    // When egress is recording server-side, skip the client-side capture.
+    recordOnServer,
   })
 
   // A live "Grid" stream renders the Meet/Zoom-style meeting grid instead of the
@@ -394,6 +401,7 @@ export function VideoStudioConsole({
       const startedMs = new Date(resumeStream.startedAt).getTime()
       startedAtRef.current = startedMs
       setElapsed(Math.max(0, Math.floor((Date.now() - startedMs) / 1000)))
+      setRecordOnServer(Boolean(res.recordOnServer))
       setCreds({ token: res.token, serverUrl: res.serverUrl })
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -551,6 +559,7 @@ export function VideoStudioConsole({
       previewStreamRef.current?.getTracks().forEach((t) => t.stop())
       previewStreamRef.current = null
       setRoomName(res.roomName)
+      setRecordOnServer(Boolean(res.recordOnServer))
       setCreds({ token: res.token, serverUrl: res.serverUrl })
       startedAtRef.current = null
       setElapsed(0)
@@ -568,7 +577,10 @@ export function VideoStudioConsole({
   // fire-and-forget so the room closes for participants without waiting on the
   // recording, uploads, episode creation, or the host's save decision.
   function endLiveRoom() {
-    recordingPromiseRef.current = stopRecording().catch(() => null)
+    // Server-recorded sessions have no client blob to finalize — egress + the
+    // webhook produce the replay. Only run the client recorder teardown for the
+    // fallback (non-egress) path.
+    recordingPromiseRef.current = recordOnServer ? Promise.resolve(null) : stopRecording().catch(() => null)
     if (roomName) void endBroadcast({ roomName }).catch(() => {})
     disconnect()
     setSaveDecision({ duration: formatElapsed(elapsed), durationSec: Math.round(elapsed) })
@@ -583,6 +595,14 @@ export function VideoStudioConsole({
   function handleSaveEpisode() {
     const dec = saveDecision
     setSaveDecision(null)
+    // Server-recorded replays are already being produced by egress + finalized
+    // by the webhook into the placeholder episode created at go-live. There's no
+    // client blob to upload — keeping the session just means leaving it in place.
+    if (recordOnServer) {
+      recordingPromiseRef.current = null
+      onExit?.()
+      return
+    }
     if (!dec) {
       onExit?.()
       return
@@ -610,6 +630,10 @@ export function VideoStudioConsole({
   function handleDiscardEpisode() {
     setSaveDecision(null)
     recordingPromiseRef.current = null
+    // For server-recorded sessions, remove the placeholder replay episode (and
+    // best-effort delete the stored object) so a discarded session doesn't
+    // linger in the catalogue as the webhook tries to finalize it.
+    if (recordOnServer && roomName) void discardRoomReplay({ roomName }).catch(() => {})
     onExit?.()
   }
 
