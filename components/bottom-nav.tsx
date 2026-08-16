@@ -122,7 +122,7 @@ export function BottomNav() {
           lift it off the page for a premium feel. */}
       <nav
         aria-label="Primary"
-        className="pointer-events-auto flex w-full items-stretch justify-around gap-1 rounded-full border border-border/60 bg-background/70 p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.12)] ring-1 ring-foreground/5 backdrop-blur-xl supports-[backdrop-filter]:bg-background/55"
+        className="pointer-events-auto flex w-full items-stretch justify-around gap-1 rounded-full border border-border/50 bg-background/65 p-1 shadow-[0_6px_24px_rgba(0,0,0,0.18)] ring-1 ring-white/5 backdrop-blur-xl supports-[backdrop-filter]:bg-background/50"
       >
         {TABS.map((tab, i) => {
           const active = i === activeIndex
@@ -135,7 +135,7 @@ export function BottomNav() {
               aria-current={active ? "page" : undefined}
               aria-label={tab.label}
               className={cn(
-                "group relative flex size-12 items-center justify-center rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/50",
+                "group relative flex size-11 items-center justify-center rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/50",
                 active
                   ? "bg-primary/15 text-primary"
                   : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
@@ -143,8 +143,8 @@ export function BottomNav() {
             >
               <Icon
                 className={cn(
-                  "size-[22px] shrink-0 transition-transform duration-300 ease-out",
-                  active ? "scale-[1.08] fill-current" : "scale-100",
+                  "size-5 shrink-0 transition-transform duration-300 ease-out",
+                  active ? "scale-[1.06] fill-current" : "scale-100",
                 )}
                 strokeWidth={2}
               />

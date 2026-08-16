@@ -200,16 +200,16 @@ export function ProfileTabs({
           arrow remains, returning the user to the tab they came from. */}
       {catalogueOpen && (
         <div className="fixed left-0 top-0 z-50 flex h-[100dvh] w-screen flex-col bg-background animate-in fade-in slide-in-from-bottom-2 duration-300">
-          <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border/60 bg-background/80 px-4 py-3 backdrop-blur-xl">
+          <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border/50 bg-background/70 px-4 py-4 backdrop-blur-xl sm:px-5">
             <button
               type="button"
               onClick={() => selectTab(prevTab)}
               aria-label="Back"
-              className="tap-scale -ml-1 flex size-9 items-center justify-center rounded-full text-foreground transition-colors hover:bg-secondary/60"
+              className="tap-scale -ml-1 flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
             >
               <ArrowLeft className="size-5" />
             </button>
-            <h2 className="flex-1 text-base font-semibold">Catalogue</h2>
+            <h2 className="flex-1 font-display text-lg font-semibold tracking-tight">Catalogue</h2>
 
             {/* Owner tools live top-right, opposite the back arrow: an info
                 popover with the upload hint, and the add (+) trigger. Moving
@@ -234,9 +234,9 @@ export function ProfileTabs({
                   type="button"
                   onClick={() => setUploadOpen(true)}
                   aria-label="Upload episode"
-                  className="tap-scale flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-transform hover:scale-105"
+                  className="tap-scale ml-0.5 flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/25 ring-1 ring-primary/20 transition-transform hover:scale-105 active:scale-95"
                 >
-                  <Plus className="size-5" />
+                  <Plus className="size-[18px]" strokeWidth={2.25} />
                 </button>
               </div>
             )}
