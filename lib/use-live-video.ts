@@ -577,22 +577,29 @@ export function useLiveVideo({
         // while good connections get the full-quality feed. 4:3 layers match
         // the 4:3 capture so every layer keeps the same framing.
         videoSimulcastLayers: [VideoPresets43.h360, VideoPresets43.h540],
-        // Publish the full 1440x1080 layer at ~6 Mbps / 30 fps. The server-side
-        // egress that records the replay SUBSCRIBES to this top layer, so its
-        // bitrate is the hard ceiling on replay sharpness: the recorder cannot
-        // add detail the source never sent. It was previously 4 Mbps while the
-        // egress re-encoded at 6 Mbps — i.e. re-compressing a 4 Mbps source and
-        // only adding artifacts. Publishing at 6 Mbps (with the egress given
-        // headroom ABOVE this, see livekit-egress.ts) means the MP4 preserves
-        // the source instead of degrading it. 6 Mbps @ 30 fps is still within a
-        // typical modern mobile uplink; "balanced" below sheds gracefully if not.
-        videoEncoding: { maxBitrate: 6_000_000, maxFramerate: 30 },
-        // "balanced" lets the encoder trade resolution AND frame rate together
-        // under congestion. The previous "maintain-resolution" held resolution
-        // by starving the frame rate — which is exactly why the replay looked
-        // choppy/low-fps. Balanced keeps motion smooth (closer to a steady
-        // 30 fps) with only a graceful resolution dip when the network is weak.
-        degradationPreference: "balanced",
+        // Publish the full 1440x1080 layer at up to ~8 Mbps / 30 fps. The
+        // server-side egress that records the replay SUBSCRIBES to this top
+        // layer, so its bitrate is the hard ceiling on replay sharpness: the
+        // recorder cannot add detail the source never sent. maxBitrate is a
+        // CEILING, not a floor — congestion control uses less when the uplink is
+        // weak — so raising it only helps on good networks and never forces too
+        // much onto a poor one. The egress is given headroom ABOVE this (see
+        // livekit-egress.ts) so the MP4 preserves the source instead of
+        // re-compressing it.
+        videoEncoding: { maxBitrate: 8_000_000, maxFramerate: 30 },
+        // "maintain-framerate" is the correct preference for a RECORDED talking-
+        // head stream, and it fixes two things at once:
+        //  • A/V SYNC. "balanced"/"maintain-resolution" let the publisher vary
+        //    the frame rate under any network dip, producing a variable-frame-
+        //    rate source. The egress muxes that against a constant audio clock
+        //    into a fixed 30 fps MP4, so the timing gaps accumulate over a long
+        //    session and surface as lip-sync drift. Holding a steady 30 fps
+        //    gives the egress a stable cadence to align audio against.
+        //  • SMOOTHNESS. A constant 30 fps simply looks smoother than a fps that
+        //    sags under load. Under congestion it sheds RESOLUTION instead (and
+        //    recovers afterward), which is far less noticeable than dropped
+        //    frames on motion.
+        degradationPreference: "maintain-framerate",
         // High-fidelity voice: 96 kbps MONO (far above the default 24 kbps
         // speech codec) — clean and full without forcing a stereo image onto a
         // mono mic. forceStereo is intentionally NOT set here; stereo is opted
