@@ -97,18 +97,28 @@ export async function startRoomVideoEgress(input: {
   // We set an EXPLICIT high-bitrate EncodingOptions instead of the stock
   // PORTRAIT_H264_1080P_30 / H264_1080P_30 presets. Those presets re-encode the
   // recording at a modest bitrate (~3 Mbps), which is what made the replay look
-  // soft and blocky. 6 Mbps at 30 fps with a 2s keyframe interval keeps the MP4
-  // crisp and smooth without ballooning file size, and matching the output
-  // dimensions to the orientation avoids letterboxing/rescale quality loss.
-  // (video_bitrate is in kbps; audio_bitrate too.)
+  // soft and blocky.
+  //
+  // Two things matter for replay sharpness here:
+  //  1. BITRATE HEADROOM. Egress re-encodes the host's ~6 Mbps published feed.
+  //     Re-encoding at the SAME bitrate compounds compression artifacts, so we
+  //     record at 8 Mbps — comfortably above the source — so the MP4 preserves
+  //     the incoming detail rather than degrading it. (Extra headroom on a
+  //     mostly-static preaching shot barely grows the file.)
+  //  2. H.264 HIGH PROFILE. The High profile packs noticeably more detail per
+  //     bit than Main (better transforms/entropy coding) and is universally
+  //     supported for playback, so the same bitrate simply looks sharper.
+  //
+  // Output dimensions match each orientation to avoid rescale/letterbox waste.
+  // (videoBitrate / audioBitrate are in kbps.)
   const encodingOptions =
     input.orientation === "landscape"
       ? new EncodingOptions({
           width: 1920,
           height: 1080,
           framerate: 30,
-          videoCodec: VideoCodec.H264_MAIN,
-          videoBitrate: 6000,
+          videoCodec: VideoCodec.H264_HIGH,
+          videoBitrate: 8000,
           keyFrameInterval: 2,
           audioBitrate: 128,
         })
@@ -116,8 +126,8 @@ export async function startRoomVideoEgress(input: {
           width: 1080,
           height: 1920,
           framerate: 30,
-          videoCodec: VideoCodec.H264_MAIN,
-          videoBitrate: 6000,
+          videoCodec: VideoCodec.H264_HIGH,
+          videoBitrate: 8000,
           keyFrameInterval: 2,
           audioBitrate: 128,
         })
