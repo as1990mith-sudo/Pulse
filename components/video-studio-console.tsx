@@ -30,6 +30,7 @@ import {
 import type { CurrentUser } from "@/lib/session"
 import {
   startBroadcast,
+  beginRoomRecording,
   endBroadcast,
   joinBroadcast,
   discardRoomReplay,
@@ -471,6 +472,24 @@ export function VideoStudioConsole({
       clearInterval(t)
     }
   }, [live, roomName])
+
+  // Start the SERVER-SIDE replay recording (LiveKit Egress) only once the host
+  // is actually connected AND publishing video. Egress composites the room, so
+  // starting it before the host's camera is live (as startBroadcast used to)
+  // records an empty room and strands the replay at 0:00. Gating on
+  // `localVideoReady` guarantees the host's camera track exists in the room
+  // first. `beginRoomRecording` is idempotent server-side, and the ref makes
+  // sure we only ever fire it once per room even across re-renders/reconnects.
+  const recordingBegunRef = useRef(false)
+  useEffect(() => {
+    if (!recordOnServer || !roomName || !connected || !localVideoReady) return
+    if (recordingBegunRef.current) return
+    recordingBegunRef.current = true
+    void beginRoomRecording({ roomName }).catch(() => {
+      // Allow a later retry if the call failed outright (network hiccup).
+      recordingBegunRef.current = false
+    })
+  }, [recordOnServer, roomName, connected, localVideoReady])
 
   // Keep the app-level mini-player's "now playing" info in sync.
   useEffect(() => {

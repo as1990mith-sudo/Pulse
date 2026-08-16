@@ -224,44 +224,16 @@ export async function startBroadcast(input: {
   })
 
   // ── Server-side replay recording (VIDEO only) ────────────────────────────
-  // Kick off LiveKit Egress so the replay is recorded on LiveKit's servers, not
-  // the host's device. We create the placeholder catalogue episode up front and
-  // hand its id to the egress (encoded in the object key) so the egress-ended
-  // webhook can finalize it. This is wrapped so ANY failure here (egress/storage
-  // misconfig, transient error) never blocks the host from going live — they
-  // simply go live without a recording rather than being stuck.
-  let recordOnServer = false
-  if (mode === "video" && isEgressConfigured()) {
-    let placeholderId: number | null = null
-    try {
-      const created = await createProcessingEpisode({
-        title,
-        category,
-        duration: "",
-        cover: input.cover ?? null,
-        mediaKind: "video",
-      })
-      if (created.ok) {
-        placeholderId = created.episodeId
-        const { egressId } = await startRoomVideoEgress({ roomName, episodeId: created.episodeId, orientation })
-        await db
-          .update(liveStream)
-          .set({ egressId, replayEpisodeId: created.episodeId })
-          .where(eq(liveStream.roomName, roomName))
-        recordOnServer = true
-      }
-    } catch (err) {
-      console.log("[v0] egress start failed; going live without recording:", (err as Error)?.message)
-      // Roll back the placeholder so it doesn't linger as a stuck "processing" row.
-      if (placeholderId != null) {
-        try {
-          await deleteProcessingEpisode(placeholderId)
-        } catch {
-          /* best-effort cleanup */
-        }
-      }
-    }
-  }
+  // The replay is recorded on LiveKit's servers via Egress, not the host's
+  // device. Egress is deliberately NOT started here: at this point the host's
+  // browser hasn't connected to the room yet, so compositing would record an
+  // EMPTY room — a black lead-in, or (worse) a failed/short recording that
+  // stranded the replay at 0:00. Instead the host's client calls
+  // beginRoomRecording() once it is actually connected and publishing video,
+  // and that starts egress against a room that already has the host's camera.
+  // Here we only advertise whether the server WILL record, so the client knows
+  // to skip its own (legacy, unreliable) MediaRecorder capture.
+  const recordOnServer = mode === "video" && isEgressConfigured()
 
   const token = await createAccessToken({
     roomName,
@@ -282,6 +254,86 @@ export async function startBroadcast(input: {
 
   revalidatePath("/live")
   return { ok: true, token, serverUrl: LIVEKIT_URL, roomName, recordOnServer }
+}
+
+/**
+ * Starts the server-side replay recording for a live VIDEO room. Called by the
+ * HOST'S CLIENT once it is connected and actually publishing — NOT from
+ * startBroadcast, because at go-live time the host's browser hasn't joined the
+ * room yet and egress would composite an empty room (the 0:00 / black-frame
+ * replay bug). Starting it here guarantees LiveKit records a room that already
+ * has the host's camera, so the replay spans the full session from frame one.
+ *
+ * Creates the placeholder catalogue episode and hands its id to the egress
+ * (encoded in the object key) so the egress-ended webhook can finalize it.
+ * Idempotent and host-scoped: a no-op if a recording is already running for the
+ * room (e.g. the host reconnects, or the effect fires twice). Any failure is
+ * swallowed — a missing recording is far better than blocking the live session.
+ */
+export async function beginRoomRecording(input: { roomName: string }): Promise<{ recording: boolean }> {
+  let user
+  try {
+    user = await requireUser()
+  } catch {
+    return { recording: false }
+  }
+  if (!isEgressConfigured()) return { recording: false }
+
+  const [row] = await db
+    .select({
+      mode: liveStream.mode,
+      orientation: liveStream.orientation,
+      title: liveStream.title,
+      category: liveStream.category,
+      cover: liveStream.cover,
+      egressId: liveStream.egressId,
+      replayEpisodeId: liveStream.replayEpisodeId,
+    })
+    .from(liveStream)
+    .where(and(eq(liveStream.roomName, input.roomName), eq(liveStream.hostId, user.id), eq(liveStream.status, "live")))
+    .limit(1)
+
+  // Only the live video host records; ignore audio rooms and non-hosts.
+  if (!row || row.mode !== "video") return { recording: false }
+  // Already recording (or resumed session) → nothing to do. This is what makes
+  // the action safe to call more than once from the client.
+  if (row.egressId || row.replayEpisodeId) return { recording: true }
+
+  const orientation: LiveOrientation = row.orientation === "landscape" ? "landscape" : "portrait"
+
+  let placeholderId: number | null = null
+  try {
+    const created = await createProcessingEpisode({
+      title: row.title,
+      category: row.category ?? "",
+      duration: "",
+      cover: row.cover ?? null,
+      mediaKind: "video",
+    })
+    if (!created.ok) return { recording: false }
+    placeholderId = created.episodeId
+    const { egressId } = await startRoomVideoEgress({
+      roomName: input.roomName,
+      episodeId: created.episodeId,
+      orientation,
+    })
+    await db
+      .update(liveStream)
+      .set({ egressId, replayEpisodeId: created.episodeId })
+      .where(eq(liveStream.roomName, input.roomName))
+    return { recording: true }
+  } catch (err) {
+    console.log("[v0] beginRoomRecording failed:", (err as Error)?.message)
+    // Roll back the placeholder so it doesn't linger as a stuck "processing" row.
+    if (placeholderId != null) {
+      try {
+        await deleteProcessingEpisode(placeholderId)
+      } catch {
+        /* best-effort cleanup */
+      }
+    }
+    return { recording: false }
+  }
 }
 
 /** Host stops broadcasting. */
@@ -383,9 +435,13 @@ export async function joinBroadcast(input: { roomName: string }): Promise<JoinRe
     metadata: JSON.stringify({ image: user.image ?? null }),
   })
 
-  // A host resuming their own video broadcast should keep skipping client-side
-  // recording if egress is already running for this room.
-  const recordOnServer = isHost && Boolean(stream.egressId)
+  // A host resuming their own video broadcast keeps the server-side recording
+  // path: if egress is already running it just continues; if it hasn't started
+  // yet (recording begins lazily once the host is publishing), the client will
+  // call beginRoomRecording — which is idempotent. Either way the client must
+  // skip its own MediaRecorder, so advertise the server path whenever egress is
+  // configured for this video room.
+  const recordOnServer = isHost && stream.mode === "video" && isEgressConfigured()
 
   return { ok: true, token, serverUrl: LIVEKIT_URL, roomName: input.roomName, canPublish, recordOnServer }
 }
@@ -1676,7 +1732,7 @@ export async function resolveMusicControl(input: {
 }
 
 // How long the host has to answer a co-host's "end live session" request
-// before the live ends automatically. Not exported — a "use server" module may
+// before the live ends automatically. Not exported ��� a "use server" module may
 // only export async functions; the client derives its countdown from the
 // server-reported remainingMs instead.
 const END_REQUEST_WINDOW_MS = 30_000
