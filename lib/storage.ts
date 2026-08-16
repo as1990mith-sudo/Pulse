@@ -64,3 +64,21 @@ export function buildPublicUrl(key: string): string {
   const base = (cfg?.publicBaseUrl ?? "").replace(/\/+$/, "")
   return `${base}/${key.replace(/^\/+/, "")}`
 }
+
+/**
+ * Best-effort delete of a stored object (used when a host discards a session
+ * that was recorded server-side). No-op if storage isn't configured. The S3
+ * client is imported lazily so this module stays cheap to import elsewhere.
+ */
+export async function deleteReplayObject(key: string): Promise<void> {
+  const cfg = getStorageConfig()
+  if (!cfg || !key) return
+  const { S3Client, DeleteObjectCommand } = await import("@aws-sdk/client-s3")
+  const client = new S3Client({
+    region: cfg.region,
+    endpoint: cfg.endpoint,
+    credentials: { accessKeyId: cfg.accessKeyId, secretAccessKey: cfg.secretAccessKey },
+    forcePathStyle: true,
+  })
+  await client.send(new DeleteObjectCommand({ Bucket: cfg.bucket, Key: key.replace(/^\/+/, "") }))
+}

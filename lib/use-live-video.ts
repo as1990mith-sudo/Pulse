@@ -196,6 +196,7 @@ export function useLiveVideo({
   initialMicOn = true,
   initialCamOn = true,
   recordAspect = "portrait",
+  recordOnServer = false,
   onAskUnmute,
 }: {
   token: string | null
@@ -215,6 +216,11 @@ export function useLiveVideo({
   // stream; "landscape" mirrors a grid meeting. The recording composites every
   // participant tile into this frame so the replay matches the live view.
   recordAspect?: "portrait" | "landscape"
+  // When true, the replay is being recorded SERVER-SIDE by LiveKit Egress, so
+  // this hook must NOT run its own client-side MediaRecorder capture. This is
+  // the permanent recording path; the client canvas/MediaRecorder capture below
+  // is retained only as a fallback for when egress is unavailable.
+  recordOnServer?: boolean
   // Fired when the host asks this client to unmute (received over the data
   // channel). The UI shows a prompt; we never open the mic without consent.
   onAskUnmute?: () => void
@@ -259,11 +265,6 @@ export function useLiveVideo({
   // saved replay comes back empty. `stopRecording` owns the teardown instead.
   const finalizingRef = useRef(false)
   const compositorRef = useRef<LiveCompositor | null>(null)
-  // [v0-diag] TEMPORARY: heartbeat interval + running chunk tally so ONE test
-  // session shows, in the console, exactly when/if chunk generation stalls.
-  const diagHeartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const diagChunkCountRef = useRef(0)
-  const diagChunkBytesRef = useRef(0)
   const recordAspectRef = useRef(recordAspect)
   recordAspectRef.current = recordAspect
   // Ordered roster (host first) mirrored into a ref so the compositor's draw
@@ -1100,30 +1101,8 @@ export function useLiveVideo({
       return
     }
     recordChunksRef.current = []
-    // [v0-diag] TEMPORARY: reset per-session diagnostic tallies + log config.
-    diagChunkCountRef.current = 0
-    diagChunkBytesRef.current = 0
-    console.log("[v0-diag] MediaRecorder starting", {
-      mimeChosen: mime || "(browser default)",
-      isTypeSupported_mp4: typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("video/mp4"),
-      streamVideoTracks: stream.getVideoTracks().length,
-      streamAudioTracks: stream.getAudioTracks().length,
-      timesliceMs: 1000,
-    })
     rec.ondataavailable = (e) => {
-      if (e.data && e.data.size > 0) {
-        recordChunksRef.current.push(e.data)
-        // [v0-diag] TEMPORARY: tally each chunk as it arrives.
-        diagChunkCountRef.current++
-        diagChunkBytesRef.current += e.data.size
-        if (diagChunkCountRef.current <= 5 || diagChunkCountRef.current % 15 === 0) {
-          console.log("[v0-diag] chunk", diagChunkCountRef.current, {
-            sizeBytes: e.data.size,
-            totalBytes: diagChunkBytesRef.current,
-            elapsedSec: recordStartMsRef.current ? Math.round((Date.now() - recordStartMsRef.current) / 1000) : 0,
-          })
-        }
-      }
+      if (e.data && e.data.size > 0) recordChunksRef.current.push(e.data)
     }
     try {
       rec.start(1000) // gather data in 1s slices so a crash still yields most of the take
@@ -1135,22 +1114,6 @@ export function useLiveVideo({
     recorderRef.current = rec
     recordingStartedRef.current = true
     recordStartMsRef.current = Date.now()
-    // [v0-diag] TEMPORARY heartbeat: every 10s, print elapsed wall-clock vs.
-    // chunks received vs. composite frames drawn vs. recorder state. This single
-    // log line is the decisive signal — it shows whether chunk generation keeps
-    // pace with the session or stalls (and at what second it stalls).
-    if (diagHeartbeatRef.current) clearInterval(diagHeartbeatRef.current)
-    diagHeartbeatRef.current = setInterval(() => {
-      const elapsedSec = Math.round((Date.now() - recordStartMsRef.current) / 1000)
-      console.log("[v0-diag] heartbeat", {
-        elapsedSec,
-        chunks: diagChunkCountRef.current,
-        totalBytes: diagChunkBytesRef.current,
-        framesDrawn: compositorRef.current?.framesDrawn ?? 0,
-        recorderState: recorderRef.current?.state ?? "(none)",
-        pageHidden: typeof document !== "undefined" ? document.hidden : "n/a",
-      })
-    }, 10000)
     // Keep the screen/page awake so a dimming phone can't background the tab and
     // truncate the recording.
     void requestWakeLock()
@@ -1253,8 +1216,12 @@ export function useLiveVideo({
   // produced an empty recording and silently failed to save. `startRecording`
   // is idempotent, so re-runs when the camera later turns on are no-ops.
   useEffect(() => {
+    // When the replay is recorded server-side by egress, skip the client-side
+    // capture entirely — running both would double-record and re-introduce the
+    // old truncated device-side blob.
+    if (recordOnServer) return
     if (isHost && connected) startRecording()
-  }, [isHost, connected, startRecording])
+  }, [isHost, connected, startRecording, recordOnServer])
 
   // The screen wake lock is auto-released by the browser whenever the page is
   // hidden. Re-acquire it the moment the host returns while still recording, so

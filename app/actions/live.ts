@@ -5,7 +5,15 @@ import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { liveStream, liveChatMessage, liveCallRequest, liveReaction, livePresence, liveBlocked } from "@/lib/db/schema"
+import {
+  liveStream,
+  liveChatMessage,
+  liveCallRequest,
+  liveReaction,
+  livePresence,
+  liveBlocked,
+  episode,
+} from "@/lib/db/schema"
 import { getHandle, getAvatarColor, getInitials } from "@/lib/identity"
 import { LIVE_CATEGORIES, CONVERSATION_CATEGORIES } from "@/lib/live-categories"
 import {
@@ -16,7 +24,8 @@ import {
   removeParticipant,
   muteParticipantAudio,
 } from "@/lib/livekit"
-import { isEgressConfigured, startRoomVideoEgress, stopRoomEgress } from "@/lib/livekit-egress"
+import { isEgressConfigured, startRoomVideoEgress, stopRoomEgress, replayObjectKey } from "@/lib/livekit-egress"
+import { deleteReplayObject } from "@/lib/storage"
 import { createProcessingEpisode, deleteProcessingEpisode } from "@/app/actions/live-processing"
 import { notifyFollowers, notifyUser } from "@/app/actions/notifications"
 
@@ -133,11 +142,20 @@ export type LiveStreamView = {
 }
 
 export type GoLiveResult =
-  | { ok: true; token: string; serverUrl: string; roomName: string }
+  | {
+      ok: true
+      token: string
+      serverUrl: string
+      roomName: string
+      // True when the replay is being recorded SERVER-SIDE by LiveKit Egress.
+      // The client then skips its own MediaRecorder capture (and the replay
+      // enqueue) so we never produce a duplicate or the old truncated recording.
+      recordOnServer?: boolean
+    }
   | { ok: false; error: string }
 
 export type JoinResult =
-  | { ok: true; token: string; serverUrl: string; roomName: string; canPublish: boolean }
+  | { ok: true; token: string; serverUrl: string; roomName: string; canPublish: boolean; recordOnServer?: boolean }
   | { ok: false; error: string }
 
 /** Host starts broadcasting: creates the stream row, mints a publisher token, notifies followers. */
@@ -212,6 +230,7 @@ export async function startBroadcast(input: {
   // webhook can finalize it. This is wrapped so ANY failure here (egress/storage
   // misconfig, transient error) never blocks the host from going live — they
   // simply go live without a recording rather than being stuck.
+  let recordOnServer = false
   if (mode === "video" && isEgressConfigured()) {
     let placeholderId: number | null = null
     try {
@@ -229,6 +248,7 @@ export async function startBroadcast(input: {
           .update(liveStream)
           .set({ egressId, replayEpisodeId: created.episodeId })
           .where(eq(liveStream.roomName, roomName))
+        recordOnServer = true
       }
     } catch (err) {
       console.log("[v0] egress start failed; going live without recording:", (err as Error)?.message)
@@ -261,7 +281,7 @@ export async function startBroadcast(input: {
   })
 
   revalidatePath("/live")
-  return { ok: true, token, serverUrl: LIVEKIT_URL, roomName }
+  return { ok: true, token, serverUrl: LIVEKIT_URL, roomName, recordOnServer }
 }
 
 /** Host stops broadcasting. */
@@ -278,6 +298,33 @@ export async function endBroadcast(input: { roomName: string }): Promise<void> {
     .set({ status: "ended", endedAt: new Date() })
     .where(eq(liveStream.roomName, input.roomName))
   revalidatePath("/live")
+}
+
+/**
+ * Host chose NOT to keep the just-ended session, and it was recorded server-side
+ * by egress. Deletes the placeholder replay episode (and best-effort removes the
+ * stored object) so a discarded session doesn't linger in the catalogue. Scoped
+ * to the host. Safe no-op if there's no server recording for the room.
+ */
+export async function discardRoomReplay(input: { roomName: string }): Promise<void> {
+  const user = await requireUser()
+  const [row] = await db
+    .select({ hostId: liveStream.hostId, replayEpisodeId: liveStream.replayEpisodeId })
+    .from(liveStream)
+    .where(eq(liveStream.roomName, input.roomName))
+    .limit(1)
+  if (!row || row.hostId !== user.id || !row.replayEpisodeId) return
+  // Best-effort: delete the stored MP4 (may not exist yet if egress is still
+  // finalizing — the webhook will then find no episode and skip finalizing).
+  try {
+    await deleteReplayObject(replayObjectKey(row.replayEpisodeId, input.roomName))
+  } catch {
+    /* best-effort */
+  }
+  await db.delete(episode).where(and(eq(episode.id, row.replayEpisodeId), eq(episode.hostUserId, user.id)))
+  await db.update(liveStream).set({ replayEpisodeId: null }).where(eq(liveStream.roomName, input.roomName))
+  revalidatePath("/live")
+  revalidatePath(`/u/${user.id}`)
 }
 
 /** A listener (or the host returning) joins an existing live room. */
@@ -336,7 +383,11 @@ export async function joinBroadcast(input: { roomName: string }): Promise<JoinRe
     metadata: JSON.stringify({ image: user.image ?? null }),
   })
 
-  return { ok: true, token, serverUrl: LIVEKIT_URL, roomName: input.roomName, canPublish }
+  // A host resuming their own video broadcast should keep skipping client-side
+  // recording if egress is already running for this room.
+  const recordOnServer = isHost && Boolean(stream.egressId)
+
+  return { ok: true, token, serverUrl: LIVEKIT_URL, roomName: input.roomName, canPublish, recordOnServer }
 }
 
 /** All currently-live streams, newest first. */

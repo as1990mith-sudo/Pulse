@@ -98,14 +98,16 @@ export async function POST(req: Request) {
       .where(eq(episode.id, episodeId))
 
     // Notify the host their replay is live (self-notification, mirrors finalizeProcessing).
-    await db.insert(notification).values({
-      userId: row.hostUserId,
-      actorId: row.hostUserId,
-      actorName: row.hostName,
-      type: "live",
-      message: "Your live replay is now ready in your Live Catalogue.",
-      link: `/live/${row.slug}`,
-    })
+    if (row.hostUserId) {
+      await db.insert(notification).values({
+        userId: row.hostUserId,
+        actorId: row.hostUserId,
+        actorName: row.hostName,
+        type: "live",
+        message: "Your live replay is now ready in your Live Catalogue.",
+        link: `/live/${row.slug}`,
+      })
+    }
 
     console.log("[v0] egress replay finalized:", { episodeId, durationSec: Math.round(durationSec), publicUrl })
     return NextResponse.json({ ok: true, finalized: episodeId })
@@ -117,14 +119,16 @@ export async function POST(req: Request) {
       .update(episode)
       .set({ processingStatus: "failed", processingError: "Recording failed on the server." })
       .where(eq(episode.id, episodeId))
-    await db.insert(notification).values({
-      userId: row.hostUserId,
-      actorId: row.hostUserId,
-      actorName: row.hostName,
-      type: "live",
-      message: "We couldn't finish recording your live replay.",
-      link: `/u/${row.hostUserId}`,
-    })
+    if (row.hostUserId) {
+      await db.insert(notification).values({
+        userId: row.hostUserId,
+        actorId: row.hostUserId,
+        actorName: row.hostName,
+        type: "live",
+        message: "We couldn't finish recording your live replay.",
+        link: `/u/${row.hostUserId}`,
+      })
+    }
     console.log("[v0] egress replay failed:", { episodeId, status })
     return NextResponse.json({ ok: true, failed: episodeId })
   }
