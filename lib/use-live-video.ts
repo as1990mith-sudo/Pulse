@@ -577,13 +577,16 @@ export function useLiveVideo({
         // while good connections get the full-quality feed. 4:3 layers match
         // the 4:3 capture so every layer keeps the same framing.
         videoSimulcastLayers: [VideoPresets43.h360, VideoPresets43.h540],
-        // Publish the full 1440x1080 layer at a raised ~4 Mbps / 30 fps. The
-        // server-side egress that records the replay subscribes to this top
-        // layer, so its bitrate is the ceiling on replay sharpness — the old
-        // ~2.3 Mbps looked soft/over-compressed once re-encoded into the MP4.
-        // 4 Mbps @ 30 fps keeps the recording crisp while staying within a
-        // typical mobile uplink.
-        videoEncoding: { maxBitrate: 4_000_000, maxFramerate: 30 },
+        // Publish the full 1440x1080 layer at ~6 Mbps / 30 fps. The server-side
+        // egress that records the replay SUBSCRIBES to this top layer, so its
+        // bitrate is the hard ceiling on replay sharpness: the recorder cannot
+        // add detail the source never sent. It was previously 4 Mbps while the
+        // egress re-encoded at 6 Mbps — i.e. re-compressing a 4 Mbps source and
+        // only adding artifacts. Publishing at 6 Mbps (with the egress given
+        // headroom ABOVE this, see livekit-egress.ts) means the MP4 preserves
+        // the source instead of degrading it. 6 Mbps @ 30 fps is still within a
+        // typical modern mobile uplink; "balanced" below sheds gracefully if not.
+        videoEncoding: { maxBitrate: 6_000_000, maxFramerate: 30 },
         // "balanced" lets the encoder trade resolution AND frame rate together
         // under congestion. The previous "maintain-resolution" held resolution
         // by starving the frame rate — which is exactly why the replay looked
