@@ -12,6 +12,7 @@ import {
   type RemoteTrack,
   type RemoteTrackPublication,
   type RemoteParticipant,
+  type VideoCaptureOptions,
 } from "livekit-client"
 import { LiveCompositor, type CompositorSource } from "@/lib/live-compositor"
 import { fixRecordedVideoDuration } from "@/lib/webm-duration"
@@ -35,6 +36,43 @@ import { fixRecordedVideoDuration } from "@/lib/webm-duration"
  * flip too, so front-camera framing is byte-for-byte identical every time.
  */
 const CAPTURE_RESOLUTION = VideoPresets43.h1080.resolution
+
+/**
+ * Turn the camera on, degrading the capture format if the device can't satisfy
+ * the preferred full-sensor 1440x1080. Some Android front cameras reject a
+ * specific high resolution and (depending on the browser) surface it as an
+ * opaque failure rather than an OverconstrainedError — which is why a single
+ * fixed request produced the "We couldn't start your camera" dead-end. We try
+ * the preferred 4:3 1080, then a lighter 4:3 720, then a bare request that lets
+ * the browser pick whatever the sensor supports. A working lower-resolution
+ * camera is always better than no camera. Throws only if EVERY attempt fails
+ * (genuine permission denial / no device), so the caller still shows a precise
+ * error for those real cases.
+ */
+async function enableCameraResilient(room: Room): Promise<void> {
+  const attempts: (VideoCaptureOptions | undefined)[] = [
+    { resolution: CAPTURE_RESOLUTION },
+    { resolution: VideoPresets43.h720.resolution },
+    undefined,
+  ]
+  let lastErr: unknown = null
+  for (let i = 0; i < attempts.length; i++) {
+    try {
+      await withTimeout(
+        room.localParticipant.setCameraEnabled(true, attempts[i]),
+        12000,
+        "Camera start timed out.",
+      )
+      return
+    } catch (e) {
+      lastErr = e
+      // Brief backoff before the next (lighter) attempt; the camera hardware
+      // may still be releasing from the failed acquisition.
+      await new Promise((r) => setTimeout(r, 400))
+    }
+  }
+  throw lastErr
+}
 
 /** Reject a promise if it doesn't settle within `ms`, with a friendly message. */
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
@@ -539,12 +577,19 @@ export function useLiveVideo({
         // while good connections get the full-quality feed. 4:3 layers match
         // the 4:3 capture so every layer keeps the same framing.
         videoSimulcastLayers: [VideoPresets43.h360, VideoPresets43.h540],
-        // Publish the primary layer at the 1440x1080 preset's healthy bitrate
-        // (~2.3 Mbps) so the image is sharp and not over-compressed on Android.
-        videoEncoding: VideoPresets43.h1080.encoding,
-        // Keep resolution sharp (rather than dropping to a blurry frame) when
-        // the encoder is bandwidth-constrained — faces stay legible.
-        degradationPreference: "maintain-resolution",
+        // Publish the full 1440x1080 layer at a raised ~4 Mbps / 30 fps. The
+        // server-side egress that records the replay subscribes to this top
+        // layer, so its bitrate is the ceiling on replay sharpness — the old
+        // ~2.3 Mbps looked soft/over-compressed once re-encoded into the MP4.
+        // 4 Mbps @ 30 fps keeps the recording crisp while staying within a
+        // typical mobile uplink.
+        videoEncoding: { maxBitrate: 4_000_000, maxFramerate: 30 },
+        // "balanced" lets the encoder trade resolution AND frame rate together
+        // under congestion. The previous "maintain-resolution" held resolution
+        // by starving the frame rate — which is exactly why the replay looked
+        // choppy/low-fps. Balanced keeps motion smooth (closer to a steady
+        // 30 fps) with only a graceful resolution dip when the network is weak.
+        degradationPreference: "balanced",
         // High-fidelity voice: 96 kbps MONO (far above the default 24 kbps
         // speech codec) — clean and full without forcing a stereo image onto a
         // mono mic. forceStereo is intentionally NOT set here; stereo is opted
@@ -691,22 +736,12 @@ export function useLiveVideo({
       if (!wantCam) {
         setCamOn(false)
       } else {
-        let cameraOk = false
-        let lastErr: unknown = null
-        for (let attempt = 0; attempt < 2 && !cameraOk; attempt++) {
-          try {
-            await withTimeout(room.localParticipant.setCameraEnabled(true), 12000, "Camera start timed out.")
-            cameraOk = true
-          } catch (e) {
-            lastErr = e
-            if (attempt === 0) await new Promise((r) => setTimeout(r, 600))
-          }
-        }
-        if (cameraOk) {
+        try {
+          await enableCameraResilient(room)
           attachLocalVideo(room)
-        } else {
+        } catch (e) {
           setCamOn(false)
-          setError(describeMediaError(lastErr))
+          setError(describeMediaError(e))
         }
       }
     }
@@ -775,7 +810,7 @@ export function useLiveVideo({
     // Turning the camera on (also used as the "retry" after a permission error).
     setError(null)
     try {
-      await withTimeout(room.localParticipant.setCameraEnabled(true), 12000, "Camera start timed out.")
+      await enableCameraResilient(room)
       setCamOn(true)
       attachLocalVideo(room)
     } catch (e) {
