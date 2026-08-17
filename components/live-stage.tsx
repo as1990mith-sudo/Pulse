@@ -34,29 +34,6 @@ type StageSlot = {
   quality: ConnQuality
 }
 
-/** Small signal indicator (3 bars) coloured by connection quality. */
-function QualityBars({ quality }: { quality: ConnQuality }) {
-  if (quality === "unknown") return null
-  const level = quality === "excellent" ? 3 : quality === "good" ? 2 : 1
-  const tone =
-    quality === "poor" ? "bg-live" : quality === "good" ? "bg-primary" : "bg-call-accept"
-  return (
-    <span
-      className="absolute -left-1 -top-1 flex items-end gap-px rounded-full border-2 border-zinc-950 bg-zinc-900/90 p-1"
-      title={`Connection: ${quality}`}
-      aria-label={`Connection quality: ${quality}`}
-    >
-      {[1, 2, 3].map((b) => (
-        <span
-          key={b}
-          className={cn("w-0.5 rounded-full", b <= level ? tone : "bg-muted-foreground/30")}
-          style={{ height: `${3 + b * 2}px` }}
-        />
-      ))}
-    </span>
-  )
-}
-
 /** Tiny equalizer that bounces while a speaker is talking. */
 function SpeakingEq() {
   return (
@@ -193,8 +170,8 @@ function StageTile({
       onKeyDown={onTap ? (e) => (e.key === "Enter" || e.key === " ") && onTap() : undefined}
       aria-label={onTap ? `Manage ${slot.name}` : undefined}
       className={cn(
-        "flex flex-col items-center gap-1.5 rounded-2xl border border-white/15 bg-zinc-900 px-1 py-3 shadow-lg shadow-black/30 transition-colors",
-        slot.isSpeaking && "border-call-accept/60 bg-call-accept/10",
+        "flex flex-col items-center gap-1.5 rounded-2xl border border-white/15 bg-white/10 px-1 py-3 shadow-lg shadow-black/30 backdrop-blur-xl transition-colors supports-[backdrop-filter]:bg-white/[0.07]",
+        slot.isSpeaking && "border-call-accept/60 bg-call-accept/10 supports-[backdrop-filter]:bg-call-accept/10",
         isCoHost && "border-amber-400/40",
         onTap && "cursor-pointer hover:border-white/40",
         !isHost && "speaker-in",
@@ -236,9 +213,6 @@ function StageTile({
             getInitials(slot.name)
           )}
         </span>
-
-        {/* Connection quality (top-left). */}
-        <QualityBars quality={slot.quality} />
 
         {/* Follow affordance on the host tile (listeners only). */}
         {isHost && hostFollow && hostFollow.canFollow && (
@@ -321,7 +295,7 @@ function EmptySlot({
   // compact with just the solid slot + dashed call-in circle.
   const label = callPending ? "Requested" : canRequestCall ? "Call in" : null
   return (
-    <div className="flex flex-col items-center justify-center gap-1.5 rounded-2xl border border-white/15 bg-zinc-900 px-1 py-3 shadow-lg shadow-black/30">
+    <div className="flex flex-col items-center justify-center gap-1.5 rounded-2xl border border-white/10 bg-white/[0.07] px-1 py-3 shadow-lg shadow-black/30 backdrop-blur-xl">
       <button
         type="button"
         disabled={!canRequestCall || callPending}
