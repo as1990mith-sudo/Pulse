@@ -573,7 +573,7 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
       {attachment && (
         <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card p-2.5">
           {attachment.type === "image" ? (
-            <SmartImage src={attachment.url} alt={attachment.name} priority className="size-12 rounded-md bg-muted object-cover" />
+            <SmartImage src={attachment.url} alt={attachment.name} priority w={128} className="size-12 rounded-md bg-muted object-cover" />
           ) : attachment.type === "video" ? (
             <video src={attachment.url} className="size-12 rounded-md object-cover" />
           ) : (
@@ -813,6 +813,7 @@ function MessageBubble({
                 <SmartImage
                   src={m.attachmentUrl}
                   alt={m.attachmentName ?? "Shared image"}
+                  w={828}
                   className="max-h-64 rounded-xl bg-muted object-cover"
                 />
               </button>

@@ -7,7 +7,7 @@ import { authClient } from "@/lib/auth-client"
 import { cn } from "@/lib/utils"
 import { ImageCropper } from "@/components/image-cropper"
 import { SmartImage } from "@/components/ui/smart-image"
-import { uploadMedia } from "@/lib/upload-media"
+import { uploadMedia, compressImage } from "@/lib/upload-media"
 import { StatusViewer } from "@/components/status-bar"
 import type { StatusGroup } from "@/app/actions/status"
 import type { CurrentUser } from "@/lib/session"
@@ -47,7 +47,10 @@ export function ProfileAvatar({
     setCropSrc(null)
     try {
       const file = new File([blob], "avatar.jpg", { type: "image/jpeg" })
-      const data = await uploadMedia(file, "avatars")
+      // Avatars display tiny, so shrink to 512px before upload — smaller upload,
+      // less storage, and faster first paint everywhere the avatar appears.
+      const compressed = await compressImage(file, 512, 0.85)
+      const data = await uploadMedia(compressed, "avatars")
 
       // Persist the URL on the user via Better Auth so the session stays in sync.
       const result = await authClient.updateUser({ image: data.url })
@@ -78,6 +81,7 @@ export function ProfileAvatar({
                   src={preview}
                   alt={`${name}'s profile picture`}
                   priority
+                  w={384}
                   className="size-full object-cover"
                 />
               ) : (

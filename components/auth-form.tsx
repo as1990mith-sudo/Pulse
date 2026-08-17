@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { ImageCropper } from "@/components/image-cropper"
-import { uploadMedia } from "@/lib/upload-media"
+import { uploadMedia, compressImage } from "@/lib/upload-media"
 import { createOrganization } from "@/app/actions/organizations"
 import { ORG_CATEGORIES, ORG_REACH, type OrgCategory, type OrgReach } from "@/lib/org-types"
 
@@ -95,7 +95,9 @@ export function AuthForm({ mode, googleEnabled = false }: { mode: "sign-in" | "s
 
     try {
       const file = new File([avatarBlob!], "avatar.jpg", { type: "image/jpeg" })
-      const data = await uploadMedia(file, "avatars")
+      // Avatars display tiny — shrink to 512px before upload for a fast, small file.
+      const compressed = await compressImage(file, 512, 0.85)
+      const data = await uploadMedia(compressed, "avatars")
       const result = await authClient.updateUser({ image: data.url })
       if (result.error) throw new Error(result.error.message || "Could not save your photo")
     } catch (err) {

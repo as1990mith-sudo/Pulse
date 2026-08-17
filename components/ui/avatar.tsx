@@ -4,6 +4,7 @@ import * as React from "react"
 import { Avatar as AvatarPrimitive } from "@base-ui/react/avatar"
 
 import { cn } from "@/lib/utils"
+import { optimizedImageUrl } from "@/lib/image-url"
 
 function Avatar({
   className,
@@ -25,14 +26,31 @@ function Avatar({
   )
 }
 
-function AvatarImage({ className, ...props }: AvatarPrimitive.Image.Props) {
+function AvatarImage({ className, src, ...props }: AvatarPrimitive.Image.Props) {
+  // Avatars render at most ~40px (lg) — at 3x DPR that's 120px, so 128 (a valid
+  // Next image width) is the right target. This is the biggest avatar speed win:
+  // instead of downloading the full multi-MB original, the browser gets a tiny
+  // resized WebP. If the optimizer ever fails, fall back to the raw source so
+  // the avatar still shows.
+  const [useRaw, setUseRaw] = React.useState(false)
+  const rawSrc = typeof src === "string" ? src : undefined
+  const optimized = useRaw ? rawSrc : optimizedImageUrl(rawSrc, 128) ?? rawSrc
+
+  React.useEffect(() => {
+    setUseRaw(false)
+  }, [rawSrc])
+
   return (
     <AvatarPrimitive.Image
       data-slot="avatar-image"
+      src={optimized}
       // Decode off the main thread so a photo can't delay paint; base-ui only
       // reveals the image once it has loaded (showing the initials fallback
       // until then), so avatars never flash a broken/empty state.
       decoding="async"
+      onError={() => {
+        if (!useRaw && optimized !== rawSrc) setUseRaw(true)
+      }}
       className={cn(
         "aspect-square size-full rounded-full object-cover",
         className

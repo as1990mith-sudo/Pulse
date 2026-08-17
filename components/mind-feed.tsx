@@ -983,6 +983,7 @@ function MediaSlide({
           src={item.url}
           alt=""
           aria-hidden
+          w={384}
           className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover blur-2xl"
         />
       )}
@@ -990,6 +991,7 @@ function MediaSlide({
         src={item.url}
         alt={count > 1 ? `Post attachment ${index + 1} of ${count}` : `Image posted by ${authorName}`}
         priority={index === 0}
+        w={1080}
         className={cn("relative h-full w-full", imageTall ? "object-contain" : "object-cover")}
       />
       {cropped && (

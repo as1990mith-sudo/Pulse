@@ -142,6 +142,7 @@ export function MediaCollage({
                 <SmartImage
                   src={item.url}
                   alt={item.name ?? "Shared photo"}
+                  w={640}
                   className="h-full w-full object-cover transition-transform duration-200 group-hover/tile:scale-[1.02]"
                 />
               )}
@@ -295,6 +296,7 @@ function CollageViewer({
           src={current.url}
           alt={current.name ?? "Shared photo"}
           priority
+          w={1920}
           className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
           onClick={(e) => e.stopPropagation()}
         />
