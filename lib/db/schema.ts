@@ -584,6 +584,12 @@ export const liveStream = pgTable("live_stream", {
   // webhook finalizes with the stored MP4's URL + true duration.
   egressId: text("egressId"),
   replayEpisodeId: integer("replayEpisodeId"),
+  // When set, this session was started from within a private Home and is scoped
+  // to that organisation's members: it is excluded from Universal live discovery
+  // and only active members of the Home may join. Null = a public Universal
+  // session. (Pass B replaces the earlier host-membership heuristic with this
+  // explicit column so scoping is exact and never leaks across organisations.)
+  homeId: text("homeId"),
 })
 
 // Call-in requests (listener -> host) and invites (host -> listener) for a live
@@ -847,6 +853,10 @@ export const notification = pgTable("notification", {
   message: text("message").notNull(),
   link: text("link").notNull(),
   read: boolean("read").notNull().default(false),
+  // When set, this is a Home-scoped notification (activity that happened inside a
+  // private Home): it appears ONLY in that Home's inbox and is excluded from the
+  // Universal notifications list. Null = a Universal notification.
+  homeId: text("homeId"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 

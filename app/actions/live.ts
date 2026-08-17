@@ -1,10 +1,11 @@
 "use server"
 
-import { and, asc, desc, eq, gt, lt } from "drizzle-orm"
-import { headers } from "next/headers"
+import { and, asc, desc, eq, gt, isNull, lt } from "drizzle-orm"
+import { cookies, headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
+import { isActiveHomeMember, HOME_GO_LIVE_COOKIE } from "@/lib/home/access"
 import {
   liveStream,
   liveChatMessage,
@@ -27,7 +28,7 @@ import {
 import { isEgressConfigured, startRoomVideoEgress, stopRoomEgress, replayObjectKey } from "@/lib/livekit-egress"
 import { deleteReplayObject } from "@/lib/storage"
 import { createProcessingEpisode, deleteProcessingEpisode } from "@/app/actions/live-processing"
-import { notifyFollowers, notifyUser } from "@/app/actions/notifications"
+import { notifyFollowers, notifyUser, notifyHomeLive } from "@/app/actions/notifications"
 
 // Host + up to 11 guests = 12 on stage.
 const MAX_GUESTS = 11
@@ -198,6 +199,20 @@ export async function startBroadcast(input: {
   // Deterministic, unique room name per host session.
   const roomName = `live_${user.id}_${Date.now()}`
 
+  // ── Home scoping ──────────────────────────────────────────────────────────
+  // If this go-live was started from inside a private Home, the entry action
+  // dropped a cookie carrying the Home's id. Consume it once here: verify the
+  // host is (still) an active member, stamp the session with the Home, and clear
+  // the cookie so it can't bleed onto a later, unrelated broadcast. A Home
+  // session is unlisted in Universal discovery and gated to Home members.
+  let homeId: string | null = null
+  const jar = await cookies()
+  const pendingHomeId = jar.get(HOME_GO_LIVE_COOKIE)?.value
+  if (pendingHomeId) {
+    if (await isActiveHomeMember(pendingHomeId, user.id)) homeId = pendingHomeId
+    jar.delete(HOME_GO_LIVE_COOKIE)
+  }
+
   // End any stale streams this host may have left open.
   await db
     .update(liveStream)
@@ -220,6 +235,7 @@ export async function startBroadcast(input: {
     // is shown as "Today's Discussion" in the room header.
     topic: input.topic?.trim() || null,
     visibility,
+    homeId,
     status: "live",
   })
 
@@ -243,14 +259,20 @@ export async function startBroadcast(input: {
     metadata: JSON.stringify({ image: user.image ?? null }),
   })
 
-  // Let followers know they're on air.
-  await notifyFollowers({
-    actorId: user.id,
-    actorName: user.name,
-    type: "live",
-    message: title,
-    link: `/live/${roomName}`,
-  })
+  if (homeId) {
+    // A private Home session must NOT leak to Universal followers (its room is
+    // member-gated). Instead, tell this Home's members — inside the Home inbox.
+    await notifyHomeLive({ homeId, actorId: user.id, actorName: user.name, title, roomName })
+  } else {
+    // Public session: let the host's followers know they're on air.
+    await notifyFollowers({
+      actorId: user.id,
+      actorName: user.name,
+      type: "live",
+      message: title,
+      link: `/live/${roomName}`,
+    })
+  }
 
   revalidatePath("/live")
   return { ok: true, token, serverUrl: LIVEKIT_URL, roomName, recordOnServer }
@@ -398,6 +420,14 @@ export async function joinBroadcast(input: { roomName: string }): Promise<JoinRe
 
   const isHost = stream.hostId === user.id
 
+  // Home privacy gate: a session scoped to a private Home can only be joined by
+  // an active member of that Home — even with a direct link. This is the entry
+  // half of the isolation boundary (the discovery half hides it from Universal).
+  if (stream.homeId && !isHost) {
+    const allowed = await isActiveHomeMember(stream.homeId, user.id)
+    if (!allowed) return { ok: false, error: "This session is private to its community." }
+  }
+
   // Blocked users can't (re)join. The host is never blockable, so this only
   // affects listeners/guests the host removed.
   if (!isHost) {
@@ -453,7 +483,11 @@ export async function getLiveStreams(): Promise<LiveStreamView[]> {
     .select()
     .from(liveStream)
     // Only public streams are listed in discovery; private streams stay unlisted.
-    .where(and(eq(liveStream.status, "live"), eq(liveStream.visibility, "public")))
+    // Home-scoped sessions (homeId set) are never shown in Universal discovery —
+    // they live only inside their organisation's private Home.
+    .where(
+      and(eq(liveStream.status, "live"), eq(liveStream.visibility, "public"), isNull(liveStream.homeId)),
+    )
     .orderBy(desc(liveStream.startedAt))
 
   return rows.map((r) => ({
