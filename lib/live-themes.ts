@@ -14,9 +14,10 @@ export type LiveThemeId =
   | "default"
   | "midnight"
   | "ocean"
-  | "verdant-valley"
-  | "city-lights"
-  | "starfall"
+  | "evergreen"
+  | "golden-lake"
+  | "winter-cabin"
+  | "fernlight"
 
 export type LiveTheme = {
   id: LiveThemeId
@@ -36,15 +37,21 @@ export type LiveTheme = {
 }
 
 export const LIVE_THEMES: LiveTheme[] = [
+  // Forest Road is the preset/default room look — a calm, dark aerial photo
+  // whose uniform deep greens keep overlaid text and controls perfectly legible.
+  // It intentionally reuses the id "default" so brand-new rooms (whose DB theme
+  // column defaults to "default") and any room already on the old default adopt
+  // this photo automatically, with no data migration.
   {
     id: "default",
-    name: "Midnight Amber",
-    description: "The classic dark room with a warm amber glow.",
-    background: "linear-gradient(160deg, oklch(0.12 0.006 285), oklch(0.15 0.006 285) 45%, oklch(0.2 0.02 60))",
-    primary: "oklch(0.72 0.18 55)",
-    primaryForeground: "oklch(0.99 0.005 60)",
-    accent: "oklch(0.66 0.21 24)",
-    swatch: ["oklch(0.72 0.18 55)", "oklch(0.15 0.006 285)"],
+    name: "Forest Road",
+    description: "A quiet road through deep green forest.",
+    background: "linear-gradient(160deg, oklch(0.16 0.03 150), oklch(0.2 0.04 145) 45%, oklch(0.26 0.05 140))",
+    primary: "oklch(0.78 0.15 145)",
+    primaryForeground: "oklch(0.15 0.03 150)",
+    accent: "oklch(0.82 0.15 128)",
+    swatch: ["oklch(0.78 0.15 145)", "oklch(0.2 0.04 145)"],
+    backgroundImage: "/live-themes/forest-road.jpg",
   },
   {
     id: "midnight",
@@ -72,37 +79,48 @@ export const LIVE_THEMES: LiveTheme[] = [
   // part of the scene. `background` is the fallback gradient shown behind the
   // image while it loads.
   {
-    id: "verdant-valley",
-    name: "Verdant Valley",
-    description: "Lush green hills in soft morning mist.",
-    background: "linear-gradient(160deg, oklch(0.13 0.03 150), oklch(0.17 0.04 145) 45%, oklch(0.24 0.06 140))",
-    primary: "oklch(0.74 0.14 150)",
-    primaryForeground: "oklch(0.15 0.03 150)",
-    accent: "oklch(0.78 0.13 130)",
-    swatch: ["oklch(0.74 0.14 150)", "oklch(0.17 0.04 145)"],
-    backgroundImage: "/live-themes/verdant-valley.png",
+    id: "evergreen",
+    name: "Evergreen",
+    description: "Sunlit green needles up close.",
+    background: "linear-gradient(160deg, oklch(0.16 0.04 145), oklch(0.2 0.06 140) 45%, oklch(0.28 0.08 135))",
+    primary: "oklch(0.82 0.17 135)",
+    primaryForeground: "oklch(0.15 0.04 145)",
+    accent: "oklch(0.85 0.16 120)",
+    swatch: ["oklch(0.82 0.17 135)", "oklch(0.2 0.06 140)"],
+    backgroundImage: "/live-themes/evergreen.jpg",
   },
   {
-    id: "city-lights",
-    name: "City Lights",
-    description: "Glass skyscrapers at blue hour.",
-    background: "linear-gradient(160deg, oklch(0.12 0.03 250), oklch(0.16 0.04 240) 45%, oklch(0.24 0.06 225))",
-    primary: "oklch(0.74 0.13 230)",
-    primaryForeground: "oklch(0.99 0.005 240)",
-    accent: "oklch(0.75 0.12 200)",
-    swatch: ["oklch(0.74 0.13 230)", "oklch(0.16 0.04 240)"],
-    backgroundImage: "/live-themes/city-lights.png",
+    id: "golden-lake",
+    name: "Golden Lake",
+    description: "Sunset over a still harbour.",
+    background: "linear-gradient(160deg, oklch(0.18 0.04 70), oklch(0.22 0.06 65) 45%, oklch(0.3 0.08 55))",
+    primary: "oklch(0.82 0.14 75)",
+    primaryForeground: "oklch(0.18 0.04 60)",
+    accent: "oklch(0.78 0.16 45)",
+    swatch: ["oklch(0.82 0.14 75)", "oklch(0.22 0.06 65)"],
+    backgroundImage: "/live-themes/golden-lake.jpg",
   },
   {
-    id: "starfall",
-    name: "Starfall",
-    description: "The Milky Way over a dark horizon.",
-    background: "linear-gradient(160deg, oklch(0.11 0.04 290), oklch(0.15 0.06 285) 45%, oklch(0.22 0.08 280))",
-    primary: "oklch(0.74 0.14 300)",
-    primaryForeground: "oklch(0.99 0.005 300)",
-    accent: "oklch(0.72 0.13 265)",
-    swatch: ["oklch(0.74 0.14 300)", "oklch(0.15 0.06 285)"],
-    backgroundImage: "/live-themes/starfall.png",
+    id: "winter-cabin",
+    name: "Winter Cabin",
+    description: "A warm cabin by a snowy lake.",
+    background: "linear-gradient(160deg, oklch(0.16 0.02 260), oklch(0.2 0.03 250) 45%, oklch(0.26 0.05 70))",
+    primary: "oklch(0.8 0.14 70)",
+    primaryForeground: "oklch(0.18 0.03 60)",
+    accent: "oklch(0.74 0.12 40)",
+    swatch: ["oklch(0.8 0.14 70)", "oklch(0.2 0.03 250)"],
+    backgroundImage: "/live-themes/winter-cabin.jpg",
+  },
+  {
+    id: "fernlight",
+    name: "Fernlight",
+    description: "A green fern in golden light.",
+    background: "linear-gradient(160deg, oklch(0.16 0.04 140), oklch(0.2 0.05 120) 45%, oklch(0.28 0.07 90))",
+    primary: "oklch(0.82 0.16 135)",
+    primaryForeground: "oklch(0.15 0.04 140)",
+    accent: "oklch(0.83 0.14 95)",
+    swatch: ["oklch(0.82 0.16 135)", "oklch(0.2 0.05 120)"],
+    backgroundImage: "/live-themes/fernlight.jpg",
   },
 ]
 
