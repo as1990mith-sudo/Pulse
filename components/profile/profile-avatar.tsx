@@ -6,6 +6,7 @@ import { Camera, Loader2 } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
 import { cn } from "@/lib/utils"
 import { ImageCropper } from "@/components/image-cropper"
+import { SmartImage } from "@/components/ui/smart-image"
 import { uploadMedia } from "@/lib/upload-media"
 import { StatusViewer } from "@/components/status-bar"
 import type { StatusGroup } from "@/app/actions/status"
@@ -73,10 +74,10 @@ export function ProfileAvatar({
               )}
             >
               {preview ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={preview || "/placeholder.svg"}
+                <SmartImage
+                  src={preview}
                   alt={`${name}'s profile picture`}
+                  priority
                   className="size-full object-cover"
                 />
               ) : (

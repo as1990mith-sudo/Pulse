@@ -57,6 +57,7 @@ import { FormattedTextarea } from "@/components/formatted-textarea"
 import { useMentionAutocomplete, MentionAutocompleteList } from "@/components/mention-autocomplete"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card } from "@/components/ui/card"
+import { SmartImage } from "@/components/ui/smart-image"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -978,18 +979,17 @@ function MediaSlide({
           A blurred, zoomed copy of the same photo fills the letterbox space for a
           premium, intentional look instead of hard black bars. */}
       {imageTall && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={item.url || "/placeholder.svg"}
+        <SmartImage
+          src={item.url}
           alt=""
           aria-hidden
           className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover blur-2xl"
         />
       )}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={item.url || "/placeholder.svg"}
+      <SmartImage
+        src={item.url}
         alt={count > 1 ? `Post attachment ${index + 1} of ${count}` : `Image posted by ${authorName}`}
+        priority={index === 0}
         className={cn("relative h-full w-full", imageTall ? "object-contain" : "object-cover")}
       />
       {cropped && (
