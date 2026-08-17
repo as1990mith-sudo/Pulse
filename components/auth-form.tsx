@@ -23,7 +23,18 @@ import { ORG_CATEGORIES, ORG_REACH, type OrgCategory, type OrgReach } from "@/li
 
 type AccountType = "individual" | "organization"
 
-export function AuthForm({ mode, googleEnabled = false }: { mode: "sign-in" | "sign-up"; googleEnabled?: boolean }) {
+export function AuthForm({
+  mode,
+  googleEnabled = false,
+  individualOnly = false,
+}: {
+  mode: "sign-in" | "sign-up"
+  googleEnabled?: boolean
+  // When true, the organisation path is hidden and only the individual
+  // (Frequency Universal) signup is offered. The two-path chooser at /sign-up
+  // routes organisations to the dedicated Home onboarding instead.
+  individualOnly?: boolean
+}) {
   const router = useRouter()
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
@@ -317,7 +328,7 @@ export function AuthForm({ mode, googleEnabled = false }: { mode: "sign-in" | "s
             />
           ) : (
             <>
-              {isSignUp && (
+              {isSignUp && !individualOnly && (
                 <div className="mb-4 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Account type">
                   <AccountTypeCard
                     active={accountType === "individual"}

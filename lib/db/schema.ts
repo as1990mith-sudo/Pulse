@@ -1395,3 +1395,89 @@ export const onlinePresence = pgTable("online_presence", {
     .references(() => user.id, { onDelete: "cascade" }),
   lastSeenAt: timestamp("lastSeenAt").notNull().defaultNow(),
 })
+
+// --- Frequency Home --------------------------------------------------------
+// A Frequency Home is the PRIVATE digital environment for a church/ministry.
+// It layers on top of an existing public `organization` (one org ↔ one Home):
+// the org supplies the name, handle, logo, cover and discovery surface, while
+// the Home adds private membership, roles, a subscription plan, an
+// authorisation key, and (in later phases) private feed/rooms/events scoped
+// strictly to its members. Nothing in a Home is visible to non-members.
+export const home = pgTable(
+  "home",
+  {
+    id: text("id").primaryKey(),
+    // The public organisation this Home belongs to (1↔1). Drives name/handle/
+    // branding; the Home is reached at /home/[organization.handle].
+    organizationId: text("organizationId").notNull().unique(),
+    // Display name of the Home, e.g. "Kingdom Academy Home".
+    name: text("name").notNull(),
+    // Subscription plan: "premium" | "premium_pro". Pro unlocks publishing
+    // selected content to the wider Universal community (future phase).
+    plan: text("plan").notNull().default("premium"),
+    // Plan lifecycle: "active" | "trialing" | "past_due" | "canceled". Kept
+    // simple now; a real billing integration can expand this later.
+    planStatus: text("planStatus").notNull().default("active"),
+    // Organisation accent colour (hex). Becomes the Home's primary accent so
+    // the environment feels like the organisation's own, not generic Frequency.
+    accentColor: text("accentColor"),
+    // How new members join with a valid key: "auto" (instant membership) or
+    // "approval" (creates a pending request an admin must approve).
+    joinPolicy: text("joinPolicy").notNull().default("auto"),
+    status: text("status").notNull().default("active"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: uniqueIndex("home_organization_idx").on(t.organizationId),
+  }),
+)
+
+// Organisation Authorisation Key. Members enter a key to join a Home. A Home
+// can have exactly one ACTIVE key at a time; regenerating marks the current
+// key inactive and inserts a new one. Regeneration NEVER removes existing
+// members — it only affects future onboarding. Old rows are retained for audit.
+export const homeAuthKey = pgTable(
+  "home_auth_key",
+  {
+    id: text("id").primaryKey(),
+    homeId: text("homeId").notNull(),
+    // Human-shareable key, e.g. FREQ-KNG-7F42-XP91. Unique across all Homes.
+    key: text("key").notNull().unique(),
+    active: boolean("active").notNull().default(true),
+    createdBy: text("createdBy"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    // Set when the key is regenerated or explicitly disabled.
+    disabledAt: timestamp("disabledAt"),
+  },
+  (t) => ({
+    homeIdx: index("home_auth_key_home_idx").on(t.homeId),
+    activeIdx: index("home_auth_key_active_idx").on(t.homeId, t.active),
+  }),
+)
+
+// Membership linking an individual account to a Home. One individual account
+// can belong to many Homes (and one Home has many members). This is the ONLY
+// bridge between a user and a Home — there is never a separate account per Home.
+export const homeMembership = pgTable(
+  "home_membership",
+  {
+    id: text("id").primaryKey(),
+    homeId: text("homeId").notNull(),
+    userId: text("userId").notNull(),
+    // owner | administrator | content_manager | moderator | leader | member.
+    role: text("role").notNull().default("member"),
+    // "active" (full member) or "pending" (awaiting admin approval under the
+    // approval join policy). Pending members can see nothing private yet.
+    status: text("status").notNull().default("active"),
+    // How they joined: "created" (founding owner), "key_auto", "key_request".
+    joinedVia: text("joinedVia").notNull().default("key_auto"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    homeUserIdx: uniqueIndex("home_membership_home_user_idx").on(t.homeId, t.userId),
+    userIdx: index("home_membership_user_idx").on(t.userId),
+    homeStatusIdx: index("home_membership_home_status_idx").on(t.homeId, t.status),
+  }),
+)
