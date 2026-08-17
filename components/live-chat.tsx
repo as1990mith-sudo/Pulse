@@ -345,13 +345,12 @@ export function LiveChat({
                         canPreview && "hover:underline",
                       )}
                     >
-                      {isMine ? "You" : m.userName}
+                      {/* Own messages read as "You". For everyone else, a host's
+                          messages are attributed simply to "HOST" (never the
+                          host's real name), so the separate HOST badge is no
+                          longer needed on any interface. */}
+                      {isMine ? "You" : m.isHost ? "HOST" : m.userName}
                     </ProfilePreview>
-                    {m.isHost && (
-                      <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                        Host
-                      </span>
-                    )}
                   </div>
                   <p
                     className={cn(

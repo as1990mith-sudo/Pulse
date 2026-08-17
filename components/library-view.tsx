@@ -131,9 +131,6 @@ function ContinueCard({ article }: { article: LibraryArticleCard }) {
           <div className="size-full bg-gradient-to-br from-primary/25 via-secondary/40 to-card" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-        <span className="absolute bottom-2 left-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/85">
-          {article.category}
-        </span>
       </div>
       <div className="flex flex-1 flex-col p-3.5">
         <h3 className="line-clamp-2 text-pretty font-display text-sm font-semibold leading-snug text-foreground group-hover:text-primary">
@@ -207,8 +204,7 @@ function SavedRow({ article, onRemoved }: { article: ArticleCard; onRemoved: () 
       <Link href={`/articles/${article.id}`} className="tap-scale group flex items-center gap-4 py-4">
         <RowThumb coverUrl={article.coverUrl} />
         <div className="min-w-0 flex-1">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">{article.category}</span>
-          <h3 className="mt-1 line-clamp-2 text-pretty font-display text-[15px] font-semibold leading-snug text-foreground transition-colors group-hover:text-primary">
+          <h3 className="line-clamp-2 text-pretty font-display text-[15px] font-semibold leading-snug text-foreground transition-colors group-hover:text-primary">
             {article.title}
           </h3>
           <div className="mt-1.5 flex items-center gap-1.5 text-[12px] text-muted-foreground">
@@ -238,8 +234,7 @@ function HistoryRow({ article, saved }: { article: LibraryArticleCard; saved: bo
       <Link href={`/articles/${article.id}`} className="tap-scale group flex items-center gap-4 py-4">
         <RowThumb coverUrl={article.coverUrl} />
         <div className="min-w-0 flex-1">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">{article.category}</span>
-          <h3 className="mt-1 line-clamp-2 text-pretty font-display text-[15px] font-semibold leading-snug text-foreground transition-colors group-hover:text-primary">
+          <h3 className="line-clamp-2 text-pretty font-display text-[15px] font-semibold leading-snug text-foreground transition-colors group-hover:text-primary">
             {article.title}
           </h3>
           <div className="mt-1.5 flex items-center gap-1.5 text-[12px] text-muted-foreground">

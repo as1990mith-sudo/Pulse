@@ -10,6 +10,7 @@ import {
   getImmersiveViewerOpen,
   useImmersiveViewerOpen,
 } from "@/lib/video-handoff"
+import { registerActiveVideo, reconcileActiveVideo, setManualActiveVideo } from "@/lib/active-video"
 
 /**
  * A feed video with a modern, minimal custom control bar.
@@ -80,6 +81,8 @@ export function FeedVideo({
 }) {
   const ref = useRef<HTMLVideoElement>(null)
   const seekRef = useRef<HTMLDivElement>(null)
+  // The coordinator entry for this player, so manual play can mark it the winner.
+  const entryRef = useRef<{ distanceToCenter: () => number; play: () => void; pause: () => void } | null>(null)
   const userPausedRef = useRef(false)
   const programmaticPauseRef = useRef(false)
   const draggingRef = useRef(false)
@@ -138,22 +141,64 @@ export function FeedVideo({
     const el = ref.current
     if (!el) return
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        const visible = entry.isIntersecting && entry.intersectionRatio >= 0.6
-        inViewRef.current = visible
-        if (visible) {
-          if (!userPausedRef.current) attemptPlay(el)
-        } else {
+    // An in-view player does not play itself — it registers with the app-wide
+    // coordinator, which lets only the clip nearest the viewport center play and
+    // pauses all the others. This is what prevents two stacked feed videos from
+    // playing at once. `unregister` is (re)created as this clip enters/leaves view.
+    let unregister: (() => void) | null = null
+
+    const entry = {
+      // Distance from this clip's center to the viewport center — the smallest
+      // wins the single "active" slot.
+      distanceToCenter: () => {
+        const rect = el.getBoundingClientRect()
+        const clipCenter = rect.top + rect.height / 2
+        return Math.abs(clipCenter - window.innerHeight / 2)
+      },
+      play: () => {
+        if (!userPausedRef.current) attemptPlay(el)
+      },
+      pause: () => {
+        if (!el.paused) {
           programmaticPauseRef.current = true
           el.pause()
+        }
+      },
+    }
+    entryRef.current = entry
+
+    const observer = new IntersectionObserver(
+      ([obs]) => {
+        const visible = obs.isIntersecting && obs.intersectionRatio >= 0.6
+        inViewRef.current = visible
+        if (visible) {
+          // Become eligible to play; the coordinator decides if we actually do.
+          if (!unregister) unregister = registerActiveVideo(entry)
+        } else {
+          // No longer eligible — leave the running set (this also pauses us) and
+          // clear the user-pause flag so re-entering view can autoplay again.
+          if (unregister) {
+            unregister()
+            unregister = null
+          }
           userPausedRef.current = false
         }
       },
       { threshold: [0, 0.6, 1] },
     )
     observer.observe(el)
-    return () => observer.disconnect()
+
+    // As the user scrolls between two simultaneously-visible clips, re-pick the
+    // one nearest center so playback follows focus.
+    const onScroll = () => reconcileActiveVideo()
+    window.addEventListener("scroll", onScroll, { passive: true })
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener("scroll", onScroll)
+      if (unregister) unregister()
+      entryRef.current = null
+    }
   }, [attemptPlay])
 
   // Pause inline playback while the immersive viewer is open, and resume the
@@ -191,9 +236,15 @@ export function FeedVideo({
     if (!el) return
     if (el.paused) {
       userPausedRef.current = false
+      // Manually starting a clip makes it the active one regardless of scroll
+      // position, pausing any other inline video that happened to be playing.
+      if (entryRef.current) setManualActiveVideo(entryRef.current)
       attemptPlay(el)
+      reconcileActiveVideo()
     } else {
       userPausedRef.current = true
+      // Releasing the manual override lets nearest-to-center selection resume.
+      setManualActiveVideo(null)
       el.pause()
     }
   }
