@@ -236,16 +236,20 @@ function toCommentView(
 type UserInfo = {
   name: string
   image: string | null
-  // Present when this user owns a verified organisation account.
+  // The organisation this user owns (if any). Present so that posts published by
+  // an organisation account are attributed to the ORGANISATION's identity — its
+  // name, handle and logo — rather than the admin's personal profile.
   orgVerified: boolean
   orgHandle: string | null
+  orgName: string | null
+  orgLogo: string | null
 }
 
 async function getUserInfoMap(userIds: string[]): Promise<Map<string, UserInfo>> {
   const unique = [...new Set(userIds)]
   if (unique.length === 0) return new Map()
   // Left-join the organisation each user owns (if any) so a single lookup gives
-  // us both the author's identity and their verified-organisation status.
+  // us both the author's personal identity and their organisation's identity.
   const rows = await db
     .select({
       id: userTable.id,
@@ -253,6 +257,8 @@ async function getUserInfoMap(userIds: string[]): Promise<Map<string, UserInfo>>
       image: userTable.image,
       orgVerified: organization.verified,
       orgHandle: organization.handle,
+      orgName: organization.name,
+      orgLogo: organization.logo,
     })
     .from(userTable)
     .leftJoin(organization, eq(organization.ownerId, userTable.id))
@@ -260,9 +266,53 @@ async function getUserInfoMap(userIds: string[]): Promise<Map<string, UserInfo>>
   return new Map(
     rows.map((r) => [
       r.id,
-      { name: r.name, image: r.image, orgVerified: r.orgVerified ?? false, orgHandle: r.orgHandle ?? null },
+      {
+        name: r.name,
+        image: r.image,
+        orgVerified: r.orgVerified ?? false,
+        orgHandle: r.orgHandle ?? null,
+        orgName: r.orgName ?? null,
+        orgLogo: r.orgLogo ?? null,
+      },
     ]),
   )
+}
+
+/**
+ * Resolves the author identity to render for a feed post. When the post was
+ * published by an organisation account (`organizationId` set), it is attributed
+ * to the ORGANISATION — its name, @handle, logo and verified badge — so an
+ * organisation always speaks as itself, never as the admin who runs it. Personal
+ * posts resolve to the author's current profile. We resolve live (rather than
+ * trusting the denormalized `authorName`) so renaming a user or organisation
+ * retroactively updates every past post.
+ */
+function resolveAuthor(
+  p: { userId: string; organizationId: string | null; authorName: string },
+  infoMap: Map<string, UserInfo>,
+) {
+  const info = infoMap.get(p.userId)
+  if (p.organizationId && info?.orgName) {
+    return {
+      user: info.orgName,
+      handle: info.orgHandle ?? getHandle(info.orgName),
+      initials: getInitials(info.orgName),
+      color: getAvatarColor(p.organizationId),
+      authorImage: info.orgLogo ?? null,
+      orgVerified: info.orgVerified,
+      orgHandle: info.orgHandle,
+    }
+  }
+  const name = info?.name ?? p.authorName
+  return {
+    user: name,
+    handle: getHandle(name),
+    initials: getInitials(name),
+    color: getAvatarColor(p.userId),
+    authorImage: info?.image ?? null,
+    orgVerified: info?.orgVerified ?? false,
+    orgHandle: info?.orgHandle ?? null,
+  }
 }
 
 // Relative for the first 24h, then an absolute dd/mm/yy date. Shared helper so
@@ -319,13 +369,7 @@ export async function getFeed(): Promise<FeedPostView[]> {
   return posts.map((p) => ({
     id: p.id,
     authorId: p.userId,
-    user: infoMap.get(p.userId)?.name ?? p.authorName,
-    handle: getHandle(infoMap.get(p.userId)?.name ?? p.authorName),
-    initials: getInitials(infoMap.get(p.userId)?.name ?? p.authorName),
-    color: getAvatarColor(p.userId),
-    authorImage: infoMap.get(p.userId)?.image ?? null,
-    orgVerified: infoMap.get(p.userId)?.orgVerified ?? false,
-    orgHandle: infoMap.get(p.userId)?.orgHandle ?? null,
+    ...resolveAuthor(p, infoMap),
     postedAt: timeAgo(p.createdAt),
     createdAtMs: p.createdAt.getTime(),
     text: p.text,
@@ -396,13 +440,7 @@ export async function getChannelFeed(channel: string): Promise<FeedPostView[]> {
   return posts.map((p) => ({
     id: p.id,
     authorId: p.userId,
-    user: infoMap.get(p.userId)?.name ?? p.authorName,
-    handle: getHandle(infoMap.get(p.userId)?.name ?? p.authorName),
-    initials: getInitials(infoMap.get(p.userId)?.name ?? p.authorName),
-    color: getAvatarColor(p.userId),
-    authorImage: infoMap.get(p.userId)?.image ?? null,
-    orgVerified: infoMap.get(p.userId)?.orgVerified ?? false,
-    orgHandle: infoMap.get(p.userId)?.orgHandle ?? null,
+    ...resolveAuthor(p, infoMap),
     postedAt: timeAgo(p.createdAt),
     createdAtMs: p.createdAt.getTime(),
     text: p.text,
@@ -487,13 +525,7 @@ export async function searchPosts(query: string): Promise<FeedPostView[]> {
   return posts.map((p) => ({
     id: p.id,
     authorId: p.userId,
-    user: infoMap.get(p.userId)?.name ?? p.authorName,
-    handle: getHandle(infoMap.get(p.userId)?.name ?? p.authorName),
-    initials: getInitials(infoMap.get(p.userId)?.name ?? p.authorName),
-    color: getAvatarColor(p.userId),
-    authorImage: infoMap.get(p.userId)?.image ?? null,
-    orgVerified: infoMap.get(p.userId)?.orgVerified ?? false,
-    orgHandle: infoMap.get(p.userId)?.orgHandle ?? null,
+    ...resolveAuthor(p, infoMap),
     postedAt: timeAgo(p.createdAt),
     createdAtMs: p.createdAt.getTime(),
     text: p.text,
@@ -555,13 +587,7 @@ export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
   return posts.map((p) => ({
     id: p.id,
     authorId: p.userId,
-    user: infoMap.get(p.userId)?.name ?? p.authorName,
-    handle: getHandle(infoMap.get(p.userId)?.name ?? p.authorName),
-    initials: getInitials(infoMap.get(p.userId)?.name ?? p.authorName),
-    color: getAvatarColor(p.userId),
-    authorImage: infoMap.get(p.userId)?.image ?? null,
-    orgVerified: infoMap.get(p.userId)?.orgVerified ?? false,
-    orgHandle: infoMap.get(p.userId)?.orgHandle ?? null,
+    ...resolveAuthor(p, infoMap),
     postedAt: timeAgo(p.createdAt),
     createdAtMs: p.createdAt.getTime(),
     text: p.text,
@@ -637,13 +663,7 @@ export async function getRepostsByUser(userId: string): Promise<FeedPostView[]> 
   return ordered.map((p) => ({
     id: p.id,
     authorId: p.userId,
-    user: infoMap.get(p.userId)?.name ?? p.authorName,
-    handle: getHandle(infoMap.get(p.userId)?.name ?? p.authorName),
-    initials: getInitials(infoMap.get(p.userId)?.name ?? p.authorName),
-    color: getAvatarColor(p.userId),
-    authorImage: infoMap.get(p.userId)?.image ?? null,
-    orgVerified: infoMap.get(p.userId)?.orgVerified ?? false,
-    orgHandle: infoMap.get(p.userId)?.orgHandle ?? null,
+    ...resolveAuthor(p, infoMap),
     postedAt: timeAgo(p.createdAt),
     createdAtMs: p.createdAt.getTime(),
     text: p.text,
@@ -735,15 +755,23 @@ export async function createPost(input: {
   // null) — community-room posts (itestify / qotd) are unaffected.
   let organizationId: string | null = null
   let isOrganization = false
+  // The author identity denormalized onto the post. For an organisation account
+  // this is the ORGANISATION's name/handle (not the admin's), so the post is
+  // attributed to the organisation even in the fallback path where the live
+  // owner lookup is unavailable.
+  let authorName = user.name
+  let authorHandle = getHandle(user.name)
   if (channel === null) {
     const [owned] = await db
-      .select({ id: organization.id })
+      .select({ id: organization.id, name: organization.name, handle: organization.handle })
       .from(organization)
       .where(eq(organization.ownerId, user.id))
       .limit(1)
     if (owned) {
       isOrganization = true
       organizationId = owned.id
+      authorName = owned.name
+      authorHandle = owned.handle
     }
   }
 
@@ -773,8 +801,8 @@ export async function createPost(input: {
     .values({
       userId: user.id,
       organizationId,
-      authorName: user.name,
-      authorHandle: getHandle(user.name),
+      authorName,
+      authorHandle,
       text,
       image: first?.type === "image" ? first.url : null,
       video: first?.type === "video" ? first.url : null,
