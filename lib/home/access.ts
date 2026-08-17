@@ -15,6 +15,14 @@ import type { HomePlanId } from "@/lib/home/plans"
 type HomeRow = typeof home.$inferSelect
 type OrgRow = typeof organization.$inferSelect
 
+/**
+ * Short-lived cookie the "start from Home" entry sets before opening the global
+ * go-live composer. `startBroadcast` reads it (once) to stamp the new session
+ * with its Home, so we get exact Home scoping without threading a prop through
+ * the entire immersive live stack.
+ */
+export const HOME_GO_LIVE_COOKIE = "freq_home_live"
+
 export async function getViewerId(): Promise<string | null> {
   const session = await auth.api.getSession({ headers: await headers() })
   return session?.user?.id ?? null
@@ -89,6 +97,27 @@ export async function getMyHomes(): Promise<HomeView[]> {
     .where(and(eq(homeMembership.userId, viewerId), eq(homeMembership.status, "active")))
     .orderBy(desc(homeMembership.createdAt))
   return Promise.all(rows.map(async (r) => toHomeView(r.h, r.org, await memberCountFor(r.h.id))))
+}
+
+/**
+ * Whether a specific user is an ACTIVE member of a Home. A lightweight boolean
+ * check (no view assembly) for server actions that have already resolved the
+ * acting user and just need to gate access — e.g. joining a Home-scoped live
+ * session, or stamping a session with its Home on go-live.
+ */
+export async function isActiveHomeMember(homeId: string, userId: string): Promise<boolean> {
+  const rows = await db
+    .select({ id: homeMembership.id })
+    .from(homeMembership)
+    .where(
+      and(
+        eq(homeMembership.homeId, homeId),
+        eq(homeMembership.userId, userId),
+        eq(homeMembership.status, "active"),
+      ),
+    )
+    .limit(1)
+  return rows.length > 0
 }
 
 /** The current viewer's membership in a Home, or null if none. */

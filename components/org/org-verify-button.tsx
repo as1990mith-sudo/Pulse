@@ -31,8 +31,8 @@ export function OrgVerifyButton({
 
   if (local === "pending") {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 px-3 py-1.5 text-xs font-medium text-muted-foreground">
-        <Clock className="size-4" /> Verification under review
+      <span className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-full border border-border/60 px-3 text-xs font-medium text-muted-foreground">
+        <Clock className="size-4 shrink-0" /> Under review
       </span>
     )
   }
@@ -52,10 +52,10 @@ export function OrgVerifyButton({
           }
         })
       }
-      className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/10 disabled:opacity-60"
+      className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-full border border-primary/40 bg-primary/5 px-4 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 active:scale-[0.98] disabled:opacity-60"
     >
-      <ShieldCheck className="size-4" />
-      {pending ? "Requesting..." : "Request verification"}
+      <ShieldCheck className="size-4 shrink-0" />
+      {pending ? "Requesting..." : "Get verified"}
     </button>
   )
 }

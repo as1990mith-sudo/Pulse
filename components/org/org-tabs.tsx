@@ -274,8 +274,9 @@ function PostsTab({ org, posts }: { org: OrganizationView; posts: OrgPostView[] 
 
 // X (Twitter)-style thread row, matching the Community Help / individual-profile
 // post timeline: edge-to-edge, avatar + inline name/time header, body, media
-// and an engagement row — instead of a boxed card.
-function OrgPostThread({ org, post }: { org: OrganizationView; post: OrgPostView }) {
+// and an engagement row — instead of a boxed card. Exported so the Home Feed
+// (org voice) reuses the exact same premium thread architecture.
+export function OrgPostThread({ org, post }: { org: OrganizationView; post: OrgPostView }) {
   return (
     <article className="flex gap-3 px-4 py-4 transition-colors hover:bg-secondary/30 sm:px-6">
       <OrgAvatar org={org} className="size-11" />

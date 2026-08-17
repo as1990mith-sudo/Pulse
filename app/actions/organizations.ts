@@ -110,12 +110,31 @@ export type CreateOrganizationInput = {
   categoryOther?: string
   description?: string
   logo?: string
+  cover?: string
   reach: OrgReach
   onlineOnly?: boolean
   country?: string
   city?: string
   region?: string
   website?: string
+  contactEmail?: string
+  contactPhone?: string
+  socials?: OrgSocials
+  mission?: string
+  vision?: string
+  history?: string
+  beliefs?: string
+}
+
+/** Trims social links and drops empties, returning null when nothing is set. */
+function cleanSocials(socials?: OrgSocials | null): OrgSocials | null {
+  if (!socials) return null
+  const out: Record<string, string> = {}
+  for (const [key, value] of Object.entries(socials)) {
+    const trimmed = (value ?? "").toString().trim()
+    if (trimmed) out[key] = trimmed
+  }
+  return Object.keys(out).length > 0 ? (out as OrgSocials) : null
 }
 
 /**
@@ -161,12 +180,20 @@ export async function createOrganization(input: CreateOrganizationInput): Promis
     categoryOther: input.category === "other" ? input.categoryOther?.trim() || null : null,
     description: input.description?.trim() || null,
     logo: input.logo || user.image || null,
+    cover: input.cover?.trim() || null,
     reach: input.reach,
     onlineOnly: !!input.onlineOnly,
     country: input.onlineOnly ? null : input.country?.trim() || null,
     city: input.onlineOnly ? null : input.city?.trim() || null,
     region: input.onlineOnly ? null : input.region?.trim() || null,
     website,
+    contactEmail: input.contactEmail?.trim() || null,
+    contactPhone: input.contactPhone?.trim() || null,
+    socials: cleanSocials(input.socials),
+    mission: input.mission?.trim() || null,
+    vision: input.vision?.trim() || null,
+    history: input.history?.trim() || null,
+    beliefs: input.beliefs?.trim() || null,
   })
 
   await db.update(userTable).set({ accountType: "organization" }).where(eq(userTable.id, user.id))

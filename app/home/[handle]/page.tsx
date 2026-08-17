@@ -1,11 +1,7 @@
 import type { Metadata } from "next"
-import Link from "next/link"
 import { requireHomeMembership } from "@/lib/home/access"
-import { isHomeAdminRole } from "@/lib/home/roles"
-import { HomeHeader } from "@/components/home/home-header"
-import { HomeOverviewBody } from "@/components/home/home-overview-body"
-import { WelcomeBanner } from "@/components/home/welcome-banner"
-import { Settings2 } from "lucide-react"
+import { getHomeDashboard } from "@/app/actions/home-surfaces"
+import { HomeDashboard } from "@/components/home/dashboard/home-dashboard"
 
 export async function generateMetadata({
   params,
@@ -16,40 +12,16 @@ export async function generateMetadata({
   return { title: `Home · ${handle}` }
 }
 
-export default async function HomeOverviewPage({
+export default async function HomeDashboardPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ handle: string }>
-  searchParams: Promise<{ welcome?: string }>
 }) {
   const { handle } = await params
-  const { welcome } = await searchParams
-  // Privacy boundary: only ACTIVE members reach this. Non-members are redirected
-  // to the join flow inside requireHomeMembership.
-  const { home, membership } = await requireHomeMembership(handle)
-  const canManage = isHomeAdminRole(membership.role)
+  // Membership is already enforced by the layout; we re-resolve the Home here to
+  // get its ids for the (Home-scoped) dashboard query.
+  const { home } = await requireHomeMembership(handle)
+  const data = await getHomeDashboard(home.id, home.organizationId)
 
-  return (
-    <main className="mx-auto min-h-svh w-full max-w-4xl pb-16">
-      <HomeHeader
-        home={home}
-        action={
-          canManage ? (
-            <Link
-              href={`/org/${handle}/admin`}
-              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/80 px-4 py-2 text-sm font-semibold shadow-sm backdrop-blur-sm transition-colors hover:bg-accent"
-            >
-              <Settings2 className="size-4" /> Admin
-            </Link>
-          ) : undefined
-        }
-      />
-
-      <div className="px-5 sm:px-8">
-        {welcome && <WelcomeBanner home={home} role={membership.role} />}
-        <HomeOverviewBody home={home} />
-      </div>
-    </main>
-  )
+  return <HomeDashboard data={data} home={{ handle: home.handle, name: home.name, logo: home.orgLogo }} />
 }

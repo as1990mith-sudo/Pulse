@@ -36,6 +36,10 @@ function isImmersive(p: string): boolean {
   if (/^\/library\/[^/]+\/[^/]+/.test(p)) return true // in-app reader / course player
   if (/^\/store\/[^/]+\/[^/]+/.test(p)) return true // product page (sticky CTA)
   if (/^\/studio(\/|$)/.test(p)) return true // broadcast studio
+  // Inside a specific Home (org space) — the Home shell renders its own
+  // org-branded navigation. The /home hub, /home/join and /home/create flows
+  // keep the global bar.
+  if (/^\/home\/(?!join$|create$)[^/]+/.test(p)) return true
   // A specific chat room (but keep the bar on the browse lists).
   if (/^\/chatrooms\/(?!community$|dreams$)[^/]+/.test(p)) return true
   return false
