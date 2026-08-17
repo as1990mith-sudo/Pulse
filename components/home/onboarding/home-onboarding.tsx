@@ -162,12 +162,27 @@ export function HomeOnboarding() {
         orgTypeId,
         categoryOther: needsOther ? categoryOther.trim() : undefined,
         country: country.trim() || undefined,
+        city: city.trim() || undefined,
+        region: region.trim() || undefined,
         website: website.trim() || undefined,
         description: description.trim() || undefined,
         logo: logoUrl,
         cover: coverUrl,
         accentColor: accent,
         plan,
+        contactEmail: contactEmail.trim() || undefined,
+        contactPhone: contactPhone.trim() || undefined,
+        socials: {
+          instagram: instagram.trim(),
+          youtube: youtube.trim(),
+          facebook: facebook.trim(),
+          twitter: twitter.trim(),
+          other: otherLink.trim(),
+        },
+        mission: mission.trim() || undefined,
+        vision: vision.trim() || undefined,
+        history: history.trim() || undefined,
+        beliefs: beliefs.trim() || undefined,
       }
       const { handle } = await createHome(payload)
 
@@ -266,7 +281,92 @@ export function HomeOnboarding() {
           </Section>
         )}
 
-        {stepIdx === 1 && (
+        {stepId === "details" && (
+          <Section title="Contact, links & your story">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Contact email" htmlFor="org-contact-email" optional icon={<Mail className="size-3.5" />}>
+                <Input
+                  id="org-contact-email"
+                  type="email"
+                  value={contactEmail}
+                  onChange={(e) => setContactEmail(e.target.value)}
+                  placeholder="hello@kingdomacademy.org"
+                />
+              </Field>
+              <Field label="Contact phone" htmlFor="org-contact-phone" optional>
+                <Input
+                  id="org-contact-phone"
+                  inputMode="tel"
+                  value={contactPhone}
+                  onChange={(e) => setContactPhone(e.target.value)}
+                  placeholder="+44 …"
+                />
+              </Field>
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-sm font-medium">Social links</span>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input value={instagram} onChange={(e) => setInstagram(e.target.value)} placeholder="Instagram" />
+                <Input value={youtube} onChange={(e) => setYoutube(e.target.value)} placeholder="YouTube" />
+                <Input value={facebook} onChange={(e) => setFacebook(e.target.value)} placeholder="Facebook" />
+                <Input value={twitter} onChange={(e) => setTwitter(e.target.value)} placeholder="X / Twitter" />
+              </div>
+              <Input
+                value={otherLink}
+                onChange={(e) => setOtherLink(e.target.value)}
+                placeholder="Any other link (optional)"
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Mission" htmlFor="org-mission" optional>
+                <textarea
+                  id="org-mission"
+                  value={mission}
+                  onChange={(e) => setMission(e.target.value)}
+                  placeholder="Why your ministry exists"
+                  rows={3}
+                  className="w-full resize-none rounded-xl border border-input bg-background px-3.5 py-2.5 text-sm leading-relaxed shadow-sm placeholder:text-muted-foreground/70 focus-visible:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                />
+              </Field>
+              <Field label="Vision" htmlFor="org-vision" optional>
+                <textarea
+                  id="org-vision"
+                  value={vision}
+                  onChange={(e) => setVision(e.target.value)}
+                  placeholder="Where you're headed"
+                  rows={3}
+                  className="w-full resize-none rounded-xl border border-input bg-background px-3.5 py-2.5 text-sm leading-relaxed shadow-sm placeholder:text-muted-foreground/70 focus-visible:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                />
+              </Field>
+            </div>
+
+            <Field label="Our story" htmlFor="org-history" optional>
+              <textarea
+                id="org-history"
+                value={history}
+                onChange={(e) => setHistory(e.target.value)}
+                placeholder="How your ministry began and where it is today."
+                rows={3}
+                className="w-full resize-none rounded-xl border border-input bg-background px-3.5 py-2.5 text-sm leading-relaxed shadow-sm placeholder:text-muted-foreground/70 focus-visible:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              />
+            </Field>
+
+            <Field label="What we believe" htmlFor="org-beliefs" optional>
+              <textarea
+                id="org-beliefs"
+                value={beliefs}
+                onChange={(e) => setBeliefs(e.target.value)}
+                placeholder="Your statement of faith or core convictions."
+                rows={3}
+                className="w-full resize-none rounded-xl border border-input bg-background px-3.5 py-2.5 text-sm leading-relaxed shadow-sm placeholder:text-muted-foreground/70 focus-visible:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              />
+            </Field>
+          </Section>
+        )}
+
+        {stepId === "identity" && (
           <Section title="Make it unmistakably yours">
             <BrandingUpload
               logoPreview={logoPreview}
@@ -284,13 +384,13 @@ export function HomeOnboarding() {
           </Section>
         )}
 
-        {stepIdx === 2 && (
+        {stepId === "plan" && (
           <Section title="Choose your plan">
             <PlanCards value={plan} onChange={setPlan} />
           </Section>
         )}
 
-        {stepIdx === 3 && (
+        {stepId === "admin" && (
           <Section title="Create your admin account">
             <Field label="Your name" htmlFor="admin-name" icon={<User className="size-3.5" />}>
               <Input
@@ -322,7 +422,7 @@ export function HomeOnboarding() {
           </Section>
         )}
 
-        {stepIdx === 4 && (
+        {stepId === "review" && (
           <Section title="Review your Home">
             <ReviewCard
               orgName={orgName}
