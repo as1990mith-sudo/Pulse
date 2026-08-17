@@ -363,7 +363,9 @@ export function LiveChat({
                         : cn(
                             "rounded-2xl px-3 py-1.5 shadow-sm",
                             isMine
-                              ? "rounded-br-md bg-primary text-primary-foreground"
+                              ? // Neutral white bubble keeps the viewer's own messages readable on
+                                // any studio theme (a themed fill blended into coloured backgrounds).
+                                "rounded-br-md bg-white text-zinc-900"
                               : immersive
                                 ? "rounded-bl-md bg-white/10 text-white/90 ring-1 ring-inset ring-white/10 backdrop-blur-md"
                                 : "rounded-bl-md bg-secondary text-foreground/90 ring-1 ring-inset ring-border/50",
@@ -371,7 +373,7 @@ export function LiveChat({
                           ),
                     )}
                   >
-                    <MentionText body={m.body} accent={isMine && !flatText} />
+                    <MentionText body={m.body} />
                   </p>
                 </div>
               </li>
