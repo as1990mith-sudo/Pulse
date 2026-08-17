@@ -8,7 +8,8 @@ import { db } from "@/lib/db"
 import { home, homeAuthKey, homeMembership, organization, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { createOrganization, updateOrganization } from "@/app/actions/organizations"
-import { getHomeByHandle, getViewerMembership } from "@/lib/home/access"
+import { getHomeByHandle, getMyHomes, getViewerMembership } from "@/lib/home/access"
+import { DEFAULT_HOME_ACCENT } from "@/lib/home/accent"
 import { isValidKeyFormat, normalizeKey } from "@/lib/home/auth-key"
 import { ensureHomeForOrg, insertFreshKey } from "@/lib/home/provision"
 import { isHomePlanId, type HomePlanId } from "@/lib/home/plans"
@@ -125,6 +126,30 @@ export async function createHome(input: CreateHomeInput): Promise<{ handle: stri
 
   revalidatePath("/home")
   return { handle }
+}
+
+export type MySpaceLink = {
+  handle: string
+  name: string
+  logo: string | null
+  initials: string
+  accent: string
+}
+
+/**
+ * Slim list of the Homes the current viewer actively belongs to, for the
+ * Universal navigation drawer's "My Spaces" section. Client-callable wrapper
+ * over the `server-only` `getMyHomes`, returning only what the menu renders.
+ */
+export async function getMySpaces(): Promise<MySpaceLink[]> {
+  const homes = await getMyHomes()
+  return homes.map((h) => ({
+    handle: h.handle,
+    name: h.name,
+    logo: h.orgLogo,
+    initials: h.orgInitials,
+    accent: h.accentColor || DEFAULT_HOME_ACCENT,
+  }))
 }
 
 export type JoinHomeResult =

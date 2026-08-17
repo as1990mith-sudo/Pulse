@@ -24,7 +24,6 @@ export default async function HomeRoomsPage({
       emptyBody="When a member of your community starts a conversation room, it appears here to join."
       icon={Users2}
       startKind="room"
-      startLabel="Start a room"
     />
   )
 }

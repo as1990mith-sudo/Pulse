@@ -24,7 +24,6 @@ export default async function HomeLivePage({
       emptyBody="When a member of your community goes live with a broadcast, you'll be able to join it here."
       icon={Radio}
       startKind="video"
-      startLabel="Go live"
     />
   )
 }

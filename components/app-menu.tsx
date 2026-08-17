@@ -15,8 +15,10 @@ import {
   ChevronDown,
   ChevronRight,
   Contrast,
+  Globe,
   Info,
   Leaf,
+  Plus,
   Library as LibraryIcon,
   LifeBuoy,
   LogOut,
@@ -38,6 +40,7 @@ import {
 import { authClient } from "@/lib/auth-client"
 import { getUnreadCount } from "@/app/actions/notifications"
 import { getMyOrganization } from "@/app/actions/organizations"
+import { getMySpaces } from "@/app/actions/home"
 import { SKINS, useSkin } from "@/components/skin-provider"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { startMenuFlow } from "@/lib/menu-flow"
@@ -96,6 +99,14 @@ export function AppMenu() {
     revalidateOnFocus: false,
   })
   const ownsOrg = !!myOrg
+
+  // The private Homes this member belongs to. Surfaced as a "My Spaces" section
+  // so a member can move between Frequency Universal and their organisation
+  // Home(s) — and find the join entry — without first being inside a Home.
+  const { data: mySpaces } = useSWR(signedIn ? "my-spaces" : null, () => getMySpaces(), {
+    revalidateOnFocus: false,
+  })
+  const spaces = mySpaces ?? []
 
   const [mounted, setMounted] = useState(false)
   const [open, setOpen] = useState(false) // portal present (enter + exit)
@@ -325,6 +336,34 @@ export function AppMenu() {
 
               {/* Scrollable menu body */}
               <div className="mt-2 flex-1 overflow-y-auto overscroll-contain px-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+                {signedIn && (
+                  <>
+                    <Section label="My spaces">
+                      <SpaceRow
+                        href="/"
+                        label="Frequency Universal"
+                        sublabel="The public platform"
+                        onNavigate={navigate}
+                        universal
+                      />
+                      {spaces.map((s) => (
+                        <SpaceRow
+                          key={s.handle}
+                          href={`/home/${s.handle}`}
+                          label={s.name}
+                          sublabel="Private home"
+                          onNavigate={navigate}
+                          logo={s.logo}
+                          initials={s.initials}
+                          accent={s.accent}
+                        />
+                      ))}
+                      <SpaceRow href="/home" label="Find or join a home" onNavigate={navigate} join />
+                    </Section>
+                    <Divider />
+                  </>
+                )}
+
                 <Section>
                   <DrawerItem href="/discover" icon={Compass} label="Discover Ministries" onNavigate={navigate} />
                   <DrawerItem href="/bible" icon={BookOpen} label="Bible" onNavigate={navigate} />
@@ -462,6 +501,63 @@ function DrawerItem({
       <IconBubble icon={icon} />
       <span className="flex-1 text-[15px] font-medium text-foreground">{label}</span>
       <CountBadge count={badge} />
+      <ChevronRight className="size-5 shrink-0 text-muted-foreground/60" />
+    </Link>
+  )
+}
+
+/**
+ * A row in the "My spaces" switcher: Frequency Universal, each Home the member
+ * belongs to (accent-branded logo/initials), or the "find or join" entry.
+ */
+function SpaceRow({
+  href,
+  label,
+  sublabel,
+  onNavigate,
+  logo,
+  initials,
+  accent,
+  universal,
+  join,
+}: {
+  href: string
+  label: string
+  sublabel?: string
+  onNavigate: () => void
+  logo?: string | null
+  initials?: string
+  accent?: string
+  universal?: boolean
+  join?: boolean
+}) {
+  return (
+    <Link href={href} onClick={onNavigate} className={itemClasses}>
+      {universal ? (
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-foreground text-background">
+          <Globe className="size-[22px]" />
+        </span>
+      ) : join ? (
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-dashed border-border text-muted-foreground">
+          <Plus className="size-[22px]" />
+        </span>
+      ) : (
+        <span
+          className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl text-sm font-bold text-white"
+          style={{ backgroundColor: accent }}
+        >
+          {logo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logo || "/placeholder.svg"} alt="" className="size-full object-cover" />
+          ) : (
+            initials
+          )}
+        </span>
+      )}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[15px] font-medium text-foreground">{label}</span>
+        {sublabel && <span className="block truncate text-xs text-muted-foreground">{sublabel}</span>}
+      </span>
       <ChevronRight className="size-5 shrink-0 text-muted-foreground/60" />
     </Link>
   )
