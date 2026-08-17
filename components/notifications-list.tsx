@@ -9,6 +9,9 @@ import {
   getNotifications,
   markNotificationsRead,
   deleteNotifications,
+  getHomeNotifications,
+  markHomeNotificationsRead,
+  deleteHomeNotifications,
   type NotificationType,
   type NotificationView,
 } from "@/app/actions/notifications"
@@ -23,6 +26,7 @@ const ICONS: Record<NotificationType, React.ComponentType<{ className?: string }
   follow: UserPlus,
   repost: Repeat2,
   mention: AtSign,
+  announcement: Megaphone,
 }
 
 function verb(type: NotificationType) {
@@ -41,6 +45,8 @@ function verb(type: NotificationType) {
       return "reposted your post"
     case "mention":
       return "mentioned you"
+    case "announcement":
+      return "shared an announcement"
   }
 }
 
@@ -49,13 +55,33 @@ const SWIPE_DELETE_THRESHOLD = 96
 // Hold a row still for this long (ms) to enter multi-select mode.
 const LONG_PRESS_MS = 450
 
-export function NotificationsList({ initial }: { initial: NotificationView[] }) {
+/**
+ * Shared notifications inbox. Pass `homeId` to scope it to a Home: it then
+ * fetches, marks-read, and deletes ONLY that Home's notifications (and clears the
+ * matching Home bell badge). Without `homeId` it is the Universal inbox. The rich
+ * swipe / long-press / multi-select interaction is identical in both.
+ */
+export function NotificationsList({
+  initial,
+  homeId,
+}: {
+  initial: NotificationView[]
+  homeId?: string
+}) {
   const router = useRouter()
   const { mutate } = useSWRConfig()
-  const { data, mutate: mutateList } = useSWR("notifications-page", () => getNotifications(), {
-    fallbackData: initial,
-    refreshInterval: 20000,
-  })
+  // Distinct SWR keys per scope so the Universal and Home inboxes never share
+  // cache. `unreadKey` MUST match the key the bell badge subscribes to.
+  const listKey = homeId ? `home-notifications-page:${homeId}` : "notifications-page"
+  const unreadKey = homeId ? `home-notifications-unread:${homeId}` : "notifications-unread"
+  const { data, mutate: mutateList } = useSWR(
+    listKey,
+    () => (homeId ? getHomeNotifications(homeId) : getNotifications()),
+    {
+      fallbackData: initial,
+      refreshInterval: 20000,
+    },
+  )
 
   // Multi-select state. Entering selection mode (via long-press) turns taps
   // into selection toggles instead of navigation.
@@ -64,8 +90,9 @@ export function NotificationsList({ initial }: { initial: NotificationView[] }) 
 
   // Opening the page marks everything read so the header badge clears.
   useEffect(() => {
-    void markNotificationsRead().then(() => mutate("notifications-unread"))
-  }, [mutate])
+    const markRead = homeId ? markHomeNotificationsRead(homeId) : markNotificationsRead()
+    void markRead.then(() => mutate(unreadKey))
+  }, [mutate, homeId, unreadKey])
 
   const notifications = data ?? []
 
@@ -94,10 +121,10 @@ export function NotificationsList({ initial }: { initial: NotificationView[] }) 
       if (ids.length === 0) return
       const idSet = new Set(ids)
       await mutateList((current) => (current ?? []).filter((n) => !idSet.has(n.id)), { revalidate: false })
-      await deleteNotifications(ids)
-      void mutate("notifications-unread")
+      await (homeId ? deleteHomeNotifications(homeId, ids) : deleteNotifications(ids))
+      void mutate(unreadKey)
     },
-    [mutateList, mutate],
+    [mutateList, mutate, homeId, unreadKey],
   )
 
   const clearSelected = useCallback(async () => {

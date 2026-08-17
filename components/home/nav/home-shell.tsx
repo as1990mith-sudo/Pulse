@@ -3,6 +3,8 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { motion } from "motion/react"
+import useSWR from "swr"
+import { getHomeUnreadNotificationCount } from "@/app/actions/notifications"
 import {
   Bell,
   Calendar,
@@ -78,6 +80,16 @@ export function HomeShell({
 
   const notificationsActive = isActive("notifications")
 
+  // Live unread badge for this Home's bell. The key MUST match the one the
+  // notifications page revalidates on open (`home-notifications-unread:<id>`) so
+  // visiting the inbox clears the badge immediately.
+  const { data: unreadCount = 0 } = useSWR(
+    `home-notifications-unread:${home.id}`,
+    () => getHomeUnreadNotificationCount(home.id),
+    { refreshInterval: 30000 },
+  )
+  const unreadLabel = unreadCount > 99 ? "99+" : String(unreadCount)
+
   return (
     <div className="min-h-svh bg-background" style={homeAccentStyle(home)}>
       <div className="mx-auto flex w-full max-w-6xl">
@@ -127,6 +139,14 @@ export function HomeShell({
             >
               <Bell className="size-[18px] shrink-0" strokeWidth={notificationsActive ? 2.4 : 2} />
               Notifications
+              {unreadCount > 0 && (
+                <span
+                  className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold tabular-nums text-white"
+                  style={{ backgroundColor: accent }}
+                >
+                  {unreadLabel}
+                </span>
+              )}
             </Link>
 
             {canManage && (
@@ -179,14 +199,22 @@ export function HomeShell({
               </div>
               <Link
                 href={`${base}/notifications`}
-                aria-label="Notifications"
+                aria-label={unreadCount > 0 ? `Notifications, ${unreadLabel} unread` : "Notifications"}
                 className={cn(
-                  "flex size-10 shrink-0 items-center justify-center rounded-full border border-border/60 transition-colors",
+                  "relative flex size-10 shrink-0 items-center justify-center rounded-full border border-border/60 transition-colors",
                   notificationsActive ? "text-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
                 style={notificationsActive ? { color: accent } : undefined}
               >
                 <Bell className="size-5" />
+                {unreadCount > 0 && (
+                  <span
+                    className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-bold tabular-nums text-white ring-2 ring-background"
+                    style={{ backgroundColor: accent }}
+                  >
+                    {unreadLabel}
+                  </span>
+                )}
               </Link>
             </div>
           </header>
