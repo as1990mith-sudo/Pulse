@@ -872,6 +872,11 @@ export const savedItem = pgTable("saved_item", {
 export const communityPost = pgTable("community_post", {
   id: serial("id").primaryKey(),
   userId: text("userId").notNull(), // author — exposed to others only when anonymous=false
+  // Home scoping: null = the Universal (global) Community Help; a home id scopes
+  // the post to that organisation's PRIVATE Community Help. Anonymity metadata
+  // (userId above) is preserved regardless of scope so authorised Home
+  // moderators can still act, but is never leaked across organisations.
+  homeId: text("homeId"),
   body: text("body").notNull(),
   imageUrl: text("imageUrl"), // optional attached image (Vercel Blob URL)
   videoUrl: text("videoUrl"), // optional attached video (Vercel Blob URL)

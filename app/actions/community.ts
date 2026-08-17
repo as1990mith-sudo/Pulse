@@ -1,6 +1,6 @@
 "use server"
 
-import { and, asc, desc, eq, inArray } from "drizzle-orm"
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm"
 import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
@@ -141,15 +141,26 @@ async function buildCommunityPostViews(
   })
 }
 
-/** Newest-first feed of anonymous community posts with reply counts. */
-export async function getCommunityPosts(): Promise<CommunityPostView[]> {
+/**
+ * Newest-first feed of community posts with reply counts, scoped by Home.
+ *
+ * - `homeId` omitted / null → the Universal (global) Community Help. Only posts
+ *   with no Home scope are returned, so a private Home's threads never leak into
+ *   the public room.
+ * - `homeId` set → that organisation's PRIVATE Community Help. Callers are
+ *   responsible for verifying the viewer is an active member of the Home first
+ *   (the Home routes do this via requireHomeMembership).
+ */
+export async function getCommunityPosts(homeId?: string | null): Promise<CommunityPostView[]> {
   const session = await auth.api.getSession({ headers: await headers() })
   const viewerId = session?.user?.id ?? null
+
+  const scope = homeId ? eq(communityPost.homeId, homeId) : isNull(communityPost.homeId)
 
   const posts = await db
     .select()
     .from(communityPost)
-    .where(eq(communityPost.deleted, false))
+    .where(and(eq(communityPost.deleted, false), scope))
     .orderBy(desc(communityPost.createdAt))
     .limit(200)
 
@@ -216,6 +227,7 @@ export async function createCommunityPost(
   imageUrl?: string | null,
   videoUrl?: string | null,
   anonymous = true,
+  homeId?: string | null,
 ): Promise<CommunityPostView> {
   const user = await requireUser()
   const text = body.trim()
@@ -234,7 +246,9 @@ export async function createCommunityPost(
 
   const [row] = await db
     .insert(communityPost)
-    .values({ userId: user.id, body: text, imageUrl: image, videoUrl: video, anonymous })
+    // homeId stamps the post to a private Home when provided; null keeps it in
+    // the Universal room. The author id is always stored for moderation.
+    .values({ userId: user.id, body: text, imageUrl: image, videoUrl: video, anonymous, homeId: homeId ?? null })
     .returning()
 
   revalidatePath("/chatrooms/community")
