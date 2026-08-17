@@ -165,3 +165,135 @@ export async function deleteNotifications(ids: number[]): Promise<void> {
     .where(and(eq(notification.userId, session.user.id), inArray(notification.id, ids)))
   revalidatePath("/")
 }
+
+// ── Home-scoped notifications ─────────────────────────────────────────────────
+// Everything below powers a Home's own notification inbox. Home notifications
+// carry a `homeId` so they are strictly isolated: they never appear in the
+// Universal list/count above, and a Home inbox never shows Universal activity.
+
+/** The user ids of every ACTIVE member of a Home (optionally excluding one). */
+async function activeMemberIds(homeId: string, exceptUserId?: string): Promise<string[]> {
+  const rows = await db
+    .select({ userId: homeMembership.userId })
+    .from(homeMembership)
+    .where(and(eq(homeMembership.homeId, homeId), eq(homeMembership.status, "active")))
+  return rows.map((r) => r.userId).filter((id) => id !== exceptUserId)
+}
+
+/**
+ * Fans a notification out to every active member of a Home (except the actor).
+ * Used for organisation-wide activity — a new organisation post/announcement or
+ * a new Community Help thread. One insert per recipient keeps read-state and
+ * delete-state per user, matching the Universal model.
+ */
+export async function notifyHomeMembers(input: {
+  homeId: string
+  actorId: string
+  actorName: string
+  type: NotificationType
+  message: string
+  link: string
+}): Promise<void> {
+  const recipients = await activeMemberIds(input.homeId, input.actorId)
+  if (recipients.length === 0) return
+  await db.insert(notification).values(
+    recipients.map((userId) => ({
+      userId,
+      actorId: input.actorId,
+      actorName: input.actorName,
+      type: input.type,
+      message: input.message,
+      link: input.link,
+      homeId: input.homeId,
+    })),
+  )
+}
+
+/** Tells a Home's members that a private session just went live (member-gated). */
+export async function notifyHomeLive(input: {
+  homeId: string
+  actorId: string
+  actorName: string
+  title: string
+  roomName: string
+}): Promise<void> {
+  await notifyHomeMembers({
+    homeId: input.homeId,
+    actorId: input.actorId,
+    actorName: input.actorName,
+    type: "live",
+    message: input.title,
+    link: `/live/${input.roomName}`,
+  })
+}
+
+/** Newest-first notifications for the current user WITHIN a specific Home. */
+export async function getHomeNotifications(homeId: string): Promise<NotificationView[]> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) return []
+  const rows = await db
+    .select()
+    .from(notification)
+    .where(and(eq(notification.userId, session.user.id), eq(notification.homeId, homeId)))
+    .orderBy(desc(notification.createdAt))
+    .limit(30)
+
+  return rows.map((r) => ({
+    id: r.id,
+    actorName: r.actorName,
+    type: r.type as NotificationType,
+    message: r.message,
+    link: r.link,
+    read: r.read,
+    postedAt: timeAgo(r.createdAt),
+  }))
+}
+
+/** Unread count for the current user WITHIN a specific Home (for the Home bell). */
+export async function getHomeUnreadNotificationCount(homeId: string): Promise<number> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) return 0
+  const rows = await db
+    .select({ id: notification.id })
+    .from(notification)
+    .where(
+      and(
+        eq(notification.userId, session.user.id),
+        eq(notification.homeId, homeId),
+        eq(notification.read, false),
+      ),
+    )
+  return rows.length
+}
+
+/** Marks all of the current user's notifications WITHIN a Home as read. */
+export async function markHomeNotificationsRead(homeId: string): Promise<void> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) return
+  await db
+    .update(notification)
+    .set({ read: true })
+    .where(
+      and(
+        eq(notification.userId, session.user.id),
+        eq(notification.homeId, homeId),
+        eq(notification.read, false),
+      ),
+    )
+}
+
+/** Deletes the current user's own notifications WITHIN a Home. */
+export async function deleteHomeNotifications(homeId: string, ids: number[]): Promise<void> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) return
+  if (ids.length === 0) return
+  await db
+    .delete(notification)
+    .where(
+      and(
+        eq(notification.userId, session.user.id),
+        eq(notification.homeId, homeId),
+        inArray(notification.id, ids),
+      ),
+    )
+}
