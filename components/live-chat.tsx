@@ -451,7 +451,7 @@ export function LiveChat({
               className={cn(
                 "max-h-32 min-h-10 flex-1 resize-none py-2.5",
                 immersive &&
-                  "border-white/15 bg-white/10 text-white placeholder:text-white/40 focus-visible:border-primary/60 focus-visible:ring-primary/30",
+                  "border-transparent bg-white/10 text-white placeholder:text-white/40 focus-visible:border-transparent focus-visible:ring-primary/40",
               )}
               aria-label="Chat message"
             />
