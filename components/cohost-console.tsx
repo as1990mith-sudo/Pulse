@@ -11,7 +11,7 @@ import { LiveStage, QualityIcon } from "@/components/live-stage"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { ReactionLayer } from "@/components/live-reactions"
 import { MusicPanel, PeoplePanel, type Track } from "@/components/studio-console"
-import { liveThemeStyle } from "@/lib/live-themes"
+import { liveThemeStyle, isLiveImageTheme } from "@/lib/live-themes"
 import { getAvatarColor } from "@/lib/identity"
 import { useLivePresence } from "@/lib/use-live-presence"
 import type { useLiveAudio } from "@/lib/use-live-audio"
@@ -328,13 +328,15 @@ export function CoHostConsole({
       {/* Drifting aurora backdrop. */}
       <div
         aria-hidden="true"
-        className="stage-aurora pointer-events-none absolute inset-0 opacity-70"
+        className="stage-aurora pointer-events-none absolute inset-0"
         style={{
+          opacity: "var(--live-aurora-opacity, 0.7)",
           background:
             "radial-gradient(70% 55% at 20% 0%, color-mix(in oklch, var(--primary) 45%, transparent), transparent 60%), radial-gradient(60% 50% at 90% 20%, color-mix(in oklch, var(--live-accent) 30%, transparent), transparent 55%), radial-gradient(80% 60% at 50% 100%, color-mix(in oklch, var(--primary) 25%, transparent), transparent 60%)",
         }}
       />
-      {stream.cover && (
+      {/* Blurred cover backdrop — skipped for photo themes. */}
+      {stream.cover && !isLiveImageTheme(theme) && (
         <>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img

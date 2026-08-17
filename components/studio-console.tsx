@@ -57,7 +57,7 @@ import {
   import { ManageCoHostMenu, MusicApprovalPrompt, EndSessionPrompt, CoHostsPanel } from "@/components/live/cohost-menu"
   import { SaveEpisodePrompt } from "@/components/live/save-episode-prompt"
 import { useLiveAudio } from "@/lib/use-live-audio"
-import { uploadMedia } from "@/lib/upload-media"
+import { uploadMedia, compressImage } from "@/lib/upload-media"
 import { LiveChat } from "@/components/live-chat"
 import { CoverArt } from "@/components/cover-art"
 import { MarqueeTitle } from "@/components/marquee-title"
@@ -66,7 +66,7 @@ import type { ShareTarget } from "@/lib/share-types"
 import { LiveStage, MAX_GUESTS, QualityIcon } from "@/components/live-stage"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { useLivePresence } from "@/lib/use-live-presence"
-import { LIVE_THEMES, liveThemeStyle } from "@/lib/live-themes"
+import { LIVE_THEMES, liveThemeStyle, isLiveImageTheme } from "@/lib/live-themes"
 import { LIVE_CATEGORIES } from "@/lib/live-categories"
 import { LiveBadge } from "@/components/live-badge"
 import { ReactionLayer } from "@/components/live-reactions"
@@ -754,13 +754,16 @@ export function StudioConsole({
       {/* Drifting aurora backdrop — the same immersive skin as the listener view. */}
       <div
         aria-hidden="true"
-        className="stage-aurora pointer-events-none absolute inset-0 opacity-80"
+        className="stage-aurora pointer-events-none absolute inset-0"
         style={{
+          opacity: "var(--live-aurora-opacity, 0.8)",
           background:
             "radial-gradient(75% 55% at 18% -5%, color-mix(in oklch, var(--primary) 55%, transparent), transparent 60%), radial-gradient(65% 50% at 95% 18%, color-mix(in oklch, var(--live-accent) 32%, transparent), transparent 55%), radial-gradient(90% 60% at 50% 108%, color-mix(in oklch, var(--primary) 30%, transparent), transparent 62%)",
         }}
       />
-      {cover && (
+      {/* Blurred cover backdrop — skipped for photo themes so the chosen image
+          isn't muddied by a second, darker image layer on top of it. */}
+      {cover && !isLiveImageTheme(theme) && (
         <>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -1235,6 +1238,37 @@ function ThemePanel({
   onSelect: (id: string) => void
   onClose: () => void
 }) {
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadErr, setUploadErr] = useState<string | null>(null)
+
+  // The active theme is a custom upload when it renders a photo but isn't one
+  // of the bundled presets — i.e. the stored value is the uploaded image URL.
+  const customActive = isLiveImageTheme(current) && !LIVE_THEMES.some((t) => t.id === current)
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = "" // allow re-picking the same file later
+    if (!file) return
+    if (!file.type.startsWith("image/")) {
+      setUploadErr("Please choose an image file.")
+      return
+    }
+    setUploadErr(null)
+    setUploading(true)
+    try {
+      // Shrink the phone photo before upload, then hand the room the blob URL as
+      // its theme value — liveThemeStyle renders any URL theme as a photo.
+      const compressed = await compressImage(file, 1600, 0.85)
+      const { url } = await uploadMedia(compressed, "covers", file instanceof File ? file.name : "theme.jpg")
+      onSelect(url)
+    } catch {
+      setUploadErr("Upload failed. Please try again.")
+    } finally {
+      setUploading(false)
+    }
+  }
+
   return (
     <Sheet title="Studio theme" onClose={onClose}>
       <p className="mb-3 text-sm text-muted-foreground">
@@ -1243,6 +1277,7 @@ function ThemePanel({
       <div className="grid grid-cols-2 gap-3">
         {LIVE_THEMES.map((t) => {
           const active = t.id === current
+          const isPhoto = Boolean(t.backgroundImage)
           return (
             <button
               key={t.id}
@@ -1255,16 +1290,13 @@ function ThemePanel({
               )}
               style={liveThemeStyle(t.id)}
             >
-              {/* Preview swatch using the theme's own background + accent. */}
+              {/* Preview swatch — photo themes show a single accent dot (the
+                  image itself is the preview), gradient themes show both hues. */}
               <div className="mb-8 flex items-center gap-1.5">
-                <span
-                  className="size-6 rounded-full ring-1 ring-white/20"
-                  style={{ background: t.primary }}
-                />
-                <span
-                  className="size-6 rounded-full ring-1 ring-white/20"
-                  style={{ background: t.accent }}
-                />
+                <span className="size-6 rounded-full ring-1 ring-white/20" style={{ background: t.primary }} />
+                {!isPhoto && (
+                  <span className="size-6 rounded-full ring-1 ring-white/20" style={{ background: t.accent }} />
+                )}
                 {active && (
                   <span className="ml-auto flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
                     <CheckCircle2 className="size-4" />
@@ -1276,6 +1308,45 @@ function ThemePanel({
             </button>
           )
         })}
+      </div>
+
+      {/* ── Your own photo ─────────────────────────────────────────────── */}
+      <div className="mt-5">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Your photo</p>
+        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+        <button
+          type="button"
+          onClick={() => !uploading && fileRef.current?.click()}
+          aria-pressed={customActive}
+          disabled={uploading}
+          className={cn(
+            "group relative flex h-28 w-full items-center justify-center overflow-hidden rounded-2xl text-center ring-1 ring-inset transition-all",
+            customActive ? "ring-2 ring-primary" : "ring-border hover:ring-foreground/30",
+            !customActive && "bg-gradient-to-b from-white/[0.06] to-white/[0.02]",
+          )}
+          style={customActive ? liveThemeStyle(current) : undefined}
+        >
+          {uploading ? (
+            <span className="flex items-center gap-2 text-sm font-medium text-white/90">
+              <Loader2 className="size-4 animate-spin" />
+              Uploading…
+            </span>
+          ) : customActive ? (
+            <span className="flex flex-col items-center gap-1 text-white drop-shadow">
+              <span className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                <CheckCircle2 className="size-4" />
+              </span>
+              <span className="text-xs font-semibold">Your photo · tap to change</span>
+            </span>
+          ) : (
+            <span className="flex flex-col items-center gap-1.5 text-muted-foreground group-hover:text-foreground">
+              <Upload className="size-5" />
+              <span className="text-sm font-medium">Upload a photo</span>
+              <span className="text-[11px] text-muted-foreground">Set any picture as your room backdrop</span>
+            </span>
+          )}
+        </button>
+        {uploadErr && <p className="mt-2 text-xs text-destructive">{uploadErr}</p>}
       </div>
     </Sheet>
   )

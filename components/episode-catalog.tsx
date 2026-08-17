@@ -179,7 +179,7 @@ export function EpisodeCatalog({
   const searchNoun = tab === "live" ? `live ${liveKind}` : tab === "audio" ? "uploaded" : tab
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       {/* Audio / Live section nav — editorial underline style matching the
           Articles hub. The top-level "Video" (uploads) tab is hidden for now;
           restore its entry below to re-enable it. Live recordings still expose
@@ -202,7 +202,7 @@ export function EpisodeCatalog({
                 aria-selected={active}
                 onClick={() => selectTab(key)}
                 className={cn(
-                  "-mb-px flex flex-1 items-center justify-center gap-2 border-b-2 py-3.5 text-sm font-medium tracking-tight transition-colors",
+                  "-mb-px flex flex-1 items-center justify-center gap-2 border-b-2 py-2.5 text-sm font-medium tracking-tight transition-colors",
                   active
                     ? "border-primary text-foreground"
                     : "border-transparent text-muted-foreground hover:text-foreground",

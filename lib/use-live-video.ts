@@ -58,19 +58,41 @@ async function enableCameraResilient(room: Room): Promise<void> {
   let lastErr: unknown = null
   for (let i = 0; i < attempts.length; i++) {
     try {
+      // Generous 30s budget. getUserMedia stays pending the whole time the OS
+      // permission prompt is on screen AND while a slow sensor spins up — the
+      // old 12s deadline counted both as "took too long" and surfaced a bogus
+      // error even though the camera was about to come on. 30s only ever fires
+      // as a true last-resort for a genuinely stuck device.
       await withTimeout(
         room.localParticipant.setCameraEnabled(true, attempts[i]),
-        12000,
+        30000,
         "Camera start timed out.",
       )
       return
     } catch (e) {
       lastErr = e
-      // Brief backoff before the next (lighter) attempt; the camera hardware
-      // may still be releasing from the failed acquisition.
+      // The underlying operation may have actually enabled the camera right
+      // around the deadline. If so, this is NOT a failure — never show an error.
+      if (room.localParticipant.isCameraEnabled) return
+      const timedOut = e instanceof Error && /timed out/i.test(e.message)
+      if (timedOut) {
+        // Give getUserMedia a short grace window to resolve just after the
+        // deadline before we decide it truly failed. Firing another attempt
+        // here would start a SECOND concurrent getUserMedia that fights the
+        // first, so on a real timeout we stop the loop rather than retry.
+        for (let w = 0; w < 6 && !room.localParticipant.isCameraEnabled; w++) {
+          await new Promise((r) => setTimeout(r, 500))
+        }
+        if (room.localParticipant.isCameraEnabled) return
+        break
+      }
+      // Genuine constraint/hardware rejection (rejects fast): back off briefly,
+      // then retry with a lighter capture format the device is likelier to
+      // accept. Lowering resolution can't help a timeout, only a constraint.
       await new Promise((r) => setTimeout(r, 400))
     }
   }
+  if (room.localParticipant.isCameraEnabled) return
   throw lastErr
 }
 
