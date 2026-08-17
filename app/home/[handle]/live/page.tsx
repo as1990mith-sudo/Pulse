@@ -16,12 +16,15 @@ export default async function HomeLivePage({
 
   return (
     <HomeLiveSurface
+      handle={handle}
       title="Live"
       subtitle={`Broadcasts from ${home.name}`}
       sessions={broadcasts}
       emptyTitle="Nothing live right now"
       emptyBody="When a member of your community goes live with a broadcast, you'll be able to join it here."
       icon={Radio}
+      startKind="video"
+      startLabel="Go live"
     />
   )
 }

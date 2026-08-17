@@ -2,6 +2,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { Radio, Users2, type LucideIcon } from "lucide-react"
 import type { HomeLiveView } from "@/app/actions/home-surfaces"
+import { HomeGoLiveButton } from "@/components/home/live/home-go-live-button"
 
 /**
  * Shared surface for the Home Rooms and Live pages. Both are entry points into
@@ -10,25 +11,37 @@ import type { HomeLiveView } from "@/app/actions/home-surfaces"
  * room/live system is created here.
  */
 export function HomeLiveSurface({
+  handle,
   title,
   subtitle,
   sessions,
   emptyTitle,
   emptyBody,
   icon: Icon,
+  startKind,
+  startLabel,
 }: {
+  handle: string
   title: string
   subtitle: string
   sessions: HomeLiveView[]
   emptyTitle: string
   emptyBody: string
   icon: LucideIcon
+  /** Which kind of session the "start" entry opens, or omit to hide it. */
+  startKind?: "room" | "audio" | "video"
+  startLabel?: string
 }) {
   return (
     <div className="mx-auto w-full max-w-2xl px-4 pt-5">
-      <header className="mb-4">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">{title}</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p>
+      <header className="mb-4 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">{title}</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p>
+        </div>
+        {startKind ? (
+          <HomeGoLiveButton handle={handle} kind={startKind} label={startLabel ?? "Start"} />
+        ) : null}
       </header>
 
       {sessions.length === 0 ? (
@@ -38,6 +51,11 @@ export function HomeLiveSurface({
           </span>
           <p className="mt-3 text-sm font-medium text-foreground">{emptyTitle}</p>
           <p className="mt-1 max-w-xs text-pretty text-sm text-muted-foreground">{emptyBody}</p>
+          {startKind ? (
+            <div className="mt-5">
+              <HomeGoLiveButton handle={handle} kind={startKind} label={startLabel ?? "Start"} />
+            </div>
+          ) : null}
         </div>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">

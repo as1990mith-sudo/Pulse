@@ -1,13 +1,21 @@
 "use server"
 
-import { and, desc, eq, inArray } from "drizzle-orm"
+import { and, desc, eq, inArray, isNull } from "drizzle-orm"
 import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { follow, notification } from "@/lib/db/schema"
+import { follow, homeMembership, notification } from "@/lib/db/schema"
 
-export type NotificationType = "post" | "live" | "like" | "comment" | "follow" | "repost" | "mention"
+export type NotificationType =
+  | "post"
+  | "live"
+  | "like"
+  | "comment"
+  | "follow"
+  | "repost"
+  | "mention"
+  | "announcement"
 
 export type NotificationView = {
   id: number
@@ -19,7 +27,10 @@ export type NotificationView = {
   postedAt: string
 }
 
-/** Creates a single notification for one recipient (skips self-notifications). */
+/**
+ * Creates a single notification for one recipient (skips self-notifications).
+ * Pass `homeId` to scope it to a Home inbox; omit for a Universal notification.
+ */
 export async function notifyUser(input: {
   userId: string
   actorId: string
@@ -27,6 +38,7 @@ export async function notifyUser(input: {
   type: NotificationType
   message: string
   link: string
+  homeId?: string | null
 }): Promise<void> {
   if (input.userId === input.actorId) return
   await db.insert(notification).values({
@@ -36,6 +48,7 @@ export async function notifyUser(input: {
     type: input.type,
     message: input.message,
     link: input.link,
+    homeId: input.homeId ?? null,
   })
 }
 
@@ -88,7 +101,8 @@ export async function getNotifications(): Promise<NotificationView[] | null> {
   const rows = await db
     .select()
     .from(notification)
-    .where(eq(notification.userId, session.user.id))
+    // Universal inbox only — Home-scoped notifications live in their Home inbox.
+    .where(and(eq(notification.userId, session.user.id), isNull(notification.homeId)))
     .orderBy(desc(notification.createdAt))
     .limit(30)
 
@@ -110,18 +124,30 @@ export async function getUnreadCount(): Promise<number> {
   const rows = await db
     .select({ id: notification.id })
     .from(notification)
-    .where(and(eq(notification.userId, session.user.id), eq(notification.read, false)))
+    .where(
+      and(
+        eq(notification.userId, session.user.id),
+        eq(notification.read, false),
+        isNull(notification.homeId),
+      ),
+    )
   return rows.length
 }
 
-/** Marks all of the current user's notifications as read. */
+/** Marks all of the current user's Universal notifications as read. */
 export async function markNotificationsRead(): Promise<void> {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) return
   await db
     .update(notification)
     .set({ read: true })
-    .where(and(eq(notification.userId, session.user.id), eq(notification.read, false)))
+    .where(
+      and(
+        eq(notification.userId, session.user.id),
+        eq(notification.read, false),
+        isNull(notification.homeId),
+      ),
+    )
   revalidatePath("/")
 }
 
