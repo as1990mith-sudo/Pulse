@@ -1912,7 +1912,7 @@ function PublishOverlay({
           </div>
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Episode title" aria-label="Episode title" />
           <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What was this session about?" className="min-h-20" aria-label="Description" />
-          <CoverUpload value={cover} onChange={setCover} label="Cover art" />
+          <CoverUpload value={cover} onChange={setCover} label="Cover art" compact />
           {error && <p className="text-sm text-destructive">{error}</p>}
           {savedNote && <p className="text-sm text-primary">Details saved.</p>}
           <div className="flex items-center gap-2">
