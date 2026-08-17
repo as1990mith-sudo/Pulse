@@ -137,8 +137,7 @@ export function AuthKeyManager({
 
       {/* Join policy */}
       <div className="rounded-2xl border border-border bg-card p-5">
-        <h3 className="mb-1 text-sm font-semibold">When someone enters a valid key</h3>
-        <p className="mb-4 text-xs text-muted-foreground">Choose how new members are admitted to your Home.</p>
+        <h3 className="mb-4 text-sm font-semibold">When someone enters a valid key</h3>
         <div className="grid gap-3 sm:grid-cols-2">
           <PolicyCard
             active={policy === "auto"}

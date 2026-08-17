@@ -25,12 +25,7 @@ export function SettingsManager({ home }: { home: HomeView }) {
   return (
     <div className="space-y-8">
       <section className="space-y-3">
-        <div>
-          <h2 className="text-sm font-semibold">Organisation logo</h2>
-          <p className="text-xs text-muted-foreground">
-            Your logo is the primary identity across your Home. Square works best.
-          </p>
-        </div>
+        <h2 className="text-sm font-semibold">Organisation logo</h2>
         <CoverUpload
           value={logo}
           onChange={(url) => {
@@ -44,10 +39,7 @@ export function SettingsManager({ home }: { home: HomeView }) {
       </section>
 
       <section className="space-y-3">
-        <div>
-          <h2 className="text-sm font-semibold">Cover image</h2>
-          <p className="text-xs text-muted-foreground">An optional banner shown at the top of your Home.</p>
-        </div>
+        <h2 className="text-sm font-semibold">Cover image</h2>
         <CoverUpload
           value={cover}
           onChange={(url) => {
@@ -61,10 +53,7 @@ export function SettingsManager({ home }: { home: HomeView }) {
       </section>
 
       <section className="space-y-3">
-        <div>
-          <h2 className="text-sm font-semibold">Accent colour</h2>
-          <p className="text-xs text-muted-foreground">Used across buttons and highlights in your Home.</p>
-        </div>
+        <h2 className="text-sm font-semibold">Accent colour</h2>
         <AccentPicker
           value={accent}
           onChange={(c) => {

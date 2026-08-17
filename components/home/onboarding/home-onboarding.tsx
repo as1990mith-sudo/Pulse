@@ -181,11 +181,7 @@ export function HomeOnboarding() {
 
       <div className="mt-8 flex-1">
         {stepIdx === 0 && (
-          <Section
-            eyebrow="Organisation information"
-            title="Tell us about your organisation"
-            desc="This becomes the public identity people can discover across Frequency."
-          >
+          <Section title="Tell us about your organisation">
             <Field label="Organisation name" htmlFor="org-name">
               <Input
                 id="org-name"
@@ -243,11 +239,7 @@ export function HomeOnboarding() {
         )}
 
         {stepIdx === 1 && (
-          <Section
-            eyebrow="Organisation identity"
-            title="Make it unmistakably yours"
-            desc="Your logo becomes the primary identity inside your Home. Frequency stays quietly in the background."
-          >
+          <Section title="Make it unmistakably yours">
             <BrandingUpload
               logoPreview={logoPreview}
               coverPreview={coverPreview}
@@ -265,21 +257,13 @@ export function HomeOnboarding() {
         )}
 
         {stepIdx === 2 && (
-          <Section
-            eyebrow="Choose your plan"
-            title="Choose your Frequency Home plan"
-            desc="Everything you need to run a private digital home for your community. Change or upgrade anytime."
-          >
+          <Section title="Choose your plan">
             <PlanCards value={plan} onChange={setPlan} />
           </Section>
         )}
 
         {stepIdx === 3 && (
-          <Section
-            eyebrow="Administrator account"
-            title="Create your admin account"
-            desc="You'll be the Owner of this Home. You can invite more administrators later."
-          >
+          <Section title="Create your admin account">
             <Field label="Your name" htmlFor="admin-name" icon={<User className="size-3.5" />}>
               <Input
                 id="admin-name"
@@ -311,11 +295,7 @@ export function HomeOnboarding() {
         )}
 
         {stepIdx === 4 && (
-          <Section
-            eyebrow="Review & create"
-            title="Review your Home"
-            desc="A final look before we open the doors. You can refine everything later from your admin console."
-          >
+          <Section title="Review your Home">
             <ReviewCard
               orgName={orgName}
               typeLabel={needsOther ? categoryOther || "Other" : selectedType.label}
@@ -363,23 +343,15 @@ export function HomeOnboarding() {
 }
 
 function Section({
-  eyebrow,
   title,
-  desc,
   children,
 }: {
-  eyebrow: string
   title: string
-  desc: string
   children: React.ReactNode
 }) {
   return (
     <div className="space-y-6">
-      <div className="space-y-1.5">
-        <span className="text-xs font-semibold uppercase tracking-wider text-primary">{eyebrow}</span>
-        <h1 className="text-2xl font-bold tracking-tight text-balance sm:text-[1.75rem]">{title}</h1>
-        <p className="text-sm leading-relaxed text-muted-foreground text-pretty">{desc}</p>
-      </div>
+      <h1 className="text-2xl font-bold tracking-tight text-balance sm:text-[1.75rem]">{title}</h1>
       <div className="space-y-5">{children}</div>
     </div>
   )

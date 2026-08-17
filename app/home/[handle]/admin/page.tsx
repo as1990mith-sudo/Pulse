@@ -20,11 +20,8 @@ export default async function HomeAdminOverviewPage({ params }: { params: Promis
 
   return (
     <div className="space-y-8">
-      <header className="space-y-1.5">
+      <header>
         <h1 className="text-2xl font-bold tracking-tight text-balance lg:text-3xl">Overview</h1>
-        <p className="text-sm text-muted-foreground text-pretty">
-          Welcome to {home.orgName}&apos;s private digital home. Here&apos;s where everything starts.
-        </p>
       </header>
 
       {/* Stats */}

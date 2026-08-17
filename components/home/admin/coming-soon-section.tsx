@@ -15,16 +15,6 @@ export function ComingSoonSection({ label, description }: { label: string; descr
       </div>
       <h2 className="text-lg font-semibold tracking-tight">{label} is on the way</h2>
       <p className="mt-2 max-w-md text-pretty text-sm leading-relaxed text-muted-foreground">{description}</p>
-      <p className="mt-6 inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/60 px-4 py-1.5 text-xs font-medium text-muted-foreground">
-        <span className="relative flex size-1.5">
-          <span
-            className="absolute inline-flex size-full animate-ping rounded-full opacity-70"
-            style={{ backgroundColor: "var(--home-accent)" }}
-          />
-          <span className="relative inline-flex size-1.5 rounded-full" style={{ backgroundColor: "var(--home-accent)" }} />
-        </span>
-        Coming in a future update
-      </p>
     </div>
   )
 }

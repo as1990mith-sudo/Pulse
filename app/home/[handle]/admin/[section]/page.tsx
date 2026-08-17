@@ -18,9 +18,8 @@ export default async function HomeAdminSectionPage({
 
   return (
     <div className="space-y-8">
-      <header className="space-y-1.5">
+      <header>
         <h1 className="text-2xl font-bold tracking-tight text-balance lg:text-3xl">{meta.label}</h1>
-        <p className="text-sm text-muted-foreground text-pretty">{meta.description}</p>
       </header>
 
       <SectionBody handle={handle} section={section} />

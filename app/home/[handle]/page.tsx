@@ -48,7 +48,7 @@ export default async function HomeOverviewPage({
 
       <div className="px-5 sm:px-8">
         {welcome && <WelcomeBanner home={home} role={membership.role} />}
-        <HomeOverviewBody home={home} role={membership.role} />
+        <HomeOverviewBody home={home} />
       </div>
     </main>
   )
