@@ -16,7 +16,7 @@ const SURFACES: { key: string; label: string; desc: string; icon: React.ReactNod
 ]
 
 export function HomeOverviewBody({ home, role }: { home: HomeView; role: HomeRole }) {
-  const canManage = homeRoleHasPermission(role, "manage_settings")
+  const canManage = homeRoleHasPermission(role, "home.manage")
 
   return (
     <div className="mt-6 space-y-8" style={homeAccentStyle(home)}>

@@ -46,7 +46,9 @@ export function MembersManager({
 
   function changeRole(id: string, role: HomeRole) {
     setMembers((prev) => prev.map((m) => (m.id === id ? { ...m, role } : m)))
-    startTransition(() => updateMemberRole(handle, id, role))
+    startTransition(() => {
+      void updateMemberRole(handle, id, role)
+    })
   }
 
   return (

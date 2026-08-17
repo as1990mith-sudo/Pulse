@@ -46,7 +46,9 @@ export function AuthKeyManager({
 
   function changePolicy(next: HomeJoinPolicy) {
     setPolicy(next)
-    startTransition(() => setJoinPolicy(handle, next))
+    startTransition(() => {
+      void setJoinPolicy(handle, next)
+    })
   }
 
   return (
