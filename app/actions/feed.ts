@@ -728,22 +728,23 @@ export async function createPost(input: {
 
   const channel = input.channel?.trim() || null
 
-  // Main-feed posting is organisation-only: the main feed is now the
-  // organisation / ministry discovery feed. Individuals can still post to
-  // community rooms (channels like itestify / qotd), so this gate only applies
-  // to main-feed posts (channel === null). When an organisation account posts,
-  // we attribute the post to the organisation it owns.
+  // The main feed accepts top-level posts from BOTH individual and organisation
+  // accounts. When an organisation account posts, we attribute the post to the
+  // organisation it owns (so its verified badge renders); individuals post as
+  // themselves. This org lookup only matters for main-feed posts (channel ===
+  // null) — community-room posts (itestify / qotd) are unaffected.
   let organizationId: string | null = null
+  let isOrganization = false
   if (channel === null) {
     const [owned] = await db
       .select({ id: organization.id })
       .from(organization)
       .where(eq(organization.ownerId, user.id))
       .limit(1)
-    if (!owned) {
-      throw new Error("Only ministry / organisation accounts can post to the main feed.")
+    if (owned) {
+      isOrganization = true
+      organizationId = owned.id
     }
-    organizationId = owned.id
   }
 
   // Resolve @mentions (privacy-checked); blocked ones become inert text.
@@ -754,6 +755,13 @@ export async function createPost(input: {
   if (media.length === 0) {
     if (input.image) media.push({ type: "image", url: input.image })
     else if (input.video) media.push({ type: "video", url: input.video })
+  }
+  // Business rule (top-level main-feed posts only): individual accounts MUST
+  // include at least one photo or video. "Media" means photos/videos only —
+  // text, links, and other attachments never satisfy this. Organisations may
+  // post text-only. Replies/comments are separate actions and never gated here.
+  if (channel === null && !isOrganization && media.length === 0) {
+    throw new Error("Add a photo or video to share on the Feed.")
   }
   if (!text && media.length === 0) throw new Error("Post cannot be empty.")
 

@@ -465,10 +465,21 @@ export function MindFeed({
     })
   }
 
+  // The main feed accepts posts from both individuals and organisations, but
+  // individuals must share a photo or video (organisations may post text-only).
+  const isOrg = currentUser?.accountType === "organization"
+  const mediaRequired = !isOrg
+
   function publish(e: React.FormEvent) {
     e.preventDefault()
     // Serialize picked @mentions into canonical tokens before trimming/sending.
     const text = mentions.serialize().trim()
+    // Individuals cannot publish a text-only top-level feed post — mirror the
+    // server rule here so the failure is instant and friendly.
+    if (mediaRequired && media.length === 0) {
+      setError("Add a photo or video to share on the Feed.")
+      return
+    }
     if (!text && media.length === 0) return
     startTransition(async () => {
       const created = await createPost({ text, media })
@@ -592,10 +603,11 @@ export function MindFeed({
 
   return (
     <PullToRefresh onRefresh={refreshFeed}>
-      {/* The main feed is the organisation / ministry discovery feed: only
-          organisation accounts may publish here. The composer is also only
-          relevant to the scrolling post feeds (For you / Following). */}
-      {(tab === "for-you" || tab === "following") && currentUser.accountType === "organization" && (
+      {/* The main feed is a shared space for both individuals and organisations.
+          Individuals share visual content (photo/video required); organisations
+          may also post text-only updates. The composer only appears on the
+          scrolling post feeds (For you / Following). */}
+      {(tab === "for-you" || tab === "following") && (
       <div className="border-y border-border/60 bg-gradient-to-b from-card/60 to-background px-4 py-5 sm:px-5">
         <form onSubmit={publish} className="flex gap-4">
           <Link
@@ -620,7 +632,7 @@ export function MindFeed({
                 onKeyUp={mentions.onCaretChange}
                 onClick={mentions.onCaretChange}
                 onSelect={mentions.onCaretChange}
-                placeholder="Share a thought…"
+                placeholder={isOrg ? "Share an update…" : "Share a photo or video…"}
                 className="min-h-24 resize-none rounded-xl border border-border bg-background px-3.5 py-3 text-lg leading-relaxed shadow-sm placeholder:text-muted-foreground/70 focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-ring/40"
                 aria-label="Write a post"
               />
@@ -741,6 +753,11 @@ export function MindFeed({
                 </ul>
               </div>
             )}
+            {/* Subtle, non-punitive nudge: only individuals, only until they add
+                media, and never while a hard error is showing. */}
+            {mediaRequired && media.length === 0 && !error && (
+              <p className="text-xs text-muted-foreground/80">Add a photo or video to share on the Feed.</p>
+            )}
             {error && <p className="text-xs text-destructive">{error}</p>}
             <div className="flex items-center justify-between">
               <DropdownMenu>
@@ -806,7 +823,11 @@ export function MindFeed({
               <Button
                 type="submit"
                 size="lg"
-                disabled={isPending || uploading || (!draft.trim() && media.length === 0)}
+                disabled={
+                  isPending ||
+                  uploading ||
+                  (mediaRequired ? media.length === 0 : !draft.trim() && media.length === 0)
+                }
                 className="gap-2 rounded-full bg-foreground px-6 font-semibold text-background hover:bg-foreground/90"
               >
                 <Send className="size-4" /> {isPending ? "Posting…" : "Post"}
