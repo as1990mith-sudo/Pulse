@@ -403,8 +403,8 @@ export function LiveChat({
         <form
           onSubmit={send}
           className={cn(
-            "relative border-t p-3",
-            immersive ? "border-white/10 bg-white/5 backdrop-blur-xl" : "border-border/60 bg-card/80 backdrop-blur",
+            "relative p-3",
+            immersive ? "bg-white/5 backdrop-blur-xl" : "border-t border-border/60 bg-card/80 backdrop-blur",
           )}
         >
           {/* Inline emoji picker — taps insert the emoji into the message. */}
@@ -451,7 +451,7 @@ export function LiveChat({
               className={cn(
                 "max-h-32 min-h-10 flex-1 resize-none py-2.5",
                 immersive &&
-                  "border-transparent bg-white/10 text-white placeholder:text-white/40 focus-visible:border-transparent focus-visible:ring-primary/40",
+                  "border-2 border-white/25 bg-white/10 text-white placeholder:text-white/40 focus-visible:border-primary/70 focus-visible:ring-primary/40",
               )}
               aria-label="Chat message"
             />
