@@ -275,7 +275,7 @@ export function UploadEpisode({ open, onOpenChange }: { open: boolean; onOpenCha
           aria-label={kind === "video" ? "Video title" : "Track title"}
         />
 
-        <CoverUpload value={cover} onChange={setCover} label="Cover art (optional)" />
+        <CoverUpload value={cover} onChange={setCover} label="Cover art (optional)" compact />
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
