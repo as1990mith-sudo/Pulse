@@ -41,8 +41,17 @@ export const auth = betterAuth({
     ...(process.env.VERCEL_PROJECT_PRODUCTION_URL
       ? [`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`]
       : []),
-    // In development the app is also reachable directly on localhost.
-    ...(process.env.NODE_ENV === "development" ? ["http://localhost:*", "https://localhost:*"] : []),
+    // The app is also reachable directly on localhost in local dev and, in the
+    // v0 preview runtime, through an ephemeral sandbox host such as
+    // https://sb-xxxx.vercel.run (the browser/iframe origin differs from the
+    // canonical V0_RUNTIME_URL above). NODE_ENV is not reliably "development"
+    // in the preview sandbox, so trust these unconditionally — production
+    // origins are the deployed Vercel URL(s) above, and *.vercel.run /
+    // localhost are exclusively preview/dev infrastructure, so this is safe.
+    "http://localhost:*",
+    "https://localhost:*",
+    "https://*.vercel.run",
+    "https://*.v0.build",
   ],
   session: {
     expiresIn: 60 * 60 * 24 * 7, // 7 days

@@ -1,11 +1,10 @@
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
-import { AuthForm } from "@/components/auth-form"
+import { SignupChooser } from "@/components/signup-chooser"
 
 export default async function SignUpPage() {
   const session = await auth.api.getSession({ headers: await headers() })
   if (session?.user) redirect("/feed")
-  const googleEnabled = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
-  return <AuthForm mode="sign-up" googleEnabled={googleEnabled} />
+  return <SignupChooser />
 }
