@@ -569,8 +569,19 @@ export function useLiveVideo({
         autoGainControl: true,
         echoCancellation: true,
         noiseSuppression: true,
+        // Stronger, neural (Krisp-style) noise removal. This is the single
+        // biggest cleanliness win for the mic: it strips room tone, fans, HVAC,
+        // traffic and handling noise far more aggressively than plain
+        // noiseSuppression, isolating just the speaker's voice. It's an
+        // experimental constraint, so where a browser doesn't support it the
+        // value is simply ignored and we fall back to noiseSuppression above —
+        // never worse than before, cleaner where available.
+        voiceIsolation: true,
         channelCount: 1,
         sampleRate: 48000,
+        // Ask for the full 16-bit sample depth so the captured signal has the
+        // maximum dynamic range before Opus encoding (quieter, cleaner floor).
+        sampleSize: 16,
       },
       publishDefaults: {
         // Simulcast so viewers on weak networks still receive a lower layer,
@@ -600,13 +611,20 @@ export function useLiveVideo({
         //    recovers afterward), which is far less noticeable than dropped
         //    frames on motion.
         degradationPreference: "maintain-framerate",
-        // High-fidelity voice: 96 kbps MONO (far above the default 24 kbps
-        // speech codec) — clean and full without forcing a stereo image onto a
-        // mono mic. forceStereo is intentionally NOT set here; stereo is opted
-        // into per-track for the genuinely-stereo background music below. DTX
-        // off avoids swirl/dropouts on room tone; RED adds packet-loss
-        // resilience.
-        audioPreset: AudioPresets.musicHighQuality,
+        // Highest-fidelity voice: an explicit 128 kbps MONO Opus preset (above
+        // even musicHighQuality's 96 kbps, and ~5x the 24 kbps speech default).
+        // At 128 kbps mono, Opus is effectively transparent for a spoken voice,
+        // so the mic is never the bottleneck; "high" priority protects the
+        // audio bitrate ahead of video when the uplink tightens (you'd rather
+        // lose a little image sharpness than have the sermon audio break up).
+        // forceStereo is intentionally NOT set — the mic is a mono source; the
+        // genuinely-stereo background music opts into stereo on its own track.
+        audioPreset: { maxBitrate: 128_000, priority: "high" },
+        // DTX off avoids the discontinuous-transmission codec swirling/clipping
+        // quiet passages and room tone (it's meant for choppy VoIP, not a clean
+        // continuous broadcast). RED duplicates audio packets so brief network
+        // loss doesn't cause dropouts/robotic artifacts — both keep the voice
+        // continuous and clean.
         dtx: false,
         red: true,
       },
