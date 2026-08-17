@@ -37,7 +37,7 @@ export default async function HomeOverviewPage({
         action={
           canManage ? (
             <Link
-              href={`/home/${handle}/admin`}
+              href={`/org/${handle}/admin`}
               className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/80 px-4 py-2 text-sm font-semibold shadow-sm backdrop-blur-sm transition-colors hover:bg-accent"
             >
               <Settings2 className="size-4" /> Admin

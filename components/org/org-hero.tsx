@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Globe, MapPin, ShieldQuestion } from "lucide-react"
+import { Globe, LayoutDashboard, MapPin, ShieldQuestion } from "lucide-react"
 import type { OrganizationView } from "@/lib/org-types"
 import { VerifiedBadge } from "@/components/org/verified-badge"
 import { OrgSubscribeButton } from "@/components/org/org-subscribe-button"
@@ -76,18 +76,28 @@ export function OrgHero({ org }: { org: OrganizationView }) {
         {/* Primary actions */}
         <div className="mt-6 flex w-full flex-col items-center gap-3 animate-in fade-in slide-in-from-bottom-2 delay-100 duration-500">
           {org.isOwner ? (
-            <div className="flex w-full max-w-[380px] items-center justify-center gap-2.5">
-              <div className="flex flex-1">
-                <OrgManageSheet org={org} />
-              </div>
-              {websiteHost && (
+            <div className="flex w-full max-w-[380px] flex-col items-stretch gap-2.5">
+              {/* Primary owner entry point into the integrated admin console. */}
+              <Link
+                href={`/org/${org.handle}/admin`}
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-[0.98]"
+              >
+                <LayoutDashboard className="size-4 shrink-0" />
+                Admin console
+              </Link>
+              <div className="flex items-center justify-center gap-2.5">
                 <div className="flex flex-1">
-                  <WebsiteButton href={org.website!} host={websiteHost} full />
+                  <OrgManageSheet org={org} />
                 </div>
-              )}
-              {!org.verified && (
-                <OrgVerifyButton organizationId={org.id} status={org.verificationStatus} verified={org.verified} />
-              )}
+                {websiteHost && (
+                  <div className="flex flex-1">
+                    <WebsiteButton href={org.website!} host={websiteHost} full />
+                  </div>
+                )}
+                {!org.verified && (
+                  <OrgVerifyButton organizationId={org.id} status={org.verificationStatus} verified={org.verified} />
+                )}
+              </div>
             </div>
           ) : (
             <div className="flex w-full max-w-[360px] items-center justify-center gap-2.5">

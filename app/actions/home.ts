@@ -9,7 +9,8 @@ import { home, homeAuthKey, homeMembership, organization, user as userTable } fr
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { createOrganization, updateOrganization } from "@/app/actions/organizations"
 import { getHomeByHandle, getViewerMembership } from "@/lib/home/access"
-import { generateAuthKey, isValidKeyFormat, normalizeKey } from "@/lib/home/auth-key"
+import { isValidKeyFormat, normalizeKey } from "@/lib/home/auth-key"
+import { ensureHomeForOrg, insertFreshKey } from "@/lib/home/provision"
 import { isHomePlanId, type HomePlanId } from "@/lib/home/plans"
 import { homeRoleHasPermission, type HomeRole } from "@/lib/home/roles"
 import { getHomeOrgType } from "@/lib/home/org-types"
@@ -37,20 +38,6 @@ async function requireHomeManager(handle: string, permission: Parameters<typeof 
     throw new Error("You don't have permission to do that.")
   }
   return { user, home: homeView, membership }
-}
-
-/** Inserts a fresh active authorisation key, retrying on the rare collision. */
-async function insertFreshKey(homeId: string, orgName: string, createdBy: string): Promise<string> {
-  for (let attempt = 0; attempt < 6; attempt++) {
-    const key = generateAuthKey(orgName)
-    try {
-      await db.insert(homeAuthKey).values({ id: crypto.randomUUID(), homeId, key, active: true, createdBy })
-      return key
-    } catch {
-      // Unique violation on `key` — try again with a new random.
-    }
-  }
-  throw new Error("Could not generate an authorisation key. Please try again.")
 }
 
 export type CreateHomeInput = {
@@ -108,39 +95,16 @@ export async function createHome(input: CreateHomeInput): Promise<{ handle: stri
     await updateOrganization(org.id, { cover: input.cover })
   }
 
-  // 3) Provision the Home (idempotent on organizationId).
-  const existing = await db.select().from(home).where(eq(home.organizationId, org.id)).limit(1)
-  if (existing.length > 0) {
-    // Keep plan/branding in sync with the latest onboarding choice.
-    await db
-      .update(home)
-      .set({ plan, accentColor: input.accentColor || existing[0].accentColor, updatedAt: new Date() })
-      .where(eq(home.id, existing[0].id))
-    return { handle }
-  }
-
-  const homeId = crypto.randomUUID()
-  await db.insert(home).values({
-    id: homeId,
-    organizationId: org.id,
-    name: `${name} Home`,
+  // 3) Provision the Home via the shared, idempotent helper: home row, Owner
+  //    membership for the registering administrator, and the first
+  //    Organisation Authorisation Key. Passing the onboarding plan/accent also
+  //    syncs them if the org already had a Home from another creation path.
+  await ensureHomeForOrg({
+    org: { id: org.id, name, ownerId: user.id },
     plan,
     accentColor: input.accentColor || null,
     joinPolicy: input.joinPolicy ?? "auto",
   })
-
-  // 4) The registering administrator becomes the initial Owner.
-  await db.insert(homeMembership).values({
-    id: crypto.randomUUID(),
-    homeId,
-    userId: user.id,
-    role: "owner",
-    status: "active",
-    joinedVia: "created",
-  })
-
-  // 5) Generate the first Organisation Authorisation Key.
-  await insertFreshKey(homeId, name, user.id)
 
   revalidatePath("/home")
   return { handle }
@@ -205,7 +169,7 @@ export async function joinHomeByKey(rawKey: string): Promise<JoinHomeResult> {
 export async function setJoinPolicy(handle: string, joinPolicy: HomeJoinPolicy) {
   const { home: homeView } = await requireHomeManager(handle, "home.manage")
   await db.update(home).set({ joinPolicy, updatedAt: new Date() }).where(eq(home.id, homeView.id))
-  revalidatePath(`/home/${handle}/admin/members`)
+  revalidatePath(`/org/${handle}/admin/members`)
   return { joinPolicy }
 }
 
@@ -220,7 +184,7 @@ export async function regenerateAuthKey(handle: string): Promise<{ key: string }
     .set({ active: false, disabledAt: new Date() })
     .where(and(eq(homeAuthKey.homeId, homeView.id), eq(homeAuthKey.active, true)))
   const key = await insertFreshKey(homeView.id, homeView.orgName, user.id)
-  revalidatePath(`/home/${handle}/admin/members`)
+  revalidatePath(`/org/${handle}/admin/members`)
   return { key }
 }
 
@@ -231,7 +195,7 @@ export async function disableAuthKey(handle: string) {
     .update(homeAuthKey)
     .set({ active: false, disabledAt: new Date() })
     .where(and(eq(homeAuthKey.homeId, homeView.id), eq(homeAuthKey.active, true)))
-  revalidatePath(`/home/${handle}/admin/members`)
+  revalidatePath(`/org/${handle}/admin/members`)
   return { ok: true }
 }
 
@@ -280,7 +244,7 @@ export async function approveMember(handle: string, membershipId: string) {
     .update(homeMembership)
     .set({ status: "active", updatedAt: new Date() })
     .where(and(eq(homeMembership.id, membershipId), eq(homeMembership.homeId, homeView.id)))
-  revalidatePath(`/home/${handle}/admin/members`)
+  revalidatePath(`/org/${handle}/admin/members`)
   return { ok: true }
 }
 
@@ -295,7 +259,7 @@ export async function removeMember(handle: string, membershipId: string) {
   if (rows.length === 0) return { ok: true }
   if (rows[0].role === "owner") throw new Error("The Home owner cannot be removed.")
   await db.delete(homeMembership).where(eq(homeMembership.id, membershipId))
-  revalidatePath(`/home/${handle}/admin/members`)
+  revalidatePath(`/org/${handle}/admin/members`)
   return { ok: true }
 }
 
@@ -314,7 +278,7 @@ export async function updateMemberRole(handle: string, membershipId: string, rol
     .update(homeMembership)
     .set({ role, updatedAt: new Date() })
     .where(eq(homeMembership.id, membershipId))
-  revalidatePath(`/home/${handle}/admin/members`)
+  revalidatePath(`/org/${handle}/admin/members`)
   return { ok: true }
 }
 
@@ -334,7 +298,7 @@ export async function updateHomeBranding(
     await updateOrganization(homeView.organizationId, orgPatch)
   }
   revalidatePath(`/home/${handle}`)
-  revalidatePath(`/home/${handle}/admin/settings`)
+  revalidatePath(`/org/${handle}/admin/settings`)
   return { ok: true }
 }
 
@@ -343,7 +307,7 @@ export async function changePlan(handle: string, plan: HomePlanId) {
   const { home: homeView } = await requireHomeManager(handle, "subscription.manage")
   if (!isHomePlanId(plan)) throw new Error("Unknown plan.")
   await db.update(home).set({ plan, updatedAt: new Date() }).where(eq(home.id, homeView.id))
-  revalidatePath(`/home/${handle}/admin/subscription`)
+  revalidatePath(`/org/${handle}/admin/subscription`)
   return { plan }
 }
 
