@@ -14,6 +14,7 @@ import { ensureHomeForOrg, insertFreshKey } from "@/lib/home/provision"
 import { isHomePlanId, type HomePlanId } from "@/lib/home/plans"
 import { homeRoleHasPermission, type HomeRole } from "@/lib/home/roles"
 import { getHomeOrgType } from "@/lib/home/org-types"
+import type { OrgSocials } from "@/lib/org-types"
 import type {
   HomeAuthKeyView,
   HomeJoinPolicy,
@@ -46,6 +47,7 @@ export type CreateHomeInput = {
   categoryOther?: string
   country?: string
   region?: string
+  city?: string
   website?: string
   description?: string
   logo?: string
@@ -53,6 +55,13 @@ export type CreateHomeInput = {
   accentColor?: string
   plan: HomePlanId
   joinPolicy?: HomeJoinPolicy
+  contactEmail?: string
+  contactPhone?: string
+  socials?: OrgSocials
+  mission?: string
+  vision?: string
+  history?: string
+  beliefs?: string
 }
 
 /**
@@ -83,7 +92,15 @@ export async function createHome(input: CreateHomeInput): Promise<{ handle: stri
     onlineOnly: !input.country,
     country: input.country,
     region: input.region,
+    city: input.city,
     website: input.website,
+    contactEmail: input.contactEmail,
+    contactPhone: input.contactPhone,
+    socials: input.socials,
+    mission: input.mission,
+    vision: input.vision,
+    history: input.history,
+    beliefs: input.beliefs,
   })
 
   const orgRows = await db.select().from(organization).where(eq(organization.handle, handle)).limit(1)

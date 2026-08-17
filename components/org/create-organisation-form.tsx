@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { OrgDetailsForm } from "@/components/auth-form"
+import { OrgDetailsForm, EMPTY_ORG_EXTRA, type OrgExtraDetails } from "@/components/auth-form"
 import { createOrganization } from "@/app/actions/organizations"
 import type { OrgCategory, OrgReach } from "@/lib/org-types"
 
@@ -32,6 +32,8 @@ export function CreateOrganisationForm({ initialName = "" }: { initialName?: str
   const [orgRegion, setOrgRegion] = useState("")
   const [orgDescription, setOrgDescription] = useState("")
   const [orgWebsite, setOrgWebsite] = useState("")
+  const [orgExtra, setOrgExtra] = useState<OrgExtraDetails>(EMPTY_ORG_EXTRA)
+  const patchExtra = (patch: Partial<OrgExtraDetails>) => setOrgExtra((prev) => ({ ...prev, ...patch }))
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -59,6 +61,19 @@ export function CreateOrganisationForm({ initialName = "" }: { initialName?: str
         city: orgCity,
         region: orgRegion,
         website: orgWebsite,
+        contactEmail: orgExtra.contactEmail,
+        contactPhone: orgExtra.contactPhone,
+        socials: {
+          instagram: orgExtra.instagram,
+          youtube: orgExtra.youtube,
+          facebook: orgExtra.facebook,
+          twitter: orgExtra.twitter,
+          other: orgExtra.otherLink,
+        },
+        mission: orgExtra.mission,
+        vision: orgExtra.vision,
+        history: orgExtra.history,
+        beliefs: orgExtra.beliefs,
       })
       router.push(`/org/${handle}`)
       router.refresh()
@@ -93,6 +108,8 @@ export function CreateOrganisationForm({ initialName = "" }: { initialName?: str
       setOrgDescription={setOrgDescription}
       orgWebsite={orgWebsite}
       setOrgWebsite={setOrgWebsite}
+      extra={orgExtra}
+      setExtra={patchExtra}
     />
   )
 }

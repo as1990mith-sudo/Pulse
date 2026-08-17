@@ -89,13 +89,11 @@ export function OrgHero({ org }: { org: OrganizationView }) {
                 <div className="flex flex-1">
                   <OrgManageSheet org={org} />
                 </div>
-                {websiteHost && (
-                  <div className="flex flex-1">
-                    <WebsiteButton href={org.website!} host={websiteHost} full />
-                  </div>
-                )}
+                {websiteHost && <WebsiteButton href={org.website!} host={websiteHost} iconOnly />}
                 {!org.verified && (
-                  <OrgVerifyButton organizationId={org.id} status={org.verificationStatus} verified={org.verified} />
+                  <div className="flex flex-1">
+                    <OrgVerifyButton organizationId={org.id} status={org.verificationStatus} verified={org.verified} />
+                  </div>
                 )}
               </div>
             </div>
@@ -230,7 +228,17 @@ function HeroDescription({ text }: { text: string }) {
   )
 }
 
-function WebsiteButton({ href, host, full = false }: { href: string; host: string; full?: boolean }) {
+function WebsiteButton({
+  href,
+  host,
+  full = false,
+  iconOnly = false,
+}: {
+  href: string
+  host: string
+  full?: boolean
+  iconOnly?: boolean
+}) {
   const url = /^https?:\/\//.test(href) ? href : `https://${href}`
   return (
     <Link
@@ -238,13 +246,15 @@ function WebsiteButton({ href, host, full = false }: { href: string; host: strin
       target="_blank"
       rel="noopener noreferrer"
       className={cn(
-        "inline-flex h-10 items-center justify-center gap-2 rounded-full border border-border/70 bg-secondary/40 px-4 text-sm font-semibold text-foreground shadow-sm transition-all hover:bg-secondary active:scale-[0.98]",
-        full ? "w-full" : "shrink-0",
+        "inline-flex h-10 items-center justify-center gap-2 rounded-full border border-border/70 bg-secondary/40 text-sm font-semibold text-foreground shadow-sm transition-all hover:bg-secondary active:scale-[0.98]",
+        iconOnly ? "w-10 shrink-0" : "px-4",
+        !iconOnly && (full ? "w-full" : "shrink-0"),
       )}
       title={`Visit ${host}`}
+      aria-label={iconOnly ? `Visit ${host}` : undefined}
     >
       <Globe className="size-4 shrink-0 opacity-80" />
-      <span className="truncate">Website</span>
+      {!iconOnly && <span className="truncate">Website</span>}
     </Link>
   )
 }

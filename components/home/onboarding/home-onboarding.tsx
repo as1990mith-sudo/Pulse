@@ -31,6 +31,7 @@ import { PlanCards } from "@/components/home/plan-cards"
 
 const STEPS = [
   { id: "org", label: "Organisation" },
+  { id: "details", label: "Details" },
   { id: "identity", label: "Identity" },
   { id: "plan", label: "Plan" },
   { id: "admin", label: "Administrator" },
@@ -51,8 +52,24 @@ export function HomeOnboarding() {
   const [orgTypeId, setOrgTypeId] = useState<HomeOrgTypeId>(HOME_ORG_TYPES[0].id)
   const [categoryOther, setCategoryOther] = useState("")
   const [country, setCountry] = useState("")
+  const [city, setCity] = useState("")
+  const [region, setRegion] = useState("")
   const [website, setWebsite] = useState("")
   const [description, setDescription] = useState("")
+
+  // Step 2 — details: contact, social links and the ministry's story. Captured
+  // now so the Home lands fully set up (mirrors the "Manage" workspace).
+  const [contactEmail, setContactEmail] = useState("")
+  const [contactPhone, setContactPhone] = useState("")
+  const [instagram, setInstagram] = useState("")
+  const [youtube, setYoutube] = useState("")
+  const [facebook, setFacebook] = useState("")
+  const [twitter, setTwitter] = useState("")
+  const [otherLink, setOtherLink] = useState("")
+  const [mission, setMission] = useState("")
+  const [vision, setVision] = useState("")
+  const [history, setHistory] = useState("")
+  const [beliefs, setBeliefs] = useState("")
 
   // Step 2 — identity / branding (held locally until the account exists)
   const [logoBlob, setLogoBlob] = useState<Blob | null>(null)
@@ -88,26 +105,26 @@ export function HomeOnboarding() {
     setCoverPreview(null)
   }
 
+  const stepId = STEPS[stepIdx].id
+
   // Per-step validation gates the "Continue" button so users can't advance
-  // past a step with missing required fields.
+  // past a step with missing required fields. Keyed by step id so it stays
+  // correct regardless of step ordering.
   const canContinue = useMemo(() => {
-    switch (stepIdx) {
-      case 0:
+    switch (stepId) {
+      case "org":
         return orgName.trim().length > 1 && (!needsOther || categoryOther.trim().length > 1)
-      case 1:
-        return true // branding is encouraged but logo is applied at review; not hard-blocking
-      case 2:
+      case "plan":
         return Boolean(plan)
-      case 3:
+      case "admin":
         return adminName.trim().length > 1 && /\S+@\S+\.\S+/.test(email) && password.length >= 8
       default:
-        return true
+        return true // details/identity/review are not hard-blocking
     }
-  }, [stepIdx, orgName, needsOther, categoryOther, plan, adminName, email, password])
+  }, [stepId, orgName, needsOther, categoryOther, plan, adminName, email, password])
 
   function next() {
     setError(null)
-    if (stepIdx === 0 && !logoPreview && !orgName) return
     setStepIdx((i) => Math.min(i + 1, STEPS.length - 1))
   }
   function back() {
@@ -180,7 +197,7 @@ export function HomeOnboarding() {
       <StepIndicator steps={STEPS.map((s) => ({ id: s.id, label: s.label }))} current={stepIdx} />
 
       <div className="mt-8 flex-1">
-        {stepIdx === 0 && (
+        {stepId === "org" && (
           <Section title="Tell us about your organisation">
             <Field label="Organisation name" htmlFor="org-name">
               <Input
@@ -206,12 +223,23 @@ export function HomeOnboarding() {
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Country / region" htmlFor="org-country" icon={<MapPin className="size-3.5" />}>
+              <Field label="Country" htmlFor="org-country" icon={<MapPin className="size-3.5" />}>
                 <Input
                   id="org-country"
                   value={country}
                   onChange={(e) => setCountry(e.target.value)}
                   placeholder="United Kingdom"
+                />
+              </Field>
+              <Field label="City / Town" htmlFor="org-city" optional icon={<MapPin className="size-3.5" />}>
+                <Input id="org-city" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Hounslow" />
+              </Field>
+              <Field label="Region / State" htmlFor="org-region" optional>
+                <Input
+                  id="org-region"
+                  value={region}
+                  onChange={(e) => setRegion(e.target.value)}
+                  placeholder="Middlesex"
                 />
               </Field>
               <Field label="Website" htmlFor="org-website" optional icon={<Globe className="size-3.5" />}>

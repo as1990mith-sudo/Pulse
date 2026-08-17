@@ -23,6 +23,40 @@ import { ORG_CATEGORIES, ORG_REACH, type OrgCategory, type OrgReach } from "@/li
 
 type AccountType = "individual" | "organization"
 
+/**
+ * The remaining organisation profile fields — contact, socials and story —
+ * captured at sign-up so a new Home is fully set up from the start (matching
+ * the "Manage" workspace). Grouped into one object to keep the shared
+ * `OrgDetailsForm` prop surface manageable.
+ */
+export type OrgExtraDetails = {
+  contactEmail: string
+  contactPhone: string
+  instagram: string
+  youtube: string
+  facebook: string
+  twitter: string
+  otherLink: string
+  mission: string
+  vision: string
+  history: string
+  beliefs: string
+}
+
+export const EMPTY_ORG_EXTRA: OrgExtraDetails = {
+  contactEmail: "",
+  contactPhone: "",
+  instagram: "",
+  youtube: "",
+  facebook: "",
+  twitter: "",
+  otherLink: "",
+  mission: "",
+  vision: "",
+  history: "",
+  beliefs: "",
+}
+
 export function AuthForm({
   mode,
   googleEnabled = false,
@@ -67,6 +101,9 @@ export function AuthForm({
   const [orgRegion, setOrgRegion] = useState("")
   const [orgDescription, setOrgDescription] = useState("")
   const [orgWebsite, setOrgWebsite] = useState("")
+  // Contact, socials and story — the rest of the profile, so the Home is complete.
+  const [orgExtra, setOrgExtra] = useState<OrgExtraDetails>(EMPTY_ORG_EXTRA)
+  const patchExtra = (patch: Partial<OrgExtraDetails>) => setOrgExtra((prev) => ({ ...prev, ...patch }))
 
   const isSignUp = mode === "sign-up"
   const isOrg = isSignUp && accountType === "organization"
@@ -159,6 +196,19 @@ export function AuthForm({
         city: orgCity,
         region: orgRegion,
         website: orgWebsite,
+        contactEmail: orgExtra.contactEmail,
+        contactPhone: orgExtra.contactPhone,
+        socials: {
+          instagram: orgExtra.instagram,
+          youtube: orgExtra.youtube,
+          facebook: orgExtra.facebook,
+          twitter: orgExtra.twitter,
+          other: orgExtra.otherLink,
+        },
+        mission: orgExtra.mission,
+        vision: orgExtra.vision,
+        history: orgExtra.history,
+        beliefs: orgExtra.beliefs,
       })
       router.push(`/org/${handle}`)
       router.refresh()
@@ -325,6 +375,8 @@ export function AuthForm({
               setOrgDescription={setOrgDescription}
               orgWebsite={orgWebsite}
               setOrgWebsite={setOrgWebsite}
+              extra={orgExtra}
+              setExtra={patchExtra}
             />
           ) : (
             <>
@@ -570,7 +622,10 @@ export function OrgDetailsForm(props: {
   setOrgDescription: (v: string) => void
   orgWebsite: string
   setOrgWebsite: (v: string) => void
+  extra: OrgExtraDetails
+  setExtra: (patch: Partial<OrgExtraDetails>) => void
 }) {
+  const { extra, setExtra } = props
   return (
     <form onSubmit={props.onSubmit} className="space-y-4 rounded-2xl border border-border/60 bg-card p-6">
       <div className="space-y-2">
@@ -696,6 +751,122 @@ export function OrgDetailsForm(props: {
           value={props.orgWebsite}
           onChange={(e) => props.setOrgWebsite(e.target.value)}
           placeholder="yourministry.org (optional)"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-2">
+          <label htmlFor="org-contact-email" className="text-sm font-medium">
+            Contact email
+          </label>
+          <Input
+            id="org-contact-email"
+            type="email"
+            value={extra.contactEmail}
+            onChange={(e) => setExtra({ contactEmail: e.target.value })}
+            placeholder="hello@ministry.org"
+            autoComplete="email"
+          />
+        </div>
+        <div className="space-y-2">
+          <label htmlFor="org-contact-phone" className="text-sm font-medium">
+            Contact phone
+          </label>
+          <Input
+            id="org-contact-phone"
+            inputMode="tel"
+            value={extra.contactPhone}
+            onChange={(e) => setExtra({ contactPhone: e.target.value })}
+            placeholder="Optional"
+          />
+        </div>
+      </div>
+
+      <fieldset className="space-y-3 rounded-xl border border-border/60 bg-muted/20 p-3">
+        <legend className="px-1 text-sm font-medium">Social links</legend>
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            aria-label="Instagram"
+            value={extra.instagram}
+            onChange={(e) => setExtra({ instagram: e.target.value })}
+            placeholder="Instagram"
+          />
+          <Input
+            aria-label="YouTube"
+            value={extra.youtube}
+            onChange={(e) => setExtra({ youtube: e.target.value })}
+            placeholder="YouTube"
+          />
+          <Input
+            aria-label="Facebook"
+            value={extra.facebook}
+            onChange={(e) => setExtra({ facebook: e.target.value })}
+            placeholder="Facebook"
+          />
+          <Input
+            aria-label="X / Twitter"
+            value={extra.twitter}
+            onChange={(e) => setExtra({ twitter: e.target.value })}
+            placeholder="X / Twitter"
+          />
+        </div>
+        <Input
+          aria-label="Other link"
+          value={extra.otherLink}
+          onChange={(e) => setExtra({ otherLink: e.target.value })}
+          placeholder="Any other link (optional)"
+        />
+      </fieldset>
+
+      <div className="space-y-2">
+        <label htmlFor="org-mission" className="text-sm font-medium">
+          Mission
+        </label>
+        <Textarea
+          id="org-mission"
+          value={extra.mission}
+          onChange={(e) => setExtra({ mission: e.target.value })}
+          placeholder="Why your ministry exists"
+          rows={2}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label htmlFor="org-vision" className="text-sm font-medium">
+          Vision
+        </label>
+        <Textarea
+          id="org-vision"
+          value={extra.vision}
+          onChange={(e) => setExtra({ vision: e.target.value })}
+          placeholder="Where you're headed"
+          rows={2}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label htmlFor="org-history" className="text-sm font-medium">
+          Our story
+        </label>
+        <Textarea
+          id="org-history"
+          value={extra.history}
+          onChange={(e) => setExtra({ history: e.target.value })}
+          placeholder="How you began"
+          rows={3}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label htmlFor="org-beliefs" className="text-sm font-medium">
+          What we believe
+        </label>
+        <Textarea
+          id="org-beliefs"
+          value={extra.beliefs}
+          onChange={(e) => setExtra({ beliefs: e.target.value })}
+          placeholder="Your statement of faith"
+          rows={3}
         />
       </div>
 
