@@ -1230,6 +1230,7 @@ export function VideoStudioConsole({
                 label={orientation === "landscape" ? "Room cover" : "Broadcast cover"}
                 ratios={SQUARE_RATIO}
                 allowFit
+                compact
               />
 
               {/* Discussion topic — Conversation rooms only. */}

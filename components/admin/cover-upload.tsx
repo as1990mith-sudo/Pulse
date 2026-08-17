@@ -64,7 +64,7 @@ export function CoverUpload({
   // centered; landscape covers keep full width (they're already short).
   const sizeStyle: CSSProperties = compact
     ? previewAspect <= 1
-      ? { maxWidth: "12rem", marginInline: "auto", width: "100%" }
+      ? { maxWidth: "9rem", marginInline: "auto", width: "100%" }
       : { width: "100%" }
     : previewAspect < 1
       ? { maxWidth: "16rem" }

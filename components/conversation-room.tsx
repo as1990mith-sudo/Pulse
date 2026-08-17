@@ -721,6 +721,7 @@ export function ConversationRoom({
                 label="Room cover"
                 ratios={SQUARE_RATIO}
                 allowFit
+                compact
               />
 
             <label className="block space-y-1.5">
