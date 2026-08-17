@@ -29,6 +29,10 @@ function AvatarImage({ className, ...props }: AvatarPrimitive.Image.Props) {
   return (
     <AvatarPrimitive.Image
       data-slot="avatar-image"
+      // Decode off the main thread so a photo can't delay paint; base-ui only
+      // reveals the image once it has loaded (showing the initials fallback
+      // until then), so avatars never flash a broken/empty state.
+      decoding="async"
       className={cn(
         "aspect-square size-full rounded-full object-cover",
         className

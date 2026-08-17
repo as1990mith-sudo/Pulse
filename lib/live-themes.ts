@@ -14,12 +14,9 @@ export type LiveThemeId =
   | "default"
   | "midnight"
   | "ocean"
-  | "sanctuary"
-  | "ember"
-  | "rose"
-  | "aurora-peaks"
-  | "still-waters"
-  | "golden-hour"
+  | "verdant-valley"
+  | "city-lights"
+  | "starfall"
 
 export type LiveTheme = {
   id: LiveThemeId
@@ -69,73 +66,43 @@ export const LIVE_THEMES: LiveTheme[] = [
     accent: "oklch(0.74 0.12 165)",
     swatch: ["oklch(0.72 0.13 195)", "oklch(0.16 0.04 205)"],
   },
-  {
-    id: "sanctuary",
-    name: "Sanctuary Gold",
-    description: "Reverent gold over warm candlelit shadow.",
-    background: "linear-gradient(160deg, oklch(0.13 0.02 50), oklch(0.17 0.025 60) 45%, oklch(0.26 0.04 70))",
-    primary: "oklch(0.8 0.14 80)",
-    primaryForeground: "oklch(0.2 0.03 70)",
-    accent: "oklch(0.7 0.16 45)",
-    swatch: ["oklch(0.8 0.14 80)", "oklch(0.17 0.025 60)"],
-  },
-  {
-    id: "ember",
-    name: "Ember",
-    description: "Glowing coals — fiery red over near-black.",
-    background: "linear-gradient(160deg, oklch(0.11 0.02 20), oklch(0.15 0.03 25) 45%, oklch(0.24 0.07 30))",
-    primary: "oklch(0.66 0.21 28)",
-    primaryForeground: "oklch(0.99 0.005 30)",
-    accent: "oklch(0.76 0.16 55)",
-    swatch: ["oklch(0.66 0.21 28)", "oklch(0.15 0.03 25)"],
-  },
-  {
-    id: "rose",
-    name: "Rose Quartz",
-    description: "Soft rose and magenta over dusk.",
-    background: "linear-gradient(160deg, oklch(0.12 0.03 345), oklch(0.16 0.04 350) 45%, oklch(0.26 0.07 350))",
-    primary: "oklch(0.72 0.17 350)",
-    primaryForeground: "oklch(0.99 0.005 350)",
-    accent: "oklch(0.74 0.15 20)",
-    swatch: ["oklch(0.72 0.17 350)", "oklch(0.16 0.04 350)"],
-  },
   // ── Photo themes ─────────────────────────────────────────────────────────
   // These render a full-bleed image. Their accent (primary/accent) is curated
   // to harmonize with the photo so buttons and the dimmed aurora still feel
   // part of the scene. `background` is the fallback gradient shown behind the
   // image while it loads.
   {
-    id: "aurora-peaks",
-    name: "Aurora Peaks",
-    description: "Misty mountains at first light.",
-    background: "linear-gradient(160deg, oklch(0.13 0.02 220), oklch(0.17 0.03 210) 45%, oklch(0.24 0.05 200))",
-    primary: "oklch(0.74 0.12 200)",
-    primaryForeground: "oklch(0.99 0.005 200)",
-    accent: "oklch(0.72 0.13 170)",
-    swatch: ["oklch(0.74 0.12 200)", "oklch(0.17 0.03 210)"],
-    backgroundImage: "/live-themes/aurora-peaks.png",
+    id: "verdant-valley",
+    name: "Verdant Valley",
+    description: "Lush green hills in soft morning mist.",
+    background: "linear-gradient(160deg, oklch(0.13 0.03 150), oklch(0.17 0.04 145) 45%, oklch(0.24 0.06 140))",
+    primary: "oklch(0.74 0.14 150)",
+    primaryForeground: "oklch(0.15 0.03 150)",
+    accent: "oklch(0.78 0.13 130)",
+    swatch: ["oklch(0.74 0.14 150)", "oklch(0.17 0.04 145)"],
+    backgroundImage: "/live-themes/verdant-valley.png",
   },
   {
-    id: "still-waters",
-    name: "Still Waters",
-    description: "A calm lake at twilight.",
-    background: "linear-gradient(160deg, oklch(0.12 0.03 250), oklch(0.16 0.04 245) 45%, oklch(0.24 0.06 235))",
-    primary: "oklch(0.72 0.13 235)",
+    id: "city-lights",
+    name: "City Lights",
+    description: "Glass skyscrapers at blue hour.",
+    background: "linear-gradient(160deg, oklch(0.12 0.03 250), oklch(0.16 0.04 240) 45%, oklch(0.24 0.06 225))",
+    primary: "oklch(0.74 0.13 230)",
     primaryForeground: "oklch(0.99 0.005 240)",
-    accent: "oklch(0.73 0.12 200)",
-    swatch: ["oklch(0.72 0.13 235)", "oklch(0.16 0.04 245)"],
-    backgroundImage: "/live-themes/still-waters.png",
+    accent: "oklch(0.75 0.12 200)",
+    swatch: ["oklch(0.74 0.13 230)", "oklch(0.16 0.04 240)"],
+    backgroundImage: "/live-themes/city-lights.png",
   },
   {
-    id: "golden-hour",
-    name: "Golden Hour",
-    description: "Warm light over a quiet horizon.",
-    background: "linear-gradient(160deg, oklch(0.13 0.02 55), oklch(0.17 0.03 50) 45%, oklch(0.26 0.06 40))",
-    primary: "oklch(0.8 0.14 75)",
-    primaryForeground: "oklch(0.2 0.03 60)",
-    accent: "oklch(0.72 0.16 35)",
-    swatch: ["oklch(0.8 0.14 75)", "oklch(0.17 0.03 50)"],
-    backgroundImage: "/live-themes/golden-hour.png",
+    id: "starfall",
+    name: "Starfall",
+    description: "The Milky Way over a dark horizon.",
+    background: "linear-gradient(160deg, oklch(0.11 0.04 290), oklch(0.15 0.06 285) 45%, oklch(0.22 0.08 280))",
+    primary: "oklch(0.74 0.14 300)",
+    primaryForeground: "oklch(0.99 0.005 300)",
+    accent: "oklch(0.72 0.13 265)",
+    swatch: ["oklch(0.74 0.14 300)", "oklch(0.15 0.06 285)"],
+    backgroundImage: "/live-themes/starfall.png",
   },
 ]
 

@@ -44,6 +44,7 @@ import { renderMessageBody } from "@/lib/rich-text"
 import { compressImage, uploadMedia } from "@/lib/upload-media"
 import { ActionSheet, type SheetAction } from "@/components/action-sheet"
 import { MediaCollage, type CollageMedia } from "@/components/chat/media-collage"
+import { SmartImage } from "@/components/ui/smart-image"
 import { groupConsecutiveMedia } from "@/lib/media-grouping"
 import { ChatBackgroundSheet } from "@/components/chat-background-sheet"
 import { getChatBackground, chatBackgroundStyle } from "@/lib/chat-backgrounds"
@@ -572,8 +573,7 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
       {attachment && (
         <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card p-2.5">
           {attachment.type === "image" ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={attachment.url || "/placeholder.svg"} alt={attachment.name} className="size-12 rounded-md object-cover" />
+            <SmartImage src={attachment.url} alt={attachment.name} priority className="size-12 rounded-md bg-muted object-cover" />
           ) : attachment.type === "video" ? (
             <video src={attachment.url} className="size-12 rounded-md object-cover" />
           ) : (
@@ -810,11 +810,10 @@ function MessageBubble({
           {m.attachmentUrl && m.attachmentType === "image" && (
             <>
               <button type="button" onClick={() => setLightbox(true)} className="block" aria-label="Expand image">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={m.attachmentUrl || "/placeholder.svg"}
+                <SmartImage
+                  src={m.attachmentUrl}
                   alt={m.attachmentName ?? "Shared image"}
-                  className="max-h-64 rounded-xl object-cover"
+                  className="max-h-64 rounded-xl bg-muted object-cover"
                 />
               </button>
               {lightbox && (

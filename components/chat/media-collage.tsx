@@ -5,6 +5,7 @@ import { createPortal } from "react-dom"
 import { ChevronLeft, ChevronRight, Play, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ActionSheet, type SheetAction } from "@/components/action-sheet"
+import { SmartImage } from "@/components/ui/smart-image"
 
 export type CollageMedia = {
   /** React key (usually the message id). */
@@ -138,9 +139,8 @@ export function MediaCollage({
                   className="h-full w-full object-cover"
                 />
               ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={item.url || "/placeholder.svg"}
+                <SmartImage
+                  src={item.url}
                   alt={item.name ?? "Shared photo"}
                   className="h-full w-full object-cover transition-transform duration-200 group-hover/tile:scale-[1.02]"
                 />
@@ -290,11 +290,11 @@ function CollageViewer({
           onClick={(e) => e.stopPropagation()}
         />
       ) : (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        <SmartImage
           key={current.key}
-          src={current.url || "/placeholder.svg"}
+          src={current.url}
           alt={current.name ?? "Shared photo"}
+          priority
           className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
           onClick={(e) => e.stopPropagation()}
         />
