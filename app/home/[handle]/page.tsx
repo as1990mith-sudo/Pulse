@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { requireHomeMembership } from "@/lib/home/access"
-import { homeRoleHasPermission } from "@/lib/home/roles"
+import { isHomeAdminRole } from "@/lib/home/roles"
 import { HomeHeader } from "@/components/home/home-header"
 import { HomeOverviewBody } from "@/components/home/home-overview-body"
 import { WelcomeBanner } from "@/components/home/welcome-banner"
@@ -28,7 +28,7 @@ export default async function HomeOverviewPage({
   // Privacy boundary: only ACTIVE members reach this. Non-members are redirected
   // to the join flow inside requireHomeMembership.
   const { home, membership } = await requireHomeMembership(handle)
-  const canManage = homeRoleHasPermission(membership.role, "manage_settings")
+  const canManage = isHomeAdminRole(membership.role)
 
   return (
     <main className="mx-auto min-h-svh w-full max-w-4xl pb-16">
