@@ -3,6 +3,9 @@
 import { and, desc, eq, inArray } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { homeMembership, liveStream } from "@/lib/db/schema"
+import { getOrganizationPosts, type OrgPostView } from "@/app/actions/organizations"
+import { getOrganizationEvents, type EventView } from "@/app/actions/org-content"
+import { getCommunityPosts, type CommunityPostView } from "@/app/actions/community"
 
 // Home-scoped surfacing of existing Frequency systems. Rather than duplicate the
 // Rooms/Live systems, we reuse the global `liveStream` table and scope it to the
@@ -73,4 +76,37 @@ export async function getHomeLiveSessions(
     else broadcasts.push(view)
   }
   return { rooms, broadcasts }
+}
+
+export type HomeDashboardData = {
+  latestPost: OrgPostView | null
+  nextEvent: EventView | null
+  liveNow: HomeLiveView | null
+  recentCommunity: CommunityPostView | null
+  counts: { upcomingEvents: number; liveNow: number }
+}
+
+/**
+ * One guarded pass that assembles everything the Home dashboard surfaces, all
+ * scoped to this organisation: its newest post (org voice), soonest upcoming
+ * event, a session that's live right now, and the most recent Community Help
+ * thread (member voice). Callers must have already verified Home membership.
+ */
+export async function getHomeDashboard(homeId: string, orgId: string): Promise<HomeDashboardData> {
+  const [posts, events, live, community] = await Promise.all([
+    getOrganizationPosts(orgId),
+    getOrganizationEvents(orgId),
+    getHomeLiveSessions(homeId),
+    getCommunityPosts(homeId),
+  ])
+
+  const liveList = [...live.broadcasts, ...live.rooms]
+
+  return {
+    latestPost: posts[0] ?? null,
+    nextEvent: events.upcoming[0] ?? null,
+    liveNow: liveList[0] ?? null,
+    recentCommunity: community[0] ?? null,
+    counts: { upcomingEvents: events.upcoming.length, liveNow: liveList.length },
+  }
 }

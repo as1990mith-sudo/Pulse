@@ -563,7 +563,17 @@ function CropFrame({
   )
 }
 
-function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (p: CommunityPostView) => void }) {
+function Composer({
+  open,
+  onClose,
+  onCreated,
+  homeId,
+}: {
+  open: boolean
+  onClose: () => void
+  onCreated: (p: CommunityPostView) => void
+  homeId?: string | null
+}) {
   const [body, setBody] = useState("")
   // The author's identity choice for this post. Anonymous by default so the
   // room stays a safe place to ask; the user can opt to post identifiably.
@@ -743,7 +753,7 @@ function Composer({ open, onClose, onCreated }: { open: boolean; onClose: () => 
     setError(null)
     startTransition(async () => {
       try {
-        const created = await createCommunityPost(text, imageUrl, videoUrl, anonymous)
+        const created = await createCommunityPost(text, imageUrl, videoUrl, anonymous, homeId)
         onCreated(created)
         onClose()
       } catch (err) {
@@ -992,19 +1002,27 @@ export function CommunityHelp({
   // When rendered inside the Chat Rooms two-tab hub the page IS /chatrooms, so
   // the "Back to chatrooms" arrow would loop back to itself — hide it there.
   embedded = false,
+  // When set, this is a PRIVATE Home Community Help: posts are fetched and
+  // created scoped to that Home, and never mix with the Universal room.
+  homeId = null,
 }: {
   initialPosts: CommunityPostView[]
   embedded?: boolean
+  homeId?: string | null
 }) {
   const { mutate } = useSWRConfig()
   const {
     data: posts = initialPosts,
     isLoading,
     mutate: mutatePosts,
-  } = useSWR("community-posts", getCommunityPosts, {
-    fallbackData: initialPosts,
-    refreshInterval: 20000,
-  })
+  } = useSWR(
+    homeId ? ["community-posts", homeId] : "community-posts",
+    () => getCommunityPosts(homeId),
+    {
+      fallbackData: initialPosts,
+      refreshInterval: 20000,
+    },
+  )
   const [composerOpen, setComposerOpen] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
   const [highlightedQ, setHighlightedQ] = useState<string | null>(null)
@@ -1271,7 +1289,12 @@ export function CommunityHelp({
           Ask
         </button>
 
-        <Composer open={composerOpen} onClose={() => setComposerOpen(false)} onCreated={handleCreated} />
+          <Composer
+            open={composerOpen}
+            onClose={() => setComposerOpen(false)}
+            onCreated={handleCreated}
+            homeId={homeId}
+          />
         <CommunityHelpInfoModal open={infoOpen} onClose={() => setInfoOpen(false)} />
 
         {activePost && (
