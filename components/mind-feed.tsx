@@ -633,7 +633,7 @@ export function MindFeed({
                 onClick={mentions.onCaretChange}
                 onSelect={mentions.onCaretChange}
                 placeholder={isOrg ? "Share an update…" : "Share a photo or video…"}
-                className="min-h-24 resize-none rounded-xl border border-border bg-background px-3.5 py-3 text-lg leading-relaxed shadow-sm placeholder:text-muted-foreground/70 focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-ring/40"
+                className="max-h-40 min-h-24 resize-none overflow-y-auto rounded-xl border border-border bg-background px-3.5 py-3 text-[16.5px] leading-relaxed shadow-sm placeholder:text-muted-foreground/70 focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-ring/40"
                 aria-label="Write a post"
               />
               {mentions.open && (
@@ -752,11 +752,6 @@ export function MindFeed({
                   )}
                 </ul>
               </div>
-            )}
-            {/* Subtle, non-punitive nudge: only individuals, only until they add
-                media, and never while a hard error is showing. */}
-            {mediaRequired && media.length === 0 && !error && (
-              <p className="text-xs text-muted-foreground/80">Add a photo or video to share on the Feed.</p>
             )}
             {error && <p className="text-xs text-destructive">{error}</p>}
             <div className="flex items-center justify-between">

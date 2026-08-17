@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, type ComponentProps, type ReactNode, useMemo } from "react"
+import { Fragment, type ComponentProps, type ReactNode, type UIEvent, useMemo, useRef } from "react"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
@@ -74,9 +74,20 @@ type FormattedTextareaProps = ComponentProps<typeof Textarea> & {
  * styled mirror layer (same grid cell), so the caret and selection still work
  * normally while the formatting renders underneath.
  */
-export function FormattedTextarea({ value, className, textareaRef, ...props }: FormattedTextareaProps) {
+export function FormattedTextarea({ value, className, textareaRef, onScroll, ...props }: FormattedTextareaProps) {
   const text = typeof value === "string" ? value : value != null ? String(value) : ""
   const overlay = useMemo(() => renderOverlay(text), [text])
+  const mirrorRef = useRef<HTMLDivElement>(null)
+
+  // When a caller caps the height (e.g. max-h + overflow), the real textarea
+  // scrolls internally once it overflows. The mirror sits under it and is
+  // `overflow-hidden`, so we mirror the textarea's scrollTop onto it (which is
+  // still settable on a hidden-overflow element) to keep the formatted text and
+  // caret aligned instead of drifting apart.
+  function handleScroll(e: UIEvent<HTMLTextAreaElement>) {
+    if (mirrorRef.current) mirrorRef.current.scrollTop = e.currentTarget.scrollTop
+    onScroll?.(e)
+  }
 
   return (
     <div className="relative grid">
@@ -88,6 +99,7 @@ export function FormattedTextarea({ value, className, textareaRef, ...props }: F
           sentence the moment any formatting is applied. A block keeps the runs
           flowing inline like normal wrapped text. */}
       <div
+        ref={mirrorRef}
         aria-hidden
         style={{ display: "block" }}
         className={cn(
@@ -107,6 +119,7 @@ export function FormattedTextarea({ value, className, textareaRef, ...props }: F
         {...props}
         ref={textareaRef}
         value={value}
+        onScroll={handleScroll}
         className={cn(className, "col-start-1 row-start-1 bg-transparent text-transparent caret-foreground dark:bg-transparent")}
       />
     </div>
