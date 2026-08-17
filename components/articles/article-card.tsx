@@ -27,10 +27,7 @@ export function ArticleRow({ article }: { article: ArticleCardType }) {
       className="tap-scale group flex gap-4 py-5 transition-opacity active:opacity-80 sm:gap-5"
     >
       <div className="min-w-0 flex-1">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">
-          {article.category}
-        </span>
-        <h3 className="mt-1.5 line-clamp-2 text-pretty font-display text-base font-semibold leading-snug text-foreground transition-colors group-hover:text-primary sm:text-lg">
+        <h3 className="line-clamp-2 text-pretty font-display text-base font-semibold leading-snug text-foreground transition-colors group-hover:text-primary sm:text-lg">
           {article.title}
         </h3>
         <p className="mt-1.5 line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">{article.excerpt}</p>
@@ -91,8 +88,6 @@ export function FeaturedArticleCard({ article }: { article: ArticleCardType }) {
       <div className="relative p-5 sm:p-6">
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em]">
           <span className="text-primary">Featured</span>
-          <span className="text-white/40" aria-hidden>·</span>
-          <span className="text-white/70">{article.category}</span>
         </div>
         <h2 className="mt-2.5 max-w-xl text-balance font-display text-2xl font-bold leading-[1.08] text-white sm:text-[32px]">
           {article.title}
@@ -127,8 +122,7 @@ export function ArticleTile({ article }: { article: ArticleCardType }) {
         <div className="aspect-[16/10] w-full bg-gradient-to-br from-primary/20 via-secondary/40 to-card" />
       )}
       <div className="flex flex-1 flex-col p-3">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-primary">{article.category}</span>
-        <h3 className="mt-1 line-clamp-2 text-pretty font-display text-sm font-semibold leading-snug text-foreground group-hover:text-primary">
+        <h3 className="line-clamp-2 text-pretty font-display text-sm font-semibold leading-snug text-foreground group-hover:text-primary">
           {article.title}
         </h3>
         <div className="mt-auto flex items-center gap-3 pt-2.5 text-[11px] text-muted-foreground">

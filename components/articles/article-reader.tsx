@@ -190,12 +190,9 @@ export function ArticleReader({
         )}
       </div>
 
-      {/* Category + title */}
+      {/* Title */}
       <div className="mt-5">
-        <span className="text-xs font-semibold uppercase tracking-wide text-primary">
-          {article.category}
-        </span>
-        <h1 className="mt-2 text-balance font-display text-3xl font-bold leading-tight text-foreground">
+        <h1 className="text-balance font-display text-3xl font-bold leading-tight text-foreground">
           {article.title}
         </h1>
       </div>
