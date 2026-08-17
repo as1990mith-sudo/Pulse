@@ -738,6 +738,7 @@ export function LiveListener({
             roomName={stream.roomName}
             bgUrl={stream.chatBgUrl ?? null}
             bgEffect={stream.chatBgEffect ?? "none"}
+            placeholder=""
           />
         </div>
       </section>
