@@ -16,7 +16,7 @@ import {
 import type { HomePermission } from "@/lib/home/roles"
 
 export type HomeAdminSection = {
-  /** URL slug under /home/[handle]/admin/[slug]. "overview" is the index. */
+  /** URL slug under /org/[handle]/admin/[slug]. "overview" is the index. */
   slug: string
   label: string
   icon: LucideIcon

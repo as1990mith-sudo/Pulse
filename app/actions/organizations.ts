@@ -18,6 +18,7 @@ import {
   orgReachLabel,
   slugifyHandle,
 } from "@/lib/org-types"
+import { ensureHomeForOrg } from "@/lib/home/provision"
 
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -136,6 +137,8 @@ export async function createOrganization(input: CreateOrganizationInput): Promis
     // could leave it recognised as an individual (the account-type flip and the
     // org row must always agree).
     await db.update(userTable).set({ accountType: "organization" }).where(eq(userTable.id, user.id))
+    // Every organisation is a Frequency Home — provision one if it's missing.
+    await ensureHomeForOrg({ org: { id: existing[0].id, name: existing[0].name, ownerId: user.id } })
     return { handle: existing[0].handle }
   }
 
@@ -167,6 +170,11 @@ export async function createOrganization(input: CreateOrganizationInput): Promis
   })
 
   await db.update(userTable).set({ accountType: "organization" }).where(eq(userTable.id, user.id))
+
+  // Every organisation is a Frequency Home. Provision the Home (home row, Owner
+  // membership and authorisation key) as part of creation so no organisation
+  // can ever exist as a bare org without its Home.
+  await ensureHomeForOrg({ org: { id, name, ownerId: user.id } })
 
   revalidatePath("/feed")
   return { handle }

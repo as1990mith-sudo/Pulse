@@ -26,7 +26,7 @@ export function HomeAdminShell({
 }) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const base = `/home/${home.handle}/admin`
+  const base = `/org/${home.handle}/admin`
   const accent = home.accentColor || home.orgColor
 
   const sections = HOME_ADMIN_SECTIONS.filter(
@@ -97,11 +97,11 @@ export function HomeAdminShell({
 
         <div className="border-t border-border px-5 py-4">
           <Link
-            href={`/home/${home.handle}`}
+            href={`/org/${home.handle}`}
             className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="size-3.5" />
-            Back to Home
+            Back to organisation
           </Link>
           <p className="mt-3 text-[11px] text-muted-foreground/70">
             Powered by <span className="font-semibold text-muted-foreground">Frequency</span>
