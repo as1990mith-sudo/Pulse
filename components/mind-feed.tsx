@@ -613,7 +613,10 @@ export function MindFeed({
           <Link
             href={`/u/${currentUser.id}`}
             aria-label="View your profile"
-            className="tap-scale shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            // self-start stops the link from stretching to the full row height
+            // (flex default), so only the avatar itself opens the profile — not
+            // the empty column below it.
+            className="tap-scale shrink-0 self-start rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <Avatar className="size-12 ring-2 ring-border/60">
               {currentUser.image && (
