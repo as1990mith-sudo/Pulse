@@ -612,79 +612,99 @@ export function StudioConsole({
             <X className="size-5" strokeWidth={2.5} />
           </button>
 
-          <div className="mb-6 space-y-1">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-2.5 py-1 text-xs font-semibold text-primary">
+          <div className="mb-7 space-y-2.5">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-2.5 py-1 text-xs font-semibold text-primary ring-1 ring-inset ring-primary/25">
               <Mic className="size-3.5" /> Podcast
             </span>
-            <h1 className="text-2xl font-bold tracking-tight text-balance">Start a broadcast</h1>
-            <p className="text-sm leading-relaxed text-white/60">
+            <h1 className="text-[1.75rem] font-bold leading-tight tracking-tight text-balance">Start a broadcast</h1>
+            <p className="text-sm leading-relaxed text-white/55 text-pretty">
               A host-led room where you hold the mic. Set the scene, choose a category, and open the doors.
             </p>
           </div>
 
-          <div className="space-y-5">
+          <div className="space-y-6">
             <AudioFormatSelector active="podcast" />
 
-            <CoverUpload
-              value={cover}
-              onChange={setCover}
-              label="Cover artwork (required)"
-              ratios={SQUARE_RATIO}
-              allowFit
-            />
-
-            <label className="block space-y-1.5">
-              <span className="text-sm font-medium">Room name</span>
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder={`${currentUser.name} — live session`}
-                maxLength={80}
-                className="w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-white/35 focus:border-primary/60 focus:outline-none"
-              />
-            </label>
-
-            <label className="block space-y-1.5">
-              <span className="text-sm font-medium">
-                Topic <span className="text-white/40">(optional)</span>
-              </span>
-              <input
-                value={roomTopic}
-                onChange={(e) => setRoomTopic(e.target.value)}
-                placeholder="What's this room about?"
-                maxLength={120}
-                className="w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-white/35 focus:border-primary/60 focus:outline-none"
-              />
-            </label>
-
-            {/* Category — the same dropdown selector used across both formats. */}
-            <label className="block space-y-1.5">
-              <span className="text-sm font-medium">
-                Category <span className="text-white/40">(required)</span>
-              </span>
-              <div className="relative">
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full appearance-none rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 pr-10 text-sm text-white focus:border-primary/60 focus:outline-none [&>option]:bg-neutral-900 [&>option]:text-white"
-                >
-                  <option value="" disabled>
-                    Choose a category…
-                  </option>
-                  {LIVE_CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-white/50" />
+            {/* Cover artwork — a compact, centered tile inside its own section
+                card so it reads as a deliberate choice rather than a giant empty
+                well dominating the form. */}
+            <section className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-white/60">Cover artwork</span>
+                <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/60">
+                  Required
+                </span>
               </div>
-            </label>
+              <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
+                <CoverUpload value={cover} onChange={setCover} ratios={SQUARE_RATIO} allowFit compact hideLabel />
+                <p className="mt-3 text-center text-xs leading-relaxed text-white/45">
+                  A square image shown on the Live shelf and inside your room.
+                </p>
+              </div>
+            </section>
+
+            {/* Details — room name, topic, and category grouped into one calm
+                glass card with hairline dividers for a premium, settled feel. */}
+            <section className="space-y-3">
+              <span className="text-xs font-semibold uppercase tracking-wider text-white/60">Details</span>
+              <div className="divide-y divide-white/8 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
+                <label className="block space-y-1.5 p-4">
+                  <span className="text-sm font-medium text-white/85">Room name</span>
+                  <input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder={`${currentUser.name} — live session`}
+                    maxLength={80}
+                    className="w-full bg-transparent text-[15px] text-white placeholder:text-white/35 focus:outline-none"
+                  />
+                </label>
+
+                <label className="block space-y-1.5 p-4">
+                  <span className="text-sm font-medium text-white/85">
+                    Topic <span className="font-normal text-white/40">· optional</span>
+                  </span>
+                  <input
+                    value={roomTopic}
+                    onChange={(e) => setRoomTopic(e.target.value)}
+                    placeholder="What's this room about?"
+                    maxLength={120}
+                    className="w-full bg-transparent text-[15px] text-white placeholder:text-white/35 focus:outline-none"
+                  />
+                </label>
+
+                {/* Category — the same option set, styled as an inline row. */}
+                <label className="block space-y-1.5 p-4">
+                  <span className="text-sm font-medium text-white/85">
+                    Category <span className="font-normal text-white/40">· required</span>
+                  </span>
+                  <div className="relative">
+                    <select
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      className={cn(
+                        "w-full appearance-none bg-transparent pr-8 text-[15px] focus:outline-none [&>option]:bg-neutral-900 [&>option]:text-white",
+                        category ? "text-white" : "text-white/40",
+                      )}
+                    >
+                      <option value="" disabled>
+                        Choose a category…
+                      </option>
+                      {LIVE_CATEGORIES.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-0 top-1/2 size-4 -translate-y-1/2 text-white/50" />
+                  </div>
+                </label>
+              </div>
+            </section>
 
             {/* Privacy — public (discoverable in Live) vs private (invite-only). */}
-            <div className="space-y-2">
-              <span className="text-sm font-medium">Privacy</span>
-              <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-white/[0.04] p-1">
+            <section className="space-y-3">
+              <span className="text-xs font-semibold uppercase tracking-wider text-white/60">Privacy</span>
+              <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
                 {(
                   [
                     { value: "public", label: "Public", icon: Globe },
@@ -700,7 +720,7 @@ export function StudioConsole({
                       onClick={() => setVisibility(opt.value)}
                       aria-pressed={isActive}
                       className={cn(
-                        "flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors",
+                        "flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors",
                         isActive ? "bg-primary text-primary-foreground" : "text-white/60 hover:text-white",
                       )}
                     >
@@ -709,12 +729,12 @@ export function StudioConsole({
                   )
                 })}
               </div>
-              <p className="text-xs text-white/50">
+              <p className="text-xs leading-relaxed text-white/50">
                 {visibility === "public"
                   ? "Listed in Live for everyone to discover and join."
                   : "Unlisted — only people with the link can join."}
               </p>
-            </div>
+            </section>
 
             {error && <p className="text-sm text-destructive">{error}</p>}
 
@@ -722,7 +742,7 @@ export function StudioConsole({
               type="button"
               onClick={toggleLive}
               disabled={starting || state.connecting}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-3.5 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-[0.99] disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-[15px] font-bold text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-[0.99] disabled:opacity-60"
             >
               {starting || state.connecting ? (
                 <Loader2 className="size-4 animate-spin" />

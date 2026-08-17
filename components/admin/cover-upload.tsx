@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { type CSSProperties, useRef, useState } from "react"
 import { ImagePlus, Loader2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { uploadMedia } from "@/lib/upload-media"
@@ -31,6 +31,8 @@ export function CoverUpload({
   label = "Cover image",
   ratios = DEFAULT_RATIOS,
   allowFit = false,
+  compact = false,
+  hideLabel = false,
 }: {
   value: string | null
   onChange: (url: string | null) => void
@@ -46,10 +48,27 @@ export function CoverUpload({
    * instead of only cover-cropping. Used for live-meeting cover art.
    */
   allowFit?: boolean
+  /**
+   * Caps the preview to a neat, centered tile (instead of stretching a square
+   * cover to the full container width, which produces a huge box on narrow
+   * screens). Opt-in so existing full-width usages are unaffected.
+   */
+  compact?: boolean
+  /** Hides the built-in label when the caller renders its own section header. */
+  hideLabel?: boolean
 }) {
   // Preview aspect follows the first fixed ratio (e.g. 1:1 or 4:5); falls back
   // to 16:9 when the preset only offers a free crop.
   const previewAspect = ratios.find((r) => r.value != null)?.value ?? 16 / 9
+  // In compact mode, non-landscape covers are capped to a tidy tile and
+  // centered; landscape covers keep full width (they're already short).
+  const sizeStyle: CSSProperties = compact
+    ? previewAspect <= 1
+      ? { maxWidth: "12rem", marginInline: "auto", width: "100%" }
+      : { width: "100%" }
+    : previewAspect < 1
+      ? { maxWidth: "16rem" }
+      : { width: "100%" }
   const inputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -82,12 +101,12 @@ export function CoverUpload({
 
   return (
     <div className="space-y-2">
-      <span className="text-sm font-medium">{label}</span>
+      {!hideLabel && <span className="text-sm font-medium">{label}</span>}
 
       {value ? (
         <div
-          className="relative overflow-hidden rounded-xl border border-border/60"
-          style={{ aspectRatio: previewAspect, ...(previewAspect < 1 ? { maxWidth: "16rem" } : { width: "100%" }) }}
+          className="relative overflow-hidden rounded-2xl border border-border/60"
+          style={{ aspectRatio: previewAspect, ...sizeStyle }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={value || "/placeholder.svg"} alt="Selected cover" className="size-full object-cover" />
@@ -107,8 +126,8 @@ export function CoverUpload({
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          style={{ aspectRatio: previewAspect, ...(previewAspect < 1 ? { maxWidth: "16rem" } : { width: "100%" }) }}
-          className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-muted/40 text-sm text-muted-foreground transition-colors hover:bg-muted disabled:opacity-60"
+          style={{ aspectRatio: previewAspect, ...sizeStyle }}
+          className="group flex flex-col items-center justify-center gap-2.5 rounded-2xl border border-dashed border-border bg-muted/40 px-4 text-center text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted disabled:opacity-60"
         >
           {uploading ? (
             <>
@@ -117,8 +136,11 @@ export function CoverUpload({
             </>
           ) : (
             <>
-              <ImagePlus className="size-6" />
-              Choose an image from your device
+              <span className="flex size-11 items-center justify-center rounded-full bg-background/70 ring-1 ring-inset ring-border transition-colors group-hover:ring-primary/50">
+                <ImagePlus className="size-5" />
+              </span>
+              <span className="font-medium text-foreground/80">Add cover art</span>
+              <span className="text-xs text-muted-foreground">Tap to choose from your device</span>
             </>
           )}
         </button>
