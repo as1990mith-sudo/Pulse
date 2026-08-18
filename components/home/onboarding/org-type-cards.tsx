@@ -1,14 +1,31 @@
 "use client"
 
-import { Church, HeartHandshake, Sparkles, Users, Building2, CircleEllipsis } from "lucide-react"
+import {
+  Church,
+  HeartHandshake,
+  Sparkles,
+  Users,
+  Building2,
+  CircleEllipsis,
+  HandHeart,
+  Leaf,
+  GraduationCap,
+  Briefcase,
+  Compass,
+} from "lucide-react"
 import { HOME_ORG_TYPES, type HomeOrgTypeId } from "@/lib/home/org-types"
 
 const ICONS: Record<HomeOrgTypeId, React.ReactNode> = {
   church: <Church className="size-5" />,
   ministry: <HeartHandshake className="size-5" />,
-  youth_ministry: <Sparkles className="size-5" />,
   christian_organisation: <Building2 className="size-5" />,
-  christian_community: <Users className="size-5" />,
+  charity: <HandHeart className="size-5" />,
+  nonprofit: <Leaf className="size-5" />,
+  community: <Users className="size-5" />,
+  coaching: <Compass className="size-5" />,
+  education: <GraduationCap className="size-5" />,
+  youth: <Sparkles className="size-5" />,
+  professional: <Briefcase className="size-5" />,
   other: <CircleEllipsis className="size-5" />,
 }
 

@@ -1,9 +1,13 @@
 import { notFound } from "next/navigation"
 import { getHomeAdminSection } from "@/lib/home/admin-nav"
 import { getHomeMembers, getHomeAdminOverview } from "@/app/actions/home"
+import { getHomeBookings, getHomeAppointments } from "@/app/actions/home-scheduling"
 import { MembersManager } from "@/components/home/admin/members-manager"
 import { SubscriptionManager } from "@/components/home/admin/subscription-manager"
 import { SettingsManager } from "@/components/home/admin/settings-manager"
+import { ContentManager } from "@/components/home/admin/content-manager"
+import { BookingsManager } from "@/components/home/admin/bookings-manager"
+import { AppointmentsManager } from "@/components/home/admin/appointments-manager"
 import { ComingSoonSection } from "@/components/home/admin/coming-soon-section"
 
 export default async function HomeAdminSectionPage({
@@ -42,6 +46,21 @@ async function SectionBody({ handle, section }: { handle: string; section: strin
   if (section === "settings") {
     const { home } = await getHomeAdminOverview(handle)
     return <SettingsManager home={home} />
+  }
+
+  if (section === "content") {
+    const { home } = await getHomeAdminOverview(handle)
+    return <ContentManager handle={handle} homeName={home.name} />
+  }
+
+  if (section === "bookings") {
+    const bookings = await getHomeBookings(handle)
+    return <BookingsManager handle={handle} initialBookings={bookings} />
+  }
+
+  if (section === "appointments") {
+    const appointments = await getHomeAppointments(handle)
+    return <AppointmentsManager handle={handle} initialAppointments={appointments} />
   }
 
   const meta = getHomeAdminSection(section)!

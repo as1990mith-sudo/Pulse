@@ -40,8 +40,8 @@ import {
 import { authClient } from "@/lib/auth-client"
 import { getUnreadCount } from "@/app/actions/notifications"
 import { getMyHomeMemberships, setActiveHome } from "@/app/actions/home"
-import { useHome } from "@/components/home/home-context"
-import { isHomeAdminRole } from "@/lib/home/roles"
+import { useHomeContext } from "@/components/home/home-context"
+import { isHomeAdminRole, type HomeRole } from "@/lib/home/roles"
 import { SKINS, useSkin } from "@/components/skin-provider"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { startMenuFlow } from "@/lib/menu-flow"
@@ -102,7 +102,7 @@ export function AppMenu() {
     { revalidateOnFocus: false },
   )
   const homes = myHomes ?? []
-  const { activeHome } = useHome()
+  const { activeHome } = useHomeContext()
 
   const [mounted, setMounted] = useState(false)
   const [open, setOpen] = useState(false) // portal present (enter + exit)
@@ -591,14 +591,14 @@ function HomeSwitchRow({
   onSelect,
 }: {
   name: string
-  role: string
+  role: HomeRole
   logo?: string | null
   initials?: string
   accent?: string
   active: boolean
   onSelect: () => void
 }) {
-  const roleLabel = role === "member" ? "Member" : isHomeAdminRole(role) ? "Admin" : "Member"
+  const roleLabel = isHomeAdminRole(role) ? "Admin" : "Member"
   return (
     <button type="button" onClick={onSelect} className={cn(itemClasses, "w-full text-left")}>
       <span
