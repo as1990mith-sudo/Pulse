@@ -2,17 +2,23 @@
 
 import { Check } from "lucide-react"
 
-// A restrained, premium palette. Each becomes the Home's primary accent so the
-// environment feels like the organisation's own.
+// A vivid, high-energy palette. Each becomes the Home's primary accent so the
+// environment feels like the organisation's own — bright and saturated so it
+// reads with punch against both light and dark surfaces.
 export const ACCENT_OPTIONS: { name: string; value: string }[] = [
-  { name: "Amber", value: "#E08A3C" },
-  { name: "Ember", value: "#D9603B" },
-  { name: "Rose", value: "#D6567A" },
-  { name: "Violet", value: "#8B6DD6" },
-  { name: "Indigo", value: "#5B6EE0" },
-  { name: "Ocean", value: "#3B93C4" },
-  { name: "Teal", value: "#2FA69A" },
-  { name: "Forest", value: "#4E9E63" },
+  { name: "Amber", value: "#FF9A1F" },
+  { name: "Gold", value: "#FFC22E" },
+  { name: "Ember", value: "#FF5A2C" },
+  { name: "Coral", value: "#FF5470" },
+  { name: "Rose", value: "#FF3D8B" },
+  { name: "Fuchsia", value: "#E63CE6" },
+  { name: "Violet", value: "#A05CFF" },
+  { name: "Indigo", value: "#5568FF" },
+  { name: "Ocean", value: "#1FA6FF" },
+  { name: "Cyan", value: "#14CCE0" },
+  { name: "Teal", value: "#10C9B4" },
+  { name: "Emerald", value: "#22C55E" },
+  { name: "Lime", value: "#84DB1B" },
 ]
 
 export const DEFAULT_ACCENT = ACCENT_OPTIONS[0].value

@@ -1,8 +1,9 @@
 import type { CSSProperties } from "react"
 import type { HomeView } from "./types"
 
-// Default accent when an organisation hasn't chosen one — the Frequency accent.
-export const DEFAULT_HOME_ACCENT = "#E8833A"
+// Default accent when an organisation hasn't chosen one — the Frequency accent,
+// tuned to the brighter, more vibrant amber used across the accent palette.
+export const DEFAULT_HOME_ACCENT = "#FF9A1F"
 
 /**
  * Returns an inline style exposing the Home's accent colour as the
