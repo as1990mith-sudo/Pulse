@@ -15,9 +15,9 @@ import {
   ChevronDown,
   ChevronRight,
   Contrast,
-  Globe,
   Info,
   Leaf,
+  LayoutDashboard,
   Plus,
   Library as LibraryIcon,
   LifeBuoy,
@@ -39,8 +39,9 @@ import {
 } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
 import { getUnreadCount } from "@/app/actions/notifications"
-import { getMyOrganization } from "@/app/actions/organizations"
-import { getMySpaces } from "@/app/actions/home"
+import { getMyHomeMemberships, setActiveHome } from "@/app/actions/home"
+import { useHome } from "@/components/home/home-context"
+import { isHomeAdminRole } from "@/lib/home/roles"
 import { SKINS, useSkin } from "@/components/skin-provider"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { startMenuFlow } from "@/lib/menu-flow"
@@ -91,22 +92,17 @@ export function AppMenu() {
   })
   const notificationCount = unread ?? 0
 
-  // Whether the signed-in member already owns an organisation. When they don't,
-  // we surface a "Create organisation" entry — the in-app recovery path for the
-  // two-step org sign-up, so a member who never finished it (or simply wants a
-  // page now) is never left without a way to become an organisation.
-  const { data: myOrg } = useSWR(signedIn ? "my-organization" : null, () => getMyOrganization(), {
-    revalidateOnFocus: false,
-  })
-  const ownsOrg = !!myOrg
-
-  // The private Homes this member belongs to. Surfaced as a "My Spaces" section
-  // so a member can move between Frequency Universal and their organisation
-  // Home(s) — and find the join entry — without first being inside a Home.
-  const { data: mySpaces } = useSWR(signedIn ? "my-spaces" : null, () => getMySpaces(), {
-    revalidateOnFocus: false,
-  })
-  const spaces = mySpaces ?? []
+  // The Homes this member belongs to, with their role in each. Surfaced as the
+  // "My Homes" switcher — the one structural addition to the Universal menu.
+  // Selecting a Home changes the active organisation context; the interface
+  // itself stays the same (spec §6).
+  const { data: myHomes, mutate: mutateHomes } = useSWR(
+    signedIn ? "my-homes" : null,
+    () => getMyHomeMemberships(),
+    { revalidateOnFocus: false },
+  )
+  const homes = myHomes ?? []
+  const { activeHome } = useHome()
 
   const [mounted, setMounted] = useState(false)
   const [open, setOpen] = useState(false) // portal present (enter + exit)
@@ -214,6 +210,20 @@ export function AppMenu() {
       navigator.clipboard.writeText(shareData.url).catch(() => {})
     }
     close()
+  }
+
+  // Switch the active Home context. The interface stays identical — only the
+  // organisation's data changes — so we land back at the root of the same UI.
+  async function handleSwitchHome(handle: string) {
+    if (handle === activeHome?.handle) {
+      close()
+      return
+    }
+    await setActiveHome(handle)
+    await mutateHomes()
+    close()
+    router.push("/")
+    router.refresh()
   }
 
   // ---- Swipe-to-close handlers -------------------------------------------
@@ -338,27 +348,31 @@ export function AppMenu() {
               <div className="mt-2 flex-1 overflow-y-auto overscroll-contain px-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
                 {signedIn && (
                   <>
-                    <Section label="My spaces">
-                      <SpaceRow
-                        href="/"
-                        label="Frequency Universal"
-                        sublabel="The public platform"
-                        onNavigate={navigate}
-                        universal
-                      />
-                      {spaces.map((s) => (
+                    <Section label="My Homes">
+                      {activeHome && isHomeAdminRole(activeHome.role) && (
                         <SpaceRow
-                          key={s.handle}
-                          href={`/home/${s.handle}`}
-                          label={s.name}
-                          sublabel="Private home"
+                          href={`/org/${activeHome.handle}/admin`}
+                          label="Admin Dashboard"
+                          sublabel={`Manage ${activeHome.name}`}
                           onNavigate={navigate}
-                          logo={s.logo}
-                          initials={s.initials}
-                          accent={s.accent}
+                          admin
+                          accent={activeHome.accent}
+                        />
+                      )}
+                      {homes.map((h) => (
+                        <HomeSwitchRow
+                          key={h.handle}
+                          name={h.name}
+                          role={h.role}
+                          logo={h.logo}
+                          initials={h.initials}
+                          accent={h.accent}
+                          active={h.handle === activeHome?.handle}
+                          onSelect={() => handleSwitchHome(h.handle)}
                         />
                       ))}
-                      <SpaceRow href="/home" label="Find or join a home" onNavigate={navigate} join />
+                      <SpaceRow href="/home/join" label="Join another Home" onNavigate={navigate} join />
+                      <SpaceRow href="/sign-up/home" label="Set up a new Home" onNavigate={navigate} setup />
                     </Section>
                     <Divider />
                   </>
@@ -392,14 +406,6 @@ export function AppMenu() {
 
                 <Section label="Preferences">
                   <AppearanceItem />
-                  {signedIn && !ownsOrg && (
-                    <DrawerItem
-                      href="/create-organisation"
-                      icon={Building2}
-                      label="Create organisation"
-                      onNavigate={navigate}
-                    />
-                  )}
                   {signedIn && (
                     <DrawerItem href="/settings/privacy" icon={ShieldCheck} label="Privacy" onNavigate={navigate} />
                   )}
@@ -507,8 +513,9 @@ function DrawerItem({
 }
 
 /**
- * A row in the "My spaces" switcher: Frequency Universal, each Home the member
- * belongs to (accent-branded logo/initials), or the "find or join" entry.
+ * A link row in the "My Homes" section: the Admin Dashboard entry, the "join
+ * another Home" entry, or the "set up a new Home" entry. Home membership rows
+ * that switch context are rendered by HomeSwitchRow instead.
  */
 function SpaceRow({
   href,
@@ -518,8 +525,9 @@ function SpaceRow({
   logo,
   initials,
   accent,
-  universal,
   join,
+  admin,
+  setup,
 }: {
   href: string
   label: string
@@ -528,18 +536,22 @@ function SpaceRow({
   logo?: string | null
   initials?: string
   accent?: string
-  universal?: boolean
   join?: boolean
+  admin?: boolean
+  setup?: boolean
 }) {
   return (
     <Link href={href} onClick={onNavigate} className={itemClasses}>
-      {universal ? (
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-foreground text-background">
-          <Globe className="size-[22px]" />
+      {admin ? (
+        <span
+          className="flex size-10 shrink-0 items-center justify-center rounded-xl text-white"
+          style={{ backgroundColor: accent || "hsl(var(--primary))" }}
+        >
+          <LayoutDashboard className="size-[22px]" />
         </span>
-      ) : join ? (
+      ) : join || setup ? (
         <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-dashed border-border text-muted-foreground">
-          <Plus className="size-[22px]" />
+          {setup ? <Building2 className="size-[22px]" /> : <Plus className="size-[22px]" />}
         </span>
       ) : (
         <span
@@ -560,6 +572,57 @@ function SpaceRow({
       </span>
       <ChevronRight className="size-5 shrink-0 text-muted-foreground/60" />
     </Link>
+  )
+}
+
+/**
+ * A Home membership row in "My Homes". Tapping it switches the active
+ * organisation context (spec §6) — it is a button, not a link, because it
+ * mutates context server-side then routes home. The active Home is marked with
+ * a check; the viewer's role is shown as a sublabel.
+ */
+function HomeSwitchRow({
+  name,
+  role,
+  logo,
+  initials,
+  accent,
+  active,
+  onSelect,
+}: {
+  name: string
+  role: string
+  logo?: string | null
+  initials?: string
+  accent?: string
+  active: boolean
+  onSelect: () => void
+}) {
+  const roleLabel = role === "member" ? "Member" : isHomeAdminRole(role) ? "Admin" : "Member"
+  return (
+    <button type="button" onClick={onSelect} className={cn(itemClasses, "w-full text-left")}>
+      <span
+        className={cn(
+          "relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl text-sm font-bold text-white",
+          active && "ring-2 ring-offset-2 ring-offset-background",
+        )}
+        style={{ backgroundColor: accent, ...(active ? { boxShadow: `0 0 0 2px ${accent}` } : {}) }}
+      >
+        {logo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={logo || "/placeholder.svg"} alt="" className="size-full object-cover" />
+        ) : (
+          initials
+        )}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[15px] font-medium text-foreground">{name}</span>
+        <span className="block truncate text-xs text-muted-foreground">
+          {active ? `${roleLabel} · Current Home` : roleLabel}
+        </span>
+      </span>
+      {active && <Check className="size-5 shrink-0 text-primary" />}
+    </button>
   )
 }
 

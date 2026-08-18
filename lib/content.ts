@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, lte, or, sql } from "drizzle-orm"
+import { and, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { devotional, episode, user as userTable } from "@/lib/db/schema"
 import type { Devotional, Show, Host, PodcastHost } from "@/lib/data"
@@ -144,26 +144,31 @@ export async function getEpisodesByUser(userId: string, includePrivate = false):
  * The devotional shown on the homepage: the most recently published row from
  * the database, or null when none have been posted yet.
  */
-export async function getLatestDevotional(): Promise<Devotional | null> {
+export async function getLatestDevotional(homeId?: string): Promise<Devotional | null> {
   // Public visibility rule: a devotional is live if it is "published", or it is
   // "scheduled" and its scheduled time has arrived. Drafts, archived rows and
   // not-yet-due scheduled rows are hidden from readers.
+  //
+  // Home scoping: when a homeId is supplied we return only that Home's
+  // devotionals (isolated per organisation). With no homeId we return Universal
+  // devotionals (homeId IS NULL) — a Home's content never leaks into Universal
+  // and vice versa.
   //
   // Wrapped in try/catch so a database outage (e.g. the provider is temporarily
   // unreachable or over its transfer quota) degrades gracefully to the "No
   // devotional yet" empty state on the homepage instead of throwing an
   // unhandled error that crashes the entire page render.
+  const visibility = or(
+    eq(devotional.status, "published"),
+    and(eq(devotional.status, "scheduled"), lte(devotional.scheduledFor, sql`now()`)),
+  )
+  const scope = homeId ? eq(devotional.homeId, homeId) : isNull(devotional.homeId)
   let row
   try {
     ;[row] = await db
       .select()
       .from(devotional)
-      .where(
-        or(
-          eq(devotional.status, "published"),
-          and(eq(devotional.status, "scheduled"), lte(devotional.scheduledFor, sql`now()`)),
-        ),
-      )
+      .where(and(visibility, scope))
       .orderBy(desc(devotional.lastPostedAt))
       .limit(1)
   } catch (err) {

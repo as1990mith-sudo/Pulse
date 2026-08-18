@@ -24,6 +24,8 @@ export type HomePermission =
   | "pastoral.manage" // pastoral care / prayer requests
   | "notifications.send"
   | "analytics.view"
+  | "bookings.manage" // triage booking requests
+  | "appointments.manage" // schedule and manage appointments
   | "subscription.manage" // change plan / billing
 
 export const ALL_HOME_PERMISSIONS: HomePermission[] = [
@@ -39,6 +41,8 @@ export const ALL_HOME_PERMISSIONS: HomePermission[] = [
   "pastoral.manage",
   "notifications.send",
   "analytics.view",
+  "bookings.manage",
+  "appointments.manage",
   "subscription.manage",
 ]
 
@@ -85,6 +89,8 @@ const HOME_ROLE_PERMISSIONS: Record<HomeRole, HomePermission[]> = {
     "pastoral.manage",
     "notifications.send",
     "analytics.view",
+    "bookings.manage",
+    "appointments.manage",
     "subscription.manage",
   ],
   content_manager: [
@@ -97,7 +103,7 @@ const HOME_ROLE_PERMISSIONS: Record<HomeRole, HomePermission[]> = {
     "analytics.view",
   ],
   moderator: ["members.view", "community.moderate", "content.manage"],
-  leader: ["members.view", "pastoral.manage", "community.moderate"],
+  leader: ["members.view", "pastoral.manage", "community.moderate", "appointments.manage", "bookings.manage"],
   member: [],
 }
 
