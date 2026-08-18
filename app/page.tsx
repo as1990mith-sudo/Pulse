@@ -1,13 +1,13 @@
 import Link from "next/link"
-import { Clock, Calendar, BookHeart, ShoppingCart, Quote } from "lucide-react"
+import { Clock, Calendar, BookHeart, Quote, Plus, Pencil } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
 import { DevotionalInteractions } from "@/components/devotional-interactions"
 import { Button } from "@/components/ui/button"
 import { getLatestDevotional } from "@/lib/content"
-import { devotionalSource } from "@/lib/data"
 import { getDevotionalComments } from "@/app/actions/devotional"
 import { getCurrentUser } from "@/lib/session"
 import { getActiveHomeContext } from "@/lib/home/active-home"
+import { homeRoleHasPermission } from "@/lib/home/roles"
 import { HomeEntry } from "@/components/home/onboarding/home-entry"
 
 /** Formats the devotional's publish date as e.g. "Jun 20, 2026"; returns "" if unparseable. */
@@ -24,10 +24,16 @@ export default async function DevotionalPage() {
   // the viewer is guided to set up or join a Home (spec §3). Once inside a Home,
   // the root shows that Home's landing (its Daily Devotional), scoped to its
   // organisation context.
-  const { home } = await getActiveHomeContext()
+  const { home, membership } = await getActiveHomeContext()
   if (!home) {
     return <HomeEntry signedIn={!!currentUser} />
   }
+
+  // Whether this viewer may manage the Home's content. Admins decide exactly
+  // which devotional their members see — so they get publish/manage affordances
+  // right on the landing, while members simply read what the admin posts.
+  const canManage = homeRoleHasPermission(membership?.role, "content.manage")
+  const manageHref = `/org/${home.handle}/admin/content`
 
   const d = await getLatestDevotional(home.id)
 
@@ -40,9 +46,22 @@ export default async function DevotionalPage() {
             <BookHeart className="size-6" />
           </span>
           <h1 className="text-2xl font-bold tracking-tight">No devotional yet</h1>
-          <p className="max-w-md text-pretty text-muted-foreground">
-            The latest daily devotional will appear here as soon as it&apos;s published.
-          </p>
+          {canManage ? (
+            <>
+              <p className="max-w-md text-pretty text-muted-foreground">
+                You decide what {home.name} reads. Publish your first Daily Devotional and it appears here for your
+                members — never on the Frequency Universal app.
+              </p>
+              <Button render={<Link href={manageHref} />} nativeButton={false} className="mt-2 gap-2">
+                <Plus className="size-4" />
+                Publish a devotional
+              </Button>
+            </>
+          ) : (
+            <p className="max-w-md text-pretty text-muted-foreground">
+              {home.name}&apos;s daily devotional will appear here as soon as an admin publishes one.
+            </p>
+          )}
         </main>
       </div>
     )
@@ -74,6 +93,14 @@ export default async function DevotionalPage() {
               <span className="inline-flex items-center gap-1.5 rounded-full bg-foreground/5 px-3 py-1 text-xs font-medium text-muted-foreground">
                 <Clock className="size-3.5" /> {d.readingMinutes} min read
               </span>
+              {canManage && (
+                <Link
+                  href={manageHref}
+                  className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-3 py-1 text-xs font-medium text-foreground backdrop-blur transition-colors hover:bg-accent"
+                >
+                  <Pencil className="size-3.5" /> Manage
+                </Link>
+              )}
             </div>
             <h1 className="text-balance text-3xl font-bold leading-tight tracking-tight sm:text-4xl">{d.title}</h1>
             {publishedDate && <p className="text-sm text-muted-foreground">{publishedDate}</p>}
@@ -116,31 +143,6 @@ export default async function DevotionalPage() {
             <p className="mt-3 text-pretty text-[1.0625rem] leading-8 text-foreground sm:text-lg">
               {d.prayer}
             </p>
-          </div>
-
-          {/* Attribution + order CTA. */}
-          <div className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-card p-6 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                <BookHeart className="size-5" />
-              </span>
-              <div className="space-y-0.5">
-                <p className="text-sm text-muted-foreground">
-                  Excerpt from <span className="font-semibold text-foreground">{devotionalSource.name}</span>
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  by <span className="font-medium text-foreground">{devotionalSource.author}</span>
-                </p>
-              </div>
-            </div>
-            <Button
-              render={<Link href={devotionalSource.orderUrl} target="_blank" rel="noopener noreferrer" />}
-              nativeButton={false}
-              className="shrink-0 gap-2"
-            >
-              <ShoppingCart className="size-4" />
-              Order the devotional
-            </Button>
           </div>
 
           <DevotionalInteractions
