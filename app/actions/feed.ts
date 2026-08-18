@@ -9,6 +9,7 @@ import {
   feedComment,
   feedPost,
   follow,
+  homeMembership,
   like,
   organization,
   repost,
@@ -16,6 +17,8 @@ import {
   share,
   user as userTable,
 } from "@/lib/db/schema"
+import { getActiveHomeContext } from "@/lib/home/active-home"
+import { isHomeAdminRole } from "@/lib/home/roles"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { formatPostTimestamp } from "@/lib/format-timestamp"
 import { getLikedSet, setLike } from "@/lib/likes"
@@ -278,29 +281,61 @@ async function getUserInfoMap(userIds: string[]): Promise<Map<string, UserInfo>>
   )
 }
 
+// Live organisation identity keyed by organisationId. Used so a post carrying
+// an organizationId is always attributed to that organisation — resolved from
+// the org row itself, independent of who authored it.
+type OrgInfo = { name: string; handle: string; logo: string | null; verified: boolean }
+
+async function getOrgInfoMap(orgIds: (string | null)[]): Promise<Map<string, OrgInfo>> {
+  const unique = [...new Set(orgIds.filter((id): id is string => !!id))]
+  if (unique.length === 0) return new Map()
+  const rows = await db
+    .select({
+      id: organization.id,
+      name: organization.name,
+      handle: organization.handle,
+      logo: organization.logo,
+      verified: organization.verified,
+    })
+    .from(organization)
+    .where(inArray(organization.id, unique))
+  return new Map(
+    rows.map((r) => [r.id, { name: r.name, handle: r.handle, logo: r.logo, verified: r.verified ?? false }]),
+  )
+}
+
 /**
  * Resolves the author identity to render for a feed post. When the post was
- * published by an organisation account (`organizationId` set), it is attributed
- * to the ORGANISATION — its name, @handle, logo and verified badge — so an
- * organisation always speaks as itself, never as the admin who runs it. Personal
- * posts resolve to the author's current profile. We resolve live (rather than
- * trusting the denormalized `authorName`) so renaming a user or organisation
- * retroactively updates every past post.
+ * published on behalf of an organisation (`organizationId` set), it is
+ * attributed to the ORGANISATION — its name, @handle, logo and verified badge —
+ * so the organisation always speaks as itself and the admin who runs it is never
+ * named. Org identity is resolved directly from the post's `organizationId`
+ * (via `orgMap`) so this holds for EVERY Home admin, not only the org owner; the
+ * owner-join on `infoMap` is a fallback. Personal posts resolve to the author's
+ * current profile. Everything resolves live rather than trusting the
+ * denormalized `authorName`, so renaming a user or organisation retroactively
+ * updates every past post.
  */
 function resolveAuthor(
   p: { userId: string; organizationId: string | null; authorName: string },
   infoMap: Map<string, UserInfo>,
+  orgMap?: Map<string, OrgInfo>,
 ) {
   const info = infoMap.get(p.userId)
-  if (p.organizationId && info?.orgName) {
-    return {
-      user: info.orgName,
-      handle: info.orgHandle ?? getHandle(info.orgName),
-      initials: getInitials(info.orgName),
-      color: getAvatarColor(p.organizationId),
-      authorImage: info.orgLogo ?? null,
-      orgVerified: info.orgVerified,
-      orgHandle: info.orgHandle,
+  if (p.organizationId) {
+    const org = orgMap?.get(p.organizationId)
+    const orgName = org?.name ?? info?.orgName ?? null
+    if (orgName) {
+      const orgHandle = org?.handle ?? info?.orgHandle ?? getHandle(orgName)
+      return {
+        user: orgName,
+        handle: orgHandle,
+        initials: getInitials(orgName),
+        color: getAvatarColor(p.organizationId),
+        authorImage: org?.logo ?? info?.orgLogo ?? null,
+        orgVerified: org?.verified ?? info?.orgVerified ?? false,
+        orgHandle,
+      }
     }
   }
   const name = info?.name ?? p.authorName
@@ -323,15 +358,37 @@ export async function getFeed(): Promise<FeedPostView[]> {
   const session = await auth.api.getSession({ headers: await headers() })
   const currentUserId = session?.user?.id ?? null
 
-  // Only main-feed posts. Room posts (iTestify testimonies, Question of the Day
-  // responses) carry a non-null `channel` and are excluded here so they render
-  // exclusively inside their own community rooms. Posts come back newest-first;
-  // the client decides presentation per tab ("For you" shuffles from this
-  // deterministic order, "Following" stays newest-first).
+  // The feed is a Home surface: it shows ONLY posts authored by people who
+  // actually belong to the active Home (its admins and members). Resolve the
+  // viewer's active Home and the set of its active members up front — a post by
+  // anyone outside this Home must never appear here. With no active Home there
+  // is no feed to show (the viewer is sent to onboarding elsewhere).
+  const { home } = await getActiveHomeContext()
+  if (!home) return []
+
+  const memberRows = await db
+    .select({ userId: homeMembership.userId })
+    .from(homeMembership)
+    .where(and(eq(homeMembership.homeId, home.id), eq(homeMembership.status, "active")))
+  const memberIds = memberRows.map((m) => m.userId)
+  if (memberIds.length === 0) return []
+
+  // Only main-feed posts, authored by a member/admin of this Home. Room posts
+  // (iTestify testimonies, Question of the Day responses) carry a non-null
+  // `channel` and are excluded here so they render exclusively inside their own
+  // community rooms. Posts come back newest-first; the client decides
+  // presentation per tab ("For you" shuffles from this deterministic order,
+  // "Following" stays newest-first).
   const posts = await db
     .select()
     .from(feedPost)
-    .where(and(isNull(feedPost.channel), eq(feedPost.deleted, false)))
+    .where(
+      and(
+        isNull(feedPost.channel),
+        eq(feedPost.deleted, false),
+        inArray(feedPost.userId, memberIds),
+      ),
+    )
     .orderBy(desc(feedPost.createdAt))
   if (posts.length === 0) return []
   const postIds = posts.map((p) => p.id)
@@ -349,9 +406,12 @@ export async function getFeed(): Promise<FeedPostView[]> {
     getLikedSet(currentUserId, "post", postIds),
   ])
 
-  // These two depend on the comment rows, so run them together after.
-  const [infoMap, likedCommentSet] = await Promise.all([
+  // These depend on the comment rows, so run them together after. `orgMap`
+  // resolves live organisation identity for every org-attributed post so admins
+  // always appear as their organisation, never by personal name.
+  const [infoMap, orgMap, likedCommentSet] = await Promise.all([
     getUserInfoMap([...posts.map((p) => p.userId), ...comments.map((c) => c.userId)]),
+    getOrgInfoMap(posts.map((p) => p.organizationId)),
     getLikedSet(currentUserId, "feed_comment", comments.map((c) => c.id)),
   ])
 
@@ -369,7 +429,7 @@ export async function getFeed(): Promise<FeedPostView[]> {
   return posts.map((p) => ({
     id: p.id,
     authorId: p.userId,
-    ...resolveAuthor(p, infoMap),
+    ...resolveAuthor(p, infoMap, orgMap),
     postedAt: timeAgo(p.createdAt),
     createdAtMs: p.createdAt.getTime(),
     text: p.text,
@@ -772,6 +832,19 @@ export async function createPost(input: {
       organizationId = owned.id
       authorName = owned.name
       authorHandle = owned.handle
+    } else {
+      // Not a global organisation account, but a post authored inside a Home by
+      // one of its admins (owner/administrator/content_manager/…) speaks FOR the
+      // organisation — so it's attributed to the active Home's organisation and
+      // the admin's personal name never surfaces. Regular members keep their own
+      // identity.
+      const { home, membership } = await getActiveHomeContext()
+      if (home && isHomeAdminRole(membership?.role)) {
+        isOrganization = true
+        organizationId = home.organizationId
+        authorName = home.orgName
+        authorHandle = home.handle
+      }
     }
   }
 

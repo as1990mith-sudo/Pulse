@@ -1402,7 +1402,11 @@ export function PostCard({
       {/* Header */}
       <div className={cn("flex items-center justify-between gap-2", feed ? "px-4 py-3" : "px-3 py-3")}>
         <div className="flex min-w-0 items-center gap-3">
-          <Link href={`/u/${post.authorId}`} aria-label={`View ${post.user}'s profile`} className="shrink-0">
+          <Link
+            href={post.orgHandle ? `/org/${post.orgHandle}` : `/u/${post.authorId}`}
+            aria-label={`View ${post.user}'s profile`}
+            className="shrink-0"
+          >
             <AvatarWithBadge verified={post.orgVerified} badgeSize={feed ? "md" : "sm"}>
               <Avatar className={cn(feed ? "size-12 ring-2 ring-border/60" : "size-9")}>
                 {post.authorImage && <AvatarImage src={post.authorImage || "/placeholder.svg"} alt={post.user} />}
@@ -1414,7 +1418,7 @@ export function PostCard({
           </Link>
           <div className="flex min-w-0 flex-col leading-tight">
             <Link
-              href={`/u/${post.authorId}`}
+              href={post.orgHandle ? `/org/${post.orgHandle}` : `/u/${post.authorId}`}
               className={cn(
                 "flex min-w-0 items-center gap-1 font-semibold hover:underline",
                 feed ? "text-base" : "text-sm",
