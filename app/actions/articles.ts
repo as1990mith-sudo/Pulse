@@ -16,6 +16,7 @@ import {
   savedItem,
   user as userTable,
 } from "@/lib/db/schema"
+import { getActiveHomeMemberIds } from "@/lib/home/active-home"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { getLikedSet, setLike } from "@/lib/likes"
 import {
@@ -152,17 +153,26 @@ export async function getArticleHub(): Promise<{
   latest: ArticleCard[]
   categories: string[]
 }> {
+  // Articles are a Home surface: only pieces written by an active member/admin
+  // of the viewer's current Home are shown. No Home (or no members) ⇒ nothing.
+  const { memberIds } = await getActiveHomeMemberIds()
+  if (memberIds.length === 0) {
+    return { featured: null, editorsPicks: [], latest: [], categories: [...ARTICLE_CATEGORIES] }
+  }
+
   const [featuredRows, latestRows, pickRows] = await Promise.all([
     db
       .select()
       .from(article)
-      .where(and(eq(article.status, "published"), eq(article.featured, true)))
+      .where(
+        and(eq(article.status, "published"), eq(article.featured, true), inArray(article.authorId, memberIds)),
+      )
       .orderBy(desc(article.publishedAt))
       .limit(1),
     db
       .select()
       .from(article)
-      .where(eq(article.status, "published"))
+      .where(and(eq(article.status, "published"), inArray(article.authorId, memberIds)))
       .orderBy(desc(article.publishedAt))
       .limit(30),
     // Editor's Pick: curated standouts — hand-flagged featured first, then the
@@ -171,7 +181,7 @@ export async function getArticleHub(): Promise<{
     db
       .select()
       .from(article)
-      .where(eq(article.status, "published"))
+      .where(and(eq(article.status, "published"), inArray(article.authorId, memberIds)))
       .orderBy(desc(article.featured), desc(article.likeCount), desc(article.viewCount), desc(article.publishedAt))
       .limit(9),
   ])
@@ -206,7 +216,11 @@ export async function getArticleFeed(input: {
   const limit = Math.min(Math.max(input.limit ?? 12, 1), 30)
   const offset = Math.max(input.offset ?? 0, 0)
 
-  const filters = [eq(article.status, "published")]
+  // Members-only: restrict to authors who belong to the viewer's active Home.
+  const { memberIds } = await getActiveHomeMemberIds()
+  if (memberIds.length === 0) return { items: [], nextOffset: null }
+
+  const filters = [eq(article.status, "published"), inArray(article.authorId, memberIds)]
   const excludeNum = Number(input.excludeId)
   if (Number.isFinite(excludeNum)) filters.push(ne(article.id, excludeNum))
   if (input.category && input.category !== "All") filters.push(eq(article.category, input.category))
@@ -242,6 +256,14 @@ export async function getArticle(id: string): Promise<ArticleDetail | null> {
   const viewer = await getSessionUser()
   const isAuthor = viewer?.id === row.authorId
   if (row.status !== "published" && !isAuthor) return null
+
+  // Members-only: you can always read your own article, but someone else's is
+  // only visible when its author is an active member of your current Home — so a
+  // direct URL can't leak an article from outside the Home you're inside.
+  if (!isAuthor) {
+    const { memberIds } = await getActiveHomeMemberIds()
+    if (!memberIds.includes(row.authorId)) return null
+  }
 
   const [card] = await toCards([row])
   let liked = false
@@ -393,11 +415,15 @@ export async function getWriterStats(userId: string): Promise<WriterStats> {
 
 /** Top writers by follower count then article count, for the hub rail. */
 export async function getFeaturedWriters(limit = 10): Promise<FeaturedWriter[]> {
+  // Members-only: only writers who belong to the viewer's active Home surface.
+  const { memberIds } = await getActiveHomeMemberIds()
+  if (memberIds.length === 0) return []
+
   // Writers who have at least one published article, ranked by published count.
   const rows = await db
     .select({ authorId: article.authorId, articleCount: count() })
     .from(article)
-    .where(eq(article.status, "published"))
+    .where(and(eq(article.status, "published"), inArray(article.authorId, memberIds)))
     .groupBy(article.authorId)
     .orderBy(desc(count()))
     .limit(limit)

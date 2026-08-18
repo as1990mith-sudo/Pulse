@@ -1,6 +1,9 @@
 import "server-only"
 
+import { and, eq } from "drizzle-orm"
 import { cookies } from "next/headers"
+import { db } from "@/lib/db"
+import { homeMembership } from "@/lib/db/schema"
 import { getMyHomes, getViewerMembership } from "@/lib/home/access"
 import type { HomeView, HomeMembershipView } from "@/lib/home/types"
 
@@ -53,4 +56,22 @@ export async function getActiveHomeContext(): Promise<ActiveHomeContext> {
 export async function getActiveHome(): Promise<HomeView | null> {
   const { home } = await getActiveHomeContext()
   return home
+}
+
+/**
+ * The single source of truth for "members-only" scoping across every Home
+ * surface (feed, articles, chatroom, messaging). Resolves the viewer's active
+ * Home and the ids of its ACTIVE members (admins included). With no active Home,
+ * or a Home with no active members, `memberIds` is empty — callers treat that as
+ * "nothing to show", so a viewer can only ever see content from people who
+ * actually belong to the Home they are currently inside.
+ */
+export async function getActiveHomeMemberIds(): Promise<{ home: HomeView | null; memberIds: string[] }> {
+  const { home } = await getActiveHomeContext()
+  if (!home) return { home: null, memberIds: [] }
+  const rows = await db
+    .select({ userId: homeMembership.userId })
+    .from(homeMembership)
+    .where(and(eq(homeMembership.homeId, home.id), eq(homeMembership.status, "active")))
+  return { home, memberIds: rows.map((r) => r.userId) }
 }

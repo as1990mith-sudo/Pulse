@@ -12,6 +12,7 @@ import {
   chatroomMessage,
   user as userTable,
 } from "@/lib/db/schema"
+import { getActiveHomeMemberIds } from "@/lib/home/active-home"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { EDIT_WINDOW_MS, DELETE_WINDOW_MS } from "@/lib/interactions"
 
@@ -302,12 +303,18 @@ export async function searchChatrooms(query: string): Promise<ChatroomSearchResu
   const q = query.trim()
   if (!q) return []
 
+  // Members-only: Discover only surfaces rooms created by an active member/admin
+  // of the viewer's current Home. Outside that set nothing is discoverable, even
+  // by exact name — so rooms never leak across Homes.
+  const { memberIds } = await getActiveHomeMemberIds()
+  if (memberIds.length === 0) return []
+
   // Search matches by name across BOTH public and private rooms — this is the
   // only way a private room surfaces in Discover.
   const rooms = await db
     .select()
     .from(chatroom)
-    .where(ilike(chatroom.name, `%${q}%`))
+    .where(and(ilike(chatroom.name, `%${q}%`), inArray(chatroom.ownerId, memberIds)))
     .orderBy(asc(chatroom.name))
     .limit(25)
   return enrichRoomsForUser(rooms, user.id)

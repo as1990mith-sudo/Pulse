@@ -83,11 +83,20 @@ export async function createHome(input: CreateHomeInput): Promise<{ handle: stri
     type.category === "other" ? input.categoryOther?.trim() || type.categoryOther || "Organisation" : undefined
 
   // 1) Create/link the public organisation (also flips accountType). Reuses the
-  //    existing org system so discovery, profile and catalogue all work.
+  //    existing org system so discovery, profile and catalogue all work. If this
+  //    admin already owns an organisation, this is an ADDITIONAL Home on the same
+  //    account — force a brand-new organisation rather than reusing the first, so
+  //    one login can administer several Homes (no second email/password).
+  const alreadyOwns = await db
+    .select({ id: organization.id })
+    .from(organization)
+    .where(eq(organization.ownerId, user.id))
+    .limit(1)
   const { handle } = await createOrganization({
     name,
     category: type.category,
     categoryOther,
+    forceNew: alreadyOwns.length > 0,
     description: input.description,
     logo: input.logo,
     reach: input.country ? "local" : "online_only",

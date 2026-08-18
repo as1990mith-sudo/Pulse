@@ -8,6 +8,8 @@ import { getPublicCommunityPostsByUser, getAnonymousCommunityPostsByUser } from 
 import { getActiveStatusForUser } from "@/app/actions/status"
 import { getWriterArticles } from "@/app/actions/articles"
 import { getCurrentUser } from "@/lib/session"
+import { getActiveHomeContext } from "@/lib/home/active-home"
+import { isHomeAdminRole } from "@/lib/home/roles"
 import { SiteHeader } from "@/components/site-header"
 import { ProfileFollowButton } from "@/components/profile/profile-follow-button"
 import { ProfileMessageButton } from "@/components/profile/profile-message-button"
@@ -20,9 +22,22 @@ import { ProfileBio } from "@/components/profile/profile-bio"
 export default async function ProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
 
-  // Organisation accounts have their own dedicated profile surface. If this
-  // user owns an organisation, send every visitor (owner or not) to the
-  // organisation profile instead of the personal /u/[id] page.
+  // Viewing your OWN profile follows the Home you're currently in: if you
+  // administer the active Home, your profile opens that Home's organisation
+  // profile — and from there its admin console — so a multi-Home admin lands on
+  // whichever Home they're presently inside, not an arbitrary first one.
+  const viewer = await getCurrentUser()
+  if (viewer?.id === id) {
+    const { home, membership } = await getActiveHomeContext()
+    if (home && isHomeAdminRole(membership?.role)) {
+      redirect(`/org/${home.handle}`)
+    }
+  }
+
+  // Organisation accounts have their own dedicated profile surface. For everyone
+  // else (and admins with no active Home context), if this user owns an
+  // organisation, send every visitor to that organisation's profile instead of
+  // the personal /u/[id] page. A multi-org owner defaults to their first org.
   const [ownedOrg] = await db
     .select({ handle: organization.handle })
     .from(organization)
