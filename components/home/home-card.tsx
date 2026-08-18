@@ -1,14 +1,34 @@
-import Link from "next/link"
+"use client"
+
+import { useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { Users } from "lucide-react"
 import type { HomeView } from "@/lib/home/types"
 import { homeAccentStyle } from "@/lib/home/accent"
+import { setActiveHome } from "@/app/actions/home"
 
 // Compact Home tile for the hub. Leads with the organisation's colour + logo.
+// Selecting it makes this Home the active context and lands the member in the
+// main Frequency interface (the Home IS the main interface) — never the old
+// reduced /home/[handle] shell.
 export function HomeCard({ home }: { home: HomeView }) {
+  const router = useRouter()
+  const [pending, startTransition] = useTransition()
+
+  function enter() {
+    startTransition(async () => {
+      await setActiveHome(home.handle)
+      router.push("/")
+      router.refresh()
+    })
+  }
+
   return (
-    <Link
-      href={`/home/${home.handle}`}
-      className="group relative flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-card transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
+    <button
+      type="button"
+      onClick={enter}
+      disabled={pending}
+      className="group relative flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-card text-left transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-70"
       style={homeAccentStyle(home)}
     >
       <div className="h-16 w-full" style={{ backgroundColor: "color-mix(in oklab, var(--home-accent) 22%, transparent)" }}>
@@ -36,6 +56,6 @@ export function HomeCard({ home }: { home: HomeView }) {
           </p>
         </div>
       </div>
-    </Link>
+    </button>
   )
 }

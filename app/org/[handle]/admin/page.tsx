@@ -1,8 +1,9 @@
 import Link from "next/link"
-import { Users, Clock, ShieldCheck, ArrowUpRight, ExternalLink } from "lucide-react"
+import { Users, Clock, ShieldCheck, ArrowUpRight } from "lucide-react"
 import { getHomeAdminOverview, getActiveAuthKey } from "@/app/actions/home"
 import { getHomePlan, formatHomePrice } from "@/lib/home/plans"
 import { AuthKeyManager } from "@/components/home/admin/auth-key-manager"
+import { EnterHomeLink } from "@/components/home/enter-home-link"
 
 export default async function HomeAdminOverviewPage({ params }: { params: Promise<{ handle: string }> }) {
   const { handle } = await params
@@ -62,16 +63,7 @@ export default async function HomeAdminOverviewPage({ params }: { params: Promis
           </div>
         </div>
 
-        <Link
-          href={`/home/${handle}`}
-          className="flex items-center justify-between rounded-2xl border border-border bg-card p-5 transition-colors hover:bg-muted/40"
-        >
-          <div>
-            <p className="text-lg font-semibold">View your Home</p>
-            <p className="text-sm text-muted-foreground">See what members see.</p>
-          </div>
-          <ExternalLink className="size-5 text-muted-foreground" />
-        </Link>
+        <EnterHomeLink handle={handle} />
       </div>
 
       {/* Auth key + join policy */}

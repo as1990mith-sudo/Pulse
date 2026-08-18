@@ -440,7 +440,9 @@ export async function updateHomeBranding(
   if (Object.keys(orgPatch).length > 0) {
     await updateOrganization(homeView.organizationId, orgPatch)
   }
-  revalidatePath(`/home/${handle}`)
+  // The Home IS the main interface, served at "/". Revalidate it plus the
+  // admin settings page so branding/accent changes show immediately.
+  revalidatePath("/")
   revalidatePath(`/org/${handle}/admin/settings`)
   return { ok: true }
 }

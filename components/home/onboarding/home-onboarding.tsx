@@ -184,9 +184,12 @@ export function HomeOnboarding() {
         history: history.trim() || undefined,
         beliefs: beliefs.trim() || undefined,
       }
-      const { handle } = await createHome(payload)
+      await createHome(payload)
 
-      router.push(`/home/${handle}?welcome=1`)
+      // createHome sets this new Home as the active context. Land the admin in
+      // the main Frequency interface (the Home IS the main interface) rather
+      // than the old reduced /home/[handle] shell.
+      router.push("/?welcome=1")
       router.refresh()
     } catch (err) {
       setSubmitting(false)
