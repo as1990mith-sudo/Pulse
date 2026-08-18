@@ -117,6 +117,14 @@ export type CreateOrganizationInput = {
   city?: string
   region?: string
   website?: string
+  /**
+   * When true, always provision a NEW organisation for the owner instead of
+   * reusing their existing one. Used when an admin sets up an ADDITIONAL Home on
+   * the same account — each Home is its own organisation, so one owner can hold
+   * several. Left false on the first-signup path so a double-submit can't
+   * duplicate the initial organisation.
+   */
+  forceNew?: boolean
   contactEmail?: string
   contactPhone?: string
   socials?: OrgSocials
@@ -139,17 +147,18 @@ function cleanSocials(socials?: OrgSocials | null): OrgSocials | null {
 
 /**
  * Creates an organisation for the current user and flips their account to an
- * organisation account. Called right after signup on the org path. One org per
- * owner in Phase 1 — returns the existing org if they already have one.
+ * organisation account. Called right after signup on the org path, and again
+ * whenever an admin sets up an additional Home. An owner may hold several
+ * organisations (one per Home); pass `forceNew` to always provision a fresh one.
+ * Without `forceNew` the call is idempotent — it returns the owner's existing
+ * organisation rather than duplicating it on the first-signup path.
  */
 export async function createOrganization(input: CreateOrganizationInput): Promise<{ handle: string }> {
   const user = await requireUser()
 
-  const existing = await db
-    .select()
-    .from(organization)
-    .where(eq(organization.ownerId, user.id))
-    .limit(1)
+  const existing = input.forceNew
+    ? []
+    : await db.select().from(organization).where(eq(organization.ownerId, user.id)).limit(1)
   if (existing.length > 0) {
     // An org row already exists for this owner. Make sure the account is also
     // flagged as an organisation — otherwise a partially-applied earlier attempt

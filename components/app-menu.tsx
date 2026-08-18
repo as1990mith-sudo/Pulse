@@ -10,15 +10,13 @@ import {
   AlignLeft,
   BookOpen,
   Bookmark,
-  Building2,
   Compass,
   ChevronDown,
   ChevronRight,
   Contrast,
+  Home as HomeIcon,
   Info,
   Leaf,
-  LayoutDashboard,
-  Plus,
   Library as LibraryIcon,
   LifeBuoy,
   LogOut,
@@ -32,6 +30,7 @@ import {
   Bell,
   ShieldCheck,
   Sun,
+  Trash2,
   UserPlus,
   Check,
   X,
@@ -39,9 +38,8 @@ import {
 } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
 import { getUnreadCount } from "@/app/actions/notifications"
-import { getMyHomeMemberships, setActiveHome } from "@/app/actions/home"
-import { useHomeContext } from "@/components/home/home-context"
-import { isHomeAdminRole, type HomeRole } from "@/lib/home/roles"
+import { AvatarUploadButton } from "@/components/profile/avatar-upload-button"
+import { DeleteAccountDialog } from "@/components/profile/delete-account-dialog"
 import { SKINS, useSkin } from "@/components/skin-provider"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { startMenuFlow } from "@/lib/menu-flow"
@@ -92,21 +90,10 @@ export function AppMenu() {
   })
   const notificationCount = unread ?? 0
 
-  // The Homes this member belongs to, with their role in each. Surfaced as the
-  // "My Homes" switcher — the one structural addition to the Universal menu.
-  // Selecting a Home changes the active organisation context; the interface
-  // itself stays the same (spec §6).
-  const { data: myHomes, mutate: mutateHomes } = useSWR(
-    signedIn ? "my-homes" : null,
-    () => getMyHomeMemberships(),
-    { revalidateOnFocus: false },
-  )
-  const homes = myHomes ?? []
-  const { activeHome } = useHomeContext()
-
   const [mounted, setMounted] = useState(false)
   const [open, setOpen] = useState(false) // portal present (enter + exit)
   const [active, setActive] = useState(false) // slid fully into view
+  const [deleteOpen, setDeleteOpen] = useState(false) // account-deletion dialog
 
   // Live drag state for swipe-to-close.
   const [dragX, setDragX] = useState(0)
@@ -212,20 +199,6 @@ export function AppMenu() {
     close()
   }
 
-  // Switch the active Home context. The interface stays identical — only the
-  // organisation's data changes — so we land back at the root of the same UI.
-  async function handleSwitchHome(handle: string) {
-    if (handle === activeHome?.handle) {
-      close()
-      return
-    }
-    await setActiveHome(handle)
-    await mutateHomes()
-    close()
-    router.push("/")
-    router.refresh()
-  }
-
   // ---- Swipe-to-close handlers -------------------------------------------
   function onPointerDown(e: React.PointerEvent) {
     drag.current = { startX: e.clientX, startY: e.clientY, horizontal: null }
@@ -316,63 +289,49 @@ export function AppMenu() {
                   </button>
                 </div>
 
-                <Link
-                  href={profileHref}
-                  onClick={navigateHome}
-                  className="tap-scale flex items-center gap-3 rounded-2xl p-2 transition-colors hover:bg-secondary/50"
-                >
-                  <span
-                    className={cn(
-                      "flex size-14 items-center justify-center overflow-hidden rounded-full text-lg font-semibold ring-2 ring-border/60",
-                      avatarColor,
-                    )}
-                  >
-                    {session?.user?.image ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={session.user.image || "/placeholder.svg"} alt="" className="size-full object-cover" />
-                    ) : (
-                      initials
-                    )}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-display text-lg font-semibold text-foreground">{name}</span>
-                    <span className="block truncate text-sm text-muted-foreground">
-                      {session?.user ? getHandle(name) : "Sign in to your account"}
+                <div className="flex items-center gap-3 rounded-2xl p-2">
+                  {session?.user ? (
+                    // Signed in: the avatar is an inline uploader so any member —
+                    // including admins redirected away from /u/[id] — can set a
+                    // personal profile picture instead of a blank initials tile.
+                    <AvatarUploadButton
+                      image={session.user.image ?? null}
+                      initials={initials}
+                      color={avatarColor}
+                      name={name}
+                    />
+                  ) : (
+                    <span
+                      className={cn(
+                        "flex size-14 items-center justify-center overflow-hidden rounded-full text-lg font-semibold ring-2 ring-border/60",
+                        avatarColor,
+                      )}
+                    >
+                      {initials}
                     </span>
-                  </span>
-                  <ChevronDown className="size-5 shrink-0 text-muted-foreground" />
-                </Link>
+                  )}
+                  <Link
+                    href={profileHref}
+                    onClick={navigateHome}
+                    className="tap-scale flex min-w-0 flex-1 items-center gap-3 rounded-xl px-1 py-1 transition-colors hover:bg-secondary/50"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-display text-lg font-semibold text-foreground">{name}</span>
+                      <span className="block truncate text-sm text-muted-foreground">
+                        {session?.user ? getHandle(name) : "Sign in to your account"}
+                      </span>
+                    </span>
+                    <ChevronDown className="size-5 shrink-0 text-muted-foreground" />
+                  </Link>
+                </div>
               </div>
 
               {/* Scrollable menu body */}
               <div className="mt-2 flex-1 overflow-y-auto overscroll-contain px-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
                 {signedIn && (
                   <>
-                    <Section label="My Homes">
-                      {activeHome && isHomeAdminRole(activeHome.role) && (
-                        <SpaceRow
-                          href={`/org/${activeHome.handle}/admin`}
-                          label="Admin Dashboard"
-                          sublabel={`Manage ${activeHome.name}`}
-                          onNavigate={navigate}
-                          admin
-                          accent={activeHome.accent}
-                        />
-                      )}
-                      {homes.map((h) => (
-                        <HomeSwitchRow
-                          key={h.handle}
-                          name={h.name}
-                          role={h.role}
-                          logo={h.logo}
-                          initials={h.initials}
-                          accent={h.accent}
-                          active={h.handle === activeHome?.handle}
-                          onSelect={() => handleSwitchHome(h.handle)}
-                        />
-                      ))}
-                      <SpaceRow href="/home/join" label="Join another Home" onNavigate={navigate} join />
-                      <SpaceRow href="/sign-up/home" label="Set up a new Home" onNavigate={navigate} setup />
+                    <Section>
+                      <DrawerItem href="/homes" icon={HomeIcon} label="My Homes" onNavigate={navigate} />
                     </Section>
                     <Divider />
                   </>
@@ -431,6 +390,15 @@ export function AppMenu() {
                 {session?.user && (
                   <div className="pt-1">
                     <DrawerButton icon={LogOut} label="Sign Out" onClick={handleSignOut} destructive />
+                    <DrawerButton
+                      icon={Trash2}
+                      label="Delete Account"
+                      onClick={() => {
+                        close()
+                        setDeleteOpen(true)
+                      }}
+                      destructive
+                    />
                   </div>
                 )}
               </div>
@@ -438,6 +406,8 @@ export function AppMenu() {
           </div>,
           document.body,
         )}
+
+      {session?.user && <DeleteAccountDialog open={deleteOpen} onOpenChange={setDeleteOpen} />}
     </>
   )
 }
@@ -509,120 +479,6 @@ function DrawerItem({
       <CountBadge count={badge} />
       <ChevronRight className="size-5 shrink-0 text-muted-foreground/60" />
     </Link>
-  )
-}
-
-/**
- * A link row in the "My Homes" section: the Admin Dashboard entry, the "join
- * another Home" entry, or the "set up a new Home" entry. Home membership rows
- * that switch context are rendered by HomeSwitchRow instead.
- */
-function SpaceRow({
-  href,
-  label,
-  sublabel,
-  onNavigate,
-  logo,
-  initials,
-  accent,
-  join,
-  admin,
-  setup,
-}: {
-  href: string
-  label: string
-  sublabel?: string
-  onNavigate: () => void
-  logo?: string | null
-  initials?: string
-  accent?: string
-  join?: boolean
-  admin?: boolean
-  setup?: boolean
-}) {
-  return (
-    <Link href={href} onClick={onNavigate} className={itemClasses}>
-      {admin ? (
-        <span
-          className="flex size-10 shrink-0 items-center justify-center rounded-xl text-white"
-          style={{ backgroundColor: accent || "hsl(var(--primary))" }}
-        >
-          <LayoutDashboard className="size-[22px]" />
-        </span>
-      ) : join || setup ? (
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-dashed border-border text-muted-foreground">
-          {setup ? <Building2 className="size-[22px]" /> : <Plus className="size-[22px]" />}
-        </span>
-      ) : (
-        <span
-          className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl text-sm font-bold text-white"
-          style={{ backgroundColor: accent }}
-        >
-          {logo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={logo || "/placeholder.svg"} alt="" className="size-full object-cover" />
-          ) : (
-            initials
-          )}
-        </span>
-      )}
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[15px] font-medium text-foreground">{label}</span>
-        {sublabel && <span className="block truncate text-xs text-muted-foreground">{sublabel}</span>}
-      </span>
-      <ChevronRight className="size-5 shrink-0 text-muted-foreground/60" />
-    </Link>
-  )
-}
-
-/**
- * A Home membership row in "My Homes". Tapping it switches the active
- * organisation context (spec §6) — it is a button, not a link, because it
- * mutates context server-side then routes home. The active Home is marked with
- * a check; the viewer's role is shown as a sublabel.
- */
-function HomeSwitchRow({
-  name,
-  role,
-  logo,
-  initials,
-  accent,
-  active,
-  onSelect,
-}: {
-  name: string
-  role: HomeRole
-  logo?: string | null
-  initials?: string
-  accent?: string
-  active: boolean
-  onSelect: () => void
-}) {
-  const roleLabel = isHomeAdminRole(role) ? "Admin" : "Member"
-  return (
-    <button type="button" onClick={onSelect} className={cn(itemClasses, "w-full text-left")}>
-      <span
-        className={cn(
-          "relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl text-sm font-bold text-white",
-          active && "ring-2 ring-offset-2 ring-offset-background",
-        )}
-        style={{ backgroundColor: accent, ...(active ? { boxShadow: `0 0 0 2px ${accent}` } : {}) }}
-      >
-        {logo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={logo || "/placeholder.svg"} alt="" className="size-full object-cover" />
-        ) : (
-          initials
-        )}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[15px] font-medium text-foreground">{name}</span>
-        <span className="block truncate text-xs text-muted-foreground">
-          {active ? `${roleLabel} · Current Home` : roleLabel}
-        </span>
-      </span>
-      {active && <Check className="size-5 shrink-0 text-primary" />}
-    </button>
   )
 }
 

@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { dmConversation, dmMessage, statusUpdate, statusView, user as userTable } from "@/lib/db/schema"
+import { getActiveHomeMemberIds } from "@/lib/home/active-home"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { DM_DELETE_WINDOW_MS, DM_EDIT_WINDOW_MS } from "@/lib/dm-constants"
 
@@ -169,6 +170,14 @@ export async function getOrCreateConversation(otherUserId: string): Promise<numb
   const [other] = await db.select().from(userTable).where(eq(userTable.id, otherUserId)).limit(1)
   if (!other) throw new Error("That user does not exist.")
 
+  // Members-only: you can only message people who share your active Home. This
+  // is the write-side guard — the person must be an active member/admin of the
+  // Home you're currently inside (which also covers yourself being a member).
+  const { memberIds } = await getActiveHomeMemberIds()
+  if (!memberIds.includes(otherUserId) || !memberIds.includes(user.id)) {
+    throw new Error("You can only message members of your Home.")
+  }
+
   const [userAId, userBId] = orderPair(user.id, otherUserId)
 
   const [existing] = await db
@@ -189,11 +198,23 @@ export async function getOrCreateConversation(otherUserId: string): Promise<numb
 export async function getConversations(): Promise<DmConversationSummary[]> {
   const user = await requireUser()
 
-  const rows = await db
+  // Members-only: the inbox only shows threads with people who are active
+  // members of the viewer's current Home. With no active Home there is nothing
+  // to show, and conversations with anyone outside the Home are hidden.
+  const { memberIds } = await getActiveHomeMemberIds()
+  if (memberIds.length === 0) return []
+  const memberSet = new Set(memberIds)
+
+  const allRows = await db
     .select()
     .from(dmConversation)
     .where(or(eq(dmConversation.userAId, user.id), eq(dmConversation.userBId, user.id)))
     .orderBy(desc(dmConversation.lastMessageAt))
+
+  const rows = allRows.filter((conv) => {
+    const otherId = conv.userAId === user.id ? conv.userBId : conv.userAId
+    return memberSet.has(otherId)
+  })
 
   if (rows.length === 0) return []
 

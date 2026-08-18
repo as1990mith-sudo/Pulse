@@ -1,8 +1,9 @@
-import { and, count, eq, ilike } from "drizzle-orm"
+import { and, count, eq, ilike, inArray } from "drizzle-orm"
 import { headers } from "next/headers"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { follow, user as userTable } from "@/lib/db/schema"
+import { getActiveHomeMemberIds } from "@/lib/home/active-home"
 import { getAvatarColor, getAvatarGradient, getHandle, getInitials } from "@/lib/identity"
 
 export type Profile = {
@@ -79,14 +80,21 @@ function toSummary(row: { id: string; name: string; image: string | null }): Pro
   }
 }
 
-/** Searches users by name for the header search box. Returns up to 8 matches. */
+/**
+ * Searches people by name (header search, @mentions, new-message picker).
+ * Members-only: results are limited to active members/admins of the viewer's
+ * current Home, so you can only ever find and reach people inside your Home.
+ * Returns up to 8 matches.
+ */
 export async function searchUsers(query: string): Promise<ProfileSummary[]> {
   const q = query.trim()
   if (q.length < 1) return []
+  const { memberIds } = await getActiveHomeMemberIds()
+  if (memberIds.length === 0) return []
   const rows = await db
     .select({ id: userTable.id, name: userTable.name, image: userTable.image })
     .from(userTable)
-    .where(ilike(userTable.name, `%${q}%`))
+    .where(and(ilike(userTable.name, `%${q}%`), inArray(userTable.id, memberIds)))
     .orderBy(userTable.name)
     .limit(8)
   return rows.map(toSummary)
