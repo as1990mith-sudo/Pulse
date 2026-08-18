@@ -1,7 +1,7 @@
 "use server"
 
 import { and, desc, eq } from "drizzle-orm"
-import { headers } from "next/headers"
+import { cookies, headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
@@ -9,13 +9,14 @@ import { home, homeAuthKey, homeMembership, organization, user as userTable } fr
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { createOrganization, updateOrganization } from "@/app/actions/organizations"
 import { getHomeByHandle, getMyHomes, getViewerMembership } from "@/lib/home/access"
+import { ACTIVE_HOME_COOKIE } from "@/lib/home/active-home"
 import { DEFAULT_HOME_ACCENT } from "@/lib/home/accent"
 import { isValidKeyFormat, normalizeKey } from "@/lib/home/auth-key"
 import { ensureHomeForOrg, insertFreshKey } from "@/lib/home/provision"
 import { isHomePlanId, type HomePlanId } from "@/lib/home/plans"
 import { homeRoleHasPermission, type HomeRole } from "@/lib/home/roles"
 import { getHomeOrgType } from "@/lib/home/org-types"
-import type { OrgSocials } from "@/lib/org-types"
+import { orgCategoryLabel, type OrgSocials } from "@/lib/org-types"
 import type {
   HomeAuthKeyView,
   HomeJoinPolicy,
@@ -79,7 +80,7 @@ export async function createHome(input: CreateHomeInput): Promise<{ handle: stri
   const plan: HomePlanId = isHomePlanId(input.plan) ? input.plan : "premium"
   const type = getHomeOrgType(input.orgTypeId)
   const categoryOther =
-    type.category === "other" ? input.categoryOther?.trim() || type.categoryOther || "Christian Organisation" : undefined
+    type.category === "other" ? input.categoryOther?.trim() || type.categoryOther || "Organisation" : undefined
 
   // 1) Create/link the public organisation (also flips accountType). Reuses the
   //    existing org system so discovery, profile and catalogue all work.
@@ -124,32 +125,125 @@ export async function createHome(input: CreateHomeInput): Promise<{ handle: stri
     joinPolicy: input.joinPolicy ?? "auto",
   })
 
-  revalidatePath("/home")
+  // Make the brand-new Home the caller's active context immediately, so they
+  // land inside it rather than needing to pick it from My Homes.
+  const store = await cookies()
+  store.set(ACTIVE_HOME_COOKIE, handle, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" })
+
+  revalidatePath("/", "layout")
   return { handle }
 }
 
-export type MySpaceLink = {
+export type MyHomeLink = {
   handle: string
   name: string
   logo: string | null
   initials: string
   accent: string
+  role: HomeRole
+  memberCount: number
+  isActive: boolean
 }
 
 /**
- * Slim list of the Homes the current viewer actively belongs to, for the
- * Universal navigation drawer's "My Spaces" section. Client-callable wrapper
- * over the `server-only` `getMyHomes`, returning only what the menu renders.
+ * The Homes the current viewer actively belongs to, for the "My Homes" switcher
+ * in the navigation drawer. Each row carries the viewer's role in that Home and
+ * whether it is the currently active context, so the menu can badge "Admin" vs
+ * "Member" and mark the active Home. Client-callable wrapper over the
+ * `server-only` access helpers.
  */
-export async function getMySpaces(): Promise<MySpaceLink[]> {
+export async function getMyHomeMemberships(): Promise<MyHomeLink[]> {
   const homes = await getMyHomes()
-  return homes.map((h) => ({
-    handle: h.handle,
-    name: h.name,
-    logo: h.orgLogo,
-    initials: h.orgInitials,
+  const store = await cookies()
+  const activeHandle = store.get(ACTIVE_HOME_COOKIE)?.value
+  const activeResolved = activeHandle && homes.some((h) => h.handle === activeHandle) ? activeHandle : homes[0]?.handle
+
+  const rows = await Promise.all(
+    homes.map(async (h) => {
+      const membership = await getViewerMembership(h.id)
+      return {
+        handle: h.handle,
+        name: h.name,
+        logo: h.orgLogo,
+        initials: h.orgInitials,
+        accent: h.accentColor || DEFAULT_HOME_ACCENT,
+        role: (membership?.role ?? "member") as HomeRole,
+        memberCount: h.memberCount,
+        isActive: h.handle === activeResolved,
+      }
+    }),
+  )
+  return rows
+}
+
+/**
+ * Sets the viewer's active Home context. Only Homes the viewer is an ACTIVE
+ * member of can be activated — a foreign/invalid handle is rejected so the
+ * cookie can never point at another organisation's Home. Returns the handle so
+ * the client can route into it.
+ */
+export async function setActiveHome(handle: string): Promise<{ handle: string }> {
+  await requireUser()
+  const homes = await getMyHomes()
+  const target = homes.find((h) => h.handle === handle)
+  if (!target) throw new Error("You're not a member of that Home.")
+  const store = await cookies()
+  store.set(ACTIVE_HOME_COOKIE, handle, {
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+    sameSite: "lax",
+  })
+  revalidatePath("/", "layout")
+  return { handle }
+}
+
+export type HomeKeyPreview = {
+  handle: string
+  homeName: string
+  orgInitials: string
+  orgColor: string
+  orgLogo: string | null
+  categoryLabel: string
+  accent: string
+}
+
+/**
+ * Validates an authorisation key WITHOUT joining and returns the organisation's
+ * identity, so the join flow can confirm "You are joining this Home" before the
+ * user commits to creating an account (spec §5). Throws a clear error when the
+ * key is unrecognised or no longer active. Safe to call unauthenticated — it
+ * only reveals public organisation branding, never private content.
+ */
+export async function previewHomeByKey(rawKey: string): Promise<HomeKeyPreview> {
+  const key = normalizeKey(rawKey)
+  if (!isValidKeyFormat(key)) {
+    throw new Error("That Home key isn't recognised. Check it and try again.")
+  }
+  const keyRows = await db
+    .select()
+    .from(homeAuthKey)
+    .where(and(eq(homeAuthKey.key, key), eq(homeAuthKey.active, true)))
+    .limit(1)
+  if (keyRows.length === 0) {
+    throw new Error("That Home key isn't recognised or is no longer active.")
+  }
+  const rows = await db
+    .select({ h: home, org: organization })
+    .from(home)
+    .innerJoin(organization, eq(organization.id, home.organizationId))
+    .where(eq(home.id, keyRows[0].homeId))
+    .limit(1)
+  if (rows.length === 0) throw new Error("This Home is no longer available.")
+  const { h, org } = rows[0]
+  return {
+    handle: org.handle,
+    homeName: h.name,
+    orgInitials: getInitials(org.name),
+    orgColor: getAvatarColor(org.id),
+    orgLogo: org.logo,
+    categoryLabel: orgCategoryLabel(org.category, org.categoryOther),
     accent: h.accentColor || DEFAULT_HOME_ACCENT,
-  }))
+  }
 }
 
 export type JoinHomeResult =
@@ -203,7 +297,14 @@ export async function joinHomeByKey(rawKey: string): Promise<JoinHomeResult> {
     joinedVia: autoJoin ? "key_auto" : "key_request",
   })
 
-  revalidatePath("/home")
+  // On an immediate (auto) join, switch the viewer's active context into the
+  // Home they just joined so they land straight inside it.
+  if (autoJoin) {
+    const store = await cookies()
+    store.set(ACTIVE_HOME_COOKIE, org.handle, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" })
+  }
+
+  revalidatePath("/", "layout")
   return { status: autoJoin ? "joined" : "pending", handle: org.handle, homeName: h.name }
 }
 

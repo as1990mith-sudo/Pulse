@@ -9,6 +9,9 @@ import { LiveProcessingProvider } from '@/components/live-processing-provider'
 import { AutoRefresh } from '@/components/auto-refresh'
 import { PresenceHeartbeat } from '@/components/presence-heartbeat'
 import { BottomNav } from '@/components/bottom-nav'
+import { HomeContextProvider, type ActiveHomeSummary } from '@/components/home/home-context'
+import { getActiveHomeContext } from '@/lib/home/active-home'
+import { DEFAULT_HOME_ACCENT } from '@/lib/home/accent'
 import './globals.css'
 
 // Every route in this app is personalized (session + live database reads), so
@@ -67,11 +70,26 @@ export const viewport: Viewport = {
   interactiveWidget: 'resizes-content',
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  // Resolve the viewer's active Home once, server-side, and thread a client-safe
+  // summary through the tree. Every Home-scoped surface reads the same context.
+  const { home, membership } = await getActiveHomeContext()
+  const activeHome: ActiveHomeSummary = home
+    ? {
+        handle: home.handle,
+        name: home.name,
+        logo: home.orgLogo,
+        initials: home.orgInitials,
+        accent: home.accentColor || DEFAULT_HOME_ACCENT,
+        role: membership?.role ?? "member",
+        memberCount: home.memberCount,
+      }
+    : null
+
   return (
     <html
       lang="en"
@@ -113,14 +131,18 @@ export default function RootLayout({
                       so the admin dashboard shows a true real-time presence count. */}
                   <PresenceHeartbeat />
                   {/* The whole app shell gently slides right (micro-parallax) when
-                      the left navigation drawer opens. */}
-                  <div id="app-shell" className="app-shell">
-                    {children}
-                    {/* Persistent, flagship-quality tab bar. Lives in the layout so
-                        it never remounts on navigation — the active capsule morphs
-                        between tabs and per-tab state/scroll are preserved. */}
-                    <BottomNav />
-                  </div>
+                      the left navigation drawer opens. The Home context provider
+                      wraps it so the header, menu and switcher all read the same
+                      active-Home context. */}
+                  <HomeContextProvider initialActiveHome={activeHome}>
+                    <div id="app-shell" className="app-shell">
+                      {children}
+                      {/* Persistent, flagship-quality tab bar. Lives in the layout so
+                          it never remounts on navigation — the active capsule morphs
+                          between tabs and per-tab state/scroll are preserved. */}
+                      <BottomNav />
+                    </div>
+                  </HomeContextProvider>
                   {process.env.NODE_ENV === 'production' && <Analytics />}
                 </EpisodePlayerProvider>
               </LiveSessionProvider>

@@ -7,6 +7,8 @@ import { getLatestDevotional } from "@/lib/content"
 import { devotionalSource } from "@/lib/data"
 import { getDevotionalComments } from "@/app/actions/devotional"
 import { getCurrentUser } from "@/lib/session"
+import { getActiveHomeContext } from "@/lib/home/active-home"
+import { HomeEntry } from "@/components/home/onboarding/home-entry"
 
 /** Formats the devotional's publish date as e.g. "Jun 20, 2026"; returns "" if unparseable. */
 function formatPublishedDate(value: string): string {
@@ -16,8 +18,18 @@ function formatPublishedDate(value: string): string {
 }
 
 export default async function DevotionalPage() {
-  const d = await getLatestDevotional()
   const currentUser = await getCurrentUser()
+
+  // Frequency Home front door: without an active Home there is no public feed —
+  // the viewer is guided to set up or join a Home (spec §3). Once inside a Home,
+  // the root shows that Home's landing (its Daily Devotional), scoped to its
+  // organisation context.
+  const { home } = await getActiveHomeContext()
+  if (!home) {
+    return <HomeEntry signedIn={!!currentUser} />
+  }
+
+  const d = await getLatestDevotional(home.id)
 
   if (!d) {
     return (

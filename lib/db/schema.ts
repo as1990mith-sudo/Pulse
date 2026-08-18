@@ -309,6 +309,9 @@ export const devotional = pgTable("devotional", {
   // with the most recent lastPostedAt, so any devotional can be reused without
   // losing the others.
   lastPostedAt: timestamp("lastPostedAt").notNull().defaultNow(),
+  // Home scoping: null = a Universal devotional; set = belongs to one Home and
+  // is published/managed only by that organisation. Devotionals never cross Homes.
+  homeId: text("homeId"),
 })
 
 export const episode = pgTable("episode", {
@@ -1494,5 +1497,64 @@ export const homeMembership = pgTable(
     homeUserIdx: uniqueIndex("home_membership_home_user_idx").on(t.homeId, t.userId),
     userIdx: index("home_membership_user_idx").on(t.userId),
     homeStatusIdx: index("home_membership_home_status_idx").on(t.homeId, t.status),
+  }),
+)
+
+// A booking request made inside a Home (e.g. a member requests a room, a
+// resource, a ministry visit, a coaching intro). Always scoped to exactly one
+// Home via homeId — a request in Organisation A can never surface in
+// Organisation B. Administrators triage these from the Admin Dashboard.
+export const homeBooking = pgTable(
+  "home_booking",
+  {
+    id: text("id").primaryKey(),
+    homeId: text("homeId").notNull(),
+    // The member who made the request (a Frequency identity).
+    requesterUserId: text("requesterUserId").notNull(),
+    requesterName: text("requesterName").notNull(),
+    requesterEmail: text("requesterEmail"),
+    title: text("title").notNull(),
+    notes: text("notes"),
+    // When the member would like the booking to happen.
+    requestedFor: timestamp("requestedFor"),
+    // "pending" | "confirmed" | "declined" | "completed" | "cancelled".
+    status: text("status").notNull().default("pending"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    homeIdx: index("home_booking_home_idx").on(t.homeId),
+    homeStatusIdx: index("home_booking_home_status_idx").on(t.homeId, t.status),
+  }),
+)
+
+// A scheduled appointment between a Home member and a host (leader/coach/admin)
+// inside a Home — e.g. a pastoral meeting, a mentoring session, a consultation.
+// Scoped to one Home via homeId. Distinct from bookings: an appointment has a
+// concrete time slot and a host, whereas a booking is a request to be triaged.
+export const homeAppointment = pgTable(
+  "home_appointment",
+  {
+    id: text("id").primaryKey(),
+    homeId: text("homeId").notNull(),
+    // The member the appointment is with.
+    memberUserId: text("memberUserId").notNull(),
+    memberName: text("memberName").notNull(),
+    // The host running the appointment (typically an admin/leader membership).
+    hostUserId: text("hostUserId"),
+    hostName: text("hostName"),
+    title: text("title").notNull(),
+    notes: text("notes"),
+    location: text("location"),
+    startsAt: timestamp("startsAt").notNull(),
+    endsAt: timestamp("endsAt"),
+    // "upcoming" | "completed" | "cancelled".
+    status: text("status").notNull().default("upcoming"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    homeIdx: index("home_appointment_home_idx").on(t.homeId),
+    homeStartIdx: index("home_appointment_home_start_idx").on(t.homeId, t.startsAt),
   }),
 )
