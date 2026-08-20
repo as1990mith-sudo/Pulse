@@ -3,7 +3,7 @@ import { ChevronRight, Mic, Video } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
 import { GoLiveHero } from "@/components/go-live-toggle"
 import { getLiveStreams } from "@/app/actions/live"
-import { getAdminActor } from "@/lib/admin-auth"
+import { canViewerGoLive } from "@/lib/home/access"
 
 /**
  * The full-width LIVE status pill at the top of the Live tab. Shows a pulsing
@@ -86,8 +86,7 @@ function ChannelCard({
 }
 
 export default async function LivePage() {
-  const [streams, adminActor] = await Promise.all([getLiveStreams(), getAdminActor()])
-  const canGoLive = adminActor != null
+  const [streams, canGoLive] = await Promise.all([getLiveStreams(), canViewerGoLive()])
   const videoCount = streams.filter((s) => s.mode === "video").length
   const audioCount = streams.filter((s) => s.mode === "audio").length
   const totalCount = videoCount + audioCount
