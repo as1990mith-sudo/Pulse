@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { isActiveHomeMember, HOME_GO_LIVE_COOKIE } from "@/lib/home/access"
 import { getActiveHomeContext } from "@/lib/home/active-home"
+import { createGuestSession, getGuestSession } from "@/lib/guest-session"
 import {
   liveStream,
   liveChatMessage,
@@ -43,6 +44,44 @@ async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) throw new Error("You must be signed in to do that.")
   return session.user
+}
+
+/**
+ * Who is acting in a live room right now: either a signed-in Better Auth user,
+ * or a display-name-only guest (for PUBLIC lives), or nobody. Guests carry a
+ * `guest:<id>` identity so they slot into the FK-free live tables and LiveKit
+ * exactly like a real user, while `isGuest` lets callers keep them out of
+ * private lives and anything outside the Live itself.
+ */
+export type LiveActor = {
+  id: string
+  name: string
+  image: string | null
+  isGuest: boolean
+}
+
+async function getLiveActor(): Promise<LiveActor | null> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (session?.user) {
+    return { id: session.user.id, name: session.user.name, image: session.user.image ?? null, isGuest: false }
+  }
+  const guest = await getGuestSession()
+  if (guest) return { id: `guest:${guest.id}`, name: guest.name, image: null, isGuest: true }
+  return null
+}
+
+/**
+ * Public-live join: records a display-name-only guest session (a signed cookie,
+ * never a real login) so the visitor can enter a PUBLIC Live without an account.
+ * The visibility check happens in `joinBroadcast`; this only captures the name.
+ */
+export async function joinLiveAsGuest(input: { name: string }): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await createGuestSession(input.name)
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Please enter a display name." }
+  }
 }
 
 /**
@@ -157,7 +196,11 @@ export type GoLiveResult =
 
 export type JoinResult =
   | { ok: true; token: string; serverUrl: string; roomName: string; canPublish: boolean; recordOnServer?: boolean }
-  | { ok: false; error: string }
+  // `needsIdentity`: public live, but the visitor hasn't given a display name yet
+  //   → show the "Join Live" display-name gate.
+  // `needsAuth`: private live and the visitor isn't a member → they must sign up
+  //   and join the Home before they can enter.
+  | { ok: false; error: string; needsIdentity?: boolean; needsAuth?: boolean }
 
 /** Host starts broadcasting: creates the stream row, mints a publisher token, notifies followers. */
 export async function startBroadcast(input: {
