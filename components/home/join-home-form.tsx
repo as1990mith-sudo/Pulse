@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowRight, CheckCircle2, Clock, Loader2, ShieldCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -27,6 +27,38 @@ export function JoinHomeForm({ initialKey = "", signedIn = true }: { initialKey?
   const [result, setResult] = useState<Result | null>(null)
 
   const valid = isValidKeyFormat(value)
+
+  // When the member returns from sign-up already signed in with a valid key in
+  // the URL, complete the join automatically and drop them inside the Home —
+  // no need to re-confirm the organisation they already chose before signing up.
+  const autoRan = useRef(false)
+  useEffect(() => {
+    if (autoRan.current) return
+    if (!signedIn || !initialKey || !isValidKeyFormat(initialKey)) return
+    autoRan.current = true
+    void runJoin(normalizeKey(initialKey))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signedIn, initialKey])
+
+  // Performs the actual join and routes on success. Shared by the auto-join
+  // effect and the manual "confirm" button.
+  async function runJoin(key: string) {
+    setError(null)
+    setLoading(true)
+    try {
+      const res = await joinHomeByKey(key)
+      setResult(res)
+      if (res.status === "joined" || res.status === "already_member") {
+        // Land straight inside the Home's devotional landing.
+        router.push("/")
+        router.refresh()
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't join. Please try again.")
+    } finally {
+      setLoading(false)
+    }
+  }
 
   async function validate(e: React.FormEvent) {
     e.preventDefault()
@@ -57,19 +89,7 @@ export function JoinHomeForm({ initialKey = "", signedIn = true }: { initialKey?
       router.push(`/sign-up?next=${encodeURIComponent(next)}`)
       return
     }
-    setError(null)
-    setLoading(true)
-    try {
-      const res = await joinHomeByKey(normalizeKey(value))
-      setResult(res)
-      if (res.status === "joined" || res.status === "already_member") {
-        router.refresh()
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't join. Please try again.")
-    } finally {
-      setLoading(false)
-    }
+    await runJoin(normalizeKey(value))
   }
 
   if (result && (result.status === "joined" || result.status === "already_member")) {
@@ -137,6 +157,17 @@ export function JoinHomeForm({ initialKey = "", signedIn = true }: { initialKey?
             Use a different key
           </Button>
         </div>
+      </div>
+    )
+  }
+
+  // Auto-join in progress (member just signed up and is being placed into the
+  // Home). Show a calm loading state instead of the empty key form.
+  if (signedIn && initialKey && isValidKeyFormat(initialKey) && !error) {
+    return (
+      <div className="flex flex-col items-center gap-3 rounded-2xl border border-border/60 bg-card p-8 text-center">
+        <Loader2 className="size-6 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Joining your Home…</p>
       </div>
     )
   }
