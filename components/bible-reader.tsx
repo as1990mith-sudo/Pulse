@@ -561,6 +561,7 @@ function Picker({
   children,
   width = "w-56",
   showChevron = true,
+  flexible = false,
 }: {
   label: React.ReactNode
   icon?: React.ReactNode
@@ -569,6 +570,9 @@ function Picker({
   // The book picker hides its chevron to save horizontal room so the chapter
   // pill never wraps onto a second line.
   showChevron?: boolean
+  // When true, the trigger may shrink and truncate its label instead of pushing
+  // sibling controls off the row (used by the book picker for long book names).
+  flexible?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -590,15 +594,18 @@ function Picker({
   }, [open])
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className={cn("relative", flexible && "min-w-0")}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium transition-colors hover:bg-secondary"
+        className={cn(
+          "inline-flex items-center gap-2 whitespace-nowrap rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium transition-colors hover:bg-secondary",
+          flexible && "flex w-full min-w-0",
+        )}
       >
-        {icon}
-        {label}
-        {showChevron && <ChevronDown className="size-4 text-muted-foreground" />}
+        {icon && <span className="shrink-0">{icon}</span>}
+        {flexible ? <span className="min-w-0 truncate">{label}</span> : label}
+        {showChevron && <ChevronDown className="size-4 shrink-0 text-muted-foreground" />}
       </button>
       {open && (
         <div
@@ -616,7 +623,7 @@ function Picker({
 
 function BookPicker({ book, onSelect }: { book: string; onSelect: (name: string) => void }) {
   return (
-    <Picker label={book} icon={<BookOpen className="size-4 text-primary" />} showChevron={false}>
+    <Picker label={book} icon={<BookOpen className="size-4 text-primary" />} showChevron={false} flexible>
       {(close) => (
         <>
           <p className="px-2 py-1 text-xs font-medium text-muted-foreground">Old Testament</p>

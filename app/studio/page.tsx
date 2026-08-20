@@ -2,6 +2,7 @@ import Link from "next/link"
 import { SiteHeader } from "@/components/site-header"
 import { HostStudioLauncher, HostVideoStudioLauncher, HostConversationLauncher } from "@/components/live-session"
 import { getCurrentUser } from "@/lib/session"
+import { getAdminActor } from "@/lib/admin-auth"
 import { getMyActiveStream, getMyActiveVideoStream } from "@/app/actions/live"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -15,6 +16,29 @@ export default async function StudioPage({
   const { mode, layout } = await searchParams
   const isVideo = mode === "video"
   const isConversation = mode !== "video" && layout === "conversation"
+
+  // Hosting is staff-only. A signed-in member who lands on /studio (e.g. via an
+  // old link) gets a clear notice instead of the host console; startBroadcast is
+  // independently guarded server-side.
+  if (currentUser && !(await getAdminActor())) {
+    return (
+      <div className="min-h-screen">
+        <SiteHeader />
+        <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
+          <Card className="flex flex-col items-center gap-3 p-10 text-center">
+            <p className="text-lg font-semibold">Hosting is for admins and staff</p>
+            <p className="max-w-sm text-pretty text-sm leading-relaxed text-muted-foreground">
+              Live sessions on Frequency are run by the team. You can still watch and join any live
+              session from the Live tab.
+            </p>
+            <Button render={<Link href="/live" />} nativeButton={false}>
+              Browse live
+            </Button>
+          </Card>
+        </main>
+      </div>
+    )
+  }
 
   // When signed in, the console owns the full viewport below the header so the
   // studio is compact and only the chat scrolls.

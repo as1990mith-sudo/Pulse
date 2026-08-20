@@ -5,6 +5,7 @@ import { cookies, headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
+import { getAdminActor } from "@/lib/admin-auth"
 import { isActiveHomeMember, HOME_GO_LIVE_COOKIE } from "@/lib/home/access"
 import { getActiveHomeContext } from "@/lib/home/active-home"
 import { createGuestSession, getGuestSession } from "@/lib/guest-session"
@@ -236,6 +237,13 @@ export async function startBroadcast(input: {
   visibility?: LiveVisibility
 }): Promise<GoLiveResult> {
   const user = await requireUser()
+  // Only platform admins/staff may start a live session. This is the real
+  // security boundary — the UI hides the go-live actions from members, but this
+  // server-side gate is what actually prevents a crafted request from opening a
+  // room.
+  if (!(await getAdminActor())) {
+    return { ok: false, error: "Only admins and staff can start live sessions." }
+  }
   if (!isLiveKitConfigured()) {
     return { ok: false, error: "Live is not configured yet. Add your LiveKit credentials to start broadcasting." }
   }

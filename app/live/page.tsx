@@ -3,6 +3,7 @@ import { ChevronRight, Mic, Video } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
 import { GoLiveHero } from "@/components/go-live-toggle"
 import { getLiveStreams } from "@/app/actions/live"
+import { getAdminActor } from "@/lib/admin-auth"
 
 /**
  * The full-width LIVE status pill at the top of the Live tab. Shows a pulsing
@@ -85,7 +86,8 @@ function ChannelCard({
 }
 
 export default async function LivePage() {
-  const streams = await getLiveStreams()
+  const [streams, adminActor] = await Promise.all([getLiveStreams(), getAdminActor()])
+  const canGoLive = adminActor != null
   const videoCount = streams.filter((s) => s.mode === "video").length
   const audioCount = streams.filter((s) => s.mode === "audio").length
   const totalCount = videoCount + audioCount
@@ -115,7 +117,7 @@ export default async function LivePage() {
               height so the two actions always sit just above the bottom nav. The
               id anchor lets the side menu's "Creator Studio" deep-link here. */}
           <div id="go-live" className="flex min-h-0 flex-1 scroll-mt-24">
-            <GoLiveHero />
+            <GoLiveHero canGoLive={canGoLive} />
           </div>
         </div>
       </main>
