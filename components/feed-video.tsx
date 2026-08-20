@@ -189,13 +189,17 @@ export function FeedVideo({
     observer.observe(el)
 
     // As the user scrolls between two simultaneously-visible clips, re-pick the
-    // one nearest center so playback follows focus.
+    // one nearest center so playback follows focus. Listen in the CAPTURE phase
+    // so scrolls inside a nested scroll container (e.g. the Community Help feed,
+    // which scrolls its own panel rather than the window) still trigger the
+    // re-pick — scroll events don't bubble, but capture-phase listeners on
+    // window receive them from any descendant scroller.
     const onScroll = () => reconcileActiveVideo()
-    window.addEventListener("scroll", onScroll, { passive: true })
+    window.addEventListener("scroll", onScroll, { passive: true, capture: true })
 
     return () => {
       observer.disconnect()
-      window.removeEventListener("scroll", onScroll)
+      window.removeEventListener("scroll", onScroll, { capture: true } as EventListenerOptions)
       if (unregister) unregister()
       entryRef.current = null
     }

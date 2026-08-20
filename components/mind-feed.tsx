@@ -70,7 +70,7 @@ import { ImageLightbox } from "@/components/image-lightbox"
 import { ImmersiveImageViewer } from "@/components/immersive-image-viewer"
 import { FeedVideo } from "@/components/feed-video"
 import { ReelsFeed } from "@/components/reels-feed"
-import { useMediaAspect, FEED_PREVIEW_MIN_RATIO } from "@/hooks/use-media-aspect"
+  import { useMediaAspect } from "@/hooks/use-media-aspect"
 import { StatusBar } from "@/components/status-bar"
 import type { StatusGroup } from "@/app/actions/status"
 import { ShareSheet } from "@/components/share-sheet"
@@ -945,32 +945,29 @@ function MediaSlide({
   const chosen = item.aspectRatio ?? ratio
 
   let framedAspect: number | null
-  // Images taller than the 1:1 preview frame (e.g. a 4:5 or 9:16 crop) are shown
-  // CONTAINED inside a 1:1 card — the full vertical composition is visible with
-  // no further cropping. Exact 1:1 / 16:9 crops fill their own card.
-  let imageTall = false
+  // Widest and tallest card shapes we ever allow, so nothing is absurdly
+  // panoramic or skyscraper-tall. Everything in between keeps its true ratio.
+  const WIDEST = 16 / 9
+  const TALLEST = 9 / 16
   if (item.type === "video") {
     // Videos in the feed are restricted to a fixed set of card shapes:
     // 1:1 (1) and 16:9 (1.7778). A clip in any other ratio — most notably
     // vertical 9:16 or portrait 4:5 — is presented in a 1:1 card and
     // center-cropped with object-cover. The untouched full ratio is only
-    // revealed when the clip is expanded into the immersive viewer (which uses
-    // object-contain).
+    // revealed when the clip is expanded into the immersive viewer.
     const ALLOWED_VIDEO_ASPECTS = [1, 16 / 9]
     const allowed = chosen != null && ALLOWED_VIDEO_ASPECTS.some((a) => Math.abs(chosen - a) < 0.02)
     framedAspect = allowed ? (chosen as number) : 1
   } else {
-    imageTall = chosen != null && chosen < FEED_PREVIEW_MIN_RATIO - 0.01
-    framedAspect = imageTall ? FEED_PREVIEW_MIN_RATIO : chosen
+    // Images FILL their card (object-cover) at the author's chosen crop ratio —
+    // or, for uncropped media, their natural ratio clamped into a sane range.
+    // No letterbox bars: the media is edge-to-edge and immersive.
+    framedAspect = chosen != null ? Math.min(WIDEST, Math.max(TALLEST, chosen)) : null
   }
-  // Whether the preview differs from the media's true framing — used to show an
-  // "expand to full screen" hint. Videos are center-cropped (content cut off);
-  // tall images are letterboxed inside 4:5 (full composition, but full screen
-  // reveals it larger at its true ratio).
-  const cropped =
-    item.type === "video"
-      ? ratio != null && framedAspect != null && Math.abs(ratio - framedAspect) > 0.01
-      : imageTall
+  // Whether the shown frame crops the media's true framing — used to show an
+  // "expand to full screen" hint so viewers know the full composition is
+  // available in the immersive viewer.
+  const cropped = ratio != null && framedAspect != null && Math.abs(ratio - framedAspect) > 0.01
   const frameStyle: React.CSSProperties = {
     aspectRatio: framedAspect ? String(framedAspect) : "1 / 1",
     maxHeight: feed ? "min(85svh, 46rem)" : "46rem",
@@ -1002,24 +999,15 @@ function MediaSlide({
       style={frameStyle}
       aria-label={count > 1 ? `Open image ${index + 1} of ${count} full screen` : "Open image full screen"}
     >
-      {/* Tall images (taller than 4:5) sit inside a 4:5 card via object-contain.
-          A blurred, zoomed copy of the same photo fills the letterbox space for a
-          premium, intentional look instead of hard black bars. */}
-      {imageTall && (
-        <SmartImage
-          src={item.url}
-          alt=""
-          aria-hidden
-          w={384}
-          className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover blur-2xl"
-        />
-      )}
+      {/* The image fills the card edge-to-edge (object-cover) at the framed
+          ratio — no letterbox bars. Tapping opens the immersive viewer, which
+          shows the untouched full composition. */}
       <SmartImage
         src={item.url}
         alt={count > 1 ? `Post attachment ${index + 1} of ${count}` : `Image posted by ${authorName}`}
         priority={index === 0}
         w={1080}
-        className={cn("relative h-full w-full", imageTall ? "object-contain" : "object-cover")}
+        className="relative h-full w-full object-cover"
       />
       {cropped && (
         <span className="pointer-events-none absolute right-2 top-2 flex size-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm">

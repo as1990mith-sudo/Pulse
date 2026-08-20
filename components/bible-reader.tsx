@@ -4,7 +4,9 @@ import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "rea
 import { createPortal } from "react-dom"
 import Link from "next/link"
 import useSWR from "swr"
-import {
+  import {
+  AArrowDown,
+  AArrowUp,
   BookOpen,
   Check,
   ChevronDown,
@@ -80,6 +82,30 @@ export function BibleReader({ signedIn }: { signedIn: boolean }) {
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [loaded, setLoaded] = useState(false)
   const [, startPersist] = useTransition()
+
+  // Reader font zoom — a multiplier applied to the reading-pane verse text so
+  // readers can make scripture larger or smaller. Persisted per-device so the
+  // preference sticks across sessions. Clamped to a comfortable range.
+  const [fontScale, setFontScale] = useState(1)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("bible:font-scale")
+      const n = raw ? Number.parseFloat(raw) : NaN
+      if (Number.isFinite(n)) setFontScale(Math.min(1.8, Math.max(0.8, n)))
+    } catch {
+      /* localStorage unavailable */
+    }
+  }, [])
+  const adjustFontScale = (delta: number) =>
+    setFontScale((s) => {
+      const next = Math.min(1.8, Math.max(0.8, Math.round((s + delta) * 10) / 10))
+      try {
+        localStorage.setItem("bible:font-scale", String(next))
+      } catch {
+        /* localStorage unavailable */
+      }
+      return next
+    })
 
   // Sentinel placed just below the tall controls; when it clears the top of the
   // viewport (and the app header has hidden), the slim static bar fades in.
@@ -293,8 +319,8 @@ export function BibleReader({ signedIn }: { signedIn: boolean }) {
           These scroll away naturally as you read; the slim static bar below the
           app header takes over (see ReadingMiniBar). */}
       <div className="-mx-4 space-y-3 border-b border-border/60 bg-background/90 px-4 py-3 sm:-mx-6 sm:px-6">
-      {/* Translation / interlinear toggle */}
-      <div className="flex justify-center">
+      {/* Translation / interlinear toggle + reading font zoom */}
+      <div className="flex flex-wrap items-center justify-center gap-2">
         <div
           role="tablist"
           aria-label="Reading mode"
@@ -324,6 +350,34 @@ export function BibleReader({ signedIn }: { signedIn: boolean }) {
             </button>
           ))}
         </div>
+
+        {/* Font zoom — shrink / grow the reading-pane text. Hidden in the
+            interlinear view, which has its own dense layout. */}
+        {mode !== "interlinear" && (
+          <div className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-secondary/40 p-1">
+            <button
+              type="button"
+              onClick={() => adjustFontScale(-0.1)}
+              disabled={fontScale <= 0.8}
+              className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
+              aria-label="Decrease font size"
+            >
+              <AArrowDown className="size-4" />
+            </button>
+            <span className="min-w-9 select-none text-center text-xs font-semibold tabular-nums text-muted-foreground">
+              {Math.round(fontScale * 100)}%
+            </span>
+            <button
+              type="button"
+              onClick={() => adjustFontScale(0.1)}
+              disabled={fontScale >= 1.8}
+              className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
+              aria-label="Increase font size"
+            >
+              <AArrowUp className="size-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Controls — kept on a single row (no wrapping) so the book/chapter
@@ -427,9 +481,13 @@ export function BibleReader({ signedIn }: { signedIn: boolean }) {
                   key={v.verse}
                   onClick={(e) => onVerseTap(v.verse, e.currentTarget)}
                   className={cn(
-                    "cursor-pointer rounded-md px-2 py-0.5 text-xl leading-relaxed text-left transition-colors hover:bg-secondary/60",
+                    "cursor-pointer rounded-md px-2 py-0.5 leading-relaxed text-left transition-colors hover:bg-secondary/60",
                   )}
-                  style={color ? { backgroundColor: color.bg } : undefined}
+                  style={{
+                    // Base reading size (text-xl = 1.25rem) scaled by the zoom.
+                    fontSize: `${1.25 * fontScale}rem`,
+                    ...(color ? { backgroundColor: color.bg } : {}),
+                  }}
                 >
                   {/* Verse number sits inline at the start of the verse so it
                       shares the first line with the opening words. */}

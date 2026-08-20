@@ -4,6 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { Pause, Play, RotateCcw, RotateCw, Volume2, VolumeX, X } from "lucide-react"
 import { cn } from "@/lib/utils"
+import {
+  getVideoPosition,
+  rememberVideoPosition,
+  setImmersiveViewerOpen,
+} from "@/lib/video-handoff"
 
 /**
  * Full-screen video lightbox with the app's premium control chrome (matching
@@ -36,7 +41,9 @@ export function FullscreenVideoPlayer({ src, onClose }: { src: string; onClose: 
   const [chromeVisible, setChromeVisible] = useState(true)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Lock body scroll and close on Escape while the lightbox is open.
+  // Lock body scroll and close on Escape while the lightbox is open. Also raise
+  // the immersive-viewer gate so the inline feed clip behind us pauses — only
+  // this expanded player should be playing (fixes two videos playing at once).
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose()
@@ -44,22 +51,46 @@ export function FullscreenVideoPlayer({ src, onClose }: { src: string; onClose: 
     document.addEventListener("keydown", onKey)
     const prev = document.body.style.overflow
     document.body.style.overflow = "hidden"
+    setImmersiveViewerOpen(true)
     return () => {
       document.removeEventListener("keydown", onKey)
       document.body.style.overflow = prev
+      // Drop the gate so the in-view inline clip can resume (from the shared
+      // position this player advanced) once the lightbox closes.
+      setImmersiveViewerOpen(false)
     }
   }, [onClose])
 
-  // Attempt autoplay with sound; fall back to muted if the browser blocks it.
+  // Continue from where the inline preview left off (by src) instead of
+  // restarting, then attempt autoplay with sound; fall back to muted if the
+  // browser blocks it.
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    el.play().catch(() => {
-      el.muted = true
-      setMuted(true)
-      el.play().catch(() => {})
-    })
-  }, [])
+    const resumeAt = getVideoPosition(src)
+    const start = () => {
+      el.play().catch(() => {
+        el.muted = true
+        setMuted(true)
+        el.play().catch(() => {})
+      })
+    }
+    if (resumeAt != null && resumeAt > 0) {
+      const seek = () => {
+        try {
+          el.currentTime = resumeAt
+          setCurrent(resumeAt)
+        } catch {
+          /* not seekable yet */
+        }
+        start()
+      }
+      if (el.readyState >= 1) seek()
+      else el.addEventListener("loadedmetadata", seek, { once: true })
+    } else {
+      start()
+    }
+  }, [src])
 
   const revealChrome = useCallback(() => {
     setChromeVisible(true)
@@ -191,6 +222,8 @@ export function FullscreenVideoPlayer({ src, onClose }: { src: string; onClose: 
           }}
           onTimeUpdate={(e) => {
             if (!draggingRef.current) setCurrent(e.currentTarget.currentTime)
+            // Share the position so closing continues the inline preview here.
+            rememberVideoPosition(src, e.currentTarget.currentTime)
           }}
         />
 
