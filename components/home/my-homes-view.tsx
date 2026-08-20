@@ -42,7 +42,7 @@ export function MyHomesView() {
 
   return (
     <div className="flex flex-col">
-      {/* Native sub-header: back · title · add. Nothing else. */}
+      {/* Native sub-header: back + title (left) · add (right). Nothing else. */}
       <header className="relative flex h-12 items-center">
         <button
           type="button"
@@ -53,7 +53,7 @@ export function MyHomesView() {
           <ChevronLeft className="size-5" />
         </button>
 
-        <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-base font-semibold tracking-tight text-foreground">
+        <h1 className="ml-1 text-base font-semibold tracking-tight text-foreground">
           My Homes
         </h1>
 
