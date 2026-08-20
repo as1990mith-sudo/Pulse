@@ -23,7 +23,7 @@ import { CommentThread, type ThreadComment } from "@/components/comment-thread"
 import { FeedVideo } from "@/components/feed-video"
 import { setImmersiveViewerOpen } from "@/lib/video-handoff"
 import { useMiniChat } from "@/components/mini-chat"
-import { BibleChips, LikeButton, PostIdentity, SaveButton, ANON_AVATAR } from "@/components/community-help-shared"
+import { BibleChips, FeedPostImage, LikeButton, PostIdentity, SaveButton, ANON_AVATAR } from "@/components/community-help-shared"
 
 function toThreadComment(c: CommunityCommentView): ThreadComment {
   return {
@@ -254,17 +254,7 @@ export function CommunityConversation({
             </p>
           )}
           {post.imageUrl && (
-            <button
-              type="button"
-              onClick={() => setLightboxOpen(true)}
-              className="mt-4 block w-full overflow-hidden rounded-2xl border border-border/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <img
-                src={post.imageUrl || "/placeholder.svg"}
-                alt="Attached to the question"
-                className="max-h-96 w-full object-cover"
-              />
-            </button>
+            <FeedPostImage src={post.imageUrl} onClick={() => setLightboxOpen(true)} className="mt-4" />
           )}
           {post.videoUrl && <PostVideo src={post.videoUrl} />}
           <BibleChips text={post.body} className="mt-4" />
