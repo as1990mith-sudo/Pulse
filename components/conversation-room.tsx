@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import { AnimatePresence, motion } from "motion/react"
@@ -66,6 +66,7 @@ import {
   type LiveChatMessageView,
 } from "@/app/actions/live"
 import { publishShow } from "@/app/actions/shows"
+import { LiveJoinGate } from "@/components/live-join-gate"
 import { uploadMedia } from "@/lib/upload-media"
 import type { CurrentUser } from "@/lib/session"
 import { cn } from "@/lib/utils"
@@ -193,6 +194,9 @@ export function ConversationRoom({
   const startedRef = useRef(false)
   const [connecting, setConnecting] = useState(false)
   const [arrived, setArrived] = useState(false)
+  // Public-live guest flow: joinBroadcast returned `needsIdentity`, so we show
+  // the display-name gate and let the guest name themselves before connecting.
+  const [needIdentity, setNeedIdentity] = useState(false)
   // As people settle into the room, the tall header collapses into a compact
   // sticky bar to hand more space to the participant grid.
   const [autoCompact, setAutoCompact] = useState(false)
@@ -202,39 +206,51 @@ export function ConversationRoom({
     return () => clearTimeout(t)
   }, [arrived])
 
+  // Join (or resume) the room as a participant. Extracted so the public-live
+  // display-name gate can re-invoke it after a guest names themselves.
+  const connectParticipant = useCallback(async () => {
+    setConnecting(true)
+    const rn = streamData!.roomName
+    const res = await joinBroadcast({ roomName: rn })
+    if (!res.ok) {
+      setConnecting(false)
+      // Public live + no display name yet: show the "Join Live" gate. The gate's
+      // onJoined re-calls connectParticipant once the guest has a name.
+      if (res.needsIdentity) {
+        setNeedIdentity(true)
+        return
+      }
+      setError(res.error)
+      setEnded(true)
+      return
+    }
+    setNeedIdentity(false)
+    setRoomName(rn)
+    setLive(true)
+    await connect({
+      serverUrl: res.serverUrl,
+      token: res.token,
+      publish: res.canPublish,
+      // Participants arrive muted; the host resumes with their mic ready.
+      muted: !isHost,
+    })
+    // Only the host records the room (to save it as an episode later).
+    if (isHost) {
+      startRecording()
+      setRecording(true)
+    }
+    setConnecting(false)
+    setTimeout(() => setArrived(true), 900)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Participant / resume: join an existing room immediately.
   useEffect(() => {
     if (isHostMode && !resumeStream) return // fresh host → wait for setup
     if (!canJoin) return
     if (startedRef.current) return
     startedRef.current = true
-    void (async () => {
-      setConnecting(true)
-      const rn = streamData!.roomName
-      const res = await joinBroadcast({ roomName: rn })
-      if (!res.ok) {
-        setError(res.error)
-        setConnecting(false)
-        setEnded(true)
-        return
-      }
-      setRoomName(rn)
-      setLive(true)
-      await connect({
-        serverUrl: res.serverUrl,
-        token: res.token,
-        publish: res.canPublish,
-        // Participants arrive muted; the host resumes with their mic ready.
-        muted: !isHost,
-      })
-      // Only the host records the room (to save it as an episode later).
-      if (isHost) {
-        startRecording()
-        setRecording(true)
-      }
-      setConnecting(false)
-      setTimeout(() => setArrived(true), 900)
-    })()
+    void connectParticipant()
     return () => {
       void disconnect()
     }
@@ -852,6 +868,18 @@ export function ConversationRoom({
       className="relative flex h-full flex-col overflow-hidden bg-zinc-950 text-white"
       style={liveThemeStyle(theme)}
     >
+      {/* Public-live display-name gate. On submit it creates a guest session and
+          re-runs the participant join so the room connects as that guest. */}
+      {needIdentity && streamData && (
+        <LiveJoinGate
+          stream={streamData}
+          onJoined={() => {
+            setNeedIdentity(false)
+            void connectParticipant()
+          }}
+        />
+      )}
+
       {/* Ambient warm backdrop */}
       <div
         aria-hidden="true"
