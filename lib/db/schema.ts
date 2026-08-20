@@ -484,8 +484,37 @@ export const announcement = pgTable("announcement", {
   declineReason: text("declineReason"),
   publishedAt: timestamp("publishedAt"),
   expiresAt: timestamp("expiresAt"),
+  // Community events are now published BY an organisation's Home. These link the
+  // event back to the publishing Home/org so attendance shows in that Home's
+  // admin console. Null on legacy rows created before Homes published events.
+  homeId: text("homeId"),
+  organizationId: text("organizationId"),
+  // How the event leaves the feed: "auto5h" removes it 5 hours after the event
+  // starts (expiresAt is set to start+5h); "manual" keeps it until an admin
+  // deletes it (expiresAt stays null). Legacy paid ads have neither.
+  deleteMode: text("deleteMode"), // "auto5h" | "manual" | null
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
+
+// RSVP to a community event. One row per (event, user); the response toggles
+// between attending and not attending. Drives the RSVP buttons on the feed and
+// the attendance breakdown (counts + names) in the org admin console.
+export const eventRsvp = pgTable(
+  "event_rsvp",
+  {
+    id: serial("id").primaryKey(),
+    announcementId: integer("announcementId").notNull(),
+    userId: text("userId").notNull(),
+    userName: text("userName").notNull(),
+    response: text("response").notNull(), // "coming" | "not_coming"
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    eventIdx: index("event_rsvp_event_idx").on(t.announcementId),
+    uniqueMember: uniqueIndex("event_rsvp_unique").on(t.announcementId, t.userId),
+  }),
+)
 
 // Per-user interaction + visibility state for an advert. A viewer who taps
 // "Want to know more" or "Not interested" gets a row (action set) and the ad is
