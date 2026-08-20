@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useTheme } from "next-themes"
-import { Check, Contrast, Leaf, Moon, MoonStar, Palette, Sun } from "lucide-react"
+import { Check, Contrast, Moon, MoonStar, Palette, Sun } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -16,13 +16,11 @@ import {
 import { SKINS, useSkin } from "@/components/skin-provider"
 import { cn } from "@/lib/utils"
 
-// Display order: Mid (default for new users), then Charcoal, Dark, Light, Grass.
+// Display order: Charcoal (default), then Dark, Light.
 const themes = [
-  { value: "mid", label: "Mid", icon: Contrast },
   { value: "charcoal", label: "Charcoal", icon: MoonStar },
   { value: "dark", label: "Dark", icon: Moon },
   { value: "light", label: "Light", icon: Sun },
-  { value: "grass", label: "Grass", icon: Leaf },
 ] as const
 
 // Preview swatch per skin — each shows its accent ring gradient.

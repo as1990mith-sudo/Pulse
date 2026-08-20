@@ -169,11 +169,10 @@ export function AuthForm({
       return
     }
 
-    // If a destination was requested (e.g. the "join a Home" flow), go straight
-    // there — a member joining a specific Home should never see the ministries
-    // "Welcome" onboarding. Otherwise individuals land on that skippable step
-    // inviting them to subscribe to organisations before entering the feed.
-    router.push(next || "/welcome")
+    // Individuals always arrive here from the "join a Home" flow, so `next` is
+    // the join-confirmation page that drops them straight inside their Home.
+    // The `/feed` fallback only guards the unexpected case of a missing key.
+    router.push(next || "/feed")
     router.refresh()
   }
 

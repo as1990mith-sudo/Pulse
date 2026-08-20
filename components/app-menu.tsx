@@ -25,7 +25,6 @@ import {
   Newspaper,
   NotebookPen,
   Palette,
-  Radio,
   Bell,
   ShieldCheck,
   Sun,
@@ -367,7 +366,6 @@ export function AppMenu() {
                   {signedIn && (
                     <DrawerItem href="/settings/privacy" icon={ShieldCheck} label="Privacy" onNavigate={navigate} />
                   )}
-                  <DrawerItem href="/live#go-live" icon={Radio} label="Creator Studio" onNavigate={navigate} />
                 </Section>
 
                 <Divider />

@@ -2,6 +2,8 @@ import { notFound } from "next/navigation"
 import { getHomeAdminSection } from "@/lib/home/admin-nav"
 import { getHomeMembers, getHomeAdminOverview } from "@/app/actions/home"
 import { getHomeBookings, getHomeAppointments } from "@/app/actions/home-scheduling"
+import { getHomeEventAttendance } from "@/app/actions/announcements"
+import { EventsAttendanceManager } from "@/components/home/admin/events-attendance-manager"
 import { MembersManager } from "@/components/home/admin/members-manager"
 import { SubscriptionManager } from "@/components/home/admin/subscription-manager"
 import { SettingsManager } from "@/components/home/admin/settings-manager"
@@ -65,6 +67,11 @@ async function SectionBody({ handle, section }: { handle: string; section: strin
   if (section === "appointments") {
     const appointments = await getHomeAppointments(handle)
     return <AppointmentsManager handle={handle} initialAppointments={appointments} />
+  }
+
+  if (section === "events") {
+    const events = await getHomeEventAttendance(handle)
+    return <EventsAttendanceManager handle={handle} events={events} />
   }
 
   const meta = getHomeAdminSection(section)!

@@ -92,7 +92,7 @@ export function GoLiveHero({ canGoLive = true }: { canGoLive?: boolean }) {
               <Lock className="size-4" />
             </span>
             <p className="text-pretty text-sm leading-snug text-muted-foreground">
-              Only admins and staff can start live sessions. Browse the streams above to join one.
+              Only admins and organisation owners can start live sessions. Browse the streams above to join one.
             </p>
           </div>
         )}

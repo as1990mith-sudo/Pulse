@@ -221,6 +221,7 @@ export function MindFeed({
   announcements = [],
   myRequests = [],
   isAdmin = false,
+  canPublish = false,
 }: {
   posts: FeedPostView[]
   currentUser: CurrentUser | null
@@ -228,6 +229,7 @@ export function MindFeed({
   announcements?: AnnouncementView[]
   myRequests?: AnnouncementView[]
   isAdmin?: boolean
+  canPublish?: boolean
 }) {
   const router = useRouter()
   const [draft, setDraft] = useState("")
@@ -557,6 +559,7 @@ export function MindFeed({
         myRequests={myRequests}
         currentUser={currentUser}
         isAdmin={isAdmin}
+        canPublish={canPublish}
       />
     </div>
   ) : null
