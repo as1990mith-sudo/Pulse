@@ -16,7 +16,7 @@ import {
   share,
   user as userTable,
 } from "@/lib/db/schema"
-import { getActiveHomeContext, getActiveHomeMemberIds } from "@/lib/home/active-home"
+import { getActiveHomeContext } from "@/lib/home/active-home"
 import { isHomeAdminRole } from "@/lib/home/roles"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { formatPostTimestamp } from "@/lib/format-timestamp"
@@ -332,21 +332,21 @@ export async function getFeed(): Promise<FeedPostView[]> {
   const session = await auth.api.getSession({ headers: await headers() })
   const currentUserId = session?.user?.id ?? null
 
-  // The feed is a Home surface: it shows ONLY posts authored by people who
-  // actually belong to the active Home (its admins and members). The shared
-  // helper resolves the active Home and its active-member ids — a post by anyone
-  // outside this Home must never appear here. With no active Home (or no active
-  // members) there is nothing to show; the viewer is sent to onboarding
-  // elsewhere.
-  const { memberIds } = await getActiveHomeMemberIds()
-  if (memberIds.length === 0) return []
+  // The feed is a Home surface: it shows ONLY posts that were published INTO the
+  // viewer's active Home (feed_post.homeId === the active Home id). Scoping by
+  // the post's own Home — not by author membership — is what keeps content from
+  // crossing organisations: an admin who runs several Homes posts into exactly
+  // one at a time, and that post appears in that Home alone. With no active Home
+  // there is nothing to show; the viewer is sent to onboarding elsewhere.
+  const { home } = await getActiveHomeContext()
+  if (!home) return []
 
-  // Only main-feed posts, authored by a member/admin of this Home. Room posts
-  // (iTestify testimonies, Question of the Day responses) carry a non-null
-  // `channel` and are excluded here so they render exclusively inside their own
-  // community rooms. Posts come back newest-first; the client decides
-  // presentation per tab ("For you" shuffles from this deterministic order,
-  // "Following" stays newest-first).
+  // Only main-feed posts belonging to THIS Home. Room posts (iTestify
+  // testimonies, Question of the Day responses) carry a non-null `channel` and
+  // are excluded here so they render exclusively inside their own community
+  // rooms. Posts come back newest-first; the client decides presentation per tab
+  // ("For you" shuffles from this deterministic order, "Following" stays
+  // newest-first).
   const posts = await db
     .select()
     .from(feedPost)
@@ -354,7 +354,7 @@ export async function getFeed(): Promise<FeedPostView[]> {
       and(
         isNull(feedPost.channel),
         eq(feedPost.deleted, false),
-        inArray(feedPost.userId, memberIds),
+        eq(feedPost.homeId, home.id),
       ),
     )
     .orderBy(desc(feedPost.createdAt))
@@ -516,6 +516,12 @@ export async function searchPosts(query: string): Promise<FeedPostView[]> {
       )
     : new Set<string>()
 
+  // Search is Home-scoped too: results are limited to posts published into the
+  // viewer's active Home, so search can never surface another organisation's
+  // content. No active Home => nothing to search.
+  const { home } = await getActiveHomeContext()
+  if (!home) return []
+
   const like = `%${q}%`
   const posts = await db
     .select()
@@ -524,6 +530,7 @@ export async function searchPosts(query: string): Promise<FeedPostView[]> {
       and(
         isNull(feedPost.channel),
         eq(feedPost.deleted, false),
+        eq(feedPost.homeId, home.id),
         or(ilike(feedPost.text, like), ilike(feedPost.authorName, like)),
       ),
     )
@@ -789,7 +796,18 @@ export async function createPost(input: {
   // owner lookup is unavailable.
   let authorName = user.name
   let authorHandle = getHandle(user.name)
+  // The Home this post is published into. Every main-feed post is stamped with
+  // the viewer's active Home so it appears only inside that Home. Room posts
+  // (channel !== null) stay Home-agnostic — they live in their own community
+  // rooms — so homeId is left null for those.
+  let homeId: string | null = null
   if (channel === null) {
+    const { home, membership } = await getActiveHomeContext()
+    // A main-feed post requires an active Home to belong to. Without one there
+    // is nowhere for it to appear, so refuse rather than create an orphan.
+    if (!home) throw new Error("Join or select a Home before posting to the Feed.")
+    homeId = home.id
+
     const [owned] = await db
       .select({ id: organization.id, name: organization.name, handle: organization.handle })
       .from(organization)
@@ -800,19 +818,16 @@ export async function createPost(input: {
       organizationId = owned.id
       authorName = owned.name
       authorHandle = owned.handle
-    } else {
+    } else if (isHomeAdminRole(membership?.role)) {
       // Not a global organisation account, but a post authored inside a Home by
       // one of its admins (owner/administrator/content_manager/…) speaks FOR the
       // organisation — so it's attributed to the active Home's organisation and
       // the admin's personal name never surfaces. Regular members keep their own
       // identity.
-      const { home, membership } = await getActiveHomeContext()
-      if (home && isHomeAdminRole(membership?.role)) {
-        isOrganization = true
-        organizationId = home.organizationId
-        authorName = home.orgName
-        authorHandle = home.handle
-      }
+      isOrganization = true
+      organizationId = home.organizationId
+      authorName = home.orgName
+      authorHandle = home.handle
     }
   }
 
@@ -849,6 +864,7 @@ export async function createPost(input: {
       video: first?.type === "video" ? first.url : null,
       media: media.length > 0 ? media : null,
       channel,
+      homeId,
       mentions: mentions.length > 0 ? mentions : null,
     })
     .returning({ id: feedPost.id })

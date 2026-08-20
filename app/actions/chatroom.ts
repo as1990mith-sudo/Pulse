@@ -12,7 +12,7 @@ import {
   chatroomMessage,
   user as userTable,
 } from "@/lib/db/schema"
-import { getActiveHomeMemberIds } from "@/lib/home/active-home"
+import { getActiveHomeContext } from "@/lib/home/active-home"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { EDIT_WINDOW_MS, DELETE_WINDOW_MS } from "@/lib/interactions"
 
@@ -208,9 +208,15 @@ async function memberCounts(chatroomIds: number[]): Promise<Map<number, number>>
   return map
 }
 
-/** Rooms the current user is a member of. */
+/** Rooms the current user is a member of, within the active Home only. */
 export async function getMyChatrooms(): Promise<ChatroomSummary[]> {
   const user = await requireUser()
+
+  // Chatrooms are a Home surface: only rooms belonging to the viewer's active
+  // Home are ever shown. No active Home => nothing to list.
+  const { home } = await getActiveHomeContext()
+  if (!home) return []
+
   const memberships = await db
     .select({ chatroomId: chatroomMember.chatroomId })
     .from(chatroomMember)
@@ -221,9 +227,9 @@ export async function getMyChatrooms(): Promise<ChatroomSummary[]> {
   const rooms = await db
     .select()
     .from(chatroom)
-    .where(inArray(chatroom.id, ids))
+    .where(and(inArray(chatroom.id, ids), eq(chatroom.homeId, home.id)))
     .orderBy(desc(chatroom.createdAt))
-  const counts = await memberCounts(ids)
+  const counts = await memberCounts(rooms.map((r) => r.id))
 
   return rooms.map((r) => ({
     id: r.id,
@@ -289,10 +295,16 @@ async function enrichRoomsForUser(
  */
 export async function listDiscoverChatrooms(): Promise<ChatroomSearchResult[]> {
   const user = await requireUser()
+
+  // Discover is scoped to the viewer's active Home: only public rooms that
+  // belong to this Home are listed, so rooms never leak across organisations.
+  const { home } = await getActiveHomeContext()
+  if (!home) return []
+
   const rooms = await db
     .select()
     .from(chatroom)
-    .where(eq(chatroom.visibility, "public"))
+    .where(and(eq(chatroom.visibility, "public"), eq(chatroom.homeId, home.id)))
     .orderBy(desc(chatroom.createdAt))
     .limit(50)
   return enrichRoomsForUser(rooms, user.id)
@@ -303,18 +315,18 @@ export async function searchChatrooms(query: string): Promise<ChatroomSearchResu
   const q = query.trim()
   if (!q) return []
 
-  // Members-only: Discover only surfaces rooms created by an active member/admin
-  // of the viewer's current Home. Outside that set nothing is discoverable, even
-  // by exact name — so rooms never leak across Homes.
-  const { memberIds } = await getActiveHomeMemberIds()
-  if (memberIds.length === 0) return []
+  // Home-scoped: Discover only surfaces rooms that belong to the viewer's active
+  // Home. Outside that Home nothing is discoverable, even by exact name — so
+  // rooms never leak across organisations.
+  const { home } = await getActiveHomeContext()
+  if (!home) return []
 
-  // Search matches by name across BOTH public and private rooms — this is the
-  // only way a private room surfaces in Discover.
+  // Search matches by name across BOTH public and private rooms of this Home —
+  // this is the only way a private room surfaces in Discover.
   const rooms = await db
     .select()
     .from(chatroom)
-    .where(and(ilike(chatroom.name, `%${q}%`), inArray(chatroom.ownerId, memberIds)))
+    .where(and(ilike(chatroom.name, `%${q}%`), eq(chatroom.homeId, home.id)))
     .orderBy(asc(chatroom.name))
     .limit(25)
   return enrichRoomsForUser(rooms, user.id)
@@ -333,6 +345,10 @@ export async function createChatroom(input: {
     throw new Error("Choose whether the room is public or private.")
   }
 
+  // A room is created inside — and belongs to — the viewer's active Home.
+  const { home } = await getActiveHomeContext()
+  if (!home) throw new Error("Join or select a Home before creating a chatroom.")
+
   const [room] = await db
     .insert(chatroom)
     .values({
@@ -343,6 +359,7 @@ export async function createChatroom(input: {
       ownerName: user.name,
       visibility: input.visibility,
       inviteCode: generateInviteCode(),
+      homeId: home.id,
     })
     .returning()
 
@@ -603,6 +620,14 @@ export async function joinByInviteCode(inviteCode: string) {
   const [room] = await db.select().from(chatroom).where(eq(chatroom.inviteCode, code))
   if (!room) throw new Error("Invalid invite code.")
 
+  // A room lives inside its Home: you can only join it while you are inside that
+  // same Home. This stops an invite code from pulling someone into another
+  // organisation's room.
+  const { home } = await getActiveHomeContext()
+  if (!home || room.homeId !== home.id) {
+    throw new Error("This chatroom belongs to a different Home.")
+  }
+
   const [existing] = await db
     .select()
     .from(chatroomMember)
@@ -623,6 +648,15 @@ export async function joinByInviteCode(inviteCode: string) {
 /** Request to join a room found via search. */
 export async function requestToJoin(chatroomId: number) {
   const user = await requireUser()
+
+  // The room must belong to the viewer's active Home — you can only ask to join
+  // rooms inside the Home you are currently in.
+  const [room] = await db.select({ homeId: chatroom.homeId }).from(chatroom).where(eq(chatroom.id, chatroomId))
+  if (!room) throw new Error("Chatroom not found.")
+  const { home } = await getActiveHomeContext()
+  if (!home || room.homeId !== home.id) {
+    throw new Error("This chatroom belongs to a different Home.")
+  }
 
   const [existingMember] = await db
     .select()
