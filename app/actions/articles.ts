@@ -17,6 +17,7 @@ import {
   user as userTable,
 } from "@/lib/db/schema"
 import { getActiveHomeMemberIds } from "@/lib/home/active-home"
+import { getStaffUserIds } from "@/lib/admin-auth"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { getLikedSet, setLike } from "@/lib/likes"
 import {
@@ -141,6 +142,20 @@ async function toCards(rows: ArticleRow[]): Promise<ArticleCard[]> {
   return rows.map((r) => toCard(r, authors.get(r.authorId)!))
 }
 
+/**
+ * The set of authorIds whose published articles may appear on the *global*
+ * Articles hub/feed: active members of the viewer's Home who are ALSO platform
+ * admins/staff. Members can still write and publish — their pieces simply stay
+ * on their own profile (see getWriterArticles) and never surface on the shared
+ * Articles page. Returns [] when there's no Home or no staff authors.
+ */
+async function getArticleHubAuthorIds(): Promise<string[]> {
+  const { memberIds } = await getActiveHomeMemberIds()
+  if (memberIds.length === 0) return []
+  const staff = await getStaffUserIds()
+  return memberIds.filter((id) => staff.has(id))
+}
+
 // --- Hub + feed reads ------------------------------------------------------
 
 /**
@@ -153,9 +168,10 @@ export async function getArticleHub(): Promise<{
   latest: ArticleCard[]
   categories: string[]
 }> {
-  // Articles are a Home surface: only pieces written by an active member/admin
-  // of the viewer's current Home are shown. No Home (or no members) ⇒ nothing.
-  const { memberIds } = await getActiveHomeMemberIds()
+  // The Articles hub is a curated, staff-authored surface within the viewer's
+  // current Home. Only pieces by admins/staff of that Home appear; members'
+  // articles live on their own profiles instead. No Home / no staff ⇒ nothing.
+  const memberIds = await getArticleHubAuthorIds()
   if (memberIds.length === 0) {
     return { featured: null, editorsPicks: [], latest: [], categories: [...ARTICLE_CATEGORIES] }
   }
@@ -216,8 +232,9 @@ export async function getArticleFeed(input: {
   const limit = Math.min(Math.max(input.limit ?? 12, 1), 30)
   const offset = Math.max(input.offset ?? 0, 0)
 
-  // Members-only: restrict to authors who belong to the viewer's active Home.
-  const { memberIds } = await getActiveHomeMemberIds()
+  // Staff-only: the shared feed lists articles by admins/staff of the viewer's
+  // active Home. Members' articles stay on their own profile.
+  const memberIds = await getArticleHubAuthorIds()
   if (memberIds.length === 0) return { items: [], nextOffset: null }
 
   const filters = [eq(article.status, "published"), inArray(article.authorId, memberIds)]
@@ -415,8 +432,9 @@ export async function getWriterStats(userId: string): Promise<WriterStats> {
 
 /** Top writers by follower count then article count, for the hub rail. */
 export async function getFeaturedWriters(limit = 10): Promise<FeaturedWriter[]> {
-  // Members-only: only writers who belong to the viewer's active Home surface.
-  const { memberIds } = await getActiveHomeMemberIds()
+  // Staff-only: the hub's writers rail features admins/staff of the viewer's
+  // active Home, matching the articles shown alongside it.
+  const memberIds = await getArticleHubAuthorIds()
   if (memberIds.length === 0) return []
 
   // Writers who have at least one published article, ranked by published count.

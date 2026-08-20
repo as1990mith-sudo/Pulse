@@ -945,10 +945,11 @@ function MediaSlide({
   const chosen = item.aspectRatio ?? ratio
 
   let framedAspect: number | null
-  // Widest and tallest card shapes we ever allow, so nothing is absurdly
-  // panoramic or skyscraper-tall. Everything in between keeps its true ratio.
+  // Widest card shape we ever allow, so nothing is absurdly panoramic. The
+  // shortest a media card gets is a square (1:1): anything TALLER than 1:1 is
+  // presented in a 1:1 card and object-cover-filled, so the feed never shows a
+  // portrait/vertical card. Landscape media between 1:1 and 16:9 keeps its ratio.
   const WIDEST = 16 / 9
-  const TALLEST = 9 / 16
   if (item.type === "video") {
     // Videos in the feed are restricted to a fixed set of card shapes:
     // 1:1 (1) and 16:9 (1.7778). A clip in any other ratio — most notably
@@ -959,10 +960,10 @@ function MediaSlide({
     const allowed = chosen != null && ALLOWED_VIDEO_ASPECTS.some((a) => Math.abs(chosen - a) < 0.02)
     framedAspect = allowed ? (chosen as number) : 1
   } else {
-    // Images FILL their card (object-cover) at the author's chosen crop ratio —
-    // or, for uncropped media, their natural ratio clamped into a sane range.
-    // No letterbox bars: the media is edge-to-edge and immersive.
-    framedAspect = chosen != null ? Math.min(WIDEST, Math.max(TALLEST, chosen)) : null
+    // Images FILL their card (object-cover). Anything taller than square is
+    // clamped to 1:1; landscape keeps its ratio up to 16:9. No letterbox bars —
+    // the media is edge-to-edge; the full composition is shown in the viewer.
+    framedAspect = chosen != null ? Math.min(WIDEST, Math.max(1, chosen)) : null
   }
   // Whether the shown frame crops the media's true framing — used to show an
   // "expand to full screen" hint so viewers know the full composition is

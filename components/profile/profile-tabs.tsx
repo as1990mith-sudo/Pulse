@@ -32,6 +32,7 @@ export function ProfileTabs({
   communityPosts,
   anonymousPosts,
   articles,
+  showCatalogue = false,
 }: {
   name: string
   isSelf: boolean
@@ -45,6 +46,9 @@ export function ProfileTabs({
   // The owner's own anonymous Community Help posts — only ever passed for isSelf.
   anonymousPosts: CommunityPostView[]
   articles: ArticleCardType[]
+  // Whether to show the Catalogue (live episodes) tab. Only true for admin/staff
+  // profiles — members don't host, so the tab is hidden for them.
+  showCatalogue?: boolean
 }) {
   // The "Thread" tab merges the user's Community Help posts (identifiable +, for
   // the owner only, anonymous) into a single newest-first timeline. Anonymous
@@ -56,11 +60,14 @@ export function ProfileTabs({
   )
 
   // Tab order: Posts (main feed), Thread (Community Help), Articles, Catalogue.
+  // Catalogue is only present on admin/staff profiles (see showCatalogue).
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; count: number }[] = [
     { key: "posts", label: "Posts", icon: <LayoutGrid className="size-4" />, count: feedPosts.length },
     { key: "thread", label: "Thread", icon: <MessagesSquare className="size-4" />, count: threadPosts.length },
     { key: "articles", label: "Articles", icon: <Newspaper className="size-4" />, count: articles.length },
-    { key: "catalogue", label: "Catalogue", icon: <Mic className="size-4" />, count: episodes.length },
+    ...(showCatalogue
+      ? [{ key: "catalogue" as const, label: "Catalogue", icon: <Mic className="size-4" />, count: episodes.length }]
+      : []),
   ]
 
   // Initialize the active tab from the URL (?tab=…). This makes the selection
@@ -72,7 +79,9 @@ export function ProfileTabs({
     const t = searchParams.get("tab")
     // "anonymous" is the legacy key for what is now the "Thread" tab.
     if (t === "anonymous") return "thread"
-    return t === "thread" || t === "articles" || t === "catalogue" || t === "posts" ? t : "posts"
+    // Ignore ?tab=catalogue when the Catalogue tab is hidden for this profile.
+    if (t === "catalogue") return showCatalogue ? "catalogue" : "posts"
+    return t === "thread" || t === "articles" || t === "posts" ? t : "posts"
   })()
   const [tab, setTab] = useState<TabKey>(tabFromUrl)
   // The tab the user was on before opening Catalogue, so the back arrow can

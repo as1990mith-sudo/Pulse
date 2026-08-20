@@ -1,8 +1,8 @@
 import { headers } from "next/headers"
-import { eq } from "drizzle-orm"
+import { eq, inArray, sql } from "drizzle-orm"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { adminMember } from "@/lib/db/schema"
+import { adminMember, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { type AdminRole, type Permission, roleHasPermission } from "@/lib/rbac"
 
@@ -77,4 +77,41 @@ export async function requirePermission(permission: Permission): Promise<AdminAc
 export function actorCan(actor: AdminActor | null, permission: Permission): boolean {
   if (!actor) return false
   return roleHasPermission(actor.role, permission)
+}
+
+/**
+ * The set of every userId that is platform admin/staff: anyone with an
+ * admin_member RBAC row, plus any account whose email is a bootstrap
+ * ADMIN_EMAILS address (matched case-insensitively). Used to gate staff-only
+ * surfaces — e.g. which authors appear on the global Articles page, and whose
+ * profile shows the Catalogue tab. Failures degrade to whatever was resolved so
+ * a DB hiccup can't accidentally grant staff to everyone.
+ */
+export async function getStaffUserIds(): Promise<Set<string>> {
+  const ids = new Set<string>()
+  try {
+    const rows = await db.select({ userId: adminMember.userId }).from(adminMember)
+    for (const r of rows) ids.add(r.userId)
+  } catch (err) {
+    console.error("[v0] getStaffUserIds: admin_member lookup failed:", err)
+  }
+  const emails = [...bootstrapEmails()]
+  if (emails.length > 0) {
+    try {
+      const urows = await db
+        .select({ id: userTable.id })
+        .from(userTable)
+        .where(inArray(sql`lower(${userTable.email})`, emails))
+      for (const r of urows) ids.add(r.id)
+    } catch (err) {
+      console.error("[v0] getStaffUserIds: bootstrap-email lookup failed:", err)
+    }
+  }
+  return ids
+}
+
+/** Whether a specific userId is platform admin/staff. */
+export async function isStaffUser(userId: string): Promise<boolean> {
+  const ids = await getStaffUserIds()
+  return ids.has(userId)
 }
