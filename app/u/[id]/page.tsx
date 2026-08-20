@@ -5,6 +5,7 @@ import { organization } from "@/lib/db/schema"
 import { getProfile } from "@/lib/profile"
 import { getEpisodesByUser } from "@/lib/content"
 import { getPublicCommunityPostsByUser, getAnonymousCommunityPostsByUser } from "@/app/actions/community"
+import { getFeedPostsByUser } from "@/app/actions/feed"
 import { getActiveStatusForUser } from "@/app/actions/status"
 import { getWriterArticles } from "@/app/actions/articles"
 import { getCurrentUser } from "@/lib/session"
@@ -48,11 +49,12 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
   const profile = await getProfile(id)
   if (!profile) notFound()
 
-  const [episodes, communityPosts, anonymousPosts, currentUser, statusGroup, articles] = await Promise.all([
+  const [episodes, feedPosts, communityPosts, anonymousPosts, currentUser, statusGroup, articles] = await Promise.all([
     getEpisodesByUser(id, profile.isSelf),
-    // Public (identifiable) Community Help posts power the "Posts" timeline for
-    // every viewer. Anonymous posts are fetched only for the owner's own
-    // profile — the server action returns nothing for anyone else.
+    // Main-feed posts power the "Posts" tab. Public (identifiable) Community Help
+    // posts feed the "Thread" tab for every viewer; anonymous posts are fetched
+    // only for the owner's own profile — the action returns nothing otherwise.
+    getFeedPostsByUser(id),
     getPublicCommunityPostsByUser(id),
     profile.isSelf ? getAnonymousCommunityPostsByUser(id) : Promise.resolve([]),
     getCurrentUser(),
@@ -136,7 +138,9 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
         <ProfileTabs
           name={profile.name}
           isSelf={profile.isSelf}
+          currentUser={currentUser}
           episodes={episodes}
+          feedPosts={feedPosts}
           communityPosts={communityPosts}
           anonymousPosts={anonymousPosts}
           articles={articles}

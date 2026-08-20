@@ -48,7 +48,7 @@ export function AdminTopbar({
 
   async function handleSignOut() {
     await authClient.signOut()
-    router.push("/")
+    router.push("/sign-in")
     router.refresh()
   }
 

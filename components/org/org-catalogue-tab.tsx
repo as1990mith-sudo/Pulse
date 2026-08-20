@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import {
+  BookOpen,
   Clock,
   FileText,
   Headphones,
@@ -362,6 +363,9 @@ function OrgCatalogueRow({
   const playable = Boolean(show)
   const isActive = playable && activeId === show!.id
   const isLive = Boolean(item.slug)
+  // Documents are read, not played — the trailing action shows a read icon and a
+  // "Read" label instead of the play triangle used by media/live-video rows.
+  const isDocument = item.kind === "document"
   const href = isLive ? `/live/${item.slug}` : externalHref(item.url)
   const linkProps = isLive ? {} : { target: "_blank", rel: "noopener noreferrer" }
 
@@ -469,10 +473,10 @@ function OrgCatalogueRow({
           <a
             href={href}
             {...linkProps}
-            aria-label={`Open ${item.title}`}
+            aria-label={`${isDocument ? "Read" : "Open"} ${item.title}`}
             className="flex size-9 items-center justify-center rounded-full bg-secondary text-foreground transition-colors group-hover:bg-live group-hover:text-white"
           >
-            <Play className="size-4 translate-x-px" />
+            {isDocument ? <BookOpen className="size-4" /> : <Play className="size-4 translate-x-px" />}
           </a>
         )}
 
@@ -642,7 +646,7 @@ export function NewCatalogueDialog({
           </button>
         }
       />
-      <DialogContent className="max-h-[90svh] overflow-y-auto">
+      <DialogContent className="max-h-[85svh] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span className="text-muted-foreground">{KIND_META[kind].icon}</span>
@@ -650,7 +654,7 @@ export function NewCatalogueDialog({
           </DialogTitle>
           <DialogDescription>{meta.description}</DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-4 py-2">
+        <div className="flex min-h-0 flex-col gap-4 overflow-y-auto py-2">
           <Field label="Title">
             <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={meta.titlePlaceholder} />
           </Field>

@@ -181,6 +181,7 @@ export function AppMenu() {
   async function handleSignOut() {
     close()
     await authClient.signOut()
+    router.push("/sign-in")
     router.refresh()
   }
 
@@ -338,7 +339,7 @@ export function AppMenu() {
 
                 <Section>
                   <DrawerItem href="/bible" icon={BookOpen} label="Bible" onNavigate={navigate} />
-                  <DrawerItem href="/live-notes" icon={NotebookPen} label="Live Notes" onNavigate={navigate} />
+                  <DrawerItem href="/live-notes" icon={NotebookPen} label="Notes" onNavigate={navigate} />
                   <DrawerItem href="/articles" icon={Newspaper} label="Articles" onNavigate={navigate} />
                   {/* Book Store hidden from the front end for now — restore this item to re-enable. */}
                   {/* <DrawerItem href="/store" icon={ShoppingBag} label="Book Store" onNavigate={navigate} /> */}

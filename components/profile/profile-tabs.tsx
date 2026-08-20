@@ -1,15 +1,18 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { Mic, ArrowLeft, Plus, Info, Newspaper, PenLine, MessageSquareText, VenetianMask } from "lucide-react"
+import { Mic, ArrowLeft, Plus, Info, Newspaper, PenLine, LayoutGrid, MessagesSquare } from "lucide-react"
 import Link from "next/link"
 import type { Show } from "@/lib/data"
 import type { CommunityPostView } from "@/app/actions/community"
+import type { FeedPostView } from "@/app/actions/feed"
+import type { CurrentUser } from "@/lib/session"
 import type { ArticleCard as ArticleCardType } from "@/lib/article-types"
 import { EpisodeCatalog } from "@/components/episode-catalog"
 import { UploadEpisode } from "@/components/upload-episode"
 import { ProfileThreads } from "@/components/profile/profile-threads"
+import { PostCard } from "@/components/mind-feed"
 import { ArticleRow } from "@/components/articles/article-card"
 import {
   DropdownMenu,
@@ -18,40 +21,44 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
-type TabKey = "posts" | "anonymous" | "articles" | "catalogue"
+type TabKey = "posts" | "thread" | "articles" | "catalogue"
 
 export function ProfileTabs({
   name,
   isSelf,
+  currentUser,
   episodes,
+  feedPosts,
   communityPosts,
   anonymousPosts,
   articles,
 }: {
   name: string
   isSelf: boolean
+  // The viewer, needed by <PostCard> for engagement/ownership controls.
+  currentUser: CurrentUser | null
   episodes: Show[]
-  // Public (identifiable) Community Help posts — the "Posts" timeline.
+  // The user's own MAIN-FEED posts — the "Posts" timeline.
+  feedPosts: FeedPostView[]
+  // Public (identifiable) Community Help posts — part of the "Thread" timeline.
   communityPosts: CommunityPostView[]
   // The owner's own anonymous Community Help posts — only ever passed for isSelf.
   anonymousPosts: CommunityPostView[]
   articles: ArticleCardType[]
 }) {
-  // Tab order: Posts, Anonymous (owner-only), Articles, Catalogue. The Anonymous
-  // tab is omitted entirely for other viewers so there's no trace of anonymous
-  // activity on someone else's profile.
+  // The "Thread" tab merges the user's Community Help posts (identifiable +, for
+  // the owner only, anonymous) into a single newest-first timeline. Anonymous
+  // posts are only ever supplied for the owner, so nothing leaks on someone
+  // else's profile — their anonymous questions simply never appear here.
+  const threadPosts = useMemo(
+    () => [...communityPosts, ...anonymousPosts].sort((a, b) => b.createdAtMs - a.createdAtMs),
+    [communityPosts, anonymousPosts],
+  )
+
+  // Tab order: Posts (main feed), Thread (Community Help), Articles, Catalogue.
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; count: number }[] = [
-    { key: "posts", label: "Posts", icon: <MessageSquareText className="size-4" />, count: communityPosts.length },
-    ...(isSelf
-      ? [
-          {
-            key: "anonymous" as const,
-            label: "Anonymous",
-            icon: <VenetianMask className="size-4" />,
-            count: anonymousPosts.length,
-          },
-        ]
-      : []),
+    { key: "posts", label: "Posts", icon: <LayoutGrid className="size-4" />, count: feedPosts.length },
+    { key: "thread", label: "Thread", icon: <MessagesSquare className="size-4" />, count: threadPosts.length },
     { key: "articles", label: "Articles", icon: <Newspaper className="size-4" />, count: articles.length },
     { key: "catalogue", label: "Catalogue", icon: <Mic className="size-4" />, count: episodes.length },
   ]
@@ -63,8 +70,9 @@ export function ProfileTabs({
   const searchParams = useSearchParams()
   const tabFromUrl = ((): TabKey => {
     const t = searchParams.get("tab")
-    if (t === "anonymous") return isSelf ? "anonymous" : "posts"
-    return t === "articles" || t === "catalogue" || t === "posts" ? t : "posts"
+    // "anonymous" is the legacy key for what is now the "Thread" tab.
+    if (t === "anonymous") return "thread"
+    return t === "thread" || t === "articles" || t === "catalogue" || t === "posts" ? t : "posts"
   })()
   const [tab, setTab] = useState<TabKey>(tabFromUrl)
   // The tab the user was on before opening Catalogue, so the back arrow can
@@ -159,25 +167,15 @@ export function ProfileTabs({
               ))}
             </div>
           )
-        ) : tab === "anonymous" ? (
-          anonymousPosts.length === 0 ? (
+        ) : tab === "thread" ? (
+          threadPosts.length === 0 ? (
             <EmptyState
-              icon={<VenetianMask className="size-6" />}
-              title="No anonymous posts yet"
-              message="Questions and prayers you share anonymously on Community Help stay private to you and appear here. Only you can see this tab."
-            />
-          ) : (
-            <ProfileThreads posts={anonymousPosts} mode="anonymous" />
-          )
-        ) : tab === "posts" ? (
-          communityPosts.length === 0 ? (
-            <EmptyState
-              icon={<MessageSquareText className="size-6" />}
-              title="No posts yet"
+              icon={<MessagesSquare className="size-6" />}
+              title="No threads yet"
               message={
                 isSelf
-                  ? "Public posts you share on Community Help will show up here as a timeline."
-                  : `${name} hasn't shared any public posts yet.`
+                  ? "Questions and prayers you share on Community Help appear here as a timeline."
+                  : `${name} hasn't shared anything on Community Help yet.`
               }
               action={
                 isSelf ? (
@@ -191,7 +189,35 @@ export function ProfileTabs({
               }
             />
           ) : (
-            <ProfileThreads posts={communityPosts} mode="posts" />
+            <ProfileThreads posts={threadPosts} mode="thread" />
+          )
+        ) : tab === "posts" ? (
+          feedPosts.length === 0 ? (
+            <EmptyState
+              icon={<LayoutGrid className="size-6" />}
+              title="No posts yet"
+              message={
+                isSelf
+                  ? "Posts you share on the main feed will show up here."
+                  : `${name} hasn't posted to the feed yet.`
+              }
+              action={
+                isSelf ? (
+                  <Link
+                    href="/feed"
+                    className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+                  >
+                    <Plus className="size-4" /> Post to the feed
+                  </Link>
+                ) : null
+              }
+            />
+          ) : (
+            <div className="flex flex-col gap-4">
+              {feedPosts.map((p) => (
+                <PostCard key={p.id} post={p} currentUser={currentUser} variant="card" />
+              ))}
+            </div>
           )
         ) : null}
       </div>

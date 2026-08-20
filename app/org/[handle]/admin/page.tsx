@@ -21,8 +21,9 @@ export default async function HomeAdminOverviewPage({ params }: { params: Promis
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight text-balance lg:text-3xl">Overview</h1>
+      <header className="space-y-1">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Admin Console</p>
+        <h1 className="font-display text-2xl font-semibold tracking-tight text-balance lg:text-3xl">Overview</h1>
       </header>
 
       {/* Stats */}
@@ -30,12 +31,22 @@ export default async function HomeAdminOverviewPage({ params }: { params: Promis
         {stats.map((s) => {
           const Icon = s.icon
           return (
-            <div key={s.label} className="rounded-2xl border border-border bg-card p-5">
+            <div
+              key={s.label}
+              className="rounded-2xl bg-card/60 p-5 shadow-soft ring-1 ring-inset ring-border/50 transition-shadow hover:shadow-elevated"
+            >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{s.label}</span>
-                <Icon className="size-4 text-muted-foreground" />
+                <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  {s.label}
+                </span>
+                <span
+                  className="flex size-8 items-center justify-center rounded-lg"
+                  style={{ backgroundColor: "color-mix(in oklab, var(--home-accent) 12%, transparent)" }}
+                >
+                  <Icon className="size-4" style={{ color: "var(--home-accent)" }} />
+                </span>
               </div>
-              <p className="mt-2 text-3xl font-bold tabular-nums">{s.value}</p>
+              <p className="mt-3 font-display text-3xl font-semibold tabular-nums tracking-tight">{s.value}</p>
             </div>
           )
         })}
@@ -43,11 +54,13 @@ export default async function HomeAdminOverviewPage({ params }: { params: Promis
 
       {/* Plan + view Home */}
       <div className="grid gap-3 lg:grid-cols-2">
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current plan</span>
+        <div className="rounded-2xl bg-card/60 p-5 shadow-soft ring-1 ring-inset ring-border/50">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            Current plan
+          </span>
           <div className="mt-2 flex items-center justify-between">
             <div>
-              <p className="text-lg font-semibold">{plan.name}</p>
+              <p className="font-display text-lg font-semibold tracking-tight">{plan.name}</p>
               <p className="text-sm text-muted-foreground">
                 {formatHomePrice(plan)}
                 <span className="text-muted-foreground/70">/month</span>
@@ -55,7 +68,7 @@ export default async function HomeAdminOverviewPage({ params }: { params: Promis
             </div>
             <Link
               href={`/org/${handle}/admin/subscription`}
-              className="inline-flex items-center gap-1 text-sm font-semibold"
+              className="tap-scale inline-flex items-center gap-1 text-sm font-semibold"
               style={{ color: "var(--home-accent)" }}
             >
               Manage <ArrowUpRight className="size-4" />
@@ -68,7 +81,9 @@ export default async function HomeAdminOverviewPage({ params }: { params: Promis
 
       {/* Auth key + join policy */}
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Membership onboarding</h2>
+        <h2 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          Membership onboarding
+        </h2>
         <AuthKeyManager handle={handle} initialKey={authKey} initialPolicy={home.joinPolicy} />
       </section>
     </div>

@@ -22,8 +22,12 @@ export default async function HomeAdminSectionPage({
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight text-balance lg:text-3xl">{meta.label}</h1>
+      <header className="space-y-1">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Admin Console</p>
+        <h1 className="font-display text-2xl font-semibold tracking-tight text-balance lg:text-3xl">{meta.label}</h1>
+        {meta.description && (
+          <p className="max-w-2xl text-pretty text-sm text-muted-foreground">{meta.description}</p>
+        )}
       </header>
 
       <SectionBody handle={handle} section={section} />

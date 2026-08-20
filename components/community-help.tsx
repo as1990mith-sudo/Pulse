@@ -42,6 +42,7 @@ import {
 import { MiniChatProvider, useMiniChat } from "@/components/mini-chat"
 import { CommunityConversation } from "@/components/community-conversation"
 import { FeedVideo } from "@/components/feed-video"
+import { FullscreenVideoPlayer } from "@/components/fullscreen-video-player"
 import { ImageLightbox } from "@/components/image-lightbox"
 import {
   ANON_AVATAR,
@@ -142,57 +143,6 @@ function FeedPostVideo({ src, onOpen }: { src: string; onOpen: () => void }) {
     >
       <FeedVideo src={src} className="h-full w-full object-cover" onAspectRatio={setRatio} onExpand={onOpen} />
     </div>
-  )
-}
-
-/**
- * Full-screen video viewer opened by tapping an attached clip in the feed.
- * Shows the clip at its true, untouched ratio (letterboxed on black) with native
- * controls and autoplay — mirroring ImageLightbox for photos.
- */
-function FullscreenVideo({ src, onClose }: { src: string; onClose: () => void }) {
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose()
-    }
-    document.addEventListener("keydown", onKey)
-    const prev = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-    return () => {
-      document.removeEventListener("keydown", onKey)
-      document.body.style.overflow = prev
-    }
-  }, [onClose])
-
-  if (typeof document === "undefined") return null
-
-  return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Expanded video"
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/95 py-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Close video"
-        className="absolute right-4 top-[calc(env(safe-area-inset-top)+1rem)] z-10 flex size-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/20"
-      >
-        <X className="size-5" />
-      </button>
-      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-      <video
-        src={src}
-        controls
-        autoPlay
-        playsInline
-        className="max-h-[90vh] max-w-full"
-        onClick={(e) => e.stopPropagation()}
-      />
-    </div>,
-    document.body,
   )
 }
 
@@ -364,8 +314,10 @@ function PostItem({
       </div>
 
       {/* Body, media and actions — indented (pl-14) to align under the name,
-          clearing the avatar gutter (avatar size-11 + gap-3). */}
-      <div className="mt-2 pl-14">
+          clearing the avatar gutter (avatar size-11 + gap-3). Pulled up with a
+          small negative margin so the body sits ~50% closer to the name line,
+          absorbing the whitespace left by centering the name in the tall avatar. */}
+      <div className="-mt-1 pl-14">
         {editing ? (
           <div className="mt-2">
             <Textarea
@@ -433,7 +385,7 @@ function PostItem({
         <ImageLightbox src={post.imageUrl} alt="Attached to the question" onClose={() => setMediaOpen(false)} />
       )}
       {mediaOpen && post.videoUrl && !post.imageUrl && (
-        <FullscreenVideo src={post.videoUrl} onClose={() => setMediaOpen(false)} />
+        <FullscreenVideoPlayer src={post.videoUrl} onClose={() => setMediaOpen(false)} />
       )}
 
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />

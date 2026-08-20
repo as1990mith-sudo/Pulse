@@ -43,11 +43,6 @@ import { useBibleFellowshipOptional } from "@/components/bible/fellowship-contex
 // is a separate study view.
 type ReadMode = "kjv" | "nlt" | "msg" | "interlinear"
 
-const TRANSLATION_LABEL: Record<"kjv" | "nlt" | "msg", string> = {
-  kjv: "King James Version",
-  nlt: "New Living Translation",
-  msg: "The Message",
-}
 const TRANSLATION_SHORT: Record<"kjv" | "nlt" | "msg", string> = {
   kjv: "KJV",
   nlt: "NLT",
@@ -293,7 +288,7 @@ export function BibleReader({ signedIn }: { signedIn: boolean }) {
       isFirst={isFirst}
       isLast={isLast}
     />
-    <div className="space-y-5">
+    <div className="space-y-3">
       {/* Selector bar — the translation, book/chapter, and highlight selectors.
           These scroll away naturally as you read; the slim static bar below the
           app header takes over (see ReadingMiniBar). */}
@@ -388,14 +383,11 @@ export function BibleReader({ signedIn }: { signedIn: boolean }) {
 
       {/* Reading pane — borderless and immersive (KJV / NLT / MSG) */}
       {mode !== "interlinear" && (
-      <div className="py-2">
-        <div className="mb-7 flex flex-col items-center gap-2 text-center">
+      <div className="pt-0">
+        <div className="mb-4 flex flex-col items-center gap-2 text-center">
           <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl">
             {book} {chapter}
           </h2>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">
-            {TRANSLATION_LABEL[translationKey]}
-          </p>
           {/* Live reader-presence indicator — reads its state from the
               fellowship provider; renders nothing when signed out. */}
           <BibleReaderIndicator />
