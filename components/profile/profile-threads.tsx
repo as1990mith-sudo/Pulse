@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Check, Copy, Loader2, MoreHorizontal, Pencil, Share2, Trash2, X } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import { FeedVideo } from "@/components/feed-video"
 import { ShareSheet } from "@/components/share-sheet"
 import type { ShareTarget } from "@/lib/share-types"
@@ -390,7 +391,20 @@ function AnonymousThread({
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  const shareTarget: ShareTarget = {
+    type: "community",
+    key: String(post.id),
+    title: "A post on Community Help",
+    subtitle: post.body.length > 120 ? `${post.body.slice(0, 120)}…` : post.body,
+    url: `/chatrooms/community?q=${post.id}`,
+    image: post.imageUrl,
+    downloadUrl: null,
+    downloadKind: null,
+  }
 
   useEffect(() => {
     if (!menuOpen) return
@@ -420,7 +434,7 @@ function AnonymousThread({
   }
 
   function remove() {
-    if (!window.confirm("Delete this anonymous post? This can't be undone.")) return
+    setConfirmOpen(false)
     startTransition(async () => {
       try {
         await deleteCommunityPost(post.id)
@@ -487,7 +501,7 @@ function AnonymousThread({
                     role="menuitem"
                     onClick={() => {
                       setMenuOpen(false)
-                      remove()
+                      setConfirmOpen(true)
                     }}
                     disabled={pending}
                     className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-60"
@@ -543,11 +557,47 @@ function AnonymousThread({
             <BibleChips text={post.body} className="mt-3" />
             <ThreadMedia post={post} />
             <p className="mt-2 text-xs text-muted-foreground">Posted {post.postedAt}</p>
+
+            {/* The owner still sees engagement their anonymous post has attracted
+                — likes, replies, shares and saves — even though their identity
+                stays hidden to everyone else in Community Help. */}
+            <div className="mt-3 flex max-w-[16rem] items-center justify-between text-muted-foreground">
+              <LikeButton postId={post.id} initialLikes={post.likes} initialLiked={post.liked} variant="row" />
+              <Link
+                href={`/chatrooms/community?q=${post.id}`}
+                className="flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium transition-colors hover:bg-secondary hover:text-foreground"
+                aria-label="Reply"
+              >
+                <CommentIcon className="size-5" />
+                {post.commentCount > 0 && <span className="tabular-nums">{post.commentCount}</span>}
+              </Link>
+              <button
+                type="button"
+                onClick={() => setShareOpen(true)}
+                className="flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium transition-colors hover:bg-secondary hover:text-foreground"
+                aria-label="Share"
+              >
+                <Share2 className="size-5" />
+              </button>
+              <SaveButton postId={post.id} variant="row" />
+            </div>
           </>
         )}
 
         {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
       </div>
+
+      <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
+      {confirmOpen && (
+        <ConfirmDialog
+          title="Delete this anonymous post?"
+          message="This can't be undone. Your post will be removed from Community Help."
+          confirmLabel="Delete"
+          busy={pending}
+          onConfirm={remove}
+          onCancel={() => setConfirmOpen(false)}
+        />
+      )}
     </article>
   )
 }

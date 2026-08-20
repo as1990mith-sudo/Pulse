@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react"
 import useSWR from "swr"
 import { ChevronDown, Mic, Pencil, Search, Trash2, Video, X } from "lucide-react"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import {
   deleteLiveNote,
   getLiveNotes,
@@ -190,6 +191,7 @@ function NoteEditor({
   const [body, setBody] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   // Once the full note loads, seed the editable body (only if the user hasn't
   // started typing).
   const seededBody = body ?? full?.preview ?? note.preview
@@ -207,6 +209,7 @@ function NoteEditor({
   }
 
   async function remove() {
+    setConfirmOpen(false)
     setBusy(true)
     await deleteLiveNote(note.id)
     setBusy(false)

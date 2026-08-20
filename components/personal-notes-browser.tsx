@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import useSWR from "swr"
 import { Plus, Search, Trash2, X } from "lucide-react"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import {
   createPersonalNote,
   deletePersonalNote,
@@ -146,6 +147,7 @@ function NoteEditor({
   const [title, setTitle] = useState(note.title)
   const [body, setBody] = useState(note.body)
   const [busy, setBusy] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const dirtyRef = useRef(false)
   const bodyRef = useRef<HTMLTextAreaElement>(null)
 
@@ -164,6 +166,7 @@ function NoteEditor({
   }
 
   async function remove() {
+    setConfirmOpen(false)
     setBusy(true)
     await deletePersonalNote(note.id)
     await onDeleted()
@@ -211,7 +214,7 @@ function NoteEditor({
         <div className="flex items-center justify-between border-t border-border/60 p-3">
           <button
             type="button"
-            onClick={remove}
+            onClick={() => setConfirmOpen(true)}
             disabled={busy}
             className="tap-scale inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50"
           >
@@ -227,6 +230,17 @@ function NoteEditor({
           </button>
         </div>
       </div>
+
+      {confirmOpen && (
+        <ConfirmDialog
+          title="Delete this note?"
+          message="This note will be permanently removed from your account."
+          confirmLabel="Delete"
+          busy={busy}
+          onConfirm={remove}
+          onCancel={() => setConfirmOpen(false)}
+        />
+      )}
     </div>
   )
 }
