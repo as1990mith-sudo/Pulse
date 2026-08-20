@@ -423,6 +423,35 @@ export async function removeMember(handle: string, membershipId: string) {
   return { ok: true }
 }
 
+/**
+ * The current viewer leaves a Home they belong to. Self-service (no management
+ * permission needed) but the Owner can never leave — ownership is transferred or
+ * the Home is deleted elsewhere, not abandoned. If the departed Home was the
+ * active context, the cookie is cleared so the app falls back to another Home.
+ */
+export async function leaveHome(handle: string): Promise<{ ok: true }> {
+  const user = await requireUser()
+  const homeView = await getHomeByHandle(handle)
+  if (!homeView) throw new Error("Home not found.")
+  const membership = await getViewerMembership(homeView.id)
+  if (!membership) throw new Error("You're not a member of that Home.")
+  if (membership.role === "owner") {
+    throw new Error("As the owner you can't leave your own Home.")
+  }
+  await db
+    .delete(homeMembership)
+    .where(and(eq(homeMembership.homeId, homeView.id), eq(homeMembership.userId, user.id)))
+
+  // If we just left the active Home, drop the cookie so the app doesn't keep
+  // pointing at a Home the viewer no longer belongs to.
+  const store = await cookies()
+  if (store.get(ACTIVE_HOME_COOKIE)?.value === handle) {
+    store.delete(ACTIVE_HOME_COOKIE)
+  }
+  revalidatePath("/", "layout")
+  return { ok: true }
+}
+
 /** Change a member's role. Ownership cannot be assigned or removed here. */
 export async function updateMemberRole(handle: string, membershipId: string, role: HomeRole) {
   const { home: homeView } = await requireHomeManager(handle, "members.manage")

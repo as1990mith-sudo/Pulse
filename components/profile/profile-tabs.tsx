@@ -70,8 +70,9 @@ export function ProfileTabs({
   const searchParams = useSearchParams()
   const tabFromUrl = ((): TabKey => {
     const t = searchParams.get("tab")
-    if (t === "anonymous") return isSelf ? "anonymous" : "posts"
-    return t === "articles" || t === "catalogue" || t === "posts" ? t : "posts"
+    // "anonymous" is the legacy key for what is now the "Thread" tab.
+    if (t === "anonymous") return "thread"
+    return t === "thread" || t === "articles" || t === "catalogue" || t === "posts" ? t : "posts"
   })()
   const [tab, setTab] = useState<TabKey>(tabFromUrl)
   // The tab the user was on before opening Catalogue, so the back arrow can
@@ -166,25 +167,15 @@ export function ProfileTabs({
               ))}
             </div>
           )
-        ) : tab === "anonymous" ? (
-          anonymousPosts.length === 0 ? (
+        ) : tab === "thread" ? (
+          threadPosts.length === 0 ? (
             <EmptyState
-              icon={<VenetianMask className="size-6" />}
-              title="No anonymous posts yet"
-              message="Questions and prayers you share anonymously on Community Help stay private to you and appear here. Only you can see this tab."
-            />
-          ) : (
-            <ProfileThreads posts={anonymousPosts} mode="anonymous" />
-          )
-        ) : tab === "posts" ? (
-          communityPosts.length === 0 ? (
-            <EmptyState
-              icon={<MessageSquareText className="size-6" />}
-              title="No posts yet"
+              icon={<MessagesSquare className="size-6" />}
+              title="No threads yet"
               message={
                 isSelf
-                  ? "Public posts you share on Community Help will show up here as a timeline."
-                  : `${name} hasn't shared any public posts yet.`
+                  ? "Questions and prayers you share on Community Help appear here as a timeline."
+                  : `${name} hasn't shared anything on Community Help yet.`
               }
               action={
                 isSelf ? (
@@ -198,7 +189,35 @@ export function ProfileTabs({
               }
             />
           ) : (
-            <ProfileThreads posts={communityPosts} mode="posts" />
+            <ProfileThreads posts={threadPosts} mode="thread" />
+          )
+        ) : tab === "posts" ? (
+          feedPosts.length === 0 ? (
+            <EmptyState
+              icon={<LayoutGrid className="size-6" />}
+              title="No posts yet"
+              message={
+                isSelf
+                  ? "Posts you share on the main feed will show up here."
+                  : `${name} hasn't posted to the feed yet.`
+              }
+              action={
+                isSelf ? (
+                  <Link
+                    href="/feed"
+                    className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+                  >
+                    <Plus className="size-4" /> Post to the feed
+                  </Link>
+                ) : null
+              }
+            />
+          ) : (
+            <div className="flex flex-col gap-4">
+              {feedPosts.map((p) => (
+                <PostCard key={p.id} post={p} currentUser={currentUser} variant="card" />
+              ))}
+            </div>
           )
         ) : null}
       </div>

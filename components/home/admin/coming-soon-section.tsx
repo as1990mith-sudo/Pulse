@@ -13,7 +13,7 @@ export function ComingSoonSection({ label, description }: { label: string; descr
       >
         <Sparkles className="size-6" />
       </div>
-      <h2 className="text-lg font-semibold tracking-tight">{label} is on the way</h2>
+      <h2 className="font-display text-lg font-semibold tracking-tight">{label} is on the way</h2>
       <p className="mt-2 max-w-md text-pretty text-sm leading-relaxed text-muted-foreground">{description}</p>
     </div>
   )
