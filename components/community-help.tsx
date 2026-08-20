@@ -57,17 +57,22 @@ import {
 /*  Question text with graceful "See more" collapse                           */
 /* -------------------------------------------------------------------------- */
 
-function QuestionText({ text, onOpen }: { text: string; onOpen: () => void }) {
+function QuestionText({ text, onOpen, hasMedia = false }: { text: string; onOpen: () => void; hasMedia?: boolean }) {
   const [expanded, setExpanded] = useState(false)
   const [clampable, setClampable] = useState(false)
   const ref = useRef<HTMLParagraphElement>(null)
 
+  // Twitter-style truncation: a post WITH media gets a tight 4-line preview (the
+  // media does the visual work), a text-only post gets a longer 7-line preview
+  // before "Read more" appears. Clamp class is a literal so Tailwind emits it.
+  const clampClass = hasMedia ? "line-clamp-4" : "line-clamp-[7]"
+
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    // Measured while the 6-line clamp is applied: overflow ⇒ offer "See more".
+    // Measured while the clamp is applied: overflow ⇒ offer "Read more".
     setClampable(el.scrollHeight - el.clientHeight > 4)
-  }, [text])
+  }, [text, hasMedia])
 
   return (
     <div
@@ -80,13 +85,13 @@ function QuestionText({ text, onOpen }: { text: string; onOpen: () => void }) {
           onOpen()
         }
       }}
-      className="mt-[7px] cursor-pointer outline-none"
+      className="mt-1 cursor-pointer outline-none"
     >
       <p
         ref={ref}
         className={cn(
           "whitespace-pre-wrap break-words text-[15.5px] leading-relaxed text-foreground text-pretty",
-          !expanded && "line-clamp-6",
+          !expanded && clampClass,
         )}
       >
         {renderMessageBody(text, { link: true, mention: true })}
@@ -95,12 +100,14 @@ function QuestionText({ text, onOpen }: { text: string; onOpen: () => void }) {
         <button
           type="button"
           onClick={(e) => {
+            // Expand inline rather than opening the post, so the reader stays in
+            // the feed (matches how X reveals the rest of a long tweet in place).
             e.stopPropagation()
             setExpanded(true)
           }}
           className="mt-1 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
         >
-          See more
+          Read more
         </button>
       )}
     </div>
@@ -133,9 +140,17 @@ function FeedPostVideo({ src, onOpen }: { src: string; onOpen: () => void }) {
   // The clip is taller than the frame it's displayed in whenever its true ratio
   // is narrower than the (clamped) frame ratio — fill those so no bars show.
   const fill = ratio < aspect - 0.01
+  // Portrait clips (9:16 and other tall ratios) render as a SLIM, left-aligned
+  // card — like X's vertical videos — rather than a wide block. Landscape /
+  // square clips keep the full column width. `portrait` keys off the true clip
+  // ratio so the width choice matches what's actually playing.
+  const portrait = ratio < 1
   return (
     <div
-      className="relative mt-3 w-full overflow-hidden rounded-2xl border border-border/60 bg-black"
+      className={cn(
+        "relative mt-3 overflow-hidden rounded-2xl border border-border/60 bg-black",
+        portrait ? "w-[62%] max-w-[230px]" : "w-full",
+      )}
       style={{ aspectRatio: String(aspect), maxHeight: "24rem" }}
     >
       <FeedVideo
@@ -337,7 +352,7 @@ function PostItem({
             </div>
           ) : (
             <>
-              {body && <QuestionText text={body} onOpen={onOpen} />}
+              {body && <QuestionText text={body} onOpen={onOpen} hasMedia={Boolean(post.imageUrl || post.videoUrl)} />}
               <BibleChips text={body} className="mt-3" />
             </>
           )}
