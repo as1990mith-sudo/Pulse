@@ -76,6 +76,17 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
     }
   }, [seed?.bodyHtml])
 
+  // Make Enter create real <p> paragraphs instead of the browser default
+  // <div>. Combined with the sanitizer's block normalization, this keeps
+  // paragraph breaks intact from the editor all the way through to publish.
+  useEffect(() => {
+    try {
+      document.execCommand("defaultParagraphSeparator", false, "p")
+    } catch {
+      /* not supported in this browser — the sanitizer still normalizes blocks */
+    }
+  }, [])
+
   // Recount words from the live editor (called on every input).
   function recountWords() {
     setWords(countWords(editorRef.current?.innerHTML ?? ""))

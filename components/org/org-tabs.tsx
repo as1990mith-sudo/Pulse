@@ -225,6 +225,9 @@ export function OrgTabs({
                   items={catalogue}
                   isOwner={org.isOwner}
                   orgId={org.id}
+                  orgName={org.name}
+                  orgLogo={org.logo}
+                  orgHandle={org.handle}
                   tab={catalogueKind}
                   onTabChange={setCatalogueKind}
                 />

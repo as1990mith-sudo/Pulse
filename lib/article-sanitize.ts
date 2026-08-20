@@ -112,6 +112,18 @@ export function sanitizeArticleHtml(input: string): string {
     .replace(/<style[\s\S]*?<\/style>/gi, "")
     .replace(/<(iframe|object|embed|noscript|svg|math|form|input|button|textarea|select)[\s\S]*?<\/\1>/gi, "")
 
+  // 1b) Restore paragraph structure. contentEditable (and pasted content) wrap
+  // each line in a <div> (Chrome/Safari) or a bare <span>, neither of which is a
+  // block on its own — so published bodies collapsed into one run-on paragraph
+  // with no gaps. Promote those line wrappers to real <p> elements so the breaks
+  // survive. Verses use <blockquote> and mentions use <a>, so <div>/<span> never
+  // carry meaning in an article body and are always safe to treat as paragraphs.
+  html = html
+    .replace(/<div\b[^>]*>/gi, "<p>")
+    .replace(/<\/div>\s*/gi, "</p>")
+    .replace(/<span\b[^>]*>/gi, "<p>")
+    .replace(/<\/span>\s*/gi, "</p>")
+
   // 2) Tokenize and rebuild only allowlisted tags.
   let out = ""
   const tagRe = /<\/?([a-zA-Z][a-zA-Z0-9]*)((?:[^>"']|"[^"]*"|'[^']*')*)\/?>/g
