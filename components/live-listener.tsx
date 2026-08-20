@@ -39,6 +39,7 @@ import {
   stepOffStage,
 } from "@/app/actions/live"
 import { toggleFollow, getFollowingIds } from "@/app/actions/follow"
+import { LiveJoinGate } from "@/components/live-join-gate"
 import { getOrCreateConversation } from "@/app/actions/dm"
 import { useLiveAudio } from "@/lib/use-live-audio"
 import { useLivePresence } from "@/lib/use-live-presence"
@@ -127,6 +128,9 @@ export function LiveListener({
   const [joining, setJoining] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [ended, setEnded] = useState(false)
+  // Public-live guest flow: joinBroadcast returned `needsIdentity`, so we show
+  // the display-name gate instead of connecting until the guest provides a name.
+  const [needIdentity, setNeedIdentity] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   // Set when the host ends the broadcast — shows a "Session ended" splash then
   // bounces the listener back to the Live tab.
@@ -221,10 +225,17 @@ export function LiveListener({
     const res = await joinBroadcast({ roomName: stream.roomName })
     setJoining(false)
     if (!res.ok) {
+      // Public live + no display name yet: show the "Join Live" gate rather than
+      // treating it as an ended/failed stream.
+      if (res.needsIdentity) {
+        setNeedIdentity(true)
+        return
+      }
       setError(res.error)
       setEnded(true)
       return
     }
+    setNeedIdentity(false)
     await connect({ serverUrl: res.serverUrl, token: res.token, publish: res.canPublish })
   }
 
@@ -462,6 +473,18 @@ export function LiveListener({
       className="relative flex h-full flex-col overflow-hidden bg-zinc-950 text-white transition-[background] duration-700"
       style={{ ...liveThemeStyle(theme), ["--call-accept" as string]: "var(--live-accent)" }}
     >
+      {/* Public-live display-name gate. On submit it creates a guest session and
+          re-runs join() so the room connects as that guest. */}
+      {needIdentity && (
+        <LiveJoinGate
+          stream={stream}
+          onJoined={() => {
+            setNeedIdentity(false)
+            void join()
+          }}
+        />
+      )}
+
       {/* Drifting aurora backdrop, retinted by the active studio theme. */}
       <div
         aria-hidden="true"

@@ -31,6 +31,14 @@ export default async function LiveStreamPage({ params }: { params: Promise<{ id:
 
   const currentUser = await getCurrentUser()
 
+  // A PUBLIC live grants access to the Live itself — never the organisation's
+  // Home — so a visitor with the link may enter with just a display name (no
+  // account, no membership). A PRIVATE live stays members-only. The entry gate
+  // below therefore admits everyone for a public live and only signed-in users
+  // for a private one; joinBroadcast performs the authoritative membership check
+  // and the room renders the display-name gate for public guests.
+  const isPublic = stream.visibility === "public"
+
   // Video streams: the host resumes the studio as publisher; everyone else
   // joins the redesigned multi-guest video viewer. Both are mounted at the app
   // level so the room can be minimised into a persistent mini-player.
@@ -42,7 +50,7 @@ export default async function LiveStreamPage({ params }: { params: Promise<{ id:
     return (
       <VideoViewerLauncher
         stream={stream}
-        canWatch={Boolean(currentUser)}
+        canWatch={Boolean(currentUser) || isPublic}
         currentUser={currentUser}
         currentUserId={currentUser?.id ?? null}
         initialFollowing={followingIds.includes(stream.hostId)}
@@ -60,7 +68,7 @@ export default async function LiveStreamPage({ params }: { params: Promise<{ id:
     return (
       <ConversationParticipantLauncher
         stream={stream}
-        canJoin={Boolean(currentUser)}
+        canJoin={Boolean(currentUser) || isPublic}
         currentUser={currentUser}
         currentUserId={currentUser?.id ?? null}
       />
@@ -80,7 +88,7 @@ export default async function LiveStreamPage({ params }: { params: Promise<{ id:
   return (
     <ListenerLauncher
       stream={stream}
-      canListen={Boolean(currentUser)}
+      canListen={Boolean(currentUser) || isPublic}
       currentUser={currentUser}
       currentUserId={currentUser?.id ?? null}
     />

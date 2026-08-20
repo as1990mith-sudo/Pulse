@@ -85,6 +85,27 @@ export async function joinLiveAsGuest(input: { name: string }): Promise<{ ok: bo
 }
 
 /**
+ * Resolves the current actor for an IN-ROOM action (chat, reaction, presence,
+ * raise-hand) and enforces the same access rule as joinBroadcast: guests are
+ * allowed only in PUBLIC rooms. Returns null when there's no actor at all, or
+ * when a guest targets a non-public room — callers treat null as "not allowed"
+ * and no-op, so guest identities can never act on a private live.
+ */
+async function getRoomActor(roomName: string): Promise<LiveActor | null> {
+  const actor = await getLiveActor()
+  if (!actor) return null
+  if (actor.isGuest) {
+    const [stream] = await db
+      .select({ visibility: liveStream.visibility })
+      .from(liveStream)
+      .where(eq(liveStream.roomName, roomName))
+      .limit(1)
+    if (!stream || stream.visibility !== "public") return null
+  }
+  return actor
+}
+
+/**
  * Marks any "live" streams with a stale heartbeat as ended. Cheap single UPDATE
  * run at the top of every read path so abandoned streams never linger as live
  * (which is what previously stranded a dropped host and orphaned the row).
@@ -458,7 +479,6 @@ export async function discardRoomReplay(input: { roomName: string }): Promise<vo
 
 /** A listener (or the host returning) joins an existing live room. */
 export async function joinBroadcast(input: { roomName: string }): Promise<JoinResult> {
-  const user = await requireUser()
   if (!isLiveKitConfigured()) {
     return { ok: false, error: "Live audio is not configured yet." }
   }
@@ -473,14 +493,42 @@ export async function joinBroadcast(input: { roomName: string }): Promise<JoinRe
 
   if (!stream) return { ok: false, error: "This stream has ended." }
 
-  const isHost = stream.hostId === user.id
+  const isPublic = stream.visibility === "public"
 
-  // Home privacy gate: a session scoped to a private Home can only be joined by
-  // an active member of that Home — even with a direct link. This is the entry
-  // half of the isolation boundary (the discovery half hides it from Universal).
-  if (stream.homeId && !isHost) {
-    const allowed = await isActiveHomeMember(stream.homeId, user.id)
-    if (!allowed) return { ok: false, error: "This session is private to its community." }
+  // Who is joining: a signed-in member, a display-name-only guest, or nobody yet.
+  // A PUBLIC live grants access to the Live only — never the organisation's Home
+  // — so a guest with just a display name can enter. A PRIVATE live is restricted
+  // to members, so anyone without a member session is turned away to sign up.
+  const actor = await getLiveActor()
+
+  if (!actor) {
+    return isPublic
+      ? { ok: false, error: "Enter a display name to join.", needsIdentity: true }
+      : { ok: false, error: "This live is private. Sign in as a member to join.", needsAuth: true }
+  }
+
+  const isHost = !actor.isGuest && stream.hostId === actor.id
+
+  // Guests may ONLY join public lives. A private (or member-only Home) live sends
+  // them to sign up and join the organisation first.
+  if (actor.isGuest && !isPublic) {
+    return {
+      ok: false,
+      error: "This live is private. Sign up and join the community to enter.",
+      needsAuth: true,
+    }
+  }
+
+  // Home privacy gate for members: a PRIVATE Home-scoped session can only be
+  // joined by an active member of that Home — even with a direct link. Public
+  // Home lives stay open (the entry half of the isolation boundary; discovery
+  // hides private ones from Universal). Guests never reach here on a private
+  // live — they were turned away above.
+  if (!isPublic && stream.homeId && !isHost && !actor.isGuest) {
+    const allowed = await isActiveHomeMember(stream.homeId, actor.id)
+    if (!allowed) {
+      return { ok: false, error: "This session is private to its community.", needsAuth: true }
+    }
   }
 
   // Blocked users can't (re)join. The host is never blockable, so this only
@@ -489,7 +537,7 @@ export async function joinBroadcast(input: { roomName: string }): Promise<JoinRe
     const [blocked] = await db
       .select({ id: liveBlocked.id })
       .from(liveBlocked)
-      .where(and(eq(liveBlocked.roomName, input.roomName), eq(liveBlocked.userId, user.id)))
+      .where(and(eq(liveBlocked.roomName, input.roomName), eq(liveBlocked.userId, actor.id)))
       .limit(1)
     if (blocked) return { ok: false, error: "You can no longer join this live." }
   }
@@ -514,10 +562,10 @@ export async function joinBroadcast(input: { roomName: string }): Promise<JoinRe
 
   const token = await createAccessToken({
     roomName: input.roomName,
-    identity: user.id,
-    name: user.name,
+    identity: actor.id,
+    name: actor.name,
     canPublish,
-    metadata: JSON.stringify({ image: user.image ?? null }),
+    metadata: JSON.stringify({ image: actor.image ?? null, isGuest: actor.isGuest }),
   })
 
   // A host resuming their own video broadcast keeps the server-side recording
@@ -576,7 +624,8 @@ export type LiveChatMessageView = {
 
 /** Posts a chat message to a live room. */
 export async function sendLiveChat(input: { roomName: string; body: string }): Promise<void> {
-  const user = await requireUser()
+  const actor = await getRoomActor(input.roomName)
+  if (!actor) return
   const body = input.body.trim()
   if (!body) return
 
@@ -587,10 +636,10 @@ export async function sendLiveChat(input: { roomName: string; body: string }): P
 
   await db.insert(liveChatMessage).values({
     roomName: input.roomName,
-    userId: user.id,
-    userName: user.name,
-    userImage: user.image ?? null,
-    isHost: stream?.hostId === user.id,
+    userId: actor.id,
+    userName: actor.name,
+    userImage: actor.image ?? null,
+    isHost: !actor.isGuest && stream?.hostId === actor.id,
     kind: "message",
     body,
   })
@@ -641,21 +690,20 @@ const PRESENCE_STALE_MS = 30_000
 export async function heartbeatPresence(input: {
   roomName: string
 }): Promise<{ count: number; members: LiveAudienceMember[] }> {
-  const session = await auth.api.getSession({ headers: await headers() })
-  const u = session?.user
-  if (!u) return { count: 0, members: [] }
+  const actor = await getRoomActor(input.roomName)
+  if (!actor) return { count: 0, members: [] }
 
   const [stream] = await db
     .select({ hostId: liveStream.hostId })
     .from(liveStream)
     .where(eq(liveStream.roomName, input.roomName))
-  const isHost = stream?.hostId === u.id
+  const isHost = !actor.isGuest && stream?.hostId === actor.id
 
   // Has this user been (recently) present already? Decides whether to announce.
   const [existing] = await db
     .select({ id: livePresence.id, lastSeenAt: livePresence.lastSeenAt })
     .from(livePresence)
-    .where(and(eq(livePresence.roomName, input.roomName), eq(livePresence.userId, u.id)))
+    .where(and(eq(livePresence.roomName, input.roomName), eq(livePresence.userId, actor.id)))
 
   const now = new Date()
   const isNewArrival =
@@ -664,14 +712,14 @@ export async function heartbeatPresence(input: {
   if (existing) {
     await db
       .update(livePresence)
-      .set({ lastSeenAt: now, userName: u.name, userImage: u.image ?? null, isHost })
+      .set({ lastSeenAt: now, userName: actor.name, userImage: actor.image ?? null, isHost })
       .where(eq(livePresence.id, existing.id))
   } else {
     await db.insert(livePresence).values({
       roomName: input.roomName,
-      userId: u.id,
-      userName: u.name,
-      userImage: u.image ?? null,
+      userId: actor.id,
+      userName: actor.name,
+      userImage: actor.image ?? null,
       isHost,
     })
   }
@@ -680,12 +728,12 @@ export async function heartbeatPresence(input: {
   if (isNewArrival && !isHost) {
     await db.insert(liveChatMessage).values({
       roomName: input.roomName,
-      userId: u.id,
-      userName: u.name,
-      userImage: u.image ?? null,
+      userId: actor.id,
+      userName: actor.name,
+      userImage: actor.image ?? null,
       isHost: false,
       kind: "system",
-      body: `${u.name} entered the room`,
+      body: `${actor.name} entered the room`,
     })
   }
 
@@ -746,13 +794,14 @@ export async function sendLiveReaction(input: {
   kind?: "reaction" | "gift"
   label?: string
 }): Promise<void> {
-  const user = await requireUser()
+  const actor = await getRoomActor(input.roomName)
+  if (!actor) return
   const emoji = input.emoji.trim().slice(0, 8)
   if (!emoji) return
   await db.insert(liveReaction).values({
     roomName: input.roomName,
-    userId: user.id,
-    userName: user.name,
+    userId: actor.id,
+    userName: actor.name,
     kind: input.kind ?? "reaction",
     emoji,
     label: input.label?.trim().slice(0, 40) ?? null,
@@ -1032,7 +1081,8 @@ async function stageCapFor(roomName: string): Promise<number> {
 
 /** Listener asks to come on as a guest. */
 export async function requestToJoin(input: { roomName: string }): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireUser()
+  const actor = await getRoomActor(input.roomName)
+  if (!actor) return { ok: false, error: "You can't request the stage in this live." }
   // Honor a host-locked stage or a disabled guest section: no new requests.
   const [s] = await db
     .select({ locked: liveStream.locked, guestsEnabled: liveStream.guestsEnabled })
@@ -1046,14 +1096,14 @@ export async function requestToJoin(input: { roomName: string }): Promise<{ ok: 
     .where(
       and(
         eq(liveCallRequest.roomName, input.roomName),
-        eq(liveCallRequest.userId, user.id),
+        eq(liveCallRequest.userId, actor.id),
         eq(liveCallRequest.kind, "request"),
       ),
     )
   await db.insert(liveCallRequest).values({
     roomName: input.roomName,
-    userId: user.id,
-    userName: user.name,
+    userId: actor.id,
+    userName: actor.name,
     kind: "request",
     status: "pending",
   })
@@ -1518,8 +1568,12 @@ export async function getCallState(input: { roomName: string }): Promise<{
 }> {
   // Auto-end abandoned streams first so listeners of a vanished host close out.
   await endStaleStreams()
-  const session = await auth.api.getSession({ headers: await headers() })
-  const me = session?.user?.id ?? null
+  // Resolve the caller as either a member or a display-name guest, so an accepted
+  // guest still sees their own call status (myStatus/myOnCall) and can come on
+  // stage. A guest id (`guest:<id>`) never matches a hostId, so guests never gain
+  // host controls from this.
+  const actor = await getLiveActor()
+  const me = actor?.id ?? null
 
   let [stream] = await db
     .select({
