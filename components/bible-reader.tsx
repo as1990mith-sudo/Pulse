@@ -16,7 +16,6 @@ import useSWR from "swr"
   Highlighter,
   Languages,
   Loader2,
-  LogIn,
   MessageCircle,
   NotebookPen,
   Pencil,
@@ -891,10 +890,10 @@ function VerseActionSheet({
       }}
       className={cn(
         "z-[70] flex flex-col overflow-y-auto overscroll-contain rounded-2xl border border-border bg-popover-solid p-3 text-popover-foreground shadow-2xl",
-        // Only run the entrance animation once anchored (coords known), so it
-        // animates in from its final position next to the verse rather than
-        // from the off-screen measuring holder.
-        coords && "duration-150 animate-in fade-in zoom-in-95",
+        // No entrance animation: the popover is kept hidden (visibility) until
+        // its final coords are measured in a layout effect, then revealed in
+        // place on the same paint — so it opens instantly with no blink, fade,
+        // or zoom-in flash.
       )}
     >
         <div className="mb-2.5 flex items-start justify-between gap-3">
@@ -916,11 +915,12 @@ function VerseActionSheet({
             vertical space — the full verse is still copied/shared via `formatted`. */}
         <p className="mb-4 truncate text-sm leading-relaxed text-muted-foreground">{text}</p>
 
-        <div className="flex items-center gap-2">
+        {/* Primary actions — Copy, Share and Add note on a single compact row. */}
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => void copy()}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-secondary px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-secondary/80"
+            className="flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-secondary px-2 py-2 text-sm font-semibold transition-colors hover:bg-secondary/80"
           >
             {copied ? <Check className="size-4 text-primary" /> : <Copy className="size-4" />}
             {copied ? "Copied" : "Copy"}
@@ -928,10 +928,29 @@ function VerseActionSheet({
           <button
             type="button"
             onClick={() => void share()}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-95"
+            className="flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-primary px-2 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-95"
           >
             <Share2 className="size-4" /> Share
           </button>
+          {canAnnotate ? (
+            <button
+              type="button"
+              onClick={() => {
+                setDraft(note ?? "")
+                setEditingNote(true)
+              }}
+              className="flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-secondary px-2 py-2 text-sm font-semibold transition-colors hover:bg-secondary/80"
+            >
+              <StickyNote className="size-4" /> {note ? "Note" : "Add Note"}
+            </button>
+          ) : (
+            <Link
+              href="/sign-in"
+              className="flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-secondary px-2 py-2 text-sm font-semibold transition-colors hover:bg-secondary/80"
+            >
+              <NotebookPen className="size-4" /> Note
+            </Link>
+          )}
         </div>
 
         {canShareToChat && (
@@ -978,19 +997,12 @@ function VerseActionSheet({
 
         {/* Notes — signed-in readers can attach a private note to this verse and
             edit, copy, or delete it later. Signed-out readers get a sign-in nudge. */}
+        {/* Note editor / existing note. The entry point ("Add note") lives in the
+            top action row; this section only appears while composing or when a
+            saved note exists, keeping the popover compact otherwise. */}
+        {canAnnotate && (editingNote || note) && (
         <div className="mt-4 border-t border-border/60 pt-3">
-          <span className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-            <NotebookPen className="size-3.5" /> Note
-          </span>
-
-          {!canAnnotate ? (
-            <Link
-              href="/sign-in"
-              className="flex items-center justify-center gap-2 rounded-xl border border-border bg-secondary px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-secondary/80"
-            >
-              <LogIn className="size-4" /> Sign in to add a note
-            </Link>
-          ) : editingNote ? (
+          {editingNote ? (
             <div className="space-y-2">
               <textarea
                 autoFocus
@@ -1022,7 +1034,7 @@ function VerseActionSheet({
                 </button>
               </div>
             </div>
-          ) : note ? (
+          ) : (
             <div className="space-y-2">
               <p className="max-h-32 overflow-y-auto whitespace-pre-wrap rounded-xl border border-border/60 bg-secondary/40 px-3 py-2 text-sm leading-relaxed text-foreground">
                 {note}
@@ -1031,7 +1043,7 @@ function VerseActionSheet({
                 <button
                   type="button"
                   onClick={() => {
-                    setDraft(note)
+                    setDraft(note ?? "")
                     setEditingNote(true)
                   }}
                   className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-secondary px-3 py-2 text-sm font-semibold transition-colors hover:bg-secondary/80"
@@ -1056,19 +1068,9 @@ function VerseActionSheet({
                 </button>
               </div>
             </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                setDraft("")
-                setEditingNote(true)
-              }}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-secondary px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-secondary/80"
-            >
-              <StickyNote className="size-4" /> Add note
-            </button>
           )}
   </div>
+  )}
   </div>
   </>,
     document.body,
