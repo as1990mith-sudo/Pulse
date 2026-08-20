@@ -44,11 +44,15 @@ export function AnnouncementBanner({
   myRequests,
   currentUser,
   isAdmin = false,
+  canPublish = false,
 }: {
   announcements: AnnouncementView[]
   myRequests: AnnouncementView[]
   currentUser: CurrentUser | null
   isAdmin?: boolean
+  // Whether the viewer may publish events (organisation owner/admin). Members
+  // can browse and RSVP but never see the publish entry points.
+  canPublish?: boolean
 }) {
   const [showForm, setShowForm] = useState(false)
   // The id of the event whose detail sheet is open (opened by tapping a card).
@@ -74,10 +78,9 @@ export function AnnouncementBanner({
           </span>
           <div className="leading-tight">
             <h2 className="text-base font-semibold">Events</h2>
-            <p className="text-xs text-muted-foreground">Upcoming events from the community</p>
           </div>
         </div>
-        {currentUser && (
+        {canPublish && (
           <Button size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
             <Plus className="size-4" /> Publish
           </Button>
@@ -109,16 +112,11 @@ export function AnnouncementBanner({
           <div className="space-y-1">
             <p className="text-sm font-medium text-balance">No events yet</p>
             <p className="text-xs text-muted-foreground text-pretty">
-              Be the first to publish an upcoming event for the whole community.
+              {canPublish
+                ? "Publish your first event and your members will be able to say if they're coming."
+                : "When your organisation publishes an event, you'll see it here."}
             </p>
           </div>
-          {currentUser ? (
-            <Button size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
-              <CalendarPlus className="size-4" /> Publish an event
-            </Button>
-          ) : (
-            <p className="text-xs text-muted-foreground">Sign in to publish an event.</p>
-          )}
         </Card>
       )}
 
@@ -174,6 +172,12 @@ function EventGridCard({
         </span>
         <h3 className="truncate text-sm font-semibold leading-snug text-foreground">{a.title}</h3>
         <p className="truncate text-xs text-muted-foreground">{a.creatorName}</p>
+        {a.comingCount > 0 && (
+          <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+            <Users className="size-3" />
+            {a.comingCount} {a.comingCount === 1 ? "person" : "people"} coming
+          </span>
+        )}
       </div>
     </button>
   )
@@ -194,23 +198,34 @@ function EventDetailSheet({
 }) {
   const [lightbox, setLightbox] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const [deleting, startDeleting] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
   if (typeof document === "undefined") return null
 
-  function handleInteract(action: "interested" | "not_interested") {
+  function handleRsvp(response: "coming" | "not_coming") {
     setError(null)
     startTransition(async () => {
       try {
-        await interactWithAnnouncement({ id: a.id, action })
-        onClose()
+        await rsvpToEvent({ id: a.id, response })
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong.")
       }
     })
   }
 
-  const showInterestButtons = !a.isOwner && a.myAction === null
+  function handleOwnerDelete() {
+    setError(null)
+    startDeleting(async () => {
+      try {
+        await orgDeleteEvent(a.id)
+        onClose()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not delete this event.")
+      }
+    })
+  }
+
   const calEvent = {
     title: a.title,
     description: a.description,
@@ -315,25 +330,56 @@ function EventDetailSheet({
             </div>
           )}
 
-          {showInterestButtons ? (
+          {/* Attendance roll-up — visible to everyone. */}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-live/10 px-2.5 py-1 font-medium text-live">
+              <Check className="size-3.5" /> {a.comingCount} coming
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 font-medium text-muted-foreground">
+              <X className="size-3.5" /> {a.notComingCount} can&apos;t make it
+            </span>
+          </div>
+
+          {a.isOwner ? (
+            <p className="rounded-lg bg-secondary/60 px-3 py-2 text-center text-xs text-muted-foreground">
+              This is your event. Manage attendance in your admin console.
+            </p>
+          ) : (
+            /* Members RSVP; tapping the active choice again clears it. */
             <div className="flex items-center gap-2">
               <Button
-                variant="outline"
+                variant={a.myRsvp === "not_coming" ? "default" : "outline"}
                 className="flex-1 gap-1.5"
                 disabled={isPending}
-                onClick={() => handleInteract("not_interested")}
+                aria-pressed={a.myRsvp === "not_coming"}
+                onClick={() => handleRsvp("not_coming")}
               >
-                <X className="size-4" /> Not interested
+                <X className="size-4" /> I can&apos;t make it
               </Button>
-              <Button className="flex-1 gap-1.5" disabled={isPending} onClick={() => handleInteract("interested")}>
-                {isPending ? <Loader2 className="size-4 animate-spin" /> : <MessageSquare className="size-4" />}
-                Want to know more
+              <Button
+                variant={a.myRsvp === "coming" ? "default" : "outline"}
+                className="flex-1 gap-1.5"
+                disabled={isPending}
+                aria-pressed={a.myRsvp === "coming"}
+                onClick={() => handleRsvp("coming")}
+              >
+                {isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                I&apos;m coming
               </Button>
             </div>
-          ) : (
-            <p className="rounded-lg bg-secondary/60 px-3 py-2 text-center text-xs text-muted-foreground">
-              {a.isOwner ? "This is your event." : "You've already responded to this event."}
-            </p>
+          )}
+
+          {/* The publishing org admin can remove their event straight from here. */}
+          {a.isOwner && (
+            <Button
+              variant="outline"
+              className="w-full gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+              disabled={deleting}
+              onClick={handleOwnerDelete}
+            >
+              {deleting ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+              Delete event
+            </Button>
           )}
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
@@ -559,8 +605,6 @@ function AdminMessageDialog({ announcement: a, onClose }: { announcement: Announ
   )
 }
 
-const DURATION_OPTIONS = Array.from({ length: AD_MAX_HOURS / AD_BLOCK_HOURS }, (_, i) => (i + 1) * AD_BLOCK_HOURS)
-
 function AdvertiseForm({ onClose }: { onClose: () => void }) {
   // Product adverts were removed — this form only publishes events.
   const adType: AdType = "event"
@@ -573,7 +617,8 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
   // amount when paid (and doubles as the product price for product adverts).
   const [eventPricing, setEventPricing] = useState<"free" | "paid">("free")
   const [price, setPrice] = useState("")
-  const [durationHours, setDurationHours] = useState(AD_BLOCK_HOURS)
+  // How the event should leave the feed once it's over.
+  const [deleteMode, setDeleteMode] = useState<EventDeleteMode>("auto5h")
   const [flyer, setFlyer] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -582,8 +627,6 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const today = new Date().toISOString().slice(0, 10)
-  const totalPrice = priceForHours(durationHours)
-  const isEvent = adType === "event"
 
   // Upload the original, full-size flyer untouched (like cover art in the audio
   // studio). The feed only crops it visually via object-cover; the stored file
@@ -627,7 +670,7 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
           eventDate,
           eventTime,
           price: submittedPrice,
-          durationHours,
+          deleteMode,
         })
         setResult(res)
       } catch (err) {
@@ -656,7 +699,7 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
             </span>
             <div className="leading-tight">
               <h2 className="font-semibold">Publish an event</h2>
-              <p className="text-xs text-muted-foreground">Listed in the Events tab for everyone</p>
+              <p className="text-xs text-muted-foreground">Your members can say if they&apos;re coming</p>
             </div>
           </div>
           <Button size="icon" variant="ghost" className="shrink-0" aria-label="Close" onClick={onClose}>
@@ -821,42 +864,45 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
                 </div>
             </div>
 
-            {/* Duration */}
+            {/* When should this event be removed from the feed? */}
             <div className="space-y-2">
-              <label htmlFor="ann-duration" className="text-sm font-medium">
-                Run time
-              </label>
-              <select
-                id="ann-duration"
-                value={durationHours}
-                onChange={(e) => setDurationHours(Number(e.target.value))}
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {DURATION_OPTIONS.map((h) => (
-                  <option key={h} value={h}>
-                    {h} hours — ${priceForHours(h)}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-muted-foreground">
-                $5 per {AD_BLOCK_HOURS} hours, up to {AD_MAX_HOURS} hours. Your advert auto-expires when the time is up.
-              </p>
-            </div>
-
-            {/* Paid placement summary */}
-            <div className="rounded-lg border border-border bg-secondary/50 p-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Total due</span>
-                <span className="text-sm font-semibold">${totalPrice}</span>
+              <span className="text-sm font-medium">Delete event</span>
+              <div className="grid gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteMode("auto5h")}
+                  aria-pressed={deleteMode === "auto5h"}
+                  className={cn(
+                    "flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors",
+                    deleteMode === "auto5h"
+                      ? "border-primary bg-primary/10"
+                      : "border-border hover:bg-secondary",
+                  )}
+                >
+                  <Clock className={cn("mt-0.5 size-4 shrink-0", deleteMode === "auto5h" ? "text-primary" : "text-muted-foreground")} />
+                  <span className="space-y-0.5">
+                    <span className="block text-sm font-medium">5 hours after it starts</span>
+                    <span className="block text-xs text-muted-foreground">Removed automatically once the event is over.</span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeleteMode("manual")}
+                  aria-pressed={deleteMode === "manual"}
+                  className={cn(
+                    "flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors",
+                    deleteMode === "manual"
+                      ? "border-primary bg-primary/10"
+                      : "border-border hover:bg-secondary",
+                  )}
+                >
+                  <Trash2 className={cn("mt-0.5 size-4 shrink-0", deleteMode === "manual" ? "text-primary" : "text-muted-foreground")} />
+                  <span className="space-y-0.5">
+                    <span className="block text-sm font-medium">Keep until I delete it</span>
+                    <span className="block text-xs text-muted-foreground">Stays on the feed until you remove it yourself.</span>
+                  </span>
+                </button>
               </div>
-              <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-                <li className="flex items-center gap-1.5">
-                  <Check className="size-3 text-primary" /> Reviewed on a first-come, first-served basis
-                </li>
-                <li className="flex items-center gap-1.5">
-                  <Check className="size-3 text-primary" /> Interested listeners message you directly
-                </li>
-              </ul>
             </div>
 
             {error && <p className="text-sm text-destructive">{error}</p>}
@@ -866,11 +912,10 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
                 Cancel
               </Button>
               <Button type="submit" className="gap-1.5" disabled={isPending || uploading}>
-                {isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-                {isPending ? "Submitting…" : `Pay $${totalPrice} & submit`}
+                {isPending ? <Loader2 className="size-4 animate-spin" /> : <CalendarPlus className="size-4" />}
+                {isPending ? "Publishing…" : "Publish event"}
               </Button>
             </div>
-            <p className="text-center text-[11px] text-muted-foreground">Demo checkout — no real payment is processed.</p>
           </form>
         )}
       </Card>
@@ -898,11 +943,11 @@ function ResultPanel({
         {approved ? <Check className="size-6" /> : <X className="size-6" />}
       </span>
       <div className="space-y-1">
-        <h3 className="font-semibold">{approved ? "Your advert is published!" : "Request declined"}</h3>
+        <h3 className="font-semibold">{approved ? "Your event is published!" : "Couldn't publish"}</h3>
         <p className="text-sm text-muted-foreground text-pretty">
           {approved
-            ? "It's now live at the top of the feed and will disappear automatically when your run time is up."
-            : result.declineReason || "Declined due to high demand for the selected slot."}
+            ? "It's now live in the Events feed and your members can say whether they're coming."
+            : result.declineReason || "Something went wrong publishing your event. Please try again."}
         </p>
       </div>
       <Button onClick={onClose}>Done</Button>

@@ -1,18 +1,24 @@
 import { SiteHeader } from "@/components/site-header"
 import { MindFeed } from "@/components/mind-feed"
 import { getFeed } from "@/app/actions/feed"
-import { getActiveAnnouncements, getMyAnnouncements, isPlatformAdmin } from "@/app/actions/announcements"
+import {
+  getActiveAnnouncements,
+  getMyAnnouncements,
+  isPlatformAdmin,
+  canPublishEvents,
+} from "@/app/actions/announcements"
 import { getStatusFeed } from "@/app/actions/status"
 import { getCurrentUser } from "@/lib/session"
 
 export default async function FeedPage() {
-  const [posts, currentUser, announcements, myRequests, statusGroups, isAdmin] = await Promise.all([
+  const [posts, currentUser, announcements, myRequests, statusGroups, isAdmin, canPublish] = await Promise.all([
     getFeed(),
     getCurrentUser(),
     getActiveAnnouncements(),
     getMyAnnouncements(),
     getStatusFeed(),
     isPlatformAdmin(),
+    canPublishEvents(),
   ])
 
   return (
@@ -31,6 +37,7 @@ export default async function FeedPage() {
             announcements={announcements}
             myRequests={myRequests}
             isAdmin={isAdmin}
+            canPublish={canPublish}
           />
         </div>
       </main>
