@@ -543,13 +543,49 @@ export function VideoStudioConsole({
   // removed, so this stays inert unless a legacy session reports it.
   const prayerActive = prayerStartedAt != null
 
-  // Ducking removed: the background music always stays at the host's chosen
-  // volume and is never lowered under speech. We still hold it at base (a no-op
-  // ramp) so any level left over from a prior session is normalised.
+  // Whether anyone on the call — the host or any guest — is actively speaking.
+  const anySpeaking = localSpeaking || peers.some((p) => p.isSpeaking)
+
+  // Release-hold timer so the music doesn't "pump" between words; it only rises
+  // back to full once the room has been quiet for a moment.
+  const duckReleaseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Sidechain ducking. While anyone is actively speaking, dip the background
+  // music so voices cut through cleanly and each speaker's mic echo-canceller/
+  // noise-suppressor isn't fighting loud, sustained music bleeding from their
+  // device speakers — the real cause of a voice sounding muffled/underwater.
+  // Prayer Mode is exempt: worship music keeps playing at full under prayer.
+  // Both stay clean — the music never disappears, it just steps back under
+  // live speech, with a fast attack and a gentle, held release.
   useEffect(() => {
     if (musicActiveIndex === null || !musicPlaying) return
-    duckMusic(false)
-  }, [musicActiveIndex, musicPlaying, duckMusic])
+    if (prayerActive) {
+      if (duckReleaseRef.current) {
+        clearTimeout(duckReleaseRef.current)
+        duckReleaseRef.current = null
+      }
+      duckMusic(false, 300)
+      return
+    }
+    if (anySpeaking) {
+      if (duckReleaseRef.current) {
+        clearTimeout(duckReleaseRef.current)
+        duckReleaseRef.current = null
+      }
+      duckMusic(true, 140)
+    } else {
+      duckReleaseRef.current = setTimeout(() => {
+        duckMusic(false, 480)
+        duckReleaseRef.current = null
+      }, 650)
+    }
+    return () => {
+      if (duckReleaseRef.current) {
+        clearTimeout(duckReleaseRef.current)
+        duckReleaseRef.current = null
+      }
+    }
+  }, [anySpeaking, prayerActive, musicActiveIndex, musicPlaying, duckMusic])
 
   async function goLive() {
     setError(null)

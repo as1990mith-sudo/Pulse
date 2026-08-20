@@ -405,13 +405,38 @@ export function ConversationRoom({
   const [musicError, setMusicError] = useState<string | null>(null)
   const [musicOpen, setMusicOpen] = useState(false)
 
-  // Ducking removed: the background music always plays at the host's chosen
-  // volume and is never lowered under active speakers. We still hold it at base
-  // (a no-op ramp) so any level left over from a prior session is normalised.
+  // Release-hold timer so the music doesn't "pump" up and down between words:
+  // it only rises back to full once the room has been quiet for a moment.
+  const duckReleaseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Sidechain ducking. While anyone in the room is actively speaking (host or
+  // guest), dip the background music so voices cut through cleanly — and, just
+  // as important, so each speaker's mic echo-canceller/noise-suppressor isn't
+  // fighting loud, sustained music bleeding from their device speakers, which
+  // is what makes a voice sound muffled/underwater. Fast attack when speech
+  // starts; a short hold + gentle release when it stops. Both stay clean: the
+  // music never disappears, it just steps back under live speech.
   useEffect(() => {
     if (musicActiveIndex === null || !musicPlaying) return
-    duckMusic(false)
-  }, [musicActiveIndex, musicPlaying, duckMusic])
+    if (state.speaking) {
+      if (duckReleaseRef.current) {
+        clearTimeout(duckReleaseRef.current)
+        duckReleaseRef.current = null
+      }
+      duckMusic(true, 140)
+    } else {
+      duckReleaseRef.current = setTimeout(() => {
+        duckMusic(false, 480)
+        duckReleaseRef.current = null
+      }, 650)
+    }
+    return () => {
+      if (duckReleaseRef.current) {
+        clearTimeout(duckReleaseRef.current)
+        duckReleaseRef.current = null
+      }
+    }
+  }, [state.speaking, musicActiveIndex, musicPlaying, duckMusic])
 
   // Mix a playlist track into the broadcast and mark it now-playing.
   async function playMusicTrack(index: number) {
