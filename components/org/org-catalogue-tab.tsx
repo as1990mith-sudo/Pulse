@@ -1,8 +1,22 @@
 "use client"
 
-import { useMemo, useState, useTransition } from "react"
+import { useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Clock, FileText, Headphones, Loader2, MoreVertical, Play, Plus, Radio, Search, Trash2 } from "lucide-react"
+import {
+  Clock,
+  FileText,
+  Headphones,
+  ImageIcon,
+  Loader2,
+  MoreVertical,
+  Play,
+  Plus,
+  Radio,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react"
+import { compressImage, uploadMedia } from "@/lib/upload-media"
 import {
   createCatalogueItem,
   deleteCatalogueItem,
@@ -505,8 +519,10 @@ const UPLOAD_META = {
     title: "Add audio",
     description: "Publish a sermon, teaching or worship set to your catalogue.",
     titlePlaceholder: "Message title",
-    linkLabel: "Audio link",
-    linkPlaceholder: "youtube.com/… or an audio file URL",
+    fileLabel: "Audio file",
+    fileHint: "MP3, WAV, M4A or AAC",
+    // The file <input> accept filter for this resource kind.
+    accept: "audio/*",
     submit: "Add audio",
     showMedia: true,
   },
@@ -514,8 +530,9 @@ const UPLOAD_META = {
     title: "Add document",
     description: "Publish a document, PDF or study guide to your catalogue.",
     titlePlaceholder: "Document title",
-    linkLabel: "Document link",
-    linkPlaceholder: "Link to a PDF, Google Doc, etc.",
+    fileLabel: "Document file",
+    fileHint: "PDF, EPUB or Word document",
+    accept: ".pdf,.epub,.doc,.docx,application/pdf,application/epub+zip,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     submit: "Add document",
     showMedia: false,
   },
@@ -530,7 +547,8 @@ export function NewCatalogueDialog({
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
-  const [pending, startTransition] = useTransition()
+  const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   // The resource kind follows the active Catalogue tab. Live is not uploadable,
@@ -540,38 +558,79 @@ export function NewCatalogueDialog({
 
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
-  const [url, setUrl] = useState("")
-  const [cover, setCover] = useState("")
   const [duration, setDuration] = useState("")
+  // The resource itself and (audio only) its cover art are now chosen from the
+  // device rather than pasted as links — they upload to Blob storage on submit.
+  const [file, setFile] = useState<File | null>(null)
+  const [cover, setCover] = useState<File | null>(null)
 
-  function submit() {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const coverInputRef = useRef<HTMLInputElement>(null)
+
+  function reset() {
+    setTitle("")
+    setDescription("")
+    setDuration("")
+    setFile(null)
+    setCover(null)
+    setProgress(null)
     setError(null)
-    startTransition(async () => {
-      try {
-        await createCatalogueItem({
-          organizationId,
-          title,
-          description: description || undefined,
-          kind,
-          url,
-          cover: cover || undefined,
-          duration: duration || undefined,
-        })
-        setOpen(false)
-        setTitle("")
-        setDescription("")
-        setUrl("")
-        setCover("")
-        setDuration("")
-        router.refresh()
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Couldn't add the resource.")
+  }
+
+  async function submit() {
+    setError(null)
+    if (!title.trim()) {
+      setError("Please give the resource a title.")
+      return
+    }
+    if (!file) {
+      setError(`Please choose ${kind === "document" ? "a document" : "an audio file"} to upload.`)
+      return
+    }
+
+    setBusy(true)
+    try {
+      // Upload the cover art first (quick, small) so the main file's progress
+      // bar reflects the bulk of the wait.
+      let coverUrl: string | undefined
+      if (meta.showMedia && cover) {
+        const compressed = await compressImage(cover)
+        const up = await uploadMedia(compressed, "catalogue", "cover.jpg")
+        coverUrl = up.url
       }
-    })
+
+      setProgress(0)
+      const uploaded = await uploadMedia(file, "catalogue", file.name, (p) => setProgress(p))
+
+      await createCatalogueItem({
+        organizationId,
+        title,
+        description: description || undefined,
+        kind,
+        url: uploaded.url,
+        cover: coverUrl,
+        duration: duration || undefined,
+      })
+      setOpen(false)
+      reset()
+      router.refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't add the resource.")
+    } finally {
+      setBusy(false)
+      setProgress(null)
+    }
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (busy) return
+        setOpen(next)
+        if (!next) reset()
+      }}
+    >
       <DialogTrigger
         render={
           <button
@@ -595,14 +654,51 @@ export function NewCatalogueDialog({
           <Field label="Title">
             <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={meta.titlePlaceholder} />
           </Field>
-          <Field label={meta.linkLabel}>
-            <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={meta.linkPlaceholder} />
+
+          {/* File picker replaces the old link field — upload from the device. */}
+          <Field label={meta.fileLabel}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={meta.accept}
+              className="sr-only"
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) setFile(f)
+                e.target.value = ""
+              }}
+            />
+            <FilePickerButton
+              icon={kind === "document" ? <FileText className="size-4" /> : <Headphones className="size-4" />}
+              fileName={file?.name ?? null}
+              hint={meta.fileHint}
+              onPick={() => fileInputRef.current?.click()}
+              onClear={file ? () => setFile(null) : undefined}
+            />
           </Field>
+
           {/* Cover art + duration only make sense for audio; documents skip them. */}
           {meta.showMedia && (
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Cover image URL (optional)">
-                <Input value={cover} onChange={(e) => setCover(e.target.value)} placeholder="https://…" />
+              <Field label="Cover image (optional)">
+                <input
+                  ref={coverInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) setCover(f)
+                    e.target.value = ""
+                  }}
+                />
+                <FilePickerButton
+                  icon={<ImageIcon className="size-4" />}
+                  fileName={cover?.name ?? null}
+                  hint="JPG or PNG"
+                  onPick={() => coverInputRef.current?.click()}
+                  onClear={cover ? () => setCover(null) : undefined}
+                />
               </Field>
               <Field label="Duration (optional)">
                 <Input value={duration} onChange={(e) => setDuration(e.target.value)} placeholder="42 min" />
@@ -617,6 +713,11 @@ export function NewCatalogueDialog({
               placeholder="What is this about?"
             />
           </Field>
+          {progress !== null && (
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+              <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progress}%` }} />
+            </div>
+          )}
           {error && (
             <p className="text-sm text-destructive" role="alert">
               {error}
@@ -624,15 +725,72 @@ export function NewCatalogueDialog({
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" className="rounded-full" onClick={() => setOpen(false)}>
+          <Button variant="outline" className="rounded-full" onClick={() => setOpen(false)} disabled={busy}>
             Cancel
           </Button>
-          <Button className="rounded-full" onClick={submit} disabled={pending}>
-            {pending ? "Adding..." : meta.submit}
+          <Button className="rounded-full" onClick={submit} disabled={busy}>
+            {busy ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                {progress !== null ? `Uploading ${progress}%` : "Adding..."}
+              </>
+            ) : (
+              meta.submit
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * A tappable field that opens the device file picker and then shows the chosen
+ * file's name with a clear button. Keeps the upload UI consistent between the
+ * media file and the optional cover art.
+ */
+function FilePickerButton({
+  icon,
+  fileName,
+  hint,
+  onPick,
+  onClear,
+}: {
+  icon: React.ReactNode
+  fileName: string | null
+  hint: string
+  onPick: () => void
+  onClear?: () => void
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-3 rounded-xl border border-dashed px-3 py-2.5 transition-colors",
+        fileName ? "border-primary/40 bg-primary/5" : "border-border/70 hover:border-border",
+      )}
+    >
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
+        {icon}
+      </span>
+      <button type="button" onClick={onPick} className="min-w-0 flex-1 text-left">
+        {fileName ? (
+          <span className="block truncate text-sm font-medium text-foreground">{fileName}</span>
+        ) : (
+          <span className="block text-sm font-medium text-foreground">Choose file</span>
+        )}
+        <span className="block truncate text-xs text-muted-foreground">{fileName ? "Tap to replace" : hint}</span>
+      </button>
+      {onClear && (
+        <button
+          type="button"
+          onClick={onClear}
+          aria-label="Remove file"
+          className="flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+        >
+          <X className="size-4" />
+        </button>
+      )}
+    </div>
   )
 }
 
