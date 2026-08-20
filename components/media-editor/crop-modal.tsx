@@ -224,7 +224,7 @@ export function CropModal({
                 type="button"
                 onClick={() => setRatio(r)}
                 className={cn(
-                  "flex min-w-16 flex-col items-center gap-0.5 rounded-2xl px-3 py-2 leading-none transition-colors active:scale-95",
+                  "flex min-w-16 items-center justify-center rounded-2xl px-3 py-2.5 leading-none transition-colors active:scale-95",
                   ratio.label === r.label
                     ? "bg-white text-black"
                     : "bg-white/10 text-white/80 hover:bg-white/20",
@@ -233,16 +233,6 @@ export function CropModal({
                 aria-label={r.hint ? `${r.hint} ${r.label}` : r.label}
               >
                 <span className="text-sm font-semibold">{r.label}</span>
-                {r.hint && (
-                  <span
-                    className={cn(
-                      "text-[10px] font-medium uppercase tracking-wide",
-                      ratio.label === r.label ? "text-black/60" : "text-white/50",
-                    )}
-                  >
-                    {r.hint}
-                  </span>
-                )}
               </button>
             ))}
           </div>

@@ -315,9 +315,11 @@ function PostItem({
 
       {/* Body, media and actions — indented (pl-14) to align under the name,
           clearing the avatar gutter (avatar size-11 + gap-3). Pulled up with a
-          small negative margin so the body sits ~50% closer to the name line,
-          absorbing the whitespace left by centering the name in the tall avatar. */}
-      <div className="-mt-1 pl-14">
+          negative margin so the body sits closer to the name line, absorbing the
+          whitespace left by centering the name in the tall avatar. Anonymous
+          posts carry a single-line identity (no handle beneath the name), so
+          they get a larger pull-up to close the extra gap. */}
+      <div className={cn(post.anonymous ? "-mt-3" : "-mt-1", "pl-14")}>
         {editing ? (
           <div className="mt-2">
             <Textarea
