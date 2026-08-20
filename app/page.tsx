@@ -8,7 +8,7 @@ import { getDevotionalComments } from "@/app/actions/devotional"
 import { getCurrentUser } from "@/lib/session"
 import { getActiveHomeContext } from "@/lib/home/active-home"
 import { homeRoleHasPermission } from "@/lib/home/roles"
-import { HomeEntry } from "@/components/home/onboarding/home-entry"
+import { SignupChooser } from "@/components/signup-chooser"
 
 /** Formats the devotional's publish date as e.g. "Jun 20, 2026"; returns "" if unparseable. */
 function formatPublishedDate(value: string): string {
@@ -20,13 +20,13 @@ function formatPublishedDate(value: string): string {
 export default async function DevotionalPage() {
   const currentUser = await getCurrentUser()
 
-  // Frequency Home front door: without an active Home there is no public feed —
-  // the viewer is guided to set up or join a Home (spec §3). Once inside a Home,
-  // the root shows that Home's landing (its Daily Devotional), scoped to its
-  // organisation context.
+  // Without an active Home there is no public feed — the viewer chooses how to
+  // connect: create an organisation Home, or join one as an individual with a
+  // key. Once inside a Home, the root shows that Home's landing (its Daily
+  // Devotional), scoped to its organisation context.
   const { home, membership } = await getActiveHomeContext()
   if (!home) {
-    return <HomeEntry signedIn={!!currentUser} />
+    return <SignupChooser />
   }
 
   // Whether this viewer may manage the Home's content. Admins decide exactly

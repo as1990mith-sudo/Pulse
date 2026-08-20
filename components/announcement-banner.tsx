@@ -17,6 +17,7 @@ import {
   Plus,
   Tag,
   Trash2,
+  Users,
   X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -30,10 +31,12 @@ import {
   adminMessageCreator,
   createAnnouncement,
   deleteAnnouncement,
-  interactWithAnnouncement,
+  orgDeleteEvent,
+  rsvpToEvent,
   type AnnouncementView,
+  type EventDeleteMode,
 } from "@/app/actions/announcements"
-import { AD_BLOCK_HOURS, AD_MAX_HOURS, priceForHours, type AdType } from "@/lib/ads"
+import { type AdType } from "@/lib/ads"
 import { downloadIcs, formatEventDate, googleCalendarUrl } from "@/lib/calendar"
 import type { CurrentUser } from "@/lib/session"
 import { cn } from "@/lib/utils"

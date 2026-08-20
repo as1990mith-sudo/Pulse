@@ -101,13 +101,11 @@ export default async function RootLayout({
         <ThemeProvider
           attribute="class"
           defaultTheme="charcoal"
-          themes={['light', 'dark', 'mid', 'charcoal', 'grass']}
+          themes={['light', 'dark', 'charcoal']}
           value={{
             light: 'theme-light',
             dark: 'dark',
-            mid: 'theme-mid',
             charcoal: 'theme-charcoal',
-            grass: 'theme-grass',
           }}
           enableSystem={false}
           disableTransitionOnChange

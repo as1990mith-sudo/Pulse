@@ -53,11 +53,11 @@ export function SignupChooser() {
             cta="Create"
           />
           <PathCard
-            href="/sign-up/universal"
+            href="/home/join"
             icon={<UserRound className="size-6" strokeWidth={2} />}
             title="Individual"
-            description="Join as a member of an organization. You should have the organisation key."
-            cta="Explore"
+            description="Join as a member of an organisation. Have your organisation key ready."
+            cta="Enter key"
           />
         </div>
       </div>
