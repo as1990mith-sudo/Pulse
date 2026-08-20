@@ -13,19 +13,23 @@ import { auth } from "@/lib/auth"
 // client requests is used as the blob key prefix, so we validate it against an
 // allow-list and only let signed-in users upload.
 
-const ALLOWED_PREFIXES = ["chat/", "status/", "covers/", "avatars/", "live-music/", "episodes/", "dm/", "store/", "pinned/", "community/"] as const
+const ALLOWED_PREFIXES = ["chat/", "status/", "covers/", "avatars/", "live-music/", "episodes/", "dm/", "store/", "pinned/", "community/", "catalogue/"] as const
 
-// Document buckets (store product files, host-pinned live documents) accept
-// PDFs/EPUBs in addition to media; everything else is media only.
+// Document buckets (store product files, host-pinned live documents, org
+// catalogue uploads) accept PDFs/EPUBs in addition to media; everything else is
+// media only. The catalogue bucket holds audio files, cover images AND
+// documents, so it needs the permissive document content types.
 const DOCUMENT_CONTENT_TYPES = [
   "image/*",
   "video/*",
   "audio/*",
   "application/pdf",
   "application/epub+zip",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/octet-stream",
 ]
-const DOCUMENT_PREFIXES = ["store/", "pinned/"]
+const DOCUMENT_PREFIXES = ["store/", "pinned/", "catalogue/"]
 
 // Generous ceilings per kind. Videos/audio are large; images are small.
 const MAX_BYTES = 200 * 1024 * 1024 // 200 MB

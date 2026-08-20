@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, useTransition } from "react"
+import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -24,6 +24,7 @@ import { ShareSheet } from "@/components/share-sheet"
 import { toggleSaveItem } from "@/app/actions/share"
 import type { ShareTarget } from "@/lib/share-types"
 import { cn } from "@/lib/utils"
+import { sanitizeArticleHtml } from "@/lib/article-sanitize"
 
 export function ArticleReader({
   article,
@@ -39,6 +40,11 @@ export function ArticleReader({
   currentUser: CurrentUser | null
 }) {
   const router = useRouter()
+  // Re-normalize the body at render so articles published before the paragraph
+  // fix — whose breaks were stored as bare <span>/<div> line wrappers — regain
+  // real <p> spacing. Newly-published bodies are already normalized, so this is
+  // an idempotent no-op for them.
+  const bodyHtml = useMemo(() => sanitizeArticleHtml(article.bodyHtml), [article.bodyHtml])
   const signedIn = Boolean(currentUser)
   const [liked, setLiked] = useState(article.liked)
   const [likes, setLikes] = useState(article.likeCount)
@@ -235,7 +241,7 @@ export function ArticleReader({
       {/* Body */}
       <div
         className="article-prose mt-7"
-        dangerouslySetInnerHTML={{ __html: article.bodyHtml }}
+        dangerouslySetInnerHTML={{ __html: bodyHtml }}
       />
 
       {/* Tags */}

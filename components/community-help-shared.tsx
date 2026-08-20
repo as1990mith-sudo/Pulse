@@ -295,13 +295,17 @@ export function FeedPostImage({
 }) {
   const [ratio, setRatio] = useState<number | null>(null)
   const aspect = ratio ? Math.min(16 / 9, Math.max(4 / 5, ratio)) : 4 / 5
+  // Portrait photos (taller than square) render slim and left-aligned — like X's
+  // vertical media — instead of a wide block. Landscape/square stay full-width.
+  const portrait = ratio !== null && ratio < 1
   return (
     <button
       type="button"
       onClick={onClick}
       style={{ aspectRatio: String(aspect), maxHeight: "24rem" }}
       className={cn(
-        "relative block w-full overflow-hidden rounded-2xl border border-border/60 bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "relative block overflow-hidden rounded-2xl border border-border/60 bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        portrait ? "w-[62%] max-w-[230px]" : "w-full",
         className,
       )}
       aria-label="Open attached photo"

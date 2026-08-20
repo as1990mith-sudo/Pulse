@@ -10,7 +10,6 @@ import {
   AlignLeft,
   BookOpen,
   Bookmark,
-  Compass,
   ChevronDown,
   ChevronRight,
   Contrast,
@@ -338,7 +337,6 @@ export function AppMenu() {
                 )}
 
                 <Section>
-                  <DrawerItem href="/discover" icon={Compass} label="Discover Ministries" onNavigate={navigate} />
                   <DrawerItem href="/bible" icon={BookOpen} label="Bible" onNavigate={navigate} />
                   <DrawerItem href="/live-notes" icon={NotebookPen} label="Live Notes" onNavigate={navigate} />
                   <DrawerItem href="/articles" icon={Newspaper} label="Articles" onNavigate={navigate} />
