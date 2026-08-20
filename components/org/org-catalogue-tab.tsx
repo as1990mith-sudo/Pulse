@@ -57,6 +57,8 @@ type LiveKind = "video" | "audio"
  * (and fall back to "video" when a cover image is present).
  */
 function liveMediaKind(item: CatalogueItemView): LiveKind {
+  // Auto-published replays carry an explicit media kind — trust it over guessing.
+  if (item.mediaKind) return item.mediaKind
   const u = item.url.toLowerCase()
   if (/youtube|youtu\.be|vimeo|\.mp4|\.webm|\.mov|\.m3u8/.test(u)) return "video"
   if (/\.mp3|\.wav|\.m4a|\.aac|soundcloud|spotify|anchor|podcast|audiomack/.test(u)) return "audio"
@@ -219,7 +221,9 @@ export function OrgEpisodeCatalog({
         // like the profile Catalogue's Live subtab (video & audio alike).
         <div className="-mx-4 divide-y divide-border/60 border-y border-border/60 sm:-mx-6">
           {filtered.map((it) => (
-            <OrgCatalogueRow key={it.id} item={it} orgId={orgId} isOwner={isOwner} />
+            // Ids come from two tables (catalogue_item + episode), so namespace
+            // the key by source to keep it unique across the merged list.
+            <OrgCatalogueRow key={`${it.slug ? "live" : "cat"}-${it.id}`} item={it} orgId={orgId} isOwner={isOwner} />
           ))}
         </div>
       )}
@@ -238,7 +242,12 @@ function OrgCatalogueRow({ item, orgId, isOwner }: { item: CatalogueItemView; or
   const [confirming, setConfirming] = useState(false)
   const [isPending, startTransition] = useTransition()
   const meta = KIND_META[item.kind]
-  const href = externalHref(item.url)
+  // Auto-published Live replays (they carry a slug) open the in-app player at
+  // /live/[slug]; everything else is an external resource link. Live replays are
+  // managed from live/episode tools, so they don't expose the manual delete here.
+  const isLive = Boolean(item.slug)
+  const href = isLive ? `/live/${item.slug}` : externalHref(item.url)
+  const linkProps = isLive ? {} : { target: "_blank", rel: "noopener noreferrer" }
 
   function handleDelete() {
     startTransition(async () => {
@@ -252,8 +261,7 @@ function OrgCatalogueRow({ item, orgId, isOwner }: { item: CatalogueItemView; or
     <div className="group relative flex items-center gap-3 px-4 py-3 transition-colors hover:bg-secondary/40 sm:px-6">
       <a
         href={href}
-        target="_blank"
-        rel="noopener noreferrer"
+        {...linkProps}
         aria-label={`Open ${item.title}`}
         className="flex min-w-0 flex-1 items-center gap-3 text-left"
       >
@@ -293,15 +301,14 @@ function OrgCatalogueRow({ item, orgId, isOwner }: { item: CatalogueItemView; or
       <div className="flex shrink-0 items-center gap-1">
         <a
           href={href}
-          target="_blank"
-          rel="noopener noreferrer"
+          {...linkProps}
           aria-label={`Open ${item.title}`}
           className="flex size-9 items-center justify-center rounded-full bg-secondary text-foreground transition-colors group-hover:bg-live group-hover:text-white"
         >
           <Play className="size-4 translate-x-px" />
         </a>
 
-        {isOwner && (
+        {isOwner && !isLive && (
           <DropdownMenu
             onOpenChange={(open) => {
               if (!open) setConfirming(false)

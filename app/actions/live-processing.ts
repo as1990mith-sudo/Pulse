@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { episode, notification } from "@/lib/db/schema"
 import { getHandle } from "@/lib/identity"
+import { getActiveHomeContext } from "@/lib/home/active-home"
 
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -77,12 +78,21 @@ export async function createProcessingEpisode(input: {
   // so the catalogue can file it under the right Live subtab BEFORE the media
   // url exists (a processing row has no videoUrl/audioUrl yet).
   mediaKind: "video" | "audio"
+  // The Home this replay belongs to. The video path passes the live session's
+  // own homeId for an exact match; the audio path omits it, so we fall back to
+  // the host's currently-active Home. Null => a Universal (non-Home) session.
+  homeId?: string | null
 }): Promise<CreateProcessingResult> {
   const user = await requireUser()
 
   const title = input.title.trim() || "Live session"
   const category = input.category.trim() || "Episode"
   const slug = await uniqueSlug(title)
+
+  // Scope the replay to a Home so it surfaces only in that Home's organisation
+  // Catalogue (and is kept out of the Universal Live catalogue). Prefer the
+  // explicit session homeId; otherwise use the host's active Home at save time.
+  const homeId = input.homeId ?? (await getActiveHomeContext()).home?.id ?? null
 
   const [row] = await db
     .insert(episode)
@@ -101,6 +111,7 @@ export async function createProcessingEpisode(input: {
       videoUrl: null,
       mediaKind: input.mediaKind === "video" ? "video" : "audio",
       source: "live",
+      homeId,
       processingStatus: "processing",
       processingStartedAt: new Date(),
     })

@@ -96,6 +96,12 @@ export const feedPost = pgTable("feed_post", {
   // a response under that Question of the Day's discussion thread. The main feed
   // query filters to channel IS NULL so room posts never leak into it.
   channel: text("channel"),
+  // Home scoping: the Home this post was published INTO. The main feed shows
+  // only posts whose homeId matches the viewer's active Home, so a post never
+  // crosses organisations — even when its author (e.g. an admin who runs several
+  // Homes) belongs to more than one. Null = a legacy/pre-scoping post, which is
+  // therefore not shown in any Home feed.
+  homeId: text("homeId"),
   // Resolved @mentions in `text`, in the order they appear. Each item is
   // { userId, name } for a user who passed the privacy check at save time.
   // Drives clickable mention links + notifications. Null/empty for none.
@@ -363,8 +369,13 @@ export const episode = pgTable("episode", {
   processingStartedAt: timestamp("processingStartedAt"),
   // Last error message from a failed background upload, shown with Retry.
   processingError: text("processingError"),
+  // Home scoping: the Home this recording belongs to — the Home the host was
+  // active in when they started the session (copied from live_stream.homeId).
+  // A Home replay surfaces ONLY in that Home's organisation Catalogue and is
+  // kept out of the Universal Live catalogue. Null = a Universal session.
+  homeId: text("homeId"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
-})
+  })
 
 // Comments left on a published, on-demand episode.
 export const episodeComment = pgTable("episode_comment", {
@@ -392,6 +403,11 @@ export const chatroom = pgTable("chatroom", {
   image: text("image"),
   ownerId: text("ownerId").notNull(),
   ownerName: text("ownerName").notNull(),
+  // Home scoping: the Home this room belongs to. A room is only ever listed,
+  // searchable, joinable and readable inside its own Home — chatrooms never
+  // cross organisations. Null = a legacy/pre-scoping room, hidden from every
+  // Home's chatroom surface.
+  homeId: text("homeId"),
   // "public" rooms are listed under Discover by default; "private" rooms are
   // hidden from the default list and only appear when searched by name.
   visibility: text("visibility").notNull().default("public"),
