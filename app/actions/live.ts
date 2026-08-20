@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { isActiveHomeMember, HOME_GO_LIVE_COOKIE } from "@/lib/home/access"
+import { getActiveHomeContext } from "@/lib/home/active-home"
 import {
   liveStream,
   liveChatMessage,
@@ -211,6 +212,15 @@ export async function startBroadcast(input: {
   if (pendingHomeId) {
     if (await isActiveHomeMember(pendingHomeId, user.id)) homeId = pendingHomeId
     jar.delete(HOME_GO_LIVE_COOKIE)
+  }
+  // Fallback: no explicit Home-go-live cookie was set, so scope the session to
+  // the Home the host is currently active in (the `freq_active_home` selection).
+  // Frequency is Home-centric — a host with any Home is always "inside" one — so
+  // this is what makes a live (and its saved replay) belong to that Home and
+  // appear only in that organisation's Catalogue. A host with no Homes stays
+  // null → a Universal session shown in global discovery.
+  if (!homeId) {
+    homeId = (await getActiveHomeContext()).home?.id ?? null
   }
 
   // End any stale streams this host may have left open.
