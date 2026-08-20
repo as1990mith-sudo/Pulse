@@ -57,6 +57,8 @@ type LiveKind = "video" | "audio"
  * (and fall back to "video" when a cover image is present).
  */
 function liveMediaKind(item: CatalogueItemView): LiveKind {
+  // Auto-published replays carry an explicit media kind — trust it over guessing.
+  if (item.mediaKind) return item.mediaKind
   const u = item.url.toLowerCase()
   if (/youtube|youtu\.be|vimeo|\.mp4|\.webm|\.mov|\.m3u8/.test(u)) return "video"
   if (/\.mp3|\.wav|\.m4a|\.aac|soundcloud|spotify|anchor|podcast|audiomack/.test(u)) return "audio"
@@ -219,7 +221,9 @@ export function OrgEpisodeCatalog({
         // like the profile Catalogue's Live subtab (video & audio alike).
         <div className="-mx-4 divide-y divide-border/60 border-y border-border/60 sm:-mx-6">
           {filtered.map((it) => (
-            <OrgCatalogueRow key={it.id} item={it} orgId={orgId} isOwner={isOwner} />
+            // Ids come from two tables (catalogue_item + episode), so namespace
+            // the key by source to keep it unique across the merged list.
+            <OrgCatalogueRow key={`${it.slug ? "live" : "cat"}-${it.id}`} item={it} orgId={orgId} isOwner={isOwner} />
           ))}
         </div>
       )}

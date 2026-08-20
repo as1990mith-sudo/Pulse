@@ -5,7 +5,7 @@ import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { catalogueItem, event, organization } from "@/lib/db/schema"
+import { catalogueItem, episode, event, home, organization } from "@/lib/db/schema"
 
 async function requireOrgOwner(orgId: string) {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -119,6 +119,13 @@ export type CatalogueItemView = {
   url: string
   cover: string | null
   duration: string | null
+  // Set for auto-published Live replays (episodes): the replay's slug, so the
+  // Catalogue links to the in-app player at /live/[slug] instead of treating
+  // `url` as an external link. Undefined for manually-added catalogue items.
+  slug?: string
+  // Explicit media kind for a Live replay so the Live tab's Video/Audio split is
+  // exact rather than guessed from the url. Undefined for manual items.
+  mediaKind?: "video" | "audio"
 }
 
 function toCatalogueView(row: typeof catalogueItem.$inferSelect): CatalogueItemView {
@@ -133,13 +140,66 @@ function toCatalogueView(row: typeof catalogueItem.$inferSelect): CatalogueItemV
   }
 }
 
+// Maps a finished live-replay episode into a Catalogue "Live" item. Returns null
+// for a replay that has no finalized media url yet (still processing) — it can't
+// be played, so it shouldn't appear.
+function episodeToCatalogueView(row: typeof episode.$inferSelect): CatalogueItemView | null {
+  const url = row.videoUrl ?? row.audioUrl ?? ""
+  if (!url) return null
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description || null,
+    kind: "video", // the "Live" tab in the org Catalogue
+    url,
+    cover: row.cover,
+    duration: row.duration,
+    slug: row.slug,
+    mediaKind: row.mediaKind === "video" ? "video" : "audio",
+  }
+}
+
 export async function getOrganizationCatalogue(orgId: string): Promise<CatalogueItemView[]> {
+  // Manually-added resources (audio uploads & documents).
   const rows = await db
     .select()
     .from(catalogueItem)
     .where(eq(catalogueItem.organizationId, orgId))
     .orderBy(desc(catalogueItem.createdAt))
-  return rows.map(toCatalogueView)
+  const manual = rows.map(toCatalogueView)
+
+  // Live replays recorded from finished sessions are stored as `episode` rows
+  // (source "live"), NOT catalogue_item — which is why they never showed up in
+  // the organisation Catalogue. Surface this organisation's Home replays here,
+  // filed under the Catalogue's "Live" tab. A Home maps 1:1 to an organisation,
+  // so scoping by that Home's id keeps a replay to the single Home its session
+  // was started in and never leaks it into another Home's Catalogue.
+  const [homeRow] = await db
+    .select({ id: home.id })
+    .from(home)
+    .where(eq(home.organizationId, orgId))
+    .limit(1)
+  if (!homeRow) return manual
+
+  const replays = await db
+    .select()
+    .from(episode)
+    .where(
+      and(
+        eq(episode.homeId, homeRow.id),
+        eq(episode.source, "live"),
+        eq(episode.isPrivate, false),
+        eq(episode.processingStatus, "ready"),
+      ),
+    )
+    .orderBy(desc(episode.createdAt))
+
+  const live = replays
+    .map(episodeToCatalogueView)
+    .filter((v): v is CatalogueItemView => v !== null)
+
+  // Live replays first (most relevant recent content), then manual resources.
+  return [...live, ...manual]
 }
 
 export type CreateCatalogueInput = {

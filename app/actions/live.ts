@@ -310,6 +310,7 @@ export async function beginRoomRecording(input: { roomName: string }): Promise<{
       cover: liveStream.cover,
       egressId: liveStream.egressId,
       replayEpisodeId: liveStream.replayEpisodeId,
+      homeId: liveStream.homeId,
     })
     .from(liveStream)
     .where(and(eq(liveStream.roomName, input.roomName), eq(liveStream.hostId, user.id), eq(liveStream.status, "live")))
@@ -331,6 +332,8 @@ export async function beginRoomRecording(input: { roomName: string }): Promise<{
       duration: "",
       cover: row.cover ?? null,
       mediaKind: "video",
+      // Scope the replay to the exact Home this session was started in.
+      homeId: row.homeId ?? null,
     })
     if (!created.ok) return { recording: false }
     placeholderId = created.episodeId

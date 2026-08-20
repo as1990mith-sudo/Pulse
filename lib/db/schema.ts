@@ -369,8 +369,13 @@ export const episode = pgTable("episode", {
   processingStartedAt: timestamp("processingStartedAt"),
   // Last error message from a failed background upload, shown with Retry.
   processingError: text("processingError"),
+  // Home scoping: the Home this recording belongs to — the Home the host was
+  // active in when they started the session (copied from live_stream.homeId).
+  // A Home replay surfaces ONLY in that Home's organisation Catalogue and is
+  // kept out of the Universal Live catalogue. Null = a Universal session.
+  homeId: text("homeId"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
-})
+  })
 
 // Comments left on a published, on-demand episode.
 export const episodeComment = pgTable("episode_comment", {
