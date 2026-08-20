@@ -427,7 +427,7 @@ export function BibleReader({ signedIn }: { signedIn: boolean }) {
                   key={v.verse}
                   onClick={(e) => onVerseTap(v.verse, e.currentTarget)}
                   className={cn(
-                    "cursor-pointer rounded-md px-2 py-0.5 text-lg leading-relaxed text-left transition-colors hover:bg-secondary/60",
+                    "cursor-pointer rounded-md px-2 py-0.5 text-xl leading-relaxed text-left transition-colors hover:bg-secondary/60",
                   )}
                   style={color ? { backgroundColor: color.bg } : undefined}
                 >
@@ -503,11 +503,15 @@ function Picker({
   icon,
   children,
   width = "w-56",
+  showChevron = true,
 }: {
   label: React.ReactNode
   icon?: React.ReactNode
   children: (close: () => void) => React.ReactNode
   width?: string
+  // The book picker hides its chevron to save horizontal room so the chapter
+  // pill never wraps onto a second line.
+  showChevron?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -533,11 +537,11 @@ function Picker({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium transition-colors hover:bg-secondary"
+        className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium transition-colors hover:bg-secondary"
       >
         {icon}
         {label}
-        <ChevronDown className="size-4 text-muted-foreground" />
+        {showChevron && <ChevronDown className="size-4 text-muted-foreground" />}
       </button>
       {open && (
         <div
@@ -555,7 +559,7 @@ function Picker({
 
 function BookPicker({ book, onSelect }: { book: string; onSelect: (name: string) => void }) {
   return (
-    <Picker label={book} icon={<BookOpen className="size-4 text-primary" />}>
+    <Picker label={book} icon={<BookOpen className="size-4 text-primary" />} showChevron={false}>
       {(close) => (
         <>
           <p className="px-2 py-1 text-xs font-medium text-muted-foreground">Old Testament</p>

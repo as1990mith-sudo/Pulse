@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import useSWR from "swr"
-import { Plus, Trash2, X } from "lucide-react"
+import { Plus, Search, Trash2, X } from "lucide-react"
 import {
   createPersonalNote,
   deletePersonalNote,
@@ -30,6 +30,14 @@ export function PersonalNotesBrowser({
 
   const [openNote, setOpenNote] = useState<PersonalNoteView | null>(null)
   const [creating, setCreating] = useState(false)
+  const [query, setQuery] = useState("")
+
+  // Case-insensitive filter over title + body.
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return notes
+    return notes.filter((n) => `${n.title} ${n.body}`.toLowerCase().includes(q))
+  }, [notes, query])
 
   if (!signedIn) {
     return (
@@ -52,23 +60,39 @@ export function PersonalNotesBrowser({
 
   return (
     <>
-      {/* New-note action — a single, prominent control. */}
-      <button
-        type="button"
-        onClick={newNote}
-        disabled={creating}
-        className="tap-scale mb-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-primary/30 bg-primary/10 py-3 text-sm font-semibold text-primary transition-colors hover:bg-primary/15 disabled:opacity-50"
-      >
-        <Plus className="size-4" /> New note
-      </button>
+      {/* New-note action + search, side by side. */}
+      <div className="mb-3 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={newNote}
+          disabled={creating}
+          className="tap-scale flex shrink-0 items-center justify-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-4 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/15 disabled:opacity-50"
+        >
+          <Plus className="size-4" /> New
+        </button>
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search notes"
+            aria-label="Search notes"
+            className="w-full rounded-full border border-border/60 bg-secondary/40 py-2.5 pl-9 pr-3 text-sm text-foreground outline-none ring-primary/40 transition-shadow placeholder:text-muted-foreground focus:ring-2"
+          />
+        </div>
+      </div>
 
       {notes.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border/60 bg-card/50 p-10 text-center">
           <p className="text-sm font-medium text-muted-foreground">Nothing here yet</p>
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border/60 bg-card/50 p-10 text-center">
+          <p className="text-sm font-medium text-muted-foreground">No notes match &ldquo;{query.trim()}&rdquo;</p>
+        </div>
       ) : (
         <ul className="grid grid-cols-2 gap-2.5">
-          {notes.map((note) => (
+          {filtered.map((note) => (
             <li key={note.id}>
               <button
                 type="button"
