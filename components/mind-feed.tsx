@@ -245,7 +245,7 @@ export function MindFeed({
   // "status" is kept in the union (still deep-linkable via /status and ?tab=status)
   // but is intentionally NOT surfaced as a feed sub-tab anymore — "events" takes
   // its place and hosts the announcements/events feature.
-  const [tab, setTab] = useState<"for-you" | "following" | "status" | "events" | "reels">("for-you")
+  const [tab, setTab] = useState<"for-you" | "admin" | "status" | "events" | "reels">("for-you")
   const fileInputRef = useRef<HTMLInputElement>(null)
   // Separate inputs so we can request the device camera directly: one for
   // capturing a photo and one for recording a video. The "capture" attribute
@@ -278,7 +278,7 @@ export function MindFeed({
   const allPosts = livePosts ?? posts
 
   // Pull-to-refresh: revalidate whichever tab the user is on. The feed key backs
-  // "For you"/"Following"; the "discover" keys back the Find tab's results.
+  // "For you"/"Admin"; the "discover" keys back the Find tab's results.
   async function refreshFeed() {
     await globalMutate(
       (key) => key === "feed" || (Array.isArray(key) && key[0] === "discover"),
@@ -315,7 +315,10 @@ export function MindFeed({
   // shuffled feed follows beneath.
   const [pinnedIds, setPinnedIds] = useState<string[]>([])
 
-  // "For you" → freshly posted items first, then shuffled. "Following" → newest-first.
+  // "For you" → every post from the active Home (members + admins): freshly
+  // posted items first, then shuffled. "Admin" → only posts published by an
+  // admin of the Home on behalf of the organisation (`orgHandle` set),
+  // newest-first.
   const forYouPosts = useMemo(() => {
     const shuffled = seededShuffle(allPosts, shuffleSeed)
     if (pinnedIds.length === 0) return shuffled
@@ -325,12 +328,12 @@ export function MindFeed({
     const pinnedSet = new Set(pinnedIds)
     return [...pinned, ...shuffled.filter((p) => !pinnedSet.has(String(p.id)))]
   }, [allPosts, shuffleSeed, pinnedIds])
-  const followingPosts = useMemo(
-    () => allPosts.filter((p) => p.isFollowing).sort((a, b) => b.createdAtMs - a.createdAtMs),
+  const adminPosts = useMemo(
+    () => allPosts.filter((p) => Boolean(p.orgHandle)).sort((a, b) => b.createdAtMs - a.createdAtMs),
     [allPosts],
   )
 
-  const visiblePosts = tab === "following" ? followingPosts : forYouPosts
+  const visiblePosts = tab === "admin" ? adminPosts : forYouPosts
 
   // Open a specific feed tab directly when arriving with ?tab=<id> — this backs
   // the /reels redirect (?tab=reels) and lets us deep-link to Status too, so old
@@ -338,11 +341,14 @@ export function MindFeed({
   useEffect(() => {
     if (typeof window === "undefined") return
     const requested = new URLSearchParams(window.location.search).get("tab")
-    if (
+    // Accept the legacy ?tab=following link and land it on the renamed Admin tab.
+    if (requested === "following") {
+      setTab("admin")
+    } else if (
       requested === "reels" ||
       requested === "status" ||
       requested === "events" ||
-      requested === "following" ||
+      requested === "admin" ||
       requested === "for-you"
     ) {
       setTab(requested)
@@ -361,7 +367,7 @@ export function MindFeed({
     if (!targetId) return
     // Make sure we're on a tab that can show the post.
     if (!allPosts.some((p) => String(p.id) === targetId)) return
-    if (tab === "following" && !allPosts.find((p) => String(p.id) === targetId)?.isFollowing) {
+    if (tab === "admin" && !allPosts.find((p) => String(p.id) === targetId)?.orgHandle) {
       setTab("for-you")
     }
     const t = setTimeout(() => {
@@ -504,18 +510,18 @@ export function MindFeed({
   // TikTok-style switcher that sits over the full-screen reels.
   const TAB_ITEMS = [
     { id: "for-you" as const, label: "For you" },
-    { id: "following" as const, label: "Following" },
+    { id: "admin" as const, label: "Admin" },
     { id: "events" as const, label: "Events" },
     { id: "reels" as const, label: "Reels" },
   ]
 
   // Sub-tabs are switched by tapping the tab labels only. Horizontal
   // swipe-to-switch was intentionally removed so a sideways drag never jumps
-  // between For You / Following / Reels — it kept hijacking media and content
+  // between For You / Admin / Reels — it kept hijacking media and content
   // gestures. Tapping the switcher remains the single, predictable way to move.
 
   // Floating switcher shown over the reels: the three tabs "sit" on top of the
-  // video (like TikTok's For You / Following) so switching back is one tap away.
+  // video (like TikTok's For You / Admin) so switching back is one tap away.
   const reelsSwitcher = (
     <div className="flex items-center gap-6">
       {TAB_ITEMS.map((t) => (
@@ -606,8 +612,9 @@ export function MindFeed({
       {/* The main feed is a shared space for both individuals and organisations.
           Individuals share visual content (photo/video required); organisations
           may also post text-only updates. The composer only appears on the
-          scrolling post feeds (For you / Following). */}
-      {(tab === "for-you" || tab === "following") && (
+          "For you" feed; the Admin tab is a read-only view of the Home admins'
+          posts. */}
+      {tab === "for-you" && (
       <div className="border-y border-border/60 bg-gradient-to-b from-card/60 to-background px-4 py-5 sm:px-5">
         <form onSubmit={publish} className="flex gap-4">
           <Link
@@ -848,7 +855,7 @@ export function MindFeed({
       )}
 
       {/* Sticky segmented tabs that blend into the feed. Reels lives here as the
-          third tab (after For you / Following); tapping it opens the immersive
+          third tab (after For you / Admin); tapping it opens the immersive
           full-screen reels experience. */}
       <div className="sticky top-0 z-10 flex items-center border-b border-border/60 bg-background/85 backdrop-blur">
         {TAB_ITEMS.map((t) => (
@@ -894,8 +901,9 @@ export function MindFeed({
         ) : (
           <Card className="m-4 p-8 text-center sm:mx-0">
             <p className="text-sm text-muted-foreground leading-relaxed">
-              You&apos;re not following anyone yet. Tap <span className="font-medium text-foreground">Follow</span> on a
-              post to see their thoughts here, or use the search icon in the header to discover people.
+              {tab === "admin"
+                ? "No posts from the admins of your Home yet. Announcements and updates they share will appear here."
+                : "No posts yet. Be the first to share an update with your Home."}
             </p>
           </Card>
         )}
