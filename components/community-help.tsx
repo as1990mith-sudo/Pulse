@@ -42,7 +42,7 @@ import {
 import { MiniChatProvider, useMiniChat } from "@/components/mini-chat"
 import { CommunityConversation } from "@/components/community-conversation"
 import { FeedVideo } from "@/components/feed-video"
-import { FullscreenVideoPlayer } from "@/components/fullscreen-video-player"
+import { VideoLightbox } from "@/components/community-video-lightbox"
 import { ImageLightbox } from "@/components/image-lightbox"
 import {
   ANON_AVATAR,
@@ -129,11 +129,13 @@ function QuestionText({ text, onOpen, hasMedia = false }: { text: string; onOpen
  * card. The clip always `object-cover`-fills that card (no letterbox bars); the
  * untouched full ratio is revealed when it's tapped open full screen (onExpand).
  */
-function FeedPostVideo({ src, onOpen }: { src: string; onOpen: () => void }) {
+function FeedPostVideo({ src }: { src: string }) {
   // Default to 4:5 before metadata loads (the common portrait case here), then
   // settle onto the clip's true ratio once known.
   const [ratio, setRatio] = useState<number>(4 / 5)
-  // 1:1 and 16:9 fill their own card; any other ratio is framed as 4:5.
+  // Tapping the clip opens the shared full-screen viewer.
+  const [fullscreen, setFullscreen] = useState(false)
+  // 1:1 and 16:9 fill their own card; any other ratio (incl. 9:16) is framed 4:5.
   const isStandard = [1, 16 / 9].some((a) => Math.abs(ratio - a) < 0.02)
   const aspect = isStandard ? ratio : 4 / 5
   return (
@@ -141,7 +143,20 @@ function FeedPostVideo({ src, onOpen }: { src: string; onOpen: () => void }) {
       className="relative mt-3 w-full overflow-hidden rounded-lg border border-border/60 bg-black"
       style={{ aspectRatio: String(aspect), maxHeight: "32rem" }}
     >
-      <FeedVideo src={src} className="h-full w-full object-cover" onAspectRatio={setRatio} onExpand={onOpen} />
+      {/* While the full-screen viewer is open the inline clip is unmounted so
+          only one <video> plays. Both instances share a playback position by
+          `src`, so remounting with `resume` on close continues seamlessly with
+          the same sound state — the expand feels instant, not a fresh load. */}
+      {!fullscreen && (
+        <FeedVideo
+          src={src}
+          className="h-full w-full object-cover"
+          onAspectRatio={setRatio}
+          resume
+          onExpand={() => setFullscreen(true)}
+        />
+      )}
+      {fullscreen && <VideoLightbox src={src} onClose={() => setFullscreen(false)} />}
     </div>
   )
 }
@@ -350,7 +365,7 @@ function PostItem({
 
         {post.imageUrl && <FeedPostImage src={post.imageUrl} onClick={() => setMediaOpen(true)} className="mt-3" />}
 
-        {post.videoUrl && <FeedPostVideo src={post.videoUrl} onOpen={() => setMediaOpen(true)} />}
+        {post.videoUrl && <FeedPostVideo src={post.videoUrl} />}
 
         {/* Engagement actions — spread evenly across the width so Like, Reply,
             Share and Save sit at consistent intervals under the post. */}
@@ -382,12 +397,10 @@ function PostItem({
         )}
       </div>
 
-      {/* Full-screen media, opened by tapping the attached photo/video. */}
+      {/* Full-screen photo, opened by tapping the attached image. Video has its
+          own in-component full-screen viewer (see FeedPostVideo). */}
       {mediaOpen && post.imageUrl && (
         <ImageLightbox src={post.imageUrl} alt="Attached to the question" onClose={() => setMediaOpen(false)} />
-      )}
-      {mediaOpen && post.videoUrl && !post.imageUrl && (
-        <FullscreenVideoPlayer src={post.videoUrl} onClose={() => setMediaOpen(false)} />
       )}
 
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />

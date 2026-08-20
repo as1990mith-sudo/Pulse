@@ -40,24 +40,34 @@ export function getVideoPosition(src: string): number | undefined {
 
 // ---- Immersive viewer open/closed signal ---------------------------------
 
-let viewerOpen = false
+// REF-COUNTED so nested immersive surfaces compose correctly. Example: the
+// expanded conversation raises the gate to pause the feed behind it, and then a
+// video inside that conversation opens the full-screen lightbox, which raises it
+// again. A plain boolean would let the lightbox's close lower the gate while the
+// conversation is still open, resuming the hidden feed videos underneath. With a
+// counter the gate only truly drops once every open surface has closed. Callers
+// stay unchanged — each balanced `setImmersiveViewerOpen(true)` / `(false)` pair
+// increments then decrements the count.
+let viewerOpenCount = 0
 const openListeners = new Set<(open: boolean) => void>()
 
 export function setImmersiveViewerOpen(open: boolean) {
-  if (viewerOpen === open) return
-  viewerOpen = open
-  openListeners.forEach((fn) => fn(open))
+  const wasOpen = viewerOpenCount > 0
+  viewerOpenCount = Math.max(0, viewerOpenCount + (open ? 1 : -1))
+  const isOpen = viewerOpenCount > 0
+  if (wasOpen === isOpen) return
+  openListeners.forEach((fn) => fn(isOpen))
 }
 
 export function getImmersiveViewerOpen() {
-  return viewerOpen
+  return viewerOpenCount > 0
 }
 
 /** Subscribe a component to whether the immersive video viewer is open. */
 export function useImmersiveViewerOpen(): boolean {
-  const [open, setOpen] = useState(viewerOpen)
+  const [open, setOpen] = useState(getImmersiveViewerOpen)
   useEffect(() => {
-    setOpen(viewerOpen)
+    setOpen(getImmersiveViewerOpen())
     const fn = (o: boolean) => setOpen(o)
     openListeners.add(fn)
     return () => {

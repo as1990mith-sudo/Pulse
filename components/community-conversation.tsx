@@ -21,6 +21,7 @@ import {
 } from "@/app/actions/community"
 import { CommentThread, type ThreadComment } from "@/components/comment-thread"
 import { FeedVideo } from "@/components/feed-video"
+import { VideoLightbox } from "@/components/community-video-lightbox"
 import { setImmersiveViewerOpen } from "@/lib/video-handoff"
 import { useMiniChat } from "@/components/mini-chat"
 import { BibleChips, FeedPostImage, LikeButton, PostIdentity, SaveButton, ANON_AVATAR } from "@/components/community-help-shared"
@@ -394,8 +395,11 @@ function PostVideo({ src }: { src: string }) {
   const [ratio, setRatio] = useState<number | null>(null)
   // Tapping the inline clip opens a full-screen viewer with the premium player.
   const [fullscreen, setFullscreen] = useState(false)
-  // Clamp between 9:16 and 16:9 so an extreme clip can't create a giant frame.
-  const aspect = ratio ? Math.min(16 / 9, Math.max(9 / 16, ratio)) : 4 / 5
+  // Same card rule as the feed: a 1:1 or 16:9 clip keeps its own ratio; anything
+  // else (portrait 9:16, 4:5, or any other crop) is presented in a uniform 4:5
+  // card and object-cover-filled. The true ratio is revealed full screen.
+  const isStandard = ratio != null && [1, 16 / 9].some((a) => Math.abs(ratio - a) < 0.02)
+  const aspect = isStandard ? (ratio as number) : 4 / 5
   return (
     <div
       className="relative mt-4 w-full overflow-hidden rounded-2xl border border-border/60 bg-black"
@@ -419,57 +423,4 @@ function PostVideo({ src }: { src: string }) {
   )
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Full-screen video viewer                                                  */
-/* -------------------------------------------------------------------------- */
 
-/**
- * Full-screen viewer for an attached video. Renders the shared FeedVideo player
- * (branded play button, ±10s skip, draggable scrubber, shared mute) letterboxed
- * with object-contain on a black backdrop, so the clip fills the screen while
- * keeping its true aspect ratio. Tapping the video toggles play/pause; the
- * backdrop, close button, or Escape dismisses it. Rendered in its own portal so
- * it sits above the conversation dialog.
- *
- * `resume` continues from wherever the inline preview reached (shared by src),
- * and `ignoreViewerGate` lets this player own playback while the conversation's
- * immersive-viewer gate is active.
- */
-function VideoLightbox({ src, onClose }: { src: string; onClose: () => void }) {
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose()
-    }
-    document.addEventListener("keydown", onKey)
-    return () => document.removeEventListener("keydown", onKey)
-  }, [onClose])
-
-  if (typeof document === "undefined") return null
-
-  return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Attached video"
-      onClick={onClose}
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black duration-200 animate-in fade-in"
-    >
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Close"
-        className="absolute right-4 top-[calc(0.75rem+env(safe-area-inset-top))] z-10 flex size-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/20"
-      >
-        <X className="size-5" />
-      </button>
-      {/* Stop backdrop clicks so tapping the video toggles play instead of closing. */}
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="relative h-full max-h-[100dvh] w-full max-w-[100vw]"
-      >
-        <FeedVideo src={src} className="h-full w-full object-contain" resume ignoreViewerGate />
-      </div>
-    </div>,
-    document.body,
-  )
-}
