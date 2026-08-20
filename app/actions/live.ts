@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { isActiveHomeMember, HOME_GO_LIVE_COOKIE } from "@/lib/home/access"
 import { getActiveHomeContext } from "@/lib/home/active-home"
+import { createGuestSession, getGuestSession } from "@/lib/guest-session"
 import {
   liveStream,
   liveChatMessage,
@@ -43,6 +44,65 @@ async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) throw new Error("You must be signed in to do that.")
   return session.user
+}
+
+/**
+ * Who is acting in a live room right now: either a signed-in Better Auth user,
+ * or a display-name-only guest (for PUBLIC lives), or nobody. Guests carry a
+ * `guest:<id>` identity so they slot into the FK-free live tables and LiveKit
+ * exactly like a real user, while `isGuest` lets callers keep them out of
+ * private lives and anything outside the Live itself.
+ */
+export type LiveActor = {
+  id: string
+  name: string
+  image: string | null
+  isGuest: boolean
+}
+
+async function getLiveActor(): Promise<LiveActor | null> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (session?.user) {
+    return { id: session.user.id, name: session.user.name, image: session.user.image ?? null, isGuest: false }
+  }
+  const guest = await getGuestSession()
+  if (guest) return { id: `guest:${guest.id}`, name: guest.name, image: null, isGuest: true }
+  return null
+}
+
+/**
+ * Public-live join: records a display-name-only guest session (a signed cookie,
+ * never a real login) so the visitor can enter a PUBLIC Live without an account.
+ * The visibility check happens in `joinBroadcast`; this only captures the name.
+ */
+export async function joinLiveAsGuest(input: { name: string }): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await createGuestSession(input.name)
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Please enter a display name." }
+  }
+}
+
+/**
+ * Resolves the current actor for an IN-ROOM action (chat, reaction, presence,
+ * raise-hand) and enforces the same access rule as joinBroadcast: guests are
+ * allowed only in PUBLIC rooms. Returns null when there's no actor at all, or
+ * when a guest targets a non-public room — callers treat null as "not allowed"
+ * and no-op, so guest identities can never act on a private live.
+ */
+async function getRoomActor(roomName: string): Promise<LiveActor | null> {
+  const actor = await getLiveActor()
+  if (!actor) return null
+  if (actor.isGuest) {
+    const [stream] = await db
+      .select({ visibility: liveStream.visibility })
+      .from(liveStream)
+      .where(eq(liveStream.roomName, roomName))
+      .limit(1)
+    if (!stream || stream.visibility !== "public") return null
+  }
+  return actor
 }
 
 /**
@@ -132,7 +192,6 @@ export type LiveStreamView = {
   orientation: LiveOrientation
   layout: LiveLayout
   topic?: string | null
-  prayerStartedAt?: string | null
   gridPinnedId?: string | null
   visibility: LiveVisibility
   locked?: boolean
@@ -158,7 +217,11 @@ export type GoLiveResult =
 
 export type JoinResult =
   | { ok: true; token: string; serverUrl: string; roomName: string; canPublish: boolean; recordOnServer?: boolean }
-  | { ok: false; error: string }
+  // `needsIdentity`: public live, but the visitor hasn't given a display name yet
+  //   → show the "Join Live" display-name gate.
+  // `needsAuth`: private live and the visitor isn't a member → they must sign up
+  //   and join the Home before they can enter.
+  | { ok: false; error: string; needsIdentity?: boolean; needsAuth?: boolean }
 
 /** Host starts broadcasting: creates the stream row, mints a publisher token, notifies followers. */
 export async function startBroadcast(input: {
@@ -416,7 +479,6 @@ export async function discardRoomReplay(input: { roomName: string }): Promise<vo
 
 /** A listener (or the host returning) joins an existing live room. */
 export async function joinBroadcast(input: { roomName: string }): Promise<JoinResult> {
-  const user = await requireUser()
   if (!isLiveKitConfigured()) {
     return { ok: false, error: "Live audio is not configured yet." }
   }
@@ -431,14 +493,42 @@ export async function joinBroadcast(input: { roomName: string }): Promise<JoinRe
 
   if (!stream) return { ok: false, error: "This stream has ended." }
 
-  const isHost = stream.hostId === user.id
+  const isPublic = stream.visibility === "public"
 
-  // Home privacy gate: a session scoped to a private Home can only be joined by
-  // an active member of that Home — even with a direct link. This is the entry
-  // half of the isolation boundary (the discovery half hides it from Universal).
-  if (stream.homeId && !isHost) {
-    const allowed = await isActiveHomeMember(stream.homeId, user.id)
-    if (!allowed) return { ok: false, error: "This session is private to its community." }
+  // Who is joining: a signed-in member, a display-name-only guest, or nobody yet.
+  // A PUBLIC live grants access to the Live only — never the organisation's Home
+  // — so a guest with just a display name can enter. A PRIVATE live is restricted
+  // to members, so anyone without a member session is turned away to sign up.
+  const actor = await getLiveActor()
+
+  if (!actor) {
+    return isPublic
+      ? { ok: false, error: "Enter a display name to join.", needsIdentity: true }
+      : { ok: false, error: "This live is private. Sign in as a member to join.", needsAuth: true }
+  }
+
+  const isHost = !actor.isGuest && stream.hostId === actor.id
+
+  // Guests may ONLY join public lives. A private (or member-only Home) live sends
+  // them to sign up and join the organisation first.
+  if (actor.isGuest && !isPublic) {
+    return {
+      ok: false,
+      error: "This live is private. Sign up and join the community to enter.",
+      needsAuth: true,
+    }
+  }
+
+  // Home privacy gate for members: a PRIVATE Home-scoped session can only be
+  // joined by an active member of that Home — even with a direct link. Public
+  // Home lives stay open (the entry half of the isolation boundary; discovery
+  // hides private ones from Universal). Guests never reach here on a private
+  // live — they were turned away above.
+  if (!isPublic && stream.homeId && !isHost && !actor.isGuest) {
+    const allowed = await isActiveHomeMember(stream.homeId, actor.id)
+    if (!allowed) {
+      return { ok: false, error: "This session is private to its community.", needsAuth: true }
+    }
   }
 
   // Blocked users can't (re)join. The host is never blockable, so this only
@@ -447,7 +537,7 @@ export async function joinBroadcast(input: { roomName: string }): Promise<JoinRe
     const [blocked] = await db
       .select({ id: liveBlocked.id })
       .from(liveBlocked)
-      .where(and(eq(liveBlocked.roomName, input.roomName), eq(liveBlocked.userId, user.id)))
+      .where(and(eq(liveBlocked.roomName, input.roomName), eq(liveBlocked.userId, actor.id)))
       .limit(1)
     if (blocked) return { ok: false, error: "You can no longer join this live." }
   }
@@ -472,10 +562,10 @@ export async function joinBroadcast(input: { roomName: string }): Promise<JoinRe
 
   const token = await createAccessToken({
     roomName: input.roomName,
-    identity: user.id,
-    name: user.name,
+    identity: actor.id,
+    name: actor.name,
     canPublish,
-    metadata: JSON.stringify({ image: user.image ?? null }),
+    metadata: JSON.stringify({ image: actor.image ?? null, isGuest: actor.isGuest }),
   })
 
   // A host resuming their own video broadcast keeps the server-side recording
@@ -516,7 +606,6 @@ export async function getLiveStreams(): Promise<LiveStreamView[]> {
     orientation: (r.orientation as LiveOrientation) ?? "portrait",
     layout: (r.layout as LiveLayout) ?? "podcast",
     topic: r.topic ?? null,
-    prayerStartedAt: r.prayerStartedAt ? r.prayerStartedAt.toISOString() : null,
     gridPinnedId: r.gridPinnedId ?? null,
     visibility: (r.visibility as LiveVisibility) ?? "public",
     startedAt: r.startedAt.toISOString(),
@@ -535,7 +624,8 @@ export type LiveChatMessageView = {
 
 /** Posts a chat message to a live room. */
 export async function sendLiveChat(input: { roomName: string; body: string }): Promise<void> {
-  const user = await requireUser()
+  const actor = await getRoomActor(input.roomName)
+  if (!actor) return
   const body = input.body.trim()
   if (!body) return
 
@@ -546,10 +636,10 @@ export async function sendLiveChat(input: { roomName: string; body: string }): P
 
   await db.insert(liveChatMessage).values({
     roomName: input.roomName,
-    userId: user.id,
-    userName: user.name,
-    userImage: user.image ?? null,
-    isHost: stream?.hostId === user.id,
+    userId: actor.id,
+    userName: actor.name,
+    userImage: actor.image ?? null,
+    isHost: !actor.isGuest && stream?.hostId === actor.id,
     kind: "message",
     body,
   })
@@ -600,21 +690,20 @@ const PRESENCE_STALE_MS = 30_000
 export async function heartbeatPresence(input: {
   roomName: string
 }): Promise<{ count: number; members: LiveAudienceMember[] }> {
-  const session = await auth.api.getSession({ headers: await headers() })
-  const u = session?.user
-  if (!u) return { count: 0, members: [] }
+  const actor = await getRoomActor(input.roomName)
+  if (!actor) return { count: 0, members: [] }
 
   const [stream] = await db
     .select({ hostId: liveStream.hostId })
     .from(liveStream)
     .where(eq(liveStream.roomName, input.roomName))
-  const isHost = stream?.hostId === u.id
+  const isHost = !actor.isGuest && stream?.hostId === actor.id
 
   // Has this user been (recently) present already? Decides whether to announce.
   const [existing] = await db
     .select({ id: livePresence.id, lastSeenAt: livePresence.lastSeenAt })
     .from(livePresence)
-    .where(and(eq(livePresence.roomName, input.roomName), eq(livePresence.userId, u.id)))
+    .where(and(eq(livePresence.roomName, input.roomName), eq(livePresence.userId, actor.id)))
 
   const now = new Date()
   const isNewArrival =
@@ -623,14 +712,14 @@ export async function heartbeatPresence(input: {
   if (existing) {
     await db
       .update(livePresence)
-      .set({ lastSeenAt: now, userName: u.name, userImage: u.image ?? null, isHost })
+      .set({ lastSeenAt: now, userName: actor.name, userImage: actor.image ?? null, isHost })
       .where(eq(livePresence.id, existing.id))
   } else {
     await db.insert(livePresence).values({
       roomName: input.roomName,
-      userId: u.id,
-      userName: u.name,
-      userImage: u.image ?? null,
+      userId: actor.id,
+      userName: actor.name,
+      userImage: actor.image ?? null,
       isHost,
     })
   }
@@ -639,12 +728,12 @@ export async function heartbeatPresence(input: {
   if (isNewArrival && !isHost) {
     await db.insert(liveChatMessage).values({
       roomName: input.roomName,
-      userId: u.id,
-      userName: u.name,
-      userImage: u.image ?? null,
+      userId: actor.id,
+      userName: actor.name,
+      userImage: actor.image ?? null,
       isHost: false,
       kind: "system",
-      body: `${u.name} entered the room`,
+      body: `${actor.name} entered the room`,
     })
   }
 
@@ -705,13 +794,14 @@ export async function sendLiveReaction(input: {
   kind?: "reaction" | "gift"
   label?: string
 }): Promise<void> {
-  const user = await requireUser()
+  const actor = await getRoomActor(input.roomName)
+  if (!actor) return
   const emoji = input.emoji.trim().slice(0, 8)
   if (!emoji) return
   await db.insert(liveReaction).values({
     roomName: input.roomName,
-    userId: user.id,
-    userName: user.name,
+    userId: actor.id,
+    userName: actor.name,
     kind: input.kind ?? "reaction",
     emoji,
     label: input.label?.trim().slice(0, 40) ?? null,
@@ -772,7 +862,6 @@ export async function getMyActiveStream(): Promise<LiveStreamView | null> {
     orientation: (r.orientation as LiveOrientation) ?? "portrait",
     layout: (r.layout as LiveLayout) ?? "podcast",
     topic: r.topic ?? null,
-    prayerStartedAt: r.prayerStartedAt ? r.prayerStartedAt.toISOString() : null,
     gridPinnedId: r.gridPinnedId ?? null,
     visibility: (r.visibility as LiveVisibility) ?? "public",
     locked: r.locked ?? false,
@@ -812,7 +901,6 @@ export async function getMyActiveVideoStream(): Promise<LiveStreamView | null> {
     orientation: (r.orientation as LiveOrientation) ?? "portrait",
     layout: (r.layout as LiveLayout) ?? "podcast",
     topic: r.topic ?? null,
-    prayerStartedAt: r.prayerStartedAt ? r.prayerStartedAt.toISOString() : null,
     gridPinnedId: r.gridPinnedId ?? null,
     visibility: (r.visibility as LiveVisibility) ?? "public",
     locked: r.locked ?? false,
@@ -845,7 +933,6 @@ export async function getLiveStream(roomName: string): Promise<LiveStreamView | 
     orientation: (r.orientation as LiveOrientation) ?? "portrait",
     layout: (r.layout as LiveLayout) ?? "podcast",
     topic: r.topic ?? null,
-    prayerStartedAt: r.prayerStartedAt ? r.prayerStartedAt.toISOString() : null,
     gridPinnedId: r.gridPinnedId ?? null,
     visibility: (r.visibility as LiveVisibility) ?? "public",
     locked: r.locked ?? false,
@@ -994,7 +1081,8 @@ async function stageCapFor(roomName: string): Promise<number> {
 
 /** Listener asks to come on as a guest. */
 export async function requestToJoin(input: { roomName: string }): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireUser()
+  const actor = await getRoomActor(input.roomName)
+  if (!actor) return { ok: false, error: "You can't request the stage in this live." }
   // Honor a host-locked stage or a disabled guest section: no new requests.
   const [s] = await db
     .select({ locked: liveStream.locked, guestsEnabled: liveStream.guestsEnabled })
@@ -1008,14 +1096,14 @@ export async function requestToJoin(input: { roomName: string }): Promise<{ ok: 
     .where(
       and(
         eq(liveCallRequest.roomName, input.roomName),
-        eq(liveCallRequest.userId, user.id),
+        eq(liveCallRequest.userId, actor.id),
         eq(liveCallRequest.kind, "request"),
       ),
     )
   await db.insert(liveCallRequest).values({
     roomName: input.roomName,
-    userId: user.id,
-    userName: user.name,
+    userId: actor.id,
+    userName: actor.name,
     kind: "request",
     status: "pending",
   })
@@ -1477,14 +1565,15 @@ export async function getCallState(input: { roomName: string }): Promise<{
   gridPinRequest: { userId: string; userName: string } | null
   // Host-selected Conversation video layout, synced to everyone.
   gridLayout: GridLayout
-  // Shared Prayer Mode: ISO timestamp when the host started prayer, else null.
-  // Synced to everyone so all live formats can show the prayer overlay together.
-  prayerStartedAt: string | null
 }> {
   // Auto-end abandoned streams first so listeners of a vanished host close out.
   await endStaleStreams()
-  const session = await auth.api.getSession({ headers: await headers() })
-  const me = session?.user?.id ?? null
+  // Resolve the caller as either a member or a display-name guest, so an accepted
+  // guest still sees their own call status (myStatus/myOnCall) and can come on
+  // stage. A guest id (`guest:<id>`) never matches a hostId, so guests never gain
+  // host controls from this.
+  const actor = await getLiveActor()
+  const me = actor?.id ?? null
 
   let [stream] = await db
     .select({
@@ -1503,7 +1592,6 @@ export async function getCallState(input: { roomName: string }): Promise<{
       gridPinRequestId: liveStream.gridPinRequestId,
       gridPinRequestName: liveStream.gridPinRequestName,
       gridLayout: liveStream.gridLayout,
-      prayerStartedAt: liveStream.prayerStartedAt,
     })
     .from(liveStream)
     .where(eq(liveStream.roomName, input.roomName))
@@ -1638,7 +1726,6 @@ export async function getCallState(input: { roomName: string }): Promise<{
         ? { userId: stream.gridPinRequestId, userName: stream.gridPinRequestName ?? "A participant" }
         : null,
     gridLayout: ((stream?.gridLayout as GridLayout | undefined) ?? "balanced") as GridLayout,
-    prayerStartedAt: stream?.prayerStartedAt ? stream.prayerStartedAt.toISOString() : null,
   }
 }
 
@@ -1896,23 +1983,7 @@ export async function pinLiveChat(input: { roomName: string; chatId: number | nu
   return { ok: true }
 }
 
-// --- Shared live state: prayer mode, pinned participant, room state ----------
-
-/**
- * Host toggles Prayer Mode for any live room (Broadcast, Conversation video, or
- * audio). When on, `prayerStartedAt` is set — driving the shared prayer overlay
- * for everyone and disabling music ducking. No one is muted; the whole room
- * prays together and worship/instrumental music keeps playing naturally.
- */
-export async function setPrayerMode(input: { roomName: string; on: boolean }): Promise<{ ok: boolean }> {
-  const user = await requireUser()
-  if ((await getHostId(input.roomName)) !== user.id) throw new Error("Only the host can control Prayer Mode.")
-  await db
-    .update(liveStream)
-    .set({ prayerStartedAt: input.on ? new Date() : null })
-    .where(eq(liveStream.roomName, input.roomName))
-  return { ok: true }
-}
+// --- Shared live state: pinned participant, room state -----------------------
 
 /**
  * Host pins (or unpins, with userId=null) a single participant in a Conversation
@@ -1933,7 +2004,6 @@ export async function setPinnedParticipant(input: {
 }
 
 export type ConversationState = {
-  prayerStartedAt: string | null
   pinnedId: string | null
   locked: boolean
   ended: boolean
@@ -1943,13 +2013,12 @@ export type ConversationState = {
 }
 
 /**
- * Lightweight poll for every client in a Conversation room: prayer mode, pinned
- * participant, lock state, the room theme, and whether the room has ended.
+ * Lightweight poll for every client in a Conversation room: pinned participant,
+ * lock state, the room theme, and whether the room has ended.
  */
 export async function getConversationState(input: { roomName: string }): Promise<ConversationState> {
   const [r] = await db
     .select({
-      prayerStartedAt: liveStream.prayerStartedAt,
       gridPinnedId: liveStream.gridPinnedId,
       locked: liveStream.locked,
       status: liveStream.status,
@@ -1959,10 +2028,8 @@ export async function getConversationState(input: { roomName: string }): Promise
     .from(liveStream)
     .where(eq(liveStream.roomName, input.roomName))
     .limit(1)
-  if (!r)
-    return { prayerStartedAt: null, pinnedId: null, locked: false, ended: true, theme: "default", gridLayout: "balanced" }
+  if (!r) return { pinnedId: null, locked: false, ended: true, theme: "default", gridLayout: "balanced" }
   return {
-    prayerStartedAt: r.prayerStartedAt ? r.prayerStartedAt.toISOString() : null,
     pinnedId: r.gridPinnedId ?? null,
     locked: r.locked ?? false,
     ended: r.status !== "live",

@@ -1068,8 +1068,8 @@ export function useLiveVideo({
   /**
    * Ducks (or restores) background music around live speech. When `ducked`, the
    * gain fades to 18% of the host's base volume; otherwise it fades back to the
-   * full base. Prayer Mode passes `ducked = false` so worship music keeps
-   * playing naturally. Fades are smooth.
+   * full base. Driven by the host's "Lower music under speech" toggle — when the
+   * host turns it off, `ducked = false` keeps music at full. Fades are smooth.
    */
   const duckMusic = useCallback(
     (ducked: boolean, ms = 320) => {

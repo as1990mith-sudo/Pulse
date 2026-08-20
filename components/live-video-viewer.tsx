@@ -46,7 +46,6 @@ import { getAvatarColor, getInitials } from "@/lib/identity"
 import { broadcastStageRects, stageRectStyle, type StageRect } from "@/lib/broadcast-stage"
 import { CoverArt } from "@/components/cover-art"
 import { MarqueeTitle } from "@/components/marquee-title"
-import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
 import { cn } from "@/lib/utils"
 
 /** Icon-only glass follow toggle for the host info pill. */
@@ -398,18 +397,6 @@ export function LiveVideoViewer({
   // connecting/off overlays): the spotlighted guest, my own cam, or the host.
   const bigVideoOn = spotlightPeer ? spotlightPeer.hasVideo : spotlightIsSelf ? camOn : remoteVideoOn
 
-  // ── Shared Prayer Mode ────────────────────────────────────────────────────
-  // The Broadcast viewer mirrors the host's prayer state from the polled call
-  // state (the Conversation grid viewer handles its own overlay). A short toast
-  // flashes when prayer ends.
-  const prayerStartedAt = callState?.prayerStartedAt ?? null
-  const prayerActive = prayerStartedAt != null
-  const [prayerEndedAt, setPrayerEndedAt] = useState<number | null>(null)
-  const prevPrayerRef = useRef<string | null>(null)
-  useEffect(() => {
-    if (prevPrayerRef.current && !prayerStartedAt) setPrayerEndedAt(Date.now())
-    prevPrayerRef.current = prayerStartedAt
-  }, [prayerStartedAt])
 
   if (blocked) {
     return (
@@ -458,7 +445,7 @@ export function LiveVideoViewer({
   // ── Conversation video viewer ───────���────────────────────────────────────
   // The premium community gathering: this viewer gets their own tile and
   // publishes camera + mic on join. ConversationVideo owns the header, tiles,
-  // paging, host controls, prayer, music ducking, chat and floating messages.
+  // paging, host controls, music ducking, chat and floating messages.
   if (isGridMeeting) {
     return (
       <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-neutral-950 text-white [isolation:isolate]">
@@ -874,9 +861,6 @@ export function LiveVideoViewer({
           </div>
         )}
 
-        {/* Shared Prayer Mode overlay + "ended" toast over the video stage. */}
-        <PrayerOverlay active={prayerActive} endedAt={prayerEndedAt} />
-        <PrayerEndedToast endedAt={prayerEndedAt} />
       </div>
 
       {/* ── Live chatroom. Call-in guests overlay the video above, so the chat

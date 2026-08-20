@@ -273,16 +273,12 @@ export function SelfIdentity({
 /* -------------------------------------------------------------------------- */
 
 /**
- * A post's attached photo. The image was already cropped to the author's chosen
- * aspect ratio (1:1, 4:5, 16:9 or 9:16) at posting, so we read its natural ratio
- * and display the card AT that ratio — clamped between 16:9 (landscape) and 4:5
- * (portrait). That keeps a tall 9:16 photo to a comfortable 4:5 preview instead
- * of a towering frame; tapping (onClick) opens the full view.
- *
- * `object-cover` fills the frame with no letterbox bars: because the photo was
- * pre-cropped to its chosen ratio it matches the (unclamped) frame exactly, so
- * only a height-capped 9:16 actually gets trimmed — which is the intended
- * "not too tall until opened" behaviour.
+ * A post's attached photo. Feed media uses just two card shapes: a photo that is
+ * exactly 1:1 or 16:9 keeps its own ratio, and EVERYTHING else (portrait 4:5,
+ * 3:4, 9:16, or any other crop) is presented in a uniform 4:5 portrait card and
+ * center-cropped with `object-cover` so it fills the frame with no letterbox
+ * bars. The original photo is never modified — tapping (onClick) opens it full
+ * screen at its true ratio.
  */
 export function FeedPostImage({
   src,
@@ -294,18 +290,16 @@ export function FeedPostImage({
   className?: string
 }) {
   const [ratio, setRatio] = useState<number | null>(null)
-  const aspect = ratio ? Math.min(16 / 9, Math.max(4 / 5, ratio)) : 4 / 5
-  // Portrait photos (taller than square) render slim and left-aligned — like X's
-  // vertical media — instead of a wide block. Landscape/square stay full-width.
-  const portrait = ratio !== null && ratio < 1
+  // 1:1 and 16:9 fill their own card; any other ratio is framed as 4:5.
+  const isStandard = ratio != null && [1, 16 / 9].some((a) => Math.abs(ratio - a) < 0.02)
+  const aspect = isStandard ? (ratio as number) : 4 / 5
   return (
     <button
       type="button"
       onClick={onClick}
-      style={{ aspectRatio: String(aspect), maxHeight: "24rem" }}
+      style={{ aspectRatio: String(aspect), maxHeight: "32rem" }}
       className={cn(
-        "relative block overflow-hidden rounded-2xl border border-border/60 bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        portrait ? "w-[62%] max-w-[230px]" : "w-full",
+        "relative block w-full overflow-hidden rounded-lg border border-border/60 bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         className,
       )}
       aria-label="Open attached photo"

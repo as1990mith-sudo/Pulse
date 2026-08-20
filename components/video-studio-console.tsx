@@ -59,7 +59,6 @@ import { ConversationVideo } from "@/components/conversation/conversation-video"
 import { CoverUpload, SQUARE_RATIO } from "@/components/admin/cover-upload"
 import { CoverArt } from "@/components/cover-art"
 import { MarqueeTitle } from "@/components/marquee-title"
-import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
 import type { ShareTarget } from "@/lib/share-types"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { broadcastStageRects, stageRectStyle, type StageRect } from "@/lib/broadcast-stage"
@@ -324,10 +323,6 @@ export function VideoStudioConsole({
   // music, etc.), so the host can preview a clean frame.
   const [controlsVisible, setControlsVisible] = useState(true)
   // Full-screen cover artwork viewer (opened from the Broadcast header).
-  // Shared Prayer Mode: locally optimistic + reconciled with polled call state.
-  const [prayerStartedAt, setPrayerStartedAt] = useState<string | null>(null)
-  const [prayerEndedAt, setPrayerEndedAt] = useState<number | null>(null)
-  const prevPrayerRef = useRef<string | null>(null)
   const [musicTracks, setMusicTracks] = useState<Track[]>([])
   const [musicActiveIndex, setMusicActiveIndex] = useState<number | null>(null)
   const [musicPlaying, setMusicPlayingState] = useState(false)
@@ -337,6 +332,8 @@ export function VideoStudioConsole({
   const [musicMixing, setMusicMixing] = useState(false)
   const [musicLoop, setMusicLoopState] = useState(false)
   const [musicError, setMusicError] = useState<string | null>(null)
+  // Host choice: automatically dip music under live speech (default on).
+  const [duckEnabled, setDuckEnabled] = useState(true)
 
   const live = Boolean(roomName && creds)
 
@@ -529,27 +526,49 @@ export function VideoStudioConsole({
     }
   }
 
-  // ── Shared Prayer Mode ──────────────────────────────────────────────────
-  // Reconcile prayer state from the polled call state; flash a toast when it
-  // turns off. The host toggles it; everyone in the room sees the overlay.
-  useEffect(() => {
-    if (callState?.prayerStartedAt === undefined) return
-    const next = callState.prayerStartedAt
-    if (prevPrayerRef.current && !next) setPrayerEndedAt(Date.now())
-    prevPrayerRef.current = next
-    setPrayerStartedAt(next)
-  }, [callState?.prayerStartedAt])
-  // Prayer Mode is reconciled from server state only; the host trigger has been
-  // removed, so this stays inert unless a legacy session reports it.
-  const prayerActive = prayerStartedAt != null
+  // Whether anyone on the call — the host or any guest — is actively speaking.
+  const anySpeaking = localSpeaking || peers.some((p) => p.isSpeaking)
 
-  // Ducking removed: the background music always stays at the host's chosen
-  // volume and is never lowered under speech. We still hold it at base (a no-op
-  // ramp) so any level left over from a prior session is normalised.
+  // Release-hold timer so the music doesn't "pump" between words; it only rises
+  // back to full once the room has been quiet for a moment.
+  const duckReleaseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Sidechain ducking (host-toggleable via the music panel). While anyone is
+  // actively speaking, dip the background music so voices cut through cleanly and
+  // each speaker's mic echo-canceller/noise-suppressor isn't fighting loud,
+  // sustained music bleeding from their device speakers — the real cause of a
+  // voice sounding muffled/underwater. Fast attack when speech starts; a short
+  // hold + gentle release when it stops. When the host turns ducking off, the
+  // music simply holds at its full set volume.
   useEffect(() => {
     if (musicActiveIndex === null || !musicPlaying) return
-    duckMusic(false)
-  }, [musicActiveIndex, musicPlaying, duckMusic])
+    if (!duckEnabled) {
+      if (duckReleaseRef.current) {
+        clearTimeout(duckReleaseRef.current)
+        duckReleaseRef.current = null
+      }
+      duckMusic(false, 300)
+      return
+    }
+    if (anySpeaking) {
+      if (duckReleaseRef.current) {
+        clearTimeout(duckReleaseRef.current)
+        duckReleaseRef.current = null
+      }
+      duckMusic(true, 140)
+    } else {
+      duckReleaseRef.current = setTimeout(() => {
+        duckMusic(false, 480)
+        duckReleaseRef.current = null
+      }, 650)
+    }
+    return () => {
+      if (duckReleaseRef.current) {
+        clearTimeout(duckReleaseRef.current)
+        duckReleaseRef.current = null
+      }
+    }
+  }, [duckEnabled, anySpeaking, musicActiveIndex, musicPlaying, duckMusic])
 
   async function goLive() {
     setError(null)
@@ -1403,6 +1422,7 @@ export function VideoStudioConsole({
             mixing={musicMixing}
             loop={musicLoop}
             error={musicError}
+            duck={duckEnabled}
             onAddTracks={(added) => setMusicTracks((t) => [...t, ...added])}
             onPlayTrack={(i) => void playTrack(i)}
             onTogglePlay={toggleMusicPlay}
@@ -1413,12 +1433,10 @@ export function VideoStudioConsole({
             onSeek={seekMusic}
             onRemoveTrack={(i) => void removeTrack(i)}
             onError={setMusicError}
+            onToggleDuck={setDuckEnabled}
             onClose={() => setMusicPanelOpen(false)}
           />
         )}
-        {/* Shared Prayer Mode overlay + "ended" toast over the video stage. */}
-        <PrayerOverlay active={prayerActive} endedAt={prayerEndedAt} />
-        <PrayerEndedToast endedAt={prayerEndedAt} />
       </div>
 
       {/* ── Live chatroom. Call-in guests now overlay the video above, so the

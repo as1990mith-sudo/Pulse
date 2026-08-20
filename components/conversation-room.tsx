@@ -40,7 +40,6 @@ import { CoverUpload, SQUARE_RATIO } from "@/components/admin/cover-upload"
 import { AudioFormatSelector } from "@/components/audio-format-selector"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { ParticipantGrid, type GridParticipant } from "@/components/conversation/participant-grid"
-import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
 import { FloatingMessages } from "@/components/conversation/floating-messages"
 import { SnowOverlay } from "@/components/conversation/snow-overlay"
 import { MusicPanel, type Track } from "@/components/studio-console"
@@ -274,8 +273,7 @@ export function ConversationRoom({
     setArrived(true)
   }
 
-  // ── Shared room state (prayer, pin, lock, ended) ─────────────────────────
-  const [prayerStartedAt, setPrayerStartedAt] = useState<string | null>(streamData?.prayerStartedAt ?? null)
+  // ── Shared room state (pin, lock, ended) ─────────────────────────────────
   const [pinnedId, setPinnedId] = useState<string | null>(streamData?.gridPinnedId ?? null)
   const [locked, setLocked] = useState<boolean>(streamData?.locked ?? false)
   const [theme, setThemeState] = useState<string>(streamData?.theme ?? "default")
@@ -291,8 +289,6 @@ export function ConversationRoom({
     null,
   )
   const [savingEpisode, setSavingEpisode] = useState(false)
-  const [prayerEndedAt, setPrayerEndedAt] = useState<number | null>(null)
-  const prevPrayer = useRef<string | null>(prayerStartedAt)
 
   // Host-only UI: consolidated host-controls menu, theme picker, cover lightbox.
   const [hostMenuOpen, setHostMenuOpen] = useState(false)
@@ -335,10 +331,6 @@ export function ConversationRoom({
           }
           return
         }
-        // Detect prayer turning off to flash the "ended" toast.
-        if (prevPrayer.current && !s.prayerStartedAt) setPrayerEndedAt(Date.now())
-        prevPrayer.current = s.prayerStartedAt
-        setPrayerStartedAt(s.prayerStartedAt)
         setPinnedId(s.pinnedId)
         setLocked(s.locked)
         // Participants follow the host's theme; the host keeps their own local
@@ -357,7 +349,6 @@ export function ConversationRoom({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomName, live])
 
-  const prayerActive = prayerStartedAt != null
 
   // ── Chat (for floating messages when the panel is closed) ────────────────
   const { data: chatMessages = [] } = useSWR<LiveChatMessageView[]>(
@@ -404,14 +395,51 @@ export function ConversationRoom({
   const [musicLoop, setMusicLoopState] = useState(false)
   const [musicError, setMusicError] = useState<string | null>(null)
   const [musicOpen, setMusicOpen] = useState(false)
+  // Host choice: whether the background music automatically dips under live
+  // speech (default on). When off, music holds at the host's set volume.
+  const [duckEnabled, setDuckEnabled] = useState(true)
 
-  // Ducking removed: the background music always plays at the host's chosen
-  // volume and is never lowered under active speakers. We still hold it at base
-  // (a no-op ramp) so any level left over from a prior session is normalised.
+  // Release-hold timer so the music doesn't "pump" up and down between words:
+  // it only rises back to full once the room has been quiet for a moment.
+  const duckReleaseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Sidechain ducking (host-toggleable). While anyone in the room is actively
+  // speaking (host or guest), dip the background music so voices cut through
+  // cleanly — and, just as important, so each speaker's mic echo-canceller/
+  // noise-suppressor isn't fighting loud, sustained music bleeding from their
+  // device speakers, which is what makes a voice sound muffled/underwater. Fast
+  // attack when speech starts; a short hold + gentle release when it stops. When
+  // the host turns ducking off, the music simply holds at its full set volume.
   useEffect(() => {
     if (musicActiveIndex === null || !musicPlaying) return
-    duckMusic(false)
-  }, [musicActiveIndex, musicPlaying, duckMusic])
+    if (!duckEnabled) {
+      // Ensure any prior dip is released back to full when ducking is disabled.
+      if (duckReleaseRef.current) {
+        clearTimeout(duckReleaseRef.current)
+        duckReleaseRef.current = null
+      }
+      duckMusic(false, 300)
+      return
+    }
+    if (state.speaking) {
+      if (duckReleaseRef.current) {
+        clearTimeout(duckReleaseRef.current)
+        duckReleaseRef.current = null
+      }
+      duckMusic(true, 140)
+    } else {
+      duckReleaseRef.current = setTimeout(() => {
+        duckMusic(false, 480)
+        duckReleaseRef.current = null
+      }, 650)
+    }
+    return () => {
+      if (duckReleaseRef.current) {
+        clearTimeout(duckReleaseRef.current)
+        duckReleaseRef.current = null
+      }
+    }
+  }, [duckEnabled, state.speaking, musicActiveIndex, musicPlaying, duckMusic])
 
   // Mix a playlist track into the broadcast and mark it now-playing.
   async function playMusicTrack(index: number) {
@@ -569,7 +597,7 @@ export function ConversationRoom({
       },
     ]
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, prayerActive, locked])
+  }, [isHost, locked])
 
   function toggleLock() {
     if (!roomName) return
@@ -1035,7 +1063,7 @@ export function ConversationRoom({
           <DockButton
             label="Host controls"
             onClick={() => setHostMenuOpen(true)}
-            active={hostMenuOpen || prayerActive || musicPlaying || locked}
+            active={hostMenuOpen || musicPlaying || locked}
           >
             <Settings2 />
           </DockButton>
@@ -1065,9 +1093,6 @@ export function ConversationRoom({
           and by the participant dock share button. */}
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
 
-      {/* Prayer overlay + toast */}
-      <PrayerOverlay active={prayerActive} endedAt={prayerEndedAt} />
-      <PrayerEndedToast endedAt={prayerEndedAt} />
 
       {/* Host music panel — the same playlist panel used in podcast studio mode */}
       {isHost && musicOpen && (
@@ -1082,6 +1107,7 @@ export function ConversationRoom({
           mixing={musicMixing}
           loop={musicLoop}
           error={musicError}
+          duck={duckEnabled}
           onAddTracks={(added) => setMusicTracks((t) => [...t, ...added])}
           onPlayTrack={(i) => void playMusicTrack(i)}
           onTogglePlay={toggleMusicPlay}
@@ -1092,6 +1118,7 @@ export function ConversationRoom({
           onSeek={seekMusic}
           onRemoveTrack={removeMusicTrack}
           onError={setMusicError}
+          onToggleDuck={setDuckEnabled}
           onClose={() => setMusicOpen(false)}
         />
       )}

@@ -36,25 +36,27 @@ export function SignupChooser() {
       <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col justify-center px-4 pb-16 pt-4 sm:px-6">
         <div className="mb-8 sm:mb-10">
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-primary">Get started</p>
-          <h1 className="text-4xl font-bold leading-[1.05] tracking-tight text-balance sm:text-5xl">
-            Choose how you connect
+          <h1 className="text-4xl font-bold leading-[1.05] tracking-tight sm:text-5xl">
+            Choose how you
+            <br />
+            connect
           </h1>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
+        <div className="grid grid-cols-2 gap-3 sm:gap-5">
           <PathCard
             href="/sign-up/home"
             featured
             icon={<Building2 className="size-6" strokeWidth={2} />}
             title="Organisation"
-            description="A private home for your church or ministry"
+            description="Create a private home for your organisation"
             cta="Create"
           />
           <PathCard
             href="/sign-up/universal"
             icon={<UserRound className="size-6" strokeWidth={2} />}
             title="Individual"
-            description="Connect with the wider community"
+            description="Join as a member of an organization. You should have the organisation key."
             cta="Explore"
           />
         </div>
@@ -82,7 +84,7 @@ function PathCard({
     <Link
       href={href}
       className={[
-        "group relative flex flex-col justify-between overflow-hidden rounded-3xl border p-6 transition-all duration-300 sm:p-7",
+        "group relative flex flex-col justify-between overflow-hidden rounded-3xl border p-4 transition-all duration-300 sm:p-7",
         "hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         featured
           ? "border-primary/50 bg-card shadow-elevated hover:border-primary/70 hover:shadow-floating"
@@ -104,26 +106,26 @@ function PathCard({
         <div className="flex items-start justify-between">
           <span
             className={[
-              "flex size-14 items-center justify-center rounded-2xl transition-transform duration-300 group-hover:scale-[1.04]",
+              "flex size-12 items-center justify-center rounded-2xl transition-transform duration-300 group-hover:scale-[1.04] sm:size-14",
               featured ? "bg-primary text-primary-foreground shadow-elevated" : BLUE.tile,
             ].join(" ")}
           >
             {icon}
           </span>
           {featured && (
-            <span className="rounded-full bg-primary px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-primary-foreground">
+            <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-foreground sm:px-2.5 sm:py-1 sm:text-[11px]">
               Premium
             </span>
           )}
         </div>
 
-        <h2 className="mt-6 text-2xl font-bold leading-tight tracking-tight">{title}</h2>
-        <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground text-pretty">{description}</p>
+        <h2 className="mt-4 text-xl font-bold leading-tight tracking-tight sm:mt-6 sm:text-2xl">{title}</h2>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground text-pretty sm:text-[15px]">{description}</p>
       </div>
 
       <span
         className={[
-          "relative mt-8 inline-flex items-center gap-1.5 text-[15px] font-semibold transition-colors",
+          "relative mt-6 inline-flex items-center gap-1.5 text-sm font-semibold transition-colors sm:mt-8 sm:text-[15px]",
           featured ? "text-primary" : BLUE.cta,
         ].join(" ")}
       >

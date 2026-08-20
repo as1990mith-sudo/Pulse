@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import {
+  AudioLines,
   CheckCircle2,
   ChevronDown,
   Crown,
@@ -35,6 +36,7 @@ import {
   X,
 } from "lucide-react"
 import type { CurrentUser } from "@/lib/session"
+import { Switch } from "@/components/ui/switch"
 import { publishShow, updateEpisode } from "@/app/actions/shows"
 import {
   startBroadcast,
@@ -70,7 +72,6 @@ import { LIVE_THEMES, liveThemeStyle, isLiveImageTheme } from "@/lib/live-themes
 import { LIVE_CATEGORIES } from "@/lib/live-categories"
 import { LiveBadge } from "@/components/live-badge"
 import { ReactionLayer } from "@/components/live-reactions"
-import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
 import { BackExitMenu } from "@/components/live-back-menu"
 import { CoverUpload, SQUARE_RATIO } from "@/components/admin/cover-upload"
 import { AudioFormatSelector } from "@/components/audio-format-selector"
@@ -292,22 +293,6 @@ export function StudioConsole({
   const guests = callState?.guests ?? []
   const locked = callState?.locked ?? false
 
-  // ── Shared Prayer Mode ──────────────────────────────────────────────────
-  // Reconcile from the polled call state; flash a toast when prayer ends. The
-  // host toggles it and every listener sees the same overlay.
-  const [prayerStartedAt, setPrayerStartedAt] = useState<string | null>(null)
-  const [prayerEndedAt, setPrayerEndedAt] = useState<number | null>(null)
-  const prevPrayerRef = useRef<string | null>(null)
-  useEffect(() => {
-    if (callState?.prayerStartedAt === undefined) return
-    const next = callState.prayerStartedAt
-    if (prevPrayerRef.current && !next) setPrayerEndedAt(Date.now())
-    prevPrayerRef.current = next
-    setPrayerStartedAt(next)
-  }, [callState?.prayerStartedAt])
-  // Prayer Mode is reconciled from server state only; the host trigger has been
-  // removed, so this stays inert unless a legacy session reports it.
-  const prayerActive = prayerStartedAt != null
   // Co-host state from the poll. `coHosts` includes everyone granted co-host
   // status (on the call or off it) so the host can manage them all.
   const coHosts = callState?.coHosts ?? []
@@ -923,9 +908,6 @@ export function StudioConsole({
             onTapSpeaker={openSpeakerMenu}
           />
           {live && roomName && <ReactionLayer roomName={roomName} />}
-          {/* Shared Prayer Mode overlay + "ended" toast. */}
-          <PrayerOverlay active={prayerActive} endedAt={prayerEndedAt} />
-          <PrayerEndedToast endedAt={prayerEndedAt} />
         </div>
 
         {/* Host control dock ��� compact essentials, sits right under the stage row */}
@@ -1481,6 +1463,7 @@ export function MusicPanel({
   mixing,
   loop,
   error,
+  duck,
   onAddTracks,
   onPlayTrack,
   onTogglePlay,
@@ -1491,6 +1474,7 @@ export function MusicPanel({
   onSeek,
   onRemoveTrack,
   onError,
+  onToggleDuck,
   onClose,
 }: {
   live: boolean
@@ -1503,6 +1487,10 @@ export function MusicPanel({
   mixing: boolean
   loop: boolean
   error: string | null
+  // Optional sidechain-ducking control. Only consoles that mix live speech with
+  // music (audio Conversation, video Studio) pass these; when omitted the toggle
+  // is hidden entirely (e.g. solo podcast / cohost panels don't need it).
+  duck?: boolean
   onAddTracks: (tracks: Track[]) => void
   onPlayTrack: (index: number) => void
   onTogglePlay: () => void
@@ -1513,6 +1501,7 @@ export function MusicPanel({
   onSeek: (seconds: number) => void
   onRemoveTrack: (index: number) => void
   onError: (message: string | null) => void
+  onToggleDuck?: (next: boolean) => void
   onClose: () => void
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -1704,6 +1693,25 @@ export function MusicPanel({
                 {Math.round(volume * 100)}%
               </span>
             </div>
+          </div>
+        )}
+
+        {/* ── Duck under speech (host choice) ──
+            Only rendered for consoles that mix live speech with music. When on,
+            the music automatically dips while anyone is speaking so voices stay
+            clean; when off, music holds at the set volume the whole time. */}
+        {onToggleDuck && (
+          <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-secondary/40 p-3.5">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-background text-primary ring-1 ring-inset ring-border/60">
+              <AudioLines className="size-4" strokeWidth={2.5} />
+            </span>
+            <label htmlFor="music-duck" className="min-w-0 flex-1 cursor-pointer">
+              <span className="block text-sm font-semibold text-foreground">Lower music under speech</span>
+              <span className="block text-[11px] leading-tight text-muted-foreground">
+                Dips the music while someone is talking, then restores it
+              </span>
+            </label>
+            <Switch id="music-duck" checked={duck ?? false} onCheckedChange={(next) => onToggleDuck(next)} />
           </div>
         )}
 

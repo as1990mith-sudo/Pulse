@@ -42,6 +42,7 @@ import {
 import { MiniChatProvider, useMiniChat } from "@/components/mini-chat"
 import { CommunityConversation } from "@/components/community-conversation"
 import { FeedVideo } from "@/components/feed-video"
+import { ImageLightbox } from "@/components/image-lightbox"
 import {
   ANON_AVATAR,
   ANON_NAME,
@@ -121,45 +122,77 @@ function QuestionText({ text, onOpen, hasMedia = false }: { text: string; onOpen
 /**
  * A post's attached video in the feed. Uses the shared FeedVideo player so the
  * clip auto-plays when it scrolls into view (and pauses when it leaves) — the
- * same behavior as the reels/mind feed. The frame mirrors the clip's REAL
- * aspect ratio (reported via onAspectRatio), clamped between 16:9 (landscape)
- * and 4:5 (portrait) so an extreme clip can't produce a giant frame.
- *
- * Fit vs fill:
- *  - Landscape / within-range clips → `object-contain` so a 16:9 video shows
- *    its full frame with nothing cropped.
- *  - Taller-than-4:5 portrait clips (e.g. 9:16) → `object-cover` so they FILL
- *    the clamped 4:5 card (cropping the excess) instead of being letterboxed
- *    with bars on the sides. Tapping opens the full post (onExpand).
+ * same behavior as the reels/mind feed. Feed media uses just two card shapes: a
+ * clip that is exactly 1:1 or 16:9 keeps its own ratio, and EVERYTHING else
+ * (portrait 9:16, 4:5, or any other crop) is presented in a uniform 4:5 portrait
+ * card. The clip always `object-cover`-fills that card (no letterbox bars); the
+ * untouched full ratio is revealed when it's tapped open full screen (onExpand).
  */
 function FeedPostVideo({ src, onOpen }: { src: string; onOpen: () => void }) {
-  // Default to 16:9 before metadata loads (matches the common case), then
+  // Default to 4:5 before metadata loads (the common portrait case here), then
   // settle onto the clip's true ratio once known.
-  const [ratio, setRatio] = useState<number>(16 / 9)
-  const aspect = Math.min(16 / 9, Math.max(4 / 5, ratio))
-  // The clip is taller than the frame it's displayed in whenever its true ratio
-  // is narrower than the (clamped) frame ratio — fill those so no bars show.
-  const fill = ratio < aspect - 0.01
-  // Portrait clips (9:16 and other tall ratios) render as a SLIM, left-aligned
-  // card — like X's vertical videos — rather than a wide block. Landscape /
-  // square clips keep the full column width. `portrait` keys off the true clip
-  // ratio so the width choice matches what's actually playing.
-  const portrait = ratio < 1
+  const [ratio, setRatio] = useState<number>(4 / 5)
+  // 1:1 and 16:9 fill their own card; any other ratio is framed as 4:5.
+  const isStandard = [1, 16 / 9].some((a) => Math.abs(ratio - a) < 0.02)
+  const aspect = isStandard ? ratio : 4 / 5
   return (
     <div
-      className={cn(
-        "relative mt-3 overflow-hidden rounded-2xl border border-border/60 bg-black",
-        portrait ? "w-[62%] max-w-[230px]" : "w-full",
-      )}
-      style={{ aspectRatio: String(aspect), maxHeight: "24rem" }}
+      className="relative mt-3 w-full overflow-hidden rounded-lg border border-border/60 bg-black"
+      style={{ aspectRatio: String(aspect), maxHeight: "32rem" }}
     >
-      <FeedVideo
-        src={src}
-        className={`h-full w-full ${fill ? "object-cover" : "object-contain"}`}
-        onAspectRatio={setRatio}
-        onExpand={onOpen}
-      />
+      <FeedVideo src={src} className="h-full w-full object-cover" onAspectRatio={setRatio} onExpand={onOpen} />
     </div>
+  )
+}
+
+/**
+ * Full-screen video viewer opened by tapping an attached clip in the feed.
+ * Shows the clip at its true, untouched ratio (letterboxed on black) with native
+ * controls and autoplay — mirroring ImageLightbox for photos.
+ */
+function FullscreenVideo({ src, onClose }: { src: string; onClose: () => void }) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose()
+    }
+    document.addEventListener("keydown", onKey)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.removeEventListener("keydown", onKey)
+      document.body.style.overflow = prev
+    }
+  }, [onClose])
+
+  if (typeof document === "undefined") return null
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Expanded video"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/95 py-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close video"
+        className="absolute right-4 top-[calc(env(safe-area-inset-top)+1rem)] z-10 flex size-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/20"
+      >
+        <X className="size-5" />
+      </button>
+      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+      <video
+        src={src}
+        controls
+        autoPlay
+        playsInline
+        className="max-h-[90vh] max-w-full"
+        onClick={(e) => e.stopPropagation()}
+      />
+    </div>,
+    document.body,
   )
 }
 
@@ -187,6 +220,9 @@ function PostItem({
   const [edited, setEdited] = useState(post.edited)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Tapping attached media opens it full screen (image lightbox / video overlay)
+  // instead of the conversation, so the media can be viewed at its true ratio.
+  const [mediaOpen, setMediaOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -267,132 +303,138 @@ function PostItem({
         highlighted && "bg-emerald-500/5",
       )}
     >
-      {/* Indented, Threads-style row: avatar in a fixed left gutter, all content
-          (name, question, image, actions) flows in the column to its right.
-          items-start keeps the avatar top-aligned with the name — without it the
-          gutter stretches to the full post height and the button-wrapped
-          (clickable) avatar centers, drifting down beside the body text. */}
-      <div className="flex items-start gap-3">
+      {/* Header: the avatar and the name/date sit on ONE centered row, so the
+          name aligns to the vertical middle of the avatar rather than its top.
+          The body, media and actions then flow in an indented block below. */}
+      <div className="flex items-center gap-3">
         <CommunityAvatar post={post} onAuthorClick={openProfile} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <PostMeta post={post} edited={edited} onAuthorClick={openProfile} />
-            <div ref={menuRef} className="relative">
-              <button
-                type="button"
-                onClick={() => setMenuOpen((o) => !o)}
-                className={cn(
-                  "-mr-1 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
-                  menuOpen && "bg-secondary text-foreground",
-                )}
-                aria-label="Post options"
-                aria-haspopup="menu"
-                aria-expanded={menuOpen}
+        <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
+          <PostMeta post={post} edited={edited} onAuthorClick={openProfile} />
+          <div ref={menuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setMenuOpen((o) => !o)}
+              className={cn(
+                "-mr-1 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
+                menuOpen && "bg-secondary text-foreground",
+              )}
+              aria-label="Post options"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+            >
+              <MoreHorizontal className="size-5" />
+            </button>
+            {menuOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-2xl border border-border/60 bg-card p-1 shadow-xl duration-150 animate-in fade-in zoom-in-95"
               >
-                <MoreHorizontal className="size-5" />
-              </button>
-              {menuOpen && (
-                <div
-                  role="menu"
-                  className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-2xl border border-border/60 bg-card p-1 shadow-xl duration-150 animate-in fade-in zoom-in-95"
-                >
-                  {post.isSelf && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={startEdit}
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-secondary"
-                    >
-                      <Pencil className="size-4" /> Edit
-                    </button>
-                  )}
+                {post.isSelf && (
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={handleCopy}
+                    onClick={startEdit}
                     className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-secondary"
                   >
-                    <Copy className="size-4" /> Copy text
+                    <Pencil className="size-4" /> Edit
                   </button>
-                  {post.isSelf && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={handleDelete}
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
-                    >
-                      <Trash2 className="size-4" /> Delete
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {editing ? (
-            <div className="mt-2">
-              <Textarea
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                rows={3}
-                maxLength={1000}
-                autoFocus
-                className="resize-none rounded-2xl text-[17px]"
-              />
-              {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
-              <div className="mt-2 flex items-center justify-end gap-2">
-                <Button type="button" variant="ghost" size="sm" className="rounded-full" onClick={() => setEditing(false)} disabled={isPending}>
-                  Cancel
-                </Button>
-                <Button type="button" size="sm" className="gap-1.5 rounded-full" onClick={saveEdit} disabled={isPending || !draft.trim()}>
-                  {isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
-                  Save
-                </Button>
+                )}
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={handleCopy}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-secondary"
+                >
+                  <Copy className="size-4" /> Copy text
+                </button>
+                {post.isSelf && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={handleDelete}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
+                  >
+                    <Trash2 className="size-4" /> Delete
+                  </button>
+                )}
               </div>
-            </div>
-          ) : (
-            <>
-              {body && <QuestionText text={body} onOpen={onOpen} hasMedia={Boolean(post.imageUrl || post.videoUrl)} />}
-              <BibleChips text={body} className="mt-3" />
-            </>
-          )}
-
-          {post.imageUrl && <FeedPostImage src={post.imageUrl} onClick={onOpen} className="mt-3" />}
-
-          {post.videoUrl && <FeedPostVideo src={post.videoUrl} onOpen={onOpen} />}
-
-          {/* Engagement actions — a left-aligned group with uniform gaps so
-              Like · Reply · Share · Save are evenly spaced (Share no longer
-              drifts apart from the rest the way a stretched edge-to-edge row
-              made it). */}
-          <div className="mt-3 flex items-center gap-1">
-            <LikeButton postId={post.id} initialLikes={post.likes} initialLiked={post.liked} variant="row" />
-            <button
-              type="button"
-              onClick={onOpen}
-              aria-label="Reply"
-              className="flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-            >
-              <CommentIcon className="size-5" />
-              {post.commentCount > 0 && <span className="tabular-nums">{post.commentCount}</span>}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShareOpen(true)}
-              aria-label="Share"
-              className="flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-            >
-              <Share2 className="size-5" />
-            </button>
-            <SaveButton postId={post.id} variant="row" />
+            )}
           </div>
-          {copied && (
-            <span className="mt-2 flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-              <Check className="size-3.5" /> Copied
-            </span>
-          )}
         </div>
       </div>
+
+      {/* Body, media and actions — indented (pl-14) to align under the name,
+          clearing the avatar gutter (avatar size-11 + gap-3). */}
+      <div className="mt-2 pl-14">
+        {editing ? (
+          <div className="mt-2">
+            <Textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              rows={3}
+              maxLength={1000}
+              autoFocus
+              className="resize-none rounded-2xl text-[17px]"
+            />
+            {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
+            <div className="mt-2 flex items-center justify-end gap-2">
+              <Button type="button" variant="ghost" size="sm" className="rounded-full" onClick={() => setEditing(false)} disabled={isPending}>
+                Cancel
+              </Button>
+              <Button type="button" size="sm" className="gap-1.5 rounded-full" onClick={saveEdit} disabled={isPending || !draft.trim()}>
+                {isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+                Save
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {body && <QuestionText text={body} onOpen={onOpen} hasMedia={Boolean(post.imageUrl || post.videoUrl)} />}
+            <BibleChips text={body} className="mt-3" />
+          </>
+        )}
+
+        {post.imageUrl && <FeedPostImage src={post.imageUrl} onClick={() => setMediaOpen(true)} className="mt-3" />}
+
+        {post.videoUrl && <FeedPostVideo src={post.videoUrl} onOpen={() => setMediaOpen(true)} />}
+
+        {/* Engagement actions — spread evenly across the width so Like, Reply,
+            Share and Save sit at consistent intervals under the post. */}
+        <div className="mt-3 flex items-center justify-between">
+          <LikeButton postId={post.id} initialLikes={post.likes} initialLiked={post.liked} variant="row" />
+          <button
+            type="button"
+            onClick={onOpen}
+            aria-label="Reply"
+            className="flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          >
+            <CommentIcon className="size-5" />
+            {post.commentCount > 0 && <span className="tabular-nums">{post.commentCount}</span>}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShareOpen(true)}
+            aria-label="Share"
+            className="flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          >
+            <Share2 className="size-5" />
+          </button>
+          <SaveButton postId={post.id} variant="row" />
+        </div>
+        {copied && (
+          <span className="mt-2 flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+            <Check className="size-3.5" /> Copied
+          </span>
+        )}
+      </div>
+
+      {/* Full-screen media, opened by tapping the attached photo/video. */}
+      {mediaOpen && post.imageUrl && (
+        <ImageLightbox src={post.imageUrl} alt="Attached to the question" onClose={() => setMediaOpen(false)} />
+      )}
+      {mediaOpen && post.videoUrl && !post.imageUrl && (
+        <FullscreenVideo src={post.videoUrl} onClose={() => setMediaOpen(false)} />
+      )}
 
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
     </article>

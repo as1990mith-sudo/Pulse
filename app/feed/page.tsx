@@ -20,7 +20,7 @@ export default async function FeedPage() {
       <SiteHeader />
       <main>
         <div className="mx-auto w-full max-w-2xl pb-8">
-          {/* Status now lives inside the feed tabs (For you / Following / Status /
+          {/* Status now lives inside the feed tabs (For you / Admin / Status /
               Reels); the feed runs edge-to-edge for an immersive scroll. The
               Announcements banner renders inside the feed so it can be hidden on
               the Status tab. */}
