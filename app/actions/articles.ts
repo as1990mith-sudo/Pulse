@@ -774,6 +774,25 @@ export async function saveReadingProgress(input: { articleId: string; percent: n
 }
 
 /**
+ * Remove a single article from the viewer's reading history (their Library
+ * "Reading History" / "Continue Reading" entry). Scoped to the signed-in user
+ * so a reader can only prune their own history. Idempotent — deleting an entry
+ * that isn't there is a no-op.
+ */
+export async function deleteReadingHistory(articleId: string): Promise<void> {
+  const viewer = await getSessionUser()
+  if (!viewer) return
+  const numId = Number(articleId)
+  if (!Number.isFinite(numId)) return
+
+  await db
+    .delete(articleReadingProgress)
+    .where(and(eq(articleReadingProgress.userId, viewer.id), eq(articleReadingProgress.articleId, numId)))
+
+  revalidatePath("/library")
+}
+
+/**
  * The signed-in reader's personalised Library: articles they've started but not
  * finished ("Continue Reading"), everything they've opened ("Reading History",
  * with a completed flag), and the articles they've bookmarked ("Saved"). All

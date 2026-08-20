@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import {
   ArrowRight,
@@ -10,11 +11,17 @@ import {
   Clock,
   History,
   Sparkles,
+  Trash2,
   X,
 } from "lucide-react"
 import type { ArticleCard, LibraryArticleCard, LibraryData } from "@/lib/article-types"
 import { AuthorAvatar } from "@/components/articles/author-avatar"
 import { toggleSaveItem } from "@/app/actions/share"
+import { deleteReadingHistory } from "@/app/actions/articles"
+import { cn } from "@/lib/utils"
+
+// Drag further left than this (px) to trigger swipe-to-delete on release.
+const SWIPE_DELETE_THRESHOLD = 96
 
 /**
  * The Library — a personalised reading hub for articles, styled to match the
@@ -23,8 +30,9 @@ import { toggleSaveItem } from "@/app/actions/share"
  * collections separated by hairline dividers rather than boxed cards.
  */
 export function LibraryView({ library }: { library: LibraryData }) {
-  const { continueReading, history } = library
+  const { continueReading } = library
   const [saved, setSaved] = useState<ArticleCard[]>(library.saved)
+  const [history, setHistory] = useState<LibraryArticleCard[]>(library.history)
   const savedIds = new Set(saved.map((a) => a.id))
   const isEmpty = continueReading.length === 0 && saved.length === 0 && history.length === 0
 
@@ -49,14 +57,11 @@ export function LibraryView({ library }: { library: LibraryData }) {
         </section>
       )}
 
-      <section>
-        <SectionHeading icon={<BookMarked className="size-4" />} title="Saved" caption="Bookmarked for later" />
-        {saved.length === 0 ? (
-          <InlineEmpty
-            icon={<BookMarked className="size-5" />}
-            message="Tap the bookmark on any article and it lands here for later."
-          />
-        ) : (
+      {/* Saved only appears once the reader has actually bookmarked something —
+          no empty-state placeholder when the collection is empty. */}
+      {saved.length > 0 && (
+        <section>
+          <SectionHeading icon={<BookMarked className="size-4" />} title="Saved" caption="Bookmarked for later" />
           <ul className="-mt-1 flex flex-col divide-y divide-border/40">
             {saved.map((a) => (
               <SavedRow
@@ -66,15 +71,20 @@ export function LibraryView({ library }: { library: LibraryData }) {
               />
             ))}
           </ul>
-        )}
-      </section>
+        </section>
+      )}
 
       {history.length > 0 && (
         <section>
-          <SectionHeading icon={<History className="size-4" />} title="Reading History" caption="Everything you've opened" />
+          <SectionHeading icon={<History className="size-4" />} title="Reading History" caption="Swipe left to remove" />
           <ul className="-mt-1 flex flex-col divide-y divide-border/40">
             {history.map((a) => (
-              <HistoryRow key={a.id} article={a} saved={savedIds.has(a.id)} />
+              <HistoryRow
+                key={a.id}
+                article={a}
+                saved={savedIds.has(a.id)}
+                onRemoved={() => setHistory((prev) => prev.filter((x) => x.id !== a.id))}
+              />
             ))}
           </ul>
         </section>
@@ -227,11 +237,120 @@ function SavedRow({ article, onRemoved }: { article: ArticleCard; onRemoved: () 
   )
 }
 
-/** A dense history row with a status that distinguishes completed vs in-progress. */
-function HistoryRow({ article, saved }: { article: LibraryArticleCard; saved: boolean }) {
+/**
+ * A dense history row that can be swiped left to remove from reading history.
+ * Pointer-based (mouse + touch), axis-locked so vertical scrolling still works,
+ * and it optimistically removes on release past the threshold, then persists via
+ * `deleteReadingHistory`. A clean tap (no horizontal drag) opens the article.
+ */
+function HistoryRow({
+  article,
+  saved,
+  onRemoved,
+}: {
+  article: LibraryArticleCard
+  saved: boolean
+  onRemoved: () => void
+}) {
+  const router = useRouter()
+  const [, startTransition] = useTransition()
+  const [dx, setDx] = useState(0)
+  const [removing, setRemoving] = useState(false)
+
+  const startX = useRef(0)
+  const startY = useRef(0)
+  const draggingAxis = useRef<null | "x" | "y">(null)
+  const moved = useRef(false)
+
+  function commitDelete() {
+    setRemoving(true)
+    setDx(-window.innerWidth)
+    // Persist first, then drop from the list once the exit animation has played.
+    startTransition(async () => {
+      try {
+        await deleteReadingHistory(article.id)
+      } catch {
+        // Best-effort; optimistic removal already ran on the client.
+      }
+    })
+    setTimeout(onRemoved, 180)
+  }
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return
+    startX.current = e.clientX
+    startY.current = e.clientY
+    draggingAxis.current = null
+    moved.current = false
+  }
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    const deltaX = e.clientX - startX.current
+    const deltaY = e.clientY - startY.current
+    // Lock to an axis once movement is meaningful so vertical scroll is preserved.
+    if (draggingAxis.current === null && (Math.abs(deltaX) > 8 || Math.abs(deltaY) > 8)) {
+      draggingAxis.current = Math.abs(deltaX) > Math.abs(deltaY) ? "x" : "y"
+      if (draggingAxis.current === "x") {
+        moved.current = true
+        try {
+          ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+        } catch {
+          // ignore unsupported capture
+        }
+      }
+    }
+    // Allow left swipe (negative); resist dragging right past the origin.
+    if (draggingAxis.current === "x") setDx(Math.min(0, deltaX))
+  }
+
+  const onPointerUp = () => {
+    if (draggingAxis.current === "x") {
+      if (dx <= -SWIPE_DELETE_THRESHOLD) {
+        commitDelete()
+        return
+      }
+      setDx(0)
+      return
+    }
+    // Clean tap → open the article.
+    if (!moved.current) router.push(`/articles/${article.id}`)
+  }
+
+  const onPointerCancel = () => setDx(0)
+
   return (
-    <li>
-      <Link href={`/articles/${article.id}`} className="tap-scale group flex items-center gap-4 py-4">
+    <li className="relative">
+      {/* Red delete affordance revealed as the row slides left. */}
+      <div
+        aria-hidden="true"
+        className={cn(
+          "pointer-events-none absolute inset-0 flex items-center justify-end rounded-xl bg-destructive pr-5 text-white transition-opacity",
+          dx < -8 ? "opacity-100" : "opacity-0",
+        )}
+      >
+        <Trash2 className="size-5" />
+      </div>
+
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`Open ${article.title}`}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            router.push(`/articles/${article.id}`)
+          }
+        }}
+        style={{ transform: `translateX(${dx}px)` }}
+        className={cn(
+          "tap-scale group flex touch-pan-y select-none items-center gap-4 bg-background py-4",
+          (dx === 0 || removing) && "transition-transform duration-200",
+        )}
+      >
         <RowThumb coverUrl={article.coverUrl} />
         <div className="min-w-0 flex-1">
           <h3 className="line-clamp-2 text-pretty font-display text-[15px] font-semibold leading-snug text-foreground transition-colors group-hover:text-primary">
@@ -247,7 +366,7 @@ function HistoryRow({ article, saved }: { article: LibraryArticleCard; saved: bo
           {saved && <BookMarked className="size-3.5 text-primary" aria-label="Saved" />}
           <StatusPill article={article} />
         </div>
-      </Link>
+      </div>
     </li>
   )
 }
@@ -277,17 +396,6 @@ function ProgressBar({ percent }: { percent: number }) {
         className="h-full rounded-full bg-primary transition-all duration-500"
         style={{ width: `${Math.min(100, Math.max(3, percent))}%` }}
       />
-    </div>
-  )
-}
-
-function InlineEmpty({ icon, message }: { icon: React.ReactNode; message: string }) {
-  return (
-    <div className="mt-1 flex items-center gap-3 rounded-2xl border border-dashed border-border/50 px-4 py-5 text-sm text-muted-foreground">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-secondary/60 text-muted-foreground ring-1 ring-border/40">
-        {icon}
-      </span>
-      <p className="text-pretty">{message}</p>
     </div>
   )
 }
