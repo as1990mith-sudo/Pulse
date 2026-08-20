@@ -245,7 +245,7 @@ function NoteEditor({
         <div className="flex items-center justify-between gap-2 border-t border-border/60 p-3">
           <button
             type="button"
-            onClick={remove}
+            onClick={() => setConfirmOpen(true)}
             disabled={busy}
             className="tap-scale inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50"
           >
@@ -261,6 +261,17 @@ function NoteEditor({
           </button>
         </div>
       </div>
+
+      {confirmOpen && (
+        <ConfirmDialog
+          title="Delete this note?"
+          message="This live note will be permanently removed from your account."
+          confirmLabel="Delete"
+          busy={busy}
+          onConfirm={remove}
+          onCancel={() => setConfirmOpen(false)}
+        />
+      )}
     </div>
   )
 }
