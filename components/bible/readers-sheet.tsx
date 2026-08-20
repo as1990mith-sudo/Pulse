@@ -187,18 +187,18 @@ function ReaderCard({
   }
 
   return (
-    <div className="rounded-2xl border border-border/60 bg-background/60 p-3 shadow-sm transition-all hover:border-border hover:shadow-md">
-      <div className="flex items-center gap-3">
+    <div className="rounded-2xl border border-border/60 bg-background/60 p-2.5 shadow-sm transition-all hover:border-border hover:shadow-md">
+      <div className="flex items-center gap-2.5">
         <button type="button" onClick={onProfile} className="relative shrink-0" aria-label={`View ${reader.name}'s profile`}>
-          <Avatar className="size-12">
+          <Avatar className="size-9">
             {reader.image ? <AvatarImage src={reader.image} alt={reader.name} /> : null}
-            <AvatarFallback className={cn("font-semibold", getAvatarColor(reader.userId))}>
+            <AvatarFallback className={cn("text-xs font-semibold", getAvatarColor(reader.userId))}>
               {getInitials(reader.name)}
             </AvatarFallback>
           </Avatar>
           {reader.online && (
             <span
-              className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full border-2 border-card bg-chart-2"
+              className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-card bg-chart-2"
               aria-hidden
             />
           )}
@@ -206,11 +206,10 @@ function ReaderCard({
 
         <button type="button" onClick={onProfile} className="min-w-0 flex-1 text-left">
           <div className="flex items-center gap-1.5">
-            <p className="truncate font-semibold leading-tight">{reader.name}</p>
+            <p className="truncate text-sm font-semibold leading-tight">{reader.name}</p>
             {reader.isSelf && <span className="shrink-0 text-xs text-muted-foreground">(you)</span>}
           </div>
-          <p className="truncate text-xs text-muted-foreground">{reader.handle}</p>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <span className="truncate text-xs text-primary">
               {activityLabel(reader.activity, reader.book, reader.chapter)}
             </span>

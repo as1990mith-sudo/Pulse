@@ -178,7 +178,9 @@ export function StudioConsole({
   // back menu can't drop everyone out of the broadcast (mirrors the video studio).
   const [endConfirmOpen, setEndConfirmOpen] = useState(false)
   // Immersive studio theme (persisted server-side, applied live to listeners).
-  const [theme, setTheme] = useState(resumeStream?.theme ?? "default")
+  // A resumed broadcast keeps its own theme; a brand-new one opens on the host's
+  // last-used backdrop (their remembered preference) so they needn't re-pick it.
+  const [theme, setTheme] = useState(resumeStream?.theme ?? currentUser.preferredLiveTheme ?? "default")
 
   // ── Background-music playlist (lifted here so it survives closing the music
   // panel and minimising the whole console — the audio engine itself lives in

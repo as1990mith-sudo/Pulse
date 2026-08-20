@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react"
 import useSWR from "swr"
-import { ChevronDown, Mic, Pencil, Trash2, Video, X } from "lucide-react"
+import { ChevronDown, Mic, Pencil, Search, Trash2, Video, X } from "lucide-react"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import {
   deleteLiveNote,
   getLiveNotes,
@@ -30,6 +31,23 @@ export function LiveNotesBrowser({
   })
 
   const [openNote, setOpenNote] = useState<GroupedLiveNote | null>(null)
+  const [query, setQuery] = useState("")
+
+  // Filter across host, topic and preview; keep only groups with matches and
+  // narrow each group's notes to the matching ones.
+  const filteredGroups = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return groups
+    return groups
+      .map((g) => {
+        const hostMatch = g.hostName.toLowerCase().includes(q)
+        const notes = hostMatch
+          ? g.notes
+          : g.notes.filter((n) => `${n.topic} ${n.preview ?? ""}`.toLowerCase().includes(q))
+        return { ...g, notes }
+      })
+      .filter((g) => g.notes.length > 0)
+  }, [groups, query])
 
   if (!signedIn) {
     return (
@@ -49,15 +67,33 @@ export function LiveNotesBrowser({
 
   return (
     <>
-      <div className="space-y-5">
-        {groups.map((group) => (
-          <HostGroup
-            key={group.hostId ?? group.hostName}
-            group={group}
-            onOpen={(note) => setOpenNote(note)}
-          />
-        ))}
+      {/* Search across all captured live notes. */}
+      <div className="relative mb-4">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search live notes"
+          aria-label="Search live notes"
+          className="w-full rounded-full border border-border/60 bg-secondary/40 py-2.5 pl-9 pr-3 text-sm text-foreground outline-none ring-primary/40 transition-shadow placeholder:text-muted-foreground focus:ring-2"
+        />
       </div>
+
+      {filteredGroups.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border/60 bg-card/50 p-10 text-center">
+          <p className="text-sm font-medium text-muted-foreground">No live notes match &ldquo;{query.trim()}&rdquo;</p>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {filteredGroups.map((group) => (
+            <HostGroup
+              key={group.hostId ?? group.hostName}
+              group={group}
+              onOpen={(note) => setOpenNote(note)}
+            />
+          ))}
+        </div>
+      )}
 
       {openNote && (
         <NoteEditor
@@ -155,6 +191,7 @@ function NoteEditor({
   const [body, setBody] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   // Once the full note loads, seed the editable body (only if the user hasn't
   // started typing).
   const seededBody = body ?? full?.preview ?? note.preview
@@ -172,6 +209,7 @@ function NoteEditor({
   }
 
   async function remove() {
+    setConfirmOpen(false)
     setBusy(true)
     await deleteLiveNote(note.id)
     setBusy(false)
@@ -207,7 +245,7 @@ function NoteEditor({
         <div className="flex items-center justify-between gap-2 border-t border-border/60 p-3">
           <button
             type="button"
-            onClick={remove}
+            onClick={() => setConfirmOpen(true)}
             disabled={busy}
             className="tap-scale inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50"
           >
@@ -223,6 +261,17 @@ function NoteEditor({
           </button>
         </div>
       </div>
+
+      {confirmOpen && (
+        <ConfirmDialog
+          title="Delete this note?"
+          message="This live note will be permanently removed from your account."
+          confirmLabel="Delete"
+          busy={busy}
+          onConfirm={remove}
+          onCancel={() => setConfirmOpen(false)}
+        />
+      )}
     </div>
   )
 }

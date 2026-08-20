@@ -16,6 +16,7 @@ import {
   livePresence,
   liveBlocked,
   episode,
+  user as userTable,
 } from "@/lib/db/schema"
 import { getHandle, getAvatarColor, getInitials } from "@/lib/identity"
 import { LIVE_CATEGORIES, CONVERSATION_CATEGORIES } from "@/lib/live-categories"
@@ -292,6 +293,15 @@ export async function startBroadcast(input: {
     .set({ status: "ended", endedAt: new Date() })
     .where(and(eq(liveStream.hostId, user.id), eq(liveStream.status, "live")))
 
+  // Open the room on the host's remembered backdrop (their last-used theme /
+  // uploaded image) so listeners see it from the first second, without the host
+  // re-picking it. Falls back to the schema default for a first-time host.
+  const [hostPref] = await db
+    .select({ preferredLiveTheme: userTable.preferredLiveTheme })
+    .from(userTable)
+    .where(eq(userTable.id, user.id))
+    .limit(1)
+
   await db.insert(liveStream).values({
     roomName,
     hostId: user.id,
@@ -303,6 +313,7 @@ export async function startBroadcast(input: {
     mode,
     orientation,
     layout,
+    ...(hostPref?.preferredLiveTheme ? { theme: hostPref.preferredLiveTheme } : {}),
     // Optional room topic. Applies to audio live sessions (podcast &
     // conversation) and to Conversation (landscape) video gatherings, where it
     // is shown as "Today's Discussion" in the room header.
@@ -1972,6 +1983,12 @@ export async function setLiveTheme(input: { roomName: string; theme: string }): 
   const user = await requireUser()
   if ((await getHostId(input.roomName)) !== user.id) throw new Error("Only the host can change the theme.")
   await db.update(liveStream).set({ theme: input.theme }).where(eq(liveStream.roomName, input.roomName))
+  // Remember this as the host's default so their next broadcast opens on the
+  // same backdrop (including a custom uploaded image) without re-picking it.
+  await db
+    .update(userTable)
+    .set({ preferredLiveTheme: input.theme })
+    .where(eq(userTable.id, user.id))
   return { ok: true }
 }
 

@@ -28,10 +28,7 @@ export default async function BibleNotesPage() {
           </Link>
 
           <header className="mb-6">
-            <h1 className="text-2xl font-bold tracking-tight text-balance sm:text-3xl">My Notes</h1>
-            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-              Notes you&apos;ve written against verses, in the order of the books of the Bible.
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight text-balance sm:text-3xl">Bible Notes</h1>
           </header>
 
           <BibleNotesList initialNotes={notes} signedIn={!!currentUser} />
