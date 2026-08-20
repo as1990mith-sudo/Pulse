@@ -427,7 +427,7 @@ export function BibleReader({ signedIn }: { signedIn: boolean }) {
                   key={v.verse}
                   onClick={(e) => onVerseTap(v.verse, e.currentTarget)}
                   className={cn(
-                    "cursor-pointer rounded-md px-2 py-0.5 text-lg leading-relaxed text-justify [text-justify:inter-word] transition-colors hover:bg-secondary/60",
+                    "cursor-pointer rounded-md px-2 py-0.5 text-lg leading-relaxed text-left transition-colors hover:bg-secondary/60",
                   )}
                   style={color ? { backgroundColor: color.bg } : undefined}
                 >

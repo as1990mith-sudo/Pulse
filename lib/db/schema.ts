@@ -26,6 +26,10 @@ export const user = pgTable("user", {
   // Set once the user completes (or skips) the post-signup onboarding flow that
   // invites them to subscribe to at least one organisation. Null = not yet done.
   onboardedAt: timestamp("onboardedAt"),
+  // The host's last-used immersive live theme (a preset id or a custom uploaded
+  // image URL). New broadcasts start on this so a host needn't re-pick their
+  // backdrop every live. Null until they first choose one.
+  preferredLiveTheme: text("preferredLiveTheme"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 })

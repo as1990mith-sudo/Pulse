@@ -24,6 +24,9 @@ export type CurrentUser = {
   accountType: "individual" | "organization"
   // The organisation this account owns, if accountType === "organization".
   organization: CurrentUserOrg | null
+  // The host's last-used immersive live theme (preset id or custom image URL),
+  // used to seed a new broadcast's backdrop. Null until they first choose one.
+  preferredLiveTheme: string | null
 }
 
 /** Returns the signed-in user (with derived handle + initials), or null. */
@@ -44,13 +47,15 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   // to a plain individual identity rather than crashing the page.
   let accountType: "individual" | "organization" = "individual"
   let org: CurrentUserOrg | null = null
+  let preferredLiveTheme: string | null = null
   try {
     const [row] = await db
-      .select({ accountType: userTable.accountType })
+      .select({ accountType: userTable.accountType, preferredLiveTheme: userTable.preferredLiveTheme })
       .from(userTable)
       .where(eq(userTable.id, session.user.id))
       .limit(1)
     if (row?.accountType === "organization") accountType = "organization"
+    preferredLiveTheme = row?.preferredLiveTheme ?? null
 
     if (accountType === "organization") {
       const [o] = await db
@@ -79,5 +84,6 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     image: session.user.image ?? null,
     accountType,
     organization: org,
+    preferredLiveTheme,
   }
 }

@@ -1,14 +1,14 @@
 "use client"
 
 // A compact scripture reader that floats over the live. Readers can change
-// book/chapter, search (jump to a reference or filter the open chapter),
-// highlight verses, bookmark them, and share a verse straight into the live's
-// chat — all without leaving the live. Highlights/bookmarks persist to the
-// signed-in reader's account (reusing the main Bible's annotation actions).
+// book/chapter, search the whole Bible by remembered words/phrases, highlight
+// verses, bookmark them, and share a verse straight into the live's chat — all
+// without leaving the live. Highlights/bookmarks persist to the signed-in
+// reader's account (reusing the main Bible's annotation actions).
 
 import { useEffect, useRef, useState } from "react"
 import useSWR from "swr"
-import { Bookmark, Check, ChevronDown, Copy, Send, X } from "lucide-react"
+import { ArrowLeft, Bookmark, Check, ChevronDown, Copy, Loader2, Search, Send, X } from "lucide-react"
 import { BIBLE_BOOKS, getBook } from "@/lib/bible-books"
 import {
   getBibleAnnotations,
@@ -16,6 +16,7 @@ import {
   setBibleHighlight,
   toggleBibleBookmark,
 } from "@/app/actions/bible-notes"
+import { searchBible, type BibleSearchResult } from "@/app/actions/bible-search"
 import { cn } from "@/lib/utils"
 import { useLiveResources } from "../resource-context"
 
@@ -45,6 +46,16 @@ export function MiniBiblePanel() {
   const [shared, setShared] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
+  // Search state: when searching, the header becomes a query field and the verse
+  // list is replaced by whole-Bible results. Tapping a result jumps there.
+  const [searching, setSearching] = useState(false)
+  const [query, setQuery] = useState("")
+  const [results, setResults] = useState<BibleSearchResult[]>([])
+  const [searchLoading, setSearchLoading] = useState(false)
+  // Verse to scroll into view once a chapter (re)loads, set when jumping from a
+  // search result to a passage that isn't the currently open chapter.
+  const pendingScrollVerse = useRef<number | null>(null)
+
   const bookIndex = BIBLE_BOOKS.findIndex((b) => b.name === book)
   const bookMeta = getBook(book)
 
@@ -61,10 +72,64 @@ export function MiniBiblePanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [book, chapter])
 
+  // Once the target chapter's verses are in, scroll the jumped-to verse into
+  // view and clear the pending marker.
+  useEffect(() => {
+    if (pendingScrollVerse.current == null || verses.length === 0) return
+    const v = pendingScrollVerse.current
+    pendingScrollVerse.current = null
+    const el = scrollRef.current?.querySelector<HTMLElement>(`[data-verse="${v}"]`)
+    el?.scrollIntoView({ block: "center" })
+  }, [verses])
+
+  // Debounced whole-Bible search while the query field is open.
+  useEffect(() => {
+    if (!searching) return
+    const q = query.trim()
+    if (q.length < 2) {
+      setResults([])
+      setSearchLoading(false)
+      return
+    }
+    setSearchLoading(true)
+    const t = setTimeout(async () => {
+      try {
+        const found = await searchBible(q)
+        setResults(found)
+      } catch {
+        setResults([])
+      } finally {
+        setSearchLoading(false)
+      }
+    }, 300)
+    return () => clearTimeout(t)
+  }, [query, searching])
+
   const verseId = (v: number) => `${bookIndex}:${chapter}:${v}`
   const reference = (v: number) => `${book} ${chapter}:${v}`
   const isBookmarked = (v: number) => Boolean(bookmarks?.some((b) => b.verseId === verseId(v)))
   const highlightOf = (v: number) => annotations?.highlights[verseId(v)]
+
+  function openSearch() {
+    setSearching(true)
+    setQuery("")
+    setResults([])
+  }
+
+  function closeSearch() {
+    setSearching(false)
+    setQuery("")
+    setResults([])
+  }
+
+  // Jump from a search result to its passage, then scroll it into view.
+  function goToResult(r: BibleSearchResult) {
+    setBook(r.book)
+    setChapter(r.chapter)
+    setSelected(r.verse)
+    pendingScrollVerse.current = r.verse
+    closeSearch()
+  }
 
   async function applyHighlight(v: number, color: string | null) {
     const id = verseId(v)
@@ -101,74 +166,157 @@ export function MiniBiblePanel() {
 
   return (
     <div className="flex h-full flex-col">
-        {/* Book / chapter pickers */}
+        {/* Header: book/chapter pickers + search, or the search query field */}
         <div className="flex flex-col gap-2 border-b border-white/8 px-3 py-2.5">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <select
-                value={book}
-                onChange={(e) => {
-                  setBook(e.target.value)
-                  setChapter(1)
-                }}
-                aria-label="Choose book"
-                className="w-full appearance-none rounded-xl border border-white/10 bg-white/5 py-2 pl-3 pr-8 text-sm font-semibold text-white outline-none focus:border-primary/50"
+          {searching ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={closeSearch}
+                aria-label="Close search"
+                className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white/8 text-white/70 transition-colors hover:bg-white/15 hover:text-white"
               >
-                {BIBLE_BOOKS.map((b) => (
-                  <option key={b.name} value={b.name} className="bg-zinc-900">
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-white/40" />
+                <ArrowLeft className="size-4" />
+              </button>
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-white/40" />
+                {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
+                <input
+                  autoFocus
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search words or a phrase…"
+                  aria-label="Search the Bible"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 py-2 pl-9 pr-8 text-sm text-white outline-none placeholder:text-white/40 focus:border-primary/50"
+                />
+                {query && (
+                  <button
+                    type="button"
+                    onClick={() => setQuery("")}
+                    aria-label="Clear search"
+                    className="absolute right-2 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full text-white/40 hover:text-white"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="relative w-24">
-              <select
-                value={chapter}
-                onChange={(e) => setChapter(Number(e.target.value))}
-                aria-label="Choose chapter"
-                className="w-full appearance-none rounded-xl border border-white/10 bg-white/5 py-2 pl-3 pr-7 text-sm font-semibold text-white outline-none focus:border-primary/50"
+          ) : (
+            <div className="flex items-center gap-2">
+              <div className="relative min-w-0 flex-1 sm:max-w-[190px]">
+                <select
+                  value={book}
+                  onChange={(e) => {
+                    setBook(e.target.value)
+                    setChapter(1)
+                  }}
+                  aria-label="Choose book"
+                  className="w-full appearance-none truncate rounded-xl border border-white/10 bg-white/5 py-2 pl-3 pr-8 text-sm font-semibold text-white outline-none focus:border-primary/50"
+                >
+                  {BIBLE_BOOKS.map((b) => (
+                    <option key={b.name} value={b.name} className="bg-zinc-900">
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-white/40" />
+              </div>
+              <div className="relative w-[76px] shrink-0">
+                <select
+                  value={chapter}
+                  onChange={(e) => setChapter(Number(e.target.value))}
+                  aria-label="Choose chapter"
+                  className="w-full appearance-none rounded-xl border border-white/10 bg-white/5 py-2 pl-3 pr-7 text-sm font-semibold text-white outline-none focus:border-primary/50"
+                >
+                  {Array.from({ length: bookMeta?.chapters ?? 1 }, (_, i) => i + 1).map((c) => (
+                    <option key={c} value={c} className="bg-zinc-900">
+                      {c}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-white/40" />
+              </div>
+              <button
+                type="button"
+                onClick={openSearch}
+                aria-label="Search the Bible"
+                className="ml-auto flex size-9 shrink-0 items-center justify-center rounded-xl bg-white/8 text-white/70 transition-colors hover:bg-white/15 hover:text-white"
               >
-                {Array.from({ length: bookMeta?.chapters ?? 1 }, (_, i) => i + 1).map((c) => (
-                  <option key={c} value={c} className="bg-zinc-900">
-                    {c}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-white/40" />
+                <Search className="size-4" />
+              </button>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Verses */}
-        <div ref={scrollRef} className="min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain px-2 py-2">
-          {verses.length === 0 && (
-            <p className="px-3 py-6 text-center text-sm text-white/40">Loading chapter…</p>
-          )}
-          {verses.map((v) => {
-            const hl = highlightOf(v.verse)
-            const hlClass = HIGHLIGHT_COLORS.find((c) => c.key === hl)?.className
-            const isSel = selected === v.verse
-            return (
-              <button
-                key={v.verse}
-                type="button"
-                onClick={() => setSelected((s) => (s === v.verse ? null : v.verse))}
-                className={cn(
-                  "flex w-full gap-2 rounded-xl px-3 py-2 text-left transition-colors",
-                  isSel ? "bg-white/10 ring-1 ring-primary/40" : "hover:bg-white/5",
-                  hlClass,
-                )}
-              >
-                <span className="mt-0.5 shrink-0 text-[11px] font-bold text-primary/80 tabular-nums">{v.verse}</span>
-                <span className="text-[15px] leading-relaxed text-white/90">{v.text}</span>
-              </button>
-            )
-          })}
-        </div>
+        {searching ? (
+          /* Search results */
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2">
+            {searchLoading && (
+              <div className="flex items-center justify-center gap-2 py-8 text-sm text-white/40">
+                <Loader2 className="size-4 animate-spin" /> Searching…
+              </div>
+            )}
+            {!searchLoading && query.trim().length >= 2 && results.length === 0 && (
+              <p className="px-3 py-8 text-center text-sm text-white/40">
+                No verses found for &ldquo;{query.trim()}&rdquo;.
+              </p>
+            )}
+            {!searchLoading && query.trim().length < 2 && (
+              <p className="px-3 py-8 text-center text-sm text-white/40">
+                Type words or a phrase you remember to find the verse.
+              </p>
+            )}
+            {!searchLoading && results.length > 0 && (
+              <ul className="space-y-1">
+                {results.map((r) => (
+                  <li key={`${r.bookIndex}:${r.chapter}:${r.verse}`}>
+                    <button
+                      type="button"
+                      onClick={() => goToResult(r)}
+                      className="flex w-full flex-col gap-0.5 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/5"
+                    >
+                      <span className="text-[11px] font-bold uppercase tracking-wide text-primary/80">
+                        {r.book} {r.chapter}:{r.verse}
+                      </span>
+                      <span className="line-clamp-2 text-[13px] leading-snug text-white/80">{r.text}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : (
+          /* Verses */
+          <div ref={scrollRef} className="min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain px-2 py-2">
+            {verses.length === 0 && (
+              <p className="px-3 py-6 text-center text-sm text-white/40">Loading chapter…</p>
+            )}
+            {verses.map((v) => {
+              const hl = highlightOf(v.verse)
+              const hlClass = HIGHLIGHT_COLORS.find((c) => c.key === hl)?.className
+              const isSel = selected === v.verse
+              return (
+                <button
+                  key={v.verse}
+                  type="button"
+                  data-verse={v.verse}
+                  onClick={() => setSelected((s) => (s === v.verse ? null : v.verse))}
+                  className={cn(
+                    "flex w-full gap-2 rounded-xl px-3 py-2 text-left transition-colors",
+                    isSel ? "bg-white/10 ring-1 ring-primary/40" : "hover:bg-white/5",
+                    hlClass,
+                  )}
+                >
+                  <span className="mt-0.5 shrink-0 text-[11px] font-bold text-primary/80 tabular-nums">{v.verse}</span>
+                  <span className="text-[15px] leading-relaxed text-white/90">{v.text}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
 
         {/* Verse action bar */}
-        {selectedVerse && (
+        {!searching && selectedVerse && (
           <div className="border-t border-white/8 bg-white/[0.03] px-3 py-2.5">
             <div className="mb-2 flex items-center justify-between">
               <span className="text-xs font-bold text-white">{reference(selectedVerse.verse)}</span>
