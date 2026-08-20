@@ -269,6 +269,59 @@ export function SelfIdentity({
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Attached photo (aspect-aware feed card)                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A post's attached photo. The image was already cropped to the author's chosen
+ * aspect ratio (1:1, 4:5, 16:9 or 9:16) at posting, so we read its natural ratio
+ * and display the card AT that ratio — clamped between 16:9 (landscape) and 4:5
+ * (portrait). That keeps a tall 9:16 photo to a comfortable 4:5 preview instead
+ * of a towering frame; tapping (onClick) opens the full view.
+ *
+ * `object-cover` fills the frame with no letterbox bars: because the photo was
+ * pre-cropped to its chosen ratio it matches the (unclamped) frame exactly, so
+ * only a height-capped 9:16 actually gets trimmed — which is the intended
+ * "not too tall until opened" behaviour.
+ */
+export function FeedPostImage({
+  src,
+  onClick,
+  className,
+}: {
+  src: string
+  onClick: () => void
+  className?: string
+}) {
+  const [ratio, setRatio] = useState<number | null>(null)
+  const aspect = ratio ? Math.min(16 / 9, Math.max(4 / 5, ratio)) : 4 / 5
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{ aspectRatio: String(aspect), maxHeight: "24rem" }}
+      className={cn(
+        "relative block w-full overflow-hidden rounded-2xl border border-border/60 bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        className,
+      )}
+      aria-label="Open attached photo"
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src || "/placeholder.svg"}
+        alt="Attached to the question"
+        loading="lazy"
+        onLoad={(e) => {
+          const img = e.currentTarget
+          if (img.naturalWidth && img.naturalHeight) setRatio(img.naturalWidth / img.naturalHeight)
+        }}
+        className="h-full w-full object-cover"
+      />
+    </button>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Scripture reference chips                                                  */
 /* -------------------------------------------------------------------------- */
 

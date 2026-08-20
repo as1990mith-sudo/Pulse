@@ -47,6 +47,7 @@ import {
   ANON_NAME,
   BibleChips,
   CommunityAvatar,
+  FeedPostImage,
   LikeButton,
   PostMeta,
   SaveButton,
@@ -341,27 +342,15 @@ function PostItem({
             </>
           )}
 
-          {post.imageUrl && (
-            <button
-              type="button"
-              onClick={onOpen}
-              className="mt-3 block w-full overflow-hidden rounded-2xl border border-border/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <img
-                src={post.imageUrl || "/placeholder.svg"}
-                alt="Attached to the question"
-                loading="lazy"
-                className="max-h-96 w-full object-cover"
-              />
-            </button>
-          )}
+          {post.imageUrl && <FeedPostImage src={post.imageUrl} onClick={onOpen} className="mt-3" />}
 
           {post.videoUrl && <FeedPostVideo src={post.videoUrl} onOpen={onOpen} />}
 
-          {/* Engagement actions — evenly distributed within a bounded width so
-              they read as a tidy group (not clustered, not stretched edge to
-              edge), with comfortably sized icons (Like · Reply · Share · Save). */}
-          <div className="mt-3 flex max-w-[16rem] items-center justify-between">
+          {/* Engagement actions — a left-aligned group with uniform gaps so
+              Like · Reply · Share · Save are evenly spaced (Share no longer
+              drifts apart from the rest the way a stretched edge-to-edge row
+              made it). */}
+          <div className="mt-3 flex items-center gap-1">
             <LikeButton postId={post.id} initialLikes={post.likes} initialLiked={post.liked} variant="row" />
             <button
               type="button"
