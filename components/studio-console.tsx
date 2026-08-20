@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import {
+  AudioLines,
   CheckCircle2,
   ChevronDown,
   Crown,
@@ -35,6 +36,7 @@ import {
   X,
 } from "lucide-react"
 import type { CurrentUser } from "@/lib/session"
+import { Switch } from "@/components/ui/switch"
 import { publishShow, updateEpisode } from "@/app/actions/shows"
 import {
   startBroadcast,
@@ -1481,6 +1483,7 @@ export function MusicPanel({
   mixing,
   loop,
   error,
+  duck,
   onAddTracks,
   onPlayTrack,
   onTogglePlay,
@@ -1491,6 +1494,7 @@ export function MusicPanel({
   onSeek,
   onRemoveTrack,
   onError,
+  onToggleDuck,
   onClose,
 }: {
   live: boolean
@@ -1503,6 +1507,10 @@ export function MusicPanel({
   mixing: boolean
   loop: boolean
   error: string | null
+  // Optional sidechain-ducking control. Only consoles that mix live speech with
+  // music (audio Conversation, video Studio) pass these; when omitted the toggle
+  // is hidden entirely (e.g. solo podcast / cohost panels don't need it).
+  duck?: boolean
   onAddTracks: (tracks: Track[]) => void
   onPlayTrack: (index: number) => void
   onTogglePlay: () => void
@@ -1513,6 +1521,7 @@ export function MusicPanel({
   onSeek: (seconds: number) => void
   onRemoveTrack: (index: number) => void
   onError: (message: string | null) => void
+  onToggleDuck?: (next: boolean) => void
   onClose: () => void
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -1704,6 +1713,25 @@ export function MusicPanel({
                 {Math.round(volume * 100)}%
               </span>
             </div>
+          </div>
+        )}
+
+        {/* ── Duck under speech (host choice) ──
+            Only rendered for consoles that mix live speech with music. When on,
+            the music automatically dips while anyone is speaking so voices stay
+            clean; when off, music holds at the set volume the whole time. */}
+        {onToggleDuck && (
+          <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-secondary/40 p-3.5">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-background text-primary ring-1 ring-inset ring-border/60">
+              <AudioLines className="size-4" strokeWidth={2.5} />
+            </span>
+            <label htmlFor="music-duck" className="min-w-0 flex-1 cursor-pointer">
+              <span className="block text-sm font-semibold text-foreground">Lower music under speech</span>
+              <span className="block text-[11px] leading-tight text-muted-foreground">
+                Dips the music while someone is talking, then restores it
+              </span>
+            </label>
+            <Switch id="music-duck" checked={duck ?? false} onCheckedChange={(next) => onToggleDuck(next)} />
           </div>
         )}
 

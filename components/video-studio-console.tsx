@@ -337,6 +337,8 @@ export function VideoStudioConsole({
   const [musicMixing, setMusicMixing] = useState(false)
   const [musicLoop, setMusicLoopState] = useState(false)
   const [musicError, setMusicError] = useState<string | null>(null)
+  // Host choice: automatically dip music under live speech (default on).
+  const [duckEnabled, setDuckEnabled] = useState(true)
 
   const live = Boolean(roomName && creds)
 
@@ -541,8 +543,6 @@ export function VideoStudioConsole({
   }, [callState?.prayerStartedAt])
   // Prayer Mode is reconciled from server state only; the host trigger has been
   // removed, so this stays inert unless a legacy session reports it.
-  const prayerActive = prayerStartedAt != null
-
   // Whether anyone on the call — the host or any guest — is actively speaking.
   const anySpeaking = localSpeaking || peers.some((p) => p.isSpeaking)
 
@@ -550,16 +550,16 @@ export function VideoStudioConsole({
   // back to full once the room has been quiet for a moment.
   const duckReleaseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Sidechain ducking. While anyone is actively speaking, dip the background
-  // music so voices cut through cleanly and each speaker's mic echo-canceller/
-  // noise-suppressor isn't fighting loud, sustained music bleeding from their
-  // device speakers — the real cause of a voice sounding muffled/underwater.
-  // Prayer Mode is exempt: worship music keeps playing at full under prayer.
-  // Both stay clean — the music never disappears, it just steps back under
-  // live speech, with a fast attack and a gentle, held release.
+  // Sidechain ducking (host-toggleable via the music panel). While anyone is
+  // actively speaking, dip the background music so voices cut through cleanly and
+  // each speaker's mic echo-canceller/noise-suppressor isn't fighting loud,
+  // sustained music bleeding from their device speakers — the real cause of a
+  // voice sounding muffled/underwater. Fast attack when speech starts; a short
+  // hold + gentle release when it stops. When the host turns ducking off, the
+  // music simply holds at its full set volume.
   useEffect(() => {
     if (musicActiveIndex === null || !musicPlaying) return
-    if (prayerActive) {
+    if (!duckEnabled) {
       if (duckReleaseRef.current) {
         clearTimeout(duckReleaseRef.current)
         duckReleaseRef.current = null
@@ -585,7 +585,7 @@ export function VideoStudioConsole({
         duckReleaseRef.current = null
       }
     }
-  }, [anySpeaking, prayerActive, musicActiveIndex, musicPlaying, duckMusic])
+  }, [duckEnabled, anySpeaking, musicActiveIndex, musicPlaying, duckMusic])
 
   async function goLive() {
     setError(null)
@@ -1439,6 +1439,7 @@ export function VideoStudioConsole({
             mixing={musicMixing}
             loop={musicLoop}
             error={musicError}
+            duck={duckEnabled}
             onAddTracks={(added) => setMusicTracks((t) => [...t, ...added])}
             onPlayTrack={(i) => void playTrack(i)}
             onTogglePlay={toggleMusicPlay}
@@ -1449,6 +1450,7 @@ export function VideoStudioConsole({
             onSeek={seekMusic}
             onRemoveTrack={(i) => void removeTrack(i)}
             onError={setMusicError}
+            onToggleDuck={setDuckEnabled}
             onClose={() => setMusicPanelOpen(false)}
           />
         )}
