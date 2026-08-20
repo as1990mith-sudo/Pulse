@@ -27,24 +27,43 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
   // administer the active Home, your profile opens that Home's organisation
   // profile — and from there its admin console — so a multi-Home admin lands on
   // whichever Home they're presently inside, not an arbitrary first one.
-  const viewer = await getCurrentUser()
+  //
+  // Redirect resolution is DEFENSIVE: the destination is computed inside guarded
+  // blocks, but `redirect()` is always called OUTSIDE any try/catch. redirect()
+  // works by throwing an internal control-flow error that MUST be allowed to
+  // propagate — swallowing it (or letting an unrelated lookup failure bubble on
+  // a route with no error boundary) is exactly what made the admin avatar show
+  // the browser's native "This page couldn't load" crash. A hiccup resolving
+  // the Home/org now degrades to simply rendering the personal profile.
+  const viewer = await getCurrentUser().catch(() => null)
+
   if (viewer?.id === id) {
-    const { home, membership } = await getActiveHomeContext()
-    if (home && isHomeAdminRole(membership?.role)) {
-      redirect(`/org/${home.handle}`)
+    let activeOrgHandle: string | null = null
+    try {
+      const { home, membership } = await getActiveHomeContext()
+      if (home && isHomeAdminRole(membership?.role)) activeOrgHandle = home.handle
+    } catch (err) {
+      console.error("[v0] /u/[id]: active Home resolution failed:", err)
     }
+    if (activeOrgHandle) redirect(`/org/${activeOrgHandle}`)
   }
 
   // Organisation accounts have their own dedicated profile surface. For everyone
   // else (and admins with no active Home context), if this user owns an
   // organisation, send every visitor to that organisation's profile instead of
   // the personal /u/[id] page. A multi-org owner defaults to their first org.
-  const [ownedOrg] = await db
-    .select({ handle: organization.handle })
-    .from(organization)
-    .where(eq(organization.ownerId, id))
-    .limit(1)
-  if (ownedOrg) redirect(`/org/${ownedOrg.handle}`)
+  let ownedOrgHandle: string | null = null
+  try {
+    const [ownedOrg] = await db
+      .select({ handle: organization.handle })
+      .from(organization)
+      .where(eq(organization.ownerId, id))
+      .limit(1)
+    if (ownedOrg) ownedOrgHandle = ownedOrg.handle
+  } catch (err) {
+    console.error("[v0] /u/[id]: owned-org lookup failed:", err)
+  }
+  if (ownedOrgHandle) redirect(`/org/${ownedOrgHandle}`)
 
   const profile = await getProfile(id)
   if (!profile) notFound()
