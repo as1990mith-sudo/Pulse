@@ -4,7 +4,9 @@ import { useState } from "react"
 import Link from "next/link"
 import { Globe, LayoutDashboard, MapPin, ShieldQuestion } from "lucide-react"
 import type { OrganizationView } from "@/lib/org-types"
+import type { HomeRosterMember } from "@/lib/home/access"
 import { VerifiedBadge } from "@/components/org/verified-badge"
+import { OrgMembersDialog } from "@/components/org/org-members-dialog"
 import { OrgSubscribeButton } from "@/components/org/org-subscribe-button"
 import { OrgVerifyButton } from "@/components/org/org-verify-button"
 import { OrgManageSheet } from "@/components/org/org-manage-sheet"
@@ -19,7 +21,7 @@ import { cn } from "@/lib/utils"
  * description → actions rhythm, and restrained motion on entry. All existing
  * data and controls (subscribe, notify, verify, manage, website) are preserved.
  */
-export function OrgHero({ org }: { org: OrganizationView }) {
+export function OrgHero({ org, members = [] }: { org: OrganizationView; members?: HomeRosterMember[] }) {
   const websiteHost = org.website ? org.website.replace(/^https?:\/\//, "").replace(/\/$/, "") : null
 
   return (
@@ -110,12 +112,9 @@ export function OrgHero({ org }: { org: OrganizationView }) {
             </div>
           )}
 
-          {org.subscriberCount > 0 && (
-            <p className="text-xs text-muted-foreground">
-              <span className="font-semibold text-foreground">{formatCount(org.subscriberCount)}</span>{" "}
-              {org.subscriberCount === 1 ? "subscriber" : "subscribers"}
-            </p>
-          )}
+          {/* The Home roster, opened as a popup. Members are people who joined
+              this organisation's Home — distinct from public subscribers. */}
+          <OrgMembersDialog members={members} />
         </div>
       </div>
     </header>
@@ -259,8 +258,3 @@ function WebsiteButton({
   )
 }
 
-function formatCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(n % 1_000 === 0 ? 0 : 1)}K`
-  return String(n)
-}
