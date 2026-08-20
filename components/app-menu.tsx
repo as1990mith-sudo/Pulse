@@ -181,6 +181,7 @@ export function AppMenu() {
   async function handleSignOut() {
     close()
     await authClient.signOut()
+    router.push("/sign-in")
     router.refresh()
   }
 
