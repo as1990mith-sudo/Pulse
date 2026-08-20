@@ -57,6 +57,7 @@ export type HomeDevotionalInput = {
   verse: string
   body: string
   prayer?: string
+  cover?: string | null
   readingMinutes?: number
 }
 
@@ -81,7 +82,7 @@ export async function publishHomeDevotional(input: HomeDevotionalInput) {
     verse,
     body,
     prayer: input.prayer?.trim() || "",
-    cover: null,
+    cover: input.cover?.trim() || null,
     readingMinutes: input.readingMinutes && input.readingMinutes > 0 ? input.readingMinutes : 3,
     publishDate: `home-${homeId.slice(0, 6)}-${now.getTime()}-${randomUUID().slice(0, 6)}`,
     status: "published",

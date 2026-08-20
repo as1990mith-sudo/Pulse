@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { CoverUpload, SQUARE_PORTRAIT_RATIOS } from "@/components/admin/cover-upload"
 import { toast } from "sonner"
 import {
   getHomeDevotionals,
@@ -152,6 +153,7 @@ function DevotionalRow({
 function DevotionalForm({ handle, onDone }: { handle: string; onDone: () => void }) {
   const [pending, start] = useTransition()
   const [form, setForm] = useState({ title: "", verseRef: "", verse: "", body: "", prayer: "" })
+  const [cover, setCover] = useState<string | null>(null)
 
   function submit() {
     if (!form.title.trim() || !form.verseRef.trim() || !form.verse.trim() || !form.body.trim()) {
@@ -160,7 +162,7 @@ function DevotionalForm({ handle, onDone }: { handle: string; onDone: () => void
     }
     start(async () => {
       try {
-        await publishHomeDevotional({ handle, ...form })
+        await publishHomeDevotional({ handle, ...form, cover })
         toast.success("Devotional published to your Home")
         onDone()
       } catch (e) {
@@ -219,6 +221,16 @@ function DevotionalForm({ handle, onDone }: { handle: string; onDone: () => void
           onChange={(e) => setForm({ ...form, prayer: e.target.value })}
           rows={2}
           placeholder="A short closing prayer."
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label>Cover art (optional)</Label>
+        <CoverUpload
+          value={cover}
+          onChange={setCover}
+          ratios={SQUARE_PORTRAIT_RATIOS}
+          compact
+          hideLabel
         />
       </div>
       <div className="flex items-center justify-end gap-2">
