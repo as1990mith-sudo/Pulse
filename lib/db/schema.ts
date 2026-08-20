@@ -1091,6 +1091,24 @@ export const liveNote = pgTable(
   }),
 )
 
+// Free-form personal notes, unconnected to any live. Written from the main-app
+// Notes → Personal Notes tab; a plain notes app scoped per user. Every query
+// filters by userId (no RLS on Neon), keeping notes private to their owner.
+export const personalNote = pgTable(
+  "personal_note",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("userId").notNull(),
+    title: text("title").notNull().default(""),
+    body: text("body").notNull().default(""),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    userIdx: uniqueIndex("personal_note_id_user_idx").on(t.id, t.userId),
+  }),
+)
+
 // Host-pinned resources for a live room. Participants read them from the
 // resource drawer. kind ∈ verse|pdf|book|devotional|link|session. meta carries
 // kind-specific payload (e.g. a verseId, productId, or episode slug).

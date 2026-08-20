@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import useSWR from "swr"
-import { ChevronDown, Mic, NotebookPen, Pencil, Trash2, Video, X } from "lucide-react"
+import { ChevronDown, Mic, Pencil, Trash2, Video, X } from "lucide-react"
 import {
   deleteLiveNote,
   getLiveNotes,
@@ -33,28 +33,23 @@ export function LiveNotesBrowser({
 
   if (!signedIn) {
     return (
-      <div className="rounded-2xl border border-border bg-card p-8 text-center">
-        <NotebookPen className="mx-auto mb-3 size-7 text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">Sign in to see the notes you take during lives.</p>
+      <div className="rounded-2xl border border-border/60 bg-card p-8 text-center">
+        <p className="text-sm text-muted-foreground">Sign in to see your live notes.</p>
       </div>
     )
   }
 
   if (groups.length === 0) {
     return (
-      <div className="rounded-2xl border border-border bg-card p-8 text-center">
-        <NotebookPen className="mx-auto mb-3 size-7 text-muted-foreground" />
-        <p className="text-sm font-medium text-foreground">No live notes yet</p>
-        <p className="mx-auto mt-1 max-w-xs text-sm leading-relaxed text-muted-foreground">
-          Open the resource drawer inside any live and start writing — your notes save here automatically.
-        </p>
+      <div className="rounded-2xl border border-dashed border-border/60 bg-card/50 p-10 text-center">
+        <p className="text-sm font-medium text-muted-foreground">No live notes yet</p>
       </div>
     )
   }
 
   return (
     <>
-      <div className="space-y-6">
+      <div className="space-y-5">
         {groups.map((group) => (
           <HostGroup
             key={group.hostId ?? group.hostName}
@@ -92,33 +87,39 @@ function HostGroup({ group, onOpen }: { group: LiveNoteHostGroup; onOpen: (n: Gr
           aria-expanded={open}
           className="tap-scale flex w-full items-center justify-between gap-3 rounded-xl py-1 text-left transition-colors"
         >
-          <span className="flex min-w-0 items-baseline gap-2">
-            <span className="truncate font-display text-lg font-semibold tracking-tight text-foreground">
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate font-display text-[15px] font-semibold tracking-tight text-foreground">
               {group.hostName}
             </span>
-            <span className="shrink-0 text-xs font-medium text-muted-foreground">{group.notes.length}</span>
+            <span className="flex min-w-5 shrink-0 items-center justify-center rounded-full bg-secondary/70 px-1.5 text-[11px] font-semibold text-muted-foreground">
+              {group.notes.length}
+            </span>
           </span>
           <ChevronDown
-            className={cn("size-5 shrink-0 text-muted-foreground transition-transform duration-300", open ? "rotate-180" : "rotate-0")}
+            className={cn("size-4 shrink-0 text-muted-foreground transition-transform duration-300", open ? "rotate-180" : "rotate-0")}
           />
         </button>
       </h2>
-      <ul className={cn("space-y-2", !open && "hidden")}>
+      <ul className={cn("space-y-1.5", !open && "hidden")}>
         {group.notes.map((note) => (
           <li key={note.id}>
             <button
               type="button"
               onClick={() => onOpen(note)}
-              className="tap-scale flex w-full items-start gap-3 rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:bg-secondary/40"
+              className="tap-scale flex w-full items-start gap-3 rounded-xl border border-border/60 bg-card p-3 text-left transition-colors hover:border-primary/40 hover:bg-secondary/30"
             >
-              <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-secondary/70 text-muted-foreground">
-                {note.mode === "video" ? <Video className="size-4" /> : <Mic className="size-4" />}
+              <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-secondary/70 text-muted-foreground">
+                {note.mode === "video" ? <Video className="size-3.5" /> : <Mic className="size-3.5" />}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate font-semibold text-foreground">{note.topic}</span>
-                <span className="mt-0.5 block text-xs font-medium text-muted-foreground">{formatDate(note.date)}</span>
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className="truncate text-sm font-semibold text-foreground">{note.topic}</span>
+                  <span className="shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground/70">
+                    {formatDate(note.date)}
+                  </span>
+                </span>
                 {note.preview && (
-                  <span className="mt-1 block truncate text-sm text-muted-foreground">{note.preview}</span>
+                  <span className="mt-0.5 block truncate text-xs text-muted-foreground">{note.preview}</span>
                 )}
               </span>
             </button>
@@ -178,12 +179,12 @@ function NoteEditor({
   }
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-6">
-      <div className="flex max-h-[85dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-border bg-card shadow-2xl sm:rounded-3xl">
-        <div className="flex items-start gap-3 border-b border-border p-4">
+    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm sm:items-center sm:p-6">
+      <div className="flex max-h-[85dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-border/60 bg-card shadow-2xl sm:rounded-3xl">
+        <div className="flex items-start gap-3 border-b border-border/60 p-4">
           <div className="min-w-0 flex-1">
-            <p className="truncate font-display text-lg font-semibold text-foreground">{note.topic}</p>
-            <p className="mt-0.5 text-xs font-medium text-muted-foreground">{formatDate(note.date)}</p>
+            <p className="truncate font-display text-base font-semibold text-foreground">{note.topic}</p>
+            <p className="mt-0.5 text-[11px] font-medium text-muted-foreground">{formatDate(note.date)}</p>
           </div>
           <button
             type="button"
@@ -199,12 +200,11 @@ function NoteEditor({
           <textarea
             value={seededBody}
             onChange={(e) => setBody(e.target.value)}
-            placeholder="Your note…"
-            className="min-h-[40dvh] w-full resize-none bg-transparent text-[15px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
+            className="min-h-[40dvh] w-full resize-none bg-transparent text-[15px] leading-relaxed text-foreground outline-none"
           />
         </div>
 
-        <div className="flex items-center justify-between gap-2 border-t border-border p-3">
+        <div className="flex items-center justify-between gap-2 border-t border-border/60 p-3">
           <button
             type="button"
             onClick={remove}
