@@ -420,6 +420,82 @@ export async function getFeed(): Promise<FeedPostView[]> {
 }
 
 /**
+ * Newest-first MAIN-FEED posts authored by a single user, powering their
+ * profile "Posts" timeline. Personal posts only (organizationId null) so
+ * organisation-attributed posts stay on the org profile, and top-level posts
+ * only (channel null) so community-room posts stay in their rooms. Global (not
+ * Home-scoped): a profile is the person's own surface, mirroring the per-user
+ * community-post timelines. Returns the same rich FeedPostView the main feed
+ * uses so the profile can reuse <PostCard> unchanged.
+ */
+export async function getFeedPostsByUser(userId: string): Promise<FeedPostView[]> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  const currentUserId = session?.user?.id ?? null
+
+  const posts = await db
+    .select()
+    .from(feedPost)
+    .where(
+      and(
+        isNull(feedPost.channel),
+        isNull(feedPost.organizationId),
+        eq(feedPost.deleted, false),
+        eq(feedPost.userId, userId),
+      ),
+    )
+    .orderBy(desc(feedPost.createdAt))
+  if (posts.length === 0) return []
+  const postIds = posts.map((p) => p.id)
+
+  const [followingIds, comments, repostedSet, savedSet, saveCounts, shareCounts, likedPostSet] = await Promise.all([
+    getFollowingSet(currentUserId),
+    db.select().from(feedComment).where(inArray(feedComment.postId, postIds)).orderBy(asc(feedComment.createdAt)),
+    getRepostedSet(currentUserId),
+    getSavedPostSet(currentUserId),
+    getPostSaveCounts(postIds),
+    getPostShareCounts(postIds),
+    getLikedSet(currentUserId, "post", postIds),
+  ])
+
+  const [infoMap, likedCommentSet] = await Promise.all([
+    getUserInfoMap([...posts.map((p) => p.userId), ...comments.map((c) => c.userId)]),
+    getLikedSet(currentUserId, "feed_comment", comments.map((c) => c.id)),
+  ])
+
+  const commentsByPost = new Map<number, FeedCommentView[]>()
+  for (const c of comments) {
+    const view = toCommentView(c, infoMap, currentUserId, likedCommentSet)
+    const arr = commentsByPost.get(c.postId)
+    if (arr) arr.push(view)
+    else commentsByPost.set(c.postId, [view])
+  }
+
+  return posts.map((p) => ({
+    id: p.id,
+    authorId: p.userId,
+    ...resolveAuthor(p, infoMap),
+    postedAt: timeAgo(p.createdAt),
+    createdAtMs: p.createdAt.getTime(),
+    text: p.text,
+    image: p.image,
+    video: p.video,
+    media: toMedia(p),
+    likes: p.likes,
+    liked: likedPostSet.has(p.id),
+    reposts: p.reposts,
+    reposted: repostedSet.has(p.id),
+    saved: savedSet.has(String(p.id)),
+    saves: saveCounts.get(p.id) ?? 0,
+    shares: shareCounts.get(p.id) ?? 0,
+    edited: !!p.editedAt,
+    isFollowing: followingIds.has(p.userId),
+    isSelf: currentUserId === p.userId,
+    mentionedMe: currentUserId ? (p.mentions ?? []).some((m) => m.userId === currentUserId) : false,
+    comments: commentsByPost.get(p.id) ?? [],
+  }))
+}
+
+/**
  * Newest-first posts for a single community room `channel`
  * ("itestify" or "qotd:<questionId>"). Returns the same rich FeedPostView the
  * main feed uses, so room UIs can reuse <PostCard> and all its engagement,

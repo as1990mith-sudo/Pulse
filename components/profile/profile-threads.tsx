@@ -26,19 +26,22 @@ import {
 } from "@/app/actions/community"
 
 /**
- * X (Twitter)-style thread timeline used by two profile tabs:
- *  - mode="posts": the user's public Community Help posts (identifiable). Shows
- *    avatar, name, timestamp, body, media and engagement (like/comment/share).
- *  - mode="anonymous": the owner's own anonymous posts. Identity stays hidden
- *    (universal anon avatar + "Anonymous"), and only the owner sees inline
- *    edit/delete controls. Never rendered for non-owners.
+ * X (Twitter)-style thread timeline used by the profile tabs:
+ *  - mode="posts": public Community Help posts (identifiable). Shows avatar,
+ *    name, timestamp, body, media and engagement (like/comment/share).
+ *  - mode="anonymous": the owner's own anonymous posts, identity hidden.
+ *  - mode="thread": the "Thread" tab — the user's Community Help posts, mixing
+ *    identifiable and (for the owner only) anonymous posts. Each post decides
+ *    its own rendering from `post.anonymous`, so anonymous questions still show
+ *    the universal anon avatar + "Anonymous" while identifiable ones show the
+ *    author. Only the owner ever receives anonymous posts, so anonymity holds.
  */
 export function ProfileThreads({
   posts,
   mode,
 }: {
   posts: CommunityPostView[]
-  mode: "posts" | "anonymous"
+  mode: "posts" | "anonymous" | "thread"
 }) {
   // Local copy so edits/deletes reflect instantly without a full refetch.
   const [items, setItems] = useState(posts)
@@ -54,7 +57,7 @@ export function ProfileThreads({
     <ul className="-mx-4 divide-y divide-border/60 sm:-mx-6">
       {items.map((post) => (
         <li key={post.id}>
-          {mode === "anonymous" ? (
+          {mode === "anonymous" || (mode === "thread" && post.anonymous) ? (
             <AnonymousThread post={post} onDeleted={handleDeleted} onEdited={handleEdited} />
           ) : (
             <PublicThread post={post} onDeleted={handleDeleted} onEdited={handleEdited} />

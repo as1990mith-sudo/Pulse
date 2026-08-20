@@ -1,15 +1,18 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { Mic, ArrowLeft, Plus, Info, Newspaper, PenLine, MessageSquareText, VenetianMask } from "lucide-react"
+import { Mic, ArrowLeft, Plus, Info, Newspaper, PenLine, LayoutGrid, MessagesSquare } from "lucide-react"
 import Link from "next/link"
 import type { Show } from "@/lib/data"
 import type { CommunityPostView } from "@/app/actions/community"
+import type { FeedPostView } from "@/app/actions/feed"
+import type { CurrentUser } from "@/lib/session"
 import type { ArticleCard as ArticleCardType } from "@/lib/article-types"
 import { EpisodeCatalog } from "@/components/episode-catalog"
 import { UploadEpisode } from "@/components/upload-episode"
 import { ProfileThreads } from "@/components/profile/profile-threads"
+import { PostCard } from "@/components/mind-feed"
 import { ArticleRow } from "@/components/articles/article-card"
 import {
   DropdownMenu,
@@ -18,40 +21,44 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
-type TabKey = "posts" | "anonymous" | "articles" | "catalogue"
+type TabKey = "posts" | "thread" | "articles" | "catalogue"
 
 export function ProfileTabs({
   name,
   isSelf,
+  currentUser,
   episodes,
+  feedPosts,
   communityPosts,
   anonymousPosts,
   articles,
 }: {
   name: string
   isSelf: boolean
+  // The viewer, needed by <PostCard> for engagement/ownership controls.
+  currentUser: CurrentUser | null
   episodes: Show[]
-  // Public (identifiable) Community Help posts — the "Posts" timeline.
+  // The user's own MAIN-FEED posts — the "Posts" timeline.
+  feedPosts: FeedPostView[]
+  // Public (identifiable) Community Help posts — part of the "Thread" timeline.
   communityPosts: CommunityPostView[]
   // The owner's own anonymous Community Help posts — only ever passed for isSelf.
   anonymousPosts: CommunityPostView[]
   articles: ArticleCardType[]
 }) {
-  // Tab order: Posts, Anonymous (owner-only), Articles, Catalogue. The Anonymous
-  // tab is omitted entirely for other viewers so there's no trace of anonymous
-  // activity on someone else's profile.
+  // The "Thread" tab merges the user's Community Help posts (identifiable +, for
+  // the owner only, anonymous) into a single newest-first timeline. Anonymous
+  // posts are only ever supplied for the owner, so nothing leaks on someone
+  // else's profile — their anonymous questions simply never appear here.
+  const threadPosts = useMemo(
+    () => [...communityPosts, ...anonymousPosts].sort((a, b) => b.createdAtMs - a.createdAtMs),
+    [communityPosts, anonymousPosts],
+  )
+
+  // Tab order: Posts (main feed), Thread (Community Help), Articles, Catalogue.
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; count: number }[] = [
-    { key: "posts", label: "Posts", icon: <MessageSquareText className="size-4" />, count: communityPosts.length },
-    ...(isSelf
-      ? [
-          {
-            key: "anonymous" as const,
-            label: "Anonymous",
-            icon: <VenetianMask className="size-4" />,
-            count: anonymousPosts.length,
-          },
-        ]
-      : []),
+    { key: "posts", label: "Posts", icon: <LayoutGrid className="size-4" />, count: feedPosts.length },
+    { key: "thread", label: "Thread", icon: <MessagesSquare className="size-4" />, count: threadPosts.length },
     { key: "articles", label: "Articles", icon: <Newspaper className="size-4" />, count: articles.length },
     { key: "catalogue", label: "Catalogue", icon: <Mic className="size-4" />, count: episodes.length },
   ]
