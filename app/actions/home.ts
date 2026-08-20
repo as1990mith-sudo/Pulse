@@ -1,6 +1,6 @@
 "use server"
 
-import { and, desc, eq } from "drizzle-orm"
+import { and, desc, eq, isNull } from "drizzle-orm"
 import { cookies, headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
@@ -305,6 +305,14 @@ export async function joinHomeByKey(rawKey: string): Promise<JoinHomeResult> {
     status: autoJoin ? "active" : "pending",
     joinedVia: autoJoin ? "key_auto" : "key_request",
   })
+
+  // A member who joined a specific Home has completed onboarding — they chose
+  // their Home directly and must never be diverted to the ministries "Welcome"
+  // subscribe screen. Stamp onboardedAt if it isn't already set.
+  await db
+    .update(userTable)
+    .set({ onboardedAt: new Date() })
+    .where(and(eq(userTable.id, user.id), isNull(userTable.onboardedAt)))
 
   // On an immediate (auto) join, switch the viewer's active context into the
   // Home they just joined so they land straight inside it.

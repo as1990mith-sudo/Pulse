@@ -61,6 +61,7 @@ export function AuthForm({
   mode,
   googleEnabled = false,
   individualOnly = false,
+  next,
 }: {
   mode: "sign-in" | "sign-up"
   googleEnabled?: boolean
@@ -68,6 +69,10 @@ export function AuthForm({
   // (Frequency Universal) signup is offered. The two-path chooser at /sign-up
   // routes organisations to the dedicated Home onboarding instead.
   individualOnly?: boolean
+  // Where to send the user after auth. Used by the "join a Home" flow to return
+  // the new member straight to the join confirmation (and then into the Home),
+  // bypassing the ministries "Welcome" onboarding entirely.
+  next?: string
 }) {
   const router = useRouter()
   const [name, setName] = useState("")
@@ -127,7 +132,7 @@ export function AuthForm({
         setError(error.message ?? "Something went wrong. Please try again.")
         return
       }
-      router.push("/feed")
+      router.push(next || "/feed")
       router.refresh()
       return
     }
@@ -164,9 +169,11 @@ export function AuthForm({
       return
     }
 
-    // Individuals land on a skippable onboarding step that invites them to
-    // subscribe to at least one organisation before entering the feed.
-    router.push("/welcome")
+    // If a destination was requested (e.g. the "join a Home" flow), go straight
+    // there — a member joining a specific Home should never see the ministries
+    // "Welcome" onboarding. Otherwise individuals land on that skippable step
+    // inviting them to subscribe to organisations before entering the feed.
+    router.push(next || "/welcome")
     router.refresh()
   }
 
