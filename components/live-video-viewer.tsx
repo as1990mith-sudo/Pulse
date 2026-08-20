@@ -41,6 +41,7 @@ import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { ShareSheet } from "@/components/share-sheet"
 import { ConversationVideo } from "@/components/conversation/conversation-video"
 import { GridPrejoin } from "@/components/grid-prejoin"
+import { LiveJoinGate } from "@/components/live-join-gate"
 import type { ShareTarget } from "@/lib/share-types"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { broadcastStageRects, stageRectStyle, type StageRect } from "@/lib/broadcast-stage"
@@ -191,6 +192,9 @@ export function LiveVideoViewer({
   const [ended, setEnded] = useState(false)
   const [hostEnded, setHostEnded] = useState(false)
   const [blocked, setBlocked] = useState(false)
+  // Public-live guest flow: joinBroadcast returned `needsIdentity`, so we show
+  // the display-name gate and let the guest name themselves before connecting.
+  const [needIdentity, setNeedIdentity] = useState(false)
   // A pending "come on stage" invite from the host (accept/decline in-session).
   const [myInvite, setMyInvite] = useState<CallRequestView | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
@@ -249,10 +253,17 @@ export function LiveVideoViewer({
     const res = await joinBroadcast({ roomName: stream.roomName })
     setJoining(false)
     if (!res.ok) {
+      // Public live + no display name yet: show the "Join Live" gate rather than
+      // treating it as an ended stream.
+      if (res.needsIdentity) {
+        setNeedIdentity(true)
+        return
+      }
       setError(res.error)
       setEnded(true)
       return
     }
+    setNeedIdentity(false)
     setCreds({ token: res.token, serverUrl: res.serverUrl })
   }
 
@@ -421,6 +432,22 @@ export function LiveVideoViewer({
         <p className="text-sm text-white/60">The host has ended this live. Taking you back to Live…</p>
         <Loader2 className="size-4 animate-spin text-white/60" />
       </div>
+    )
+  }
+
+  // ── Public-live display-name gate ─────────────────────────────────────────
+  // A guest opening a public live is asked for a display name before anything
+  // else renders. On submit it creates a guest session and re-runs join() so the
+  // viewer connects as that guest.
+  if (needIdentity) {
+    return (
+      <LiveJoinGate
+        stream={stream}
+        onJoined={() => {
+          setNeedIdentity(false)
+          void join()
+        }}
+      />
     )
   }
 
