@@ -37,7 +37,6 @@ import { MarqueeTitle } from "@/components/marquee-title"
 import { LiveChat } from "@/components/live-chat"
 import { useLiveResourcesOptional } from "@/components/live/resource/resource-context"
 import { FloatingMessages } from "@/components/conversation/floating-messages"
-import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
 import {
   blockParticipant,
   getConversationState,
@@ -199,15 +198,14 @@ export function ConversationVideo(props: ConversationVideoProps) {
     }
   }
 
-  // ── Synced room state (prayer / lock / layout). One lightweight poll shared
-  //    by every client so the host's choices apply to everyone in real time. ──
+  // ── Synced room state (lock / layout). One lightweight poll shared by every
+  //    client so the host's choices apply to everyone in real time. ──
   const { data: roomState, mutate: mutateRoomState } = useSWR(
     roomName && connected ? ["conv-video-state", roomName] : null,
     () => getConversationState({ roomName }),
     { refreshInterval: 2000, revalidateOnFocus: false },
   )
   const gridLayout: GridLayout = roomState?.gridLayout ?? "balanced"
-  const prayerActive = !!roomState?.prayerStartedAt
   const locked = !!roomState?.locked
   // Chat panel state lives here (above the layout resolution) because opening
   // the chatroom forces the grid into a compact reflow.
@@ -987,10 +985,6 @@ export function ConversationVideo(props: ConversationVideoProps) {
           </>
         )}
       </AnimatePresence>
-
-      {/* Prayer overlay + ended toast (shared with the audio Conversation) */}
-      <PrayerOverlay active={prayerActive} endedAt={null} />
-
     </div>
   )
 }

@@ -59,7 +59,6 @@ import { ConversationVideo } from "@/components/conversation/conversation-video"
 import { CoverUpload, SQUARE_RATIO } from "@/components/admin/cover-upload"
 import { CoverArt } from "@/components/cover-art"
 import { MarqueeTitle } from "@/components/marquee-title"
-import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
 import type { ShareTarget } from "@/lib/share-types"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { broadcastStageRects, stageRectStyle, type StageRect } from "@/lib/broadcast-stage"
@@ -324,10 +323,6 @@ export function VideoStudioConsole({
   // music, etc.), so the host can preview a clean frame.
   const [controlsVisible, setControlsVisible] = useState(true)
   // Full-screen cover artwork viewer (opened from the Broadcast header).
-  // Shared Prayer Mode: locally optimistic + reconciled with polled call state.
-  const [prayerStartedAt, setPrayerStartedAt] = useState<string | null>(null)
-  const [prayerEndedAt, setPrayerEndedAt] = useState<number | null>(null)
-  const prevPrayerRef = useRef<string | null>(null)
   const [musicTracks, setMusicTracks] = useState<Track[]>([])
   const [musicActiveIndex, setMusicActiveIndex] = useState<number | null>(null)
   const [musicPlaying, setMusicPlayingState] = useState(false)
@@ -531,18 +526,6 @@ export function VideoStudioConsole({
     }
   }
 
-  // ── Shared Prayer Mode ──────────────────────────────────────────────────
-  // Reconcile prayer state from the polled call state; flash a toast when it
-  // turns off. The host toggles it; everyone in the room sees the overlay.
-  useEffect(() => {
-    if (callState?.prayerStartedAt === undefined) return
-    const next = callState.prayerStartedAt
-    if (prevPrayerRef.current && !next) setPrayerEndedAt(Date.now())
-    prevPrayerRef.current = next
-    setPrayerStartedAt(next)
-  }, [callState?.prayerStartedAt])
-  // Prayer Mode is reconciled from server state only; the host trigger has been
-  // removed, so this stays inert unless a legacy session reports it.
   // Whether anyone on the call — the host or any guest — is actively speaking.
   const anySpeaking = localSpeaking || peers.some((p) => p.isSpeaking)
 
@@ -1454,9 +1437,6 @@ export function VideoStudioConsole({
             onClose={() => setMusicPanelOpen(false)}
           />
         )}
-        {/* Shared Prayer Mode overlay + "ended" toast over the video stage. */}
-        <PrayerOverlay active={prayerActive} endedAt={prayerEndedAt} />
-        <PrayerEndedToast endedAt={prayerEndedAt} />
       </div>
 
       {/* ── Live chatroom. Call-in guests now overlay the video above, so the

@@ -47,7 +47,6 @@ import { LiveStage, QualityIcon } from "@/components/live-stage"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { liveThemeStyle, isLiveImageTheme } from "@/lib/live-themes"
 import { ReactionLayer } from "@/components/live-reactions"
-import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
 import { getAvatarColor } from "@/lib/identity"
 import { cn } from "@/lib/utils"
 
@@ -197,10 +196,6 @@ export function LiveListener({
   const [declinedFlash, setDeclinedFlash] = useState(false)
   const [locked, setLocked] = useState<boolean>(stream.locked ?? false)
   const prevStatus = useRef<CallRequestView["status"] | null>(null)
-  // Shared Prayer Mode, mirrored from the polled call state.
-  const [prayerStartedAt, setPrayerStartedAt] = useState<string | null>(null)
-  const [prayerEndedAt, setPrayerEndedAt] = useState<number | null>(null)
-  const prevPrayer = useRef<string | null>(null)
 
   // ── Co-host state (polled): role + permissions + music control flags, plus
   // the host-style People data a co-host needs (pending requests, guests). ──
@@ -309,10 +304,6 @@ export function LiveListener({
       }
       prevStatus.current = s.myStatus
       setMyStatus(s.myStatus)
-      // Shared Prayer Mode: flash the "ended" toast on the off transition.
-      if (prevPrayer.current && !s.prayerStartedAt) setPrayerEndedAt(Date.now())
-      prevPrayer.current = s.prayerStartedAt
-      setPrayerStartedAt(s.prayerStartedAt)
     }
     void tick()
     const iv = setInterval(tick, 3000)
@@ -745,9 +736,6 @@ export function LiveListener({
 
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
 
-      {/* Shared Prayer Mode overlay + "ended" toast. */}
-      <PrayerOverlay active={prayerStartedAt != null} endedAt={prayerEndedAt} />
-      <PrayerEndedToast endedAt={prayerEndedAt} />
     </div>
   )
 }

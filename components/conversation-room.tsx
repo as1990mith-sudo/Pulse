@@ -40,7 +40,6 @@ import { CoverUpload, SQUARE_RATIO } from "@/components/admin/cover-upload"
 import { AudioFormatSelector } from "@/components/audio-format-selector"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { ParticipantGrid, type GridParticipant } from "@/components/conversation/participant-grid"
-import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
 import { FloatingMessages } from "@/components/conversation/floating-messages"
 import { SnowOverlay } from "@/components/conversation/snow-overlay"
 import { MusicPanel, type Track } from "@/components/studio-console"
@@ -274,8 +273,7 @@ export function ConversationRoom({
     setArrived(true)
   }
 
-  // ── Shared room state (prayer, pin, lock, ended) ─────────────────────────
-  const [prayerStartedAt, setPrayerStartedAt] = useState<string | null>(streamData?.prayerStartedAt ?? null)
+  // ── Shared room state (pin, lock, ended) ─────────────────────────────────
   const [pinnedId, setPinnedId] = useState<string | null>(streamData?.gridPinnedId ?? null)
   const [locked, setLocked] = useState<boolean>(streamData?.locked ?? false)
   const [theme, setThemeState] = useState<string>(streamData?.theme ?? "default")
@@ -291,8 +289,6 @@ export function ConversationRoom({
     null,
   )
   const [savingEpisode, setSavingEpisode] = useState(false)
-  const [prayerEndedAt, setPrayerEndedAt] = useState<number | null>(null)
-  const prevPrayer = useRef<string | null>(prayerStartedAt)
 
   // Host-only UI: consolidated host-controls menu, theme picker, cover lightbox.
   const [hostMenuOpen, setHostMenuOpen] = useState(false)
@@ -335,10 +331,6 @@ export function ConversationRoom({
           }
           return
         }
-        // Detect prayer turning off to flash the "ended" toast.
-        if (prevPrayer.current && !s.prayerStartedAt) setPrayerEndedAt(Date.now())
-        prevPrayer.current = s.prayerStartedAt
-        setPrayerStartedAt(s.prayerStartedAt)
         setPinnedId(s.pinnedId)
         setLocked(s.locked)
         // Participants follow the host's theme; the host keeps their own local
@@ -357,7 +349,6 @@ export function ConversationRoom({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomName, live])
 
-  const prayerActive = prayerStartedAt != null
 
   // ── Chat (for floating messages when the panel is closed) ────────────────
   const { data: chatMessages = [] } = useSWR<LiveChatMessageView[]>(
@@ -606,7 +597,7 @@ export function ConversationRoom({
       },
     ]
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, prayerActive, locked])
+  }, [isHost, locked])
 
   function toggleLock() {
     if (!roomName) return
@@ -1072,7 +1063,7 @@ export function ConversationRoom({
           <DockButton
             label="Host controls"
             onClick={() => setHostMenuOpen(true)}
-            active={hostMenuOpen || prayerActive || musicPlaying || locked}
+            active={hostMenuOpen || musicPlaying || locked}
           >
             <Settings2 />
           </DockButton>
@@ -1102,9 +1093,6 @@ export function ConversationRoom({
           and by the participant dock share button. */}
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
 
-      {/* Prayer overlay + toast */}
-      <PrayerOverlay active={prayerActive} endedAt={prayerEndedAt} />
-      <PrayerEndedToast endedAt={prayerEndedAt} />
 
       {/* Host music panel — the same playlist panel used in podcast studio mode */}
       {isHost && musicOpen && (

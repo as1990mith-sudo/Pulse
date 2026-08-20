@@ -132,7 +132,6 @@ export type LiveStreamView = {
   orientation: LiveOrientation
   layout: LiveLayout
   topic?: string | null
-  prayerStartedAt?: string | null
   gridPinnedId?: string | null
   visibility: LiveVisibility
   locked?: boolean
@@ -516,7 +515,6 @@ export async function getLiveStreams(): Promise<LiveStreamView[]> {
     orientation: (r.orientation as LiveOrientation) ?? "portrait",
     layout: (r.layout as LiveLayout) ?? "podcast",
     topic: r.topic ?? null,
-    prayerStartedAt: r.prayerStartedAt ? r.prayerStartedAt.toISOString() : null,
     gridPinnedId: r.gridPinnedId ?? null,
     visibility: (r.visibility as LiveVisibility) ?? "public",
     startedAt: r.startedAt.toISOString(),
@@ -772,7 +770,6 @@ export async function getMyActiveStream(): Promise<LiveStreamView | null> {
     orientation: (r.orientation as LiveOrientation) ?? "portrait",
     layout: (r.layout as LiveLayout) ?? "podcast",
     topic: r.topic ?? null,
-    prayerStartedAt: r.prayerStartedAt ? r.prayerStartedAt.toISOString() : null,
     gridPinnedId: r.gridPinnedId ?? null,
     visibility: (r.visibility as LiveVisibility) ?? "public",
     locked: r.locked ?? false,
@@ -812,7 +809,6 @@ export async function getMyActiveVideoStream(): Promise<LiveStreamView | null> {
     orientation: (r.orientation as LiveOrientation) ?? "portrait",
     layout: (r.layout as LiveLayout) ?? "podcast",
     topic: r.topic ?? null,
-    prayerStartedAt: r.prayerStartedAt ? r.prayerStartedAt.toISOString() : null,
     gridPinnedId: r.gridPinnedId ?? null,
     visibility: (r.visibility as LiveVisibility) ?? "public",
     locked: r.locked ?? false,
@@ -845,7 +841,6 @@ export async function getLiveStream(roomName: string): Promise<LiveStreamView | 
     orientation: (r.orientation as LiveOrientation) ?? "portrait",
     layout: (r.layout as LiveLayout) ?? "podcast",
     topic: r.topic ?? null,
-    prayerStartedAt: r.prayerStartedAt ? r.prayerStartedAt.toISOString() : null,
     gridPinnedId: r.gridPinnedId ?? null,
     visibility: (r.visibility as LiveVisibility) ?? "public",
     locked: r.locked ?? false,
@@ -1477,9 +1472,6 @@ export async function getCallState(input: { roomName: string }): Promise<{
   gridPinRequest: { userId: string; userName: string } | null
   // Host-selected Conversation video layout, synced to everyone.
   gridLayout: GridLayout
-  // Shared Prayer Mode: ISO timestamp when the host started prayer, else null.
-  // Synced to everyone so all live formats can show the prayer overlay together.
-  prayerStartedAt: string | null
 }> {
   // Auto-end abandoned streams first so listeners of a vanished host close out.
   await endStaleStreams()
@@ -1503,7 +1495,6 @@ export async function getCallState(input: { roomName: string }): Promise<{
       gridPinRequestId: liveStream.gridPinRequestId,
       gridPinRequestName: liveStream.gridPinRequestName,
       gridLayout: liveStream.gridLayout,
-      prayerStartedAt: liveStream.prayerStartedAt,
     })
     .from(liveStream)
     .where(eq(liveStream.roomName, input.roomName))
@@ -1638,7 +1629,6 @@ export async function getCallState(input: { roomName: string }): Promise<{
         ? { userId: stream.gridPinRequestId, userName: stream.gridPinRequestName ?? "A participant" }
         : null,
     gridLayout: ((stream?.gridLayout as GridLayout | undefined) ?? "balanced") as GridLayout,
-    prayerStartedAt: stream?.prayerStartedAt ? stream.prayerStartedAt.toISOString() : null,
   }
 }
 
@@ -1896,23 +1886,7 @@ export async function pinLiveChat(input: { roomName: string; chatId: number | nu
   return { ok: true }
 }
 
-// --- Shared live state: prayer mode, pinned participant, room state ----------
-
-/**
- * Host toggles Prayer Mode for any live room (Broadcast, Conversation video, or
- * audio). When on, `prayerStartedAt` is set — driving the shared prayer overlay
- * for everyone and disabling music ducking. No one is muted; the whole room
- * prays together and worship/instrumental music keeps playing naturally.
- */
-export async function setPrayerMode(input: { roomName: string; on: boolean }): Promise<{ ok: boolean }> {
-  const user = await requireUser()
-  if ((await getHostId(input.roomName)) !== user.id) throw new Error("Only the host can control Prayer Mode.")
-  await db
-    .update(liveStream)
-    .set({ prayerStartedAt: input.on ? new Date() : null })
-    .where(eq(liveStream.roomName, input.roomName))
-  return { ok: true }
-}
+// --- Shared live state: pinned participant, room state -----------------------
 
 /**
  * Host pins (or unpins, with userId=null) a single participant in a Conversation
@@ -1933,7 +1907,6 @@ export async function setPinnedParticipant(input: {
 }
 
 export type ConversationState = {
-  prayerStartedAt: string | null
   pinnedId: string | null
   locked: boolean
   ended: boolean
@@ -1943,13 +1916,12 @@ export type ConversationState = {
 }
 
 /**
- * Lightweight poll for every client in a Conversation room: prayer mode, pinned
- * participant, lock state, the room theme, and whether the room has ended.
+ * Lightweight poll for every client in a Conversation room: pinned participant,
+ * lock state, the room theme, and whether the room has ended.
  */
 export async function getConversationState(input: { roomName: string }): Promise<ConversationState> {
   const [r] = await db
     .select({
-      prayerStartedAt: liveStream.prayerStartedAt,
       gridPinnedId: liveStream.gridPinnedId,
       locked: liveStream.locked,
       status: liveStream.status,
@@ -1959,10 +1931,8 @@ export async function getConversationState(input: { roomName: string }): Promise
     .from(liveStream)
     .where(eq(liveStream.roomName, input.roomName))
     .limit(1)
-  if (!r)
-    return { prayerStartedAt: null, pinnedId: null, locked: false, ended: true, theme: "default", gridLayout: "balanced" }
+  if (!r) return { pinnedId: null, locked: false, ended: true, theme: "default", gridLayout: "balanced" }
   return {
-    prayerStartedAt: r.prayerStartedAt ? r.prayerStartedAt.toISOString() : null,
     pinnedId: r.gridPinnedId ?? null,
     locked: r.locked ?? false,
     ended: r.status !== "live",

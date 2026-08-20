@@ -72,7 +72,6 @@ import { LIVE_THEMES, liveThemeStyle, isLiveImageTheme } from "@/lib/live-themes
 import { LIVE_CATEGORIES } from "@/lib/live-categories"
 import { LiveBadge } from "@/components/live-badge"
 import { ReactionLayer } from "@/components/live-reactions"
-import { PrayerOverlay, PrayerEndedToast } from "@/components/conversation/prayer-overlay"
 import { BackExitMenu } from "@/components/live-back-menu"
 import { CoverUpload, SQUARE_RATIO } from "@/components/admin/cover-upload"
 import { AudioFormatSelector } from "@/components/audio-format-selector"
@@ -294,22 +293,6 @@ export function StudioConsole({
   const guests = callState?.guests ?? []
   const locked = callState?.locked ?? false
 
-  // ── Shared Prayer Mode ──────────────────────────────────────────────────
-  // Reconcile from the polled call state; flash a toast when prayer ends. The
-  // host toggles it and every listener sees the same overlay.
-  const [prayerStartedAt, setPrayerStartedAt] = useState<string | null>(null)
-  const [prayerEndedAt, setPrayerEndedAt] = useState<number | null>(null)
-  const prevPrayerRef = useRef<string | null>(null)
-  useEffect(() => {
-    if (callState?.prayerStartedAt === undefined) return
-    const next = callState.prayerStartedAt
-    if (prevPrayerRef.current && !next) setPrayerEndedAt(Date.now())
-    prevPrayerRef.current = next
-    setPrayerStartedAt(next)
-  }, [callState?.prayerStartedAt])
-  // Prayer Mode is reconciled from server state only; the host trigger has been
-  // removed, so this stays inert unless a legacy session reports it.
-  const prayerActive = prayerStartedAt != null
   // Co-host state from the poll. `coHosts` includes everyone granted co-host
   // status (on the call or off it) so the host can manage them all.
   const coHosts = callState?.coHosts ?? []
@@ -925,9 +908,6 @@ export function StudioConsole({
             onTapSpeaker={openSpeakerMenu}
           />
           {live && roomName && <ReactionLayer roomName={roomName} />}
-          {/* Shared Prayer Mode overlay + "ended" toast. */}
-          <PrayerOverlay active={prayerActive} endedAt={prayerEndedAt} />
-          <PrayerEndedToast endedAt={prayerEndedAt} />
         </div>
 
         {/* Host control dock ��� compact essentials, sits right under the stage row */}
