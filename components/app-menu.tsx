@@ -12,10 +12,8 @@ import {
   Bookmark,
   ChevronDown,
   ChevronRight,
-  Contrast,
   Home as HomeIcon,
   Info,
-  Leaf,
   Library as LibraryIcon,
   LifeBuoy,
   LogOut,
@@ -39,17 +37,16 @@ import { getUnreadCount } from "@/app/actions/notifications"
 import { AvatarUploadButton } from "@/components/profile/avatar-upload-button"
 import { DeleteAccountDialog } from "@/components/profile/delete-account-dialog"
 import { SKINS, useSkin } from "@/components/skin-provider"
-import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
+import { useHomeContext } from "@/components/home/home-context"
+import { getAvatarColor, getInitials } from "@/lib/identity"
 import { startMenuFlow } from "@/lib/menu-flow"
 import { haptic } from "@/lib/haptics"
 import { cn } from "@/lib/utils"
 
 const themes = [
-  { value: "mid", label: "Mid", icon: Contrast },
   { value: "charcoal", label: "Charcoal", icon: MoonStar },
   { value: "dark", label: "Dark", icon: Moon },
   { value: "light", label: "Light", icon: Sun },
-  { value: "grass", label: "Grass", icon: Leaf },
 ] as const
 
 const SKIN_SWATCH: Record<string, string> = {
@@ -114,10 +111,16 @@ export function AppMenu() {
     }
   }, [])
 
+  // The viewer's active Home. Only an organisation admin's avatar mirrors the
+  // Home logo by default — regular members always use their own picture.
+  const { activeHome, isAdmin } = useHomeContext()
+
   const name = session?.user?.name || "Guest"
   const firstName = name.trim().split(/\s+/)[0]
   const initials = getInitials(name)
   const avatarColor = getAvatarColor(session?.user?.id || name)
+  // Prefer a personal picture; admins fall back to their Home's logo, members don't.
+  const avatarImage = session?.user?.image ?? (isAdmin ? activeHome?.logo ?? null : null)
 
   const close = useCallback(() => {
     drawerOpenIntent = false
@@ -294,7 +297,7 @@ export function AppMenu() {
                     // including admins redirected away from /u/[id] — can set a
                     // personal profile picture instead of a blank initials tile.
                     <AvatarUploadButton
-                      image={session.user.image ?? null}
+                      image={avatarImage}
                       initials={initials}
                       color={avatarColor}
                       name={name}
@@ -316,9 +319,10 @@ export function AppMenu() {
                   >
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-display text-lg font-semibold text-foreground">{name}</span>
-                      <span className="block truncate text-sm text-muted-foreground">
-                        {session?.user ? getHandle(name) : "Sign in to your account"}
-                      </span>
+                      {/* Signed-in members show name only; signed-out shows a prompt. */}
+                      {!session?.user && (
+                        <span className="block truncate text-sm text-muted-foreground">Sign in to your account</span>
+                      )}
                     </span>
                     <ChevronDown className="size-5 shrink-0 text-muted-foreground" />
                   </Link>

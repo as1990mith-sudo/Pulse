@@ -7,7 +7,6 @@ import {
   CalendarPlus,
   Check,
   Clock,
-  Download,
   ImageIcon,
   Loader2,
   MapPin,
@@ -37,7 +36,7 @@ import {
   type EventDeleteMode,
 } from "@/app/actions/announcements"
 import { type AdType } from "@/lib/ads"
-import { downloadIcs, formatEventDate, googleCalendarUrl } from "@/lib/calendar"
+import { formatEventDate } from "@/lib/calendar"
 import type { CurrentUser } from "@/lib/session"
 import { cn } from "@/lib/utils"
 import { uploadMedia } from "@/lib/upload-media"
@@ -229,14 +228,6 @@ function EventDetailSheet({
     })
   }
 
-  const calEvent = {
-    title: a.title,
-    description: a.description,
-    location: a.location,
-    date: a.eventDate ?? "",
-    time: a.eventTime,
-  }
-
   return createPortal(
     <div
       role="dialog"
@@ -316,38 +307,7 @@ function EventDetailSheet({
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{a.description}</p>
           )}
 
-          {/* Add to calendar */}
-          {a.eventDate && (
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant="secondary"
-                className="gap-1.5"
-                onClick={() => window.open(googleCalendarUrl(calEvent), "_blank", "noopener,noreferrer")}
-              >
-                <CalendarPlus className="size-4" /> Add to Google
-              </Button>
-              <Button size="sm" variant="secondary" className="gap-1.5" onClick={() => downloadIcs(calEvent)}>
-                <Download className="size-4" /> Save .ics
-              </Button>
-            </div>
-          )}
-
-          {/* Attendance roll-up — visible to everyone. */}
-          <div className="flex items-center gap-2 text-xs">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-live/10 px-2.5 py-1 font-medium text-live">
-              <Check className="size-3.5" /> {a.comingCount} coming
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 font-medium text-muted-foreground">
-              <X className="size-3.5" /> {a.notComingCount} can&apos;t make it
-            </span>
-          </div>
-
-          {a.isOwner ? (
-            <p className="rounded-lg bg-secondary/60 px-3 py-2 text-center text-xs text-muted-foreground">
-              This is your event. Manage attendance in your admin console.
-            </p>
-          ) : (
+          {!a.isOwner && (
             /* Members RSVP; tapping the active choice again clears it. */
             <div className="flex items-center gap-2">
               <Button
@@ -702,7 +662,6 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
             </span>
             <div className="leading-tight">
               <h2 className="font-semibold">Publish an event</h2>
-              <p className="text-xs text-muted-foreground">Your members can say if they&apos;re coming</p>
             </div>
           </div>
           <Button size="icon" variant="ghost" className="shrink-0" aria-label="Close" onClick={onClose}>
@@ -728,9 +687,6 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
               </div>
               <div className="space-y-1.5">
                 <p className="text-sm font-medium">Event flyer</p>
-                <p className="text-xs text-muted-foreground">
-                  The box shows a preview; your full flyer is kept and shown when tapped.
-                </p>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -764,7 +720,6 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
                 id="ann-title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Summer Worship Night"
                 maxLength={80}
               />
             </div>
@@ -777,7 +732,6 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
                 id="ann-desc"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Tell people what to expect, who's hosting, ticket info…"
                 rows={3}
                 maxLength={400}
               />
@@ -813,7 +767,6 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
                     id="ann-loc"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
-                    placeholder="e.g. Online, or 123 Main St"
                   />
                 </div>
 

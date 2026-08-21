@@ -16,7 +16,8 @@ import {
   savedItem,
   user as userTable,
 } from "@/lib/db/schema"
-import { getActiveHomeMemberIds } from "@/lib/home/active-home"
+import { getActiveHomeContext, getActiveHomeMemberIds } from "@/lib/home/active-home"
+import { isHomeAdminRole } from "@/lib/home/roles"
 import { getStaffUserIds } from "@/lib/admin-auth"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { getLikedSet, setLike } from "@/lib/likes"
@@ -730,6 +731,49 @@ async function setStatus(id: string, status: ArticleStatus): Promise<void> {
   const [row] = await db.select({ authorId: article.authorId }).from(article).where(eq(article.id, numId)).limit(1)
   if (!row || row.authorId !== user.id) throw new Error("Article not found.")
   await db.update(article).set({ status, updatedAt: new Date() }).where(eq(article.id, numId))
+  revalidateArticle(numId, user.id)
+}
+
+/**
+ * Sets (or clears) the single featured article for the viewer's active Home's
+ * Articles hub. Only a Home admin may feature, and only their own published
+ * article. Featuring first clears the flag on every other article by the Home's
+ * hub authors, so the hub always shows exactly one featured hero at a time.
+ */
+export async function setFeaturedArticle(id: string, featured: boolean): Promise<void> {
+  const user = await requireUser()
+  const numId = Number(id)
+  if (!Number.isFinite(numId)) throw new Error("Article not found.")
+
+  // Gate: the viewer must be an admin of the Home they're currently inside.
+  const { home, membership } = await getActiveHomeContext()
+  if (!home || !isHomeAdminRole(membership?.role)) {
+    throw new Error("Only a Home admin can feature articles.")
+  }
+
+  const [row] = await db
+    .select({ authorId: article.authorId, status: article.status })
+    .from(article)
+    .where(eq(article.id, numId))
+    .limit(1)
+  if (!row || row.authorId !== user.id) throw new Error("Article not found.")
+  if (featured && row.status !== "published") throw new Error("Only published articles can be featured.")
+
+  if (featured) {
+    // One hero at a time: clear any current featured article across the Home's
+    // hub authors before flagging this one.
+    const authorIds = await getArticleHubAuthorIds()
+    if (authorIds.length > 0) {
+      await db
+        .update(article)
+        .set({ featured: false })
+        .where(and(eq(article.featured, true), inArray(article.authorId, authorIds)))
+    }
+    await db.update(article).set({ featured: true, updatedAt: new Date() }).where(eq(article.id, numId))
+  } else {
+    await db.update(article).set({ featured: false, updatedAt: new Date() }).where(eq(article.id, numId))
+  }
+
   revalidateArticle(numId, user.id)
 }
 
