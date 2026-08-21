@@ -111,16 +111,16 @@ export function AppMenu() {
     }
   }, [])
 
-  // The viewer's active Home — its logo is the default avatar so a member's
-  // picture mirrors the Home they're currently inside until they set their own.
-  const { activeHome } = useHomeContext()
+  // The viewer's active Home. Only an organisation admin's avatar mirrors the
+  // Home logo by default — regular members always use their own picture.
+  const { activeHome, isAdmin } = useHomeContext()
 
   const name = session?.user?.name || "Guest"
   const firstName = name.trim().split(/\s+/)[0]
   const initials = getInitials(name)
   const avatarColor = getAvatarColor(session?.user?.id || name)
-  // Prefer a personal picture; otherwise fall back to the active Home's logo.
-  const avatarImage = session?.user?.image ?? activeHome?.logo ?? null
+  // Prefer a personal picture; admins fall back to their Home's logo, members don't.
+  const avatarImage = session?.user?.image ?? (isAdmin ? activeHome?.logo ?? null : null)
 
   const close = useCallback(() => {
     drawerOpenIntent = false
