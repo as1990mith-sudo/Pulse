@@ -9,7 +9,6 @@ import {
   Camera,
   Check,
   Globe,
-  ImagePlus,
   Link2,
   Loader2,
   Mail,
@@ -17,16 +16,15 @@ import {
   Phone,
   Play,
   Settings2,
-  Trash2,
   Users,
   X,
 } from "lucide-react"
 import { updateOrganization } from "@/app/actions/organizations"
 import { orgLocationLabel, type OrganizationView } from "@/lib/org-types"
 import { VerifiedBadge } from "@/components/org/verified-badge"
+import { BrandImages } from "@/components/org/brand-images"
 import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
-import { compressImage, uploadMedia } from "@/lib/upload-media"
 import { cn } from "@/lib/utils"
 
 const DESC_MAX = 280

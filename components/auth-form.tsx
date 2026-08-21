@@ -191,9 +191,9 @@ export function AuthForm({
 
     setLoading(true)
     try {
-      const { handle } = await createOrganization({
-        name: orgName,
-        category: orgCategory,
+        const { handle } = await createOrganization({
+          name: orgName,
+          category: orgCategory,
         categoryOther: orgCategory === "other" ? orgCategoryOther : undefined,
         description: orgDescription,
         reach: orgReach,
