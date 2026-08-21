@@ -15,14 +15,18 @@ import {
   Archive,
   ArchiveRestore,
   Send,
+  Star,
+  StarOff,
 } from "lucide-react"
 import type { ArticleCard } from "@/lib/article-types"
 import {
   archiveArticle,
   deleteArticle,
   publishArticle,
+  setFeaturedArticle,
   unpublishArticle,
 } from "@/app/actions/articles"
+import { useHomeContext } from "@/components/home/home-context"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,6 +45,7 @@ const TABS: { key: Tab; label: string }[] = [
 
 export function MyArticlesView({ initial }: { initial: ArticleCard[] }) {
   const router = useRouter()
+  const { isAdmin } = useHomeContext()
   const [items, setItems] = useState<ArticleCard[]>(initial)
   const [tab, setTab] = useState<Tab>("published")
   const [, startTransition] = useTransition()
@@ -75,6 +80,12 @@ export function MyArticlesView({ initial }: { initial: ArticleCard[] }) {
   function handleDelete(id: string) {
     setItems((prev) => prev.filter((a) => a.id !== id))
     startTransition(() => void deleteArticle(id).catch(() => router.refresh()))
+  }
+  function handleFeature(id: string, featured: boolean) {
+    // Only one article can be featured at a time — mirror that locally so the
+    // list reflects the new hero immediately while the server persists it.
+    setItems((prev) => prev.map((a) => ({ ...a, featured: a.id === id ? featured : featured ? false : a.featured })))
+    startTransition(() => void setFeaturedArticle(id, featured).catch(() => router.refresh()))
   }
 
   return (
@@ -145,11 +156,13 @@ export function MyArticlesView({ initial }: { initial: ArticleCard[] }) {
             <MyArticleRow
               key={a.id}
               article={a}
+              canFeature={isAdmin}
               onEdit={() => router.push(`/articles/write?id=${a.id}`)}
               onPublish={() => handlePublish(a.id)}
               onUnpublish={() => handleUnpublish(a.id)}
               onArchive={() => handleArchive(a.id)}
               onDelete={() => handleDelete(a.id)}
+              onToggleFeature={() => handleFeature(a.id, !a.featured)}
             />
           ))}
         </div>
@@ -166,18 +179,22 @@ function compact(n: number): string {
 
 function MyArticleRow({
   article: a,
+  canFeature,
   onEdit,
   onPublish,
   onUnpublish,
   onArchive,
   onDelete,
+  onToggleFeature,
 }: {
   article: ArticleCard
+  canFeature: boolean
   onEdit: () => void
   onPublish: () => void
   onUnpublish: () => void
   onArchive: () => void
   onDelete: () => void
+  onToggleFeature: () => void
 }) {
   return (
     <div className="group flex gap-4 py-5 sm:gap-5">
@@ -226,29 +243,43 @@ function MyArticleRow({
               <span className="sr-only">Article actions</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={onEdit}>
-                <Pencil className="mr-2 size-4" /> Edit
+              <DropdownMenuItem onClick={onEdit} className="whitespace-nowrap">
+                <Pencil className="mr-2 size-4 shrink-0" /> Edit
               </DropdownMenuItem>
+              {/* Admin-only: promote a published article to the Home's featured hero. */}
+              {canFeature && a.status === "published" && (
+                <DropdownMenuItem onClick={onToggleFeature} className="whitespace-nowrap">
+                  {a.featured ? (
+                    <>
+                      <StarOff className="mr-2 size-4 shrink-0" /> Unfeature
+                    </>
+                  ) : (
+                    <>
+                      <Star className="mr-2 size-4 shrink-0" /> Feature
+                    </>
+                  )}
+                </DropdownMenuItem>
+              )}
               {a.status !== "published" ? (
-                <DropdownMenuItem onClick={onPublish}>
-                  <Send className="mr-2 size-4" /> Publish
+                <DropdownMenuItem onClick={onPublish} className="whitespace-nowrap">
+                  <Send className="mr-2 size-4 shrink-0" /> Publish
                 </DropdownMenuItem>
               ) : (
-                <DropdownMenuItem onClick={onUnpublish}>
-                  <ArchiveRestore className="mr-2 size-4" /> Move to drafts
+                <DropdownMenuItem onClick={onUnpublish} className="whitespace-nowrap">
+                  <ArchiveRestore className="mr-2 size-4 shrink-0" /> Move to drafts
                 </DropdownMenuItem>
               )}
               {a.status !== "archived" ? (
-                <DropdownMenuItem onClick={onArchive}>
-                  <Archive className="mr-2 size-4" /> Archive
+                <DropdownMenuItem onClick={onArchive} className="whitespace-nowrap">
+                  <Archive className="mr-2 size-4 shrink-0" /> Archive
                 </DropdownMenuItem>
               ) : (
-                <DropdownMenuItem onClick={onUnpublish}>
-                  <ArchiveRestore className="mr-2 size-4" /> Restore to drafts
+                <DropdownMenuItem onClick={onUnpublish} className="whitespace-nowrap">
+                  <ArchiveRestore className="mr-2 size-4 shrink-0" /> Restore to drafts
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem onClick={onDelete} className="text-destructive">
-                <Trash2 className="mr-2 size-4" /> Delete
+              <DropdownMenuItem onClick={onDelete} className="whitespace-nowrap text-destructive">
+                <Trash2 className="mr-2 size-4 shrink-0" /> Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
