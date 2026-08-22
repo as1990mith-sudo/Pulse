@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react"
 import { createPortal } from "react-dom"
 import Link from "next/link"
-import useSWR, { useSWRConfig } from "swr"
+import useSWR from "swr"
 import {
   ArrowLeft,
   Check,
@@ -111,7 +111,7 @@ function FeedPostVideo({ src }: { src: string }) {
   const aspect = isStandard ? ratio : 4 / 5
   return (
     <div
-      className="relative mt-3 w-full overflow-hidden rounded-lg border border-border/60 bg-black"
+      className="relative mt-3 w-full overflow-hidden rounded-md border border-border/60 bg-black"
       style={{ aspectRatio: String(aspect), maxHeight: "32rem" }}
     >
       {/* While the full-screen viewer is open the inline clip is unmounted so
@@ -994,7 +994,6 @@ export function CommunityHelp({
   embedded?: boolean
   homeId?: string | null
 }) {
-  const { mutate } = useSWRConfig()
   const {
     data: posts = initialPosts,
     isLoading,
@@ -1131,13 +1130,19 @@ export function CommunityHelp({
     }
   }
 
+  // All three optimistic updates below go through `mutatePosts` — the mutator
+  // bound to this instance's own SWR key — rather than the bare string
+  // "community-posts". In a private Home the key is ["community-posts", homeId],
+  // so writing to the string key updated a cache entry nothing was reading: a
+  // new post flashed in from local state and then vanished on the next 20s
+  // revalidation.
   function handleCreated(post: CommunityPostView) {
-    mutate("community-posts", (prev: CommunityPostView[] | undefined) => [post, ...(prev ?? [])], { revalidate: false })
+    void mutatePosts((prev: CommunityPostView[] | undefined) => [post, ...(prev ?? [])], { revalidate: false })
   }
 
   function handleDeleted(id: number) {
     if (activeId === id) closeConversation()
-    mutate("community-posts", (prev: CommunityPostView[] | undefined) => (prev ?? []).filter((p) => p.id !== id), {
+    void mutatePosts((prev: CommunityPostView[] | undefined) => (prev ?? []).filter((p) => p.id !== id), {
       revalidate: false,
     })
   }
@@ -1145,8 +1150,7 @@ export function CommunityHelp({
   // Keep feed reply counts in sync when replies are added/removed in the
   // conversation screen (optimistic, no refetch).
   function handleCountChange(postId: number, delta: number) {
-    mutate(
-      "community-posts",
+    void mutatePosts(
       (prev: CommunityPostView[] | undefined) =>
         (prev ?? []).map((p) => (p.id === postId ? { ...p, commentCount: Math.max(0, p.commentCount + delta) } : p)),
       { revalidate: false },

@@ -299,7 +299,7 @@ export function FeedPostImage({
       onClick={onClick}
       style={{ aspectRatio: String(aspect), maxHeight: "32rem" }}
       className={cn(
-        "relative block w-full overflow-hidden rounded-lg border border-border/60 bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "relative block w-full overflow-hidden rounded-md border border-border/60 bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         className,
       )}
       aria-label="Open attached photo"
