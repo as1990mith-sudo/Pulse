@@ -1,6 +1,6 @@
 "use server"
 
-import { and, desc, eq, inArray, isNull, or } from "drizzle-orm"
+import { and, desc, eq, inArray, isNotNull, isNull, lt, or } from "drizzle-orm"
 import { cookies, headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
@@ -8,6 +8,7 @@ import { db } from "@/lib/db"
 import {
   announcement,
   announcementInteraction,
+  article,
   catalogueItem,
   chatroom,
   chatroomJoinRequest,
@@ -511,10 +512,66 @@ export async function deleteHome(handle: string): Promise<{ ok: true }> {
     throw new Error("Only the Home owner can delete it.")
   }
 
-  const homeId = homeView.id
-  const orgId = homeView.organizationId
-
+  // Deleting a Home dissolves the ORGANISATION — it never touches the personal
+  // accounts of its members. So this marks the Home deleted and schedules the
+  // purge; it deliberately destroys nothing now. Members keep their account,
+  // profile and personal content, and simply lose access to this Home (their
+  // membership rows are removed at purge time, and `getMyHomes` filters the Home
+  // out immediately).
+  const now = new Date()
+  const purgeAfter = new Date(now.getTime() + HOME_RETENTION_DAYS * 24 * 60 * 60 * 1000)
   await db.transaction(async (tx) => {
+    await tx
+      .update(home)
+      .set({ deletedAt: now, purgeAfter, status: "deleted", updatedAt: now })
+      .where(eq(home.id, homeView.id))
+
+    // Access must stop the instant deletion is requested, not 30 days later: the
+    // retention window exists to keep the data RECOVERABLE, not to keep the Home
+    // usable. So revoke the join key and end any broadcast still in flight.
+    await tx.delete(homeAuthKey).where(eq(homeAuthKey.homeId, homeView.id))
+    await tx
+      .update(liveStream)
+      .set({ status: "ended", endedAt: now })
+      .where(and(eq(liveStream.homeId, homeView.id), eq(liveStream.status, "live")))
+  })
+
+  // The deleted Home can't remain the active context.
+  const store = await cookies()
+  if (store.get(ACTIVE_HOME_COOKIE)?.value === handle) {
+    store.delete(ACTIVE_HOME_COOKIE)
+  }
+  revalidatePath("/", "layout")
+  return { ok: true }
+}
+
+/** How long a deleted Home's organisational content is retained before purge. */
+export const HOME_RETENTION_DAYS = 30
+
+/**
+ * Permanently destroys one soft-deleted Home's organisational data.
+ *
+ * The critical distinction (requirement 17): content published AS the Home
+ * belongs to the Home and dies with it, while content a member published under
+ * their OWN identity belongs to that person and must survive. Those personal
+ * posts are detached (homeId → null) rather than deleted, so they remain on
+ * their author's profile and personal feed. Previously this selected every post
+ * carrying the Home's id and deleted the lot, which destroyed members' personal
+ * posts along with the organisation's.
+ */
+export async function purgeHomeData(homeId: string, orgId: string | null): Promise<void> {
+  await db.transaction(async (tx) => {
+    // --- Preserve members' personal content ---------------------------------
+    // Detach before the delete pass so these rows can't be swept up by it.
+    await tx
+      .update(feedPost)
+      .set({ homeId: null })
+      .where(and(eq(feedPost.homeId, homeId), eq(feedPost.publishedAsType, "personal")))
+    await tx
+      .update(article)
+      .set({ homeId: null, organizationId: null })
+      .where(and(eq(article.homeId, homeId), eq(article.publishedAsType, "personal")))
+
     // --- Resolve the ids/room names of everything scoped to this Home --------
     const streams = await tx.select().from(liveStream).where(eq(liveStream.homeId, homeId))
     const roomNames = streams.map((s) => s.roomName)
@@ -529,7 +586,8 @@ export async function deleteHome(handle: string): Promise<{ ok: true }> {
     const communityPostIds = (
       await tx.select({ id: communityPost.id }).from(communityPost).where(eq(communityPost.homeId, homeId))
     ).map((r) => r.id)
-    // Feed posts and announcements can be tagged by either key, so match both.
+    // Only ORGANISATIONAL posts. Members' personal posts were detached above, so
+    // they no longer carry this homeId and are correctly excluded here.
     const feedPostIds = (
       await tx
         .select({ id: feedPost.id })
@@ -606,14 +664,22 @@ export async function deleteHome(handle: string): Promise<{ ok: true }> {
     await tx.delete(home).where(eq(home.id, homeId))
     if (orgId) await tx.delete(organization).where(eq(organization.id, orgId))
   })
+}
 
-  // The deleted Home can't remain the active context.
-  const store = await cookies()
-  if (store.get(ACTIVE_HOME_COOKIE)?.value === handle) {
-    store.delete(ACTIVE_HOME_COOKIE)
+/**
+ * Purges every Home whose 30-day retention window has elapsed. Safe to call
+ * repeatedly — it only picks up Homes already past their `purgeAfter` stamp.
+ */
+export async function purgeExpiredHomes(): Promise<{ purged: number }> {
+  const due = await db
+    .select({ id: home.id, organizationId: home.organizationId })
+    .from(home)
+    .where(and(isNotNull(home.purgeAfter), lt(home.purgeAfter, new Date())))
+
+  for (const row of due) {
+    await purgeHomeData(row.id, row.organizationId)
   }
-  revalidatePath("/", "layout")
-  return { ok: true }
+  return { purged: due.length }
 }
 
 /** Change a member's role. Ownership cannot be assigned or removed here. */

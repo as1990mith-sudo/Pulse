@@ -17,6 +17,7 @@ import {
   user as userTable,
 } from "@/lib/db/schema"
 import { getActiveHomeContext, getActiveHomeMemberIds } from "@/lib/home/active-home"
+import { publishingColumns, resolvePublishingIdentity } from "@/lib/home/publishing"
 import { isHomeAdminRole } from "@/lib/home/roles"
 import { getStaffUserIds } from "@/lib/admin-auth"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
@@ -625,6 +626,12 @@ export async function saveArticle(input: {
   const authorHandle = getHandle(user.name)
 
   if (input.id) {
+    // NOTE: editing never re-derives publishing identity. homeId /
+    // organizationId / publishedAsType are stamped once at creation and are
+    // deliberately absent from the update below — an author demoted from admin
+    // must not have their existing Home articles silently become personal (nor
+    // the reverse) just because they fixed a typo. Only authorName/Image are
+    // refreshed, since those track the person's current display details.
     const numId = Number(input.id)
     const [existing] = await db.select().from(article).where(eq(article.id, numId)).limit(1)
     if (!existing || existing.authorId !== user.id) throw new Error("Article not found.")
@@ -665,6 +672,17 @@ export async function saveArticle(input: {
     return { id: String(numId) }
   }
 
+  // Resolve the publishing identity once, at creation, from the active context.
+  // An admin of the active Home publishes the article AS the Home; a member of
+  // that same Home publishes it as themselves. The author keeps it in their
+  // personal authored history either way (requirement 10) — that surface is
+  // driven by authorId, which is independent of the publishing identity below.
+  const identity = await resolvePublishingIdentity({
+    name: authorName,
+    handle: authorHandle,
+    image: user.image ?? null,
+  })
+
   const [created] = await db
     .insert(article)
     .values({
@@ -672,6 +690,7 @@ export async function saveArticle(input: {
       authorName,
       authorHandle,
       authorImage: user.image ?? null,
+      ...publishingColumns(identity),
       title,
       bodyHtml,
       excerpt,
