@@ -37,7 +37,6 @@ import { getUnreadCount } from "@/app/actions/notifications"
 import { AvatarUploadButton } from "@/components/profile/avatar-upload-button"
 import { DeleteAccountDialog } from "@/components/profile/delete-account-dialog"
 import { SKINS, useSkin } from "@/components/skin-provider"
-import { useHomeContext } from "@/components/home/home-context"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { startMenuFlow } from "@/lib/menu-flow"
 import { haptic } from "@/lib/haptics"
@@ -111,16 +110,16 @@ export function AppMenu() {
     }
   }, [])
 
-  // The viewer's active Home. Only an organisation admin's avatar mirrors the
-  // Home logo by default — regular members always use their own picture.
-  const { activeHome, isAdmin } = useHomeContext()
-
   const name = session?.user?.name || "Guest"
   const firstName = name.trim().split(/\s+/)[0]
   const initials = getInitials(name)
   const avatarColor = getAvatarColor(session?.user?.id || name)
-  // Prefer a personal picture; admins fall back to their Home's logo, members don't.
-  const avatarImage = session?.user?.image ?? (isAdmin ? activeHome?.logo ?? null : null)
+  // The account avatar is ALWAYS the person: their own picture, or their initials.
+  // It deliberately does not fall back to the active Home's logo for admins — that
+  // made an admin's own identity disappear behind the organisation's, and made the
+  // avatar change meaning whenever they switched Home. The Home's logo belongs to
+  // the Home switcher; this avatar belongs to the human being signed in.
+  const avatarImage = session?.user?.image ?? null
 
   const close = useCallback(() => {
     drawerOpenIntent = false

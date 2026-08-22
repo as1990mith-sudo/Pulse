@@ -1,12 +1,13 @@
 "use server"
 
-import { and, asc, desc, eq, gt, isNull, lt } from "drizzle-orm"
+import { and, asc, desc, eq, gt, inArray, isNull, lt, or } from "drizzle-orm"
 import { cookies, headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { isActiveHomeMember, canViewerGoLive, HOME_GO_LIVE_COOKIE } from "@/lib/home/access"
-import { getActiveHomeContext } from "@/lib/home/active-home"
+import { isActiveHomeMember, HOME_GO_LIVE_COOKIE } from "@/lib/home/access"
+import { canViewerGoLive, getActiveHomeContext } from "@/lib/home/active-home"
+import { resolvePublishingIdentity } from "@/lib/home/publishing"
 import { createGuestSession, getGuestSession } from "@/lib/guest-session"
 import {
   liveStream,
@@ -295,11 +296,25 @@ export async function startBroadcast(input: {
     homeId = (await getActiveHomeContext()).home?.id ?? null
   }
 
-  // End any stale streams this host may have left open.
+  // End only this host's stale streams IN THIS SAME CONTEXT.
+  //
+  // A Home is not a singleton broadcaster: several admins of one Home can be
+  // live simultaneously, and one admin who manages several Homes can be live in
+  // each of them at once. Scoping the cleanup to (hostId, homeId) keeps those
+  // sessions independent — previously this ended EVERY live row for the host, so
+  // starting a Kingdom Media broadcast silently killed the host's ongoing
+  // Kingdom Academy one. Other admins' sessions were never touched (the hostId
+  // filter), but a single admin could not be live in two Homes.
   await db
     .update(liveStream)
     .set({ status: "ended", endedAt: new Date() })
-    .where(and(eq(liveStream.hostId, user.id), eq(liveStream.status, "live")))
+    .where(
+      and(
+        eq(liveStream.hostId, user.id),
+        eq(liveStream.status, "live"),
+        homeId ? eq(liveStream.homeId, homeId) : isNull(liveStream.homeId),
+      ),
+    )
 
   // Open the room on the host's remembered backdrop (their last-used theme /
   // uploaded image) so listeners see it from the first second, without the host
@@ -310,11 +325,25 @@ export async function startBroadcast(input: {
     .where(eq(userTable.id, user.id))
     .limit(1)
 
+  // Broadcaster identity follows the same active-context rule as posts: an admin
+  // of the active Home broadcasts AS the Home, so members see "Kingdom Academy"
+  // rather than the individual admin's name. hostId always stays the real person
+  // (each concurrent session is owned by its own host, and the room needs to know
+  // who is publishing) — only the DISPLAYED identity changes.
+  const identity = homeId
+    ? await resolvePublishingIdentity({
+        name: user.name,
+        handle: getHandle(user.name),
+        image: user.image ?? null,
+      })
+    : null
+  const broadcastAsHome = identity?.type === "home" && identity.homeId === homeId
+
   await db.insert(liveStream).values({
     roomName,
     hostId: user.id,
-    hostName: user.name,
-    hostHandle: getHandle(user.name),
+    hostName: broadcastAsHome ? identity.name : user.name,
+    hostHandle: broadcastAsHome ? identity.handle : getHandle(user.name),
     title,
     category,
     cover: input.cover ?? null,
@@ -352,9 +381,26 @@ export async function startBroadcast(input: {
   })
 
   if (homeId) {
-    // A private Home session must NOT leak to Universal followers (its room is
-    // member-gated). Instead, tell this Home's members — inside the Home inbox.
-    await notifyHomeLive({ homeId, actorId: user.id, actorName: user.name, title, roomName })
+    // Visibility is chosen by the host at creation and is what decides
+    // distribution — never the host's admin status.
+    //
+    // PRIVATE: no Home-wide notification, no discovery listing. Access is by
+    // link only. Notifying members here would defeat the entire purpose of a
+    // private session, so this branch stays silent.
+    //
+    // PUBLIC: notify this Home's members that the Home has started a live. The
+    // notification is tied to THIS session's roomName, so a second admin going
+    // live sends its own separate notification rather than overwriting the first.
+    if (visibility === "public") {
+      await notifyHomeLive({
+        homeId,
+        actorId: user.id,
+        // Members are told the HOME is live when an admin broadcasts as it.
+        actorName: broadcastAsHome ? identity.name : user.name,
+        title,
+        roomName,
+      })
+    }
   } else {
     // Public session: let the host's followers know they're on air.
     await notifyFollowers({
@@ -601,14 +647,28 @@ export async function joinBroadcast(input: { roomName: string }): Promise<JoinRe
 /** All currently-live streams, newest first. */
 export async function getLiveStreams(): Promise<LiveStreamView[]> {
   await endStaleStreams()
+  // Private sessions are NEVER listed here, whatever their Home: they are
+  // reachable only by direct link. Among public sessions, Ongoing Live Streams
+  // shows Universal ones (no Home) plus those belonging to a Home the viewer is
+  // actually an active member of — so a Home's public live reaches its members
+  // without exposing the organisation's activity to the whole platform.
+  //
+  // Every concurrent session is an independent row, so two admins of the same
+  // Home both appear, each with its own host and join target.
+  const { homes } = await getActiveHomeContext()
+  const memberHomeIds = homes.map((h) => h.id)
+
   const rows = await db
     .select()
     .from(liveStream)
-    // Only public streams are listed in discovery; private streams stay unlisted.
-    // Home-scoped sessions (homeId set) are never shown in Universal discovery —
-    // they live only inside their organisation's private Home.
     .where(
-      and(eq(liveStream.status, "live"), eq(liveStream.visibility, "public"), isNull(liveStream.homeId)),
+      and(
+        eq(liveStream.status, "live"),
+        eq(liveStream.visibility, "public"),
+        memberHomeIds.length > 0
+          ? or(isNull(liveStream.homeId), inArray(liveStream.homeId, memberHomeIds))
+          : isNull(liveStream.homeId),
+      ),
     )
     .orderBy(desc(liveStream.startedAt))
 

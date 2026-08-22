@@ -1,10 +1,9 @@
 import "server-only"
 
-import { and, count, desc, eq } from "drizzle-orm"
+import { and, count, desc, eq, isNull } from "drizzle-orm"
 import { headers } from "next/headers"
 import { notFound, redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
-import { getAdminActor } from "@/lib/admin-auth"
 import { db } from "@/lib/db"
 import { home, homeMembership, organization, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getInitials } from "@/lib/identity"
@@ -27,60 +26,6 @@ export const HOME_GO_LIVE_COOKIE = "freq_home_live"
 export async function getViewerId(): Promise<string | null> {
   const session = await auth.api.getSession({ headers: await headers() })
   return session?.user?.id ?? null
-}
-
-/**
- * Whether the current viewer is allowed to start a live session. True for
- * platform admins/staff (site-wide), OR for anyone who holds the `live.manage`
- * permission in ANY Home they actively belong to — i.e. an organisation
- * owner/administrator/content-manager. This is the single source of truth used
- * by the Live tab, the studio page, and the startBroadcast server action so all
- * three agree on who can go live.
- */
-export async function canViewerGoLive(): Promise<boolean> {
-  const [actor, viewerId] = await Promise.all([getAdminActor(), getViewerId()])
-  if (actor) return true
-  if (!viewerId) return false
-  const rows = await db
-    .select({ role: homeMembership.role })
-    .from(homeMembership)
-    .where(and(eq(homeMembership.userId, viewerId), eq(homeMembership.status, "active")))
-  return rows.some((r) => homeRoleHasPermission(r.role as HomeRole, "live.manage"))
-}
-
-/**
- * The Home this viewer publishes community events on behalf of — the first Home
- * (newest membership) where they hold `events.manage` (owner / administrator /
- * content-manager). Community events are stamped with this Home so their
- * attendance shows up in that Home's admin console. Returns null for members
- * with no event-management rights anywhere.
- */
-export async function getViewerEventHome(): Promise<{
-  homeId: string
-  organizationId: string
-  handle: string
-  orgName: string
-} | null> {
-  const viewerId = await getViewerId()
-  if (!viewerId) return null
-  const rows = await db
-    .select({ h: home, org: organization, role: homeMembership.role })
-    .from(homeMembership)
-    .innerJoin(home, eq(home.id, homeMembership.homeId))
-    .innerJoin(organization, eq(organization.id, home.organizationId))
-    .where(and(eq(homeMembership.userId, viewerId), eq(homeMembership.status, "active")))
-    .orderBy(desc(homeMembership.createdAt))
-  for (const r of rows) {
-    if (homeRoleHasPermission(r.role as HomeRole, "events.manage")) {
-      return { homeId: r.h.id, organizationId: r.org.id, handle: r.org.handle, orgName: r.org.name }
-    }
-  }
-  return null
-}
-
-/** Whether the viewer may publish a community event (i.e. manages a Home). */
-export async function canViewerManageEvents(): Promise<boolean> {
-  return (await getViewerEventHome()) !== null
 }
 
 async function memberCountFor(homeId: string): Promise<number> {
@@ -114,13 +59,22 @@ function toHomeView(h: HomeRow, org: OrgRow, memberCount: number): HomeView {
   }
 }
 
-/** Resolves a Home + its organisation by the organisation handle. */
+/**
+ * Resolves a Home + its organisation by the organisation handle.
+ *
+ * Soft-deleted Homes are treated as non-existent by every resolver in this file.
+ * Deletion is a 30-day retention window that keeps the data RECOVERABLE, not a
+ * grace period in which the Home stays usable — so filtering here (rather than
+ * at each of the dozens of call sites) is what makes a deleted Home disappear
+ * from the whole app at once, and prevents a stale link or cookie from resolving
+ * back into it.
+ */
 export async function getHomeByHandle(handle: string): Promise<HomeView | null> {
   const rows = await db
     .select({ h: home, org: organization })
     .from(home)
     .innerJoin(organization, eq(organization.id, home.organizationId))
-    .where(eq(organization.handle, handle))
+    .where(and(eq(organization.handle, handle), isNull(home.deletedAt)))
     .limit(1)
   if (rows.length === 0) return null
   const memberCount = await memberCountFor(rows[0].h.id)
@@ -133,7 +87,7 @@ export async function getHomeByOrganizationId(organizationId: string): Promise<H
     .select({ h: home, org: organization })
     .from(home)
     .innerJoin(organization, eq(organization.id, home.organizationId))
-    .where(eq(home.organizationId, organizationId))
+    .where(and(eq(home.organizationId, organizationId), isNull(home.deletedAt)))
     .limit(1)
   if (rows.length === 0) return null
   const memberCount = await memberCountFor(rows[0].h.id)
@@ -160,7 +114,7 @@ export async function getHomeRosterByOrg(organizationId: string): Promise<HomeRo
   const [h] = await db
     .select({ id: home.id })
     .from(home)
-    .where(eq(home.organizationId, organizationId))
+    .where(and(eq(home.organizationId, organizationId), isNull(home.deletedAt)))
     .limit(1)
   if (!h) return []
   const rows = await db
@@ -191,7 +145,11 @@ export async function getMyHomes(): Promise<HomeView[]> {
     .from(homeMembership)
     .innerJoin(home, eq(home.id, homeMembership.homeId))
     .innerJoin(organization, eq(organization.id, home.organizationId))
-    .where(and(eq(homeMembership.userId, viewerId), eq(homeMembership.status, "active")))
+    // A deleted Home vanishes from My Homes immediately, even though its
+    // membership rows survive until the purge (they're what a restore would
+    // need). Filtering on the Home rather than the membership is what lets
+    // deletion be reversible without leaving the Home visible meanwhile.
+    .where(and(eq(homeMembership.userId, viewerId), eq(homeMembership.status, "active"), isNull(home.deletedAt)))
     .orderBy(desc(homeMembership.createdAt))
   return Promise.all(rows.map(async (r) => toHomeView(r.h, r.org, await memberCountFor(r.h.id))))
 }
@@ -206,11 +164,17 @@ export async function isActiveHomeMember(homeId: string, userId: string): Promis
   const rows = await db
     .select({ id: homeMembership.id })
     .from(homeMembership)
+    // Joined to `home` so a soft-deleted Home grants nothing. This gate is
+    // consulted by homeId directly (it never goes through getHomeByHandle), so
+    // without this join a deleted Home's private live would keep admitting its
+    // former members for the whole 30-day retention window.
+    .innerJoin(home, eq(home.id, homeMembership.homeId))
     .where(
       and(
         eq(homeMembership.homeId, homeId),
         eq(homeMembership.userId, userId),
         eq(homeMembership.status, "active"),
+        isNull(home.deletedAt),
       ),
     )
     .limit(1)

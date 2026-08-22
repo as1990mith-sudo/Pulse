@@ -18,7 +18,7 @@ import {
   Users,
 } from "lucide-react"
 import { deleteHome, getMyHomeMemberships, setActiveHome, leaveHome, type MyHomeLink } from "@/app/actions/home"
-import { isHomeAdminRole } from "@/lib/home/roles"
+import { homeRoleLabel, isHomeAdminRole } from "@/lib/home/roles"
 import { Sheet, SheetClose, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
 
@@ -26,10 +26,16 @@ import { cn } from "@/lib/utils"
  * "My Homes" — a compact, flagship-feeling switcher. A native sub-header (back,
  * title, circular +) sits above a single "YOUR HOMES" list of the member's
  * Homes. Every row carries a 3-dot menu that opens the Home's public profile,
- * plus the destructive action for the viewer's role — members can leave, and an
- * owner can permanently delete the Home (admins can do neither). The + reveals a premium bottom sheet with the
- * add-actions — "Join a Home" is hidden for owners, since a Home account can't
- * become a member of another Home. Admin management lives on the org profile.
+ * plus the destructive action for the viewer's role IN THAT HOME — members can
+ * leave, and an owner can permanently delete the Home (admins can do neither).
+ * Each row also shows that Home's own role beneath its name, because a role is
+ * per-Home: the same person can be Admin in one and Member in another.
+ *
+ * The + reveals a bottom sheet offering both "Join a Home" and "Set up a new
+ * Home" to EVERYONE — a person is not their organisation, so owning one Home
+ * never prevents joining another as an ordinary member, nor creating a second.
+ * Admin management lives on the org profile, reached from the 3-dot menu — never
+ * from the account avatar.
  */
 export function MyHomesView() {
   const router = useRouter()
@@ -69,9 +75,6 @@ export function MyHomesView() {
     router.push(`/org/${handle}`)
   }
 
-  // Owners of a Home cannot join another Home (a Home can't be a member of a
-  // Home), so the "Join a Home" action is hidden from their + menu.
-  const isOwner = homes.some((h) => h.role === "owner")
 
   // Switch the active Home context. The interface stays identical — only the
   // organisation's data changes — so we land back at the root of the same UI.
@@ -164,7 +167,12 @@ export function MyHomesView() {
       ) : (
         <div className="flex flex-col gap-2">
           {homes.map((h) => {
-            const roleLabel = isHomeAdminRole(h.role) ? "Admin" : "Member"
+            // Show the member's ACTUAL role in this Home (Owner, Administrator,
+            // Content Manager, Member, …) rather than flattening every admin
+            // role to "Admin". A user's role is per-Home, so this row is also
+            // the only place they can see that they're an owner in one Home and
+            // an ordinary member in another.
+            const roleLabel = homeRoleLabel(h.role)
             const busy = switching === h.handle
             return (
               <div
@@ -247,7 +255,8 @@ export function MyHomesView() {
         </div>
       )}
 
-      {/* Add-a-Home sheet — Join (members only) / Set up a new Home. */}
+      {/* Add-a-Home sheet — Join an existing Home / Set up a new one. Both are
+          offered to everyone, owners included. */}
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
         <SheetContent
           side="bottom"
@@ -257,22 +266,28 @@ export function MyHomesView() {
           <SheetTitle className="sr-only">Add a Home</SheetTitle>
           <div className="mx-auto mt-3 h-1 w-9 rounded-full bg-border" aria-hidden />
           <div className="flex flex-col gap-1 p-3 pt-4">
-            {!isOwner && (
-              <SheetClose
-                render={
-                  <Link
-                    href="/home/join"
-                    className="flex items-center gap-4 rounded-2xl px-3 py-3.5 transition-colors hover:bg-secondary/60"
-                  >
-                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-foreground">
-                      <KeyRound className="size-5" />
-                    </span>
-                    <span className="flex-1 text-[15px] font-medium text-foreground">Join a Home</span>
-                    <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" />
-                  </Link>
-                }
-              />
-            )}
+            {/*
+              "Join a Home" is available to EVERYONE, including owners. A person
+              is not their organisation: the owner of Kingdom Academy is still an
+              individual who may join Grace Community as an ordinary member, and
+              their role is scoped to each Home separately. This was previously
+              hidden from owners, which conflated the account with the
+              organisation and locked owners out of participating anywhere else.
+            */}
+            <SheetClose
+              render={
+                <Link
+                  href="/home/join"
+                  className="flex items-center gap-4 rounded-2xl px-3 py-3.5 transition-colors hover:bg-secondary/60"
+                >
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-foreground">
+                    <KeyRound className="size-5" />
+                  </span>
+                  <span className="flex-1 text-[15px] font-medium text-foreground">Join a Home</span>
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" />
+                </Link>
+              }
+            />
             <SheetClose
               render={
                 <Link
@@ -368,9 +383,12 @@ export function MyHomesView() {
               {view === "delete" ? (
                 <>
                   <p className="px-1 text-sm text-muted-foreground">
-                    Permanently delete <span className="font-semibold text-foreground">{actionsFor?.name}</span>? Its
-                    profile, members, live replays, episodes, events and posts will all be erased. This cannot be
-                    undone.
+                    Delete <span className="font-semibold text-foreground">{actionsFor?.name}</span>? It disappears for
+                    everyone immediately and members lose access right away. Its content is kept for 30 days, then
+                    permanently erased.
+                  </p>
+                  <p className="mt-2 px-1 text-sm text-muted-foreground">
+                    Members keep their accounts, and anything they posted under their own name stays on their profile.
                   </p>
                   {error && <p className="mt-3 px-1 text-sm font-medium text-destructive">{error}</p>}
                   <div className="mt-4 flex flex-col gap-2">
@@ -381,7 +399,7 @@ export function MyHomesView() {
                       className="flex h-12 items-center justify-center gap-2 rounded-full bg-destructive text-sm font-semibold text-destructive-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
                     >
                       {deleting ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-                      Delete Home Permanently
+                      Delete Home
                     </button>
                     <button
                       type="button"

@@ -16,12 +16,8 @@ import {
 } from "@/lib/db/schema"
 import { getCurrentUser } from "@/lib/session"
 import { getAdminUser, requireAdmin } from "@/lib/admin"
-import {
-  canViewerManageEvents,
-  getViewerEventHome,
-  getHomeByHandle,
-  getViewerMembership,
-} from "@/lib/home/access"
+import { getHomeByHandle, getViewerMembership } from "@/lib/home/access"
+import { canViewerManageEvents, getViewerEventHome } from "@/lib/home/active-home"
 import { homeRoleHasPermission, type HomeRole } from "@/lib/home/roles"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { AD_MAX_HOURS, AD_BLOCK_HOURS, FREQUENCY_TEAM_ID, type AdType, type AdAction } from "@/lib/ads"

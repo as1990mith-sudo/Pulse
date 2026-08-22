@@ -17,7 +17,7 @@ import {
   user as userTable,
 } from "@/lib/db/schema"
 import { getActiveHomeContext } from "@/lib/home/active-home"
-import { isHomeAdminRole } from "@/lib/home/roles"
+import { resolvePublishingIdentity } from "@/lib/home/publishing"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { formatPostTimestamp } from "@/lib/format-timestamp"
 import { getLikedSet, setLike } from "@/lib/likes"
@@ -332,14 +332,18 @@ export async function getFeed(): Promise<FeedPostView[]> {
   const session = await auth.api.getSession({ headers: await headers() })
   const currentUserId = session?.user?.id ?? null
 
-  // The feed is a Home surface: it shows ONLY posts that were published INTO the
-  // viewer's active Home (feed_post.homeId === the active Home id). Scoping by
-  // the post's own Home — not by author membership — is what keeps content from
+  // The feed follows the active context. In a Home it shows ONLY posts published
+  // INTO that Home (feed_post.homeId === the active Home id). Scoping by the
+  // post's own Home — not by author membership — is what keeps content from
   // crossing organisations: an admin who runs several Homes posts into exactly
-  // one at a time, and that post appears in that Home alone. With no active Home
-  // there is nothing to show; the viewer is sent to onboarding elsewhere.
-  const { home } = await getActiveHomeContext()
-  if (!home) return []
+  // one at a time, and that post appears in that Home alone.
+  //
+  // In Personal mode the viewer has stepped outside every Home, so the feed
+  // shows personal posts (homeId IS NULL) instead. Without either, there is
+  // nothing to show and the viewer is sent to onboarding elsewhere.
+  const { home, mode } = await getActiveHomeContext()
+  if (!home && mode !== "personal") return []
+  const contextScope = home ? eq(feedPost.homeId, home.id) : isNull(feedPost.homeId)
 
   // Only main-feed posts belonging to THIS Home. Room posts (iTestify
   // testimonies, Question of the Day responses) carry a non-null `channel` and
@@ -354,7 +358,7 @@ export async function getFeed(): Promise<FeedPostView[]> {
       and(
         isNull(feedPost.channel),
         eq(feedPost.deleted, false),
-        eq(feedPost.homeId, home.id),
+        contextScope,
       ),
     )
     .orderBy(desc(feedPost.createdAt))
@@ -859,51 +863,44 @@ export async function createPost(input: {
 
   const channel = input.channel?.trim() || null
 
-  // The main feed accepts top-level posts from BOTH individual and organisation
-  // accounts. When an organisation account posts, we attribute the post to the
-  // organisation it owns (so its verified badge renders); individuals post as
-  // themselves. This org lookup only matters for main-feed posts (channel ===
-  // null) — community-room posts (itestify / qotd) are unaffected.
+  // Publishing identity comes from the ACTIVE context and the author's role in
+  // THAT Home — never from any global "does this user own an organisation?"
+  // lookup. See lib/home/publishing.ts for the full rule and the bug it fixes.
+  //
+  // Room posts (channel !== null) stay Home-agnostic: they live in their own
+  // community rooms, so they're always personal and carry no Home.
   let organizationId: string | null = null
   let isOrganization = false
-  // The author identity denormalized onto the post. For an organisation account
-  // this is the ORGANISATION's name/handle (not the admin's), so the post is
-  // attributed to the organisation even in the fallback path where the live
-  // owner lookup is unavailable.
   let authorName = user.name
   let authorHandle = getHandle(user.name)
-  // The Home this post is published into. Every main-feed post is stamped with
-  // the viewer's active Home so it appears only inside that Home. Room posts
-  // (channel !== null) stay Home-agnostic — they live in their own community
-  // rooms — so homeId is left null for those.
   let homeId: string | null = null
-  if (channel === null) {
-    const { home, membership } = await getActiveHomeContext()
-    // A main-feed post requires an active Home to belong to. Without one there
-    // is nowhere for it to appear, so refuse rather than create an orphan.
-    if (!home) throw new Error("Join or select a Home before posting to the Feed.")
-    homeId = home.id
+  // Immutable publication-context stamp, persisted so a later role change can
+  // never rewrite this post's identity.
+  let publishedAsType = "personal"
+  let publishedAsRole: string | null = null
 
-    const [owned] = await db
-      .select({ id: organization.id, name: organization.name, handle: organization.handle })
-      .from(organization)
-      .where(eq(organization.ownerId, user.id))
-      .limit(1)
-    if (owned) {
+  if (channel === null) {
+    const { home, mode } = await getActiveHomeContext()
+    // A main-feed post needs somewhere to appear: either a Home, or the author's
+    // own personal feed when they've deliberately switched to Personal mode.
+    if (!home && mode !== "personal") {
+      throw new Error("Join or select a Home before posting to the Feed.")
+    }
+
+    const identity = await resolvePublishingIdentity({
+      name: user.name,
+      handle: getHandle(user.name),
+      image: user.image ?? null,
+    })
+
+    homeId = identity.homeId
+    authorName = identity.name
+    authorHandle = identity.handle
+    publishedAsType = identity.type
+    publishedAsRole = identity.role
+    if (identity.type === "home") {
       isOrganization = true
-      organizationId = owned.id
-      authorName = owned.name
-      authorHandle = owned.handle
-    } else if (isHomeAdminRole(membership?.role)) {
-      // Not a global organisation account, but a post authored inside a Home by
-      // one of its admins (owner/administrator/content_manager/…) speaks FOR the
-      // organisation — so it's attributed to the active Home's organisation and
-      // the admin's personal name never surfaces. Regular members keep their own
-      // identity.
-      isOrganization = true
-      organizationId = home.organizationId
-      authorName = home.orgName
-      authorHandle = home.handle
+      organizationId = identity.organizationId
     }
   }
 
@@ -941,6 +938,8 @@ export async function createPost(input: {
       media: media.length > 0 ? media : null,
       channel,
       homeId,
+      publishedAsType,
+      publishedAsRole,
       mentions: mentions.length > 0 ? mentions : null,
     })
     .returning({ id: feedPost.id })
