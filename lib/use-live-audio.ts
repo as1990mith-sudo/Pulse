@@ -103,6 +103,43 @@ export const SOUND_EFFECTS: { name: SoundEffectName; label: string; emoji: strin
   { name: "riser", label: "Riser", emoji: "🚀" },
 ]
 
+/**
+ * Resumes an AudioContext that isn't running, and keeps it that way.
+ *
+ * Two things this handles that a bare `if (ctx.state === "suspended")` misses:
+ *
+ *  - Safari/iOS also uses the non-standard `"interrupted"` state when the OS
+ *    takes over the audio session (incoming call, another app, a route change
+ *    like plugging in headphones, screen lock). A context in that state is not
+ *    `"suspended"`, so a suspended-only check silently skips it and the host's
+ *    local monitoring — their own background music — stays dead for the rest of
+ *    the session even though listeners keep receiving the published track.
+ *
+ *  - An interruption can land at any time, not just when we happen to be
+ *    starting a track. The `statechange` listener re-resumes whenever the
+ *    context drops out of `"running"`, so recovery is automatic.
+ *
+ * Attaching the listener is idempotent via a WeakSet, so repeat calls on the
+ * same context don't stack up handlers.
+ */
+const ctxWatched = new WeakSet<AudioContext>()
+async function ensureCtxRunning(ctx: AudioContext) {
+  if (!ctxWatched.has(ctx)) {
+    ctxWatched.add(ctx)
+    ctx.addEventListener("statechange", () => {
+      if (ctx.state !== "running" && ctx.state !== "closed") void ctx.resume().catch(() => {})
+    })
+  }
+  if (ctx.state !== "running") {
+    try {
+      await ctx.resume()
+    } catch {
+      // Resume needs a user gesture in some states; the statechange listener and
+      // the next explicit play both retry, so a failure here isn't terminal.
+    }
+  }
+}
+
 /** Builds a short white-noise buffer used for applause / drumroll textures. */
 function noiseBuffer(ctx: AudioContext, seconds: number): AudioBuffer {
   const len = Math.floor(ctx.sampleRate * seconds)
@@ -210,6 +247,9 @@ export function useLiveAudio() {
   // all three hear the identical processed signal.
   const musicChainOutRef = useRef<AudioNode | null>(null)
   const musicElRef = useRef<HTMLAudioElement | null>(null)
+  // Whether the user WANTS music playing. Distinguishes a deliberate pause from
+  // an OS interruption, so recovery only restarts a track that should be running.
+  const musicPlayingRef = useRef(false)
   const musicTrackRef = useRef<LocalAudioTrack | null>(null)
   // Whether the current track should loop, and a callback fired when a
   // (non-looping) track finishes — used by the console to auto-advance the
@@ -325,6 +365,7 @@ export function useLiveAudio() {
       musicTrackRef.current = null
     }
     if (musicElRef.current) musicElRef.current.pause()
+    musicPlayingRef.current = false
     musicStreamRef.current = null
     if (fxTrackRef.current) {
       try {
@@ -526,17 +567,25 @@ export function useLiveAudio() {
           update({ micEnabled: true })
         }
 
-        // Listeners: browsers often block autoplay until a user gesture. Try to
-        // start playback; if it's blocked, surface a prompt so the listener can
-        // tap to enable sound (this was why nothing was audible while live).
-        if (!opts.publish) {
-          try {
-            await room.startAudio()
-          } catch {
-            // ignore — handled via audioBlocked below
-          }
-          update({ audioBlocked: !room.canPlaybackAudio })
+        // Browsers often block autoplay until a user gesture. Try to start
+        // playback; if it's blocked, surface a prompt so the user can tap to
+        // enable sound (this was why nothing was audible while live).
+        //
+        // This runs for EVERY role, publishers included. It used to be gated
+        // behind `!opts.publish`, on the assumption that a host who tapped
+        // "Go live" had already satisfied the autoplay policy. But the gesture
+        // that unblocks an AudioContext does not unblock the <audio> elements
+        // LiveKit mints for remote speakers — those are separate elements
+        // created after the gesture. So a host could be heard by everyone while
+        // hearing none of their guests, and because `audioBlocked` was also
+        // left unset for publishers, they never even got the "tap to enable
+        // sound" prompt that would have fixed it.
+        try {
+          await room.startAudio()
+        } catch {
+          // ignore — handled via audioBlocked below
         }
+        update({ audioBlocked: !room.canPlaybackAudio })
 
         refreshCounts(room)
         refreshSpeakers(room)
@@ -589,6 +638,15 @@ export function useLiveAudio() {
       el.muted = listenerMutedRef.current
       void el.play().catch(() => {})
     })
+    // This tap is a user gesture, which is exactly what a suspended or
+    // OS-interrupted AudioContext needs to restart. Recover local monitoring
+    // (own background music, soundboard) here too, so one tap fixes everything
+    // the user can't hear rather than only the remote voices.
+    if (musicCtxRef.current) await ensureCtxRunning(musicCtxRef.current)
+    if (fxCtxRef.current) await ensureCtxRunning(fxCtxRef.current)
+    // The element feeding the music graph can also be paused by an interruption.
+    const musicEl = musicElRef.current
+    if (musicEl && musicPlayingRef.current && musicEl.paused) void musicEl.play().catch(() => {})
     update({ audioBlocked: !room.canPlaybackAudio })
   }, [update])
 
@@ -603,7 +661,7 @@ export function useLiveAudio() {
 
     const ctx = musicCtxRef.current ?? new AudioContext()
     musicCtxRef.current = ctx
-    if (ctx.state === "suspended") await ctx.resume()
+    await ensureCtxRunning(ctx)
 
     // Build the audio element + graph exactly once, then reuse it for every
     // track. Switching tracks is just a src swap through the persistent graph,
@@ -643,6 +701,7 @@ export function useLiveAudio() {
     el.src = url
     el.currentTime = 0
     update({ musicPosition: 0 })
+    musicPlayingRef.current = true
     await el.play().catch(() => {})
 
     // Publish the music to LiveKit once. Later track swaps keep flowing through
@@ -746,6 +805,7 @@ export function useLiveAudio() {
   const setMusicPlaying = useCallback((playing: boolean) => {
     const el = musicElRef.current
     if (!el) return
+    musicPlayingRef.current = playing
     if (playing) void el.play().catch(() => {})
     else el.pause()
   }, [])
@@ -783,6 +843,7 @@ export function useLiveAudio() {
     if (musicElRef.current) {
       musicElRef.current.pause()
     }
+    musicPlayingRef.current = false
   }, [])
 
   /**
@@ -796,7 +857,7 @@ export function useLiveAudio() {
 
     const ctx = fxCtxRef.current ?? new AudioContext()
     fxCtxRef.current = ctx
-    if (ctx.state === "suspended") await ctx.resume()
+    await ensureCtxRunning(ctx)
 
     // Master FX gain → host speakers (monitor) + a published track for listeners.
     let gain = fxGainRef.current
@@ -936,6 +997,33 @@ export function useLiveAudio() {
     roomRef.current = null
     update({ connected: false, connecting: false, reconnecting: false, micEnabled: false, listeners: 0, speaking: false })
   }, [cleanupRoomMedia, update])
+
+  // Recover audio when the tab comes back to the foreground.
+  //
+  // Backgrounding a tab (switching apps, locking the screen, taking a call) is
+  // the most common way the audio session gets interrupted mid-broadcast. On
+  // return, contexts can still be suspended/interrupted and the remote speaker
+  // elements paused — leaving someone live but deaf, with no obvious way back
+  // short of rejoining. Re-asserting playback here makes that self-healing.
+  useEffect(() => {
+    const recover = () => {
+      if (document.visibilityState !== "visible") return
+      const room = roomRef.current
+      if (!room) return
+      void room.startAudio().catch(() => {})
+      audioElsRef.current.forEach((el) => {
+        el.muted = listenerMutedRef.current
+        if (el.paused) void el.play().catch(() => {})
+      })
+      if (musicCtxRef.current) void ensureCtxRunning(musicCtxRef.current)
+      if (fxCtxRef.current) void ensureCtxRunning(fxCtxRef.current)
+      const musicEl = musicElRef.current
+      if (musicEl && musicPlayingRef.current && musicEl.paused) void musicEl.play().catch(() => {})
+      update({ audioBlocked: !room.canPlaybackAudio })
+    }
+    document.addEventListener("visibilitychange", recover)
+    return () => document.removeEventListener("visibilitychange", recover)
+  }, [update])
 
   // Clean up on unmount.
   useEffect(() => {

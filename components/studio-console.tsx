@@ -137,6 +137,7 @@ export function StudioConsole({
     stopMusic,
     startRecording,
     stopRecording,
+    startAudioPlayback,
   } = useLiveAudio()
   // "On air" is an intent that persists across a dropped/recovering connection,
   // so a transient network blip never flips the host back to the offline setup
