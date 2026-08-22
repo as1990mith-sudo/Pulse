@@ -152,13 +152,6 @@ async function buildCommunityPostViews(
  *   (the Home routes do this via requireHomeMembership).
  */
 export async function getCommunityPosts(homeId?: string | null): Promise<CommunityPostView[]> {
-  // TEMPORARY: Community Help is hidden on the front end for now. We return no
-  // posts so every surface that renders the feed (the standalone page and the
-  // embedded Chatrooms tab) shows its empty state. Nothing is deleted — flip
-  // this flag back to false to restore the feed.
-  const HIDE_COMMUNITY_HELP = true as boolean
-  if (HIDE_COMMUNITY_HELP) return []
-
   const session = await auth.api.getSession({ headers: await headers() })
   const viewerId = session?.user?.id ?? null
 
