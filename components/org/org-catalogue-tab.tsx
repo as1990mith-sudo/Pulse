@@ -164,7 +164,8 @@ export function OrgEpisodeCatalog({
 }) {
   const [query, setQuery] = useState("")
   // Video / Audio subtab within the Live tab (mirrors the profile Catalogue).
-  const [liveKind, setLiveKind] = useState<LiveKind>("video")
+  // `null` = not chosen yet, so we can default to whichever kind has recordings.
+  const [pickedLiveKind, setPickedLiveKind] = useState<LiveKind | null>(null)
 
   // The organisation stands in as the "host" of its catalogue audio, so the
   // shared player shows the org's name + logo on the now-playing screen.
@@ -196,6 +197,12 @@ export function OrgEpisodeCatalog({
     }
     return { video, audio }
   }, [items])
+
+  // Until the viewer picks a subtab, show the kind that actually has recordings
+  // (audio-only replays would otherwise look missing behind an empty "Video").
+  const liveKind: LiveKind =
+    pickedLiveKind ?? (liveCounts.video === 0 && liveCounts.audio > 0 ? "audio" : "video")
+  const setLiveKind = setPickedLiveKind
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
