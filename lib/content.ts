@@ -5,7 +5,8 @@ import type { Devotional, Show, Host, PodcastHost } from "@/lib/data"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { getEpisodeViewCounts } from "@/app/actions/engagement"
 
-function relativeTime(date: Date): string {
+/** "just now" / "5m ago" / "3d ago" — the meta line's published stamp. */
+export function relativeTime(date: Date): string {
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
   const days = Math.floor(seconds / 86400)
   if (days >= 7) return `${Math.floor(days / 7)}w ago`

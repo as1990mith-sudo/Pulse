@@ -6,6 +6,8 @@ import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { catalogueItem, episode, event, home, homeMembership, organization } from "@/lib/db/schema"
+import { relativeTime } from "@/lib/content"
+import { getEpisodeViewCounts } from "@/app/actions/engagement"
 
 async function requireOrgOwner(orgId: string) {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -126,6 +128,18 @@ export type CatalogueItemView = {
   // Explicit media kind for a Live replay so the Live tab's Video/Audio split is
   // exact rather than guessed from the url. Undefined for manual items.
   mediaKind?: "video" | "audio"
+  // --- Live-replay only: the extra metadata the video listing renders ---------
+  // The Live › Video tab presents replays as full VideoCard rows (16:9 artwork,
+  // title, @handle, "N views · when"), so those cards need the replay's real
+  // engagement + authorship data rather than the org's generic fields.
+  /** Real play count for the replay, shown as "N views". */
+  views?: number
+  /** Relative publish stamp, e.g. "just now" / "3d ago". */
+  publishedAt?: string
+  /** The streaming host's @handle (the card credits the person, not the org). */
+  hostHandle?: string
+  /** Drives the card's "Private" badge for owners. */
+  isPrivate?: boolean
 }
 
 function toCatalogueView(row: typeof catalogueItem.$inferSelect): CatalogueItemView {
@@ -143,7 +157,7 @@ function toCatalogueView(row: typeof catalogueItem.$inferSelect): CatalogueItemV
 // Maps a finished live-replay episode into a Catalogue "Live" item. Returns null
 // for a replay that has no finalized media url yet (still processing) — it can't
 // be played, so it shouldn't appear.
-function episodeToCatalogueView(row: typeof episode.$inferSelect): CatalogueItemView | null {
+function episodeToCatalogueView(row: typeof episode.$inferSelect, views = 0): CatalogueItemView | null {
   const url = row.videoUrl ?? row.audioUrl ?? ""
   if (!url) return null
   return {
@@ -156,6 +170,10 @@ function episodeToCatalogueView(row: typeof episode.$inferSelect): CatalogueItem
     duration: row.duration,
     slug: row.slug,
     mediaKind: row.mediaKind === "video" ? "video" : "audio",
+    views,
+    publishedAt: relativeTime(row.createdAt),
+    hostHandle: row.hostHandle || "@" + row.hostName.toLowerCase().replace(/[^a-z0-9]+/g, ""),
+    isPrivate: row.isPrivate,
   }
 }
 
@@ -217,8 +235,10 @@ export async function getOrganizationCatalogue(orgId: string): Promise<Catalogue
     )
     .orderBy(desc(episode.createdAt))
 
+  // Real play counts so the video cards show "N views" rather than a guess.
+  const viewCounts = await getEpisodeViewCounts(replays.map((r) => r.id))
   const live = replays
-    .map(episodeToCatalogueView)
+    .map((r) => episodeToCatalogueView(r, viewCounts.get(r.id) ?? 0))
     .filter((v): v is CatalogueItemView => v !== null)
 
   // Live replays first (most relevant recent content), then manual resources.

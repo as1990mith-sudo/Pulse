@@ -45,6 +45,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { Host, Show } from "@/lib/data"
 import { isPlayable, useEpisodePlayer } from "@/components/episode-player-provider"
+import { VideoCard } from "@/components/profile/video-card"
 
 // A resource is playable in the in-app audio player when its URL is a direct
 // media file (our own blob/R2/S3 storage or a known audio/video extension) —
@@ -96,6 +97,43 @@ function catalogueItemToShow(item: CatalogueItemView, host: Host): Show | null {
     ...(isLive ? { episodeId: item.id } : {}),
   }
   return isPlayable(show) ? show : null
+}
+
+/**
+ * Builds the `Show` a VideoCard needs from a Live *video* replay, so the org
+ * Catalogue's Live › Video tab renders the same cinematic listing as the
+ * profile Catalogue — large 16:9 artwork with a duration badge, then title,
+ * @handle and "N views · when" — instead of the compact audio row.
+ *
+ * Returns null for anything VideoCard can't open: manual/external video links
+ * (it always routes to /live/[slug]) and non-video rows. Those keep the
+ * compact row, so nothing ever disappears from the tab.
+ */
+function liveVideoToShow(item: CatalogueItemView, host: Host): Show | null {
+  if (!item.slug || item.mediaKind !== "video") return null
+  return {
+    // VideoCard links live replays to /live/[id], so the id must be the slug.
+    id: item.slug,
+    title: item.title,
+    tagline: item.description ?? "",
+    // Leave the placeholder when there's no artwork so VideoCard falls back to
+    // the replay's own first video frame rather than showing an empty tile.
+    cover: item.cover ?? "/placeholder.svg",
+    category: "Episode",
+    // Credit the person who streamed (matching the profile listing); fall back
+    // to the organisation's handle so the line is never blank.
+    host: item.hostHandle ? { ...host, handle: item.hostHandle } : host,
+    status: "ended",
+    listeners: item.views ?? 0,
+    duration: item.duration ?? undefined,
+    publishedAt: item.publishedAt,
+    description: item.description ?? "",
+    videoUrl: item.url,
+    mediaType: "video",
+    source: "live",
+    episodeId: item.id,
+    isPrivate: item.isPrivate,
+  }
 }
 
 // The stored `audio` kind is surfaced as "Uploads" (manually added resources)
@@ -227,6 +265,24 @@ export function OrgEpisodeCatalog({
 
   const searchNoun = tab === "video" ? `live ${liveKind}` : KIND_META[tab].label.toLowerCase()
 
+  // Live › Video gets the dedicated video listing. Replays render as VideoCards;
+  // any manual/external video link that VideoCard can't route keeps the compact
+  // row below the grid so it stays reachable.
+  const showsVideoGrid = tab === "video" && liveKind === "video"
+  const { videoCards, videoRows } = useMemo(() => {
+    if (!showsVideoGrid) return { videoCards: [], videoRows: [] as CatalogueItemView[] }
+    const cards: { item: CatalogueItemView; show: Show }[] = []
+    const rows: CatalogueItemView[] = []
+    for (const it of filtered) {
+      const show = liveVideoToShow(it, host)
+      if (show) cards.push({ item: it, show })
+      else rows.push(it)
+    }
+    return { videoCards: cards, videoRows: rows }
+  }, [showsVideoGrid, filtered, host])
+  // Up-next queue for the video player: every card in the current view.
+  const videoQueue = useMemo(() => videoCards.map((c) => c.show), [videoCards])
+
   return (
     <div className="space-y-4">
       {/* Audio / Live / Documents section nav — editorial underline style
@@ -315,9 +371,42 @@ export function OrgEpisodeCatalog({
         <p className="px-1 py-8 text-center text-sm text-muted-foreground">
           {query ? `No ${searchNoun} resources match “${query}”.` : `No ${searchNoun} resources yet.`}
         </p>
+      ) : showsVideoGrid ? (
+        // Live › Video: the cinematic VideoCard listing (identical to the
+        // profile Catalogue's Live › Video tab) — 16:9 artwork with a duration
+        // badge, then title, @handle and views · date.
+        <div className="space-y-4">
+          {videoCards.length > 0 && (
+            <div className="-mx-4 grid grid-cols-1 gap-y-3 sm:mx-0 sm:grid-cols-2 sm:gap-x-2 lg:grid-cols-3">
+              {videoCards.map(({ item, show }, i) => (
+                <div
+                  key={`live-${item.id}`}
+                  className="animate-in fade-in slide-in-from-bottom-1 duration-500"
+                  style={{ animationDelay: `${Math.min(i, 8) * 45}ms`, animationFillMode: "both" }}
+                >
+                  <VideoCard show={show} owned={isOwner} queue={videoQueue} flush />
+                </div>
+              ))}
+            </div>
+          )}
+          {videoRows.length > 0 && (
+            <div className="-mx-4 divide-y divide-border/60 border-y border-border/60 sm:-mx-6">
+              {videoRows.map((it) => (
+                <OrgCatalogueRow
+                  key={`cat-${it.id}`}
+                  item={it}
+                  orgId={orgId}
+                  isOwner={isOwner}
+                  show={shows.get(it.id) ?? null}
+                  queue={queue}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       ) : (
-        // Every view uses the same compact edge-to-edge divided list, exactly
-        // like the profile Catalogue's Live subtab (video & audio alike).
+        // Uploads, Documents and Live › Audio keep the compact edge-to-edge
+        // divided list, matching the profile Catalogue's audio presentation.
         <div className="-mx-4 divide-y divide-border/60 border-y border-border/60 sm:-mx-6">
           {filtered.map((it) => (
             // Ids come from two tables (catalogue_item + episode), so namespace
