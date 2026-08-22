@@ -437,7 +437,7 @@ function AboutTab({ org }: { org: OrganizationView }) {
         title="Nothing here yet"
         message={
           org.isOwner
-            ? "Add your mission, vision and beliefs so people understand your ministry."
+            ? "Add your mission and vision so people understand your ministry."
             : `${org.name} hasn't added details yet.`
         }
       />

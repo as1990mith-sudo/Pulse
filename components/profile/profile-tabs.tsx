@@ -222,9 +222,13 @@ export function ProfileTabs({
               }
             />
           ) : (
-            <div className="flex flex-col gap-4">
+            /* Immersive timeline: the "feed" variant drops the card border and
+               background, and the negative inset cancels the profile page's
+               horizontal padding so each post spans the full screen width,
+               divided only by hairlines. */
+            <div className="-mx-4 flex flex-col divide-y divide-border/60 border-t border-border/60 sm:-mx-6">
               {feedPosts.map((p) => (
-                <PostCard key={p.id} post={p} currentUser={currentUser} variant="card" />
+                <PostCard key={p.id} post={p} currentUser={currentUser} variant="feed" />
               ))}
             </div>
           )

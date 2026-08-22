@@ -50,8 +50,6 @@ type Snapshot = {
   otherLink: string
   mission: string
   vision: string
-  history: string
-  beliefs: string
 }
 
 function snapshotFromOrg(org: OrganizationView): Snapshot {
@@ -73,8 +71,6 @@ function snapshotFromOrg(org: OrganizationView): Snapshot {
     otherLink: org.socials?.other ?? "",
     mission: org.mission ?? "",
     vision: org.vision ?? "",
-    history: org.history ?? "",
-    beliefs: org.beliefs ?? "",
   }
 }
 
@@ -113,8 +109,6 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
   const [otherLink, setOtherLink] = useState(initial.current.otherLink)
   const [mission, setMission] = useState(initial.current.mission)
   const [vision, setVision] = useState(initial.current.vision)
-  const [history, setHistory] = useState(initial.current.history)
-  const [beliefs, setBeliefs] = useState(initial.current.beliefs)
 
   const current: Snapshot = {
     logo,
@@ -134,8 +128,6 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
     otherLink,
     mission,
     vision,
-    history,
-    beliefs,
   }
 
   const dirty = useMemo(
@@ -156,10 +148,10 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
       contactPhone.trim().length > 0,
       [instagram, youtube, facebook, twitter, otherLink].some((s) => s.trim().length > 0),
       mission.trim().length > 0,
-      beliefs.trim().length > 0,
+      vision.trim().length > 0,
     ]
     return Math.round((checks.filter(Boolean).length / checks.length) * 100)
-  }, [description, onlineOnly, city, country, website, contactEmail, contactPhone, instagram, youtube, facebook, twitter, otherLink, mission, beliefs])
+  }, [description, onlineOnly, city, country, website, contactEmail, contactPhone, instagram, youtube, facebook, twitter, otherLink, mission, vision])
 
   function reset() {
     const s = initial.current
@@ -180,8 +172,6 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
     setOtherLink(s.otherLink)
     setMission(s.mission)
     setVision(s.vision)
-    setHistory(s.history)
-    setBeliefs(s.beliefs)
     setError(null)
   }
 
@@ -215,8 +205,6 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
           },
           mission: mission.trim() || null,
           vision: vision.trim() || null,
-          history: history.trim() || null,
-          beliefs: beliefs.trim() || null,
         })
         initial.current = { ...current }
         setSaved(true)
@@ -443,19 +431,13 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
                     </div>
                   </Section>
 
-                  {/* Story & beliefs */}
-                  <Section title="Story & beliefs" hint="Share the heart behind your ministry.">
+                  {/* Mission & vision */}
+                  <Section title="Mission & vision" hint="Share the heart behind your ministry.">
                     <Field label="Mission">
                       <textarea value={mission} onChange={(e) => setMission(e.target.value)} rows={2} placeholder="Why your ministry exists" className={TEXTAREA_CLS} />
                     </Field>
                     <Field label="Vision">
                       <textarea value={vision} onChange={(e) => setVision(e.target.value)} rows={2} placeholder="Where you're headed" className={TEXTAREA_CLS} />
-                    </Field>
-                    <Field label="Our story">
-                      <textarea value={history} onChange={(e) => setHistory(e.target.value)} rows={3} placeholder="How you began" className={TEXTAREA_CLS} />
-                    </Field>
-                    <Field label="What we believe">
-                      <textarea value={beliefs} onChange={(e) => setBeliefs(e.target.value)} rows={3} placeholder="Your statement of faith" className={TEXTAREA_CLS} />
                     </Field>
                   </Section>
 
