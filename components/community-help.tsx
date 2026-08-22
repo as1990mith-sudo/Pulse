@@ -516,7 +516,7 @@ function CropFrame({
         onPointerCancel={onPointerUp}
         style={{ aspectRatio: `${ratio.w} / ${ratio.h}` }}
         className={cn(
-          "relative w-full max-w-xs touch-none select-none overflow-hidden rounded-2xl border border-border/60 bg-secondary",
+          "relative w-full max-w-xs touch-none select-none overflow-hidden rounded-lg border border-border/60 bg-secondary",
           canPan && !uploading ? "cursor-grab active:cursor-grabbing" : "",
         )}
       >
@@ -748,170 +748,198 @@ function Composer({
 
   const canPost = (!!body.trim() || !!imageUrl || !!videoUrl) && !uploading && !isPending
 
+  // Character budget feedback: silent until the last stretch, then it earns
+  // attention. Showing "0/1000" from the first keystroke is noise.
+  const remaining = 1000 - body.length
+  const showCount = body.length > 800
+
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
+    // z-60 (not z-50) because the global BottomNav is itself fixed at z-50: at
+    // equal stacking the nav covered the pinned footer and the Post button with
+    // it. A modal dialog should sit above the app chrome it blocks anyway.
+    <div className="fixed inset-0 z-60 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
       <button className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} aria-label="Close" />
-      <div className="relative z-10 flex max-h-[100dvh] w-full max-w-lg flex-col rounded-t-3xl border border-border/60 bg-card p-5 shadow-2xl duration-200 animate-in slide-in-from-bottom sm:max-h-[90dvh] sm:rounded-3xl">
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {anonymous ? (
-              <Avatar className="size-10 ring-2 ring-border/70">
-                <AvatarImage src={ANON_AVATAR || "/placeholder.svg"} alt="" />
-                <AvatarFallback className="bg-muted font-bold text-muted-foreground">?</AvatarFallback>
-              </Avatar>
-            ) : (
-              <span className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary ring-2 ring-border/70">
-                <User className="size-5" />
-              </span>
-            )}
-            <div>
-              <p className={cn("font-semibold", anonymous ? "text-emerald-600 dark:text-emerald-400" : "text-foreground")}>
-                {anonymous ? ANON_NAME : "Posting as yourself"}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {anonymous ? "Your identity stays private" : "Your name and photo will be shown"}
-              </p>
-            </div>
-          </div>
-          <button onClick={onClose} className="rounded-full p-2 text-muted-foreground hover:bg-secondary" aria-label="Close">
-            <X className="size-5" />
-          </button>
-        </div>
-
-        {/* Identity choice — anonymous (default) or identifiable. */}
-        <div
-          role="radiogroup"
-          aria-label="Post identity"
-          className="mb-4 grid grid-cols-2 gap-1 rounded-full border border-border/60 bg-secondary/40 p-1"
-        >
-          <button
-            type="button"
-            role="radio"
-            aria-checked={anonymous}
-            onClick={() => setAnonymous(true)}
-            className={cn(
-              "flex items-center justify-center gap-2 rounded-full px-3 py-2 text-sm font-semibold transition-colors",
-              anonymous ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <VenetianMask className="size-4" />
-            Anonymous
-          </button>
-          <button
-            type="button"
-            role="radio"
-            aria-checked={!anonymous}
-            onClick={() => setAnonymous(false)}
-            className={cn(
-              "flex items-center justify-center gap-2 rounded-full px-3 py-2 text-sm font-semibold transition-colors",
-              !anonymous ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <User className="size-4" />
-            Show my name
-          </button>
-        </div>
-        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
-          <Textarea
-            ref={textareaRef}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder="Ask anything… what's on your heart?"
-            rows={4}
-            maxLength={1000}
-            className="resize-none rounded-2xl text-base"
-          />
-
-          {/* Media preview (image or video) with upload progress + remove control */}
-          {preview && (
-            <>
-              {mediaKind === "video" ? (
-                <div className="mt-3 flex justify-center">
-                  <div className="relative inline-block overflow-hidden rounded-2xl border border-border/60">
-                    <video src={preview} controls playsInline className="max-h-72 max-w-full object-contain bg-black" />
-                    {uploading && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm">
-                        <Loader2 className="size-6 animate-spin text-foreground" />
-                        <span className="text-xs font-medium text-foreground tabular-nums">{progress}%</span>
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      onClick={resetMedia}
-                      className="absolute right-2 top-2 rounded-full bg-background/80 p-1.5 text-foreground shadow-sm backdrop-blur transition-colors hover:bg-background"
-                      aria-label="Remove attachment"
-                    >
-                      <X className="size-4" />
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <CropFrame
-                    src={preview}
-                    ratio={ratio}
-                    natural={imgNatural}
-                    offset={offset}
-                    onCommit={commitCrop}
-                    uploading={uploading}
-                    progress={progress}
-                    onRemove={resetMedia}
-                  />
-
-                  {/* Aspect ratio picker — images only (video can't be cropped here) */}
-                  <div className="mt-3 flex items-center justify-center gap-2">
-                    {ASPECT_RATIOS.map((r) => (
-                      <button
-                        key={r.label}
-                        type="button"
-                        onClick={() => applyRatio(r)}
-                        disabled={uploading}
-                        aria-pressed={ratio.label === r.label}
-                        className={cn(
-                          "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50",
-                          ratio.label === r.label
-                            ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                            : "border-border/60 text-muted-foreground hover:bg-secondary hover:text-foreground",
-                        )}
-                      >
-                        {r.label}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="mt-2 text-center text-xs text-muted-foreground">Drag the photo to reposition it</p>
-                </>
-              )}
-            </>
+      {/* Three-part shell: fixed header, scrolling body, pinned footer. The
+          submit action stays reachable no matter how much has been typed or how
+          tall the media preview is, instead of scrolling away with the form. */}
+      <div className="relative z-10 flex max-h-[100dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-border/60 bg-card shadow-2xl duration-200 animate-in slide-in-from-bottom sm:max-h-[90dvh] sm:rounded-3xl">
+        <header className="flex shrink-0 items-center gap-3 border-b border-border/50 px-4 py-3.5">
+          {anonymous ? (
+            <Avatar className="size-9 shrink-0 ring-1 ring-border">
+              <AvatarImage src={ANON_AVATAR || "/placeholder.svg"} alt="" />
+              <AvatarFallback className="bg-muted text-sm font-bold text-muted-foreground">?</AvatarFallback>
+            </Avatar>
+          ) : (
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary ring-1 ring-border">
+              <User className="size-4" />
+            </span>
           )}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold leading-tight text-foreground">
+              {anonymous ? ANON_NAME : "Posting as yourself"}
+            </p>
+            <p className="truncate text-xs leading-tight text-muted-foreground">
+              {anonymous ? "Your identity stays private" : "Your name and photo will be shown"}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="-mr-1 shrink-0 rounded-full p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            aria-label="Close"
+          >
+            <X className="size-4" />
+          </button>
+        </header>
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*,video/*"
-            className="sr-only"
-            onChange={handlePickMedia}
-          />
-
-          <div className="mt-3 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={!!preview}
-              className="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium text-emerald-600 transition-colors hover:bg-emerald-500/10 disabled:opacity-40 dark:text-emerald-400"
-            >
-              <ImagePlus className="size-4" />
-              Add photo or video
-            </button>
-            <span className="text-xs text-muted-foreground">{body.length}/1000</span>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+          {/* Identity choice — anonymous (default) or identifiable. */}
+          <div
+            role="radiogroup"
+            aria-label="Post identity"
+            className="grid grid-cols-2 gap-1 rounded-lg bg-secondary/60 p-1"
+          >
+            {(
+              [
+                { on: true, icon: VenetianMask, label: "Anonymous" },
+                { on: false, icon: User, label: "Show my name" },
+              ] as const
+            ).map((opt) => {
+              const active = anonymous === opt.on
+              return (
+                <button
+                  key={opt.label}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => setAnonymous(opt.on)}
+                  className={cn(
+                    "flex items-center justify-center gap-1.5 rounded-md px-2 py-2 text-[13px] font-semibold transition-colors",
+                    active
+                      ? "bg-card text-foreground shadow-sm ring-1 ring-border/60"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <opt.icon className="size-3.5" />
+                  {opt.label}
+                </button>
+              )
+            })}
           </div>
 
-          {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
+          <form id="community-composer" onSubmit={handleSubmit} className="mt-3">
+            {/* Fixed-height writing surface. The shared Textarea sets
+                `field-sizing-content`, which grew the box with every new line and
+                pushed the rest of the composer down the screen; `field-sizing-fixed`
+                pins it so long text scrolls inside a stable frame instead. */}
+            <Textarea
+              ref={textareaRef}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="Ask anything… what's on your heart?"
+              maxLength={1000}
+              className="field-sizing-fixed h-32 min-h-0 resize-none overflow-y-auto rounded-xl bg-secondary/30 px-3.5 py-3 text-base leading-relaxed"
+            />
 
-          <Button type="submit" className="mt-3 w-full gap-2 rounded-full" disabled={!canPost}>
+            {/* Media preview (image or video) with upload progress + remove control */}
+            {preview && (
+              <>
+                {mediaKind === "video" ? (
+                  <div className="mt-3 flex justify-center">
+                    <div className="relative inline-block overflow-hidden rounded-lg border border-border/60">
+                      <video src={preview} controls playsInline className="max-h-72 max-w-full bg-black object-contain" />
+                      {uploading && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm">
+                          <Loader2 className="size-6 animate-spin text-foreground" />
+                          <span className="text-xs font-medium text-foreground tabular-nums">{progress}%</span>
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={resetMedia}
+                        className="absolute right-2 top-2 rounded-full bg-background/80 p-1.5 text-foreground shadow-sm backdrop-blur transition-colors hover:bg-background"
+                        aria-label="Remove attachment"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <CropFrame
+                      src={preview}
+                      ratio={ratio}
+                      natural={imgNatural}
+                      offset={offset}
+                      onCommit={commitCrop}
+                      uploading={uploading}
+                      progress={progress}
+                      onRemove={resetMedia}
+                    />
+
+                    {/* Aspect ratio picker — images only (video can't be cropped here) */}
+                    <div className="mt-3 flex items-center justify-center gap-1.5">
+                      {ASPECT_RATIOS.map((r) => (
+                        <button
+                          key={r.label}
+                          type="button"
+                          onClick={() => applyRatio(r)}
+                          disabled={uploading}
+                          aria-pressed={ratio.label === r.label}
+                          className={cn(
+                            "rounded-md border px-2.5 py-1 text-xs font-semibold tabular-nums transition-colors disabled:opacity-50",
+                            ratio.label === r.label
+                              ? "border-emerald-500/70 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                              : "border-border/60 text-muted-foreground hover:bg-secondary hover:text-foreground",
+                          )}
+                        >
+                          {r.label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-center text-xs text-muted-foreground">Drag the photo to reposition it</p>
+                  </>
+                )}
+              </>
+            )}
+
+            <input ref={fileInputRef} type="file" accept="image/*,video/*" className="sr-only" onChange={handlePickMedia} />
+
+            {error && <p className="mt-2.5 text-xs font-medium text-destructive">{error}</p>}
+          </form>
+        </div>
+
+        {/* Extra bottom inset on the sheet layout keeps the Post button clear of
+            the iOS home indicator; the centered dialog (sm+) needs no inset. */}
+        <footer className="flex shrink-0 items-center gap-2 border-t border-border/50 px-4 pt-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] sm:pb-3">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={!!preview}
+            className="flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-semibold text-emerald-600 transition-colors hover:bg-emerald-500/10 disabled:opacity-40 dark:text-emerald-400"
+          >
+            <ImagePlus className="size-4" />
+            {preview ? "Attached" : "Photo or video"}
+          </button>
+          {showCount && (
+            <span
+              className={cn(
+                "ml-auto text-xs font-medium tabular-nums",
+                remaining <= 50 ? "text-destructive" : "text-muted-foreground",
+              )}
+            >
+              {remaining}
+            </span>
+          )}
+          <Button
+            type="submit"
+            form="community-composer"
+            className={cn("h-9 gap-1.5 rounded-lg px-4", !showCount && "ml-auto")}
+            disabled={!canPost}
+          >
             {isPending || uploading ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-            {uploading ? "Uploading…" : anonymous ? "Post anonymously" : "Post as yourself"}
+            {uploading ? "Uploading…" : "Post"}
           </Button>
-        </form>
+        </footer>
       </div>
     </div>,
     document.body,
