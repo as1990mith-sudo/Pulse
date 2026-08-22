@@ -14,9 +14,10 @@ import {
   Loader2,
   LogOut,
   MoreVertical,
+  Trash2,
   Users,
 } from "lucide-react"
-import { getMyHomeMemberships, setActiveHome, leaveHome, type MyHomeLink } from "@/app/actions/home"
+import { deleteHome, getMyHomeMemberships, setActiveHome, leaveHome, type MyHomeLink } from "@/app/actions/home"
 import { isHomeAdminRole } from "@/lib/home/roles"
 import { Sheet, SheetClose, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
@@ -24,8 +25,9 @@ import { cn } from "@/lib/utils"
 /**
  * "My Homes" — a compact, flagship-feeling switcher. A native sub-header (back,
  * title, circular +) sits above a single "YOUR HOMES" list of the member's
- * Homes. Each row carries a 3-dot menu so members can leave a Home; owners have
- * no leave option (they own it). The + reveals a premium bottom sheet with the
+ * Homes. Every row carries a 3-dot menu that opens the Home's public profile,
+ * plus the destructive action for the viewer's role — members can leave, and an
+ * owner can permanently delete the Home (admins can do neither). The + reveals a premium bottom sheet with the
  * add-actions — "Join a Home" is hidden for owners, since a Home account can't
  * become a member of another Home. Admin management lives on the org profile.
  */
@@ -39,7 +41,28 @@ export function MyHomesView() {
   const [menuOpen, setMenuOpen] = useState(false)
   // The Home whose 3-dot actions sheet is open (null = closed).
   const [actionsFor, setActionsFor] = useState<MyHomeLink | null>(null)
+  // Which pane the actions sheet is showing: the menu, or a confirmation for
+  // one of the irreversible actions.
+  const [view, setView] = useState<"menu" | "leave" | "delete">("menu")
   const [leaving, setLeaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  // While a destructive action is in flight the sheet must not be dismissable.
+  const busyAction = leaving || deleting
+
+  function closeActions() {
+    setActionsFor(null)
+    setView("menu")
+    setError(null)
+  }
+
+  // Open the Home/Organisation's public profile directly.
+  function openProfile() {
+    if (!actionsFor) return
+    const handle = actionsFor.handle
+    closeActions()
+    router.push(`/org/${handle}`)
+  }
 
   // Owners of a Home cannot join another Home (a Home can't be a member of a
   // Home), so the "Join a Home" action is hidden from their + menu.
@@ -63,13 +86,35 @@ export function MyHomesView() {
   async function handleLeave() {
     if (!actionsFor) return
     setLeaving(true)
+    setError(null)
     try {
       await leaveHome(actionsFor.handle)
       await mutate()
-      setActionsFor(null)
+      closeActions()
       router.refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't leave this Home.")
     } finally {
       setLeaving(false)
+    }
+  }
+
+  // Permanently delete a Home the viewer owns, along with all of its content.
+  // The server re-checks ownership, so this is safe even though only owners see
+  // the trigger.
+  async function handleDelete() {
+    if (!actionsFor) return
+    setDeleting(true)
+    setError(null)
+    try {
+      await deleteHome(actionsFor.handle)
+      await mutate()
+      closeActions()
+      router.refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't delete this Home.")
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -114,7 +159,6 @@ export function MyHomesView() {
           {homes.map((h) => {
             const roleLabel = isHomeAdminRole(h.role) ? "Admin" : "Member"
             const busy = switching === h.handle
-            const canLeave = h.role !== "owner"
             return (
               <div
                 key={h.handle}
@@ -175,20 +219,20 @@ export function MyHomesView() {
                   </span>
                 </button>
 
-                {/* 3-dot menu — members can leave; owners get no trigger. A fixed
-                    slot keeps every row aligned whether or not the dots show. */}
+                {/* 3-dot menu — on every row now. It opens the Home's public
+                    profile for anyone, and adds the destructive actions that
+                    apply to the viewer's role (leave for members, delete for
+                    the owner). */}
                 <span className="flex w-8 shrink-0 items-center justify-center">
-                  {canLeave && (
-                    <button
-                      type="button"
-                      onClick={() => setActionsFor(h)}
-                      disabled={!!switching}
-                      aria-label={`Options for ${h.name}`}
-                      className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground active:scale-90"
-                    >
-                      <MoreVertical className="size-[18px]" />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setActionsFor(h)}
+                    disabled={!!switching}
+                    aria-label={`Options for ${h.name}`}
+                    className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground active:scale-90"
+                  >
+                    <MoreVertical className="size-[18px]" />
+                  </button>
                 </span>
               </div>
             )
@@ -240,8 +284,10 @@ export function MyHomesView() {
         </SheetContent>
       </Sheet>
 
-      {/* Per-home actions sheet — currently the leave-membership confirmation. */}
-      <Sheet open={!!actionsFor} onOpenChange={(open) => !open && !leaving && setActionsFor(null)}>
+      {/* Per-home actions sheet. Opens as a menu (profile + role-specific
+          destructive action) and swaps to an inline confirmation for the
+          irreversible steps rather than stacking a second sheet. */}
+      <Sheet open={!!actionsFor} onOpenChange={(open) => !open && !busyAction && closeActions()}>
         <SheetContent
           side="bottom"
           showCloseButton={false}
@@ -249,31 +295,127 @@ export function MyHomesView() {
         >
           <SheetTitle className="sr-only">{actionsFor ? `Options for ${actionsFor.name}` : "Home options"}</SheetTitle>
           <div className="mx-auto mt-3 h-1 w-9 rounded-full bg-border" aria-hidden />
-          <div className="p-4 pt-4">
-            <p className="px-1 text-sm text-muted-foreground">
-              Leave <span className="font-semibold text-foreground">{actionsFor?.name}</span>? You&apos;ll lose access
-              to its content and need the Home key to rejoin.
-            </p>
-            <div className="mt-4 flex flex-col gap-2">
+
+          {view === "menu" ? (
+            <div className="flex flex-col gap-1 p-3 pt-4">
+              {/* Identity header so it's unmistakable which Home is being acted on. */}
+              <div className="mb-1 flex items-center gap-3 px-3 pb-2">
+                <span
+                  className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg text-xs font-bold text-white"
+                  style={{ backgroundColor: actionsFor?.accent }}
+                >
+                  {actionsFor?.logo ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={actionsFor.logo || "/placeholder.svg"} alt="" className="size-full object-cover" />
+                  ) : (
+                    actionsFor?.initials
+                  )}
+                </span>
+                <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-semibold text-foreground">
+                  {actionsFor?.name}
+                </span>
+              </div>
+
+              {/* Straight to the Home/Organisation's public profile. */}
               <button
                 type="button"
-                onClick={handleLeave}
-                disabled={leaving}
-                className="flex h-12 items-center justify-center gap-2 rounded-full bg-destructive text-sm font-semibold text-destructive-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
+                onClick={openProfile}
+                className="flex items-center gap-4 rounded-2xl px-3 py-3.5 text-left transition-colors hover:bg-secondary/60"
               >
-                {leaving ? <Loader2 className="size-4 animate-spin" /> : <LogOut className="size-4" />}
-                Leave Home Membership
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-foreground">
+                  <Building2 className="size-5" />
+                </span>
+                <span className="flex-1 text-[15px] font-medium text-foreground">
+                  {actionsFor && isHomeAdminRole(actionsFor.role) ? "Visit Profile" : "Open Profile"}
+                </span>
+                <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" />
               </button>
-              <button
-                type="button"
-                onClick={() => setActionsFor(null)}
-                disabled={leaving}
-                className="flex h-12 items-center justify-center rounded-full text-sm font-semibold text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground disabled:opacity-60"
-              >
-                Cancel
-              </button>
+
+              {/* Owner: delete the whole Home. Everyone else: leave it. */}
+              {actionsFor?.role === "owner" ? (
+                <button
+                  type="button"
+                  onClick={() => setView("delete")}
+                  className="flex items-center gap-4 rounded-2xl px-3 py-3.5 text-left transition-colors hover:bg-destructive/10"
+                >
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
+                    <Trash2 className="size-5" />
+                  </span>
+                  <span className="flex-1 text-[15px] font-medium text-destructive">Delete Home</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setView("leave")}
+                  className="flex items-center gap-4 rounded-2xl px-3 py-3.5 text-left transition-colors hover:bg-destructive/10"
+                >
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
+                    <LogOut className="size-5" />
+                  </span>
+                  <span className="flex-1 text-[15px] font-medium text-destructive">Leave Home</span>
+                </button>
+              )}
             </div>
-          </div>
+          ) : (
+            <div className="p-4 pt-4">
+              {view === "delete" ? (
+                <>
+                  <p className="px-1 text-sm text-muted-foreground">
+                    Permanently delete <span className="font-semibold text-foreground">{actionsFor?.name}</span>? Its
+                    profile, members, live replays, episodes, events and posts will all be erased. This cannot be
+                    undone.
+                  </p>
+                  {error && <p className="mt-3 px-1 text-sm font-medium text-destructive">{error}</p>}
+                  <div className="mt-4 flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={handleDelete}
+                      disabled={busyAction}
+                      className="flex h-12 items-center justify-center gap-2 rounded-full bg-destructive text-sm font-semibold text-destructive-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
+                    >
+                      {deleting ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                      Delete Home Permanently
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setView("menu")}
+                      disabled={busyAction}
+                      className="flex h-12 items-center justify-center rounded-full text-sm font-semibold text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="px-1 text-sm text-muted-foreground">
+                    Leave <span className="font-semibold text-foreground">{actionsFor?.name}</span>? You&apos;ll lose
+                    access to its content and need the Home key to rejoin.
+                  </p>
+                  {error && <p className="mt-3 px-1 text-sm font-medium text-destructive">{error}</p>}
+                  <div className="mt-4 flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={handleLeave}
+                      disabled={busyAction}
+                      className="flex h-12 items-center justify-center gap-2 rounded-full bg-destructive text-sm font-semibold text-destructive-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
+                    >
+                      {leaving ? <Loader2 className="size-4 animate-spin" /> : <LogOut className="size-4" />}
+                      Leave Home Membership
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setView("menu")}
+                      disabled={busyAction}
+                      className="flex h-12 items-center justify-center rounded-full text-sm font-semibold text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </SheetContent>
       </Sheet>
     </div>
