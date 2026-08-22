@@ -146,7 +146,7 @@ function EventGridCard({
       type="button"
       onClick={onOpen}
       className="group flex flex-col text-left animate-in fade-in slide-in-from-bottom-3 duration-500 fill-mode-both"
-      style={{ animationDelay: `${Math.min(index, 12) * 45}ms` }}
+      style={{ animationDelay: `${Math.min(index, 5) * 40}ms` }}
     >
       <div className="relative aspect-[3/4] w-full overflow-hidden rounded-[1.25rem] border border-border/60 bg-muted shadow-elevated transition-transform duration-300 group-active:scale-[0.98]">
         {a.flyer ? (
@@ -154,7 +154,18 @@ function EventGridCard({
           <img
             src={a.flyer || "/placeholder.svg"}
             alt={`${a.title} flyer`}
-            loading="lazy"
+            // The first row is what the user is waiting on, so it loads eagerly
+            // and at high priority; everything below the fold stays lazy. Loading
+            // every flyer lazily made the grid appear blank on arrival.
+            loading={index < 4 ? "eager" : "lazy"}
+            fetchPriority={index < 4 ? "high" : "auto"}
+            // Intrinsic size gives the browser an aspect ratio before bytes
+            // arrive, so the grid reserves space instead of reflowing per image.
+            width={600}
+            height={800}
+            // Decode off the main thread so a batch of flyers resolving at once
+            // can't block scrolling or the tab transition.
+            decoding="async"
             className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
           />
         ) : (

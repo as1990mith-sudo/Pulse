@@ -19,7 +19,12 @@ export type GridParticipant = {
   pinned: boolean
 }
 
-const DEFAULT_PER_PAGE = 12
+// 4 columns x 4 rows. The row count is load-bearing: all four rows must land
+// inside the stage area rather than the last one clipping below the fold, so
+// rows are explicit equal tracks (see `gridTemplateRows`) and each tile carries
+// `min-h-0` instead of sizing to its content.
+const COLUMNS = 4
+const DEFAULT_PER_PAGE = COLUMNS * 4
 
 // Horizontal page transition. `custom` carries the swipe direction (1 = forward,
 // -1 = back) so incoming/outgoing pages slide the natural way.
@@ -39,7 +44,17 @@ function chunk<T>(arr: T[], size: number): T[][] {
  * A single participant tile. Gently enlarges with an animated ring while the
  * person is speaking, and shows their mic state + host/pin badges.
  */
-function ParticipantCard({ p, onTap }: { p: GridParticipant; onTap?: (p: GridParticipant) => void }) {
+function ParticipantCard({
+  p,
+  onTap,
+  compact = false,
+}: {
+  p: GridParticipant
+  onTap?: (p: GridParticipant) => void
+  // Set when the stage is short (chat open). Uses the original smaller avatar so
+  // rows fit their tracks instead of names colliding with the row below.
+  compact?: boolean
+}) {
   return (
     <motion.button
       type="button"
@@ -50,9 +65,12 @@ function ParticipantCard({ p, onTap }: { p: GridParticipant; onTap?: (p: GridPar
       animate={{ opacity: 1, scale: p.isSpeaking ? 1.06 : 1 }}
       exit={{ opacity: 0, scale: 0.6 }}
       transition={{ type: "spring", stiffness: 460, damping: 34, mass: 0.7 }}
-      className="flex min-w-0 flex-col items-center gap-1.5 rounded-2xl p-1.5 text-center focus:outline-none"
+      // `min-h-0` lets the tile shrink inside its row track rather than forcing
+      // the row taller than the stage. Tiles hug their content (`justify-start`)
+      // so the name sits directly under the avatar instead of drifting.
+      className="flex min-h-0 min-w-0 flex-col items-center justify-start gap-1.5 rounded-2xl p-0.5 text-center focus:outline-none"
     >
-      <span className="relative inline-flex">
+      <span className="relative inline-flex shrink-0">
         {/* Soft animated ring while speaking. */}
         <AnimatePresence>
           {p.isSpeaking && (
@@ -69,7 +87,12 @@ function ParticipantCard({ p, onTap }: { p: GridParticipant; onTap?: (p: GridPar
         </AnimatePresence>
         <Avatar
           className={cn(
-            "size-14 ring-2 transition-colors sm:size-16",
+            "ring-2 transition-colors",
+            // Full stage: 10% up on the original 3.5rem/4rem slots. At 4 columns
+            // a ~384px stage gives roughly 78px per cell, so this fills the cell
+            // while leaving room for the speaking ring's 6px glow to breathe.
+            // Compact (chat open) keeps the original size so 2 rows still fit.
+            compact ? "size-14 sm:size-16" : "size-[3.85rem] sm:size-[4.4rem]",
             p.isSpeaking ? "ring-primary/80" : "ring-white/10",
           )}
         >
@@ -112,7 +135,7 @@ function ParticipantCard({ p, onTap }: { p: GridParticipant; onTap?: (p: GridPar
 }
 
 /**
- * Paginated, swipeable participant grid — 12 people per page. Cards fade/scale
+ * Paginated, swipeable participant grid — 20 people per page (5x4). Cards fade/scale
  * in on join, reorder smoothly, and pages slide with spring physics. Empty
  * seats are never shown (only present participants render).
  */
@@ -128,6 +151,9 @@ export function ParticipantGrid({
   perPage?: number
 }) {
   const pages = chunk(participants, perPage)
+  // Rows needed to hold a full page at 5 across, so a reduced `perPage` (chat
+  // open) shows fewer, taller rows instead of 4 short ones with gaps.
+  const rows = Math.max(1, Math.ceil(perPage / COLUMNS))
   const [page, setPage] = useState(0)
   const [dir, setDir] = useState(0)
   const clamped = Math.min(page, pages.length - 1)
@@ -167,10 +193,28 @@ export function ParticipantGrid({
             }}
             className="absolute inset-0"
           >
-            <div className="grid h-full grid-cols-3 content-start gap-x-2 gap-y-4 px-3 py-4 sm:grid-cols-4">
+            {/* 4 columns x N rows. Rows are explicit, evenly-divided tracks
+                rather than content-sized, so the bottom row can't spill past the
+                stage. Row count is set inline because it varies with `perPage`
+                (4 normally, 2 when the chat is open) and Tailwind can't
+                statically extract a computed class name.
+
+                Vertical framing: rows share the stage evenly (`1fr` tracks) so
+                the block fills the space instead of clumping at the top, and the
+                bottom padding is larger than the top so the group sits slightly
+                high with more clearance beneath it than above.
+
+                Both the bottom padding and the avatar size step down on a short
+                stage (chat open, 2 rows): a flat `pb-8` plus full-size avatars
+                overflowed the shorter tracks and names collided with the row
+                below. */}
+            <div
+              className={cn("grid h-full grid-cols-4 gap-x-2 gap-y-1 px-3 pt-2", rows >= 4 ? "pb-8" : "pb-3")}
+              style={{ gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}
+            >
               <AnimatePresence mode="popLayout">
                 {pages[clamped].map((p) => (
-                  <ParticipantCard key={p.identity} p={p} onTap={onTapParticipant} />
+                  <ParticipantCard key={p.identity} p={p} onTap={onTapParticipant} compact={rows < 4} />
                 ))}
               </AnimatePresence>
             </div>

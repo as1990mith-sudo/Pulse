@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/purge-homes",
+      "schedule": "0 4 * * *"
+    }
+  ]
+}

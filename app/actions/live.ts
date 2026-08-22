@@ -218,7 +218,18 @@ export type GoLiveResult =
   | { ok: false; error: string }
 
 export type JoinResult =
-  | { ok: true; token: string; serverUrl: string; roomName: string; canPublish: boolean; recordOnServer?: boolean }
+  | {
+      ok: true
+      token: string
+      serverUrl: string
+      roomName: string
+      canPublish: boolean
+      recordOnServer?: boolean
+      // Display name when the viewer joined as a signed-out guest (null for
+      // account holders). The client needs it to enable in-room chat: the room
+      // link is the credential, so a guest who's in the call can talk in it.
+      guestName?: string | null
+    }
   // `needsIdentity`: public live, but the visitor hasn't given a display name yet
   //   → show the "Join Live" display-name gate.
   // `needsAuth`: private live and the visitor isn't a member → they must sign up
@@ -499,12 +510,20 @@ export async function beginRoomRecording(input: { roomName: string }): Promise<{
   }
 }
 
-/** Host stops broadcasting. */
+/**
+ * Host stops broadcasting.
+ *
+ * Guests (signed-out visitors in a public live) reach this only via the shared
+ * leave/exit path, and they are never controllers — so resolve the actor
+ * leniently and no-op rather than calling requireUser(), which would throw and
+ * surface an error on what is, for them, an ordinary "leave the call" tap.
+ */
 export async function endBroadcast(input: { roomName: string }): Promise<void> {
-  const user = await requireUser()
+  const actor = await getLiveActor()
+  if (!actor || actor.isGuest) return
   // The host can always end. In a grid meeting the co-host has full parity and
   // may end the live for everyone too.
-  const { isController } = await getGridControl(input.roomName, user.id)
+  const { isController } = await getGridControl(input.roomName, actor.id)
   if (!isController) return
   // Stop the server-side recording first so the replay finalizes promptly.
   await stopEgressForRoom(input.roomName)
@@ -641,7 +660,17 @@ export async function joinBroadcast(input: { roomName: string }): Promise<JoinRe
   // configured for this video room.
   const recordOnServer = isHost && stream.mode === "video" && isEgressConfigured()
 
-  return { ok: true, token, serverUrl: LIVEKIT_URL, roomName: input.roomName, canPublish, recordOnServer }
+  return {
+    ok: true,
+    token,
+    serverUrl: LIVEKIT_URL,
+    roomName: input.roomName,
+    canPublish,
+    recordOnServer,
+    // Only set for guests, so the client can enable chat for them without
+    // inventing an identity of its own.
+    guestName: actor.isGuest ? actor.name : null,
+  }
 }
 
 /** All currently-live streams, newest first. */
@@ -1031,6 +1060,9 @@ export type CoHostPermissions = {
   acceptRequests: boolean
   controlTracks: boolean
   endSession: boolean
+  // Gates whether this co-host may publish their own recording of the session.
+  // Off by default so each session produces one canonical episode.
+  saveRecording: boolean
 }
 
 export type CallRequestView = {
@@ -1097,6 +1129,7 @@ function mapRequest(r: typeof liveCallRequest.$inferSelect): CallRequestView {
       acceptRequests: r.canAcceptRequests ?? false,
       controlTracks: r.canControlTracks ?? false,
       endSession: r.canEndSession ?? false,
+      saveRecording: r.canSaveRecording ?? false,
     },
     musicApproved: r.musicApproved ?? false,
     musicRequestPending: r.musicRequestPending ?? false,
@@ -1760,8 +1793,9 @@ export async function getCallState(input: { roomName: string }): Promise<{
           acceptRequests: myCoHost?.canAcceptRequests ?? false,
           controlTracks: myCoHost?.canControlTracks ?? false,
           endSession: myCoHost?.canEndSession ?? false,
+          saveRecording: myCoHost?.canSaveRecording ?? false,
         }
-      : { acceptRequests: false, controlTracks: false, endSession: false }
+      : { acceptRequests: false, controlTracks: false, endSession: false, saveRecording: false }
 
   // A co-host controls music once they have the Control Tracks permission AND
   // their first upload has been approved by the host.
@@ -1842,6 +1876,8 @@ export async function makeCoHost(input: { roomName: string; userId: string }): P
       canAcceptRequests: true,
       canControlTracks: false,
       canEndSession: false,
+      // Deliberately off on promotion: the host's take is the canonical episode.
+      canSaveRecording: false,
       musicApproved: false,
       musicRequestPending: false,
       updatedAt: new Date(),
@@ -1858,7 +1894,7 @@ export async function makeCoHost(input: { roomName: string; userId: string }): P
 export async function setCoHostPermission(input: {
   roomName: string
   userId: string
-  permission: "acceptRequests" | "controlTracks" | "endSession"
+  permission: "acceptRequests" | "controlTracks" | "endSession" | "saveRecording"
   enabled: boolean
 }): Promise<{ ok: boolean; error?: string }> {
   const user = await requireUser()
@@ -1872,6 +1908,7 @@ export async function setCoHostPermission(input: {
   const patch: Partial<typeof liveCallRequest.$inferInsert> = { updatedAt: new Date() }
   if (input.permission === "acceptRequests") patch.canAcceptRequests = input.enabled
   if (input.permission === "endSession") patch.canEndSession = input.enabled
+  if (input.permission === "saveRecording") patch.canSaveRecording = input.enabled
   if (input.permission === "controlTracks") {
     patch.canControlTracks = input.enabled
     // Revoking Control Tracks immediately hands music back to the host.

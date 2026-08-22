@@ -14,10 +14,19 @@ import {
   Loader2,
   LogOut,
   MoreVertical,
+  RotateCcw,
   Trash2,
   Users,
 } from "lucide-react"
-import { deleteHome, getMyHomeMemberships, setActiveHome, leaveHome, type MyHomeLink } from "@/app/actions/home"
+import {
+  deleteHome,
+  getMyDeletedHomes,
+  getMyHomeMemberships,
+  reactivateHome,
+  setActiveHome,
+  leaveHome,
+  type MyHomeLink,
+} from "@/app/actions/home"
 import { homeRoleLabel, isHomeAdminRole } from "@/lib/home/roles"
 import { Sheet, SheetClose, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
@@ -43,6 +52,18 @@ export function MyHomesView() {
     revalidateOnFocus: false,
   })
   const homes = data ?? []
+  // Homes this owner deleted that are still inside the 30-day recovery window.
+  // Deletion is only genuinely recoverable if the owner can SEE what's pending —
+  // the backend kept the row and the countdown, but nothing surfaced it, so the
+  // window silently expired and the data was purged with no way back.
+  const {
+    data: deletedData,
+    mutate: mutateDeleted,
+    isLoading: loadingDeleted,
+  } = useSWR("my-deleted-homes", () => getMyDeletedHomes(), { revalidateOnFocus: false })
+  const deletedHomes = deletedData ?? []
+  const [restoring, setRestoring] = useState<string | null>(null)
+  const [restoreError, setRestoreError] = useState<string | null>(null)
   const [switching, setSwitching] = useState<string | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   // The Home whose 3-dot actions sheet is open (null = closed).
@@ -118,13 +139,33 @@ export function MyHomesView() {
     setError(null)
     try {
       await deleteHome(actionsFor.handle)
-      await mutate()
+      // Refresh both lists: the Home leaves "Your Homes" and immediately appears
+      // under "Recently deleted" with its countdown, so the recovery route is
+      // visible at the exact moment the owner might regret the deletion.
+      await Promise.all([mutate(), mutateDeleted()])
       closeActions()
       router.refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't delete this Home.")
     } finally {
       setDeleting(false)
+    }
+  }
+
+  // Restore a soft-deleted Home within its window. The server re-checks
+  // ownership and that the purge hasn't already run, so a stale button that the
+  // cron has since overtaken fails safely rather than resurrecting a shell.
+  async function handleRestore(handle: string) {
+    setRestoring(handle)
+    setRestoreError(null)
+    try {
+      await reactivateHome(handle)
+      await Promise.all([mutate(), mutateDeleted()])
+      router.refresh()
+    } catch (e) {
+      setRestoreError(e instanceof Error ? e.message : "Couldn't restore this Home.")
+    } finally {
+      setRestoring(null)
     }
   }
 
@@ -253,6 +294,68 @@ export function MyHomesView() {
             )
           })}
         </div>
+      )}
+
+      {/* Recently deleted — only rendered when something is actually pending, so
+          it never becomes permanent furniture. Each row states the remaining
+          days plainly and offers a one-tap restore; once the countdown reaches
+          zero the nightly purge removes the row and it disappears from here. */}
+      {!loadingDeleted && deletedHomes.length > 0 && (
+        <section aria-labelledby="recently-deleted-heading" className="mt-7">
+          <p
+            id="recently-deleted-heading"
+            className="mb-2.5 px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground"
+          >
+            Recently Deleted
+          </p>
+          <div className="flex flex-col gap-2">
+            {deletedHomes.map((d) => {
+              const busy = restoring === d.handle
+              // Day 0 means the purge is imminent (the cron runs at 04:00), so
+              // the copy shifts from a countdown to a last-chance warning.
+              const urgent = d.daysRemaining <= 3
+              return (
+                <div
+                  key={d.handle}
+                  className="flex items-center gap-3 rounded-xl border border-dashed border-border/70 bg-secondary/20 px-3 py-2.5"
+                >
+                  <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
+                    <Trash2 className="size-5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block overflow-hidden text-ellipsis whitespace-nowrap text-[15px] font-semibold leading-tight text-foreground">
+                      {d.name}
+                    </span>
+                    <span
+                      className={cn(
+                        "mt-1 block text-xs",
+                        urgent ? "font-medium text-destructive" : "text-muted-foreground",
+                      )}
+                    >
+                      {d.daysRemaining === 0
+                        ? "Erased permanently today"
+                        : `${d.daysRemaining} ${d.daysRemaining === 1 ? "day" : "days"} left to restore`}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleRestore(d.handle)}
+                    disabled={!!restoring}
+                    className="flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-3.5 text-xs font-semibold text-foreground transition-all hover:bg-secondary/60 active:scale-95 disabled:opacity-60"
+                  >
+                    {busy ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />}
+                    Restore
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+          {restoreError && <p className="mt-2 px-1 text-sm font-medium text-destructive">{restoreError}</p>}
+          <p className="mt-2.5 px-1 text-xs leading-relaxed text-muted-foreground">
+            Restoring brings back the Home and its members. The join key stays revoked, so generate a new one when
+            you&apos;re ready to admit new members.
+          </p>
+        </section>
       )}
 
       {/* Add-a-Home sheet — Join an existing Home / Set up a new one. Both are

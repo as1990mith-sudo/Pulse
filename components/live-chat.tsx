@@ -48,6 +48,7 @@ function MentionText({ body, accent = false }: { body: string; accent?: boolean 
 export function LiveChat({
   asHost = false,
   currentUser = null,
+  guestName = null,
   roomName,
   bgUrl = null,
   bgEffect = "none",
@@ -60,6 +61,11 @@ export function LiveChat({
 }: {
   asHost?: boolean
   currentUser?: CurrentUser | null
+  // Display name of a signed-OUT guest who joined a public live via its link.
+  // The server already accepts guest chat (it resolves a guest actor from the
+  // room cookie); this is purely so the composer knows an identity exists and
+  // stays enabled instead of showing the "Sign in" prompt.
+  guestName?: string | null
   roomName?: string
   // Host-controlled chat background (image URL + blur/dim treatment).
   bgUrl?: string | null
@@ -163,7 +169,12 @@ export function LiveChat({
     if (changed && atBottomRef.current) scrollToBottom()
   }, [messages])
 
-  const canSend = (asHost || currentUser) && roomName
+  // A named guest counts as an identity: the room link is the invitation, so a
+  // guest who's already in the conversation can talk in it without an account.
+  const canSend = (asHost || currentUser || guestName) && roomName
+  // Name to show on this viewer's own optimistic messages before the poll
+  // returns the server's authoritative copy.
+  const myName = asHost ? (currentUser?.name ?? "Host") : (currentUser?.name ?? guestName ?? "You")
 
   // Expose a "post to chat" function to the Live Resource system so mini panels
   // (e.g. the mini-Bible) can share a verse straight into this live's chat
@@ -178,7 +189,7 @@ export function LiveChat({
       const optimistic: LiveChatMessageView = {
         id: -Date.now(),
         userId: currentUser?.id ?? "me",
-        userName: asHost ? `${currentUser?.name ?? "Host"}` : (currentUser?.name ?? "You"),
+        userName: myName,
         userImage: currentUser?.image ?? null,
         isHost: asHost,
         kind: "message",
@@ -190,7 +201,7 @@ export function LiveChat({
       mutate()
     })
     return unregister
-  }, [registerChatSender, canSend, roomName, asHost, currentUser, messages, mutate])
+  }, [registerChatSender, canSend, roomName, asHost, currentUser, myName, messages, mutate])
 
   // Emoji toggle button — rendered on the left or right of the composer.
   const emojiButton = (
@@ -220,7 +231,7 @@ export function LiveChat({
     const optimistic: LiveChatMessageView = {
       id: -Date.now(),
       userId: currentUser?.id ?? "me",
-      userName: asHost ? `${currentUser?.name ?? "Host"}` : (currentUser?.name ?? "You"),
+      userName: myName,
       userImage: currentUser?.image ?? null,
       isHost: asHost,
       kind: "message",

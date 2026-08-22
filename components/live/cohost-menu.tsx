@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Crown, Music, PhoneIncoming, PowerOff, Radio, UserMinus, X } from "lucide-react"
+import { Crown, Music, PhoneIncoming, PowerOff, Radio, Save, UserMinus, X } from "lucide-react"
 import type { CallRequestView, CoHostPermissions } from "@/app/actions/live"
 import { cn } from "@/lib/utils"
 
@@ -176,7 +176,7 @@ export function ManageCoHostMenu({
 
 /**
  * The MAIN HOST's "Co-hosts" tab: lists everyone granted co-host status —
- * whether or not they're still on the call — with their three permission
+ * whether or not they're still on the call — with their four permission
  * toggles and a Remove (retract) button. Retracting works regardless of
  * whether the co-host is currently in the session.
  */
@@ -236,6 +236,13 @@ export function CoHostsPanel({
                   description="Manage the background music. Your music controls pause while they do."
                   enabled={c.permissions.controlTracks}
                   onToggle={(next) => onTogglePermission(c.userId, "controlTracks", next)}
+                />
+                <PermissionToggle
+                  icon={<Save />}
+                  label="Save Recording"
+                  description="Let them publish their own recording. Off by default, so a session becomes one episode — yours."
+                  enabled={c.permissions.saveRecording}
+                  onToggle={(next) => onTogglePermission(c.userId, "saveRecording", next)}
                 />
                 <PermissionToggle
                   icon={<PowerOff />}

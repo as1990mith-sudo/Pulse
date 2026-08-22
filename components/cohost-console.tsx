@@ -140,6 +140,7 @@ export function CoHostConsole({
     setMusicLoop,
     setMusicEndedHandler,
     stopMusic,
+    duckMusic,
   } = audio
 
   // Whether the co-host is actively on the call (publishing). Driven by the
@@ -170,6 +171,51 @@ export function CoHostConsole({
     setMusicPosition(state.musicPosition ?? 0)
     setMusicDuration(state.musicDuration ?? 0)
   }, [state.musicPosition, state.musicDuration])
+
+  // Auto-ducking, toggleable, defaulting on to match every other Live console.
+  const [duckEnabled, setDuckEnabled] = useState(true)
+  // Release-hold timer so music doesn't "pump" between words — it only returns
+  // to full once the room has been quiet for a moment.
+  const duckReleaseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Sidechain ducking for the co-host's own mixed-in music. When the co-host is
+  // the one running tracks, they get the same treatment the host has: dip the
+  // bed while anyone is speaking so voices cut through, and so each speaker's
+  // echo-canceller isn't fighting loud sustained music bleeding from their
+  // device speakers (the real cause of "muffled" voices).
+  //
+  // Deliberately identical to the host effect in studio-console: same shared
+  // duckMusic(), same state.speaking signal, same attack/hold/release timings,
+  // so ducking feels the same regardless of who is driving the playlist.
+  useEffect(() => {
+    if (musicActiveIndex === null || !musicPlaying) return
+    if (!duckEnabled) {
+      if (duckReleaseRef.current) {
+        clearTimeout(duckReleaseRef.current)
+        duckReleaseRef.current = null
+      }
+      duckMusic(false, 300)
+      return
+    }
+    if (state.speaking) {
+      if (duckReleaseRef.current) {
+        clearTimeout(duckReleaseRef.current)
+        duckReleaseRef.current = null
+      }
+      duckMusic(true, 140)
+    } else {
+      duckReleaseRef.current = setTimeout(() => {
+        duckMusic(false, 480)
+        duckReleaseRef.current = null
+      }, 650)
+    }
+    return () => {
+      if (duckReleaseRef.current) {
+        clearTimeout(duckReleaseRef.current)
+        duckReleaseRef.current = null
+      }
+    }
+  }, [duckEnabled, state.speaking, musicActiveIndex, musicPlaying, duckMusic])
 
   // First upload always needs host approval. Until approved, we can queue
   // tracks but not mix them in. Once approved, control is ours until revoked.
@@ -479,14 +525,12 @@ export function CoHostConsole({
 
           {/* On the call → step off (stay in the room); off the call → call back in. */}
           {onCall ? (
-            <button
-              type="button"
-              onClick={() => void handleStepOff()}
-              aria-label="End call"
-              className="flex items-center gap-1.5 rounded-full bg-destructive px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-destructive/30 transition-all hover:bg-destructive/90 active:scale-95"
-            >
-              <PhoneOff className="size-4" strokeWidth={2.5} /> End call
-            </button>
+            // Icon-only, matching every other dock control: the wide labelled
+            // pill crowded the dock on narrow screens. Red is carried by
+            // DockButton's "danger" tone, and the label lives on aria-label.
+            <DockButton label="End call" onClick={() => void handleStepOff()} tone="danger">
+              <PhoneOff className="size-5" />
+            </DockButton>
           ) : (
             <DockButton label="Call in" onClick={() => void handleCallIn()} tone="success">
               <PhoneCall className="size-5" />
@@ -533,6 +577,8 @@ export function CoHostConsole({
           mixing={musicMixing}
           loop={musicLoop}
           error={musicError}
+          duck={duckEnabled}
+          onToggleDuck={setDuckEnabled}
           onAddTracks={(t) => setMusicTracks((arr) => [...arr, ...t])}
           onPlayTrack={(i) => void playMusicTrack(i)}
           onTogglePlay={toggleMusicPlay}

@@ -94,7 +94,15 @@ function formatDuration(s: number) {
   return `${h}h ${(m % 60).toString().padStart(2, "0")}m`
 }
 
-type EndedSession = { title: string; duration: string; audioBlob: Blob | null; cover: string | null } | null
+type EndedSession = {
+  title: string
+  duration: string
+  audioBlob: Blob | null
+  cover: string | null
+  // The room the recording came from, so the server can scope the published
+  // episode to the session's Home. Captured before the room name is cleared.
+  roomName: string | null
+} | null
 export type Track = { url: string; name: string }
 
 export function StudioConsole({
@@ -129,6 +137,7 @@ export function StudioConsole({
     stopMusic,
     startRecording,
     stopRecording,
+    startAudioPlayback,
   } = useLiveAudio()
   // "On air" is an intent that persists across a dropped/recovering connection,
   // so a transient network blip never flips the host back to the offline setup
@@ -159,9 +168,14 @@ export function StudioConsole({
   // After the room has ended for everyone, the host is asked whether to save the
   // session as an episode. This holds the metadata needed to publish if they
   // say yes. It is entirely separate from tearing down the live room.
-  const [saveDecision, setSaveDecision] = useState<{ title: string; duration: string; cover: string | null } | null>(
-    null,
-  )
+  const [saveDecision, setSaveDecision] = useState<{
+    title: string
+    duration: string
+    cover: string | null
+    // Held here because `roomName` state is cleared the moment the room closes,
+    // which happens before the host answers the save prompt.
+    roomName: string | null
+  } | null>(null)
   // The in-flight recording finalization, started the instant the host ends the
   // live. We hold the promise (rather than awaiting it inline) so recording
   // finalization never blocks the room from closing for participants.
@@ -538,6 +552,8 @@ export function StudioConsole({
       recordingPromiseRef.current = recording
         ? stopRecording().catch(() => null)
         : Promise.resolve(recordedBlobRef.current)
+      // Snapshot the room before it's cleared — the save prompt needs it later.
+      const endedRoomName = roomName
       if (roomName) void endBroadcast({ roomName }).catch(() => {})
       void disconnect()
       setRoomName(null)
@@ -546,7 +562,7 @@ export function StudioConsole({
       recordedBlobRef.current = null
       // The room is now ending for everyone — ask the host, as a separate step,
       // whether they'd like to keep this session as an episode.
-      setSaveDecision({ title, duration, cover })
+      setSaveDecision({ title, duration, cover, roomName: endedRoomName })
       setElapsed(0)
     } else {
       // Cover art is required for audio live sessions.
@@ -592,7 +608,13 @@ export function StudioConsole({
     if (!dec) return
     const audioBlob = await (recordingPromiseRef.current ?? Promise.resolve(null))
     recordingPromiseRef.current = null
-    setEndedSession({ title: dec.title, duration: dec.duration, audioBlob, cover: dec.cover })
+    setEndedSession({
+      title: dec.title,
+      duration: dec.duration,
+      audioBlob,
+      cover: dec.cover,
+      roomName: dec.roomName,
+    })
   }
 
   // Host confirmed they don't want to save. Drop the recording and leave the
@@ -928,6 +950,22 @@ export function StudioConsole({
             </Button>
           )}
         </header>
+
+        {/* The host can be blocked from HEARING the room while still
+            broadcasting to it: the gesture that started the broadcast does not
+            authorise the <audio> elements minted later for each remote speaker.
+            Without this the host had no way back — they simply couldn't hear
+            their guests or their own music. Tapping re-asserts playback and
+            resumes any interrupted AudioContext. */}
+        {live && state.audioBlocked && (
+          <button
+            type="button"
+            onClick={() => void startAudioPlayback()}
+            className="mx-4 mt-3 flex items-center justify-center gap-2 rounded-lg bg-amber-500 px-3 py-2 text-xs font-bold text-amber-950 transition-colors hover:bg-amber-400 sm:mx-6"
+          >
+            <Volume2 className="size-4" strokeWidth={2.5} /> Tap to enable sound
+          </button>
+        )}
 
         {error && (
           <div className="mx-4 mt-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground sm:mx-6">
@@ -1873,7 +1911,7 @@ function PublishOverlay({
   onClose,
   onExit,
 }: {
-  session: { title: string; duration: string; audioBlob: Blob | null; cover: string | null }
+  session: { title: string; duration: string; audioBlob: Blob | null; cover: string | null; roomName: string | null }
   onClose: () => void
   // Called once auto-publishing finishes so the host is returned to the Live tab.
   onExit: () => void
@@ -1920,6 +1958,8 @@ function PublishOverlay({
         audioUrl,
         // Auto-published from a live session → files under the catalogue's Live tab.
         source: "live",
+        // Lets the server scope the replay to the session's Home.
+        roomName: session.roomName,
       })
       if (res.ok) {
         setSlug(res.slug)

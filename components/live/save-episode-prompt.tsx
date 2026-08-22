@@ -21,11 +21,17 @@ import { AlertTriangle, Film } from "lucide-react"
 export function SaveEpisodePrompt({
   onSave,
   onDiscard,
+  note = null,
 }: {
   /** Host chose to save — kick off the (async) episode save/processing. */
   onSave: () => void
   /** Host confirmed they don't want to save — discard the recording. */
   onDiscard: () => void
+  /**
+   * Extra context shown under the question. Used for a co-host, whose recording
+   * only covers the stretch they were actually on the call.
+   */
+  note?: string | null
 }) {
   const [confirmingDiscard, setConfirmingDiscard] = useState(false)
 
@@ -49,6 +55,7 @@ export function SaveEpisodePrompt({
             <p className="mt-1.5 text-sm text-white/60 text-pretty">
               Your live has ended. You can add the recording to your catalogue, or skip saving it.
             </p>
+            {note && <p className="mt-2 text-xs text-white/45 text-pretty">{note}</p>}
             <div className="mt-5 flex flex-col gap-2">
               <button
                 type="button"

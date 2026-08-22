@@ -27,6 +27,9 @@ import { LiveChat } from "@/components/live-chat"
 import { CoverArt } from "@/components/cover-art"
 import { MarqueeTitle } from "@/components/marquee-title"
 import { CoHostConsole } from "@/components/cohost-console"
+import { SaveEpisodePrompt } from "@/components/live/save-episode-prompt"
+import { publishShow } from "@/app/actions/shows"
+import { uploadMedia } from "@/lib/upload-media"
 import type { CurrentUser } from "@/lib/session"
 import type { ShareTarget } from "@/lib/share-types"
 import type { CallRequestView, CoHostPermissions, LiveRole, LiveStreamView } from "@/app/actions/live"
@@ -122,6 +125,7 @@ export function LiveListener({
   // co-host console (single LiveKit room — never a second connection).
   const audio = useLiveAudio()
   const { state, speakers, connect, disconnect, toggleMic, setListenerMuted, startAudioPlayback } = audio
+  const { startRecording, stopRecording } = audio
   const [muted, setMuted] = useState(false)
   // The audience/crowd view is hidden by default (frees space for the stage +
   // chat) and revealed by tapping the audience pill in the header.
@@ -131,11 +135,31 @@ export function LiveListener({
   // Public-live guest flow: joinBroadcast returned `needsIdentity`, so we show
   // the display-name gate instead of connecting until the guest provides a name.
   const [needIdentity, setNeedIdentity] = useState(false)
+  // Display name of a signed-out guest who joined via the room link, so chat
+  // treats them as a participant rather than prompting them to sign in.
+  const [guestName, setGuestName] = useState<string | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
   // Set when the host ends the broadcast — shows a "Session ended" splash then
   // bounces the listener back to the Live tab.
   const [hostEnded, setHostEnded] = useState(false)
   const [blocked, setBlocked] = useState(false)
+
+  // ── Co-host "save this session?" flow ──────────────────────────────────────
+  // A co-host gets the same post-end save decision the host does. Their audio is
+  // captured on their own device, so it spans only the time they were actually
+  // on the call — recording starts when they're granted publish rights, which
+  // is why a late joiner's copy can be shorter than the host's.
+  const [coHostSave, setCoHostSave] = useState<{ blob: Blob | null; duration: string; partial: boolean } | null>(null)
+  const [coHostSaving, setCoHostSaving] = useState(false)
+  // Guards the one-shot start/stop so re-renders and repeated polls can't spawn
+  // a second recorder or stop one twice.
+  const coHostRecordingRef = useRef(false)
+  // Set once the co-host has been on the call, so we know a recording exists to
+  // offer even if they stepped off before the host ended the session.
+  const coHostRecordedRef = useRef(false)
+  // Seconds of elapsed time at the moment recording began, so the saved
+  // episode's duration reflects the co-host's actual span, not the whole show.
+  const coHostRecordStartRef = useRef(0)
 
   // Whether the current listener follows the host (drives the follow chip on
   // the host's stage tile). The host can't follow themselves.
@@ -208,6 +232,7 @@ export function LiveListener({
     acceptRequests: false,
     controlTracks: false,
     endSession: false,
+    saveRecording: false,
   })
   const [myMusicApproved, setMyMusicApproved] = useState(false)
   const [myMusicRequestPending, setMyMusicRequestPending] = useState(false)
@@ -218,6 +243,44 @@ export function LiveListener({
   // True while this co-host's "end live session" request awaits the host's
   // answer (drives the "Waiting for host…" banner in the co-host console).
   const [endRequestPending, setEndRequestPending] = useState(false)
+
+  // Begin capturing as soon as this co-host is publishing, so a save is possible
+  // later without asking them to opt in mid-show. Recording stays local until
+  // they explicitly choose "Save" on the post-end prompt; declining discards it.
+  // Intentionally not stopped on step-off — a co-host who steps off and calls
+  // back in keeps one continuous take instead of losing the earlier portion.
+  // Gated on the host's explicit "Save Recording" grant, so a session yields ONE
+  // canonical episode (the host's) by default. Enforced here at the capture
+  // source rather than by hiding the save prompt: without permission nothing is
+  // recorded at all, so there's no local copy of the room sitting in memory.
+  useEffect(() => {
+    if (myRole !== "cohost" || !myPermissions.saveRecording) return
+    if (!state.canPublish || coHostRecordingRef.current) return
+    coHostRecordingRef.current = true
+    coHostRecordedRef.current = true
+    coHostRecordStartRef.current = elapsed
+    try {
+      startRecording()
+    } catch {
+      // Best-effort: if the browser refuses to record, the co-host simply isn't
+      // offered a save rather than the live itself breaking.
+      coHostRecordingRef.current = false
+      coHostRecordedRef.current = false
+    }
+    // `elapsed` is read as a one-shot start offset, so it must not re-run this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myRole, myPermissions.saveRecording, state.canPublish, startRecording])
+
+  // If the host revokes "Save Recording" (or demotes them) mid-session, stop and
+  // discard the take immediately. Otherwise a co-host who was recording would
+  // keep a copy they're no longer permitted to publish.
+  useEffect(() => {
+    if (!coHostRecordingRef.current) return
+    if (myRole === "cohost" && myPermissions.saveRecording) return
+    coHostRecordingRef.current = false
+    coHostRecordedRef.current = false
+    void stopRecording().catch(() => null)
+  }, [myRole, myPermissions.saveRecording, stopRecording])
 
   async function join() {
     setError(null)
@@ -236,6 +299,7 @@ export function LiveListener({
       return
     }
     setNeedIdentity(false)
+    setGuestName(res.guestName ?? null)
     await connect({ serverUrl: res.serverUrl, token: res.token, publish: res.canPublish })
   }
 
@@ -284,6 +348,25 @@ export function LiveListener({
       // Host ended the session: tear down audio, show the splash, then redirect.
       if (s.ended) {
         setHostEnded(true)
+        // A co-host who was on the call gets the save decision first. We stop
+        // the recorder BEFORE disconnecting — tearing down the room would kill
+        // the mixed track the recorder is reading from and truncate the file.
+        // The auto-redirect is skipped so the prompt can't be yanked away
+        // mid-decision; navigation happens once they choose.
+        if (coHostRecordedRef.current) {
+          const seconds = Math.max(0, elapsed - coHostRecordStartRef.current)
+          const blob = await stopRecording().catch(() => null)
+          coHostRecordingRef.current = false
+          void disconnect()
+          setCoHostSave({
+            blob,
+            duration: formatElapsed(seconds),
+            // Flag a take that missed the opening, so the prompt can say so
+            // rather than implying it captured the whole session.
+            partial: coHostRecordStartRef.current > 2,
+          })
+          return
+        }
         void disconnect()
         setTimeout(() => (onExit ? onExit() : router.push("/live")), 2600)
         return
@@ -456,14 +539,72 @@ export function LiveListener({
   }
 
   if (hostEnded) {
+    const leaveLive = () => (onExit ? onExit() : router.push("/live"))
+
+    // Publishes the co-host's recording. `roomName` lets the server resolve the
+    // session's Home, so the episode lands in that Home's catalogue rather than
+    // only on the co-host's own profile.
+    const saveCoHostEpisode = async () => {
+      if (!coHostSave || coHostSaving) return
+      setCoHostSaving(true)
+      let audioUrl: string | null = null
+      if (coHostSave.blob) {
+        try {
+          const ext = coHostSave.blob.type.includes("mp4") ? "mp4" : "webm"
+          const file = new File([coHostSave.blob], `session.${ext}`, { type: coHostSave.blob.type })
+          audioUrl = (await uploadMedia(file, "episodes")).url
+        } catch {
+          // Publish the entry without audio rather than losing the session.
+        }
+      }
+      await publishShow({
+        title: stream.title,
+        tagline: "",
+        category: "",
+        duration: coHostSave.duration,
+        description: "",
+        cover: stream.cover ?? null,
+        audioUrl,
+        source: "live",
+        roomName: stream.roomName,
+      }).catch(() => null)
+      router.refresh()
+      leaveLive()
+    }
+
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 bg-zinc-950 px-6 py-14 text-center text-white">
         <span className="flex size-14 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-inset ring-white/15">
           <Radio className="size-7" strokeWidth={2.5} />
         </span>
         <p className="text-lg font-bold">Session Ended</p>
-        <p className="text-sm text-white/60">The host has ended this live session. Taking you back to Live…</p>
-        <Loader2 className="size-4 animate-spin text-white/60" />
+        {/* While the co-host is deciding, the splash must not promise a redirect
+            that isn't coming — the prompt owns navigation from here. */}
+        {coHostSave ? (
+          <p className="text-sm text-white/60">This live session has ended.</p>
+        ) : (
+          <>
+            <p className="text-sm text-white/60">The host has ended this live session. Taking you back to Live…</p>
+            <Loader2 className="size-4 animate-spin text-white/60" />
+          </>
+        )}
+
+        {coHostSave &&
+          (coHostSaving ? (
+            <p className="mt-2 flex items-center gap-2 text-sm text-white/70">
+              <Loader2 className="size-4 animate-spin" /> Saving episode…
+            </p>
+          ) : (
+            <SaveEpisodePrompt
+              note={
+                coHostSave.partial
+                  ? "Your recording covers the part of the session you were on the call for."
+                  : null
+              }
+              onSave={() => void saveCoHostEpisode()}
+              onDiscard={leaveLive}
+            />
+          ))}
       </div>
     )
   }
@@ -510,7 +651,7 @@ export function LiveListener({
         </>
       )}
 
-      {/* ───────── Broadcast header: cover art + live + title + stats ───────── */}
+      {/* ��──────── Broadcast header: cover art + live + title + stats ───────── */}
       <header className="relative z-30 flex items-center gap-3 border-b border-white/10 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+1rem)] backdrop-blur-xl">
         {/* Back control — opens Leave / Minimise while connected. */}
         <BackExitMenu
@@ -749,6 +890,7 @@ export function LiveListener({
             immersive
             showResourceButton
             currentUser={currentUser}
+            guestName={guestName}
             roomName={stream.roomName}
             bgUrl={stream.chatBgUrl ?? null}
             bgEffect={stream.chatBgEffect ?? "none"}

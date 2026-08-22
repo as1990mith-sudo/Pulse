@@ -80,6 +80,9 @@ export type ConversationVideoProps = {
   self: { identity: string; name: string; image: string | null }
   peers: RemotePeer[]
   currentUser: CurrentUser | null
+  // Display name when this viewer joined as a signed-out guest via the room
+  // link, so in-room chat treats them as a participant.
+  guestName?: string | null
   hostId: string | null
   gridCohostId: string | null
   gridPinnedIds: string[]
@@ -130,6 +133,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
     self,
     peers,
     currentUser,
+    guestName = null,
     hostId,
     gridCohostId,
     gridPinnedIds,
@@ -826,6 +830,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
               <LiveChat
                 asHost={isController}
                 currentUser={currentUser}
+                guestName={guestName}
                 roomName={roomName}
                 bgUrl={chatBgUrl}
                 bgEffect={chatBgEffect}

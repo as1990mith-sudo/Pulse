@@ -64,8 +64,22 @@ async function requireUser() {
   return user
 }
 
-/** Lazily flip approved ads to expired once their paid window has elapsed. */
+/**
+ * Lazily flip approved ads to expired once their paid window has elapsed.
+ *
+ * This is a write on a read path, so it's throttled: the feed page calls it
+ * twice per load (active + own events) and every visitor paid for a fresh
+ * `UPDATE ... WHERE expiresAt <= now()` before a single event could render,
+ * which is what made the Events tab feel slow to appear. Running it at most
+ * once a minute per server instance keeps expiry effectively immediate — the
+ * read below filters on `expiresAt` anyway, so an already-expired event is
+ * never shown regardless of whether the flag has been written yet.
+ */
+let lastExpirySweep = 0
 async function expireDueAnnouncements() {
+  const now = Date.now()
+  if (now - lastExpirySweep < 60_000) return
+  lastExpirySweep = now
   await db
     .update(announcement)
     .set({ status: "declined", declineReason: "Expired" })
