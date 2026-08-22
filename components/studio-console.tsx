@@ -951,6 +951,22 @@ export function StudioConsole({
           )}
         </header>
 
+        {/* The host can be blocked from HEARING the room while still
+            broadcasting to it: the gesture that started the broadcast does not
+            authorise the <audio> elements minted later for each remote speaker.
+            Without this the host had no way back — they simply couldn't hear
+            their guests or their own music. Tapping re-asserts playback and
+            resumes any interrupted AudioContext. */}
+        {live && state.audioBlocked && (
+          <button
+            type="button"
+            onClick={() => void startAudioPlayback()}
+            className="mx-4 mt-3 flex items-center justify-center gap-2 rounded-lg bg-amber-500 px-3 py-2 text-xs font-bold text-amber-950 transition-colors hover:bg-amber-400 sm:mx-6"
+          >
+            <Volume2 className="size-4" strokeWidth={2.5} /> Tap to enable sound
+          </button>
+        )}
+
         {error && (
           <div className="mx-4 mt-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground sm:mx-6">
             {error}
