@@ -1035,9 +1035,9 @@ export function ConversationRoom({
               <ParticipantGrid
                 participants={rest}
                 onTapParticipant={handleTapParticipant}
-                // 5 across: 4 rows normally, 2 rows while the chat takes half
+                // 4 across: 4 rows normally, 2 rows while the chat takes half
                 // the stage (so tiles stay legible instead of shrinking).
-                perPage={chatOpen ? 10 : 20}
+                perPage={chatOpen ? 8 : 16}
               />
             </div>
           </>

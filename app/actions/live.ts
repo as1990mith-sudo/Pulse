@@ -1879,6 +1879,7 @@ export async function setCoHostPermission(input: {
   const patch: Partial<typeof liveCallRequest.$inferInsert> = { updatedAt: new Date() }
   if (input.permission === "acceptRequests") patch.canAcceptRequests = input.enabled
   if (input.permission === "endSession") patch.canEndSession = input.enabled
+  if (input.permission === "saveRecording") patch.canSaveRecording = input.enabled
   if (input.permission === "controlTracks") {
     patch.canControlTracks = input.enabled
     // Revoking Control Tracks immediately hands music back to the host.

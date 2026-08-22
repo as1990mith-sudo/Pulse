@@ -19,13 +19,12 @@ export type GridParticipant = {
   pinned: boolean
 }
 
-// 5 columns x 4 rows. The row count is what's load-bearing here: all four rows
-// must land inside the stage area rather than the last one clipping below the
-// fold, so the grid uses `grid-rows-4` + `min-h-0` instead of letting rows size
-// to their content.
-const COLUMNS = 5
-const ROWS = 4
-const DEFAULT_PER_PAGE = COLUMNS * ROWS
+// 4 columns x 4 rows. The row count is load-bearing: all four rows must land
+// inside the stage area rather than the last one clipping below the fold, so
+// rows are explicit equal tracks (see `gridTemplateRows`) and each tile carries
+// `min-h-0` instead of sizing to its content.
+const COLUMNS = 4
+const DEFAULT_PER_PAGE = COLUMNS * 4
 
 // Horizontal page transition. `custom` carries the swipe direction (1 = forward,
 // -1 = back) so incoming/outgoing pages slide the natural way.
@@ -56,10 +55,10 @@ function ParticipantCard({ p, onTap }: { p: GridParticipant; onTap?: (p: GridPar
       animate={{ opacity: 1, scale: p.isSpeaking ? 1.06 : 1 }}
       exit={{ opacity: 0, scale: 0.6 }}
       transition={{ type: "spring", stiffness: 460, damping: 34, mass: 0.7 }}
-      // `min-h-0` lets the tile shrink inside its fixed row track instead of
-      // forcing the row taller than the stage; the padding and gap are trimmed
-      // to pay for the larger avatar within a narrower 5-column cell.
-      className="flex min-h-0 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl p-0.5 text-center focus:outline-none"
+      // `min-h-0` lets the tile shrink inside its row track rather than forcing
+      // the row taller than the stage. Tiles hug their content (`justify-start`)
+      // so the name sits directly under the avatar instead of drifting.
+      className="flex min-h-0 min-w-0 flex-col items-center justify-start gap-1.5 rounded-2xl p-0.5 text-center focus:outline-none"
     >
       <span className="relative inline-flex">
         {/* Soft animated ring while speaking. */}
@@ -78,7 +77,9 @@ function ParticipantCard({ p, onTap }: { p: GridParticipant; onTap?: (p: GridPar
         </AnimatePresence>
         <Avatar
           className={cn(
-            // 10% larger than the previous 3.5rem/4rem slots.
+            // 10% up on the original 3.5rem/4rem slots. At 4 columns a ~384px
+            // stage gives roughly 78px per cell, so this fills the cell while
+            // leaving room for the speaking ring's 6px glow to breathe.
             "size-[3.85rem] ring-2 transition-colors sm:size-[4.4rem]",
             p.isSpeaking ? "ring-primary/80" : "ring-white/10",
           )}
@@ -180,15 +181,20 @@ export function ParticipantGrid({
             }}
             className="absolute inset-0"
           >
-            {/* 5 columns x N rows. Rows are explicit, evenly-divided tracks
+            {/* 4 columns x N rows. Rows are explicit, evenly-divided tracks
                 rather than content-sized, so the bottom row can't spill past the
-                stage; the tighter x-padding and column gap buy back the width
-                the extra columns cost. Row count is set inline because it varies
-                with `perPage` (4 normally, 2 when the chat is open) and Tailwind
-                can't statically extract a computed class name. */}
+                stage. Row count is set inline because it varies with `perPage`
+                (4 normally, 2 when the chat is open) and Tailwind can't
+                statically extract a computed class name.
+
+                `content-start` + asymmetric padding is what gives the stage its
+                vertical balance: the block of avatars sits high, leaving a
+                deliberately larger gap beneath it than above. Without this the
+                rows stretch to fill the height and the grid reads as bottom-
+                heavy, crowding the dock. */}
             <div
-              className="grid h-full grid-cols-5 gap-x-1 gap-y-1 px-2 py-2"
-              style={{ gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}
+              className="grid h-full grid-cols-4 content-start gap-x-2 gap-y-3 px-3 pb-10 pt-3"
+              style={{ gridTemplateRows: `repeat(${rows}, minmax(0, auto))` }}
             >
               <AnimatePresence mode="popLayout">
                 {pages[clamped].map((p) => (

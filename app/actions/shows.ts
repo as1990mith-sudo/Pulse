@@ -5,7 +5,7 @@ import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { episode, liveStream } from "@/lib/db/schema"
+import { episode, liveCallRequest, liveStream } from "@/lib/db/schema"
 import { getHandle } from "@/lib/identity"
 
 async function requireUser() {
@@ -64,11 +64,32 @@ export async function publishShow(input: {
   let homeId: string | null = null
   if (input.source === "live" && input.roomName) {
     const [row] = await db
-      .select({ homeId: liveStream.homeId })
+      .select({ homeId: liveStream.homeId, hostUserId: liveStream.hostUserId })
       .from(liveStream)
       .where(eq(liveStream.roomName, input.roomName))
       .limit(1)
     homeId = row?.homeId ?? null
+
+    // One canonical episode per session: anyone other than the session's host
+    // needs an explicit "Save Recording" grant. Enforced server-side because the
+    // client gate alone could be bypassed by calling this action directly, which
+    // would let a co-host publish a duplicate (often shorter) copy of the show.
+    if (row && row.hostUserId !== user.id) {
+      const [grant] = await db
+        .select({ canSaveRecording: liveCallRequest.canSaveRecording })
+        .from(liveCallRequest)
+        .where(
+          and(
+            eq(liveCallRequest.roomName, input.roomName),
+            eq(liveCallRequest.userId, user.id),
+            eq(liveCallRequest.role, "cohost"),
+          ),
+        )
+        .limit(1)
+      if (!grant?.canSaveRecording) {
+        return { ok: false, error: "The host hasn't allowed you to save a recording of this session." }
+      }
+    }
   }
 
   const title = input.title.trim() || "Untitled session"

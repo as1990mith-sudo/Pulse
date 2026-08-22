@@ -229,6 +229,7 @@ export function LiveListener({
     acceptRequests: false,
     controlTracks: false,
     endSession: false,
+    saveRecording: false,
   })
   const [myMusicApproved, setMyMusicApproved] = useState(false)
   const [myMusicRequestPending, setMyMusicRequestPending] = useState(false)
@@ -245,8 +246,13 @@ export function LiveListener({
   // they explicitly choose "Save" on the post-end prompt; declining discards it.
   // Intentionally not stopped on step-off — a co-host who steps off and calls
   // back in keeps one continuous take instead of losing the earlier portion.
+  // Gated on the host's explicit "Save Recording" grant, so a session yields ONE
+  // canonical episode (the host's) by default. Enforced here at the capture
+  // source rather than by hiding the save prompt: without permission nothing is
+  // recorded at all, so there's no local copy of the room sitting in memory.
   useEffect(() => {
-    if (myRole !== "cohost" || !state.canPublish || coHostRecordingRef.current) return
+    if (myRole !== "cohost" || !myPermissions.saveRecording) return
+    if (!state.canPublish || coHostRecordingRef.current) return
     coHostRecordingRef.current = true
     coHostRecordedRef.current = true
     coHostRecordStartRef.current = elapsed
@@ -260,7 +266,18 @@ export function LiveListener({
     }
     // `elapsed` is read as a one-shot start offset, so it must not re-run this.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [myRole, state.canPublish, startRecording])
+  }, [myRole, myPermissions.saveRecording, state.canPublish, startRecording])
+
+  // If the host revokes "Save Recording" (or demotes them) mid-session, stop and
+  // discard the take immediately. Otherwise a co-host who was recording would
+  // keep a copy they're no longer permitted to publish.
+  useEffect(() => {
+    if (!coHostRecordingRef.current) return
+    if (myRole === "cohost" && myPermissions.saveRecording) return
+    coHostRecordingRef.current = false
+    coHostRecordedRef.current = false
+    void stopRecording().catch(() => null)
+  }, [myRole, myPermissions.saveRecording, stopRecording])
 
   async function join() {
     setError(null)
