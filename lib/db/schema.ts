@@ -106,6 +106,18 @@ export const feedPost = pgTable("feed_post", {
   // Homes) belongs to more than one. Null = a legacy/pre-scoping post, which is
   // therefore not shown in any Home feed.
   homeId: text("homeId"),
+  // IMMUTABLE publishing context, stamped once at creation and never recomputed
+  // on read. "home" = published as the organisation by an admin of the Home that
+  // was active at the time; "personal" = published as the individual.
+  //
+  // This is what makes identity survive a role change: if an admin is later
+  // demoted to member, their old Home posts stay Home posts, and posts they made
+  // as an ordinary member never become Home posts. Never derive identity by
+  // re-checking the author's CURRENT role — read these columns instead.
+  publishedAsType: text("publishedAsType").notNull().default("personal"),
+  // The author's role in `homeId` at the moment of publication (e.g. "owner",
+  // "administrator", "member"). Audit trail for the decision above.
+  publishedAsRole: text("publishedAsRole"),
   // Resolved @mentions in `text`, in the order they appear. Each item is
   // { userId, name } for a user who passed the privacy check at save time.
   // Drives clickable mention links + notifications. Null/empty for none.
@@ -1204,6 +1216,17 @@ export const article = pgTable("article", {
   authorName: text("authorName").notNull(),
   authorHandle: text("authorHandle").notNull(),
   authorImage: text("authorImage"),
+  // The Home this article was published INTO, and the organisation it is
+  // attributed to when published as a Home. Null on both = a personal article,
+  // which is the case for every article written before Home scoping existed.
+  homeId: text("homeId"),
+  organizationId: text("organizationId"),
+  // IMMUTABLE publishing context — see feedPost.publishedAsType. A Home article
+  // stays a Home article even if its author is later demoted. The author always
+  // keeps it in their personal authored history regardless, but the *publishing
+  // identity* shown on the article is decided by these columns alone.
+  publishedAsType: text("publishedAsType").notNull().default("personal"),
+  publishedAsRole: text("publishedAsRole"),
   title: text("title").notNull(),
   // Short plain-text summary shown on cards + used for SEO/meta. Derived from
   // the body on save when the author leaves it blank.
@@ -1511,11 +1534,23 @@ export const home = pgTable(
     // "approval" (creates a pending request an admin must approve).
     joinPolicy: text("joinPolicy").notNull().default("auto"),
     status: text("status").notNull().default("active"),
+    // Soft deletion. Deleting a Home dissolves the ORGANISATION, never the
+    // personal accounts of its members: members keep their account, profile and
+    // any content they published under their own identity.
+    //
+    // deletedAt marks the moment deletion was requested; the Home immediately
+    // disappears from member-facing surfaces. purgeAfter is deletedAt + 30 days,
+    // when the Home's own organisational content is permanently destroyed. Until
+    // then the row is retained so the deletion is recoverable and historical
+    // data isn't pretended out of existence.
+    deletedAt: timestamp("deletedAt"),
+    purgeAfter: timestamp("purgeAfter"),
     createdAt: timestamp("createdAt").notNull().defaultNow(),
     updatedAt: timestamp("updatedAt").notNull().defaultNow(),
   },
   (t) => ({
     orgIdx: uniqueIndex("home_organization_idx").on(t.organizationId),
+    deletedIdx: index("home_deleted_idx").on(t.deletedAt),
   }),
 )
 

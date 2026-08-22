@@ -3,7 +3,7 @@ import { ChevronRight, Mic, Video } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
 import { GoLiveHero } from "@/components/go-live-toggle"
 import { getLiveStreams } from "@/app/actions/live"
-import { canViewerGoLive } from "@/lib/home/access"
+import { canViewerGoLive } from "@/lib/home/active-home"
 
 /**
  * The full-width LIVE status pill at the top of the Live tab. Shows a pulsing
