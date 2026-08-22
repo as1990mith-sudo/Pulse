@@ -164,11 +164,17 @@ async function endStaleStreams(): Promise<void> {
  * or ended elsewhere), which tells the client to stop and finalize.
  */
 export async function heartbeatBroadcast(input: { roomName: string }): Promise<{ ok: boolean; ended: boolean }> {
-  const user = await requireUser()
+  // Resolved leniently rather than via requireUser(): this runs on an interval
+  // from the shared room shell, so for a signed-out guest a throwing guard would
+  // fire repeatedly. A guest is never the host, so report "not ended" and stop.
+  const actor = await getLiveActor()
+  if (!actor || actor.isGuest) return { ok: true, ended: false }
   const rows = await db
     .update(liveStream)
     .set({ lastSeenAt: new Date() })
-    .where(and(eq(liveStream.roomName, input.roomName), eq(liveStream.hostId, user.id), eq(liveStream.status, "live")))
+    .where(
+      and(eq(liveStream.roomName, input.roomName), eq(liveStream.hostId, actor.id), eq(liveStream.status, "live")),
+    )
     .returning({ id: liveStream.id })
   return { ok: true, ended: rows.length === 0 }
 }
@@ -371,7 +377,7 @@ export async function startBroadcast(input: {
     status: "live",
   })
 
-  // ── Server-side replay recording (VIDEO only) ────────────────────────────
+  // ── Server-side replay recording (VIDEO only) ───────��────────────────────
   // The replay is recorded on LiveKit's servers via Egress, not the host's
   // device. Egress is deliberately NOT started here: at this point the host's
   // browser hasn't connected to the room yet, so compositing would record an

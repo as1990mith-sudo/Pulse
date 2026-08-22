@@ -125,17 +125,26 @@ function ParticipantCard({
           {p.isLocal ? "You" : p.name}
         </span>
       </span>
-      {p.isHost && (
-        <span className="flex items-center gap-0.5 text-[9px] font-semibold uppercase tracking-wide text-live">
-          <Shield className="size-2" strokeWidth={3} /> Host
-        </span>
-      )}
+      {/* Rendered for everyone (hidden for non-hosts) rather than only for the
+          host. The host's label is a third line of content, so mounting it
+          conditionally made that one tile taller than its neighbours and pushed
+          it into the row below. Reserving the line on every tile keeps all tiles
+          the same height, which is what actually keeps the rows aligned. */}
+      <span
+        aria-hidden={!p.isHost}
+        className={cn(
+          "flex items-center gap-0.5 text-[9px] font-semibold uppercase tracking-wide text-live",
+          !p.isHost && "invisible",
+        )}
+      >
+        <Shield className="size-2" strokeWidth={3} /> Host
+      </span>
     </motion.button>
   )
 }
 
 /**
- * Paginated, swipeable participant grid — 20 people per page (5x4). Cards fade/scale
+ * Paginated, swipeable participant grid — 16 people per page (4x4). Cards fade/scale
  * in on join, reorder smoothly, and pages slide with spring physics. Empty
  * seats are never shown (only present participants render).
  */
