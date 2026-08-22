@@ -18,7 +18,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { authClient } from "@/lib/auth-client"
+import { authClient, useSession } from "@/lib/auth-client"
 import { createHome, type CreateHomeInput } from "@/app/actions/home"
 import { uploadMedia, compressImage } from "@/lib/upload-media"
 import { HOME_ORG_TYPES, type HomeOrgTypeId } from "@/lib/home/org-types"
@@ -29,7 +29,7 @@ import { AccentPicker } from "./accent-picker"
 import { BrandingUpload } from "./branding-upload"
 import { PlanCards } from "@/components/home/plan-cards"
 
-const STEPS = [
+const ALL_STEPS = [
   { id: "org", label: "Organisation" },
   { id: "details", label: "Details" },
   { id: "identity", label: "Identity" },
@@ -46,6 +46,16 @@ export function HomeOnboarding() {
   const [stepIdx, setStepIdx] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // An already-signed-in user creating another Home is the SAME person — they
+  // become this Home's Owner using their existing account. Asking them for a
+  // name/email/password again would either fail (email already registered) or
+  // silently create a second, duplicate account. So the Administrator step is
+  // dropped from the flow entirely when a session exists.
+  const { data: session, isPending: sessionPending } = useSession()
+  const signedIn = Boolean(session?.user)
+
+  const STEPS = useMemo(() => ALL_STEPS.filter((s) => s.id !== "admin" || !signedIn), [signedIn])
 
   // Step 1 — organisation information
   const [orgName, setOrgName] = useState("")
@@ -103,7 +113,10 @@ export function HomeOnboarding() {
     setCoverPreview(null)
   }
 
-  const stepId = STEPS[stepIdx].id
+  // The step list shrinks by one the moment the session resolves, so clamp the
+  // index rather than indexing past the end (which would crash on undefined).
+  const safeStepIdx = Math.min(stepIdx, STEPS.length - 1)
+  const stepId = STEPS[safeStepIdx].id
 
   // Per-step validation gates the "Continue" button so users can't advance
   // past a step with missing required fields. Keyed by step id so it stays
@@ -115,6 +128,7 @@ export function HomeOnboarding() {
       case "plan":
         return Boolean(plan)
       case "admin":
+        // Only reachable when signed out; a signed-in owner never sees this step.
         return adminName.trim().length > 1 && /\S+@\S+\.\S+/.test(email) && password.length >= 8
       default:
         return true // details/identity/review are not hard-blocking
@@ -125,6 +139,7 @@ export function HomeOnboarding() {
     setError(null)
     setStepIdx((i) => Math.min(i + 1, STEPS.length - 1))
   }
+
   function back() {
     setError(null)
     setStepIdx((i) => Math.max(i - 1, 0))
@@ -134,13 +149,18 @@ export function HomeOnboarding() {
     setError(null)
     setSubmitting(true)
     try {
-      // 1) Create the administrator account (autoSignIn establishes a session).
-      const { error: signUpError } = await authClient.signUp.email({
-        email: email.trim(),
-        password,
-        name: adminName.trim(),
-      })
-      if (signUpError) throw new Error(signUpError.message ?? "Could not create your administrator account.")
+      // 1) Establish the owner's session. If they're already signed in we reuse
+      // that account as-is — createHome() makes the *caller* the Owner, so the
+      // existing session is all that's needed. Only a visitor creating their
+      // first Home needs an account created here (autoSignIn signs them in).
+      if (!signedIn) {
+        const { error: signUpError } = await authClient.signUp.email({
+          email: email.trim(),
+          password,
+          name: adminName.trim(),
+        })
+        if (signUpError) throw new Error(signUpError.message ?? "Could not create your administrator account.")
+      }
 
       // 2) Now authenticated — upload branding blobs.
       let logoUrl: string | undefined
@@ -204,11 +224,11 @@ export function HomeOnboarding() {
           Frequency Home
         </div>
         <span className="text-xs text-muted-foreground">
-          Step {stepIdx + 1} of {STEPS.length}
+          Step {safeStepIdx + 1} of {STEPS.length}
         </span>
       </div>
 
-      <StepIndicator steps={STEPS.map((s) => ({ id: s.id, label: s.label }))} current={stepIdx} />
+      <StepIndicator steps={STEPS.map((s) => ({ id: s.id, label: s.label }))} current={safeStepIdx} />
 
       <div className="mt-8 flex-1">
         {stepId === "org" && (
@@ -410,8 +430,10 @@ export function HomeOnboarding() {
               logoPreview={logoPreview}
               accent={accent}
               plan={plan}
-              adminName={adminName}
-              email={email}
+              // Show the real owner. When signed in, that's the existing
+              // account — not the (deliberately empty) admin-step fields.
+              adminName={signedIn ? (session?.user?.name ?? "") : adminName}
+              email={signedIn ? (session?.user?.email ?? "") : email}
             />
           </Section>
         )}
@@ -425,7 +447,7 @@ export function HomeOnboarding() {
 
       {/* Sticky footer navigation */}
       <div className="mt-8 flex items-center justify-between gap-3 border-t border-border/60 pt-6">
-        {stepIdx > 0 ? (
+        {safeStepIdx > 0 ? (
           <Button type="button" variant="ghost" onClick={back} disabled={submitting} className="gap-1.5">
             <ArrowLeft className="size-4" /> Back
           </Button>
@@ -433,12 +455,20 @@ export function HomeOnboarding() {
           <span />
         )}
 
-        {stepIdx < STEPS.length - 1 ? (
+        {safeStepIdx < STEPS.length - 1 ? (
           <Button type="button" onClick={next} disabled={!canContinue} className="gap-1.5 px-6">
             Continue <ArrowRight className="size-4" />
           </Button>
         ) : (
-          <Button type="button" onClick={handleCreate} disabled={submitting || !canContinue} className="gap-2 px-6">
+          <Button
+            type="button"
+            onClick={handleCreate}
+            // Wait for the session check before submitting: acting while it's
+            // still pending could wrongly take the signed-out path and try to
+            // register an account the user already has.
+            disabled={submitting || !canContinue || sessionPending}
+            className="gap-2 px-6"
+          >
             {submitting ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
             {submitting ? "Creating your Home…" : "Create Home"}
           </Button>

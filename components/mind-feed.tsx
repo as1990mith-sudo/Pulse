@@ -106,6 +106,7 @@ const POPUP_MENU_ITEM =
   "gap-3 rounded-xl px-3 py-2.5 text-[15px] font-medium transition-colors active:bg-white/10 [&_svg]:size-5"
 import { linkify, extractFirstUrl } from "@/lib/linkify"
 import { renderMessageBody } from "@/lib/rich-text"
+import { CLAMP_LINES } from "@/components/clamped-text"
 import { LinkPreview } from "@/components/link-preview"
 import { AnnouncementBanner } from "@/components/announcement-banner"
 import type { AnnouncementView } from "@/app/actions/announcements"
@@ -211,7 +212,9 @@ const FeedPostItem = memo(function FeedPostItem({
   currentUser: CurrentUser | null
   highlighted: boolean
 }) {
-  return <PostCard post={post} currentUser={currentUser} variant="feed" highlighted={highlighted} />
+  return (
+    <PostCard post={post} currentUser={currentUser} variant="feed" clampSurface="feed" highlighted={highlighted} />
+  )
 })
 
 export function MindFeed({
@@ -600,6 +603,7 @@ export function MindFeed({
                 post={post}
                 currentUser={currentUser}
                 variant="feed"
+                clampSurface="feed"
                 highlighted={highlightedPost === String(post.id)}
                 videoFeedPosts={allPosts}
               />
@@ -1156,12 +1160,19 @@ export function PostCard({
   variant = "card",
   highlighted = false,
   videoFeedPosts,
+  clampSurface = "post",
 }: {
   post: FeedPostView
   currentUser: CurrentUser | null
   // "feed" blends edge-to-edge into the immersive scroll; "card" keeps the
   // boxed look used on profile pages.
   variant?: "card" | "feed"
+  // Which truncation rule set applies. The MAIN FEED ("feed") clamps a member
+  // post carrying media to a two-line lede; everywhere else the same post gets
+  // the standard six-line preview. Organisation posts always get seven lines,
+  // on every surface. This is deliberately separate from `variant`, which only
+  // controls the card's visual chrome.
+  clampSurface?: "feed" | "post"
   // Briefly ring the card when it's the deep-linked target of a shared link.
   highlighted?: boolean
   // Sibling posts to browse in the immersive video viewer (vertical swipe).
@@ -1355,11 +1366,17 @@ export function PostCard({
           : []
   const hasMedia = mediaItems.length > 0
 
-  // Captions fade into an inline "Read more" toggle based on line count — after
-  // the first line when the post carries media, or after 11 lines for a
-  // text-only post. Line height here is 1.25 (leading-tight).
+  // Captions fade into an inline "Read more" toggle based on line count.
+  // Line height here is 1.25 (leading-tight).
   const POST_LINE_HEIGHT = 1.25
-  const clampLines = hasMedia ? 1 : 11
+  const clampLines = post.orgHandle
+    ? // Organisation / Home posts: seven lines, on every surface.
+      CLAMP_LINES.ORG
+    : clampSurface === "feed" && hasMedia
+      ? // Main feed, member post with media: a tight two-line lede.
+        CLAMP_LINES.MEDIA
+      : // Everything else (text-only, or the same post on a profile/channel).
+        CLAMP_LINES.POST
   const collapsedMaxEm = clampLines * POST_LINE_HEIGHT
   // A clamped, un-expanded caption that actually overflows shows the fade.
   const isClamped = clampable && !expanded

@@ -54,28 +54,13 @@ import {
   PostMeta,
   SaveButton,
 } from "@/components/community-help-shared"
+import { ClampedText, CLAMP_LINES } from "@/components/clamped-text"
 
 /* -------------------------------------------------------------------------- */
 /*  Question text with graceful "See more" collapse                           */
 /* -------------------------------------------------------------------------- */
 
-function QuestionText({ text, onOpen, hasMedia = false }: { text: string; onOpen: () => void; hasMedia?: boolean }) {
-  const [expanded, setExpanded] = useState(false)
-  const [clampable, setClampable] = useState(false)
-  const ref = useRef<HTMLParagraphElement>(null)
-
-  // Twitter-style truncation: a post WITH media gets a tight 4-line preview (the
-  // media does the visual work), a text-only post gets a longer 7-line preview
-  // before "Read more" appears. Clamp class is a literal so Tailwind emits it.
-  const clampClass = hasMedia ? "line-clamp-4" : "line-clamp-[7]"
-
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    // Measured while the clamp is applied: overflow ⇒ offer "Read more".
-    setClampable(el.scrollHeight - el.clientHeight > 4)
-  }, [text, hasMedia])
-
+function QuestionText({ text, onOpen }: { text: string; onOpen: () => void }) {
   return (
     <div
       role="button"
@@ -89,29 +74,15 @@ function QuestionText({ text, onOpen, hasMedia = false }: { text: string; onOpen
       }}
       className="mt-1 cursor-pointer outline-none"
     >
-      <p
-        ref={ref}
-        className={cn(
-          "whitespace-pre-wrap break-words text-[15.5px] leading-relaxed text-foreground text-pretty",
-          !expanded && clampClass,
-        )}
+      {/* Six-line preview, then an inline "Read more" that expands in place and
+          collapses again — the reader stays in the timeline rather than being
+          navigated into the post. */}
+      <ClampedText
+        lines={CLAMP_LINES.POST}
+        className="whitespace-pre-wrap break-words text-[15.5px] leading-relaxed text-foreground text-pretty"
       >
         {renderMessageBody(text, { link: true, mention: true })}
-      </p>
-      {clampable && !expanded && (
-        <button
-          type="button"
-          onClick={(e) => {
-            // Expand inline rather than opening the post, so the reader stays in
-            // the feed (matches how X reveals the rest of a long tweet in place).
-            e.stopPropagation()
-            setExpanded(true)
-          }}
-          className="mt-1 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
-        >
-          Read more
-        </button>
-      )}
+      </ClampedText>
     </div>
   )
 }
@@ -358,7 +329,7 @@ function PostItem({
           </div>
         ) : (
           <>
-            {body && <QuestionText text={body} onOpen={onOpen} hasMedia={Boolean(post.imageUrl || post.videoUrl)} />}
+            {body && <QuestionText text={body} onOpen={onOpen} />}
             <BibleChips text={body} className="mt-3" />
           </>
         )}

@@ -14,6 +14,13 @@ import {
   type RemoteParticipant,
   type VideoCaptureOptions,
 } from "livekit-client"
+import {
+  buildMusicChain,
+  DUCK_FACTOR,
+  LIVE_MIC_CONSTRAINTS,
+  LIVE_VOICE_PRESET,
+  rampGain,
+} from "@/lib/live-audio-chain"
 import { LiveCompositor, type CompositorSource } from "@/lib/live-compositor"
 import { fixRecordedVideoDuration } from "@/lib/webm-duration"
 
@@ -298,7 +305,9 @@ export function useLiveVideo({
   const musicGainRef = useRef<GainNode | null>(null)
   // The host's intended (non-ducked) music volume, so ducking can restore it.
   const musicBaseVolumeRef = useRef(0.8)
-  const musicBassRef = useRef<BiquadFilterNode | null>(null)
+  // Final node of the shared studio chain (post limiter). Monitor, published
+  // track and recording mixer all tap this same node.
+  const musicChainOutRef = useRef<AudioNode | null>(null)
   const musicElRef = useRef<HTMLAudioElement | null>(null)
   const musicTrackRef = useRef<LocalAudioTrack | null>(null)
   const musicSourceRef = useRef<MediaElementAudioSourceNode | null>(null)
@@ -587,24 +596,7 @@ export function useLiveVideo({
       // the voice in only the LEFT channel (right silent), which the stereo
       // encoder relays faithfully — so viewers hear the host in one ear only.
       // Mono capture is rendered to both ears equally.
-      audioCaptureDefaults: {
-        autoGainControl: true,
-        echoCancellation: true,
-        noiseSuppression: true,
-        // Stronger, neural (Krisp-style) noise removal. This is the single
-        // biggest cleanliness win for the mic: it strips room tone, fans, HVAC,
-        // traffic and handling noise far more aggressively than plain
-        // noiseSuppression, isolating just the speaker's voice. It's an
-        // experimental constraint, so where a browser doesn't support it the
-        // value is simply ignored and we fall back to noiseSuppression above —
-        // never worse than before, cleaner where available.
-        voiceIsolation: true,
-        channelCount: 1,
-        sampleRate: 48000,
-        // Ask for the full 16-bit sample depth so the captured signal has the
-        // maximum dynamic range before Opus encoding (quieter, cleaner floor).
-        sampleSize: 16,
-      },
+      audioCaptureDefaults: LIVE_MIC_CONSTRAINTS,
       publishDefaults: {
         // Simulcast so viewers on weak networks still receive a lower layer,
         // while good connections get the full-quality feed. 4:3 layers match
@@ -641,7 +633,7 @@ export function useLiveVideo({
         // lose a little image sharpness than have the sermon audio break up).
         // forceStereo is intentionally NOT set — the mic is a mono source; the
         // genuinely-stereo background music opts into stereo on its own track.
-        audioPreset: { maxBitrate: 128_000, priority: "high" },
+        audioPreset: LIVE_VOICE_PRESET,
         // DTX off avoids the discontinuous-transmission codec swirling/clipping
         // quiet passages and room tone (it's meant for choppy VoIP, not a clean
         // continuous broadcast). RED duplicates audio packets so brief network
@@ -991,24 +983,16 @@ export function useLiveVideo({
 
     if (!musicSourceRef.current) {
       const source = ctx.createMediaElementSource(el)
-      const gain = ctx.createGain()
-      // Start at the host's intended base level (not a hardcoded 0.4). With mic
-      // echo cancellation on, the host's own speaker output is treated as echo
-      // and suppressed, so a low starting gain made the background music sound
-      // muffled/suppressed to the host. Initialising at the base keeps it clear.
-      gain.gain.value = musicBaseVolumeRef.current
-      const bass = ctx.createBiquadFilter()
-      bass.type = "lowshelf"
-      // A gentle low-shelf lift keeps warmth without muddying the mids. The old
-      // +7 dB boost smeared sustained music, so keep it subtle.
-      bass.frequency.value = 180
-      bass.gain.value = 2
-      source.connect(gain)
-      gain.connect(bass)
-      bass.connect(ctx.destination)
+      // Shared studio chain (high-pass → warmth → harshness dip → gain →
+      // compressor → limiter), identical to every other Live type. Starts at
+      // the host's intended base level (not a hardcoded 0.4): with mic echo
+      // cancellation on, the host's own speaker output is treated as echo and
+      // suppressed, so a low starting gain made the music sound muffled.
+      const chain = buildMusicChain(ctx, source, musicBaseVolumeRef.current)
+      chain.output.connect(ctx.destination)
       musicSourceRef.current = source
-      musicGainRef.current = gain
-      musicBassRef.current = bass
+      musicGainRef.current = chain.gain
+      musicChainOutRef.current = chain.output
     }
 
     el.loop = musicLoopRef.current
@@ -1018,11 +1002,11 @@ export function useLiveVideo({
     await el.play().catch(() => {})
 
     if (!musicTrackRef.current) {
-      const bass = musicBassRef.current!
+      const chainOut = musicChainOutRef.current!
       // Two channels so the high-quality stereo preset actually carries stereo.
       const dest = ctx.createMediaStreamDestination()
       dest.channelCount = 2
-      bass.connect(dest)
+      chainOut.connect(dest)
       const [mediaTrack] = dest.stream.getAudioTracks()
       const localTrack = new LocalAudioTrack(mediaTrack)
       // Publish background music with a high-quality stereo preset so it stays
@@ -1043,17 +1027,7 @@ export function useLiveVideo({
 
   /** Smoothly ramps the music gain (no sudden jumps). */
   const rampMusicVolume = useCallback((target: number, ms = 300) => {
-    const gain = musicGainRef.current
-    const ctx = musicCtxRef.current
-    if (!gain) return
-    if (ctx) {
-      const now = ctx.currentTime
-      gain.gain.cancelScheduledValues(now)
-      gain.gain.setValueAtTime(gain.gain.value, now)
-      gain.gain.linearRampToValueAtTime(Math.max(0.0001, target), now + Math.max(0.01, ms / 1000))
-    } else {
-      gain.gain.value = target
-    }
+    rampGain(musicCtxRef.current, musicGainRef.current, target, ms)
   }, [])
 
   const setMusicVolume = useCallback(
@@ -1067,14 +1041,15 @@ export function useLiveVideo({
 
   /**
    * Ducks (or restores) background music around live speech. When `ducked`, the
-   * gain fades to 18% of the host's base volume; otherwise it fades back to the
-   * full base. Driven by the host's "Lower music under speech" toggle — when the
-   * host turns it off, `ducked = false` keeps music at full. Fades are smooth.
+   * gain fades to DUCK_FACTOR of the host's base volume; otherwise it fades back
+   * to the full base. Driven by the host's "Lower music under speech" toggle —
+   * when the host turns it off, `ducked = false` keeps music at full. Fades are
+   * smooth, and the factor is shared across every Live type.
    */
   const duckMusic = useCallback(
     (ducked: boolean, ms = 320) => {
       const base = musicBaseVolumeRef.current
-      rampMusicVolume(ducked ? base * 0.18 : base, ms)
+      rampMusicVolume(ducked ? base * DUCK_FACTOR : base, ms)
     },
     [rampMusicVolume],
   )

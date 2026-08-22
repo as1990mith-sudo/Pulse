@@ -1,12 +1,10 @@
 import { notFound } from "next/navigation"
 import { getProfile } from "@/lib/profile"
-import { getEpisodesByUser } from "@/lib/content"
 import { getPublicCommunityPostsByUser, getAnonymousCommunityPostsByUser } from "@/app/actions/community"
 import { getFeedPostsByUser } from "@/app/actions/feed"
 import { getActiveStatusForUser } from "@/app/actions/status"
 import { getWriterArticles } from "@/app/actions/articles"
 import { getCurrentUser } from "@/lib/session"
-import { isStaffUser } from "@/lib/admin-auth"
 import { SiteHeader } from "@/components/site-header"
 import { ProfileFollowButton } from "@/components/profile/profile-follow-button"
 import { ProfileMessageButton } from "@/components/profile/profile-message-button"
@@ -33,22 +31,17 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
   const profile = await getProfile(id)
   if (!profile) notFound()
 
-  const [episodes, feedPosts, communityPosts, anonymousPosts, currentUser, statusGroup, articles, ownerIsStaff] =
-    await Promise.all([
-      getEpisodesByUser(id, profile.isSelf),
-      // Main-feed posts power the "Posts" tab. Public (identifiable) Community Help
-      // posts feed the "Thread" tab for every viewer; anonymous posts are fetched
-      // only for the owner's own profile — the action returns nothing otherwise.
-      getFeedPostsByUser(id),
-      getPublicCommunityPostsByUser(id),
-      profile.isSelf ? getAnonymousCommunityPostsByUser(id) : Promise.resolve([]),
-      getCurrentUser(),
-      getActiveStatusForUser(id),
-      getWriterArticles(id),
-      // Catalogue (live episodes) is a staff-only surface, so the tab only shows
-      // on admin/staff profiles. Members don't host, so they have no catalogue.
-      isStaffUser(id),
-    ])
+  const [feedPosts, communityPosts, anonymousPosts, currentUser, statusGroup, articles] = await Promise.all([
+    // Main-feed posts power the "Posts" tab. Public (identifiable) Community Help
+    // posts feed the "Thread" tab for every viewer; anonymous posts are fetched
+    // only for the owner's own profile — the action returns nothing otherwise.
+    getFeedPostsByUser(id),
+    getPublicCommunityPostsByUser(id),
+    profile.isSelf ? getAnonymousCommunityPostsByUser(id) : Promise.resolve([]),
+    getCurrentUser(),
+    getActiveStatusForUser(id),
+    getWriterArticles(id),
+  ])
 
   return (
     <div className="min-h-screen">
@@ -127,12 +120,10 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
           name={profile.name}
           isSelf={profile.isSelf}
           currentUser={currentUser}
-          episodes={episodes}
           feedPosts={feedPosts}
           communityPosts={communityPosts}
           anonymousPosts={anonymousPosts}
           articles={articles}
-          showCatalogue={ownerIsStaff}
         />
       </main>
     </div>

@@ -10,6 +10,8 @@ type Preview = {
   description: string | null
   image: string | null
   siteName: string | null
+  /** Site logo, sent only when the page has no `og:image`. */
+  icon?: string | null
 }
 
 const fetcher = async (key: string): Promise<Preview | null> => {
@@ -71,12 +73,13 @@ export function LinkPreview({
   if (compact) {
     if (isLoading) {
       return (
-        <div className={cn("w-full max-w-[15rem]", className)}>
-          <div className="flex items-center gap-3 overflow-hidden rounded-xl border border-border/60 bg-card/40 p-2">
-            <div className="size-12 shrink-0 animate-pulse rounded-lg bg-muted" />
-            <div className="min-w-0 flex-1 space-y-2">
+        <div className={cn("w-full max-w-[17rem]", className)}>
+          <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/60">
+            <div className="aspect-[1.91/1] w-full animate-pulse bg-muted" />
+            <div className="space-y-1.5 px-2.5 py-2">
+              <div className="h-2 w-1/3 animate-pulse rounded bg-muted" />
               <div className="h-3 w-3/4 animate-pulse rounded bg-muted" />
-              <div className="h-2.5 w-1/2 animate-pulse rounded bg-muted" />
+              <div className="h-2 w-1/2 animate-pulse rounded bg-muted" />
             </div>
           </div>
         </div>
@@ -85,17 +88,17 @@ export function LinkPreview({
 
     if (!data) {
       return (
-        <div className={cn("w-full max-w-[15rem]", className)}>
+        <div className={cn("w-full max-w-[17rem] text-left", className)}>
           <a
             href={url}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="flex items-center gap-2.5 rounded-xl border border-border/60 bg-card/40 px-2.5 py-2 transition-colors hover:bg-card/70"
+            className="flex items-center gap-2.5 rounded-2xl border border-border/60 border-l-2 border-l-primary bg-card/60 px-2.5 py-2 transition-colors hover:bg-card"
           >
-            <ExternalLink className="size-4 shrink-0 text-muted-foreground" />
+            <ExternalLink className="size-4 shrink-0 text-primary" />
             <span className="min-w-0">
-              <span className="block truncate text-xs font-semibold text-foreground">{host}</span>
+              <span className="block truncate text-[13px] font-semibold text-foreground">{host}</span>
               <span className="block truncate text-[11px] text-muted-foreground">{url}</span>
             </span>
           </a>
@@ -103,28 +106,53 @@ export function LinkPreview({
       )
     }
 
+    // A native-messenger link card: thumbnail on top, then domain / title /
+    // description, then the URL itself. The left orange rule is the only accent,
+    // which keeps the card readable without flooding the thread with colour.
+    // `text-left` resets the right-alignment an outgoing bubble applies, since
+    // card copy always reads from the left regardless of who sent it.
     return (
-      <div className={cn("w-full max-w-[15rem]", className)}>
+      <div className={cn("w-full max-w-[17rem] text-left", className)}>
         <a
           href={data.url || url}
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
-          className="flex items-stretch gap-2.5 overflow-hidden rounded-xl border border-border/60 bg-card/40 p-2 transition-colors hover:bg-card/70"
+          className="block overflow-hidden rounded-2xl border border-border/60 bg-card/60 transition-colors hover:bg-card"
         >
           {data.image && (
-            <div className="size-12 shrink-0 overflow-hidden rounded-lg bg-muted">
+            <div className="aspect-[1.91/1] w-full overflow-hidden bg-muted">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={data.image || "/placeholder.svg"} alt="" className="size-full object-cover" loading="lazy" />
             </div>
           )}
-          <div className="flex min-w-0 flex-1 flex-col justify-center">
-            <p className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              {data.siteName || host}
+          <div className="border-l-2 border-primary px-2.5 py-2">
+            <p className="flex items-center gap-1.5 truncate text-[10px] font-semibold uppercase tracking-wider text-primary">
+              {/* With no banner image, the site's own logo sits inline beside the
+                  domain — a 32px icon stretched across the card reads as broken. */}
+              {!data.image && data.icon && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={data.icon || "/placeholder.svg"}
+                  alt=""
+                  className="size-4 shrink-0 rounded-[4px] object-cover"
+                  loading="lazy"
+                />
+              )}
+              <span className="truncate">{data.siteName || host}</span>
             </p>
             {data.title && (
-              <p className="line-clamp-2 text-xs font-semibold leading-snug text-foreground">{data.title}</p>
+              <p className="mt-0.5 line-clamp-2 text-[13px] font-semibold leading-snug text-foreground">{data.title}</p>
             )}
+            {data.description && (
+              <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
+                {data.description}
+              </p>
+            )}
+            <span className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+              <LinkIcon className="size-2.5 shrink-0" />
+              <span className="truncate">{host}</span>
+            </span>
           </div>
         </a>
       </div>

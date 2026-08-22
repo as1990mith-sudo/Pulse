@@ -63,3 +63,45 @@ export function formatChatTimestamp(value: Date | string | number): string {
   )
   return `${date}, ${time}`
 }
+
+/**
+ * The clock time alone, e.g. "2:50 PM".
+ *
+ * Used for the per-message timestamp in a chat thread, where the day is already
+ * established by a day separator above the message — repeating the date on every
+ * bubble is the noise this replaces.
+ */
+export function formatChatClock(value: Date | string | number): string {
+  const d = value instanceof Date ? value : new Date(value)
+  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+}
+
+/**
+ * The label for a chat day separator: "Today", "Yesterday", a weekday for the
+ * past week, then a full date beyond that.
+ */
+export function formatChatDay(value: Date | string | number): string {
+  const d = value instanceof Date ? value : new Date(value)
+  const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  const days = Math.round((startOf(new Date()) - startOf(d)) / 86_400_000)
+
+  if (days === 0) return "Today"
+  if (days === 1) return "Yesterday"
+  if (days > 1 && days < 7) return d.toLocaleDateString([], { weekday: "long" })
+
+  const sameYear = d.getFullYear() === new Date().getFullYear()
+  return d.toLocaleDateString(
+    [],
+    sameYear ? { day: "numeric", month: "long" } : { day: "numeric", month: "long", year: "numeric" },
+  )
+}
+
+/** True when two timestamps fall on different calendar days for the viewer. */
+export function isNewChatDay(current: number, previous: number | null): boolean {
+  if (previous == null) return true
+  const a = new Date(current)
+  const b = new Date(previous)
+  return (
+    a.getFullYear() !== b.getFullYear() || a.getMonth() !== b.getMonth() || a.getDate() !== b.getDate()
+  )
+}

@@ -121,6 +121,7 @@ export function StudioConsole({
     toggleMic,
     publishMusic,
     setMusicVolume,
+    duckMusic,
     setMusicPlaying,
     seekMusic,
     setMusicLoop,
@@ -195,6 +196,56 @@ export function StudioConsole({
   const [musicError, setMusicError] = useState<string | null>(null)
   // Loop the current track instead of advancing to the next one when it ends.
   const [musicLoop, setMusicLoopState] = useState(false)
+  // Host choice: whether background music automatically dips under live speech
+  // (default on). When off, music holds at the host's set volume.
+  const [duckEnabled, setDuckEnabled] = useState(true)
+
+  // Release-hold timer so the music doesn't "pump" up and down between words:
+  // it only rises back to full once the room has been quiet for a moment.
+  const duckReleaseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Sidechain ducking (host-toggleable). While anyone on the show is actively
+  // speaking (host, guest or participant), dip the background music so voices
+  // cut through cleanly — and, just as important, so each speaker's mic echo-
+  // canceller/noise-suppressor isn't fighting loud sustained music bleeding
+  // from their device speakers, which is what makes a voice sound muffled.
+  // Fast attack when speech starts; a short hold + gentle release when it
+  // stops. When the host turns ducking off, music holds at its full set volume.
+  //
+  // This mirrors the working implementation in Audio Live (conversation-room)
+  // and Video Live (video-studio-console) exactly, driving the same shared
+  // duckMusic() from the same state.speaking signal, so Podcast Live behaves
+  // identically rather than having its own parallel system.
+  useEffect(() => {
+    if (musicActiveIndex === null || !musicPlaying) return
+    if (!duckEnabled) {
+      // Ensure any prior dip is released back to full when ducking is disabled.
+      if (duckReleaseRef.current) {
+        clearTimeout(duckReleaseRef.current)
+        duckReleaseRef.current = null
+      }
+      duckMusic(false, 300)
+      return
+    }
+    if (state.speaking) {
+      if (duckReleaseRef.current) {
+        clearTimeout(duckReleaseRef.current)
+        duckReleaseRef.current = null
+      }
+      duckMusic(true, 140)
+    } else {
+      duckReleaseRef.current = setTimeout(() => {
+        duckMusic(false, 480)
+        duckReleaseRef.current = null
+      }, 650)
+    }
+    return () => {
+      if (duckReleaseRef.current) {
+        clearTimeout(duckReleaseRef.current)
+        duckReleaseRef.current = null
+      }
+    }
+  }, [duckEnabled, state.speaking, musicActiveIndex, musicPlaying, duckMusic])
 
   // Mix a playlist track into the broadcast and mark it now-playing.
   async function playMusicTrack(index: number) {
@@ -785,7 +836,10 @@ export function StudioConsole({
 
       <div className="relative flex min-h-0 w-full flex-1 flex-col">
         {/* Broadcast header: cover artwork + live indicator + title + stats */}
-        <header className="relative z-30 flex items-center gap-3 border-b border-white/[0.07] px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)] sm:px-6">
+        {/* Frosted glass, matching the listener/guest header: the cover artwork
+            behind it is blurred rather than showing through cleanly, so the
+            title and live badge stay legible over any artwork. */}
+        <header className="relative z-30 flex items-center gap-3 border-b border-white/10 bg-zinc-950/30 px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)] backdrop-blur-xl sm:px-6">
           <BackExitMenu
             showMenu={live}
             exitLabel="End"
@@ -882,7 +936,7 @@ export function StudioConsole({
         )}
 
         {/* Speaker stage — unified 4-col grid (host first, then guests) */}
-        <div className="relative shrink-0 border-b border-white/[0.07] px-4 py-2.5 sm:px-6">
+        <div className="relative shrink-0 border-b border-white/10 bg-zinc-950/30 px-4 py-2.5 backdrop-blur-xl sm:px-6">
           {/* Status row only appears when there's something to flag, so an idle
               room gives all its vertical space to the call-in slots & chat. */}
           {(locked || pending.length > 0) && (
@@ -912,8 +966,10 @@ export function StudioConsole({
           {live && roomName && <ReactionLayer roomName={roomName} />}
         </div>
 
-        {/* Host control dock ��� compact essentials, sits right under the stage row */}
-        <div className="shrink-0 border-b border-white/[0.07] px-4 py-2.5 sm:px-6">
+        {/* Host control dock — compact essentials, sits right under the stage row.
+            Frosted like the header so the icon row reads as a solid control
+            surface rather than floating transparently over the artwork. */}
+        <div className="shrink-0 border-b border-white/10 bg-zinc-950/30 px-4 py-2.5 backdrop-blur-xl sm:px-6">
           <div className="flex items-center justify-center gap-3 sm:gap-4">
             <DockButton
               icon={micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
@@ -1025,6 +1081,8 @@ export function StudioConsole({
           mixing={musicMixing}
           error={musicError}
           loop={musicLoop}
+          duck={duckEnabled}
+          onToggleDuck={setDuckEnabled}
           onAddTracks={(added) => setMusicTracks((t) => [...t, ...added])}
           onPlayTrack={playMusicTrack}
           onTogglePlay={toggleMusicPlay}
@@ -1489,9 +1547,11 @@ export function MusicPanel({
   mixing: boolean
   loop: boolean
   error: string | null
-  // Optional sidechain-ducking control. Only consoles that mix live speech with
-  // music (audio Conversation, video Studio) pass these; when omitted the toggle
-  // is hidden entirely (e.g. solo podcast / cohost panels don't need it).
+  // Optional sidechain-ducking control. Every Live console that mixes live
+  // speech with music passes these — Podcast Live, Audio Live (Conversation)
+  // and both video Studio formats — so ducking behaves identically everywhere.
+  // Still optional so panels with no speech to duck under (e.g. the co-host
+  // track panel) can omit them and hide the toggle entirely.
   duck?: boolean
   onAddTracks: (tracks: Track[]) => void
   onPlayTrack: (index: number) => void
