@@ -537,7 +537,7 @@ export function ConversationRoom({
 
   // ── Participant grid data ────────────────────────────────────────────────
   const gridParticipants = useMemo<GridParticipant[]>(() => {
-    return speakers.map((s) => ({
+    const mapped = speakers.map((s) => ({
       identity: s.identity,
       name: s.name,
       image: s.image,
@@ -548,6 +548,13 @@ export function ConversationRoom({
       isHost: s.identity === hostId,
       pinned: s.identity === pinnedId,
     }))
+    // The host always takes the first slot, for everyone. LiveKit orders
+    // participants by join time, which put the host wherever they happened to
+    // connect — and on the host's own screen they'd drift as people came and
+    // went. Sorting here (rather than in each consumer) keeps the host's
+    // position identical on the host and participant interfaces. Everyone else
+    // keeps their existing relative order, so tiles don't shuffle unnecessarily.
+    return mapped.sort((a, b) => Number(b.isHost) - Number(a.isHost))
   }, [speakers, hostId, pinnedId])
 
   const pinned = gridParticipants.find((p) => p.pinned) ?? null
@@ -1028,7 +1035,9 @@ export function ConversationRoom({
               <ParticipantGrid
                 participants={rest}
                 onTapParticipant={handleTapParticipant}
-                perPage={chatOpen ? 6 : 12}
+                // 5 across: 4 rows normally, 2 rows while the chat takes half
+                // the stage (so tiles stay legible instead of shrinking).
+                perPage={chatOpen ? 10 : 20}
               />
             </div>
           </>

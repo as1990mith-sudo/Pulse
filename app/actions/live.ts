@@ -1031,6 +1031,9 @@ export type CoHostPermissions = {
   acceptRequests: boolean
   controlTracks: boolean
   endSession: boolean
+  // Gates whether this co-host may publish their own recording of the session.
+  // Off by default so each session produces one canonical episode.
+  saveRecording: boolean
 }
 
 export type CallRequestView = {
@@ -1097,6 +1100,7 @@ function mapRequest(r: typeof liveCallRequest.$inferSelect): CallRequestView {
       acceptRequests: r.canAcceptRequests ?? false,
       controlTracks: r.canControlTracks ?? false,
       endSession: r.canEndSession ?? false,
+      saveRecording: r.canSaveRecording ?? false,
     },
     musicApproved: r.musicApproved ?? false,
     musicRequestPending: r.musicRequestPending ?? false,
@@ -1760,8 +1764,9 @@ export async function getCallState(input: { roomName: string }): Promise<{
           acceptRequests: myCoHost?.canAcceptRequests ?? false,
           controlTracks: myCoHost?.canControlTracks ?? false,
           endSession: myCoHost?.canEndSession ?? false,
+          saveRecording: myCoHost?.canSaveRecording ?? false,
         }
-      : { acceptRequests: false, controlTracks: false, endSession: false }
+      : { acceptRequests: false, controlTracks: false, endSession: false, saveRecording: false }
 
   // A co-host controls music once they have the Control Tracks permission AND
   // their first upload has been approved by the host.
@@ -1842,6 +1847,8 @@ export async function makeCoHost(input: { roomName: string; userId: string }): P
       canAcceptRequests: true,
       canControlTracks: false,
       canEndSession: false,
+      // Deliberately off on promotion: the host's take is the canonical episode.
+      canSaveRecording: false,
       musicApproved: false,
       musicRequestPending: false,
       updatedAt: new Date(),
@@ -1858,7 +1865,7 @@ export async function makeCoHost(input: { roomName: string; userId: string }): P
 export async function setCoHostPermission(input: {
   roomName: string
   userId: string
-  permission: "acceptRequests" | "controlTracks" | "endSession"
+  permission: "acceptRequests" | "controlTracks" | "endSession" | "saveRecording"
   enabled: boolean
 }): Promise<{ ok: boolean; error?: string }> {
   const user = await requireUser()

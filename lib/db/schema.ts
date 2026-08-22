@@ -670,6 +670,11 @@ export const liveCallRequest = pgTable("live_call_request", {
   canAcceptRequests: boolean("canAcceptRequests").notNull().default(false),
   canControlTracks: boolean("canControlTracks").notNull().default(false),
   canEndSession: boolean("canEndSession").notNull().default(false),
+  // Off by default so a session yields ONE canonical episode (the host's). Each
+  // participant records locally, so without this gate both host and co-host
+  // could publish the same session twice — and the co-host's copy is often the
+  // shorter one, since it only covers the stretch they were on the call for.
+  canSaveRecording: boolean("canSaveRecording").notNull().default(false),
   // Music approval flow: the first time a co-host with Control Tracks tries to
   // upload, the host must approve. Once approved they keep control until the
   // Control Tracks permission is revoked.
