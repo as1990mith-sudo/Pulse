@@ -281,8 +281,9 @@ function ArticleCoverCard({ article, className }: { article: ArticleCard; classN
       ) : (
         <div className="absolute inset-0 bg-gradient-to-br from-primary/30 via-secondary/40 to-card" />
       )}
-      {/* Deep scrim keeps the title readable even over busy promo artwork. */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/5" />
+      {/* Scrim confined to the bottom half so the artwork reads through up top;
+          matched to FeaturedArticleCard so every cover on the hub tints alike. */}
+      <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
       <div className="relative p-3.5">
         <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/70">
           {article.category}
