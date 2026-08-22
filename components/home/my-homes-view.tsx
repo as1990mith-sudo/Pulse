@@ -18,7 +18,7 @@ import {
   Users,
 } from "lucide-react"
 import { deleteHome, getMyHomeMemberships, setActiveHome, leaveHome, type MyHomeLink } from "@/app/actions/home"
-import { isHomeAdminRole } from "@/lib/home/roles"
+import { homeRoleLabel, isHomeAdminRole } from "@/lib/home/roles"
 import { Sheet, SheetClose, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
 
@@ -26,10 +26,16 @@ import { cn } from "@/lib/utils"
  * "My Homes" — a compact, flagship-feeling switcher. A native sub-header (back,
  * title, circular +) sits above a single "YOUR HOMES" list of the member's
  * Homes. Every row carries a 3-dot menu that opens the Home's public profile,
- * plus the destructive action for the viewer's role — members can leave, and an
- * owner can permanently delete the Home (admins can do neither). The + reveals a premium bottom sheet with the
- * add-actions — "Join a Home" is hidden for owners, since a Home account can't
- * become a member of another Home. Admin management lives on the org profile.
+ * plus the destructive action for the viewer's role IN THAT HOME — members can
+ * leave, and an owner can permanently delete the Home (admins can do neither).
+ * Each row also shows that Home's own role beneath its name, because a role is
+ * per-Home: the same person can be Admin in one and Member in another.
+ *
+ * The + reveals a bottom sheet offering both "Join a Home" and "Set up a new
+ * Home" to EVERYONE — a person is not their organisation, so owning one Home
+ * never prevents joining another as an ordinary member, nor creating a second.
+ * Admin management lives on the org profile, reached from the 3-dot menu — never
+ * from the account avatar.
  */
 export function MyHomesView() {
   const router = useRouter()
@@ -69,12 +75,6 @@ export function MyHomesView() {
     router.push(`/org/${handle}`)
   }
 
-  // "Join a Home" is available to EVERYONE, including owners. A person is not
-  // their organisation: the owner of Kingdom Academy is still an individual who
-  // may join Grace Community as an ordinary member, and their role is scoped to
-  // each Home separately. Hiding this from owners (as this previously did)
-  // conflated the account with the organisation and locked owners out of
-  // participating anywhere else.
 
   // Switch the active Home context. The interface stays identical — only the
   // organisation's data changes — so we land back at the root of the same UI.
@@ -266,6 +266,14 @@ export function MyHomesView() {
           <SheetTitle className="sr-only">Add a Home</SheetTitle>
           <div className="mx-auto mt-3 h-1 w-9 rounded-full bg-border" aria-hidden />
           <div className="flex flex-col gap-1 p-3 pt-4">
+            {/*
+              "Join a Home" is available to EVERYONE, including owners. A person
+              is not their organisation: the owner of Kingdom Academy is still an
+              individual who may join Grace Community as an ordinary member, and
+              their role is scoped to each Home separately. This was previously
+              hidden from owners, which conflated the account with the
+              organisation and locked owners out of participating anywhere else.
+            */}
             <SheetClose
               render={
                 <Link

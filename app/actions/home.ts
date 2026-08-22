@@ -1,44 +1,21 @@
 "use server"
 
-import { and, desc, eq, inArray, isNotNull, isNull, lt, or } from "drizzle-orm"
+import { and, desc, eq, isNull, or } from "drizzle-orm"
 import { cookies, headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
+// Retention + purge live in a plain module: a "use server" file can only export
+// async functions, and an irreversible data purge must never be client-callable.
+import { HOME_RETENTION_DAYS } from "@/lib/home/retention"
 import {
   announcement,
-  announcementInteraction,
-  article,
-  catalogueItem,
-  chatroom,
-  chatroomJoinRequest,
-  chatroomMember,
-  chatroomMessage,
-  communityComment,
-  communityPost,
-  contentView,
-  devotional,
-  episode,
-  episodeComment,
-  event,
-  eventRsvp,
-  feedComment,
   feedPost,
   home,
-  homeAppointment,
   homeAuthKey,
-  homeBooking,
   homeMembership,
-  liveBlocked,
-  liveCallRequest,
-  liveChatMessage,
-  liveNote,
-  livePresence,
-  liveReaction,
   liveStream,
-  notification,
   organization,
-  repost,
   subscription,
   user as userTable,
 } from "@/lib/db/schema"
@@ -545,142 +522,6 @@ export async function deleteHome(handle: string): Promise<{ ok: true }> {
   return { ok: true }
 }
 
-/** How long a deleted Home's organisational content is retained before purge. */
-export const HOME_RETENTION_DAYS = 30
-
-/**
- * Permanently destroys one soft-deleted Home's organisational data.
- *
- * The critical distinction (requirement 17): content published AS the Home
- * belongs to the Home and dies with it, while content a member published under
- * their OWN identity belongs to that person and must survive. Those personal
- * posts are detached (homeId → null) rather than deleted, so they remain on
- * their author's profile and personal feed. Previously this selected every post
- * carrying the Home's id and deleted the lot, which destroyed members' personal
- * posts along with the organisation's.
- */
-export async function purgeHomeData(homeId: string, orgId: string | null): Promise<void> {
-  await db.transaction(async (tx) => {
-    // --- Preserve members' personal content ---------------------------------
-    // Detach before the delete pass so these rows can't be swept up by it.
-    await tx
-      .update(feedPost)
-      .set({ homeId: null })
-      .where(and(eq(feedPost.homeId, homeId), eq(feedPost.publishedAsType, "personal")))
-    await tx
-      .update(article)
-      .set({ homeId: null, organizationId: null })
-      .where(and(eq(article.homeId, homeId), eq(article.publishedAsType, "personal")))
-
-    // --- Resolve the ids/room names of everything scoped to this Home --------
-    const streams = await tx.select().from(liveStream).where(eq(liveStream.homeId, homeId))
-    const roomNames = streams.map((s) => s.roomName)
-    const streamIds = streams.map((s) => s.id)
-
-    const episodeIds = (await tx.select({ id: episode.id }).from(episode).where(eq(episode.homeId, homeId))).map(
-      (r) => r.id,
-    )
-    const chatroomIds = (await tx.select({ id: chatroom.id }).from(chatroom).where(eq(chatroom.homeId, homeId))).map(
-      (r) => r.id,
-    )
-    const communityPostIds = (
-      await tx.select({ id: communityPost.id }).from(communityPost).where(eq(communityPost.homeId, homeId))
-    ).map((r) => r.id)
-    // Only ORGANISATIONAL posts. Members' personal posts were detached above, so
-    // they no longer carry this homeId and are correctly excluded here.
-    const feedPostIds = (
-      await tx
-        .select({ id: feedPost.id })
-        .from(feedPost)
-        .where(orgId ? or(eq(feedPost.homeId, homeId), eq(feedPost.organizationId, orgId)) : eq(feedPost.homeId, homeId))
-    ).map((r) => r.id)
-    const announcementIds = (
-      await tx
-        .select({ id: announcement.id })
-        .from(announcement)
-        .where(
-          orgId
-            ? or(eq(announcement.homeId, homeId), eq(announcement.organizationId, orgId))
-            : eq(announcement.homeId, homeId),
-        )
-    ).map((r) => r.id)
-
-    // --- Live rooms (children keyed by roomName / streamId) -----------------
-    if (roomNames.length > 0) {
-      await tx.delete(liveChatMessage).where(inArray(liveChatMessage.roomName, roomNames))
-      await tx.delete(livePresence).where(inArray(livePresence.roomName, roomNames))
-      await tx.delete(liveReaction).where(inArray(liveReaction.roomName, roomNames))
-      await tx.delete(liveCallRequest).where(inArray(liveCallRequest.roomName, roomNames))
-      await tx.delete(liveBlocked).where(inArray(liveBlocked.roomName, roomNames))
-    }
-    if (streamIds.length > 0) await tx.delete(liveNote).where(inArray(liveNote.streamId, streamIds))
-    await tx.delete(liveStream).where(eq(liveStream.homeId, homeId))
-
-    // --- Episodes (incl. live replays) --------------------------------------
-    if (episodeIds.length > 0) {
-      await tx.delete(episodeComment).where(inArray(episodeComment.episodeId, episodeIds))
-      await tx.delete(contentView).where(inArray(contentView.episodeId, episodeIds))
-    }
-    await tx.delete(episode).where(eq(episode.homeId, homeId))
-
-    // --- Chatrooms ----------------------------------------------------------
-    if (chatroomIds.length > 0) {
-      await tx.delete(chatroomMessage).where(inArray(chatroomMessage.chatroomId, chatroomIds))
-      await tx.delete(chatroomMember).where(inArray(chatroomMember.chatroomId, chatroomIds))
-      await tx.delete(chatroomJoinRequest).where(inArray(chatroomJoinRequest.chatroomId, chatroomIds))
-    }
-    await tx.delete(chatroom).where(eq(chatroom.homeId, homeId))
-
-    // --- Feed / community / announcements -----------------------------------
-    if (feedPostIds.length > 0) {
-      await tx.delete(feedComment).where(inArray(feedComment.postId, feedPostIds))
-      await tx.delete(repost).where(inArray(repost.postId, feedPostIds))
-      await tx.delete(feedPost).where(inArray(feedPost.id, feedPostIds))
-    }
-    if (communityPostIds.length > 0) {
-      await tx.delete(communityComment).where(inArray(communityComment.postId, communityPostIds))
-      await tx.delete(communityPost).where(inArray(communityPost.id, communityPostIds))
-    }
-    if (announcementIds.length > 0) {
-      await tx.delete(eventRsvp).where(inArray(eventRsvp.announcementId, announcementIds))
-      await tx.delete(announcementInteraction).where(inArray(announcementInteraction.announcementId, announcementIds))
-      await tx.delete(announcement).where(inArray(announcement.id, announcementIds))
-    }
-
-    // --- Remaining Home-scoped rows ----------------------------------------
-    await tx.delete(devotional).where(eq(devotional.homeId, homeId))
-    await tx.delete(notification).where(eq(notification.homeId, homeId))
-    await tx.delete(homeBooking).where(eq(homeBooking.homeId, homeId))
-    await tx.delete(homeAppointment).where(eq(homeAppointment.homeId, homeId))
-    await tx.delete(homeAuthKey).where(eq(homeAuthKey.homeId, homeId))
-    await tx.delete(homeMembership).where(eq(homeMembership.homeId, homeId))
-
-    // --- Organisation-scoped rows, then the Home + org themselves -----------
-    if (orgId) {
-      await tx.delete(catalogueItem).where(eq(catalogueItem.organizationId, orgId))
-      await tx.delete(event).where(eq(event.organizationId, orgId))
-      await tx.delete(subscription).where(eq(subscription.organizationId, orgId))
-    }
-    await tx.delete(home).where(eq(home.id, homeId))
-    if (orgId) await tx.delete(organization).where(eq(organization.id, orgId))
-  })
-}
-
-/**
- * Purges every Home whose 30-day retention window has elapsed. Safe to call
- * repeatedly — it only picks up Homes already past their `purgeAfter` stamp.
- */
-export async function purgeExpiredHomes(): Promise<{ purged: number }> {
-  const due = await db
-    .select({ id: home.id, organizationId: home.organizationId })
-    .from(home)
-    .where(and(isNotNull(home.purgeAfter), lt(home.purgeAfter, new Date())))
-
-  for (const row of due) {
-    await purgeHomeData(row.id, row.organizationId)
-  }
-  return { purged: due.length }
-}
 
 /** Change a member's role. Ownership cannot be assigned or removed here. */
 export async function updateMemberRole(handle: string, membershipId: string, role: HomeRole) {
