@@ -13,6 +13,13 @@ import {
   type RemoteTrackPublication,
   type RemoteParticipant,
 } from "livekit-client"
+import {
+  buildMusicChain,
+  DUCK_FACTOR,
+  LIVE_MIC_CONSTRAINTS,
+  LIVE_VOICE_PRESET,
+  rampGain,
+} from "@/lib/live-audio-chain"
 
 // Normalised connection quality surfaced to the UI for the signal dots.
 export type ConnQuality = "excellent" | "good" | "poor" | "unknown"
@@ -198,7 +205,10 @@ export function useLiveAudio() {
   // background music sound muffled to the host.
   const musicBaseVolumeRef = useRef(0.8)
   // Low-shelf EQ that lifts the low end so the broadcast music has more bass.
-  const musicBassRef = useRef<BiquadFilterNode | null>(null)
+  // Final node of the shared studio chain (post limiter). Every destination —
+  // host monitor, published track and recording mixer — taps this same node so
+  // all three hear the identical processed signal.
+  const musicChainOutRef = useRef<AudioNode | null>(null)
   const musicElRef = useRef<HTMLAudioElement | null>(null)
   const musicTrackRef = useRef<LocalAudioTrack | null>(null)
   // Whether the current track should loop, and a callback fired when a
@@ -365,19 +375,11 @@ export function useLiveAudio() {
       // the speaker-bleed at capture, which is what prevents the self-feedback
       // loop without muting anyone or requiring headphones. Genuine background
       // music rides a SEPARATE dedicated track, so mic DSP never touches it.
-      audioCaptureDefaults: {
-        autoGainControl: true,
-        echoCancellation: true,
-        noiseSuppression: true,
-        channelCount: 1,
-        sampleRate: 48000,
-      },
+      audioCaptureDefaults: LIVE_MIC_CONSTRAINTS,
       publishDefaults: {
-        // High-fidelity voice: 96 kbps MONO (far above the default 24 kbps
-        // speech codec) — clean and full without forcing a stereo image onto a
-        // mono mic. forceStereo is intentionally NOT set here; stereo is opted
-        // into per-track for the genuinely-stereo background music below.
-        audioPreset: AudioPresets.musicHighQuality,
+        // Shared high-fidelity voice preset (128 kbps MONO) — the same one the
+        // video Lives use, so no Live type sounds thinner than another.
+        audioPreset: LIVE_VOICE_PRESET,
         // DTX chops the stream during "silence" (adds swirl/dropouts on music
         // and room tone); RED adds packet-loss resilience. Studio audio wants
         // DTX off and RED on.
@@ -623,23 +625,17 @@ export function useLiveAudio() {
 
     if (!musicSourceRef.current) {
       const source = ctx.createMediaElementSource(el)
-      const gain = ctx.createGain()
-      gain.gain.value = musicBaseVolumeRef.current
-      // Low-shelf filter boosts everything below ~220Hz for a warmer, bassier
-      // sound. Sits after the volume gain so the whole chain (monitor + the
-      // published/recorded stream) is fed the same bass-enhanced signal.
-      const bass = ctx.createBiquadFilter()
-      bass.type = "lowshelf"
-      bass.frequency.value = 220
-      bass.gain.value = 7
-      source.connect(gain)
-      gain.connect(bass)
+      // Shared studio chain (high-pass → warmth → harshness dip → gain →
+      // compressor → limiter), identical to every other Live type. This
+      // replaced a local +7 dB low shelf with no peak protection, which is what
+      // made Audio/Podcast Live boomier and harsher than Video Live.
+      const chain = buildMusicChain(ctx, source, musicBaseVolumeRef.current)
       // Route the music to the host's own speakers so they can monitor it (and
       // hear volume changes) exactly as it's broadcast/recorded.
-      bass.connect(ctx.destination)
+      chain.output.connect(ctx.destination)
       musicSourceRef.current = source
-      musicGainRef.current = gain
-      musicBassRef.current = bass
+      musicGainRef.current = chain.gain
+      musicChainOutRef.current = chain.output
     }
 
     // Swap to the requested track and (re)start playback, honoring the loop flag.
@@ -652,9 +648,9 @@ export function useLiveAudio() {
     // Publish the music to LiveKit once. Later track swaps keep flowing through
     // this same published stream, so listeners hear the change seamlessly.
     if (!musicTrackRef.current) {
-      const bass = musicBassRef.current!
+      const chainOut = musicChainOutRef.current!
       const dest = ctx.createMediaStreamDestination()
-      bass.connect(dest)
+      chainOut.connect(dest)
       const [mediaTrack] = dest.stream.getAudioTracks()
       const localTrack = new LocalAudioTrack(mediaTrack)
       // Background music IS a real stereo source, so opt this track into
@@ -706,28 +702,19 @@ export function useLiveAudio() {
    * to a fraction while someone speaks, then back up to the base afterward.
    */
   const rampMusicVolume = useCallback((target: number, ms: number) => {
-    const gain = musicGainRef.current
-    const ctx = musicCtxRef.current
-    if (!gain) return
-    if (ctx) {
-      const now = ctx.currentTime
-      gain.gain.cancelScheduledValues(now)
-      gain.gain.setValueAtTime(gain.gain.value, now)
-      gain.gain.linearRampToValueAtTime(Math.max(0.0001, target), now + Math.max(0.01, ms / 1000))
-    } else {
-      gain.gain.value = target
-    }
+    rampGain(musicCtxRef.current, musicGainRef.current, target, ms)
   }, [])
 
   /**
    * Ducks (or restores) the background music around live speech. When `ducked`
-   * is true the gain fades to 18% of the host's base volume; otherwise it fades
-   * back up to the full base. Fades are smooth (no sudden jumps).
+   * is true the gain fades to DUCK_FACTOR of the host's base volume; otherwise
+   * it fades back up to the full base. Fades are smooth (no sudden jumps), and
+   * the factor is shared so ducking feels identical in every Live type.
    */
   const duckMusic = useCallback(
     (ducked: boolean, ms = 320) => {
       const base = musicBaseVolumeRef.current
-      rampMusicVolume(ducked ? base * 0.18 : base, ms)
+      rampMusicVolume(ducked ? base * DUCK_FACTOR : base, ms)
     },
     [rampMusicVolume],
   )
