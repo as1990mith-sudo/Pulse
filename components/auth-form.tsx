@@ -39,8 +39,6 @@ export type OrgExtraDetails = {
   otherLink: string
   mission: string
   vision: string
-  history: string
-  beliefs: string
 }
 
 export const EMPTY_ORG_EXTRA: OrgExtraDetails = {
@@ -53,8 +51,6 @@ export const EMPTY_ORG_EXTRA: OrgExtraDetails = {
   otherLink: "",
   mission: "",
   vision: "",
-  history: "",
-  beliefs: "",
 }
 
 export function AuthForm({
@@ -213,8 +209,6 @@ export function AuthForm({
         },
         mission: orgExtra.mission,
         vision: orgExtra.vision,
-        history: orgExtra.history,
-        beliefs: orgExtra.beliefs,
       })
       router.push(`/org/${handle}`)
       router.refresh()
@@ -847,32 +841,6 @@ export function OrgDetailsForm(props: {
           onChange={(e) => setExtra({ vision: e.target.value })}
           placeholder="Where you're headed"
           rows={2}
-        />
-      </div>
-
-      <div className="space-y-2">
-        <label htmlFor="org-history" className="text-sm font-medium">
-          Our story
-        </label>
-        <Textarea
-          id="org-history"
-          value={extra.history}
-          onChange={(e) => setExtra({ history: e.target.value })}
-          placeholder="How you began"
-          rows={3}
-        />
-      </div>
-
-      <div className="space-y-2">
-        <label htmlFor="org-beliefs" className="text-sm font-medium">
-          What we believe
-        </label>
-        <Textarea
-          id="org-beliefs"
-          value={extra.beliefs}
-          onChange={(e) => setExtra({ beliefs: e.target.value })}
-          placeholder="Your statement of faith"
-          rows={3}
         />
       </div>
 

@@ -421,8 +421,6 @@ function AboutTab({ org }: { org: OrganizationView }) {
   const sections = [
     { label: "Mission", value: org.mission },
     { label: "Vision", value: org.vision },
-    { label: "Our story", value: org.history },
-    { label: "What we believe", value: org.beliefs },
   ].filter((s) => s.value?.trim())
 
   const socials = org.socials

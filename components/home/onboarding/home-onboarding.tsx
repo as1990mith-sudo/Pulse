@@ -68,8 +68,6 @@ export function HomeOnboarding() {
   const [otherLink, setOtherLink] = useState("")
   const [mission, setMission] = useState("")
   const [vision, setVision] = useState("")
-  const [history, setHistory] = useState("")
-  const [beliefs, setBeliefs] = useState("")
 
   // Step 2 — identity / branding (held locally until the account exists)
   const [logoBlob, setLogoBlob] = useState<Blob | null>(null)
@@ -181,8 +179,6 @@ export function HomeOnboarding() {
         },
         mission: mission.trim() || undefined,
         vision: vision.trim() || undefined,
-        history: history.trim() || undefined,
-        beliefs: beliefs.trim() || undefined,
       }
       await createHome(payload)
 
@@ -345,27 +341,6 @@ export function HomeOnboarding() {
               </Field>
             </div>
 
-            <Field label="Our story" htmlFor="org-history" optional>
-              <textarea
-                id="org-history"
-                value={history}
-                onChange={(e) => setHistory(e.target.value)}
-                placeholder="How your ministry began and where it is today."
-                rows={3}
-                className="w-full resize-none rounded-xl border border-input bg-background px-3.5 py-2.5 text-sm leading-relaxed shadow-sm placeholder:text-muted-foreground/70 focus-visible:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-              />
-            </Field>
-
-            <Field label="What we believe" htmlFor="org-beliefs" optional>
-              <textarea
-                id="org-beliefs"
-                value={beliefs}
-                onChange={(e) => setBeliefs(e.target.value)}
-                placeholder="Your statement of faith or core convictions."
-                rows={3}
-                className="w-full resize-none rounded-xl border border-input bg-background px-3.5 py-2.5 text-sm leading-relaxed shadow-sm placeholder:text-muted-foreground/70 focus-visible:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-              />
-            </Field>
           </Section>
         )}
 
