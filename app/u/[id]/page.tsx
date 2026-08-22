@@ -1,7 +1,4 @@
-import { notFound, redirect } from "next/navigation"
-import { eq } from "drizzle-orm"
-import { db } from "@/lib/db"
-import { organization } from "@/lib/db/schema"
+import { notFound } from "next/navigation"
 import { getProfile } from "@/lib/profile"
 import { getEpisodesByUser } from "@/lib/content"
 import { getPublicCommunityPostsByUser, getAnonymousCommunityPostsByUser } from "@/app/actions/community"
@@ -10,8 +7,6 @@ import { getActiveStatusForUser } from "@/app/actions/status"
 import { getWriterArticles } from "@/app/actions/articles"
 import { getCurrentUser } from "@/lib/session"
 import { isStaffUser } from "@/lib/admin-auth"
-import { getActiveHomeContext } from "@/lib/home/active-home"
-import { isHomeAdminRole } from "@/lib/home/roles"
 import { SiteHeader } from "@/components/site-header"
 import { ProfileFollowButton } from "@/components/profile/profile-follow-button"
 import { ProfileMessageButton } from "@/components/profile/profile-message-button"
@@ -24,48 +19,17 @@ import { ProfileBio } from "@/components/profile/profile-bio"
 export default async function ProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
 
-  // Viewing your OWN profile follows the Home you're currently in: if you
-  // administer the active Home, your profile opens that Home's organisation
-  // profile — and from there its admin console — so a multi-Home admin lands on
-  // whichever Home they're presently inside, not an arbitrary first one.
+  // /u/[id] is ALWAYS the person. It never redirects to an organisation.
   //
-  // Redirect resolution is DEFENSIVE: the destination is computed inside guarded
-  // blocks, but `redirect()` is always called OUTSIDE any try/catch. redirect()
-  // works by throwing an internal control-flow error that MUST be allowed to
-  // propagate — swallowing it (or letting an unrelated lookup failure bubble on
-  // a route with no error boundary) is exactly what made the admin avatar show
-  // the browser's native "This page couldn't load" crash. A hiccup resolving
-  // the Home/org now degrades to simply rendering the personal profile.
-  const viewer = await getCurrentUser().catch(() => null)
-
-  if (viewer?.id === id) {
-    let activeOrgHandle: string | null = null
-    try {
-      const { home, membership } = await getActiveHomeContext()
-      if (home && isHomeAdminRole(membership?.role)) activeOrgHandle = home.handle
-    } catch (err) {
-      console.error("[v0] /u/[id]: active Home resolution failed:", err)
-    }
-    if (activeOrgHandle) redirect(`/org/${activeOrgHandle}`)
-  }
-
-  // Organisation accounts have their own dedicated profile surface. For everyone
-  // else (and admins with no active Home context), if this user owns an
-  // organisation, send every visitor to that organisation's profile instead of
-  // the personal /u/[id] page. A multi-org owner defaults to their first org.
-  let ownedOrgHandle: string | null = null
-  try {
-    const [ownedOrg] = await db
-      .select({ handle: organization.handle })
-      .from(organization)
-      .where(eq(organization.ownerId, id))
-      .limit(1)
-    if (ownedOrg) ownedOrgHandle = ownedOrg.handle
-  } catch (err) {
-    console.error("[v0] /u/[id]: owned-org lookup failed:", err)
-  }
-  if (ownedOrgHandle) redirect(`/org/${ownedOrgHandle}`)
-
+  // This page previously redirected in two ways, and both erased the individual:
+  //   1. your own profile → /org/[handle] whenever you administered the active
+  //      Home, so an admin had no personal profile at all; and
+  //   2. anyone's profile → /org/[handle] if that user happened to own an org,
+  //      so visitors could never see the person either.
+  //
+  // A user is a person who may hold a role in some Home — the role is not the
+  // identity. A Home profile is reached deliberately, from the Home switcher's
+  // per-Home menu, never by opening a human being's profile.
   const profile = await getProfile(id)
   if (!profile) notFound()
 
