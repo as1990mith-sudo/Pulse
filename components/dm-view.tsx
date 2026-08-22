@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils"
 import { haptic } from "@/lib/haptics"
 import { extractFirstUrl } from "@/lib/linkify"
 import { renderMessageBody } from "@/lib/rich-text"
+import { ClampedText, CLAMP_LINES } from "@/components/clamped-text"
 import { LinkPreview } from "@/components/link-preview"
 import { compressImage, uploadMedia } from "@/lib/upload-media"
 import { MediaCollage, type CollageMedia } from "@/components/chat/media-collage"
@@ -1099,12 +1100,18 @@ function DmBubble({
             </a>
           )}
           {m.body && !editing && !bodyIsOnlyLink && (
-            <p className={cn("whitespace-pre-wrap [overflow-wrap:anywhere]", m.attachmentUrl && "px-2 pb-1 pt-1.5")}>
+            <ClampedText
+              lines={CLAMP_LINES.POST}
+              className={cn("whitespace-pre-wrap [overflow-wrap:anywhere]", m.attachmentUrl && "px-2 pb-1 pt-1.5")}
+              // Inherit the bubble's own text colour — a muted grey would be
+              // unreadable inside the sender's tinted bubble.
+              toggleClassName={cn("text-current opacity-70 hover:opacity-100", m.attachmentUrl && "px-2")}
+            >
               {renderMessageBody(m.body, {
                 link: true,
                 linkClassName: "font-medium underline underline-offset-2 [overflow-wrap:anywhere] hover:opacity-80",
               })}
-            </p>
+            </ClampedText>
           )}
           {previewUrl && (
             <div className={cn("w-full", !bodyIsOnlyLink && "pt-1")}>

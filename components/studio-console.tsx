@@ -836,7 +836,10 @@ export function StudioConsole({
 
       <div className="relative flex min-h-0 w-full flex-1 flex-col">
         {/* Broadcast header: cover artwork + live indicator + title + stats */}
-        <header className="relative z-30 flex items-center gap-3 border-b border-white/[0.07] px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)] sm:px-6">
+        {/* Frosted glass, matching the listener/guest header: the cover artwork
+            behind it is blurred rather than showing through cleanly, so the
+            title and live badge stay legible over any artwork. */}
+        <header className="relative z-30 flex items-center gap-3 border-b border-white/10 bg-zinc-950/30 px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)] backdrop-blur-xl sm:px-6">
           <BackExitMenu
             showMenu={live}
             exitLabel="End"
@@ -933,7 +936,7 @@ export function StudioConsole({
         )}
 
         {/* Speaker stage — unified 4-col grid (host first, then guests) */}
-        <div className="relative shrink-0 border-b border-white/[0.07] px-4 py-2.5 sm:px-6">
+        <div className="relative shrink-0 border-b border-white/10 bg-zinc-950/30 px-4 py-2.5 backdrop-blur-xl sm:px-6">
           {/* Status row only appears when there's something to flag, so an idle
               room gives all its vertical space to the call-in slots & chat. */}
           {(locked || pending.length > 0) && (
@@ -963,8 +966,10 @@ export function StudioConsole({
           {live && roomName && <ReactionLayer roomName={roomName} />}
         </div>
 
-        {/* Host control dock ��� compact essentials, sits right under the stage row */}
-        <div className="shrink-0 border-b border-white/[0.07] px-4 py-2.5 sm:px-6">
+        {/* Host control dock — compact essentials, sits right under the stage row.
+            Frosted like the header so the icon row reads as a solid control
+            surface rather than floating transparently over the artwork. */}
+        <div className="shrink-0 border-b border-white/10 bg-zinc-950/30 px-4 py-2.5 backdrop-blur-xl sm:px-6">
           <div className="flex items-center justify-center gap-3 sm:gap-4">
             <DockButton
               icon={micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}

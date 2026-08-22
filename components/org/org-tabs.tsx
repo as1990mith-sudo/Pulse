@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import {
   ArrowLeft,
@@ -33,6 +33,7 @@ import { FeedVideo } from "@/components/feed-video"
 import { ImageLightbox } from "@/components/image-lightbox"
 import { ShareSheet } from "@/components/share-sheet"
 import { renderMessageBody } from "@/lib/rich-text"
+import { ClampedText, CLAMP_LINES } from "@/components/clamped-text"
 import { cn } from "@/lib/utils"
 
 type TabKey = "posts" | "about" | "events" | "articles" | "catalogue"
@@ -90,19 +91,11 @@ export function OrgTabs({
   })
   const catalogueOpen = tab === "catalogue"
 
-  // Horizontal tab scroller: the labels no longer squeeze to fit, so trailing
-  // tabs (e.g. Catalogue) live off-screen until scrolled to. Whenever the active
-  // tab changes we glide it toward the centre so the selection is always in view
-  // — the momentum/smooth easing gives it a premium, native-app feel.
-  const tabScrollerRef = useRef<HTMLDivElement>(null)
-  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({})
-  useEffect(() => {
-    const el = tabRefs.current[tab]
-    const scroller = tabScrollerRef.current
-    if (!el || !scroller) return
-    const target = el.offsetLeft - (scroller.clientWidth - el.clientWidth) / 2
-    scroller.scrollTo({ left: Math.max(0, target), behavior: "smooth" })
-  }, [tab])
+  // Position of the sliding top indicator.
+  const activeIndex = Math.max(
+    0,
+    tabs.findIndex((t) => t.key === tab),
+  )
 
   // Catalogue opens as an immersive full-screen view, so lock background scroll
   // while it's open and restore it on close.
@@ -122,55 +115,42 @@ export function OrgTabs({
 
   return (
     <section className="mt-2">
-      {/* Edge-faded, horizontally scrollable tab bar. The mask softly dissolves
-          tabs at both edges so off-screen tabs (e.g. Catalogue) read as "there's
-          more" rather than being hard-cropped. */}
+      {/* Same tab language as the personal profile: a full-width grid where every
+          tab gets an equal share, only the active tab reveals its label, and a
+          single indicator slides along the top border. No horizontal scrolling —
+          the icon-only inactive tabs mean all five always fit. */}
       <div
-        className="relative -mx-4 border-b border-border/50 sm:-mx-6"
-        style={{
-          maskImage:
-            "linear-gradient(to right, transparent, black 20px, black calc(100% - 20px), transparent)",
-          WebkitMaskImage:
-            "linear-gradient(to right, transparent, black 20px, black calc(100% - 20px), transparent)",
-        }}
+        role="tablist"
+        className="relative -mx-4 grid border-t border-border/60 sm:-mx-6"
+        style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
       >
-        <div
-          ref={tabScrollerRef}
-          role="tablist"
-          className="flex overflow-x-auto scroll-smooth pl-1.5 pr-4 sm:pl-3 sm:pr-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          style={{ WebkitOverflowScrolling: "touch" }}
-        >
-          {tabs.map((t) => (
-            <button
-              key={t.key}
-              ref={(el) => {
-                tabRefs.current[t.key] = el
-              }}
-              role="tab"
-              onClick={() => selectTab(t.key)}
-              aria-selected={tab === t.key}
-              title={t.label}
-              className={cn(
-                "relative flex shrink-0 items-center gap-2 whitespace-nowrap px-4 py-3.5 text-[13px] font-medium uppercase tracking-wide transition-colors duration-200",
-                tab === t.key ? "text-foreground" : "text-muted-foreground/70 hover:text-foreground",
-              )}
-            >
-              <span className={cn("transition-transform duration-200", tab === t.key && "scale-105")}>{t.icon}</span>
-              <span>
-                {t.label}
-                {t.count ? ` ${t.count}` : ""}
-              </span>
-              {/* Per-tab underline that fades/scales in under the active tab. */}
-              <span
-                className={cn(
-                  "absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-primary shadow-[0_0_12px_var(--primary)] transition-all duration-300 ease-out",
-                  tab === t.key ? "scale-x-100 opacity-100" : "scale-x-0 opacity-0",
-                )}
-                aria-hidden
-              />
-            </button>
-          ))}
-        </div>
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            role="tab"
+            onClick={() => selectTab(t.key)}
+            aria-selected={tab === t.key}
+            title={t.label}
+            className={cn(
+              "flex items-center justify-center gap-2 py-3 text-xs font-semibold uppercase tracking-wider transition-colors",
+              tab === t.key ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {t.icon}
+            {/* Keep the label on one line so the icon stays vertically aligned
+                with the icon-only tabs instead of centring against wrapped text. */}
+            <span className={cn("whitespace-nowrap", tab !== t.key && "sr-only")}>
+              {t.label}
+              {t.count ? ` ${t.count}` : ""}
+            </span>
+          </button>
+        ))}
+        {/* Sliding active indicator */}
+        <span
+          className="absolute -top-px left-0 h-0.5 bg-foreground transition-transform duration-300 ease-out"
+          style={{ width: `${100 / tabs.length}%`, transform: `translateX(${activeIndex * 100}%)` }}
+          aria-hidden
+        />
       </div>
 
       {/* Catalogue renders as a full-screen overlay below; other tabs render inline. */}
@@ -282,10 +262,14 @@ export function OrgPostThread({ org, post }: { org: OrganizationView; post: OrgP
           {post.edited && <span className="shrink-0 text-sm text-muted-foreground">· edited</span>}
         </div>
 
+        {/* Organisation / Home posts get the seven-line preview. */}
         {post.text && (
-          <p className="mt-1 whitespace-pre-wrap text-pretty text-[15px] leading-relaxed text-foreground">
+          <ClampedText
+            lines={CLAMP_LINES.ORG}
+            className="mt-1 whitespace-pre-wrap text-pretty text-[15px] leading-relaxed text-foreground"
+          >
             {renderMessageBody(post.text, { link: true, mention: true })}
-          </p>
+          </ClampedText>
         )}
 
         {post.media.length > 0 && <OrgPostMedia media={post.media} />}

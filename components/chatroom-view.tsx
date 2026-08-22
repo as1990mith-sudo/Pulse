@@ -41,6 +41,7 @@ import { ChatroomCall } from "@/components/chatroom-call"
 import { cn } from "@/lib/utils"
 import { useAutoHideChatChrome } from "@/lib/chat-chrome"
 import { renderMessageBody } from "@/lib/rich-text"
+import { ClampedText, CLAMP_LINES } from "@/components/clamped-text"
 import { compressImage, uploadMedia } from "@/lib/upload-media"
 import { ActionSheet, type SheetAction } from "@/components/action-sheet"
 import { MediaCollage, type CollageMedia } from "@/components/chat/media-collage"
@@ -844,12 +845,18 @@ function MessageBubble({
             </a>
           )}
           {m.body && !editing && (
-            <p className={cn("whitespace-pre-wrap [overflow-wrap:anywhere]", m.attachmentUrl && "px-2 pb-1 pt-1.5")}>
+            <ClampedText
+              lines={CLAMP_LINES.POST}
+              className={cn("whitespace-pre-wrap [overflow-wrap:anywhere]", m.attachmentUrl && "px-2 pb-1 pt-1.5")}
+              // Inherit the bubble's own text colour so the toggle stays legible
+              // inside a tinted bubble.
+              toggleClassName={cn("text-current opacity-70 hover:opacity-100", m.attachmentUrl && "px-2")}
+            >
               {renderMessageBody(m.body, {
                 link: true,
                 linkClassName: "font-medium underline underline-offset-2 hover:opacity-80",
               })}
-            </p>
+            </ClampedText>
           )}
           {m.body && editing && (
             <form
