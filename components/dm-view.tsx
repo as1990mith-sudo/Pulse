@@ -31,7 +31,7 @@ import {
   type DmMessageView,
 } from "@/app/actions/dm"
 import { DM_DELETE_WINDOW_MS, DM_EDIT_WINDOW_MS } from "@/lib/dm-constants"
-import { formatChatTimestamp } from "@/lib/format-timestamp"
+import { formatChatClock, formatChatDay, isNewChatDay } from "@/lib/format-timestamp"
 import { ActionSheet, type SheetAction } from "@/components/action-sheet"
 import { getActiveCall, startCall, type CallMode, type DmCallView } from "@/app/actions/dm-call"
 import { ChatBackgroundSheet } from "@/components/chat-background-sheet"
@@ -359,60 +359,68 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
           dropdown renders on top of message bubbles instead of behind them. */}
       <div
         className={cn(
-          "relative z-30 flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-6",
-          hasWallpaper && "bg-background/40 backdrop-blur-md",
+          // Pinned to the top with the notch respected, so only the conversation
+          // scrolls. The identity block flexes and the action cluster is fixed
+          // width, which stops the display name being clipped by the icons.
+          "sticky top-0 z-30 flex items-center gap-1.5 border-b border-border/50 px-2 pb-2.5 pt-[calc(env(safe-area-inset-top)+0.625rem)] sm:px-4",
+          hasWallpaper ? "bg-background/60 backdrop-blur-xl" : "bg-background/80 backdrop-blur-xl",
         )}
       >
         <Link
           href="/messages"
           aria-label="Back to messages"
-          className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "shrink-0")}
+          className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "size-9 shrink-0 rounded-full")}
         >
-          <ArrowLeft className="size-5" />
+          <ArrowLeft className="size-[18px]" />
         </Link>
-        <Link href={`/u/${detail.otherUserId}`} className="flex min-w-0 items-center gap-3">
-          <Avatar className="size-10 shrink-0">
+        <Link href={`/u/${detail.otherUserId}`} className="flex min-w-0 flex-1 items-center gap-2.5">
+          <Avatar className="size-9 shrink-0">
             {detail.image && <AvatarImage src={detail.image || "/placeholder.svg"} alt={detail.otherUserName} />}
-            <AvatarFallback className={cn("text-sm", detail.color)}>{detail.initials}</AvatarFallback>
+            <AvatarFallback className={cn("text-xs", detail.color)}>{detail.initials}</AvatarFallback>
           </Avatar>
           <div className="min-w-0">
-            <h1 className="truncate text-lg font-semibold leading-tight hover:underline">{detail.otherUserName}</h1>
-            <p className="truncate text-xs text-muted-foreground">{detail.otherUserHandle}</p>
+            <h1 className="truncate text-[15px] font-semibold leading-tight tracking-tight">
+              {detail.otherUserName}
+            </h1>
+            <p className="truncate text-[11px] leading-tight text-muted-foreground">{detail.otherUserHandle}</p>
           </div>
         </Link>
-        <div className="ml-auto flex shrink-0 items-center">
+        <div className="flex shrink-0 items-center gap-0.5">
           <Button
             type="button"
             variant="ghost"
             size="icon"
+            className="size-9 rounded-full text-muted-foreground hover:text-foreground"
             onClick={() => beginCall("audio")}
             disabled={starting || Boolean(liveCall)}
             aria-label="Start voice call"
           >
-            <Phone className="size-5" />
+            <Phone className="size-[18px]" />
           </Button>
           <Button
             type="button"
             variant="ghost"
             size="icon"
+            className="size-9 rounded-full text-muted-foreground hover:text-foreground"
             onClick={() => beginCall("video")}
             disabled={starting || Boolean(liveCall)}
             aria-label="Start video call"
           >
-            <Video className="size-5" />
+            <Video className="size-[18px]" />
           </Button>
           {/* Overflow menu sits to the right of the call icons. */}
-          <div className="relative ml-0.5">
+          <div className="relative">
             <Button
               type="button"
               variant="ghost"
               size="icon"
+              className="size-9 rounded-full text-muted-foreground hover:text-foreground"
               onClick={() => setMenuOpen((o) => !o)}
               aria-haspopup="menu"
               aria-expanded={menuOpen}
               aria-label="More options"
             >
-              <MoreVertical className="size-5" />
+              <MoreVertical className="size-[18px]" />
             </Button>
             {menuOpen && (
               <>
@@ -553,7 +561,9 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
 
       {/* Messages */}
       <div className={cn("relative z-10 flex-1 overflow-y-auto", !hasWallpaper && "bg-card/30")}>
-        <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 py-5 sm:px-6">
+        {/* Vertical rhythm is set per-run with margins (tight for a continued
+            run, looser when the speaker or day changes), so no `gap` here. */}
+        <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col px-3 py-4 sm:px-6">
           {messages.length === 0 && (
             <p className="py-10 text-center text-sm text-muted-foreground">
               No messages yet. Say hello to {detail.otherUserName}.
@@ -573,35 +583,61 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
                 (m.attachmentType === "image" || m.attachmentType === "video"),
             }),
             (m) => m.id,
-          ).map((run) =>
-            run.type === "single" ? (
-              <DmBubble
-                key={run.item.id}
-                message={run.item}
-                color={run.item.isSelf ? detail.currentUserColor : detail.color}
-                initials={run.item.isSelf ? detail.currentUserInitials : detail.initials}
-                image={run.item.isSelf ? detail.currentUserImage : detail.image}
-                name={run.item.isSelf ? "You" : detail.otherUserName}
-                highlighted={matchSet.has(run.item.id)}
-                flashed={flashId === run.item.id}
-                onDelete={handleDeleteMessage}
-                onTogglePin={handleTogglePin}
-                onEdit={handleEditMessage}
-              />
-            ) : (
-              <DmMediaGroup
-                key={run.key}
-                messages={run.items}
-                color={run.items[0].isSelf ? detail.currentUserColor : detail.color}
-                initials={run.items[0].isSelf ? detail.currentUserInitials : detail.initials}
-                image={run.items[0].isSelf ? detail.currentUserImage : detail.image}
-                name={run.items[0].isSelf ? "You" : detail.otherUserName}
-                flashId={flashId}
-                onDelete={handleDeleteMessage}
-                onTogglePin={handleTogglePin}
-              />
-            ),
-          )}
+          ).map((run, i, runs) => {
+            // A run's leading message drives both the day separator and the
+            // "is this a continuation of the same sender" decision, which is
+            // what lets consecutive messages tuck together without repeating
+            // the avatar and timestamp on every single bubble.
+            const lead = run.type === "single" ? run.item : run.items[0]
+            const prevRun = runs[i - 1]
+            const prev = prevRun ? (prevRun.type === "single" ? prevRun.item : prevRun.items.at(-1)!) : null
+            const newDay = isNewChatDay(lead.createdAtMs, prev?.createdAtMs ?? null)
+            // Same sender, within five minutes, and no day break in between.
+            const continues =
+              !newDay &&
+              !!prev &&
+              prev.isSelf === lead.isSelf &&
+              prev.senderId === lead.senderId &&
+              lead.createdAtMs - prev.createdAtMs < 5 * 60_000
+
+            return (
+              <div key={run.type === "single" ? run.item.id : run.key} className={cn(continues ? "mt-0.5" : "mt-3")}>
+                {newDay && (
+                  <div className="flex justify-center py-2">
+                    <span className="rounded-full border border-border/50 bg-background/70 px-3 py-1 text-[11px] font-medium text-muted-foreground backdrop-blur-sm">
+                      {formatChatDay(lead.createdAtMs)}
+                    </span>
+                  </div>
+                )}
+                {run.type === "single" ? (
+                  <DmBubble
+                    message={run.item}
+                    color={run.item.isSelf ? detail.currentUserColor : detail.color}
+                    initials={run.item.isSelf ? detail.currentUserInitials : detail.initials}
+                    image={run.item.isSelf ? detail.currentUserImage : detail.image}
+                    name={run.item.isSelf ? "You" : detail.otherUserName}
+                    highlighted={matchSet.has(run.item.id)}
+                    flashed={flashId === run.item.id}
+                    grouped={continues}
+                    onDelete={handleDeleteMessage}
+                    onTogglePin={handleTogglePin}
+                    onEdit={handleEditMessage}
+                  />
+                ) : (
+                  <DmMediaGroup
+                    messages={run.items}
+                    color={run.items[0].isSelf ? detail.currentUserColor : detail.color}
+                    initials={run.items[0].isSelf ? detail.currentUserInitials : detail.initials}
+                    image={run.items[0].isSelf ? detail.currentUserImage : detail.image}
+                    name={run.items[0].isSelf ? "You" : detail.otherUserName}
+                    flashId={flashId}
+                    onDelete={handleDeleteMessage}
+                    onTogglePin={handleTogglePin}
+                  />
+                )}
+              </div>
+            )
+          })}
           <div ref={scrollEndRef} />
         </div>
       </div>
@@ -634,11 +670,11 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
       ) : (
       <div
         className={cn(
-          "relative z-10 border-t border-border/60 px-4 py-3 pb-safe-2 pl-safe pr-safe sm:px-6",
-          hasWallpaper ? "bg-background/40 backdrop-blur-md" : "bg-background",
+          "sticky bottom-0 z-10 border-t border-border/50 px-2.5 py-2 pb-safe-2 pl-safe pr-safe sm:px-6",
+          hasWallpaper ? "bg-background/60 backdrop-blur-xl" : "bg-background",
         )}
       >
-        <div className="mx-auto w-full max-w-3xl space-y-3">
+        <div className="mx-auto w-full max-w-3xl space-y-2">
           {attachment && (
             <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card p-3">
               {attachment.type === "image" ? (
@@ -682,7 +718,7 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
               sending={sendingVoice}
             />
           ) : (
-            <form onSubmit={handleSend} className="flex items-center gap-2">
+            <form onSubmit={handleSend} className="flex items-end gap-2">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -690,48 +726,54 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
                 className="hidden"
                 onChange={handleFilePick}
               />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="shrink-0 text-muted-foreground"
-                onClick={() => setShowEmoji((s) => !s)}
-                aria-label="Toggle emoji picker"
-              >
-                <Smile className="size-5" />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="shrink-0 text-muted-foreground"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-                aria-label="Attach a file"
-              >
-                <Paperclip className={cn("size-5", uploading && "animate-pulse")} />
-              </Button>
-              <Input
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                placeholder={uploading ? "Uploading attachment…" : "Type a message"}
-                aria-label="Message"
-              />
+              {/* One rounded pill holds the attach button, the input and the
+                  emoji trigger, so the composer reads as a single control
+                  instead of a row of loose buttons. */}
+              <div className="flex min-w-0 flex-1 items-center gap-1 rounded-full border border-border/60 bg-secondary/60 pl-1 pr-1.5">
+                <button
+                  type="button"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground disabled:opacity-50"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  aria-label="Attach a file"
+                >
+                  <Paperclip className={cn("size-[18px]", uploading && "animate-pulse")} />
+                </button>
+                <Input
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder={uploading ? "Uploading attachment…" : "Message"}
+                  aria-label="Message"
+                  className="h-10 min-w-0 flex-1 border-0 bg-transparent px-0 text-[15px] shadow-none focus-visible:ring-0"
+                />
+                <button
+                  type="button"
+                  className={cn(
+                    "flex size-9 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-foreground/5",
+                    showEmoji ? "text-primary" : "text-muted-foreground hover:text-foreground",
+                  )}
+                  onClick={() => setShowEmoji((s) => !s)}
+                  aria-label="Toggle emoji picker"
+                  aria-expanded={showEmoji}
+                >
+                  <Smile className="size-[18px]" />
+                </button>
+              </div>
               {draft.trim() || attachment ? (
                 <Button
                   type="submit"
                   size="icon"
-                  className="shrink-0"
+                  className="size-11 shrink-0 rounded-full shadow-lg shadow-primary/20"
                   disabled={uploading}
                   aria-label="Send message"
                 >
-                  <Send className="size-4" />
+                  <Send className="size-[18px]" />
                 </Button>
               ) : (
                 <Button
                   type="button"
                   size="icon"
-                  className="shrink-0"
+                  className="size-11 shrink-0 rounded-full shadow-lg shadow-primary/20"
                   onClick={() => {
                     setShowEmoji(false)
                     setRecording(true)
@@ -739,7 +781,7 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
                   disabled={uploading}
                   aria-label="Record a voice note"
                 >
-                  <Mic className="size-4" />
+                  <Mic className="size-[18px]" />
                 </Button>
               )}
             </form>
@@ -901,6 +943,7 @@ function DmBubble({
   name,
   highlighted = false,
   flashed = false,
+  grouped = false,
   onDelete,
   onTogglePin,
   onEdit,
@@ -912,6 +955,12 @@ function DmBubble({
   name: string
   highlighted?: boolean
   flashed?: boolean
+  /**
+   * This message continues a run from the same sender, so the avatar slot is
+   * left empty and the timestamp is suppressed — the reader already knows who
+   * is speaking and roughly when.
+   */
+  grouped?: boolean
   onDelete: (id: number) => void
   onTogglePin: (id: number, pinned: boolean) => void
   onEdit: (id: number, body: string) => void
@@ -967,7 +1016,7 @@ function DmBubble({
           <AvatarFallback className={cn("text-[10px]", color)}>{initials}</AvatarFallback>
         </Avatar>
         <div className={cn("max-w-[75%] space-y-0.5", m.isSelf && "text-right")}>
-          <span className="text-[10px] text-muted-foreground">{formatChatTimestamp(m.createdAtMs)}</span>
+          <span className="px-1 text-[10px] font-medium text-muted-foreground/70">{formatChatClock(m.createdAtMs)}</span>
           <div
             className={cn(
               "inline-flex items-center gap-1.5 rounded-2xl border border-dashed border-border/70 px-3 py-2 text-sm italic text-muted-foreground",
@@ -991,17 +1040,29 @@ function DmBubble({
         (flashed || highlighted) && "p-1.5",
       )}
     >
-      <Avatar className="size-7 shrink-0">
-        {image && <AvatarImage src={image || "/placeholder.svg"} alt={name} />}
-        <AvatarFallback className={cn("text-[10px]", color)}>{initials}</AvatarFallback>
-      </Avatar>
-      <div className={cn("relative max-w-[75%] space-y-0.5", m.isSelf && "text-right")}>
-        <span className={cn("flex items-center gap-1 text-[10px] text-muted-foreground", m.isSelf && "justify-end")}>
-          {m.pinned && <Pin className="size-3 fill-current" aria-label="Pinned" />}
-          {formatChatTimestamp(m.createdAtMs)}
-          {m.edited && <span>· edited</span>}
-          {copied && <span className="text-primary">Copied</span>}
-        </span>
+      {grouped ? (
+        // Keeps the bubble column aligned without repeating the avatar.
+        <span className="size-7 shrink-0" aria-hidden />
+      ) : (
+        <Avatar className="size-7 shrink-0">
+          {image && <AvatarImage src={image || "/placeholder.svg"} alt={name} />}
+          <AvatarFallback className={cn("text-[10px]", color)}>{initials}</AvatarFallback>
+        </Avatar>
+      )}
+      <div className={cn("relative max-w-[78%] space-y-1", m.isSelf && "text-right")}>
+        {(!grouped || m.pinned || m.edited || copied) && (
+          <span
+            className={cn(
+              "flex items-center gap-1 px-1 text-[10px] font-medium text-muted-foreground/70",
+              m.isSelf && "justify-end",
+            )}
+          >
+            {m.pinned && <Pin className="size-2.5 fill-current" aria-label="Pinned" />}
+            {!grouped && formatChatClock(m.createdAtMs)}
+            {m.edited && <span>· edited</span>}
+            {copied && <span className="text-primary">Copied</span>}
+          </span>
+        )}
         <div
           onPointerDown={startPress}
           onPointerUp={cancelPress}
@@ -1101,9 +1162,9 @@ function DmBubble({
             <ClampedText
               lines={CLAMP_LINES.POST}
               className={cn("whitespace-pre-wrap [overflow-wrap:anywhere]", m.attachmentUrl && "px-2 pb-1 pt-1.5")}
-              // Inherit the bubble's own text colour — a muted grey would be
-              // unreadable inside the sender's tinted bubble.
-              toggleClassName={cn("text-current opacity-70 hover:opacity-100", m.attachmentUrl && "px-2")}
+              // Orange is reserved for interactive accents, and the expand
+              // toggle is the one interactive element inside a bubble.
+              toggleClassName={cn("text-primary hover:text-primary/80", m.attachmentUrl && "px-2")}
             >
               {renderMessageBody(m.body, {
                 link: true,
@@ -1215,10 +1276,15 @@ function DmMediaGroup({
         {image && <AvatarImage src={image || "/placeholder.svg"} alt={name} />}
         <AvatarFallback className={cn("text-[10px]", color)}>{initials}</AvatarFallback>
       </Avatar>
-      <div className={cn("flex max-w-[75%] flex-col gap-0.5", isSelf && "items-end text-right")}>
-        <span className={cn("flex items-center gap-1 text-[10px] text-muted-foreground", isSelf && "justify-end")}>
-          {anyPinned && <Pin className="size-3 fill-current" aria-label="Pinned" />}
-          {formatChatTimestamp(lastMs)}
+      <div className={cn("flex max-w-[78%] flex-col gap-1", isSelf && "items-end text-right")}>
+        <span
+          className={cn(
+            "flex items-center gap-1 px-1 text-[10px] font-medium text-muted-foreground/70",
+            isSelf && "justify-end",
+          )}
+        >
+          {anyPinned && <Pin className="size-2.5 fill-current" aria-label="Pinned" />}
+          {formatChatClock(lastMs)}
         </span>
         <MediaCollage
           items={media}

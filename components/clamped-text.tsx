@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 /**
@@ -17,6 +18,10 @@ export const CLAMP_LINES = {
   POST: 6,
   ORG: 7,
   MEDIA: 2,
+  // Chat bubbles are much narrower than a post card, so the same line count
+  // fills far more of the screen. A tighter clamp keeps one long message from
+  // taking over the whole conversation view.
+  CHAT: 5,
 } as const
 
 /**
@@ -71,7 +76,11 @@ export function ClampedText({
     <>
       <Tag
         ref={ref as never}
-        className={className}
+        // Re-keying on `expanded` restarts the fade, so revealing or hiding the
+        // remainder eases in rather than snapping. A height transition isn't
+        // possible here because -webkit-line-clamp has no animatable height.
+        key={expanded ? "expanded" : "collapsed"}
+        className={cn(className, "animate-in fade-in duration-200")}
         style={
           expanded
             ? undefined
@@ -97,11 +106,12 @@ export function ClampedText({
           }}
           aria-expanded={expanded}
           className={cn(
-            "mt-1 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground",
+            "mt-1 inline-flex items-center gap-1 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-foreground",
             toggleClassName,
           )}
         >
-          {expanded ? "Read less" : "Read more"}
+          {expanded ? "Show less" : "Read more"}
+          <ChevronDown className={cn("size-3.5 transition-transform duration-200", expanded && "rotate-180")} />
         </button>
       )}
     </>

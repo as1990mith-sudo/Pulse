@@ -8,6 +8,12 @@ type Preview = {
   description: string | null
   image: string | null
   siteName: string | null
+  /**
+   * The site's own icon (apple-touch-icon / rel=icon), used only when the page
+   * has no `og:image`. Kept separate from `image` because a 32–180px logo must
+   * render as a small square — stretching it across a wide banner looks broken.
+   */
+  icon?: string | null
 }
 
 // Decodes the small set of HTML entities that commonly appear in meta tags.
@@ -39,6 +45,29 @@ function metaContent(html: string, keys: string[]): string | null {
     }
   }
   return null
+}
+
+/**
+ * Finds the best site icon in the HTML, preferring the largest declared size.
+ * Apple touch icons are favoured because they're typically 180px and opaque,
+ * whereas a bare favicon is often 16px and unusable as a thumbnail.
+ */
+function iconHref(html: string): string | null {
+  const links = html.match(/<link[^>]+rel=["'][^"']*icon[^"']*["'][^>]*>/gi)
+  if (!links) return null
+
+  let best: { href: string; score: number } | null = null
+  for (const tag of links) {
+    const href = tag.match(/href=["']([^"']+)["']/i)?.[1]
+    if (!href) continue
+    // SVG icons scale cleanly, so treat them as the best possible option.
+    const isSvg = /\.svg(\?|$)/i.test(href) || /type=["']image\/svg/i.test(tag)
+    const isApple = /apple-touch-icon/i.test(tag)
+    const size = Number(tag.match(/sizes=["'](\d+)/i)?.[1] ?? 0)
+    const score = isSvg ? 1000 : isApple ? 500 + size : size || 1
+    if (!best || score > best.score) best = { href: decodeEntities(href), score }
+  }
+  return best?.href ?? null
 }
 
 // Rejects non-http(s) URLs and obvious internal/private hosts to avoid SSRF.
@@ -169,20 +198,35 @@ export async function GET(request: Request) {
       let image = metaContent(html, ["og:image:secure_url", "og:image", "twitter:image", "twitter:image:src"])
       const siteName = metaContent(html, ["og:site_name"]) ?? target.hostname.replace(/^www\./, "")
 
+      const base = res.url || target.toString()
       if (image) {
         try {
-          image = new URL(image, res.url || target.toString()).toString()
+          image = new URL(image, base).toString()
         } catch {
           image = null
         }
       }
 
+      // Only worth resolving when there's no banner image to show.
+      let icon: string | null = null
+      if (!image) {
+        const href = iconHref(html)
+        if (href) {
+          try {
+            icon = new URL(href, base).toString()
+          } catch {
+            icon = null
+          }
+        }
+      }
+
       scraped = {
-        url: res.url || target.toString(),
+        url: base,
         title: title || null,
         description: description || null,
         image: image || null,
         siteName: siteName || null,
+        icon,
       }
     }
   } catch {
@@ -205,6 +249,7 @@ export async function GET(request: Request) {
       description: fallback.description ?? scraped?.description ?? null,
       image: fallback.image ?? scraped?.image ?? null,
       siteName: fallback.siteName ?? scraped?.siteName ?? target.hostname.replace(/^www\./, ""),
+      icon: scraped?.icon ?? null,
     }
     return NextResponse.json(merged, { headers: cacheHeaders })
   }

@@ -10,6 +10,8 @@ type Preview = {
   description: string | null
   image: string | null
   siteName: string | null
+  /** Site logo, sent only when the page has no `og:image`. */
+  icon?: string | null
 }
 
 const fetcher = async (key: string): Promise<Preview | null> => {
@@ -123,8 +125,19 @@ export function LinkPreview({
             </div>
           )}
           <div className="border-l-2 border-primary px-2.5 py-2">
-            <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-primary">
-              {data.siteName || host}
+            <p className="flex items-center gap-1.5 truncate text-[10px] font-semibold uppercase tracking-wider text-primary">
+              {/* With no banner image, the site's own logo sits inline beside the
+                  domain — a 32px icon stretched across the card reads as broken. */}
+              {!data.image && data.icon && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={data.icon || "/placeholder.svg"}
+                  alt=""
+                  className="size-4 shrink-0 rounded-[4px] object-cover"
+                  loading="lazy"
+                />
+              )}
+              <span className="truncate">{data.siteName || host}</span>
             </p>
             {data.title && (
               <p className="mt-0.5 line-clamp-2 text-[13px] font-semibold leading-snug text-foreground">{data.title}</p>
