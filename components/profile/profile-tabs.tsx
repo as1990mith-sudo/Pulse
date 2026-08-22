@@ -1,44 +1,33 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { Mic, ArrowLeft, Plus, Info, Newspaper, PenLine, LayoutGrid, MessagesSquare } from "lucide-react"
+import { Plus, Newspaper, PenLine, LayoutGrid, MessagesSquare } from "lucide-react"
 import Link from "next/link"
-import type { Show } from "@/lib/data"
 import type { CommunityPostView } from "@/app/actions/community"
 import type { FeedPostView } from "@/app/actions/feed"
 import type { CurrentUser } from "@/lib/session"
 import type { ArticleCard as ArticleCardType } from "@/lib/article-types"
-import { EpisodeCatalog } from "@/components/episode-catalog"
-import { UploadEpisode } from "@/components/upload-episode"
 import { ProfileThreads } from "@/components/profile/profile-threads"
 import { PostCard } from "@/components/mind-feed"
 import { ArticleRow } from "@/components/articles/article-card"
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-} from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
-type TabKey = "posts" | "thread" | "articles" | "catalogue"
+type TabKey = "posts" | "thread" | "articles"
 
 export function ProfileTabs({
   name,
   isSelf,
   currentUser,
-  episodes,
   feedPosts,
   communityPosts,
   anonymousPosts,
   articles,
-  showCatalogue = false,
 }: {
   name: string
   isSelf: boolean
   // The viewer, needed by <PostCard> for engagement/ownership controls.
   currentUser: CurrentUser | null
-  episodes: Show[]
   // The user's own MAIN-FEED posts — the "Posts" timeline.
   feedPosts: FeedPostView[]
   // Public (identifiable) Community Help posts — part of the "Thread" timeline.
@@ -46,9 +35,6 @@ export function ProfileTabs({
   // The owner's own anonymous Community Help posts — only ever passed for isSelf.
   anonymousPosts: CommunityPostView[]
   articles: ArticleCardType[]
-  // Whether to show the Catalogue (live episodes) tab. Only true for admin/staff
-  // profiles — members don't host, so the tab is hidden for them.
-  showCatalogue?: boolean
 }) {
   // The "Thread" tab merges the user's Community Help posts (identifiable +, for
   // the owner only, anonymous) into a single newest-first timeline. Anonymous
@@ -59,56 +45,30 @@ export function ProfileTabs({
     [communityPosts, anonymousPosts],
   )
 
-  // Tab order: Posts (main feed), Thread (Community Help), Articles, Catalogue.
-  // Catalogue is only present on admin/staff profiles (see showCatalogue).
+  // Tab order: Posts (main feed), Thread (Community Help), Articles.
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; count: number }[] = [
     { key: "posts", label: "Posts", icon: <LayoutGrid className="size-4" />, count: feedPosts.length },
     { key: "thread", label: "Thread", icon: <MessagesSquare className="size-4" />, count: threadPosts.length },
     { key: "articles", label: "Articles", icon: <Newspaper className="size-4" />, count: articles.length },
-    ...(showCatalogue
-      ? [{ key: "catalogue" as const, label: "Catalogue", icon: <Mic className="size-4" />, count: episodes.length }]
-      : []),
   ]
 
-  // Initialize the active tab from the URL (?tab=…). This makes the selection
-  // survive navigation: opening a Catalogue item routes to /live/[id], and the
-  // browser/router back button restores /u/[id]?tab=catalogue, so the profile
-  // reopens on Catalogue instead of resetting to Posts.
+  // Initialize the active tab from the URL (?tab=…) so the selection survives
+  // navigation — opening an item and coming back reopens the same tab rather
+  // than resetting to Posts.
   const searchParams = useSearchParams()
   const tabFromUrl = ((): TabKey => {
     const t = searchParams.get("tab")
     // "anonymous" is the legacy key for what is now the "Thread" tab.
     if (t === "anonymous") return "thread"
-    // Ignore ?tab=catalogue when the Catalogue tab is hidden for this profile.
-    if (t === "catalogue") return showCatalogue ? "catalogue" : "posts"
     return t === "thread" || t === "articles" || t === "posts" ? t : "posts"
   })()
   const [tab, setTab] = useState<TabKey>(tabFromUrl)
-  // The tab the user was on before opening Catalogue, so the back arrow can
-  // return them exactly where they were.
-  const [prevTab, setPrevTab] = useState<TabKey>("posts")
-  // Whether the inline upload form is open (triggered from the header + button).
-  const [uploadOpen, setUploadOpen] = useState(false)
-  const catalogueOpen = tab === "catalogue"
   const activeIndex = Math.max(
     0,
     tabs.findIndex((t) => t.key === tab),
   )
 
-  // Catalogue opens as an immersive full-screen view, so lock background scroll
-  // while it's open and restore it on close.
-  useEffect(() => {
-    if (!catalogueOpen) return
-    const previous = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-    return () => {
-      document.body.style.overflow = previous
-    }
-  }, [catalogueOpen])
-
   function selectTab(key: TabKey) {
-    // Remember where we came from when entering Catalogue.
-    if (key === "catalogue" && tab !== "catalogue") setPrevTab(tab)
     setTab(key)
     // Reflect the tab in the URL (without a navigation) so it's restored when
     // the user returns from an opened item. Next.js syncs replaceState with
@@ -145,10 +105,9 @@ export function ProfileTabs({
         />
       </div>
 
-      {/* Content with a smooth fade/slide transition between tabs. Catalogue is
-          rendered separately as a full-screen overlay below. */}
+      {/* Content with a smooth fade/slide transition between tabs. */}
       <div key={tab} className="animate-in fade-in slide-in-from-bottom-1 duration-300 pt-4">
-        {tab === "catalogue" ? null : tab === "articles" ? (
+        {tab === "articles" ? (
           articles.length === 0 ? (
             <EmptyState
               icon={<Newspaper className="size-6" />}

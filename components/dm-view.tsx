@@ -1013,11 +1013,23 @@ function DmBubble({
             setMenuOpen(true)
           }}
           className={cn(
-            "inline-block select-none overflow-hidden rounded-2xl text-sm leading-snug shadow-sm",
-            m.attachmentType === "image" || m.attachmentType === "video" ? "p-1" : "px-3 py-1.5",
-            m.isSelf
-              ? "rounded-tr-md bg-primary text-primary-foreground"
-              : "rounded-tl-md bg-secondary text-foreground ring-1 ring-inset ring-border/50",
+            "inline-block select-none overflow-hidden rounded-2xl text-[15px] leading-relaxed",
+            // A message that is nothing but a URL renders as a bare link-preview
+            // card. Wrapping it in a tinted bubble produced the oversized orange
+            // slab in the old design, so the bubble chrome is dropped entirely
+            // and the card itself becomes the message surface.
+            bodyIsOnlyLink
+              ? "bg-transparent"
+              : cn(
+                  "shadow-sm",
+                  m.attachmentType === "image" || m.attachmentType === "video" ? "p-1" : "px-3.5 py-2",
+                  m.isSelf
+                    ? // Outgoing: a restrained orange-tinted surface with an orange
+                      // hairline rather than a fully saturated fill, so long threads
+                      // don't read as a wall of orange.
+                      "rounded-br-md border border-primary/35 bg-primary/15 text-foreground"
+                    : "rounded-bl-md border border-border/50 bg-secondary/70 text-foreground",
+                ),
           )}
         >
           {m.statusId != null &&
@@ -1025,8 +1037,7 @@ function DmBubble({
               <Link
                 href={`/status/${m.statusId}`}
                 className={cn(
-                  "mb-1.5 flex items-center gap-2 rounded-lg p-1.5 text-left transition-opacity hover:opacity-80",
-                  m.isSelf ? "bg-primary-foreground/15" : "bg-foreground/5",
+                  "mb-1.5 flex items-center gap-2 rounded-lg bg-foreground/5 p-1.5 text-left transition-opacity hover:opacity-80",
                 )}
               >
                 {m.statusThumb ? (
@@ -1034,41 +1045,28 @@ function DmBubble({
                   <img src={m.statusThumb || "/placeholder.svg"} alt="" className="size-9 shrink-0 rounded-md object-cover" />
                 ) : (
                   <span
-                    className={cn(
-                      "flex size-9 shrink-0 items-center justify-center rounded-md",
-                      m.isSelf ? "bg-primary-foreground/20" : "bg-secondary",
-                    )}
+                    className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary"
                   >
                     <CornerUpLeft className="size-4" />
                   </span>
                 )}
                 <span className="flex min-w-0 flex-col leading-tight">
                   <span className="text-xs font-medium">Reply to status</span>
-                  <span className={cn("text-[11px]", m.isSelf ? "text-primary-foreground/70" : "text-muted-foreground")}>
-                    Tap to view
-                  </span>
+                  <span className="text-[11px] text-muted-foreground">Tap to view</span>
                 </span>
               </Link>
             ) : (
               <div
                 className={cn(
-                  "mb-1.5 flex items-center gap-2 rounded-lg p-1.5",
-                  m.isSelf ? "bg-primary-foreground/10" : "bg-foreground/5",
+                  "mb-1.5 flex items-center gap-2 rounded-lg bg-foreground/5 p-1.5",
                 )}
               >
-                <span
-                  className={cn(
-                    "flex size-9 shrink-0 items-center justify-center rounded-md",
-                    m.isSelf ? "bg-primary-foreground/15" : "bg-secondary",
-                  )}
-                >
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary">
                   <CornerUpLeft className="size-4 opacity-60" />
                 </span>
                 <span className="flex min-w-0 flex-col leading-tight">
                   <span className="text-xs font-medium opacity-80">Reply to status</span>
-                  <span className={cn("text-[11px]", m.isSelf ? "text-primary-foreground/60" : "text-muted-foreground")}>
-                    Status expired
-                  </span>
+                  <span className="text-[11px] text-muted-foreground">Status expired</span>
                 </span>
               </div>
             ))}
@@ -1093,7 +1091,7 @@ function DmBubble({
               href={m.attachmentUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className={cn("flex items-center gap-2 rounded-lg px-1 py-0.5 underline-offset-2 hover:underline", m.isSelf ? "text-primary-foreground" : "text-foreground")}
+              className="flex items-center gap-2 rounded-lg px-1 py-0.5 text-foreground underline-offset-2 hover:underline"
             >
               <FileText className="size-4 shrink-0" />
               <span className="truncate">{m.attachmentName ?? "Document"}</span>
