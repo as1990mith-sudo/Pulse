@@ -1,11 +1,11 @@
 "use server"
 
-import { and, asc, desc, eq } from "drizzle-orm"
+import { and, asc, desc, eq, inArray, isNull, ne, or } from "drizzle-orm"
 import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { catalogueItem, episode, event, home, organization } from "@/lib/db/schema"
+import { catalogueItem, episode, event, home, homeMembership, organization } from "@/lib/db/schema"
 
 async function requireOrgOwner(orgId: string) {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -181,15 +181,38 @@ export async function getOrganizationCatalogue(orgId: string): Promise<Catalogue
     .limit(1)
   if (!homeRow) return manual
 
+  // Replays saved before a session carried a Home (or saved while the host had
+  // no active Home) were stamped with a null homeId and would otherwise be
+  // orphaned — invisible in every Catalogue. Recover those by attributing them
+  // to this organisation when the host is one of its admins/owner. Regular
+  // members' personal recordings are excluded, so nothing leaks in.
+  const adminRows = await db
+    .select({ userId: homeMembership.userId })
+    .from(homeMembership)
+    .where(and(eq(homeMembership.homeId, homeRow.id), ne(homeMembership.role, "member")))
+  const [orgRow] = await db
+    .select({ ownerId: organization.ownerId })
+    .from(organization)
+    .where(eq(organization.id, orgId))
+    .limit(1)
+  const adminIds = Array.from(
+    new Set([...adminRows.map((r) => r.userId), ...(orgRow?.ownerId ? [orgRow.ownerId] : [])]),
+  )
+
   const replays = await db
     .select()
     .from(episode)
     .where(
       and(
-        eq(episode.homeId, homeRow.id),
         eq(episode.source, "live"),
         eq(episode.isPrivate, false),
         eq(episode.processingStatus, "ready"),
+        adminIds.length > 0
+          ? or(
+              eq(episode.homeId, homeRow.id),
+              and(isNull(episode.homeId), inArray(episode.hostUserId, adminIds)),
+            )
+          : eq(episode.homeId, homeRow.id),
       ),
     )
     .orderBy(desc(episode.createdAt))

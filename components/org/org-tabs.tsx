@@ -210,28 +210,19 @@ export function OrgTabs({
 
           <div data-scroll className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
             <div className="mx-auto w-full max-w-4xl">
-              {catalogue.length === 0 ? (
-                <EmptyState
-                  icon={<Mic className="size-6" />}
-                  title="No resources yet"
-                  message={
-                    org.isOwner
-                      ? "Publish sermons, worship sets, teachings and documents. Use the + button above to add your first resource."
-                      : `${org.name} hasn't published any resources yet.`
-                  }
-                />
-              ) : (
-                <OrgEpisodeCatalog
-                  items={catalogue}
-                  isOwner={org.isOwner}
-                  orgId={org.id}
-                  orgName={org.name}
-                  orgLogo={org.logo}
-                  orgHandle={org.handle}
-                  tab={catalogueKind}
-                  onTabChange={setCatalogueKind}
-                />
-              )}
+              {/* Always render the catalogue so the Uploads / Live / Documents
+                  tabs stay available even when a tab (or the whole catalogue)
+                  is empty — it shows its own per-tab empty message. */}
+              <OrgEpisodeCatalog
+                items={catalogue}
+                isOwner={org.isOwner}
+                orgId={org.id}
+                orgName={org.name}
+                orgLogo={org.logo}
+                orgHandle={org.handle}
+                tab={catalogueKind}
+                onTabChange={setCatalogueKind}
+              />
             </div>
           </div>
         </div>
