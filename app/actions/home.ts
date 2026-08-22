@@ -1,11 +1,46 @@
 "use server"
 
-import { and, desc, eq, isNull } from "drizzle-orm"
+import { and, desc, eq, inArray, isNull, or } from "drizzle-orm"
 import { cookies, headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { home, homeAuthKey, homeMembership, organization, user as userTable } from "@/lib/db/schema"
+import {
+  announcement,
+  announcementInteraction,
+  catalogueItem,
+  chatroom,
+  chatroomJoinRequest,
+  chatroomMember,
+  chatroomMessage,
+  communityComment,
+  communityPost,
+  contentView,
+  devotional,
+  episode,
+  episodeComment,
+  event,
+  eventRsvp,
+  feedComment,
+  feedPost,
+  home,
+  homeAppointment,
+  homeAuthKey,
+  homeBooking,
+  homeMembership,
+  liveBlocked,
+  liveCallRequest,
+  liveChatMessage,
+  liveNote,
+  livePresence,
+  liveReaction,
+  liveStream,
+  notification,
+  organization,
+  repost,
+  subscription,
+  user as userTable,
+} from "@/lib/db/schema"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { createOrganization, updateOrganization } from "@/app/actions/organizations"
 import { getHomeByHandle, getMyHomes, getViewerMembership } from "@/lib/home/access"
@@ -444,6 +479,135 @@ export async function leaveHome(handle: string): Promise<{ ok: true }> {
 
   // If we just left the active Home, drop the cookie so the app doesn't keep
   // pointing at a Home the viewer no longer belongs to.
+  const store = await cookies()
+  if (store.get(ACTIVE_HOME_COOKIE)?.value === handle) {
+    store.delete(ACTIVE_HOME_COOKIE)
+  }
+  revalidatePath("/", "layout")
+  return { ok: true }
+}
+
+/**
+ * Permanently deletes a Home, its linked organisation/public profile, and all
+ * content published under it. **Owner-only and irreversible.**
+ *
+ * The database defines no `ON DELETE CASCADE` for `home`/`organization` (the
+ * only cascades live in Better Auth's own `neon_auth` schema), so every child
+ * row has to be removed explicitly here — otherwise deleting a Home would
+ * silently orphan episodes, chat messages, RSVPs and so on across ~20 tables.
+ *
+ * Deletion runs children-before-parents inside one transaction, so a failure
+ * anywhere rolls the whole thing back rather than leaving a half-deleted Home.
+ * Live-room tables (chat/presence/reactions/requests/blocks) key off the
+ * stream's `roomName` rather than an id, so those are resolved first.
+ */
+export async function deleteHome(handle: string): Promise<{ ok: true }> {
+  const user = await requireUser()
+  const homeView = await getHomeByHandle(handle)
+  if (!homeView) throw new Error("Home not found.")
+  const membership = await getViewerMembership(homeView.id)
+  // Owner-only: admins can manage a Home but must never be able to destroy it.
+  if (!membership || membership.status !== "active" || membership.role !== "owner") {
+    throw new Error("Only the Home owner can delete it.")
+  }
+
+  const homeId = homeView.id
+  const orgId = homeView.organizationId
+
+  await db.transaction(async (tx) => {
+    // --- Resolve the ids/room names of everything scoped to this Home --------
+    const streams = await tx.select().from(liveStream).where(eq(liveStream.homeId, homeId))
+    const roomNames = streams.map((s) => s.roomName)
+    const streamIds = streams.map((s) => s.id)
+
+    const episodeIds = (await tx.select({ id: episode.id }).from(episode).where(eq(episode.homeId, homeId))).map(
+      (r) => r.id,
+    )
+    const chatroomIds = (await tx.select({ id: chatroom.id }).from(chatroom).where(eq(chatroom.homeId, homeId))).map(
+      (r) => r.id,
+    )
+    const communityPostIds = (
+      await tx.select({ id: communityPost.id }).from(communityPost).where(eq(communityPost.homeId, homeId))
+    ).map((r) => r.id)
+    // Feed posts and announcements can be tagged by either key, so match both.
+    const feedPostIds = (
+      await tx
+        .select({ id: feedPost.id })
+        .from(feedPost)
+        .where(orgId ? or(eq(feedPost.homeId, homeId), eq(feedPost.organizationId, orgId)) : eq(feedPost.homeId, homeId))
+    ).map((r) => r.id)
+    const announcementIds = (
+      await tx
+        .select({ id: announcement.id })
+        .from(announcement)
+        .where(
+          orgId
+            ? or(eq(announcement.homeId, homeId), eq(announcement.organizationId, orgId))
+            : eq(announcement.homeId, homeId),
+        )
+    ).map((r) => r.id)
+
+    // --- Live rooms (children keyed by roomName / streamId) -----------------
+    if (roomNames.length > 0) {
+      await tx.delete(liveChatMessage).where(inArray(liveChatMessage.roomName, roomNames))
+      await tx.delete(livePresence).where(inArray(livePresence.roomName, roomNames))
+      await tx.delete(liveReaction).where(inArray(liveReaction.roomName, roomNames))
+      await tx.delete(liveCallRequest).where(inArray(liveCallRequest.roomName, roomNames))
+      await tx.delete(liveBlocked).where(inArray(liveBlocked.roomName, roomNames))
+    }
+    if (streamIds.length > 0) await tx.delete(liveNote).where(inArray(liveNote.streamId, streamIds))
+    await tx.delete(liveStream).where(eq(liveStream.homeId, homeId))
+
+    // --- Episodes (incl. live replays) --------------------------------------
+    if (episodeIds.length > 0) {
+      await tx.delete(episodeComment).where(inArray(episodeComment.episodeId, episodeIds))
+      await tx.delete(contentView).where(inArray(contentView.episodeId, episodeIds))
+    }
+    await tx.delete(episode).where(eq(episode.homeId, homeId))
+
+    // --- Chatrooms ----------------------------------------------------------
+    if (chatroomIds.length > 0) {
+      await tx.delete(chatroomMessage).where(inArray(chatroomMessage.chatroomId, chatroomIds))
+      await tx.delete(chatroomMember).where(inArray(chatroomMember.chatroomId, chatroomIds))
+      await tx.delete(chatroomJoinRequest).where(inArray(chatroomJoinRequest.chatroomId, chatroomIds))
+    }
+    await tx.delete(chatroom).where(eq(chatroom.homeId, homeId))
+
+    // --- Feed / community / announcements -----------------------------------
+    if (feedPostIds.length > 0) {
+      await tx.delete(feedComment).where(inArray(feedComment.postId, feedPostIds))
+      await tx.delete(repost).where(inArray(repost.postId, feedPostIds))
+      await tx.delete(feedPost).where(inArray(feedPost.id, feedPostIds))
+    }
+    if (communityPostIds.length > 0) {
+      await tx.delete(communityComment).where(inArray(communityComment.postId, communityPostIds))
+      await tx.delete(communityPost).where(inArray(communityPost.id, communityPostIds))
+    }
+    if (announcementIds.length > 0) {
+      await tx.delete(eventRsvp).where(inArray(eventRsvp.announcementId, announcementIds))
+      await tx.delete(announcementInteraction).where(inArray(announcementInteraction.announcementId, announcementIds))
+      await tx.delete(announcement).where(inArray(announcement.id, announcementIds))
+    }
+
+    // --- Remaining Home-scoped rows ----------------------------------------
+    await tx.delete(devotional).where(eq(devotional.homeId, homeId))
+    await tx.delete(notification).where(eq(notification.homeId, homeId))
+    await tx.delete(homeBooking).where(eq(homeBooking.homeId, homeId))
+    await tx.delete(homeAppointment).where(eq(homeAppointment.homeId, homeId))
+    await tx.delete(homeAuthKey).where(eq(homeAuthKey.homeId, homeId))
+    await tx.delete(homeMembership).where(eq(homeMembership.homeId, homeId))
+
+    // --- Organisation-scoped rows, then the Home + org themselves -----------
+    if (orgId) {
+      await tx.delete(catalogueItem).where(eq(catalogueItem.organizationId, orgId))
+      await tx.delete(event).where(eq(event.organizationId, orgId))
+      await tx.delete(subscription).where(eq(subscription.organizationId, orgId))
+    }
+    await tx.delete(home).where(eq(home.id, homeId))
+    if (orgId) await tx.delete(organization).where(eq(organization.id, orgId))
+  })
+
+  // The deleted Home can't remain the active context.
   const store = await cookies()
   if (store.get(ACTIVE_HOME_COOKIE)?.value === handle) {
     store.delete(ACTIVE_HOME_COOKIE)
