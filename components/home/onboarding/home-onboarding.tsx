@@ -57,8 +57,8 @@ export function HomeOnboarding() {
   const [website, setWebsite] = useState("")
   const [description, setDescription] = useState("")
 
-  // Step 2 — details: contact, social links and the ministry's story. Captured
-  // now so the Home lands fully set up (mirrors the "Manage" workspace).
+  // Step 2 — details: contact, social links and the ministry's mission/vision.
+  // Captured now so the Home lands fully set up (mirrors the "Manage" workspace).
   const [contactEmail, setContactEmail] = useState("")
   const [contactPhone, setContactPhone] = useState("")
   const [instagram, setInstagram] = useState("")
@@ -281,7 +281,7 @@ export function HomeOnboarding() {
         )}
 
         {stepId === "details" && (
-          <Section title="Contact, links & your story">
+          <Section title="Contact, links & mission">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Contact email" htmlFor="org-contact-email" optional icon={<Mail className="size-3.5" />}>
                 <Input
