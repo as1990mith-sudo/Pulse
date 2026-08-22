@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { ensureCtxRunning } from "@/lib/audio-context"
 import {
   AudioPresets,
   LocalAudioTrack,
@@ -948,6 +949,13 @@ export function useLiveVideo({
       /* ignore */
     }
     audioElsRef.current.forEach((el) => void el.play().catch(() => {}))
+    // This tap is a user gesture, exactly what a suspended or OS-interrupted
+    // AudioContext needs to restart, so recover local music monitoring here too
+    // rather than only the remote voices.
+    if (musicCtxRef.current) await ensureCtxRunning(musicCtxRef.current)
+    // Only restart a track that had actually been loaded and got cut off.
+    const musicEl = musicElRef.current
+    if (musicEl?.src && musicEl.paused) void musicEl.play().catch(() => {})
     setAudioBlocked(!room.canPlaybackAudio)
   }, [])
 
@@ -964,7 +972,9 @@ export function useLiveVideo({
     // before publishing — keeps it clean and crisp.
     const ctx = musicCtxRef.current ?? new AudioContext({ sampleRate: 48000 })
     musicCtxRef.current = ctx
-    if (ctx.state === "suspended") await ctx.resume()
+    // Also covers Safari's "interrupted" state, which a suspended-only check
+    // misses — see ensureCtxRunning.
+    await ensureCtxRunning(ctx)
 
     let el = musicElRef.current
     if (!el) {
@@ -1268,6 +1278,28 @@ export function useLiveVideo({
     document.addEventListener("visibilitychange", onVisible)
     return () => document.removeEventListener("visibilitychange", onVisible)
   }, [requestWakeLock])
+
+  // Recover audio when the tab returns to the foreground. Backgrounding (app
+  // switch, screen lock, incoming call) is the most common way the audio session
+  // gets interrupted mid-meeting, leaving someone visible and audible to others
+  // but unable to hear the room. Re-asserting playback makes that self-healing.
+  useEffect(() => {
+    const recover = () => {
+      if (document.visibilityState !== "visible") return
+      const room = roomRef.current
+      if (!room) return
+      void room.startAudio().catch(() => {})
+      audioElsRef.current.forEach((el) => {
+        if (el.paused) void el.play().catch(() => {})
+      })
+      if (musicCtxRef.current) void ensureCtxRunning(musicCtxRef.current)
+      const musicEl = musicElRef.current
+      if (musicEl?.src && musicEl.paused) void musicEl.play().catch(() => {})
+      setAudioBlocked(!room.canPlaybackAudio)
+    }
+    document.addEventListener("visibilitychange", recover)
+    return () => document.removeEventListener("visibilitychange", recover)
+  }, [])
 
   return {
     localVideoRef,
