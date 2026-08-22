@@ -878,15 +878,25 @@ export function MindFeed({
             aria-pressed={tab === t.id}
           >
             {t.label}
-            {tab === t.id && (
-              <span className="absolute inset-x-0 -bottom-px mx-auto h-1 w-14 rounded-full bg-primary" />
-            )}
+            {/* Always rendered and animated via transform/opacity rather than
+                mounted only on the active tab: swapping the element made the
+                underline jump, and transforms stay on the compositor so the
+                indicator can't contend with the content transition. */}
+            <span
+              aria-hidden
+              className={cn(
+                "pointer-events-none absolute inset-x-0 -bottom-px mx-auto h-1 w-14 rounded-full bg-primary transition-all duration-300 ease-out",
+                tab === t.id ? "scale-x-100 opacity-100" : "scale-x-0 opacity-0",
+              )}
+            />
           </button>
         ))}
       </div>
 
-      {/* Swipe horizontally to move between the feed sub-tabs. */}
-        <div>
+      {/* Sub-tab content. Keying on `tab` restarts the enter animation on every
+          switch, so moving to Events cross-fades in rather than snapping — the
+          swap used to land as one abrupt repaint, which read as a slow load. */}
+      <div key={tab} className="animate-in fade-in slide-in-from-bottom-1 duration-300 fill-mode-both">
         {tab === "events" ? (
           announcementBanner
         ) : tab === "status" ? (
