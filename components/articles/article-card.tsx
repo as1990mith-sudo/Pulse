@@ -82,8 +82,11 @@ export function FeaturedArticleCard({ article }: { article: ArticleCardType }) {
       ) : (
         <div className="absolute inset-0 bg-gradient-to-br from-primary/30 via-card to-card" />
       )}
-      {/* Cinematic scrim: strong at the base, feathering out toward the top. */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/5" />
+      {/* Scrim confined to the bottom half, so the top of the artwork shows
+          untinted. It fades to fully transparent at its own midpoint rather
+          than ending on a visible colour, which keeps the halfway boundary from
+          reading as a hard horizontal edge across the image. */}
+      <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
 
       <div className="relative p-5 sm:p-6">
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em]">
