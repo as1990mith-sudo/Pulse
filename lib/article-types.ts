@@ -20,6 +20,9 @@ export const ARTICLE_CATEGORIES = [
 
 export type ArticleCategory = (typeof ARTICLE_CATEGORIES)[number]
 
+/** Maximum number of articles that can sit in the Editor's Pick rail at once. */
+export const EDITORS_PICK_LIMIT = 4
+
 /** A writer's public identity + reach, shown on cards and the writer profile. */
 export type ArticleAuthor = {
   id: string
@@ -41,6 +44,8 @@ export type ArticleCard = {
   status: ArticleStatus
   readMinutes: number
   featured: boolean
+  /** Hand-picked by a Home admin for the Editor's Pick rail (max 4 per Home). */
+  editorsPick: boolean
   likeCount: number
   commentCount: number
   viewCount: number

@@ -29,7 +29,7 @@ import {
   htmlToPlainText,
   sanitizeArticleHtml,
 } from "@/lib/article-sanitize"
-import { ARTICLE_CATEGORIES } from "@/lib/article-types"
+import { ARTICLE_CATEGORIES, EDITORS_PICK_LIMIT } from "@/lib/article-types"
 import {
   downgradeBlockedHtmlMentions,
   extractHtmlMentionRefs,
@@ -122,6 +122,7 @@ function toCard(row: ArticleRow, author: ArticleAuthor): ArticleCard {
     status: row.status as ArticleStatus,
     readMinutes: row.readMinutes,
     featured: row.featured,
+    editorsPick: row.editorsPick,
     likeCount: row.likeCount,
     commentCount: row.commentCount,
     viewCount: row.viewCount,
@@ -192,23 +193,30 @@ export async function getArticleHub(): Promise<{
       .where(and(eq(article.status, "published"), inArray(article.authorId, memberIds)))
       .orderBy(desc(article.publishedAt))
       .limit(30),
-    // Editor's Pick: curated standouts — hand-flagged featured first, then the
-    // best-performing pieces by engagement. A generous limit lets us drop the
-    // hero article and still fill the rail.
+    // Editor's Pick: strictly hand-curated. Only articles an admin explicitly
+    // flagged appear here — no engagement fallback, so nothing can drift into
+    // the rail on its own. Capped at the 4 most recently published picks.
     db
       .select()
       .from(article)
-      .where(and(eq(article.status, "published"), inArray(article.authorId, memberIds)))
-      .orderBy(desc(article.featured), desc(article.likeCount), desc(article.viewCount), desc(article.publishedAt))
-      .limit(9),
+      .where(
+        and(
+          eq(article.status, "published"),
+          eq(article.editorsPick, true),
+          inArray(article.authorId, memberIds),
+        ),
+      )
+      .orderBy(desc(article.publishedAt))
+      .limit(EDITORS_PICK_LIMIT),
   ])
 
   // Fall back to the newest published article when nothing is flagged featured.
   const featuredRow = featuredRows[0] ?? latestRows[0] ?? null
   const [featuredCard] = featuredRow ? await toCards([featuredRow]) : [null]
   const latest = await toCards(latestRows.filter((r) => r.id !== featuredRow?.id))
-  // Exclude the hero from the picks rail so it isn't shown twice.
-  const editorsPicks = await toCards(pickRows.filter((r) => r.id !== featuredRow?.id).slice(0, 6))
+  // Exclude the hero from the picks rail so the same piece isn't rendered twice
+  // on one screen (it stays flagged — it's just already visible above).
+  const editorsPicks = await toCards(pickRows.filter((r) => r.id !== featuredRow?.id))
 
   return {
     featured: featuredCard ?? null,
@@ -774,6 +782,61 @@ export async function setFeaturedArticle(id: string, featured: boolean): Promise
     await db.update(article).set({ featured: false, updatedAt: new Date() }).where(eq(article.id, numId))
   }
 
+  revalidateArticle(numId, user.id)
+}
+
+/**
+ * Adds or removes an article from the Editor's Pick rail on the viewer's active
+ * Home's Articles hub. Only a Home admin may curate, and only their own
+ * published articles. At most EDITORS_PICK_LIMIT articles can be flagged at
+ * once across the Home's hub authors — the cap is enforced here rather than in
+ * the UI, so a stale client or a second admin curating concurrently can't push
+ * the rail over the limit.
+ */
+export async function setArticleEditorsPick(id: string, pick: boolean): Promise<void> {
+  const user = await requireUser()
+  const numId = Number(id)
+  if (!Number.isFinite(numId)) throw new Error("Article not found.")
+
+  const { home, membership } = await getActiveHomeContext()
+  if (!home || !isHomeAdminRole(membership?.role)) {
+    throw new Error("Only a Home admin can choose Editor's Picks.")
+  }
+
+  const [row] = await db
+    .select({ authorId: article.authorId, status: article.status, editorsPick: article.editorsPick })
+    .from(article)
+    .where(eq(article.id, numId))
+    .limit(1)
+  if (!row || row.authorId !== user.id) throw new Error("Article not found.")
+  if (pick && row.status !== "published") {
+    throw new Error("Only published articles can be an Editor's Pick.")
+  }
+
+  // Enforce the cap against the live count, ignoring this article so re-picking
+  // an already-flagged piece is a no-op rather than a spurious failure.
+  if (pick && !row.editorsPick) {
+    const authorIds = await getArticleHubAuthorIds()
+    if (authorIds.length > 0) {
+      const current = await db
+        .select({ id: article.id })
+        .from(article)
+        .where(
+          and(
+            eq(article.editorsPick, true),
+            eq(article.status, "published"),
+            inArray(article.authorId, authorIds),
+          ),
+        )
+      if (current.filter((r) => r.id !== numId).length >= EDITORS_PICK_LIMIT) {
+        throw new Error(
+          `You can only have ${EDITORS_PICK_LIMIT} Editor's Picks. Remove one first.`,
+        )
+      }
+    }
+  }
+
+  await db.update(article).set({ editorsPick: pick, updatedAt: new Date() }).where(eq(article.id, numId))
   revalidateArticle(numId, user.id)
 }
 

@@ -1223,6 +1223,10 @@ export const article = pgTable("article", {
   // Estimated read time in minutes, derived from word count on save.
   readMinutes: integer("readMinutes").notNull().default(1),
   featured: boolean("featured").notNull().default(false),
+  // Hand-curated Editor's Pick flag. Set only by a Home admin via the article
+  // menu, capped at 4 per Home — never inferred from engagement, so an article
+  // can't drift into the rail on its own.
+  editorsPick: boolean("editorsPick").notNull().default(false),
   likeCount: integer("likeCount").notNull().default(0),
   commentCount: integer("commentCount").notNull().default(0),
   viewCount: integer("viewCount").notNull().default(0),

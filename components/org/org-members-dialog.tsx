@@ -76,7 +76,10 @@ export function OrgMembersDialog({ members }: { members: HomeRosterMember[] }) {
               className="absolute inset-0 bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-200"
             />
 
-            <div className="relative mx-auto flex w-full max-h-[70%] flex-col rounded-t-[1.75rem] border-t border-border bg-background text-foreground shadow-2xl animate-in slide-in-from-bottom duration-300 ease-out sm:max-w-md sm:rounded-b-[1.75rem] sm:border">
+            {/* Inset from the screen edges on every breakpoint so it reads as a
+                floating sheet rather than a full-bleed panel, while still
+                rising from the bottom like the comment sheet. */}
+            <div className="relative mx-3 mb-[max(0.75rem,env(safe-area-inset-bottom))] flex max-h-[70%] flex-col overflow-hidden rounded-[1.75rem] border border-border bg-background text-foreground shadow-2xl animate-in slide-in-from-bottom duration-300 ease-out sm:mx-auto sm:w-full sm:max-w-sm">
               {/* Grabber + title row. The count sits immediately beside the
                   members icon so the two read as one unit, keeping it clear of
                   the close button in the corner. */}
