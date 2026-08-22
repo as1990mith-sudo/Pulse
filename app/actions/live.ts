@@ -218,7 +218,18 @@ export type GoLiveResult =
   | { ok: false; error: string }
 
 export type JoinResult =
-  | { ok: true; token: string; serverUrl: string; roomName: string; canPublish: boolean; recordOnServer?: boolean }
+  | {
+      ok: true
+      token: string
+      serverUrl: string
+      roomName: string
+      canPublish: boolean
+      recordOnServer?: boolean
+      // Display name when the viewer joined as a signed-out guest (null for
+      // account holders). The client needs it to enable in-room chat: the room
+      // link is the credential, so a guest who's in the call can talk in it.
+      guestName?: string | null
+    }
   // `needsIdentity`: public live, but the visitor hasn't given a display name yet
   //   → show the "Join Live" display-name gate.
   // `needsAuth`: private live and the visitor isn't a member → they must sign up
@@ -499,12 +510,20 @@ export async function beginRoomRecording(input: { roomName: string }): Promise<{
   }
 }
 
-/** Host stops broadcasting. */
+/**
+ * Host stops broadcasting.
+ *
+ * Guests (signed-out visitors in a public live) reach this only via the shared
+ * leave/exit path, and they are never controllers — so resolve the actor
+ * leniently and no-op rather than calling requireUser(), which would throw and
+ * surface an error on what is, for them, an ordinary "leave the call" tap.
+ */
 export async function endBroadcast(input: { roomName: string }): Promise<void> {
-  const user = await requireUser()
+  const actor = await getLiveActor()
+  if (!actor || actor.isGuest) return
   // The host can always end. In a grid meeting the co-host has full parity and
   // may end the live for everyone too.
-  const { isController } = await getGridControl(input.roomName, user.id)
+  const { isController } = await getGridControl(input.roomName, actor.id)
   if (!isController) return
   // Stop the server-side recording first so the replay finalizes promptly.
   await stopEgressForRoom(input.roomName)
@@ -641,7 +660,17 @@ export async function joinBroadcast(input: { roomName: string }): Promise<JoinRe
   // configured for this video room.
   const recordOnServer = isHost && stream.mode === "video" && isEgressConfigured()
 
-  return { ok: true, token, serverUrl: LIVEKIT_URL, roomName: input.roomName, canPublish, recordOnServer }
+  return {
+    ok: true,
+    token,
+    serverUrl: LIVEKIT_URL,
+    roomName: input.roomName,
+    canPublish,
+    recordOnServer,
+    // Only set for guests, so the client can enable chat for them without
+    // inventing an identity of its own.
+    guestName: actor.isGuest ? actor.name : null,
+  }
 }
 
 /** All currently-live streams, newest first. */

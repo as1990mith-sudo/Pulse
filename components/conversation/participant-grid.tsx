@@ -44,7 +44,17 @@ function chunk<T>(arr: T[], size: number): T[][] {
  * A single participant tile. Gently enlarges with an animated ring while the
  * person is speaking, and shows their mic state + host/pin badges.
  */
-function ParticipantCard({ p, onTap }: { p: GridParticipant; onTap?: (p: GridParticipant) => void }) {
+function ParticipantCard({
+  p,
+  onTap,
+  compact = false,
+}: {
+  p: GridParticipant
+  onTap?: (p: GridParticipant) => void
+  // Set when the stage is short (chat open). Uses the original smaller avatar so
+  // rows fit their tracks instead of names colliding with the row below.
+  compact?: boolean
+}) {
   return (
     <motion.button
       type="button"
@@ -60,7 +70,7 @@ function ParticipantCard({ p, onTap }: { p: GridParticipant; onTap?: (p: GridPar
       // so the name sits directly under the avatar instead of drifting.
       className="flex min-h-0 min-w-0 flex-col items-center justify-start gap-1.5 rounded-2xl p-0.5 text-center focus:outline-none"
     >
-      <span className="relative inline-flex">
+      <span className="relative inline-flex shrink-0">
         {/* Soft animated ring while speaking. */}
         <AnimatePresence>
           {p.isSpeaking && (
@@ -77,10 +87,12 @@ function ParticipantCard({ p, onTap }: { p: GridParticipant; onTap?: (p: GridPar
         </AnimatePresence>
         <Avatar
           className={cn(
-            // 10% up on the original 3.5rem/4rem slots. At 4 columns a ~384px
-            // stage gives roughly 78px per cell, so this fills the cell while
-            // leaving room for the speaking ring's 6px glow to breathe.
-            "size-[3.85rem] ring-2 transition-colors sm:size-[4.4rem]",
+            "ring-2 transition-colors",
+            // Full stage: 10% up on the original 3.5rem/4rem slots. At 4 columns
+            // a ~384px stage gives roughly 78px per cell, so this fills the cell
+            // while leaving room for the speaking ring's 6px glow to breathe.
+            // Compact (chat open) keeps the original size so 2 rows still fit.
+            compact ? "size-14 sm:size-16" : "size-[3.85rem] sm:size-[4.4rem]",
             p.isSpeaking ? "ring-primary/80" : "ring-white/10",
           )}
         >
@@ -187,18 +199,22 @@ export function ParticipantGrid({
                 (4 normally, 2 when the chat is open) and Tailwind can't
                 statically extract a computed class name.
 
-                `content-start` + asymmetric padding is what gives the stage its
-                vertical balance: the block of avatars sits high, leaving a
-                deliberately larger gap beneath it than above. Without this the
-                rows stretch to fill the height and the grid reads as bottom-
-                heavy, crowding the dock. */}
+                Vertical framing: rows share the stage evenly (`1fr` tracks) so
+                the block fills the space instead of clumping at the top, and the
+                bottom padding is larger than the top so the group sits slightly
+                high with more clearance beneath it than above.
+
+                Both the bottom padding and the avatar size step down on a short
+                stage (chat open, 2 rows): a flat `pb-8` plus full-size avatars
+                overflowed the shorter tracks and names collided with the row
+                below. */}
             <div
-              className="grid h-full grid-cols-4 content-start gap-x-2 gap-y-3 px-3 pb-10 pt-3"
-              style={{ gridTemplateRows: `repeat(${rows}, minmax(0, auto))` }}
+              className={cn("grid h-full grid-cols-4 gap-x-2 gap-y-1 px-3 pt-2", rows >= 4 ? "pb-8" : "pb-3")}
+              style={{ gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}
             >
               <AnimatePresence mode="popLayout">
                 {pages[clamped].map((p) => (
-                  <ParticipantCard key={p.identity} p={p} onTap={onTapParticipant} />
+                  <ParticipantCard key={p.identity} p={p} onTap={onTapParticipant} compact={rows < 4} />
                 ))}
               </AnimatePresence>
             </div>

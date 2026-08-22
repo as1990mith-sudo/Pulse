@@ -195,6 +195,9 @@ export function LiveVideoViewer({
   // Public-live guest flow: joinBroadcast returned `needsIdentity`, so we show
   // the display-name gate and let the guest name themselves before connecting.
   const [needIdentity, setNeedIdentity] = useState(false)
+  // Display name of a signed-out guest who joined via the room link, so chat
+  // treats them as a participant rather than prompting them to sign in.
+  const [guestName, setGuestName] = useState<string | null>(null)
   // A pending "come on stage" invite from the host (accept/decline in-session).
   const [myInvite, setMyInvite] = useState<CallRequestView | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
@@ -264,6 +267,7 @@ export function LiveVideoViewer({
       return
     }
     setNeedIdentity(false)
+    setGuestName(res.guestName ?? null)
     setCreds({ token: res.token, serverUrl: res.serverUrl })
   }
 
@@ -478,9 +482,16 @@ export function LiveVideoViewer({
       <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-neutral-950 text-white [isolation:isolate]">
         <ConversationVideo
           roomName={stream.roomName}
-          self={{ identity: currentUserId ?? "self", name: currentUser?.name ?? "You", image: currentUser?.image ?? null }}
+          // A guest has a display name but no account, so fall back to it before
+          // the generic "You" — otherwise their own tile is the only unnamed one.
+          self={{
+            identity: currentUserId ?? "self",
+            name: currentUser?.name ?? guestName ?? "You",
+            image: currentUser?.image ?? null,
+          }}
           peers={peers}
           currentUser={currentUser}
+          guestName={guestName}
           hostId={callState?.hostId ?? stream.hostId}
           gridCohostId={callState?.gridCohostId ?? null}
           gridPinnedIds={callState?.gridPinnedIds ?? []}
@@ -900,6 +911,7 @@ export function LiveVideoViewer({
         {canWatch ? (
             <LiveChat
               currentUser={currentUser}
+              guestName={guestName}
               roomName={stream.roomName}
               immersive
               flatText

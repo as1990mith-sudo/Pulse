@@ -135,6 +135,9 @@ export function LiveListener({
   // Public-live guest flow: joinBroadcast returned `needsIdentity`, so we show
   // the display-name gate instead of connecting until the guest provides a name.
   const [needIdentity, setNeedIdentity] = useState(false)
+  // Display name of a signed-out guest who joined via the room link, so chat
+  // treats them as a participant rather than prompting them to sign in.
+  const [guestName, setGuestName] = useState<string | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
   // Set when the host ends the broadcast — shows a "Session ended" splash then
   // bounces the listener back to the Live tab.
@@ -296,6 +299,7 @@ export function LiveListener({
       return
     }
     setNeedIdentity(false)
+    setGuestName(res.guestName ?? null)
     await connect({ serverUrl: res.serverUrl, token: res.token, publish: res.canPublish })
   }
 
@@ -647,7 +651,7 @@ export function LiveListener({
         </>
       )}
 
-      {/* ───────── Broadcast header: cover art + live + title + stats ───────── */}
+      {/* ��──────── Broadcast header: cover art + live + title + stats ───────── */}
       <header className="relative z-30 flex items-center gap-3 border-b border-white/10 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+1rem)] backdrop-blur-xl">
         {/* Back control — opens Leave / Minimise while connected. */}
         <BackExitMenu
@@ -886,6 +890,7 @@ export function LiveListener({
             immersive
             showResourceButton
             currentUser={currentUser}
+            guestName={guestName}
             roomName={stream.roomName}
             bgUrl={stream.chatBgUrl ?? null}
             bgEffect={stream.chatBgEffect ?? "none"}

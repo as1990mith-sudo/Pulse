@@ -197,6 +197,10 @@ export function ConversationRoom({
   // Public-live guest flow: joinBroadcast returned `needsIdentity`, so we show
   // the display-name gate and let the guest name themselves before connecting.
   const [needIdentity, setNeedIdentity] = useState(false)
+  // Display name of a signed-out guest who came in via the room link. Set from
+  // the join result so chat and the other in-room controls treat them as a real
+  // participant instead of falling back to a "Sign in" prompt.
+  const [guestName, setGuestName] = useState<string | null>(null)
   // As people settle into the room, the tall header collapses into a compact
   // sticky bar to hand more space to the participant grid.
   const [autoCompact, setAutoCompact] = useState(false)
@@ -225,6 +229,7 @@ export function ConversationRoom({
       return
     }
     setNeedIdentity(false)
+    setGuestName(res.guestName ?? null)
     setRoomName(rn)
     setLive(true)
     await connect({
@@ -1082,7 +1087,13 @@ export function ConversationRoom({
               </button>
             </div>
             <div className="min-h-0 flex-1">
-              <LiveChat asHost={isHost} currentUser={currentUser} roomName={roomName ?? undefined} immersive />
+              <LiveChat
+                asHost={isHost}
+                currentUser={currentUser}
+                guestName={guestName}
+                roomName={roomName ?? undefined}
+                immersive
+              />
             </div>
           </motion.section>
         )}

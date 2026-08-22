@@ -64,7 +64,7 @@ export async function publishShow(input: {
   let homeId: string | null = null
   if (input.source === "live" && input.roomName) {
     const [row] = await db
-      .select({ homeId: liveStream.homeId, hostUserId: liveStream.hostUserId })
+      .select({ homeId: liveStream.homeId, hostId: liveStream.hostId })
       .from(liveStream)
       .where(eq(liveStream.roomName, input.roomName))
       .limit(1)
@@ -74,7 +74,7 @@ export async function publishShow(input: {
     // needs an explicit "Save Recording" grant. Enforced server-side because the
     // client gate alone could be bypassed by calling this action directly, which
     // would let a co-host publish a duplicate (often shorter) copy of the show.
-    if (row && row.hostUserId !== user.id) {
+    if (row && row.hostId !== user.id) {
       const [grant] = await db
         .select({ canSaveRecording: liveCallRequest.canSaveRecording })
         .from(liveCallRequest)
