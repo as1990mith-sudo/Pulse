@@ -5,7 +5,7 @@ import Link from "next/link"
 import { Clock, Loader2, PenLine, Search, Sparkles, X } from "lucide-react"
 import type { ArticleCard } from "@/lib/article-types"
 import { getArticleFeed } from "@/app/actions/articles"
-import { ArticleRow, FeaturedArticleCard } from "@/components/articles/article-card"
+import { FeaturedArticleCard } from "@/components/articles/article-card"
 import { cn } from "@/lib/utils"
 
 const PAGE = 12
@@ -202,7 +202,7 @@ export function ArticlesHub({
           </div>
           <div data-scroll className="hscroll -mx-4 flex gap-3.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
             {editorsPicks.map((a) => (
-              <EditorsPickCard key={a.id} article={a} />
+              <ArticleCoverCard key={a.id} article={a} className="w-40 shrink-0 sm:w-44" />
             ))}
           </div>
         </section>
@@ -216,9 +216,11 @@ export function ArticlesHub({
         {items.length === 0 && !loading ? (
           <EmptyState search={debounced} />
         ) : (
-          <div className="flex flex-col divide-y divide-border/40">
+          /* Two-column cover grid — same card design as the Editor's Pick rail,
+             so the page reads as one consistent editorial system. */
+          <div className="mt-4 grid grid-cols-2 gap-3.5">
             {items.map((a) => (
-              <ArticleRow key={a.id} article={a} />
+              <ArticleCoverCard key={a.id} article={a} className="w-full" />
             ))}
           </div>
         )}
@@ -254,15 +256,20 @@ export function ArticlesHub({
 }
 
 /**
- * A compact, premium cover card for the Editor's Pick rail. Cover fills the
- * card with a bottom gradient; category, title, author and read time sit over
- * it so each pick reads at a glance without taking much vertical space.
+ * A premium cover card: the cover fills the card behind a bottom scrim, with
+ * category, title and read time laid over it. Shared by the Editor's Pick rail
+ * (fixed-width, horizontally scrolled) and the main two-column article grid
+ * (fluid width) so both surfaces read as one consistent design — `className`
+ * supplies only the sizing difference.
  */
-function EditorsPickCard({ article }: { article: ArticleCard }) {
+function ArticleCoverCard({ article, className }: { article: ArticleCard; className?: string }) {
   return (
     <Link
       href={`/articles/${article.id}`}
-      className="tap-scale group relative flex aspect-[3/4] w-40 shrink-0 flex-col justify-end overflow-hidden rounded-2xl bg-card shadow-elevated sm:w-44"
+      className={cn(
+        "tap-scale group relative flex aspect-[3/4] flex-col justify-end overflow-hidden rounded-2xl bg-card shadow-elevated",
+        className,
+      )}
     >
       {article.coverUrl ? (
         // eslint-disable-next-line @next/next/no-img-element

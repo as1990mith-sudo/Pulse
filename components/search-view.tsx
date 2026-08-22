@@ -98,9 +98,11 @@ export function SearchView({ currentUser }: { currentUser: CurrentUser | null })
                 <MessageSquare className="size-3.5" />
                 Posts
               </div>
-              <div className="space-y-3 px-4 sm:px-5">
+              {/* Immersive: posts run edge-to-edge and are separated only by
+                  hairlines, matching the main feed and profile timelines. */}
+              <div className="flex flex-col divide-y divide-border/60 border-t border-border/60">
                 {postResults.map((post) => (
-                  <PostCard key={post.id} post={post} currentUser={currentUser} variant="card" />
+                  <PostCard key={post.id} post={post} currentUser={currentUser} variant="feed" />
                 ))}
               </div>
             </section>

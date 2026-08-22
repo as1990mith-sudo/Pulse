@@ -72,8 +72,6 @@ export function CreateOrganisationForm({ initialName = "" }: { initialName?: str
         },
         mission: orgExtra.mission,
         vision: orgExtra.vision,
-        history: orgExtra.history,
-        beliefs: orgExtra.beliefs,
       })
       router.push(`/org/${handle}`)
       router.refresh()

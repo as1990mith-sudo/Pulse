@@ -47,6 +47,10 @@ export function MyHomesView() {
   const [leaving, setLeaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Typed confirmation for leaving a Home. Losing access is disruptive enough
+  // (rejoining needs the Home key) that it shouldn't be a single stray tap.
+  const [leaveConfirm, setLeaveConfirm] = useState("")
+  const canLeaveConfirm = leaveConfirm.trim().toUpperCase() === "LEAVE"
   // While a destructive action is in flight the sheet must not be dismissable.
   const busyAction = leaving || deleting
 
@@ -54,6 +58,7 @@ export function MyHomesView() {
     setActionsFor(null)
     setView("menu")
     setError(null)
+    setLeaveConfirm("")
   }
 
   // Open the Home/Organisation's public profile directly.
@@ -84,7 +89,9 @@ export function MyHomesView() {
 
   // Leave a Home membership. Owners never reach this (no trigger is rendered).
   async function handleLeave() {
-    if (!actionsFor) return
+    // Re-check the typed confirmation here too, so the action can't fire from a
+    // stale enabled button or an Enter keypress.
+    if (!actionsFor || !canLeaveConfirm) return
     setLeaving(true)
     setError(null)
     try {
@@ -392,20 +399,39 @@ export function MyHomesView() {
                     Leave <span className="font-semibold text-foreground">{actionsFor?.name}</span>? You&apos;ll lose
                     access to its content and need the Home key to rejoin.
                   </p>
+                  {/* Typed confirmation — deliberate friction before losing access. */}
+                  <label htmlFor="leave-confirm" className="mt-4 block px-1 text-xs text-muted-foreground">
+                    Type <span className="font-semibold tracking-wide text-foreground">LEAVE</span> to confirm
+                  </label>
+                  <input
+                    id="leave-confirm"
+                    value={leaveConfirm}
+                    onChange={(e) => setLeaveConfirm(e.target.value)}
+                    disabled={busyAction}
+                    autoComplete="off"
+                    autoCapitalize="characters"
+                    spellCheck={false}
+                    placeholder="LEAVE"
+                    aria-describedby="leave-confirm-hint"
+                    className="mt-2 h-12 w-full rounded-2xl border border-border bg-secondary/40 px-4 text-center text-sm font-semibold uppercase tracking-[0.2em] text-foreground placeholder:font-normal placeholder:tracking-normal placeholder:text-muted-foreground/50 focus-visible:border-destructive/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/30 disabled:opacity-60"
+                  />
                   {error && <p className="mt-3 px-1 text-sm font-medium text-destructive">{error}</p>}
                   <div className="mt-4 flex flex-col gap-2">
                     <button
                       type="button"
                       onClick={handleLeave}
-                      disabled={busyAction}
-                      className="flex h-12 items-center justify-center gap-2 rounded-full bg-destructive text-sm font-semibold text-destructive-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
+                      disabled={busyAction || !canLeaveConfirm}
+                      className="flex h-12 items-center justify-center gap-2 rounded-full bg-destructive text-sm font-semibold text-destructive-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
                     >
                       {leaving ? <Loader2 className="size-4 animate-spin" /> : <LogOut className="size-4" />}
                       Leave Home Membership
                     </button>
                     <button
                       type="button"
-                      onClick={() => setView("menu")}
+                      onClick={() => {
+                        setView("menu")
+                        setLeaveConfirm("")
+                      }}
                       disabled={busyAction}
                       className="flex h-12 items-center justify-center rounded-full text-sm font-semibold text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground disabled:opacity-60"
                     >

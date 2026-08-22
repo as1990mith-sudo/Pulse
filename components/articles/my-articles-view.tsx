@@ -17,12 +17,16 @@ import {
   Send,
   Star,
   StarOff,
+  Sparkles,
+  BookmarkX,
 } from "lucide-react"
-import type { ArticleCard } from "@/lib/article-types"
+import { toast } from "sonner"
+import { EDITORS_PICK_LIMIT, type ArticleCard } from "@/lib/article-types"
 import {
   archiveArticle,
   deleteArticle,
   publishArticle,
+  setArticleEditorsPick,
   setFeaturedArticle,
   unpublishArticle,
 } from "@/app/actions/articles"
@@ -86,6 +90,25 @@ export function MyArticlesView({ initial }: { initial: ArticleCard[] }) {
     // list reflects the new hero immediately while the server persists it.
     setItems((prev) => prev.map((a) => ({ ...a, featured: a.id === id ? featured : featured ? false : a.featured })))
     startTransition(() => void setFeaturedArticle(id, featured).catch(() => router.refresh()))
+  }
+  function handleEditorsPick(id: string, pick: boolean) {
+    // Check the cap client-side first so hitting the limit gives instant
+    // feedback instead of an optimistic flip that snaps back on rejection.
+    if (pick && items.filter((a) => a.editorsPick && a.id !== id).length >= EDITORS_PICK_LIMIT) {
+      toast.error(`You can only have ${EDITORS_PICK_LIMIT} Editor's Picks. Remove one first.`)
+      return
+    }
+    setItems((prev) => prev.map((a) => (a.id === id ? { ...a, editorsPick: pick } : a)))
+    startTransition(() =>
+      void setArticleEditorsPick(id, pick).then(
+        () => toast.success(pick ? "Added to Editor's Pick." : "Removed from Editor's Pick."),
+        (e) => {
+          // Server rejected (cap raced, or permissions changed) — resync.
+          toast.error(e instanceof Error ? e.message : "Couldn't update Editor's Pick.")
+          router.refresh()
+        },
+      ),
+    )
   }
 
   return (
@@ -163,6 +186,7 @@ export function MyArticlesView({ initial }: { initial: ArticleCard[] }) {
               onArchive={() => handleArchive(a.id)}
               onDelete={() => handleDelete(a.id)}
               onToggleFeature={() => handleFeature(a.id, !a.featured)}
+              onToggleEditorsPick={() => handleEditorsPick(a.id, !a.editorsPick)}
             />
           ))}
         </div>
@@ -186,6 +210,7 @@ function MyArticleRow({
   onArchive,
   onDelete,
   onToggleFeature,
+  onToggleEditorsPick,
 }: {
   article: ArticleCard
   canFeature: boolean
@@ -195,11 +220,20 @@ function MyArticleRow({
   onArchive: () => void
   onDelete: () => void
   onToggleFeature: () => void
+  onToggleEditorsPick: () => void
 }) {
   return (
     <div className="group flex gap-4 py-5 sm:gap-5">
       <div className="min-w-0 flex-1">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">{a.category}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">{a.category}</span>
+          {/* Standing marker so an admin can see the current picks at a glance. */}
+          {a.editorsPick && (
+            <span className="flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-primary">
+              <Sparkles className="size-3" /> Editor&apos;s Pick
+            </span>
+          )}
+        </div>
         <Link href={`/articles/${a.id}`} className="tap-scale block">
           <h3 className="mt-1.5 line-clamp-2 text-pretty font-display text-base font-semibold leading-snug text-foreground transition-colors group-hover:text-primary sm:text-lg">
             {a.title}
@@ -242,7 +276,9 @@ function MyArticleRow({
               <MoreHorizontal className="size-4" />
               <span className="sr-only">Article actions</span>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            {/* Min width sized to the longest label ("Remove from Editor's Pick")
+                so no option truncates or wraps onto a second line. */}
+            <DropdownMenuContent align="end" className="min-w-[15rem]">
               <DropdownMenuItem onClick={onEdit} className="whitespace-nowrap">
                 <Pencil className="mr-2 size-4 shrink-0" /> Edit
               </DropdownMenuItem>
@@ -256,6 +292,20 @@ function MyArticleRow({
                   ) : (
                     <>
                       <Star className="mr-2 size-4 shrink-0" /> Feature
+                    </>
+                  )}
+                </DropdownMenuItem>
+              )}
+              {/* Admin-only: hand-curate the Editor's Pick rail (max 4). */}
+              {canFeature && a.status === "published" && (
+                <DropdownMenuItem onClick={onToggleEditorsPick} className="whitespace-nowrap">
+                  {a.editorsPick ? (
+                    <>
+                      <BookmarkX className="mr-2 size-4 shrink-0" /> Remove from Editor&apos;s Pick
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="mr-2 size-4 shrink-0" /> Add to Editor&apos;s Pick
                     </>
                   )}
                 </DropdownMenuItem>

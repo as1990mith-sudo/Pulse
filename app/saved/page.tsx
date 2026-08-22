@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 
 export const metadata: Metadata = {
-  title: "Saved · Frequency",
-  description: "Your private collection of saved posts, episodes, devotionals, and moments.",
+  title: "Bookmarks · Frequency",
+  description: "Your private collection of bookmarked posts, episodes, devotionals, and moments.",
 }
 
 export default async function SavedPage() {
@@ -21,9 +21,9 @@ export default async function SavedPage() {
         <SiteHeader />
         <main className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
           <Card className="flex flex-col items-center gap-3 p-10 text-center">
-            <p className="text-lg font-semibold">Sign in to see your saved items</p>
+            <p className="text-lg font-semibold">Sign in to see your bookmarks</p>
             <p className="max-w-sm text-pretty text-sm leading-relaxed text-muted-foreground">
-              Bookmarks are private to your account. Sign in to view everything you&apos;ve saved.
+              Bookmarks are private to your account. Sign in to view everything you&apos;ve bookmarked.
             </p>
             <div className="flex gap-2">
               <Button render={<Link href="/sign-in" />} nativeButton={false}>

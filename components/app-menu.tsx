@@ -360,7 +360,7 @@ export function AppMenu() {
                     badge={notificationCount}
                   />
                   <DrawerItem href="/messages" icon={MessageCircle} label="Messages" onNavigate={navigate} />
-                  <DrawerItem href="/saved" icon={Bookmark} label="Saved" onNavigate={navigate} />
+                  <DrawerItem href="/saved" icon={Bookmark} label="Bookmarks" onNavigate={navigate} />
                 </Section>
 
                 <Divider />
