@@ -88,7 +88,7 @@ export function LinkPreview({
 
     if (!data) {
       return (
-        <div className={cn("w-full max-w-[17rem]", className)}>
+        <div className={cn("w-full max-w-[17rem] text-left", className)}>
           <a
             href={url}
             target="_blank"
@@ -109,8 +109,10 @@ export function LinkPreview({
     // A native-messenger link card: thumbnail on top, then domain / title /
     // description, then the URL itself. The left orange rule is the only accent,
     // which keeps the card readable without flooding the thread with colour.
+    // `text-left` resets the right-alignment an outgoing bubble applies, since
+    // card copy always reads from the left regardless of who sent it.
     return (
-      <div className={cn("w-full max-w-[17rem]", className)}>
+      <div className={cn("w-full max-w-[17rem] text-left", className)}>
         <a
           href={data.url || url}
           target="_blank"
