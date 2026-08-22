@@ -1160,7 +1160,7 @@ function DmBubble({
           )}
           {m.body && !editing && !bodyIsOnlyLink && (
             <ClampedText
-              lines={CLAMP_LINES.POST}
+              lines={CLAMP_LINES.CHAT}
               className={cn("whitespace-pre-wrap [overflow-wrap:anywhere]", m.attachmentUrl && "px-2 pb-1 pt-1.5")}
               // Orange is reserved for interactive accents, and the expand
               // toggle is the one interactive element inside a bubble.

@@ -1,6 +1,6 @@
 "use server"
 
-import { and, desc, eq, isNull, or } from "drizzle-orm"
+import { and, desc, eq, isNotNull, isNull, or } from "drizzle-orm"
 import { cookies, headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
@@ -21,6 +21,7 @@ import {
 } from "@/lib/db/schema"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { createOrganization, updateOrganization } from "@/app/actions/organizations"
+import { notifyHomeMembers } from "@/app/actions/notifications"
 import { getHomeByHandle, getMyHomes, getViewerMembership } from "@/lib/home/access"
 import { ACTIVE_HOME_COOKIE } from "@/lib/home/active-home"
 import { DEFAULT_HOME_ACCENT } from "@/lib/home/accent"
@@ -513,11 +514,133 @@ export async function deleteHome(handle: string): Promise<{ ok: true }> {
       .where(and(eq(liveStream.homeId, homeView.id), eq(liveStream.status, "live")))
   })
 
+  // Members lose access without warning otherwise: the Home simply vanishes from
+  // My Homes. This notice is sent AFTER the transaction commits (it writes via
+  // `db`, not `tx`) and while membership rows still exist, since those are what
+  // `notifyHomeMembers` resolves recipients from — they aren't removed until the
+  // purge. The notice carries `homeId`, so it's cleaned up with the Home itself.
+  await notifyHomeMembers({
+    homeId: homeView.id,
+    actorId: user.id,
+    actorName: user.name,
+    type: "announcement",
+    message: `${homeView.name} has been deleted. You keep your account and everything you posted under your own name.`,
+    link: "/homes",
+  })
+
   // The deleted Home can't remain the active context.
   const store = await cookies()
   if (store.get(ACTIVE_HOME_COOKIE)?.value === handle) {
     store.delete(ACTIVE_HOME_COOKIE)
   }
+  revalidatePath("/", "layout")
+  return { ok: true }
+}
+
+/** A Home the viewer owns that is deleted but still inside its retention window. */
+export type DeletedHomeLink = {
+  handle: string
+  name: string
+  /** ISO stamp of the moment the data is destroyed for good. */
+  purgeAt: string
+  /** Whole days left to reactivate; 0 means it's due for purge at any moment. */
+  daysRemaining: number
+}
+
+/**
+ * Deleted Homes the viewer OWNS and can still restore.
+ *
+ * Kept separate from `getMyHomeMemberships` on purpose: a deleted Home must not
+ * reappear in My Homes as if it were usable. This is the only surface that
+ * reveals it, so the owner has somewhere to recover from before the window
+ * closes. Ownership is required — a member must not learn a deleted Home is
+ * still recoverable, nor be able to act on it.
+ */
+export async function getMyDeletedHomes(): Promise<DeletedHomeLink[]> {
+  const user = await requireUser()
+  const rows = await db
+    .select({ h: home, org: organization })
+    .from(homeMembership)
+    .innerJoin(home, eq(home.id, homeMembership.homeId))
+    .innerJoin(organization, eq(organization.id, home.organizationId))
+    .where(
+      and(
+        eq(homeMembership.userId, user.id),
+        eq(homeMembership.role, "owner"),
+        eq(homeMembership.status, "active"),
+        isNotNull(home.deletedAt),
+      ),
+    )
+    .orderBy(desc(home.deletedAt))
+
+  const now = Date.now()
+  return rows.map(({ h, org }) => {
+    const purgeAt = h.purgeAfter ?? new Date(now)
+    return {
+      handle: org.handle,
+      name: h.name,
+      purgeAt: purgeAt.toISOString(),
+      daysRemaining: Math.max(0, Math.ceil((purgeAt.getTime() - now) / (24 * 60 * 60 * 1000))),
+    }
+  })
+}
+
+/**
+ * Restores a soft-deleted Home within its retention window. Owner-only, and the
+ * exact inverse of `deleteHome` for everything that flow set.
+ *
+ * Two things deletion did are deliberately NOT undone:
+ *   - The join key stays revoked. Reactivating must not silently re-open a key
+ *     that may have been circulating while the Home was gone; the owner
+ *     regenerates one when they're ready for new members.
+ *   - Ended live streams stay ended. A broadcast interrupted 20 days ago
+ *     shouldn't spring back to "live".
+ *
+ * Existing members keep their membership — those rows survive until the purge,
+ * which is precisely what makes a restore meaningful rather than an empty shell.
+ */
+export async function reactivateHome(handle: string): Promise<{ ok: true }> {
+  const user = await requireUser()
+  // Every resolver in lib/home/access.ts hides soft-deleted Homes, so the Home
+  // has to be looked up directly here — by definition it can't be fetched
+  // through the normal path.
+  const [row] = await db
+    .select({ h: home })
+    .from(home)
+    .innerJoin(organization, eq(organization.id, home.organizationId))
+    .where(and(eq(organization.handle, handle), isNotNull(home.deletedAt)))
+    .limit(1)
+  if (!row) throw new Error("Deleted Home not found.")
+
+  const [membership] = await db
+    .select({ role: homeMembership.role, status: homeMembership.status })
+    .from(homeMembership)
+    .where(and(eq(homeMembership.homeId, row.h.id), eq(homeMembership.userId, user.id)))
+    .limit(1)
+  if (!membership || membership.status !== "active" || membership.role !== "owner") {
+    throw new Error("Only the Home owner can reactivate it.")
+  }
+
+  // Past its purge stamp the data is forfeit — the scheduled job may already be
+  // mid-purge. Refusing here avoids "restoring" a Home into a half-emptied state.
+  if (row.h.purgeAfter && row.h.purgeAfter.getTime() <= Date.now()) {
+    throw new Error("This Home's 30-day recovery window has closed.")
+  }
+
+  await db
+    .update(home)
+    .set({ deletedAt: null, purgeAfter: null, status: "active", updatedAt: new Date() })
+    .where(eq(home.id, row.h.id))
+
+  await notifyHomeMembers({
+    homeId: row.h.id,
+    actorId: user.id,
+    actorName: user.name,
+    type: "announcement",
+    message: `${row.h.name} is back. Everything that was here has been restored.`,
+    link: `/home/${handle}`,
+  })
+
   revalidatePath("/", "layout")
   return { ok: true }
 }
