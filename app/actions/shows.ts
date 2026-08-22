@@ -5,7 +5,7 @@ import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { episode } from "@/lib/db/schema"
+import { episode, liveStream } from "@/lib/db/schema"
 import { getHandle } from "@/lib/identity"
 
 async function requireUser() {
@@ -48,8 +48,28 @@ export async function publishShow(input: {
   // "upload" (default) when a host manually uploads a file. Keeps the two
   // apart in the catalogue's separate Live tab.
   source?: "upload" | "live"
+  // The room this recording came from, for `source: "live"`. Used ONLY to look
+  // up the session's Home server-side — the caller never supplies homeId
+  // directly, so a client can't publish into an arbitrary Home's catalogue.
+  roomName?: string | null
 }): Promise<PublishResult> {
   const user = await requireUser()
+
+  // Carry the live session's Home onto the episode. Without this the replay is
+  // saved unscoped, and a Home catalogue only picks it up through its
+  // `homeId IS NULL AND host is an admin` fallback — which silently drops
+  // recordings published by a co-host, since a co-host isn't a Home admin.
+  // Resolving it from the room (rather than trusting an argument) keeps the
+  // episode's Home authoritative.
+  let homeId: string | null = null
+  if (input.source === "live" && input.roomName) {
+    const [row] = await db
+      .select({ homeId: liveStream.homeId })
+      .from(liveStream)
+      .where(eq(liveStream.roomName, input.roomName))
+      .limit(1)
+    homeId = row?.homeId ?? null
+  }
 
   const title = input.title.trim() || "Untitled session"
   const tagline = input.tagline.trim()
@@ -80,6 +100,7 @@ export async function publishShow(input: {
     videoUrl: input.videoUrl ?? null,
     playlist: input.playlist?.trim() || null,
     source: input.source === "live" ? "live" : "upload",
+    homeId,
   })
 
   revalidatePath("/live")

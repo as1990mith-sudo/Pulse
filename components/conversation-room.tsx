@@ -685,6 +685,8 @@ export function ConversationRoom({
       cover: dec.cover,
       audioUrl,
       source: "live",
+      // Lets the server scope the replay to this session's Home.
+      roomName,
     }).catch(() => null)
     setSaveDecision(null)
     setSavingEpisode(false)
