@@ -46,10 +46,15 @@ export function PollCard({
 
   const voted = selected.length > 0
   const interactive = canVote && !poll.closed
-  // Results appear once the viewer has voted (or the poll closed). Before that
-  // the server sends no counts at all, so there is nothing to reveal.
-  const showResults = poll.options.some((o) => o.votes !== null) || voted
-  const total = poll.totalVotes ?? 0
+  // The server only sends counts once the viewer is allowed to see them, so a
+  // non-null `votes` is the signal that results have been released.
+  const serverRevealed = poll.options.some((o) => o.votes !== null)
+  // Show results as soon as the viewer votes — but until the refetch lands the
+  // server has sent no counts, so `poll.totalVotes` is still null. Deriving the
+  // total from the selection in that window keeps the just-cast vote visible;
+  // reading totalVotes directly would divide by 0 and render every bar at 0%.
+  const showResults = serverRevealed || voted
+  const total = serverRevealed ? (poll.totalVotes ?? 0) : selected.length
   const label = closingLabel(poll.closesAt, poll.closed)
 
   function submit(next: number[]) {
@@ -84,7 +89,10 @@ export function PollCard({
       <ul className="flex flex-col gap-2">
         {poll.options.map((option) => {
           const isSelected = selected.includes(option.id)
-          const votes = option.votes ?? 0
+          // Before the refetch, the only vote this client knows about is the
+          // viewer's own — so count that and treat the rest as 0 rather than
+          // showing a stale or empty tally.
+          const votes = serverRevealed ? (option.votes ?? 0) : isSelected ? 1 : 0
           const pct = total > 0 ? Math.round((votes / total) * 100) : 0
           return (
             <li key={option.id}>

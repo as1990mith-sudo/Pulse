@@ -80,8 +80,6 @@ import { ReportReasonModal } from "@/components/report-reason-modal"
 import { ImageLightbox } from "@/components/image-lightbox"
 import { ImmersiveImageViewer } from "@/components/immersive-image-viewer"
 import { FeedVideo } from "@/components/feed-video"
-import { PollCard } from "@/components/poll-card"
-import { POLL_MAX_OPTIONS, POLL_MAX_OPTION_LENGTH, POLL_DURATIONS, type PollDurationId } from "@/app/actions/polls"
 import { ReelsFeed } from "@/components/reels-feed"
   import { useMediaAspect } from "@/hooks/use-media-aspect"
 import { StatusBar } from "@/components/status-bar"
@@ -1573,7 +1571,7 @@ export function PostCard({
               <span className="truncate">{post.user}</span>
               {post.orgVerified && <VerifiedBadge size="sm" className="shrink-0" />}
             </Link>
-            {/* Username/handle intentionally omitted — only the display name
+            {/* Username/handle intentionally omitted �� only the display name
                 (above) and the date are shown. Flex row lets the date truncate
                 while the edited info icon stays fixed (shrink-0). */}
             <span className={cn("flex min-w-0 items-center gap-1 text-muted-foreground", feed ? "text-sm" : "text-xs")}>
