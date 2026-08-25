@@ -953,6 +953,13 @@ export const communityPost = pgTable("community_post", {
   // (userId above) is preserved regardless of scope so authorised Home
   // moderators can still act, but is never leaked across organisations.
   homeId: text("homeId"),
+  // Publishing identity, mirroring feedPost.organizationId. Non-null means an
+  // admin published this thread in the ORGANISATION's voice, so it renders as
+  // the org (name + logo) and appears on that org profile's Thread tab. Null is
+  // a personal thread and never surfaces on an org profile. Stamped once at
+  // creation and never recomputed from the author's current role, so demoting an
+  // admin cannot retroactively rewrite who published a thread.
+  organizationId: text("organizationId"),
   body: text("body").notNull(),
   imageUrl: text("imageUrl"), // optional attached image (Vercel Blob URL)
   videoUrl: text("videoUrl"), // optional attached video (Vercel Blob URL)
