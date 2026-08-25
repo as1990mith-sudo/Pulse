@@ -287,8 +287,19 @@ export function ImmersiveImageViewer({
         )}
       </div>
 
-      {/* Action rail (right side), consistent with the reels layout. */}
-      <div className={cn("absolute bottom-24 right-3 z-20 flex flex-col items-center gap-5", chromeCls)}>
+      {/* Action rail (right side), sitting at the base like the Reels rail.
+          Reels can use a plain `bottom-9` because its rail stacks on top of a
+          bottom bar that already carries the safe-area padding. This viewer has
+          no such bar, so the same 2.25rem is added *on top of* the inset —
+          otherwise the bookmark would tuck under the home indicator.
+          The caption block's `pr-24` keeps the text clear of the rail, so the
+          two can share this vertical band without colliding. */}
+      <div
+        className={cn(
+          "absolute bottom-[calc(env(safe-area-inset-bottom)+2.25rem)] right-3 z-20 flex flex-col items-center gap-5",
+          chromeCls,
+        )}
+      >
         <RailButton
           onClick={toggleLike}
           label={liked ? "Unlike" : "Like"}
