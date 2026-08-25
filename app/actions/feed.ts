@@ -1185,16 +1185,15 @@ export async function setPostLike(input: { postId: number; liked: boolean }) {
     .from(feedPost)
     .where(eq(feedPost.id, input.postId))
   if (!row) return
-  // A user can never like their own post — silently ignore any such request
-  // (the UI already hides the action for the author, this is the server guard).
-  if (row.userId === user.id) return
+  // Authors may like their own posts in the main feed.
   const { changed } = await setLike(user.id, "post", input.postId, input.liked)
   if (!changed) return
   const next = Math.max(0, row.likes + (input.liked ? 1 : -1))
   await db.update(feedPost).set({ likes: next }).where(eq(feedPost.id, input.postId))
 
-  // Notify the author when their post is liked (not on un-like).
-  if (input.liked) {
+  // Notify the author when their post is liked (not on un-like, and never for
+  // your own like — self-notifications are noise).
+  if (input.liked && row.userId !== user.id) {
     await notifyUser({
       userId: row.userId,
       actorId: user.id,

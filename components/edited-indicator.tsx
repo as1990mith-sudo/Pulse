@@ -1,14 +1,15 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Info } from "lucide-react"
+import { Pencil } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
 /**
  * Compact "this post was edited" affordance. Replaces the permanent "· Edited"
- * text label with an info icon that keeps the post header clean; tapping (or
- * hovering) it reveals a small popup reading "Post was edited." The popup is
+ * text label with a small pen icon that keeps the post header clean and reads as
+ * an editing mark rather than generic information; tapping (or hovering) it
+ * reveals a small popup reading "Post was edited." The popup is
  * tap-driven so it works on touch devices, and dismisses on outside tap,
  * scroll, or Escape.
  */
@@ -54,7 +55,7 @@ export function EditedIndicator({ className }: { className?: string }) {
         onMouseLeave={() => setOpen(false)}
         className="inline-flex items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <Info className="size-3.5" aria-hidden />
+        <Pencil className="size-3" aria-hidden />
       </button>
       {open && (
         <span

@@ -204,7 +204,7 @@ export function CommunityConversation({
   const shareTarget: ShareTarget = {
     type: "community",
     key: String(post.id),
-    title: "A question on Community Help",
+    title: "A question on Community",
     subtitle: post.body.length > 120 ? `${post.body.slice(0, 120)}…` : post.body,
     url: `/chatrooms/community?q=${post.id}`,
     image: null,

@@ -185,8 +185,19 @@ export async function getCommunityPosts(homeId?: string | null): Promise<Communi
     .select()
     .from(communityPost)
     .where(and(eq(communityPost.deleted, false), scope))
+    // Newest-first in the QUERY so the candidate pool is the 200 most recent
+    // threads; the order shown to the reader is then randomised below.
     .orderBy(desc(communityPost.createdAt))
     .limit(200)
+
+  // Community is a help room, not a news feed: a strict newest-first order
+  // buries older unanswered questions forever while the newest few soak up all
+  // the attention. Shuffling on every load gives every open thread a fair shot
+  // at being seen, so refreshing surfaces a different mix each time.
+  for (let i = posts.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[posts[i], posts[j]] = [posts[j], posts[i]]
+  }
 
   return buildCommunityPostViews(posts, viewerId)
 }

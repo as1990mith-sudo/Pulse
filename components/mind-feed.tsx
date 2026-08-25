@@ -1313,11 +1313,8 @@ export function PostCard({
 
   function toggleLike() {
     if (!currentUser) return
-    // You can't like your own post — tapping shows who liked it instead.
-    if (post.isSelf) {
-      setEngagementKind("likes")
-      return
-    }
+    // Authors can like their own posts too; the "who liked this" list moved to
+    // the count beside the icon so the icon itself always just likes.
     const next = !liked
     setLiked(next)
     setLikes((n) => (next ? n + 1 : n - 1))
@@ -1335,11 +1332,8 @@ export function PostCard({
 
   function toggleSave() {
     if (!currentUser) return
-    // You can't save your own post — tapping shows who saved it instead.
-    if (post.isSelf) {
-      setEngagementKind("saves")
-      return
-    }
+    // Authors can save their own posts too; the "who saved this" list moved to
+    // the count beside the icon.
     const next = !saved
     setSaved(next) // optimistic
     setSaveCount((n) => Math.max(0, n + (next ? 1 : -1)))
@@ -1732,14 +1726,27 @@ export function PostCard({
             !currentUser && "cursor-not-allowed opacity-60",
           )}
           aria-pressed={liked}
-          aria-label={post.isSelf ? "See who liked this post" : "Like"}
+          aria-label={liked ? "Unlike" : "Like"}
         >
           <Heart
             onAnimationEnd={() => setLikeBurst(false)}
             className={cn(feed ? "size-7" : "size-6", liked && "fill-current", likeBurst && "animate-like-pop")}
           />
-          {likes > 0 && <span>{likes}</span>}
         </button>
+        {/* The count is its own control: for the author it opens the list of
+            accounts that liked the post, so the icon stays a pure like toggle. */}
+        {likes > 0 &&
+          (post.isSelf ? (
+            <button
+              onClick={() => setEngagementKind("likes")}
+              className={cn("-ml-1 tabular-nums transition-colors hover:text-primary", feed ? "text-[15px]" : "text-sm")}
+              aria-label="See who liked this post"
+            >
+              {likes}
+            </button>
+          ) : (
+            <span className={cn("-ml-1 tabular-nums", feed ? "text-[15px]" : "text-sm")}>{likes}</span>
+          ))}
 
         <button
           onClick={() => setShowComments((v) => !v)}
@@ -1762,14 +1769,25 @@ export function PostCard({
             !currentUser && "cursor-not-allowed opacity-60",
           )}
           aria-pressed={saved}
-          aria-label={post.isSelf ? "See who saved this post" : saved ? "Remove bookmark" : "Save post"}
+          aria-label={saved ? "Remove bookmark" : "Save post"}
         >
           <Bookmark
             onAnimationEnd={() => setSaveBurst(false)}
             className={cn(feed ? "size-7" : "size-6", saved && "fill-current", saveBurst && "motion-pop")}
           />
-          {saveCount > 0 && <span>{saveCount}</span>}
         </button>
+        {saveCount > 0 &&
+          (post.isSelf ? (
+            <button
+              onClick={() => setEngagementKind("saves")}
+              className={cn("-ml-1 tabular-nums transition-colors hover:text-primary", feed ? "text-[15px]" : "text-sm")}
+              aria-label="See who saved this post"
+            >
+              {saveCount}
+            </button>
+          ) : (
+            <span className={cn("-ml-1 tabular-nums", feed ? "text-[15px]" : "text-sm")}>{saveCount}</span>
+          ))}
 
         <button
           onClick={() => setShareOpen(true)}

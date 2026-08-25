@@ -17,7 +17,7 @@ import {
 import { getCurrentUser } from "@/lib/session"
 import { getAdminUser, requireAdmin } from "@/lib/admin"
 import { getHomeByHandle, getViewerMembership } from "@/lib/home/access"
-import { canViewerManageEvents, getViewerEventHome } from "@/lib/home/active-home"
+import { canViewerManageEvents, getActiveHome, getViewerEventHome } from "@/lib/home/active-home"
 import { homeRoleHasPermission, type HomeRole } from "@/lib/home/roles"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { AD_MAX_HOURS, AD_BLOCK_HOURS, FREQUENCY_TEAM_ID, type AdType, type AdAction } from "@/lib/ads"
@@ -153,13 +153,18 @@ async function loadInteractions(adIds: number[], userId: string | null) {
 }
 
 /**
- * Active events shown to everyone on the feed: approved AND either kept until
+ * Active events for the viewer's CURRENT context: approved AND either kept until
  * manually deleted (expiresAt IS NULL) or still within their auto-remove window
  * (expiresAt in the future).
+ *
+ * Scoped to the active Home so a member only ever sees events belonging to the
+ * Home they are currently in — a church's events must not leak into another
+ * church's feed. Events with no `homeId` are Universal (platform-wide) and stay
+ * visible in every context, including for viewers with no active Home.
  */
 export async function getActiveAnnouncements(): Promise<AnnouncementView[]> {
   await expireDueAnnouncements()
-  const user = await getCurrentUser()
+  const [user, activeHome] = await Promise.all([getCurrentUser(), getActiveHome()])
   const rows = await db
     .select()
     .from(announcement)
@@ -167,6 +172,10 @@ export async function getActiveAnnouncements(): Promise<AnnouncementView[]> {
       and(
         eq(announcement.status, "approved"),
         or(isNull(announcement.expiresAt), gt(announcement.expiresAt, new Date())),
+        // Universal events always show; Home events only inside that Home.
+        activeHome
+          ? or(isNull(announcement.homeId), eq(announcement.homeId, activeHome.id))
+          : isNull(announcement.homeId),
       ),
     )
     .orderBy(asc(announcement.eventDate))

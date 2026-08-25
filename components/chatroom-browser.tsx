@@ -31,11 +31,11 @@ function CommunityHelpEntry() {
       className="group flex items-center gap-3 rounded-xl border border-emerald-300/20 bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-700 px-4 py-3 shadow-lg shadow-emerald-950/40 transition-all hover:from-emerald-800 hover:via-emerald-700 hover:to-teal-600 hover:shadow-emerald-950/50 sm:px-5"
     >
       <Avatar className="size-12 shrink-0 ring-2 ring-white/50 transition-transform duration-200 group-hover:scale-105">
-        <AvatarImage src="/community-help-avatar.png" alt="Community Help" />
+        <AvatarImage src="/community-help-avatar.png" alt="Community" />
         <AvatarFallback className="bg-emerald-800 text-base font-bold text-white">?</AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-base font-semibold tracking-tight text-white">Community Help</p>
+        <p className="truncate text-base font-semibold tracking-tight text-white">Community</p>
         <p className="truncate text-sm leading-snug text-emerald-50/85">
           Ask anything anonymously — anyone in the community can help.
         </p>

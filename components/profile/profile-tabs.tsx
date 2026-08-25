@@ -142,8 +142,8 @@ export function ProfileTabs({
               title="No threads yet"
               message={
                 isSelf
-                  ? "Questions and prayers you share on Community Help appear here as a timeline."
-                  : `${name} hasn't shared anything on Community Help yet.`
+                  ? "Questions and prayers you share on Community appear here as a timeline."
+                  : `${name} hasn't shared anything on Community yet.`
               }
               action={
                 isSelf ? (
@@ -151,7 +151,7 @@ export function ProfileTabs({
                     href="/chatrooms/community"
                     className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
                   >
-                    <Plus className="size-4" /> Post to Community Help
+                    <Plus className="size-4" /> Post to Community
                   </Link>
                 ) : null
               }

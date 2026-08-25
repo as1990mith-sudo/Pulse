@@ -163,7 +163,7 @@ function PublicThread({
   const shareTarget: ShareTarget = {
     type: "community",
     key: String(post.id),
-    title: "A post on Community Help",
+    title: "A post on Community",
     subtitle: post.body.length > 120 ? `${post.body.slice(0, 120)}…` : post.body,
     url: `/chatrooms/community?q=${post.id}`,
     image: post.imageUrl,
@@ -402,7 +402,7 @@ function AnonymousThread({
   const shareTarget: ShareTarget = {
     type: "community",
     key: String(post.id),
-    title: "A post on Community Help",
+    title: "A post on Community",
     subtitle: post.body.length > 120 ? `${post.body.slice(0, 120)}…` : post.body,
     url: `/chatrooms/community?q=${post.id}`,
     image: post.imageUrl,
@@ -598,7 +598,7 @@ function AnonymousThread({
       {confirmOpen && (
         <ConfirmDialog
           title="Delete this anonymous post?"
-          message="This can't be undone. Your post will be removed from Community Help."
+          message="This can't be undone. Your post will be removed from Community."
           confirmLabel="Delete"
           busy={pending}
           onConfirm={remove}

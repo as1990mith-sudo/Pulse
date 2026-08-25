@@ -7,7 +7,7 @@ import { getCurrentUser } from "@/lib/session"
 
 export const metadata = {
   title: "Chat Rooms — Frequency",
-  description: "Ask anonymously in Community Help or share what God has done in iTestify.",
+  description: "Ask anonymously in Community or share what God has done in iTestify.",
 }
 
 export default async function ChatroomsPage() {
