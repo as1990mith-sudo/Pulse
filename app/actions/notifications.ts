@@ -9,10 +9,10 @@ import { follow, home as home_, homeMembership, notification } from "@/lib/db/sc
 import { sendPushToUsers } from "@/lib/push"
 import type { NotificationType } from "@/lib/notification-categories"
 
-// Re-exported from the category registry instead of redeclared, so a new type
-// cannot end up known here but unregistered for delivery (or the reverse).
-// Existing importers of `NotificationType` from this module keep working.
-export type { NotificationType }
+// NotificationType is imported from the category registry (the single source of
+// truth) but deliberately NOT re-exported: a "use server" module may only export
+// async functions, so a type-only re-export is erased and breaks the build.
+// Consumers import it from "@/lib/notification-categories" directly.
 
 export type NotificationView = {
   id: number
@@ -22,6 +22,12 @@ export type NotificationView = {
   link: string
   read: boolean
   postedAt: string
+  /**
+   * Raw ISO timestamp. `postedAt` is already humanised ("2h"), which cannot be
+   * grouped by day, so the inbox needs the underlying instant to build its
+   * Today / Yesterday / Earlier sections in the reader's own timezone.
+   */
+  createdAt: string
 }
 
 /**
@@ -159,6 +165,7 @@ export async function getNotifications(): Promise<NotificationView[] | null> {
     link: r.link,
     read: r.read,
     postedAt: timeAgo(r.createdAt),
+    createdAt: r.createdAt.toISOString(),
   }))
 }
 
@@ -329,6 +336,7 @@ export async function getHomeNotifications(homeId: string): Promise<Notification
     link: r.link,
     read: r.read,
     postedAt: timeAgo(r.createdAt),
+    createdAt: r.createdAt.toISOString(),
   }))
 }
 
