@@ -18,6 +18,7 @@ type TabKey = "posts" | "thread" | "articles"
 export function ProfileTabs({
   name,
   isSelf,
+  homeName,
   currentUser,
   feedPosts,
   communityPosts,
@@ -26,6 +27,14 @@ export function ProfileTabs({
 }: {
   name: string
   isSelf: boolean
+  /**
+   * The active Home this profile is being read in, or null in Personal mode.
+   * Every timeline below is scoped to it, so the empty states name it outright —
+   * "nothing in Grace Community yet" is the truth, whereas a bare "no posts yet"
+   * would read as "this person has never posted" when they may simply be active
+   * in another Home.
+   */
+  homeName: string | null
   // The viewer, needed by <PostCard> for engagement/ownership controls.
   currentUser: CurrentUser | null
   // The user's own MAIN-FEED posts — the "Posts" timeline.
@@ -44,6 +53,10 @@ export function ProfileTabs({
     () => [...communityPosts, ...anonymousPosts].sort((a, b) => b.createdAtMs - a.createdAtMs),
     [communityPosts, anonymousPosts],
   )
+
+  // Names the context every timeline is scoped to. In Personal mode there is no
+  // Home, so the copy stays generic rather than inventing a place name.
+  const inScope = homeName ? ` in ${homeName}` : ""
 
   // Tab order: Posts (main feed), Thread (Community Help), Articles.
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; count: number }[] = [
@@ -111,11 +124,11 @@ export function ProfileTabs({
           articles.length === 0 ? (
             <EmptyState
               icon={<Newspaper className="size-6" />}
-              title="No articles yet"
+              title={homeName ? `No articles in ${homeName}` : "No articles yet"}
               message={
                 isSelf
-                  ? "Long-form articles you publish will appear here."
-                  : `${name} hasn't published any articles yet.`
+                  ? `Long-form articles you publish${inScope} will appear here.`
+                  : `${name} hasn't published any articles${inScope} yet.`
               }
               action={
                 isSelf ? (
@@ -139,11 +152,11 @@ export function ProfileTabs({
           threadPosts.length === 0 ? (
             <EmptyState
               icon={<MessagesSquare className="size-6" />}
-              title="No threads yet"
+              title={homeName ? `No threads in ${homeName}` : "No threads yet"}
               message={
                 isSelf
-                  ? "Questions and prayers you share on Community appear here as a timeline."
-                  : `${name} hasn't shared anything on Community yet.`
+                  ? `Questions and prayers you share on Community${inScope} appear here as a timeline.`
+                  : `${name} hasn't shared anything on Community${inScope} yet.`
               }
               action={
                 isSelf ? (
@@ -163,11 +176,11 @@ export function ProfileTabs({
           feedPosts.length === 0 ? (
             <EmptyState
               icon={<LayoutGrid className="size-6" />}
-              title="No posts yet"
+              title={homeName ? `No posts in ${homeName}` : "No posts yet"}
               message={
                 isSelf
-                  ? "Posts you share on the main feed will show up here."
-                  : `${name} hasn't posted to the feed yet.`
+                  ? `Posts you share on the main feed${inScope} will show up here.`
+                  : `${name} hasn't posted to the feed${inScope} yet.`
               }
               action={
                 isSelf ? (

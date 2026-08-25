@@ -17,6 +17,7 @@ import {
   user as userTable,
 } from "@/lib/db/schema"
 import { getActiveHomeContext } from "@/lib/home/active-home"
+import { getProfileScope, scopeToHome } from "@/lib/home/profile-scope"
 import { resolvePublishingIdentity } from "@/lib/home/publishing"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { formatPostTimestamp } from "@/lib/format-timestamp"
@@ -436,14 +437,21 @@ export async function getFeed(): Promise<FeedPostView[]> {
  * Newest-first MAIN-FEED posts authored by a single user, powering their
  * profile "Posts" timeline. Personal posts only (organizationId null) so
  * organisation-attributed posts stay on the org profile, and top-level posts
- * only (channel null) so community-room posts stay in their rooms. Global (not
- * Home-scoped): a profile is the person's own surface, mirroring the per-user
- * community-post timelines. Returns the same rich FeedPostView the main feed
- * uses so the profile can reuse <PostCard> unchanged.
+ * only (channel null) so community-room posts stay in their rooms. Returns the
+ * same rich FeedPostView the main feed uses so the profile can reuse
+ * <PostCard> unchanged.
+ *
+ * SCOPED TO THE ACTIVE HOME. A profile is "this person within this Home", not a
+ * combined cross-Home archive: a member of Home A opening someone's profile sees
+ * only their Home A posts, and never learns what they post in Home B. This
+ * applies to the owner's own profile too, so what they see is what their Home
+ * sees. Switching Homes re-scopes it automatically, which is why the filter is
+ * derived from the active context rather than accepted as an argument.
  */
 export async function getFeedPostsByUser(userId: string): Promise<FeedPostView[]> {
   const session = await auth.api.getSession({ headers: await headers() })
   const currentUserId = session?.user?.id ?? null
+  const scope = await getProfileScope()
 
   const posts = await db
     .select()
@@ -454,6 +462,7 @@ export async function getFeedPostsByUser(userId: string): Promise<FeedPostView[]
         isNull(feedPost.organizationId),
         eq(feedPost.deleted, false),
         eq(feedPost.userId, userId),
+        scopeToHome(feedPost.homeId, scope),
       ),
     )
     .orderBy(desc(feedPost.createdAt))

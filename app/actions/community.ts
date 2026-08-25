@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { communityComment, communityPost, home, homeMembership, organization, user as userTable } from "@/lib/db/schema"
+import { getProfileScope, scopeToHome } from "@/lib/home/profile-scope"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { formatPostTimestamp } from "@/lib/format-timestamp"
 import { EDIT_WINDOW_MS } from "@/lib/interactions"
@@ -204,12 +205,17 @@ export async function getCommunityPosts(homeId?: string | null): Promise<Communi
 
 /**
  * A user's PUBLIC (identifiable) Community Help posts, newest-first — powers the
- * profile "Posts" timeline. Anonymous posts are excluded here so they never
+ * profile "Thread" timeline. Anonymous posts are excluded here so they never
  * appear in the public identity timeline. Visible to every viewer.
+ *
+ * SCOPED TO THE ACTIVE HOME, like every other profile surface: a thread the
+ * person started in another Home is that Home's social context and must not
+ * surface here.
  */
 export async function getPublicCommunityPostsByUser(userId: string): Promise<CommunityPostView[]> {
   const session = await auth.api.getSession({ headers: await headers() })
   const viewerId = session?.user?.id ?? null
+  const scope = await getProfileScope()
 
   const posts = await db
     .select()
@@ -219,6 +225,7 @@ export async function getPublicCommunityPostsByUser(userId: string): Promise<Com
         eq(communityPost.userId, userId),
         eq(communityPost.anonymous, false),
         eq(communityPost.deleted, false),
+        scopeToHome(communityPost.homeId, scope),
       ),
     )
     .orderBy(desc(communityPost.createdAt))
@@ -231,11 +238,16 @@ export async function getPublicCommunityPostsByUser(userId: string): Promise<Com
  * "Anonymous" timeline. Strictly owner-only: if the viewer isn't the profile
  * owner we return nothing, so other members get no signal that any anonymous
  * posts exist or how many there are.
+ *
+ * Home-scoped as well. Even though only the owner sees this tab, keeping it in
+ * the active Home's context means the profile reads as one coherent Home
+ * identity rather than mixing an all-Homes archive into a Home-scoped page.
  */
 export async function getAnonymousCommunityPostsByUser(userId: string): Promise<CommunityPostView[]> {
   const session = await auth.api.getSession({ headers: await headers() })
   const viewerId = session?.user?.id ?? null
   if (!viewerId || viewerId !== userId) return []
+  const scope = await getProfileScope()
 
   const posts = await db
     .select()
@@ -245,6 +257,7 @@ export async function getAnonymousCommunityPostsByUser(userId: string): Promise<
         eq(communityPost.userId, userId),
         eq(communityPost.anonymous, true),
         eq(communityPost.deleted, false),
+        scopeToHome(communityPost.homeId, scope),
       ),
     )
     .orderBy(desc(communityPost.createdAt))

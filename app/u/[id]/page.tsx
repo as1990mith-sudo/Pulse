@@ -5,6 +5,8 @@ import { getFeedPostsByUser } from "@/app/actions/feed"
 import { getActiveStatusForUser } from "@/app/actions/status"
 import { getWriterArticles } from "@/app/actions/articles"
 import { getCurrentUser } from "@/lib/session"
+import { getProfileScope } from "@/lib/home/profile-scope"
+import { HomeMark } from "@/components/home/home-mark"
 import { SiteHeader } from "@/components/site-header"
 import { ProfileFollowButton } from "@/components/profile/profile-follow-button"
 import { ProfileMessageButton } from "@/components/profile/profile-message-button"
@@ -30,6 +32,12 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
   // per-Home menu, never by opening a human being's profile.
   const profile = await getProfile(id)
   if (!profile) notFound()
+
+  // Every timeline below is scoped to the ACTIVE Home (see lib/home/profile-scope).
+  // The scope is read here purely so the header can name the context the visitor
+  // is seeing — the queries resolve it themselves, so there is no way for the
+  // page to display one Home's label over another Home's content.
+  const scope = await getProfileScope()
 
   const [feedPosts, communityPosts, anonymousPosts, currentUser, statusGroup, articles] = await Promise.all([
     // Main-feed posts power the "Posts" tab. Public (identifiable) Community Help
@@ -78,6 +86,26 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
             <p className="text-sm text-muted-foreground">{profile.handle}</p>
           </div>
 
+          {/* The Home this profile is being read in. Deliberately a quiet,
+              non-interactive chip rather than a picker: the active Home already
+              IS the filter, so offering a selector here would imply the profile
+              can be re-scoped independently of the Home you're inside. It reads
+              as "this person, within this Home", which is what the timelines
+              below actually contain. */}
+          {scope.homeName && (
+            <div className="mt-2 flex items-center gap-1.5 rounded-full border border-border/60 bg-card/60 py-1 pl-1 pr-2.5">
+              <HomeMark
+                name={scope.homeName}
+                logo={scope.homeLogo}
+                initials={scope.homeInitials}
+                color={scope.homeColor}
+                className="size-4"
+                rounded="rounded"
+              />
+              <span className="text-[11px] font-medium text-muted-foreground">{scope.homeName}</span>
+            </div>
+          )}
+
           {/* Bio, centered. */}
           <div className="mt-2 flex flex-col items-center text-center">
             <ProfileBio bio={profile.bio} editable={profile.isSelf} />
@@ -119,6 +147,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
         <ProfileTabs
           name={profile.name}
           isSelf={profile.isSelf}
+          homeName={scope.homeName}
           currentUser={currentUser}
           feedPosts={feedPosts}
           communityPosts={communityPosts}
