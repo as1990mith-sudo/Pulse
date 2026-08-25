@@ -40,6 +40,7 @@ import { SKINS, useSkin } from "@/components/skin-provider"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { startMenuFlow } from "@/lib/menu-flow"
 import { haptic } from "@/lib/haptics"
+import { useOverlayHistory } from "@/lib/navigation/use-overlay-history"
 import { cn } from "@/lib/utils"
 
 const themes = [
@@ -135,12 +136,11 @@ export function AppMenu() {
     setOpen(true)
     // Next frame: flip to active so the transform transition plays.
     requestAnimationFrame(() => requestAnimationFrame(() => setActive(true)))
-    // Push a history entry so the Android back gesture/button closes the drawer.
-    try {
-      window.history.pushState({ frequencyDrawer: true }, "")
-    } catch {
-      /* no-op */
-    }
+    // The history entry that lets Back close the drawer is owned by
+    // useOverlayHistory below, keyed off `open`. It used to be pushed here, but
+    // nothing popped it when the drawer was dismissed by tapping the scrim or a
+    // menu item — so the entry lingered and the user's next Back press was
+    // silently swallowed closing an already-closed drawer.
   }, [])
 
   // Lock scroll, toggle the page parallax shift, and wire Escape + back button.
@@ -153,18 +153,16 @@ export function AppMenu() {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") close()
     }
-    function onPop() {
-      close()
-    }
     window.addEventListener("keydown", onKey)
-    window.addEventListener("popstate", onPop)
     return () => {
       document.body.style.overflow = prevOverflow
       document.body.classList.remove("drawer-open")
       window.removeEventListener("keydown", onKey)
-      window.removeEventListener("popstate", onPop)
     }
   }, [open, close])
+
+  // Back / Android back gesture closes the drawer instead of navigating away.
+  useOverlayHistory(open, close, "app-menu")
 
   function navigate() {
     // Record where we came from so the destination page can offer a Back control

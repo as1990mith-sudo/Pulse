@@ -8,6 +8,7 @@ import { EpisodePlayerProvider } from '@/components/episode-player-provider'
 import { LiveProcessingProvider } from '@/components/live-processing-provider'
 import { AutoRefresh } from '@/components/auto-refresh'
 import { PresenceHeartbeat } from '@/components/presence-heartbeat'
+import { NavHistoryTracker } from '@/components/nav-history-tracker'
 import { BottomNav } from '@/components/bottom-nav'
 import { HomeContextProvider, type ActiveHomeSummary } from '@/components/home/home-context'
 import { getActiveHomeContext } from '@/lib/home/active-home'
@@ -125,6 +126,10 @@ export default async function RootLayout({
                   {/* Keeps server-rendered data (feed, adverts, live status, …)
                       continuously fresh so users never have to manually reload. */}
                   <AutoRefresh />
+                  {/* Tracks in-app navigation depth for the whole session so every
+                      Back control can unwind real history, and only falls back to
+                      a parent route when the user genuinely arrived from outside. */}
+                  <NavHistoryTracker />
                   {/* Reports the signed-in user as online (no-op when signed out)
                       so the admin dashboard shows a true real-time presence count. */}
                   <PresenceHeartbeat />

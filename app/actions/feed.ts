@@ -1,6 +1,6 @@
 "use server"
 
-import { and, asc, count, desc, eq, ilike, inArray, isNull, or } from "drizzle-orm"
+import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm"
 import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
@@ -17,6 +17,7 @@ import {
   user as userTable,
 } from "@/lib/db/schema"
 import { getActiveHomeContext } from "@/lib/home/active-home"
+import { canPinInScope, MAX_PINNED_PER_SCOPE, pinWithinCap } from "@/lib/home/can-pin"
 import { getProfileScope, scopeToHome } from "@/lib/home/profile-scope"
 import { resolvePublishingIdentity } from "@/lib/home/publishing"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
@@ -157,6 +158,18 @@ export type FeedPostView = {
   // Set only when this post carries a poll; the post's `text` is the question.
   // Vote counts inside are withheld until the viewer votes — see getPollsForPosts.
   poll?: PollView | null
+  // True when an admin has pinned this post to the top of the feed. Everyone who
+  // can see the feed sees the pin — it is an editorial act, not a bookmark.
+  //
+  // Optional because only the main feed (getFeed) honours pinning. Profile
+  // timelines, search and reposts stay strictly chronological: a pin is a
+  // feed-level editorial act, and reordering someone's own profile history — or
+  // a search result list — because an admin pinned a post would be surprising.
+  // Those surfaces therefore omit both fields and render no pin affordance.
+  pinned?: boolean
+  // Whether THIS viewer may pin/unpin. Resolved once per feed read rather than
+  // per post, since the permission is a property of the feed scope.
+  canPin?: boolean
 }
 
 /**
@@ -384,9 +397,12 @@ export async function getFeed(): Promise<FeedPostView[]> {
   // Only main-feed posts belonging to THIS Home. Room posts (iTestify
   // testimonies, Question of the Day responses) carry a non-null `channel` and
   // are excluded here so they render exclusively inside their own community
-  // rooms. Posts come back newest-first; the client decides presentation per tab
-  // ("For you" shuffles from this deterministic order, "Following" stays
-  // newest-first).
+  // rooms. Posts come back pinned-first then newest-first; the client decides
+  // presentation per tab ("For you" shuffles the UNPINNED remainder from this
+  // deterministic order, "Following" stays newest-first).
+  //
+  // `NULLS LAST` is required: Postgres sorts NULLs FIRST for DESC, so without it
+  // every unpinned post would outrank the pinned ones and the sort would invert.
   const posts = await db
     .select()
     .from(feedPost)
@@ -397,22 +413,26 @@ export async function getFeed(): Promise<FeedPostView[]> {
         contextScope,
       ),
     )
-    .orderBy(desc(feedPost.createdAt))
+    .orderBy(sql`${feedPost.pinnedAt} desc nulls last`, desc(feedPost.createdAt))
   if (posts.length === 0) return []
   const postIds = posts.map((p) => p.id)
 
   // Everything below depends only on the loaded post ids (or on nothing but the
   // viewer), so fire it all in parallel instead of a sequential waterfall. The
   // comments query is scoped to these posts — never a full-table scan.
-  const [followingIds, comments, repostedSet, savedSet, saveCounts, shareCounts, likedPostSet] = await Promise.all([
-    getFollowingSet(currentUserId),
-    db.select().from(feedComment).where(inArray(feedComment.postId, postIds)).orderBy(asc(feedComment.createdAt)),
-    getRepostedSet(currentUserId),
-    getSavedPostSet(currentUserId),
-    getPostSaveCounts(postIds),
-    getPostShareCounts(postIds),
-    getLikedSet(currentUserId, "post", postIds),
-  ])
+  const [followingIds, comments, repostedSet, savedSet, saveCounts, shareCounts, likedPostSet, viewerCanPin] =
+    await Promise.all([
+      getFollowingSet(currentUserId),
+      db.select().from(feedComment).where(inArray(feedComment.postId, postIds)).orderBy(asc(feedComment.createdAt)),
+      getRepostedSet(currentUserId),
+      getSavedPostSet(currentUserId),
+      getPostSaveCounts(postIds),
+      getPostShareCounts(postIds),
+      getLikedSet(currentUserId, "post", postIds),
+      // Pinning authority belongs to the feed SCOPE, not to any individual post,
+      // so it is resolved once here instead of re-checked for every row.
+      canPinInScope(home?.id ?? null),
+    ])
 
   // These depend on the comment rows, so run them together after. `orgMap`
   // resolves live organisation identity for every org-attributed post so admins
@@ -458,6 +478,8 @@ export async function getFeed(): Promise<FeedPostView[]> {
     isSelf: currentUserId === p.userId,
     mentionedMe: currentUserId ? (p.mentions ?? []).some((m) => m.userId === currentUserId) : false,
     comments: commentsByPost.get(p.id) ?? [],
+    pinned: p.pinnedAt !== null,
+    canPin: viewerCanPin,
   }))
   // Polls hang off the post, so they are hydrated after the view is built.
   return attachPolls(views, currentUserId)
@@ -1210,6 +1232,47 @@ export async function deletePost(postId: number) {
 
   revalidatePath("/feed")
   revalidatePath(`/u/${user.id}`)
+}
+
+/**
+ * Pins or unpins ANY post in the feed it belongs to — not just the caller's own.
+ * That is the point of the feature: an admin curates what their Home sees first.
+ *
+ * Authority comes from the post's OWN `homeId`, never from the caller's active
+ * Home. Otherwise an admin of Home A could pin a post in Home B simply by
+ * switching context before calling this action.
+ */
+export async function setPostPinned(input: { postId: number; pinned: boolean }) {
+  const user = await requireUser()
+  const [row] = await db
+    .select({ homeId: feedPost.homeId, pinnedAt: feedPost.pinnedAt })
+    .from(feedPost)
+    .where(eq(feedPost.id, input.postId))
+  if (!row) throw new Error("That post no longer exists.")
+
+  if (!(await canPinInScope(row.homeId))) {
+    throw new Error("Only admins of this Home can pin posts.")
+  }
+
+  // Already in the requested state — nothing to do. Also stops a double-tap from
+  // consuming a second slot against the cap.
+  if (input.pinned === (row.pinnedAt !== null)) return
+
+  if (input.pinned) {
+    // The cap is enforced under a lock inside pinWithinCap — see the note there
+    // on why a counting subquery is not enough under concurrency.
+    const ok = await pinWithinCap("feed_post", input.postId, row.homeId, user.id)
+    if (!ok) {
+      throw new Error(`You can pin up to ${MAX_PINNED_PER_SCOPE} posts. Unpin one before pinning another.`)
+    }
+  } else {
+    await db
+      .update(feedPost)
+      .set({ pinnedAt: null, pinnedBy: null })
+      .where(eq(feedPost.id, input.postId))
+  }
+
+  revalidatePath("/feed")
 }
 
 export async function addPostComment(input: {

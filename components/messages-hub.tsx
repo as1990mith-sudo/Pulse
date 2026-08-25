@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
-import { useSearchParams } from "next/navigation"
 import { MessageCircle, Users } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useUrlState } from "@/lib/navigation/use-url-state"
+import { useRestoredScroll } from "@/lib/navigation/use-restored-scroll"
 import { useHideOnScrollDown } from "@/lib/chat-chrome"
 import { DmInbox } from "@/components/dm-inbox"
 import { ChatroomBrowser } from "@/components/chatroom-browser"
@@ -11,7 +11,8 @@ import type { DmConversationSummary } from "@/app/actions/dm"
 import type { CurrentUser } from "@/lib/session"
 import type { ChatroomSummary, ChatroomSearchResult } from "@/app/actions/chatroom"
 
-type Tab = "chats" | "rooms"
+const TAB_KEYS = ["chats", "rooms"] as const
+type Tab = (typeof TAB_KEYS)[number]
 
 const TABS: { value: Tab; label: string; icon: typeof MessageCircle }[] = [
   { value: "chats", label: "Chats", icon: MessageCircle },
@@ -39,22 +40,18 @@ export function MessagesHub({
   rooms: ChatroomSummary[]
   discoverRooms: ChatroomSearchResult[]
 }) {
-  // Initialize from the URL (?tab=rooms) so the selection survives navigation:
-  // opening a room routes to /chatrooms/[id], and the back button restores
-  // /messages?tab=rooms, reopening the Rooms list instead of resetting to Chats.
-  const searchParams = useSearchParams()
-  const [tab, setTab] = useState<Tab>(searchParams.get("tab") === "rooms" ? "rooms" : "chats")
+  // Kept in the URL so the selection survives navigation: opening a room routes
+  // to /chatrooms/[id], and Back restores /messages?tab=rooms, reopening the Rooms
+  // list instead of resetting to Chats.
+  //
+  // This previously hand-rolled the same logic but called
+  // `replaceState(null, ...)`, which WIPED the Next.js router state stored on the
+  // history entry. The shared hook preserves it.
+  const [tab, selectTab] = useUrlState<Tab>("tab", "chats", { valid: TAB_KEYS })
+  // Come back from a conversation to the same place in the list. Scoped per tab so
+  // Chats and Requests keep independent positions rather than sharing one offset.
+  useRestoredScroll(`messages:${tab}`)
   const chromeHidden = useHideOnScrollDown()
-
-  function selectTab(next: Tab) {
-    setTab(next)
-    // Reflect the tab in the URL without navigating; Next.js syncs replaceState
-    // with useSearchParams. Chats is the default, so it needs no query param.
-    if (typeof window !== "undefined") {
-      const url = next === "rooms" ? `${window.location.pathname}?tab=rooms` : window.location.pathname
-      window.history.replaceState(null, "", url)
-    }
-  }
 
   return (
     <div>

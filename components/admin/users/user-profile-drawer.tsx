@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import useSWR from "swr"
 import {
   BadgeCheck,
@@ -16,6 +16,7 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { StatusBadge } from "@/components/admin/kit"
 import { cn } from "@/lib/utils"
+import { useOverlayHistory } from "@/lib/navigation/use-overlay-history"
 import { fetchUserProfile } from "@/app/actions/admin-users-read"
 import {
   suspendUser,
@@ -42,6 +43,15 @@ const tabs = ["Overview", "Moderation", "Login history"] as const
 export function UserProfileDrawer({ userId, onClose, canModerate, canManageRoles }: Props) {
   const [tab, setTab] = useState<(typeof tabs)[number]>("Overview")
   const [pending, startTransition] = useTransition()
+  // Back / iOS swipe-back closes the drawer instead of leaving the admin users
+  // list, which would throw away the surrounding filters and scroll position.
+  useOverlayHistory(!!userId, onClose, "admin-user-drawer")
+  // Each user opens on Overview. Without this the drawer kept the tab from the
+  // previously inspected user, so opening someone new could land on an empty
+  // "Login history" and look like missing data.
+  useEffect(() => {
+    setTab("Overview")
+  }, [userId])
 
   const { data: profile, isLoading, mutate } = useSWR(
     userId ? ["admin-user-profile", userId] : null,

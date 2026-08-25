@@ -27,6 +27,7 @@ import {
   warnAuthor,
 } from "@/app/actions/admin-moderation"
 import type { ReportRow, ReportStatus } from "@/lib/admin/reports-types"
+import { useUrlState } from "@/lib/navigation/use-url-state"
 import { CONTENT_TYPE_LABELS } from "@/lib/admin/reports-types"
 import { toast } from "sonner"
 import { ModerationDialog } from "./moderation-dialog"
@@ -72,7 +73,11 @@ export function ReportsModeration({
   initialCounts: Record<string, number>
   canAct: boolean
 }) {
-  const [tab, setTab] = useState<ReportStatus | "all">("pending")
+  // In the URL so the moderator's queue filter survives a reload and can be
+  // shared as a link, instead of always resetting to Pending.
+  const [tab, setTab] = useUrlState<ReportStatus | "all">("status", "pending", {
+    valid: TABS.map((t) => t.id),
+  })
   const [pending, setPending] = useState<PendingAction | null>(null)
 
   const { data, isLoading, mutate } = useSWR(

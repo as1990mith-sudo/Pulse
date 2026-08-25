@@ -18,6 +18,7 @@ import { EpisodeNowPlayingActions } from "@/components/episode-now-playing-actio
 import { EpisodeCommentsInline } from "@/components/episode-comments-inline"
 import { MarqueeTitle } from "@/components/marquee-title"
 import { getAvatarColor, getInitials } from "@/lib/identity"
+import { useOverlayHistory } from "@/lib/navigation/use-overlay-history"
 
 /** Whether a host avatar URL is a real uploaded image (not the blank placeholder). */
 function hasRealAvatar(url?: string): url is string {
@@ -162,13 +163,9 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
     // buttons both dispatch the same `leavepictureinpicture` event, so a reliable
     // close-vs-maximize is impossible and browsers often pause on exit. Our card
     // keeps the same element playing and gives us real close/expand controls.
-    // Consume the sentinel history entry (pushed when the overlay opened) so the
-    // back stack stays balanced; its popstate handler flips `minimized`.
-    if (typeof window !== "undefined" && (window.history.state as { __episodeOverlay?: boolean })?.__episodeOverlay) {
-      window.history.back()
-    } else {
-      setMinimized(true)
-    }
+    // Just flip the state: that closes the overlay, and useOverlayHistory's
+    // cleanup consumes the history entry so the back stack stays balanced.
+    setMinimized(true)
   }, [])
 
   const close = useCallback(() => {
@@ -180,9 +177,8 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
       exitPictureInPicture?: () => Promise<void>
     }
     if (doc.pictureInPictureElement) doc.exitPictureInPicture?.().catch(() => {})
-    if (typeof window !== "undefined" && (window.history.state as { __episodeOverlay?: boolean })?.__episodeOverlay) {
-      window.history.back()
-    }
+    // No manual history.back() here either: clearing `current` closes the overlay,
+    // and useOverlayHistory's cleanup pops its own entry.
     setCurrent(null)
     setQueue([])
     setMinimized(false)
@@ -227,16 +223,12 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
     return () => window.clearTimeout(t)
   }, [controlsVisible, playing, isVideo])
 
-  // Sentinel history entry so the hardware/browser back gesture collapses the
-  // immersive player instead of navigating away from the catalogue underneath.
+  // Back / back-gesture collapses the immersive player to the mini window instead
+  // of navigating away from the catalogue underneath. `minimize()` and `close()`
+  // no longer pop the entry by hand — the hook's cleanup does it when
+  // `overlayOpen` flips false, which is exactly what those two cause.
   const overlayOpen = Boolean(current) && !minimized
-  useEffect(() => {
-    if (!overlayOpen) return
-    window.history.pushState({ __episodeOverlay: true }, "")
-    const onPop = () => setMinimized(true)
-    window.addEventListener("popstate", onPop)
-    return () => window.removeEventListener("popstate", onPop)
-  }, [overlayOpen])
+  useOverlayHistory(overlayOpen, () => setMinimized(true), "episode-overlay")
 
   // Reserve space for the docked mini-player so page content never hides behind it.
   const miniShown = Boolean(current) && minimized

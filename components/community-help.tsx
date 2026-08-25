@@ -15,6 +15,8 @@ import {
   Loader2,
   MoreHorizontal,
   Pencil,
+  Pin,
+  PinOff,
   Plus,
   Send,
   Share2,
@@ -38,8 +40,13 @@ import {
   deleteCommunityPost,
   editCommunityPost,
   getCommunityPosts,
+  setCommunityPostPinned,
   type CommunityPostView,
 } from "@/app/actions/community"
+import { PinnedBadge } from "@/components/pinned-badge"
+import { useOverlayHistory } from "@/lib/navigation/use-overlay-history"
+import { useRestoredScroll } from "@/lib/navigation/use-restored-scroll"
+import { hasInAppHistory } from "@/lib/navigation/history-key"
 import { MiniChatProvider, useMiniChat } from "@/components/mini-chat"
 import { CommunityConversation } from "@/components/community-conversation"
 import { FeedVideo } from "@/components/feed-video"
@@ -140,11 +147,13 @@ function FeedPostVideo({ src }: { src: string }) {
 function PostItem({
   post,
   onDeleted,
+  onPinned,
   onOpen,
   highlighted = false,
 }: {
   post: CommunityPostView
   onDeleted: (id: number) => void
+  onPinned: () => void
   onOpen: () => void
   highlighted?: boolean
 }) {
@@ -161,7 +170,15 @@ function PostItem({
   // instead of the conversation, so the media can be viewed at its true ratio.
   const [mediaOpen, setMediaOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
+  // Local mirror so the badge flips at once; the refresh below reorders the room.
+  const [pinned, setPinned] = useState(!!post.pinned)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  // Track server updates (e.g. another admin pinned something) so this local copy
+  // cannot drift out of date.
+  useEffect(() => {
+    setPinned(!!post.pinned)
+  }, [post.pinned])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -206,6 +223,23 @@ function PostItem({
     }
   }
 
+  function handleTogglePin() {
+    setMenuOpen(false)
+    const next = !pinned
+    setPinned(next)
+    startTransition(async () => {
+      try {
+        await setCommunityPostPinned({ postId: post.id, pinned: next })
+        // Re-reads the list so the thread moves to its new position.
+        onPinned()
+      } catch (err) {
+        // Roll back: the server refuses once the room is at the three-pin cap.
+        setPinned(!next)
+        setError(err instanceof Error ? err.message : "Couldn't update the pin.")
+      }
+    })
+  }
+
   function startEdit() {
     setMenuOpen(false)
     setDraft(body)
@@ -240,6 +274,10 @@ function PostItem({
         highlighted && "bg-emerald-500/5",
       )}
     >
+      {/* Explains why this thread is at the top, rather than leaving it looking
+          like the newest question. */}
+      {pinned && <PinnedBadge className="mb-2" />}
+
       {/* Header: the avatar and the name/date sit on ONE centered row, so the
           name aligns to the vertical middle of the avatar rather than its top.
           The body, media and actions then flow in an indented block below. */}
@@ -284,6 +322,19 @@ function PostItem({
                 >
                   <Copy className="size-4" /> Copy text
                 </button>
+                {/* Deliberately not gated on isSelf: an admin pins ANY thread. */}
+                {post.canPin && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={handleTogglePin}
+                    disabled={isPending}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-secondary disabled:opacity-50"
+                  >
+                    {pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+                    {pinned ? "Unpin" : "Pin to top"}
+                  </button>
+                )}
                 {post.isSelf && (
                   <button
                     type="button"
@@ -1102,6 +1153,10 @@ export function CommunityHelp({
   const [infoOpen, setInfoOpen] = useState(false)
   const [highlightedQ, setHighlightedQ] = useState<string | null>(null)
   const [activeId, setActiveId] = useState<number | null>(null)
+  // Closing a conversation returns to the feed at the same place. Disabled while a
+  // conversation is open: that overlay is its own history entry, and restoring the
+  // feed offset underneath it would fight the overlay's own scrolling.
+  useRestoredScroll("community", undefined, activeId === null)
   // One-shot flag consumed by the history effect below: true only for the
   // conversation opened directly by an incoming ?q=<id> deep link (e.g. tapping
   // a post on someone's profile). In that case the current history entry already
@@ -1185,41 +1240,25 @@ export function CommunityHelp({
   // history entry so the phone/browser Back button returns to the feed preview
   // (just closing the overlay) instead of navigating away from Community Help.
   const conversationOpen = activeId !== null
-  useEffect(() => {
-    if (!conversationOpen || typeof window === "undefined") return
-    // Deep-linked open: the current history entry IS this conversation view, so
-    // adding another would make Back merely peel the overlay onto the feed. Skip
-    // the push so Back returns to the origin page (the profile) in a single step.
-    // Applies to the initial open only; later in-feed opens push as normal.
-    if (openedViaDeepLinkRef.current) {
-      openedViaDeepLinkRef.current = false
-      return
-    }
-    // A normal in-feed open is not a deep-link screen anymore.
-    deepLinkCloseRef.current = false
-    window.history.pushState({ chConversation: true }, "")
-    const onPop = () => setActiveId(null)
-    window.addEventListener("popstate", onPop)
-    return () => window.removeEventListener("popstate", onPop)
-  }, [conversationOpen])
+  // The shared hook owns the push/pop and the "closed from the UI" cleanup. The
+  // one Community-Help-specific rule is the deep-link case: when the page was
+  // opened directly ON a conversation, the current entry already represents it,
+  // so pushing would make Back peel the overlay and strand the user here.
+  useOverlayHistory(conversationOpen, () => setActiveId(null), "ch-conversation", {
+    skipPush: openedViaDeepLinkRef.current,
+  })
 
-  // Closing via the UI (X button / backdrop / delete) consumes the history entry
-  // we pushed so the Back button doesn't need an extra press; the popstate
-  // handler above then clears activeId. Falls back to a direct clear otherwise.
+  // Closing from the UI (X / backdrop / delete). For an in-feed open the hook's
+  // cleanup pops the entry it pushed, so clearing state is all that is needed
+  // here. A deep-linked open has no entry of its own, so Back is the only way to
+  // reach the page the user actually came from.
   function closeConversation() {
-    const state = typeof window !== "undefined" ? (window.history.state as { chConversation?: boolean } | null) : null
-    if (state?.chConversation) {
-      // In-feed open: pop the entry we pushed, returning to the feed preview.
-      window.history.back()
-    } else if (deepLinkCloseRef.current && typeof window !== "undefined" && window.history.length > 1) {
-      // Deep-linked open (e.g. from a profile): go back to the origin page so
-      // closing matches the hardware Back button. Fall back to just clearing the
-      // overlay when there's no in-app history (a fresh external share link).
+    if (deepLinkCloseRef.current && hasInAppHistory()) {
       deepLinkCloseRef.current = false
       window.history.back()
-    } else {
-      setActiveId(null)
+      return
     }
+    setActiveId(null)
   }
 
   // All three optimistic updates below go through `mutatePosts` — the mutator
@@ -1237,6 +1276,13 @@ export function CommunityHelp({
     void mutatePosts((prev: CommunityPostView[] | undefined) => (prev ?? []).filter((p) => p.id !== id), {
       revalidate: false,
     })
+  }
+
+  // A pin changes the ORDER of the room, not just one row, so unlike the updates
+  // above this one revalidates instead of patching locally — the server decides
+  // where the pinned thread now sits.
+  function handlePinned() {
+    void mutatePosts()
   }
 
   // Keep feed reply counts in sync when replies are added/removed in the
@@ -1350,6 +1396,7 @@ export function CommunityHelp({
                     key={post.id}
                     post={post}
                     onDeleted={handleDeleted}
+                    onPinned={handlePinned}
                     onOpen={() => setActiveId(post.id)}
                     highlighted={highlightedQ === String(post.id)}
                   />

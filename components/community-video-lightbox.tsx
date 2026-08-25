@@ -1,10 +1,11 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect } from "react"
 import { createPortal } from "react-dom"
 import { X } from "lucide-react"
 import { FeedVideo } from "@/components/feed-video"
 import { setImmersiveViewerOpen } from "@/lib/video-handoff"
+import { useOverlayHistory } from "@/lib/navigation/use-overlay-history"
 
 /**
  * Shared full-screen viewer for a Community Help attached video, used by BOTH
@@ -33,9 +34,11 @@ import { setImmersiveViewerOpen } from "@/lib/video-handoff"
  * the close button.
  */
 export function VideoLightbox({ src, onClose }: { src: string; onClose: () => void }) {
-  // Remembers whether this overlay was dismissed by a Back-button `popstate`, so
-  // cleanup knows not to pop the history entry a second time.
-  const closedByPopRef = useRef(false)
+  // Back / back-gesture dismisses the overlay rather than navigating away. The
+  // hook holds `onClose` in a ref, so an inline arrow from the parent no longer
+  // tears down and re-pushes the history entry on every render — which is what
+  // the old `[onClose]` dependency did.
+  useOverlayHistory(true, onClose, "video-lightbox")
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -47,28 +50,13 @@ export function VideoLightbox({ src, onClose }: { src: string; onClose: () => vo
     // with an already-open conversation gate).
     setImmersiveViewerOpen(true)
 
-    // Add a history entry so hardware / browser Back closes the viewer instead of
-    // navigating away from the page.
-    window.history.pushState({ __videoLightbox: true }, "")
-    function onPop() {
-      closedByPopRef.current = true
-      onClose()
-    }
-    window.addEventListener("popstate", onPop)
-
     const prevOverflow = document.body.style.overflow
     document.body.style.overflow = "hidden"
 
     return () => {
       document.removeEventListener("keydown", onKey)
-      window.removeEventListener("popstate", onPop)
       document.body.style.overflow = prevOverflow
       setImmersiveViewerOpen(false)
-      // Closed via X / Escape / backdrop (not the Back button): pop the history
-      // entry we pushed so the browser stack stays balanced.
-      if (!closedByPopRef.current && typeof window !== "undefined" && window.history.state?.__videoLightbox) {
-        window.history.back()
-      }
     }
   }, [onClose])
 

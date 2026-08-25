@@ -1,42 +1,52 @@
 "use client"
 
-import { useRouter } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
 
+import { useBack } from "@/lib/navigation/use-back"
+
 /**
- * Generic "Back" control that returns to whatever page the user came from,
- * mirroring the browser/device back button. We use router.back() so it reflects
- * the actual navigation history (the page where the video link was clicked),
- * and fall back to a provided href when there's no in-app history to pop
- * (e.g. the page was opened directly from a shared link or a new tab).
+ * Generic "Back" control. All of the behaviour lives in `useBack`, which unwinds
+ * the user's real navigation history instead of guessing a destination from the
+ * current route — see the note there for why that distinction matters.
+ *
+ * `fallbackHref` applies ONLY when there is no in-app history to pop (a deep link
+ * or a notification opened in a fresh tab).
  */
 export function BackButton({
   fallbackHref = "/",
   label = "Back",
-  className = "",
+  className,
+  children,
+  "aria-label": ariaLabel,
 }: {
   fallbackHref?: string
   label?: string
   className?: string
+  /**
+   * Custom contents (e.g. a bare chevron in an icon-only header button). When
+   * given, `label` is not rendered — pass `aria-label` so the control still has
+   * an accessible name.
+   */
+  children?: React.ReactNode
+  "aria-label"?: string
 }) {
-  const router = useRouter()
-
-  const handleClick = () => {
-    // history.length > 1 means there's a previous entry to return to.
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back()
-    } else {
-      router.push(fallbackHref)
-    }
-  }
+  const goBack = useBack(fallbackHref)
 
   return (
     <button
       type="button"
-      onClick={handleClick}
-      className={`inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground ${className}`}
+      onClick={goBack}
+      aria-label={ariaLabel}
+      className={
+        className ??
+        "inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      }
     >
-      <ArrowLeft className="size-4" /> {label}
+      {children ?? (
+        <>
+          <ArrowLeft className="size-4" /> {label}
+        </>
+      )}
     </button>
   )
 }

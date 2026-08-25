@@ -14,6 +14,8 @@ import {
 } from "lucide-react"
 import { PageHeader, StatCard, StatusBadge, EmptyState, Spinner } from "@/components/admin/kit"
 import { fetchBookSubmissions } from "@/app/actions/admin-books"
+import { useUrlState } from "@/lib/navigation/use-url-state"
+import { useOverlayHistory } from "@/lib/navigation/use-overlay-history"
 import type { BookSubmissionRow, SubmissionStatus } from "@/lib/admin/books"
 import { BookReviewDrawer } from "./book-review-drawer"
 
@@ -63,8 +65,15 @@ export function BooksApproval({
   stats: Stats
   canApprove: boolean
 }) {
-  const [tab, setTab] = useState<SubmissionStatus | "all">("pending")
+  // In the URL so reviewing a submission and coming back keeps the moderator in
+  // the queue they were working, and so a filtered queue is shareable as a link.
+  const [tab, setTab] = useUrlState<SubmissionStatus | "all">("status", "pending", {
+    valid: TABS.map((t) => t.id),
+  })
   const [active, setActive] = useState<BookSubmissionRow | null>(null)
+  // The review drawer is an overlay, so Back should close it rather than leave
+  // the approval queue.
+  useOverlayHistory(!!active, () => setActive(null), "book-review")
 
   const { data, isLoading, mutate } = useSWR(
     ["book-submissions", tab],

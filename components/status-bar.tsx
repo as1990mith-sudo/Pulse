@@ -31,6 +31,7 @@ import {
 } from "@/app/actions/status"
 import type { CurrentUser } from "@/lib/session"
 import { compressImage, uploadMedia } from "@/lib/upload-media"
+import { useOverlayHistory } from "@/lib/navigation/use-overlay-history"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { VideoTrimmer } from "@/components/video-trimmer"
 import { ShareSheet } from "@/components/share-sheet"
@@ -751,20 +752,15 @@ export function StatusViewer({
     pausedRef.current = paused
   }, [paused])
 
-  // Make the device/browser Back button (and back gesture) simply close the
-  // status overlay and return the user to the exact page + scroll position they
-  // came from — instead of navigating to a different page. We push one history
-  // entry when the viewer opens; pressing Back pops it, which fires popstate and
-  // closes the overlay in place. (We intentionally don't touch history on
-  // cleanup — doing so is fragile under React's dev double-invoke of effects.)
-  const onCloseRef = useRef(onClose)
-  onCloseRef.current = onClose
-  useEffect(() => {
-    window.history.pushState({ statusViewer: true }, "")
-    const onPop = () => onCloseRef.current()
-    window.addEventListener("popstate", onPop)
-    return () => window.removeEventListener("popstate", onPop)
-  }, [])
+  // Back / back-gesture closes the status viewer in place, returning the user to
+  // the exact page and scroll position they came from.
+  //
+  // The previous version deliberately left its pushed entry behind on cleanup,
+  // which meant closing the viewer with the X button stranded a dead entry — the
+  // user's next Back press did nothing. The shared hook tags its entry and only
+  // pops when that tag is still current, so it is safe under React's dev
+  // double-invoke without leaking.
+  useOverlayHistory(true, onClose, "status-viewer")
 
   const group = groups[groupIndex]
   const item: StatusItem | undefined = group?.items[itemIndex]

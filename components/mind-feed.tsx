@@ -30,6 +30,8 @@ import {
   AtSign,
   UserX,
   BarChart3,
+  Pin,
+  PinOff,
 } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import {
@@ -42,6 +44,7 @@ import {
   getFeed,
   setCommentLike,
   setPostLike,
+  setPostPinned,
   type FeedPostView,
   type PostMedia,
 } from "@/app/actions/feed"
@@ -50,6 +53,9 @@ import { removeMyMention, reportMention } from "@/app/actions/mentions"
 import { toast } from "sonner"
 import { toThreadComment } from "@/lib/feed-comment-view"
 import { CommentSheet } from "@/components/comment-sheet"
+import { PinnedBadge } from "@/components/pinned-badge"
+import { useUrlState } from "@/lib/navigation/use-url-state"
+import { useRestoredScroll } from "@/lib/navigation/use-restored-scroll"
 import { toggleFollow } from "@/app/actions/follow"
 import type { CurrentUser } from "@/lib/session"
 import { Button } from "@/components/ui/button"
@@ -172,6 +178,19 @@ function mulberry32(seed: number): () => number {
   }
 }
 
+const FEED_TABS = ["for-you", "admin", "status", "events", "reels"] as const
+type FeedTab = (typeof FEED_TABS)[number]
+
+/**
+ * Moves admin-pinned posts to the front, preserving the relative order of both
+ * groups. Applied AFTER any shuffling or sorting, because those would otherwise
+ * undo the pin.
+ */
+function hoistPinned(posts: FeedPostView[]): FeedPostView[] {
+  if (!posts.some((p) => p.pinned)) return posts
+  return [...posts.filter((p) => p.pinned), ...posts.filter((p) => !p.pinned)]
+}
+
 /** Returns a new array shuffled deterministically from `seed` (Fisher–Yates). */
 function seededShuffle<T>(arr: T[], seed: number): T[] {
   const out = [...arr]
@@ -250,7 +269,19 @@ export function MindFeed({
   // "status" is kept in the union (still deep-linkable via /status and ?tab=status)
   // but is intentionally NOT surfaced as a feed sub-tab anymore — "events" takes
   // its place and hosts the announcements/events feature.
-  const [tab, setTab] = useState<"for-you" | "admin" | "status" | "events" | "reels">("for-you")
+  //
+  // Lives in the URL so the chosen tab survives a reload and is still there when
+  // the user comes Back from a post. Previously the URL was read once on mount
+  // but never written, so switching tabs and refreshing dropped you on "For you".
+  const [tab, setTab] = useUrlState<FeedTab>("tab", "for-you", { valid: FEED_TABS })
+  // Restore the reading position when returning to the feed, scoped per tab so
+  // "For you" and "Admin" keep independent positions. Skipped when a ?post= deep
+  // link is present, since that scrolls to a specific post and the two would fight.
+  useRestoredScroll(
+    `feed:${tab}`,
+    undefined,
+    typeof window === "undefined" || !new URLSearchParams(window.location.search).get("post"),
+  )
   const fileInputRef = useRef<HTMLInputElement>(null)
   // Separate inputs so we can request the device camera directly: one for
   // capturing a photo and one for recording a video. The "capture" attribute
@@ -344,38 +375,33 @@ export function MindFeed({
     // Before the seed is known (server render + first client render) keep the
     // server's order untouched, so both sides agree and hydration is clean.
     const shuffled = shuffleSeed === null ? allPosts : seededShuffle(allPosts, shuffleSeed)
-    if (pinnedIds.length === 0) return shuffled
-    const pinned = pinnedIds
-      .map((id) => allPosts.find((p) => String(p.id) === id))
-      .filter((p): p is (typeof allPosts)[number] => Boolean(p))
-    const pinnedSet = new Set(pinnedIds)
-    return [...pinned, ...shuffled.filter((p) => !pinnedSet.has(String(p.id)))]
+    let ordered = shuffled
+    if (pinnedIds.length > 0) {
+      const justPosted = pinnedIds
+        .map((id) => allPosts.find((p) => String(p.id) === id))
+        .filter((p): p is (typeof allPosts)[number] => Boolean(p))
+      const justPostedSet = new Set(pinnedIds)
+      ordered = [...justPosted, ...shuffled.filter((p) => !justPostedSet.has(String(p.id)))]
+    }
+    // Admin-pinned posts are hoisted LAST so they end up above everything, including
+    // the viewer's own just-posted items. Sorting on the server is not sufficient
+    // here: the shuffle above would scatter them straight back into the pile, which
+    // is precisely what pinning exists to prevent.
+    return hoistPinned(ordered)
   }, [allPosts, shuffleSeed, pinnedIds])
   const adminPosts = useMemo(
-    () => allPosts.filter((p) => Boolean(p.orgHandle)).sort((a, b) => b.createdAtMs - a.createdAtMs),
+    () => hoistPinned(allPosts.filter((p) => Boolean(p.orgHandle)).sort((a, b) => b.createdAtMs - a.createdAtMs)),
     [allPosts],
   )
 
   const visiblePosts = tab === "admin" ? adminPosts : forYouPosts
 
-  // Open a specific feed tab directly when arriving with ?tab=<id> — this backs
-  // the /reels redirect (?tab=reels) and lets us deep-link to Status too, so old
-  // links/bookmarks land on the right view.
+  // ?tab=<id> is now handled by useUrlState above, which both reads AND writes it.
+  // All that remains is the legacy alias: old links and bookmarks used
+  // ?tab=following for what is now the Admin tab.
   useEffect(() => {
     if (typeof window === "undefined") return
-    const requested = new URLSearchParams(window.location.search).get("tab")
-    // Accept the legacy ?tab=following link and land it on the renamed Admin tab.
-    if (requested === "following") {
-      setTab("admin")
-    } else if (
-      requested === "reels" ||
-      requested === "status" ||
-      requested === "events" ||
-      requested === "admin" ||
-      requested === "for-you"
-    ) {
-      setTab(requested)
-    }
+    if (new URLSearchParams(window.location.search).get("tab") === "following") setTab("admin")
     // Run once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -1314,9 +1340,36 @@ export function PostCard({
   const [edited, setEdited] = useState(post.edited)
   const [text, setText] = useState(post.text)
   const [isPending, startTransition] = useTransition()
+  // Local mirror so the badge flips immediately; the server reorders the feed on
+  // the following refresh.
+  const [pinned, setPinned] = useState(!!post.pinned)
   // Immersive media viewers, opened by tapping media in the contained preview.
   const [imageViewer, setImageViewer] = useState<number | null>(null)
   const [videoViewerKey, setVideoViewerKey] = useState<string | null>(null)
+
+  // Keep in step when the server sends a new ordering (e.g. another admin pinned
+  // something), otherwise this local copy would go stale and show the wrong state.
+  useEffect(() => {
+    setPinned(!!post.pinned)
+  }, [post.pinned])
+
+  function handleTogglePin() {
+    const next = !pinned
+    setPinned(next)
+    startTransition(async () => {
+      try {
+        await setPostPinned({ postId: post.id, pinned: next })
+        toast.success(next ? "Pinned to the top of the feed." : "Unpinned.")
+        await globalMutate("feed")
+        router.refresh()
+      } catch (err) {
+        // Roll back so the badge can't claim a pin the server refused — most
+        // often because the feed is already at the three-pin cap.
+        setPinned(!next)
+        toast.error(err instanceof Error ? err.message : "Couldn't update the pin.")
+      }
+    })
+  }
 
   function handleDelete() {
     startTransition(async () => {
@@ -1539,8 +1592,20 @@ export function PostCard({
         highlighted && "ring-2 ring-primary ring-offset-2 ring-offset-background",
       )}
     >
+      {/* Pinned marker sits above the author row, so the reason the post is at the
+          top of the feed is the first thing read. */}
+      {pinned && <PinnedBadge className={cn(feed ? "px-4 pt-3" : "px-3 pt-3")} />}
+
       {/* Header */}
-      <div className={cn("flex items-center justify-between gap-2", feed ? "px-4 py-3" : "px-3 py-3")}>
+      <div
+        className={cn(
+          "flex items-center justify-between gap-2",
+          feed ? "px-4 py-3" : "px-3 py-3",
+          // The badge already supplies the top gap; keep the avatar from being
+          // pushed too far from it.
+          pinned && "pt-1.5",
+        )}
+      >
         <div className="flex min-w-0 items-center gap-3">
           <Link
             href={post.orgHandle ? `/org/${post.orgHandle}` : `/u/${post.authorId}`}
@@ -1600,6 +1665,15 @@ export function PostCard({
                 <DropdownMenuItem onClick={copyPost} className={POPUP_MENU_ITEM}>
                   {copied ? <Check /> : <Copy />}
                   {copied ? "Copied" : "Copy text"}
+                </DropdownMenuItem>
+              )}
+
+              {/* Admin pinning sits OUTSIDE the isSelf branch on purpose: the whole
+                  point is that an admin can pin anyone's post, not just their own. */}
+              {post.canPin && (
+                <DropdownMenuItem onClick={handleTogglePin} disabled={isPending} className={POPUP_MENU_ITEM}>
+                  {pinned ? <PinOff /> : <Pin />}
+                  {pinned ? "Unpin from feed" : "Pin to top of feed"}
                 </DropdownMenuItem>
               )}
 

@@ -129,6 +129,15 @@ export const feedPost = pgTable("feed_post", {
   // Soft-delete flag. Deleted posts are hidden from every user-facing read but
   // remain in the table for recovery/audit.
   deleted: boolean("deleted").notNull().default(false),
+  // Admin pinning. Null = not pinned; a timestamp floats the post to the top of
+  // the feed for EVERY viewer of that feed, most recently pinned first. A single
+  // nullable column is enough (rather than a join table) because a post lives in
+  // exactly one feed scope — its `homeId` — so a pin is a property of the post
+  // within that feed, not a per-viewer relationship.
+  pinnedAt: timestamp("pinnedAt"),
+  // Who pinned it. Pinning is a shared action available to every admin of the
+  // Home, so this is the audit trail for who put the post at the top.
+  pinnedBy: text("pinnedBy"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
@@ -1008,6 +1017,10 @@ export const communityPost = pgTable("community_post", {
   likes: integer("likes").notNull().default(0),
   deleted: boolean("deleted").notNull().default(false),
   editedAt: timestamp("editedAt"),
+  // Admin pinning, mirroring feedPost. Null = not pinned. Scoped by `homeId`, so
+  // a pin in one organisation's private Community Help never affects another's.
+  pinnedAt: timestamp("pinnedAt"),
+  pinnedBy: text("pinnedBy"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   })
 
