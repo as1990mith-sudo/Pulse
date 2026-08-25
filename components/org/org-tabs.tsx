@@ -447,12 +447,10 @@ function AboutTab({ org }: { org: OrganizationView }) {
 function ArticlesTab({ org, articles }: { org: OrganizationView; articles: ArticleCardType[] }) {
   return (
     <div className="animate-in fade-in duration-300">
-      {/* Editorial section intro sets the tone before the list/empty state. */}
+      {/* Heading only — the strapline was redundant with the active tab label
+          and the empty state's own message directly below it. */}
       <div className="mb-5">
         <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">Articles</h2>
-        <p className="mt-1 text-pretty text-sm leading-relaxed text-muted-foreground">
-          Teaching, insights and resources from {org.name}.
-        </p>
       </div>
 
       {articles.length === 0 ? (

@@ -18,7 +18,9 @@ export function HomeCard({ home }: { home: HomeView }) {
   function enter() {
     startTransition(async () => {
       await setActiveHome(home.handle)
-      router.push("/")
+      // The feed, not "/" — the root route renders the Daily Devotional, so
+      // entering a Home used to open one article instead of the Home's feed.
+      router.push("/feed")
       router.refresh()
     })
   }
