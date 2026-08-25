@@ -29,6 +29,7 @@ import {
   Maximize2,
   AtSign,
   UserX,
+  BarChart3,
 } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import {
@@ -259,6 +260,7 @@ export function MindFeed({
   // Null when the author hasn't attached a poll. Non-null puts the composer into
   // "poll" mode: the textarea becomes the question and the media rule is waived.
   const [poll, setPoll] = useState<PollDraft | null>(null)
+
   // Files awaiting the crop/trim/cover editor. When set, the full-screen editor
   // flow opens; it uploads the edited results and hands them back via onDone.
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null)
@@ -525,6 +527,13 @@ export function MindFeed({
   // Who the composer is currently speaking as — drives the avatar so the choice
   // is visible at a glance rather than only in the control below it.
   const speakingAsHome = !!homeVoice && postAsHome
+  // A poll can only be published BY a Home, so the option is offered only while
+  // the Home voice is both available and actually selected. Switching back to
+  // the personal voice drops any draft, since it could no longer be published.
+  const canPollHere = speakingAsHome
+  useEffect(() => {
+    if (!canPollHere) setPoll(null)
+  }, [canPollHere])
   // `href` follows the selected voice: tapping the avatar opens the profile of
   // whoever the post would be published as — the organisation while speaking for
   // the Home, otherwise the viewer's own profile. Null when we can't resolve a
@@ -864,6 +873,10 @@ export function MindFeed({
                 </ul>
               </div>
             )}
+            {/* Poll builder. Sits below the question (the textarea) so the
+                composer reads top-to-bottom as "what you're asking, then the
+                answers you're offering". */}
+            {poll && <PollComposer draft={poll} onChange={setPoll} onRemove={() => setPoll(null)} />}
             {error && <p className="text-xs text-destructive">{error}</p>}
             <div className="flex items-center justify-between">
               <DropdownMenu>
@@ -897,6 +910,14 @@ export function MindFeed({
                   <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className={POPUP_MENU_ITEM}>
                     <ImageIcon /> Upload from library
                   </DropdownMenuItem>
+                  {/* Polls are a Home feature, so the entry only exists while an
+                      admin is actually speaking as the Home. The server enforces
+                      the same rule; this just avoids offering a dead action. */}
+                  {canPollHere && (
+                    <DropdownMenuItem onClick={() => setPoll(emptyPollDraft())} className={POPUP_MENU_ITEM}>
+                      <BarChart3 /> Create poll
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
               {/* Library picker (photos + videos, multi-select) */}
@@ -932,7 +953,14 @@ export function MindFeed({
                 disabled={
                   isPending ||
                   uploading ||
-                  (mediaRequired ? media.length === 0 : !draft.trim() && media.length === 0)
+                  // A poll needs its question plus enough real options; it also
+                  // waives the media requirement, since the options ARE the
+                  // content. Without this branch an org poll stayed unpostable.
+                  (poll
+                    ? !draft.trim() || countUsablePollOptions(poll) < MIN_OPTIONS
+                    : mediaRequired
+                      ? media.length === 0
+                      : !draft.trim() && media.length === 0)
                 }
                 className="gap-2 rounded-full bg-foreground px-6 font-semibold text-background hover:bg-foreground/90"
               >
