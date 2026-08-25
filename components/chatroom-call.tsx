@@ -84,12 +84,23 @@ export function ChatroomCall({
       const room = new Room({
         adaptiveStream: true,
         dynacast: true,
-        // Acoustic echo cancellation on so no participant hears their own voice
-        // returned via another caller's speaker/mic. Matches the global policy.
-        audioCaptureDefaults: {
-          autoGainControl: true,
-          echoCancellation: true,
-          noiseSuppression: true,
+        // Use the SHARED studio capture constraints rather than a local copy.
+        // The inline version here set only the three DSP flags and so silently
+        // missed `channelCount: 1` and voice isolation: without mono capture a
+        // stereo-capsule phone mic can land a voice in the left ear only, which
+        // the encoder then relays faithfully. Sharing the constant also means a
+        // future tuning fix reaches calls instead of only Lives.
+        audioCaptureDefaults: LIVE_MIC_CONSTRAINTS,
+        publishDefaults: {
+          // Calls previously fell back to LiveKit's ~24-32 kbps speech default,
+          // which is why a call sounded noticeably thinner than the same voice
+          // in a Live. Same 128 kbps mono preset everywhere.
+          audioPreset: LIVE_VOICE_PRESET,
+          // DTX gates "silence" and swirls/drops room tone and music; RED adds
+          // packet-loss resilience, which is what stops the mid-meeting
+          // breakage on flaky mobile connections.
+          dtx: false,
+          red: true,
         },
       })
       roomRef.current = room
