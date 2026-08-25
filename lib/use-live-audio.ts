@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { ensureCtxRunning } from "@/lib/audio-context"
+import { applyAudioRouting, prepareAudioRouting, releaseAudioRouting } from "@/lib/audio-routing"
 import {
   AudioPresets,
   ConnectionQuality,
@@ -472,6 +473,11 @@ export function useLiveAudio() {
               try {
                 await room.localParticipant.setMicrophoneEnabled(true)
                 update({ micEnabled: true })
+                // A listener accepted onto the panel opens a mic for the first
+                // time here, which is the same moment iOS can drop the whole
+                // room into the earpiece. Re-assert the loudspeaker route, or
+                // being called up would make everyone else go quiet.
+                applyAudioRouting()
               } catch {
                 // mic permission denied — UI still reflects canPublish
               }
@@ -520,6 +526,11 @@ export function useLiveAudio() {
             update({ audioBlocked: !room.canPlaybackAudio })
           })
 
+        // Neutralise the audio session before any mic is opened, so the
+        // post-capture assignment below reads as a real change to iOS. See
+        // lib/audio-routing.ts for why the order matters.
+        prepareAudioRouting()
+
         await room.connect(opts.serverUrl, opts.token)
 
         // Seed the publish-permission baseline so the permissions handler only
@@ -530,6 +541,11 @@ export function useLiveAudio() {
           await room.localParticipant.setMicrophoneEnabled(true)
           update({ micEnabled: true })
         }
+
+        // Now that a mic may have forced iOS into a recording session (which
+        // defaults to the earpiece), push the route back out to the loudspeaker.
+        // A connected Bluetooth/wired/hearing device still wins over this.
+        applyAudioRouting()
 
         // Browsers often block autoplay until a user gesture. Try to start
         // playback; if it's blocked, surface a prompt so the user can tap to
@@ -959,6 +975,10 @@ export function useLiveAudio() {
     cleanupRoomMedia()
     await room.disconnect()
     roomRef.current = null
+    // Hand the audio session back. Left in the mic-oriented recording profile,
+    // everything played after leaving a live — a feed video, a background
+    // track — stays muffled and quiet until the tab is reloaded.
+    releaseAudioRouting()
     update({ connected: false, connecting: false, reconnecting: false, micEnabled: false, listeners: 0, speaking: false })
   }, [cleanupRoomMedia, update])
 
@@ -999,6 +1019,10 @@ export function useLiveAudio() {
       audioElsRef.current.forEach((el) => el.remove())
       audioElsRef.current.clear()
       roomRef.current = null
+      // Navigating away is the common way to leave a live, and it bypasses
+      // disconnect() entirely — so the session has to be released here too or
+      // the muffled-playback aftermath survives the exit.
+      releaseAudioRouting()
     }
   }, [])
 

@@ -42,14 +42,13 @@ import {
   getFeed,
   setCommentLike,
   setPostLike,
-  type FeedCommentView,
   type FeedPostView,
   type PostMedia,
 } from "@/app/actions/feed"
 import { toggleSaveItem } from "@/app/actions/share"
 import { removeMyMention, reportMention } from "@/app/actions/mentions"
 import { toast } from "sonner"
-import { type ThreadComment } from "@/components/comment-thread"
+import { toThreadComment } from "@/lib/feed-comment-view"
 import { CommentSheet } from "@/components/comment-sheet"
 import { toggleFollow } from "@/app/actions/follow"
 import type { CurrentUser } from "@/lib/session"
@@ -182,27 +181,6 @@ function seededShuffle<T>(arr: T[], seed: number): T[] {
     ;[out[i], out[j]] = [out[j], out[i]]
   }
   return out
-}
-
-// Maps a feed comment into the shared CommentThread shape.
-function toThreadComment(c: FeedCommentView): ThreadComment {
-  return {
-    id: c.id,
-    parentId: c.parentId,
-    authorId: c.authorId,
-    isSelf: c.isSelf,
-    name: c.user,
-    handle: c.handle,
-    initials: c.initials,
-    color: c.color,
-    image: c.authorImage,
-    text: c.text,
-    likes: c.likes,
-    liked: c.liked,
-    edited: c.edited,
-    postedAt: c.postedAt,
-    createdAtMs: c.createdAtMs,
-  }
 }
 
 /**
@@ -1052,11 +1030,14 @@ export function MindFeed({
 /**
  * A single media item inside a feed post, framed as a CONTAINED preview.
  *
- * If the author chose a crop ratio in the editor (`item.aspectRatio`), the
- * frame uses it; otherwise it falls back to the media's natural ratio. Nothing
- * is ever framed taller than 9:16 — taller media is clamped to a 9:16 frame and
- * center-cropped with object-cover. The original media is never modified:
- * cropping is purely visual, and tapping opens the immersive viewer.
+ * The card shows the EXACT crop the author chose in the editor
+ * (`item.aspectRatio`), falling back to the media's natural ratio when they made
+ * no choice. Only the extremes are clamped: wider than 16:9, or taller than 4:5.
+ * Anything taller is framed 4:5 and centre-filled with object-cover, so a
+ * vertical clip cannot take over the whole screen in the feed.
+ *
+ * The original media is never modified — the crop is purely visual, and tapping
+ * opens the immersive viewer, which shows the untouched full composition.
  */
 function MediaSlide({
   item,
@@ -1081,27 +1062,16 @@ function MediaSlide({
   // detected natural ratio.
   const chosen = item.aspectRatio ?? ratio
 
-  let framedAspect: number | null
-  // Widest card shape we ever allow, so nothing is absurdly panoramic. The
-  // shortest a media card gets is a square (1:1): anything TALLER than 1:1 is
-  // presented in a 1:1 card and object-cover-filled, so the feed never shows a
-  // portrait/vertical card. Landscape media between 1:1 and 16:9 keeps its ratio.
+  // The preview honours the crop the author actually chose at upload. The only
+  // limits are the extremes: nothing wider than 16:9 (absurdly panoramic) and
+  // nothing TALLER than 4:5 — a taller crop (portrait 3:4, vertical 9:16) is
+  // shown in a 4:5 card and centre-filled, so one post cannot swallow the whole
+  // screen. Media between those bounds keeps its exact ratio.
   const WIDEST = 16 / 9
-  if (item.type === "video") {
-    // Videos in the feed are restricted to a fixed set of card shapes:
-    // 1:1 (1) and 16:9 (1.7778). A clip in any other ratio — most notably
-    // vertical 9:16 or portrait 4:5 — is presented in a 1:1 card and
-    // center-cropped with object-cover. The untouched full ratio is only
-    // revealed when the clip is expanded into the immersive viewer.
-    const ALLOWED_VIDEO_ASPECTS = [1, 16 / 9]
-    const allowed = chosen != null && ALLOWED_VIDEO_ASPECTS.some((a) => Math.abs(chosen - a) < 0.02)
-    framedAspect = allowed ? (chosen as number) : 1
-  } else {
-    // Images FILL their card (object-cover). Anything taller than square is
-    // clamped to 1:1; landscape keeps its ratio up to 16:9. No letterbox bars —
-    // the media is edge-to-edge; the full composition is shown in the viewer.
-    framedAspect = chosen != null ? Math.min(WIDEST, Math.max(1, chosen)) : null
-  }
+  // 4:5 portrait — the tallest card the feed shows. Expressed width/height
+  // (0.8), so a SMALLER number means a taller frame.
+  const TALLEST = 4 / 5
+  const framedAspect = chosen != null ? Math.min(WIDEST, Math.max(TALLEST, chosen)) : null
   // Whether the shown frame crops the media's true framing — used to show an
   // "expand to full screen" hint so viewers know the full composition is
   // available in the immersive viewer.
@@ -1493,18 +1463,27 @@ export function PostCard({
           : []
   const hasMedia = mediaItems.length > 0
 
-  // Captions fade into an inline "Read more" toggle based on line count.
-  // Line height here is 1.25 (leading-tight).
-  const POST_LINE_HEIGHT = 1.25
-  const clampLines = post.orgHandle
-    ? // Organisation / Home posts: seven lines, on every surface.
-      CLAMP_LINES.ORG
-    : clampSurface === "feed" && hasMedia
-      ? // Main feed, member post with media: a tight two-line lede.
+  // Media is checked BEFORE the organisation allowance: with an image or video
+  // attached the caption is a lede for the media, so a Home post with media gets
+  // the same short clamp as a member's rather than the longer text-post length.
+  const clampLines =
+    clampSurface === "feed" && hasMedia
+      ? // Main feed, any post with media: a short four-line lede.
         CLAMP_LINES.MEDIA
-      : // Everything else (text-only, or the same post on a profile/channel).
-        CLAMP_LINES.POST
-  const collapsedMaxEm = clampLines * POST_LINE_HEIGHT
+      : post.orgHandle
+        ? // Organisation / Home text posts: seven lines, on every surface.
+          CLAMP_LINES.ORG
+        : // Everything else (text-only, or the same post on a profile/channel).
+          CLAMP_LINES.POST
+  // Collapsed height, in px, MEASURED from the caption's real line-height rather
+  // than assumed. This was previously `lines * 1.25em`, hardcoding leading-tight
+  // while the caption actually renders at 1.5 — so a 4-line clamp produced a
+  // 5em box that fits only 3.3 lines and sliced the fourth in half. Measuring
+  // keeps the clamp honest if the type scale ever changes again.
+  //
+  // Null until measured; the caption stays unclamped for that first paint, which
+  // is invisible because the effect runs before the browser paints.
+  const [collapsedMaxPx, setCollapsedMaxPx] = useState<number | null>(null)
   // A clamped, un-expanded caption that actually overflows shows the fade.
   const isClamped = clampable && !expanded
   // The fade blends into whatever sits behind the caption: the immersive feed
@@ -1519,9 +1498,26 @@ export function PostCard({
       setClampable(false)
       return
     }
-    const lineHeightPx = collapsedMaxEm * Number.parseFloat(getComputedStyle(el).fontSize || "16")
-    setClampable(el.scrollHeight > lineHeightPx + 2)
-  }, [text, collapsedMaxEm, expanded])
+    const measure = () => {
+      const style = getComputedStyle(el)
+      const fontSize = Number.parseFloat(style.fontSize) || 16
+      // `line-height: normal` computes to the literal string rather than a px
+      // value, so fall back to the ~1.2 ratio browsers use for it.
+      const parsed = Number.parseFloat(style.lineHeight)
+      const lineHeight = Number.isFinite(parsed) ? parsed : fontSize * 1.2
+      const maxPx = lineHeight * clampLines
+      setCollapsedMaxPx(maxPx)
+      // Half a line of slack: sub-pixel rounding on scrollHeight would otherwise
+      // flag an exactly-full caption as overflowing and show a pointless toggle.
+      setClampable(el.scrollHeight > maxPx + lineHeight / 2)
+    }
+    measure()
+    // Re-measure on reflow (rotation, font swap, container resize) so the clamp
+    // and the "Read more" toggle stay correct instead of going stale.
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [text, clampLines, expanded])
 
   // The first link in the post (if any) gets a rich preview card rendered below
   // the text, with the bare link beneath it.
@@ -1738,7 +1734,7 @@ export function PostCard({
                 <div
                   ref={textWrapRef}
                   className={cn("relative", isClamped && "overflow-hidden", clampable && expanded && "cursor-pointer")}
-                  style={isClamped ? { maxHeight: `${collapsedMaxEm}em` } : undefined}
+                  style={isClamped && collapsedMaxPx != null ? { maxHeight: `${collapsedMaxPx}px` } : undefined}
                   onClick={
                     clampable && expanded
                       ? (e) => {

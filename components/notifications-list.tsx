@@ -12,9 +12,12 @@ import {
   getHomeNotifications,
   markHomeNotificationsRead,
   deleteHomeNotifications,
-  type NotificationType,
   type NotificationView,
 } from "@/app/actions/notifications"
+// Imported from the registry, not re-exported through the "use server" module:
+// a type-only re-export is erased at runtime, which breaks the server-action
+// bundle even though it typechecks cleanly.
+import type { NotificationType } from "@/lib/notification-categories"
 import { haptic } from "@/lib/haptics"
 import { cn } from "@/lib/utils"
 
@@ -48,6 +51,42 @@ function verb(type: NotificationType) {
     case "announcement":
       return "shared an announcement"
   }
+}
+
+/**
+ * Buckets notifications into day sections for display.
+ *
+ * Grouped on the CLIENT deliberately: "Today" has to mean today in the
+ * reader's timezone, and a server-rendered boundary would be wrong for anyone
+ * not sitting in the server's zone. Uses local midnight rather than a rolling
+ * 24-hour window, so something from 11pm last night reads as "Yesterday"
+ * instead of "Today" — which is how people actually think about it.
+ *
+ * The incoming list is already ordered newest-first, so a single pass preserves
+ * chronology inside each section without re-sorting.
+ */
+function groupByDay(items: NotificationView[]): { label: string; items: NotificationView[] }[] {
+  const startOfToday = new Date()
+  startOfToday.setHours(0, 0, 0, 0)
+  const startOfYesterday = new Date(startOfToday)
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1)
+
+  const groups: { label: string; items: NotificationView[] }[] = []
+  for (const n of items) {
+    const at = new Date(n.createdAt)
+    const label =
+      at >= startOfToday
+        ? "Today"
+        : at >= startOfYesterday
+          ? "Yesterday"
+          : at.toLocaleDateString(undefined, { month: "long", day: "numeric" })
+    // Append to the open group when the label matches, so each distinct day
+    // gets exactly one heading.
+    const last = groups[groups.length - 1]
+    if (last && last.label === label) last.items.push(n)
+    else groups.push({ label, items: [n] })
+  }
+  return groups
 }
 
 // Drag further left than this (px) to trigger swipe-to-delete on release.
@@ -173,20 +212,27 @@ export function NotificationsList({
         </div>
       )}
 
-      <ul className="flex flex-col gap-1.5">
-        {notifications.map((n) => (
-          <NotificationRow
-            key={n.id}
-            n={n}
-            selectionMode={selectionMode}
-            selected={selected.has(n.id)}
-            onOpen={() => router.push(n.link)}
-            onLongPress={() => enterSelection(n.id)}
-            onToggle={() => toggleSelected(n.id)}
-            onSwipeDelete={() => void removeIds([n.id])}
-          />
-        ))}
-      </ul>
+      {groupByDay(notifications).map((group) => (
+        <section key={group.label} className="flex flex-col gap-1.5">
+          <h2 className="px-1 pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {group.label}
+          </h2>
+          <ul className="flex flex-col gap-1.5">
+            {group.items.map((n) => (
+              <NotificationRow
+                key={n.id}
+                n={n}
+                selectionMode={selectionMode}
+                selected={selected.has(n.id)}
+                onOpen={() => router.push(n.link)}
+                onLongPress={() => enterSelection(n.id)}
+                onToggle={() => toggleSelected(n.id)}
+                onSwipeDelete={() => void removeIds([n.id])}
+              />
+            ))}
+          </ul>
+        </section>
+      ))}
 
       {!selectionMode && (
         <p className="px-1 text-center text-xs text-muted-foreground">

@@ -1713,3 +1713,48 @@ export const homeAppointment = pgTable(
     homeStartIdx: index("home_appointment_home_start_idx").on(t.homeId, t.startsAt),
   }),
 )
+
+/**
+ * One row per browser/device push endpoint. Keyed on the endpoint URL rather
+ * than the user because that is what the push service treats as the identity:
+ * the same person on phone and laptop is two rows and must receive both, while
+ * a re-subscribe on the same device reuses its endpoint and must not duplicate.
+ */
+export const pushSubscription = pgTable(
+  "push_subscription",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("userId").notNull(),
+    endpoint: text("endpoint").notNull(),
+    // Encryption material handed over by the browser; required to sign payloads.
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    // Purely diagnostic, so a user can recognise which device to revoke.
+    userAgent: text("userAgent"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    endpointIdx: uniqueIndex("push_subscription_endpoint_idx").on(t.endpoint),
+    userIdx: index("push_subscription_user_idx").on(t.userId),
+  }),
+)
+
+/**
+ * Per-user, per-category opt-outs. Absence of a row means "use the category
+ * default", so this table only ever stores deliberate choices — no backfill is
+ * needed when a new category is added to the registry.
+ */
+export const notificationPreference = pgTable(
+  "notification_preference",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("userId").notNull(),
+    // A NotificationCategory key from lib/notification-categories.ts.
+    category: text("category").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    userCategoryIdx: uniqueIndex("notification_preference_user_category_idx").on(t.userId, t.category),
+  }),
+)

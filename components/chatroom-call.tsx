@@ -18,6 +18,8 @@ import { Button } from "@/components/ui/button"
 import { CallButton } from "@/components/call-controls"
 import { cn } from "@/lib/utils"
 import { getAvatarColor, getInitials } from "@/lib/identity"
+import { LIVE_MIC_CONSTRAINTS, LIVE_VOICE_PRESET } from "@/lib/live-audio-chain"
+import { applyAudioRouting, prepareAudioRouting, releaseAudioRouting } from "@/lib/audio-routing"
 import { getChatroomCallStatus, getChatroomCallToken } from "@/app/actions/chatroom-call"
 
 /**
@@ -63,6 +65,9 @@ export function ChatroomCall({
     if (room) {
       room.disconnect()
       roomRef.current = null
+      // Restore the high-fidelity output profile, otherwise media played after
+      // the call stays muffled until reload.
+      releaseAudioRouting()
     }
     setJoined(false)
     setParticipants([])
@@ -84,12 +89,23 @@ export function ChatroomCall({
       const room = new Room({
         adaptiveStream: true,
         dynacast: true,
-        // Acoustic echo cancellation on so no participant hears their own voice
-        // returned via another caller's speaker/mic. Matches the global policy.
-        audioCaptureDefaults: {
-          autoGainControl: true,
-          echoCancellation: true,
-          noiseSuppression: true,
+        // Use the SHARED studio capture constraints rather than a local copy.
+        // The inline version here set only the three DSP flags and so silently
+        // missed `channelCount: 1` and voice isolation: without mono capture a
+        // stereo-capsule phone mic can land a voice in the left ear only, which
+        // the encoder then relays faithfully. Sharing the constant also means a
+        // future tuning fix reaches calls instead of only Lives.
+        audioCaptureDefaults: LIVE_MIC_CONSTRAINTS,
+        publishDefaults: {
+          // Calls previously fell back to LiveKit's ~24-32 kbps speech default,
+          // which is why a call sounded noticeably thinner than the same voice
+          // in a Live. Same 128 kbps mono preset everywhere.
+          audioPreset: LIVE_VOICE_PRESET,
+          // DTX gates "silence" and swirls/drops room tone and music; RED adds
+          // packet-loss resilience, which is what stops the mid-meeting
+          // breakage on flaky mobile connections.
+          dtx: false,
+          red: true,
         },
       })
       roomRef.current = room
@@ -111,8 +127,13 @@ export function ChatroomCall({
         .on(RoomEvent.ParticipantDisconnected, refreshParticipants)
         .on(RoomEvent.Disconnected, () => leave())
 
+      // Neutral session before the mic opens, loudspeaker re-asserted after.
+      // Without this an iOS caller lands in the earpiece the instant their mic
+      // goes live. See lib/audio-routing.ts.
+      prepareAudioRouting()
       await room.connect(creds.url, creds.token)
       await room.localParticipant.setMicrophoneEnabled(true)
+      applyAudioRouting()
       setJoined(true)
       setMicOn(true)
       refreshParticipants()

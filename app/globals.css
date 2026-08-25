@@ -41,6 +41,7 @@
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
+  --color-feed-divider: var(--feed-divider);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: oklch(0.98 0 0);
   --color-accent-foreground: var(--accent-foreground);
@@ -97,6 +98,11 @@
   --destructive: oklch(0.66 0.21 24);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 14%);
+  /* Separator between whole feed posts. Deliberately deeper than --background
+     (0.16) so the gap reads as a deliberate break between posts rather than the
+     hairline --border used for edges inside a single card. Inherited by the
+     other dark skins; only .theme-light overrides it. */
+  --feed-divider: oklch(0.1 0.006 285);
   --ring: oklch(0.72 0.18 55);
   --live: oklch(0.66 0.21 24);
   --live-foreground: oklch(0.99 0.005 60);
@@ -143,6 +149,9 @@
   --destructive: oklch(0.6 0.22 24);
   --border: oklch(0.2 0.01 285 / 12%);
   --input: oklch(0.2 0.01 285 / 16%);
+  /* Light skin needs the inverse: a divider slightly darker than its own
+     background rather than the near-black used on the dark skins. */
+  --feed-divider: oklch(0.87 0.005 285);
   --ring: oklch(0.67 0.19 53);
   --live: oklch(0.6 0.22 24);
   --live-foreground: oklch(0.99 0.005 60);

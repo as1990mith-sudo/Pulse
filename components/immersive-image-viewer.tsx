@@ -9,9 +9,17 @@ import { CommentIcon } from "@/components/comment-icon"
 import { MediaCaption } from "@/components/media-caption"
 import { CommentSheet } from "@/components/comment-sheet"
 import { ShareSheet } from "@/components/share-sheet"
-import { addPostComment, setPostLike, setCommentLike, type FeedPostView } from "@/app/actions/feed"
+import {
+  addPostComment,
+  deletePostComment,
+  editPostComment,
+  setPostLike,
+  setCommentLike,
+  type FeedCommentView,
+  type FeedPostView,
+} from "@/app/actions/feed"
 import { toggleSaveItem } from "@/app/actions/share"
-import type { ThreadComment } from "@/components/comment-thread"
+import { toThreadComment, makeOptimisticComment } from "@/lib/feed-comment-view"
 import { useHomeVoice } from "@/lib/use-home-voice"
 import type { CurrentUser } from "@/lib/session"
 import type { ShareTarget } from "@/lib/share-types"
@@ -51,6 +59,7 @@ export function ImmersiveImageViewer({
   const [likes, setLikes] = useState(post.likes)
   const [saved, setSaved] = useState(post.saved)
   const [commentsOpen, setCommentsOpen] = useState(false)
+  const [comments, setComments] = useState<FeedCommentView[]>(post.comments ?? [])
   const [shareOpen, setShareOpen] = useState(false)
   const [, startTransition] = useTransition()
   // Tap the image to fade ALL overlay chrome (author, caption, action rail,
@@ -79,6 +88,23 @@ export function ImmersiveImageViewer({
       document.body.style.overflow = prev
     }
   }, [onClose, images.length])
+
+  // Adopt refreshed server comments while the viewer stays open, so a comment
+  // added elsewhere (or by someone else) still shows up here.
+  //
+  // Optimistic rows carry negative ids and are kept only until the server list
+  // actually contains them — matched on author + text, since the placeholder
+  // never learns its real id. Without that check a just-sent comment would
+  // briefly appear twice: once as the placeholder and once as the saved row.
+  useEffect(() => {
+    const server = post.comments ?? []
+    setComments((prev) => {
+      const pending = prev.filter(
+        (c) => c.id < 0 && !server.some((s) => s.authorId === c.authorId && s.text === c.text),
+      )
+      return [...server, ...pending]
+    })
+  }, [post.comments])
 
   function toggleLike() {
     // Authors may like their own posts, matching the main feed.
@@ -113,10 +139,34 @@ export function ImmersiveImageViewer({
     })
   }
 
-  async function submitComment(text: string, asHome?: boolean) {
+  /**
+   * Adds a comment (or reply) and shows it immediately.
+   *
+   * The list is held locally rather than read straight off the `post` prop:
+   * this viewer is portaled out of the feed, so a `router.refresh()` alone
+   * cannot update the prop it was handed while it stays mounted — which is why
+   * a new comment previously only turned up after a manual page refresh. We
+   * insert optimistically, then still refresh so the rest of the feed (and the
+   * comment count on the card behind) catches up.
+   */
+  async function addComment(text: string, asHome?: boolean, parentId: number | null = null) {
     if (!currentUser) return
-    await addPostComment({ postId: post.id, text, asOrganization: asHome })
-    router.refresh()
+    const optimistic = makeOptimisticComment({
+      currentUser,
+      text,
+      parentId,
+      voice: asHome && homeVoice ? homeVoice : null,
+    })
+    setComments((prev) => [...prev, optimistic])
+    try {
+      await addPostComment({ postId: post.id, text, parentId: parentId ?? undefined, asOrganization: asHome })
+      router.refresh()
+    } catch (err) {
+      // Roll the placeholder back so the user sees the send genuinely failed
+      // instead of a comment that looks saved but was never persisted.
+      setComments((prev) => prev.filter((c) => c.id !== optimistic.id))
+      throw err
+    }
   }
 
   const shareTarget: ShareTarget = {
@@ -130,8 +180,13 @@ export function ImmersiveImageViewer({
     downloadKind: "image",
   }
 
-  const threadComments = post.comments as unknown as ThreadComment[]
-  const commentCount = post.comments?.length ?? 0
+  // Mapped through the shared adapter, NOT cast: FeedCommentView names these
+  // fields `user`/`authorImage` while ThreadComment expects `name`/`image`, so
+  // the previous structural cast typechecked but delivered undefined for both —
+  // which is why avatars here fell back to initials while the inline comment
+  // list (which maps properly) showed the real photo.
+  const threadComments = comments.map(toThreadComment)
+  const commentCount = comments.length
 
   if (typeof document === "undefined") return null
 
@@ -317,11 +372,28 @@ export function ImmersiveImageViewer({
               }
             : undefined
         }
-        onSubmit={submitComment}
+        onSubmit={(text, asHome) => addComment(text, asHome)}
         homeVoice={homeVoice}
-        onLike={(commentId, isLiked) => void setCommentLike({ commentId, liked: isLiked })}
-        onReply={async (parentId, text, asHome) => {
-          await addPostComment({ postId: post.id, text, parentId, asOrganization: asHome })
+        onLike={(commentId, isLiked) => {
+          // Reflect the tap locally too, so the heart and count stay correct if
+          // the list is re-rendered before the next server refresh lands.
+          setComments((prev) =>
+            prev.map((c) =>
+              c.id === commentId ? { ...c, liked: isLiked, likes: Math.max(0, c.likes + (isLiked ? 1 : -1)) } : c,
+            ),
+          )
+          void setCommentLike({ commentId, liked: isLiked })
+        }}
+        onReply={(parentId, text, asHome) => addComment(text, asHome, parentId)}
+        onEdit={async (commentId, text) => {
+          setComments((prev) => prev.map((c) => (c.id === commentId ? { ...c, text, edited: true } : c)))
+          await editPostComment({ commentId, text })
+          router.refresh()
+        }}
+        onDelete={async (commentId) => {
+          // Drop the comment and any direct replies, matching the feed card.
+          setComments((prev) => prev.filter((c) => c.id !== commentId && c.parentId !== commentId))
+          await deletePostComment(commentId)
           router.refresh()
         }}
       />

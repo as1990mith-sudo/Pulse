@@ -4,6 +4,7 @@ import { useCallback, useState, useSyncExternalStore, useTransition } from "reac
 import { BookOpen, Bookmark, Heart } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { EditedIndicator } from "@/components/edited-indicator"
+import { IdentityPen } from "@/components/identity-pen"
 import { detectBibleRefs } from "@/lib/bible-refs"
 import { cn } from "@/lib/utils"
 import { setCommunityPostLike, type CommunityPostView } from "@/app/actions/community"
@@ -179,12 +180,12 @@ export function IdentityMeta({
         )}
         {/* "· you" self marker intentionally removed. */}
         <span className="shrink-0 text-xs font-normal text-muted-foreground">· {post.postedAt}</span>
-        {edited && <EditedIndicator />}
+        {/* The handle used to sit on a permanent second line, with the edited
+            mark as its own pen up here. Both now collapse into a single pen:
+            the header stays one line, and the two provenance details a reader
+            rarely needs live behind the same tap. */}
+        <IdentityPen handle={post.authorHandle} edited={edited} />
       </p>
-      {/* Username handle stacked below the display name. */}
-      {post.authorHandle && (
-        <p className="truncate text-xs font-normal leading-tight text-muted-foreground">{post.authorHandle}</p>
-      )}
     </div>
   )
 }

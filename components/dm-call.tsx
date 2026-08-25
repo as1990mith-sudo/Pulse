@@ -15,6 +15,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { CallButton } from "@/components/call-controls"
 import { cn } from "@/lib/utils"
 import { startRingtone } from "@/lib/ringtone"
+import { LIVE_MIC_CONSTRAINTS, LIVE_VOICE_PRESET } from "@/lib/live-audio-chain"
+import { applyAudioRouting, prepareAudioRouting, releaseAudioRouting } from "@/lib/audio-routing"
 import { ackCall, acceptCall, endCall, getCallToken, type DmCallView } from "@/app/actions/dm-call"
 
 type Peer = {
@@ -78,6 +80,9 @@ export function DmCall({
     if (room) {
       room.disconnect()
       roomRef.current = null
+      // Restore the high-fidelity output profile so media played after the call
+      // is not left muffled.
+      releaseAudioRouting()
     }
   }, [])
 
@@ -92,13 +97,19 @@ export function DmCall({
       const room = new Room({
         adaptiveStream: true,
         dynacast: true,
-        // Enable acoustic echo cancellation (plus noise suppression / auto gain)
-        // so a participant on loudspeaker never hears their own voice returned
-        // through the other caller's mic. Matches the global live-audio policy.
-        audioCaptureDefaults: {
-          autoGainControl: true,
-          echoCancellation: true,
-          noiseSuppression: true,
+        // Shared studio capture constraints (AEC / noise suppression / auto gain
+        // plus mono capture and voice isolation) instead of a local copy of just
+        // the three DSP flags, which silently omitted `channelCount: 1` and let
+        // a stereo-capsule phone mic land a voice in one ear only.
+        audioCaptureDefaults: LIVE_MIC_CONSTRAINTS,
+        publishDefaults: {
+          // Without this, DM calls fell back to LiveKit's ~24-32 kbps speech
+          // default and sounded thinner than the same voice in a Live.
+          audioPreset: LIVE_VOICE_PRESET,
+          // DTX gates "silence", which swirls and drops room tone or music;
+          // RED adds packet-loss resilience for flaky mobile connections.
+          dtx: false,
+          red: true,
         },
       })
       roomRef.current = room
@@ -119,8 +130,12 @@ export function DmCall({
         })
         .on(RoomEvent.Disconnected, () => setConnected(false))
 
+      // Neutral session before the mic opens, loudspeaker re-asserted after, so
+      // an iOS caller is not dropped into the earpiece. See lib/audio-routing.ts.
+      prepareAudioRouting()
       await room.connect(creds.url, creds.token)
       await room.localParticipant.setMicrophoneEnabled(true)
+      applyAudioRouting()
       if (call.mode === "video") {
         await room.localParticipant.setCameraEnabled(true, { facingMode: "user" })
         // Self-view attachment is handled by the effect that watches `camOn`
