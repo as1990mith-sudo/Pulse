@@ -18,6 +18,37 @@ import { setCommunityPostLike, type CommunityPostView } from "@/app/actions/comm
 export const ANON_AVATAR = "/community-help-avatar.png"
 export const ANON_NAME = "Anonymous"
 
+/**
+ * The single source of truth for *what identity a viewer is allowed to see* on a
+ * Community Help post. `CommunityAvatar` / `PostMeta` above render this rule with
+ * card styling (`text-foreground`), which is illegible on the black backdrop of a
+ * full-screen media viewer — so the viewer needs its own white-on-media markup.
+ * Rather than restate the rule there (a leak waiting to happen the next time one
+ * copy is edited), both consumers derive their values from this function.
+ *
+ * Note the deliberate asymmetry, which mirrors the existing components exactly:
+ *  - the **name/handle** are revealed only for identifiable posts. On their own
+ *    anonymous post the author still sees "Anonymous", matching `SelfMeta`, so a
+ *    shoulder-surfer can't tell whose post it is.
+ *  - the **avatar** additionally reveals for `isSelf`, matching `CommunityAvatar`,
+ *    so the author can recognise their own question at a glance.
+ *  - the **profile link** is exposed only for identifiable posts, never anonymous
+ *    ones — tapping through would otherwise unmask the asker.
+ */
+export function communityMediaIdentity(post: CommunityPostView) {
+  const identifiable = !post.anonymous
+  const showRealAvatar = post.isSelf || identifiable
+  return {
+    name: identifiable ? (post.authorName ?? "Member") : ANON_NAME,
+    handle: identifiable ? post.authorHandle : null,
+    image: showRealAvatar ? post.authorImage : null,
+    initials: showRealAvatar ? post.authorInitials : null,
+    color: showRealAvatar ? post.authorColor : null,
+    /** Non-null only when the post is safe to attribute publicly. */
+    profileId: identifiable ? post.authorId : null,
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Session-level "saved questions" store                                     */
 /* -------------------------------------------------------------------------- */

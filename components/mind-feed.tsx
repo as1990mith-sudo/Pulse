@@ -1552,17 +1552,53 @@ export function PostCard({
       return
     }
     const measure = () => {
-      const style = getComputedStyle(el)
-      const fontSize = Number.parseFloat(style.fontSize) || 16
-      // `line-height: normal` computes to the literal string rather than a px
-      // value, so fall back to the ~1.2 ratio browsers use for it.
-      const parsed = Number.parseFloat(style.lineHeight)
-      const lineHeight = Number.isFinite(parsed) ? parsed : fontSize * 1.2
-      const maxPx = lineHeight * clampLines
-      setCollapsedMaxPx(maxPx)
-      // Half a line of slack: sub-pixel rounding on scrollHeight would otherwise
-      // flag an exactly-full caption as overflowing and show a pointless toggle.
-      setClampable(el.scrollHeight > maxPx + lineHeight / 2)
+      // Measure the *real* rendered line boxes rather than deriving a height
+      // from the wrapper's computed line-height. The wrapper sets no leading of
+      // its own, so its computed value is whatever it inherits — while the text
+      // actually lives in `<p>` children with `leading-tight`. Multiplying the
+      // inherited value by the line count produced a height that wasn't a whole
+      // number of real lines, which sliced the last line through the middle of
+      // its glyphs. Paragraph spacing (`mt-1.5`) skews any such arithmetic too.
+      //
+      // A Range over each paragraph's contents reports one rect per line box, so
+      // the Nth line's bottom edge is an exact, spacing-aware cut point.
+      const wrapTop = el.getBoundingClientRect().top
+      const lineBottoms: number[] = []
+
+      for (const para of Array.from(el.querySelectorAll("p"))) {
+        const range = document.createRange()
+        range.selectNodeContents(para)
+        // Inline children (links, mentions) split a single visual line into
+        // several rects, so collapse them by their shared top edge and keep the
+        // lowest bottom — otherwise one line would count as several.
+        const byLine = new Map<number, number>()
+        for (const rect of Array.from(range.getClientRects())) {
+          if (rect.height === 0) continue
+          const key = Math.round(rect.top * 2) / 2
+          byLine.set(key, Math.max(byLine.get(key) ?? 0, rect.bottom))
+        }
+        lineBottoms.push(...byLine.values())
+        range.detach()
+      }
+
+      if (lineBottoms.length === 0) {
+        setClampable(false)
+        return
+      }
+
+      lineBottoms.sort((a, b) => a - b)
+
+      if (lineBottoms.length <= clampLines) {
+        // Everything already fits, so no fade and no toggle.
+        setClampable(false)
+        return
+      }
+
+      // Left unrounded on purpose: the cut lands exactly on the line boundary,
+      // where rounding up would reveal a hairline of the next line's ascenders
+      // and rounding down would nick the last line's descenders.
+      setCollapsedMaxPx(lineBottoms[clampLines - 1] - wrapTop)
+      setClampable(true)
     }
     measure()
     // Re-measure on reflow (rotation, font swap, container resize) so the clamp

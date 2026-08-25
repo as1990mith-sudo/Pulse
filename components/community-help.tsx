@@ -50,8 +50,7 @@ import { hasInAppHistory } from "@/lib/navigation/history-key"
 import { MiniChatProvider, useMiniChat } from "@/components/mini-chat"
 import { CommunityConversation } from "@/components/community-conversation"
 import { FeedVideo } from "@/components/feed-video"
-import { VideoLightbox } from "@/components/community-video-lightbox"
-import { ImageLightbox } from "@/components/image-lightbox"
+import { CommunityMediaViewer } from "@/components/community-media-viewer"
 import {
   ANON_AVATAR,
   ANON_NAME,
@@ -108,7 +107,20 @@ function QuestionText({ text, onOpen }: { text: string; onOpen: () => void }) {
  * card. The clip always `object-cover`-fills that card (no letterbox bars); the
  * untouched full ratio is revealed when it's tapped open full screen (onExpand).
  */
-function FeedPostVideo({ src }: { src: string }) {
+function FeedPostVideo({
+  src,
+  post,
+  siblings,
+  onOpenComments,
+  onAuthorClick,
+}: {
+  src: string
+  post: CommunityPostView
+  /** Every visible question, so full screen can swipe between their clips. */
+  siblings: CommunityPostView[]
+  onOpenComments: () => void
+  onAuthorClick?: (authorId: string) => void
+}) {
   // Default to 4:5 before metadata loads (the common portrait case here), then
   // settle onto the clip's true ratio once known.
   const [ratio, setRatio] = useState<number>(4 / 5)
@@ -135,7 +147,21 @@ function FeedPostVideo({ src }: { src: string }) {
           onExpand={() => setFullscreen(true)}
         />
       )}
-      {fullscreen && <VideoLightbox src={src} onClose={() => setFullscreen(false)} />}
+      {fullscreen && (
+        <CommunityMediaViewer
+          kind="video"
+          posts={siblings}
+          startId={post.id}
+          onClose={() => setFullscreen(false)}
+          onOpenComments={() => {
+            // Comments live in the conversation thread, so hand off to it rather
+            // than stacking a second overlay on top of this one.
+            setFullscreen(false)
+            onOpenComments()
+          }}
+          onAuthorClick={onAuthorClick}
+        />
+      )}
     </div>
   )
 }
@@ -146,12 +172,15 @@ function FeedPostVideo({ src }: { src: string }) {
 
 function PostItem({
   post,
+  siblings,
   onDeleted,
   onPinned,
   onOpen,
   highlighted = false,
 }: {
   post: CommunityPostView
+  /** The full visible list, so full-screen video can swipe between clips. */
+  siblings: CommunityPostView[]
   onDeleted: (id: number) => void
   onPinned: () => void
   onOpen: () => void
@@ -388,7 +417,15 @@ function PostItem({
 
         {post.imageUrl && <FeedPostImage src={post.imageUrl} onClick={() => setMediaOpen(true)} className="mt-3" />}
 
-        {post.videoUrl && <FeedPostVideo src={post.videoUrl} />}
+        {post.videoUrl && (
+          <FeedPostVideo
+            src={post.videoUrl}
+            post={post}
+            siblings={siblings}
+            onOpenComments={onOpen}
+            onAuthorClick={openProfile}
+          />
+        )}
 
         {/* Engagement actions — spread evenly across the width so Like, Reply,
             Share and Save sit at consistent intervals under the post. */}
@@ -423,7 +460,17 @@ function PostItem({
       {/* Full-screen photo, opened by tapping the attached image. Video has its
           own in-component full-screen viewer (see FeedPostVideo). */}
       {mediaOpen && post.imageUrl && (
-        <ImageLightbox src={post.imageUrl} alt="Attached to the question" onClose={() => setMediaOpen(false)} />
+        <CommunityMediaViewer
+          kind="image"
+          posts={siblings}
+          startId={post.id}
+          onClose={() => setMediaOpen(false)}
+          onOpenComments={() => {
+            setMediaOpen(false)
+            onOpen()
+          }}
+          onAuthorClick={openProfile}
+        />
       )}
 
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
@@ -1395,6 +1442,7 @@ export function CommunityHelp({
                   <PostItem
                     key={post.id}
                     post={post}
+                    siblings={posts}
                     onDeleted={handleDeleted}
                     onPinned={handlePinned}
                     onOpen={() => setActiveId(post.id)}

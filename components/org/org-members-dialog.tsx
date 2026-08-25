@@ -59,8 +59,12 @@ export function OrgMembersDialog({ members }: { members: HomeRosterMember[] }) {
         className="group inline-flex items-center gap-1 rounded-full px-1 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-label={`View ${count} ${count === 1 ? "member" : "members"}`}
       >
-        <span className="font-semibold text-foreground">{formatCount(count)}</span>
-        <span className="underline-offset-2 group-hover:underline">{count === 1 ? "member" : "members"}</span>
+        {/* The icon carries the meaning, so the word "members" is dropped — the
+            accessible name above still spells it out for screen readers. */}
+        <Users aria-hidden className="size-3.5" />
+        <span className="font-semibold text-foreground underline-offset-2 group-hover:underline">
+          {formatCount(count)}
+        </span>
       </button>
 
       {open &&

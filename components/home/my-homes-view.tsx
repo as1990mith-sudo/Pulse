@@ -98,16 +98,18 @@ export function MyHomesView() {
 
 
   // Switch the active Home context. The interface stays identical — only the
-  // organisation's data changes — so we land back at the root of the same UI.
+  // organisation's data changes — so we land on the new Home's main feed.
+  // This used to push "/", which is the Daily Devotional route, so changing
+  // Home dropped the member on a single article instead of the Home itself.
   async function handleSwitch(handle: string, isActive: boolean) {
     if (isActive) {
-      router.push("/")
+      router.push("/feed")
       return
     }
     setSwitching(handle)
     await setActiveHome(handle)
     await mutate()
-    router.push("/")
+    router.push("/feed")
     router.refresh()
   }
 
