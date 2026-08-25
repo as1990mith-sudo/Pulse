@@ -937,6 +937,10 @@ export async function createPost(input: {
   // "itestify" (a testimony) or "qotd:<questionId>" (a Question of the Day
   // response). Omitted/null for a normal feed post.
   channel?: string | null
+  // Identity choice from the composer. Admins of the active Home may publish as
+  // the organisation or as themselves; everyone else is personal regardless, so
+  // this can only ever narrow what the server would otherwise grant.
+  asOrganization?: boolean
 }) {
   const user = await requireUser()
 
@@ -966,11 +970,14 @@ export async function createPost(input: {
       throw new Error("Join or select a Home before posting to the Feed.")
     }
 
-    const identity = await resolvePublishingIdentity({
-      name: user.name,
-      handle: getHandle(user.name),
-      image: user.image ?? null,
-    })
+    const identity = await resolvePublishingIdentity(
+      {
+        name: user.name,
+        handle: getHandle(user.name),
+        image: user.image ?? null,
+      },
+      { preferPersonal: input.asOrganization === false },
+    )
 
     homeId = identity.homeId
     authorName = identity.name

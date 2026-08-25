@@ -63,12 +63,20 @@ export type PublishingIdentity =
  * Resolves the publishing identity for the acting user in their active context.
  *
  * @param actor The signed-in user's own identity, used for the personal case.
+ * @param options.preferPersonal When true, an admin who *could* publish as the
+ *   organisation posts under their own name instead. This is the user's explicit
+ *   choice in the composer's identity picker — being an admin offers the Home
+ *   voice, it never forces it. It can only ever narrow permissions, so it is
+ *   safe to take straight from the client.
  */
-export async function resolvePublishingIdentity(actor: {
-  name: string
-  handle: string
-  image: string | null
-}): Promise<PublishingIdentity> {
+export async function resolvePublishingIdentity(
+  actor: {
+    name: string
+    handle: string
+    image: string | null
+  },
+  options: { preferPersonal?: boolean } = {},
+): Promise<PublishingIdentity> {
   const { home, membership, mode } = await getActiveHomeContext()
 
   // Personal mode, or no Home at all: the person publishes as themselves and the
@@ -79,10 +87,11 @@ export async function resolvePublishingIdentity(actor: {
 
   const role = (membership?.status === "active" ? membership.role : null) as HomeRole | null
 
-  // A Home is active but the user is an ordinary member of THIS Home. They post
-  // into the Home, under their own name. Their admin rights in other Homes are
-  // irrelevant here and must not leak in.
-  if (!publishesAsHome(role)) {
+  // A Home is active but either the user is an ordinary member of THIS Home, or
+  // they are an admin who chose to speak for themselves. They post into the
+  // Home, under their own name. Admin rights in other Homes are irrelevant here
+  // and must not leak in.
+  if (options.preferPersonal || !publishesAsHome(role)) {
     return { type: "personal", homeId: home.id, name: actor.name, handle: actor.handle, image: actor.image, role }
   }
 
