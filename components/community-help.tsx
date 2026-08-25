@@ -552,16 +552,25 @@ function Composer({
   onClose,
   onCreated,
   homeId,
+  postAsOrg,
 }: {
   open: boolean
   onClose: () => void
   onCreated: (p: CommunityPostView) => void
   homeId?: string | null
+  // The organisation the viewer may publish as, when they own or administer one.
+  // Undefined/null hides the option entirely; the server re-checks permission
+  // regardless, so this only controls whether the choice is offered.
+  postAsOrg?: { id: string; name: string; logo: string | null } | null
 }) {
   const [body, setBody] = useState("")
   // The author's identity choice for this post. Anonymous by default so the
   // room stays a safe place to ask; the user can opt to post identifiably.
   const [anonymous, setAnonymous] = useState(true)
+  // Whether this thread is published in the organisation's voice. Kept separate
+  // from `anonymous` because they are different questions, and posting as the
+  // org means not anonymous — selecting it clears the anonymous choice below.
+  const [asOrg, setAsOrg] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)

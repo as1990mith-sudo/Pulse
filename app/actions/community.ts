@@ -5,7 +5,7 @@ import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { communityComment, communityPost, user as userTable } from "@/lib/db/schema"
+import { communityComment, communityPost, home, homeMembership, organization, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { formatPostTimestamp } from "@/lib/format-timestamp"
 import { EDIT_WINDOW_MS } from "@/lib/interactions"
@@ -53,6 +53,11 @@ export type CommunityPostView = {
   authorInitials: string | null
   authorColor: string | null
   authorImage: string | null
+  // Set when the thread was published in an ORGANISATION's voice. The author
+  // fields above then carry the ORG's name/handle/logo rather than the admin's,
+  // and authorId stays null so the row never links to the individual who typed
+  // it. Null for personal threads, which keep normal author attribution.
+  organizationId: string | null
 }
 
 export type CommunityCommentView = {
@@ -112,12 +117,30 @@ async function buildCommunityPostViews(
     for (const r of rows) profileMap.set(r.id, { name: r.name, image: r.image })
   }
 
+  // Live organisation identity for org-voice threads, keyed by organizationId so
+  // attribution follows the org row (current name/logo) rather than the author.
+  const orgIds = [...new Set(posts.map((p) => p.organizationId).filter((id): id is string => !!id))]
+  const orgMap = new Map<string, { name: string; handle: string | null; logo: string | null }>()
+  if (orgIds.length) {
+    const rows = await db
+      .select({ id: organization.id, name: organization.name, handle: organization.handle, logo: organization.logo })
+      .from(organization)
+      .where(inArray(organization.id, orgIds))
+    for (const r of rows) orgMap.set(r.id, { name: r.name, handle: r.handle, logo: r.logo })
+  }
+
   return posts.map((p) => {
     const isSelf = viewerId === p.userId
     // Identity is visible when the post is identifiable (to everyone) or when
     // the viewer is the author (to themselves).
     const reveal = !p.anonymous || isSelf
     const profile = reveal ? profileMap.get(p.userId) ?? null : null
+    // Org-voice threads speak as the organisation. Only applied to identifiable
+    // threads: an anonymous thread must stay anonymous, and substituting the org
+    // name onto it would both break that and reveal which org the author belongs
+    // to. authorId is left null below so an org-voice row never deep-links to
+    // the admin who typed it.
+    const org = !p.anonymous && p.organizationId ? orgMap.get(p.organizationId) ?? null : null
     return {
       id: p.id,
       body: p.body,
@@ -131,12 +154,13 @@ async function buildCommunityPostViews(
       liked: likedSet.has(p.id),
       isSelf,
       anonymous: p.anonymous,
-      authorId: reveal ? p.userId : null,
-      authorName: profile ? profile.name : null,
-      authorHandle: profile ? getHandle(profile.name) : null,
-      authorInitials: profile ? getInitials(profile.name) : null,
-      authorColor: reveal ? getAvatarColor(p.userId) : null,
-      authorImage: profile ? profile.image : null,
+      organizationId: p.organizationId ?? null,
+      authorId: org ? null : reveal ? p.userId : null,
+      authorName: org ? org.name : profile ? profile.name : null,
+      authorHandle: org ? org.handle ?? getHandle(org.name) : profile ? getHandle(profile.name) : null,
+      authorInitials: org ? getInitials(org.name) : profile ? getInitials(profile.name) : null,
+      authorColor: org ? getAvatarColor(p.organizationId!) : reveal ? getAvatarColor(p.userId) : null,
+      authorImage: org ? org.logo : profile ? profile.image : null,
     }
   })
 }
@@ -218,6 +242,70 @@ export async function getAnonymousCommunityPostsByUser(userId: string): Promise<
 }
 
 /**
+ * An organisation's ORG-VOICE Community Help threads, newest-first — powers the
+ * org profile "Thread" tab. Scoped by organizationId, so only threads an admin
+ * deliberately published as the organisation appear here; members' personal
+ * threads (including personal threads inside the org's private Home) never do.
+ *
+ * Anonymous org-voice threads are returned ONLY to the organisation's owner and
+ * administrators. For everyone else they are filtered out in SQL, so a public
+ * visitor receives no row at all — not a redacted one — and therefore gets no
+ * signal that an anonymous thread exists or how many there are.
+ */
+export async function getOrgCommunityPosts(organizationId: string): Promise<CommunityPostView[]> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  const viewerId = session?.user?.id ?? null
+
+  const isAdmin = viewerId ? await isOrgAdmin(organizationId, viewerId) : false
+
+  const posts = await db
+    .select()
+    .from(communityPost)
+    .where(
+      and(
+        eq(communityPost.organizationId, organizationId),
+        eq(communityPost.deleted, false),
+        // Non-admins only ever see identifiable org-voice threads.
+        ...(isAdmin ? [] : [eq(communityPost.anonymous, false)]),
+      ),
+    )
+    .orderBy(desc(communityPost.createdAt))
+    .limit(200)
+
+  return buildCommunityPostViews(posts, viewerId)
+}
+
+/**
+ * True when the viewer owns the organisation or holds an admin-level role in its
+ * Home. Used to gate anonymous org-voice threads on the org profile.
+ */
+async function isOrgAdmin(organizationId: string, viewerId: string): Promise<boolean> {
+  const [org] = await db
+    .select({ ownerId: organization.ownerId })
+    .from(organization)
+    .where(eq(organization.id, organizationId))
+    .limit(1)
+  if (!org) return false
+  if (org.ownerId === viewerId) return true
+
+  const rows = await db
+    .select({ role: homeMembership.role })
+    .from(homeMembership)
+    .innerJoin(home, eq(home.id, homeMembership.homeId))
+    .where(
+      and(
+        eq(home.organizationId, organizationId),
+        eq(homeMembership.userId, viewerId),
+        eq(homeMembership.status, "active"),
+        isNull(home.deletedAt),
+      ),
+    )
+    .limit(1)
+  if (rows.length === 0) return false
+  return rows[0].role === "owner" || rows[0].role === "administrator"
+}
+
+/**
  * Creates a post in the Community Help room, optionally with an image or video.
  * `anonymous` is the author's choice: true (default) hides their identity from
  * other members; false posts it identifiably with their name + avatar.
@@ -228,8 +316,16 @@ export async function createCommunityPost(
   videoUrl?: string | null,
   anonymous = true,
   homeId?: string | null,
+  // When set, publish in this ORGANISATION's voice instead of the author's. Only
+  // the org's owner/administrators may do this; the check is server-side because
+  // a client could otherwise stamp any organisation's id onto its own thread.
+  organizationId?: string | null,
 ): Promise<CommunityPostView> {
   const user = await requireUser()
+  const orgId = organizationId?.trim() || null
+  if (orgId && !(await isOrgAdmin(orgId, user.id))) {
+    throw new Error("You don't have permission to post as that organisation.")
+  }
   const text = body.trim()
   const image = imageUrl?.trim() || null
   const video = videoUrl?.trim() || null
@@ -248,8 +344,21 @@ export async function createCommunityPost(
     .insert(communityPost)
     // homeId stamps the post to a private Home when provided; null keeps it in
     // the Universal room. The author id is always stored for moderation.
-    .values({ userId: user.id, body: text, imageUrl: image, videoUrl: video, anonymous, homeId: homeId ?? null })
+    .values({
+      userId: user.id,
+      body: text,
+      imageUrl: image,
+      videoUrl: video,
+      anonymous,
+      homeId: homeId ?? null,
+      organizationId: orgId,
+    })
     .returning()
+
+  // Resolve the org's own identity so the optimistic row returned to the client
+  // matches what a refetch will render, rather than briefly flashing the admin's
+  // personal name and avatar on a thread published as the organisation.
+  const orgRow = orgId && !row.anonymous ? await getOrgIdentity(orgId) : null
 
   revalidatePath("/chatrooms/community")
   return {
@@ -265,13 +374,26 @@ export async function createCommunityPost(
     liked: false,
     isSelf: true,
     anonymous: row.anonymous,
-    authorId: user.id,
-    authorName: user.name,
-    authorHandle: getHandle(user.name),
-    authorInitials: getInitials(user.name),
-    authorColor: getAvatarColor(user.id),
-    authorImage: user.image ?? null,
+    organizationId: row.organizationId ?? null,
+    authorId: orgRow ? null : user.id,
+    authorName: orgRow ? orgRow.name : user.name,
+    authorHandle: orgRow ? orgRow.handle ?? getHandle(orgRow.name) : getHandle(user.name),
+    authorInitials: orgRow ? getInitials(orgRow.name) : getInitials(user.name),
+    authorColor: orgRow ? getAvatarColor(orgId!) : getAvatarColor(user.id),
+    authorImage: orgRow ? orgRow.logo : user.image ?? null,
   }
+}
+
+/** Live name/handle/logo for a single organisation, for org-voice attribution. */
+async function getOrgIdentity(
+  organizationId: string,
+): Promise<{ name: string; handle: string | null; logo: string | null } | null> {
+  const [row] = await db
+    .select({ name: organization.name, handle: organization.handle, logo: organization.logo })
+    .from(organization)
+    .where(eq(organization.id, organizationId))
+    .limit(1)
+  return row ?? null
 }
 
 /** Non-anonymous comments for a post, oldest-first, with commenter profiles. */
