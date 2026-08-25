@@ -3,7 +3,13 @@
 import { Building2, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-export type HomeVoice = { name: string; image: string | null; initials: string }
+export type HomeVoice = {
+  name: string
+  /** The organisation's handle, for linking to its profile at /org/<handle>. */
+  handle: string
+  image: string | null
+  initials: string
+}
 
 /**
  * Lets an admin of the active Home choose whether a post or comment speaks for

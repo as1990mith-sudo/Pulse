@@ -238,7 +238,7 @@ export function MindFeed({
   canPublish?: boolean
   // The organisation of the ACTIVE Home when the viewer may speak for it. Null
   // for ordinary members, so the identity switcher simply never renders.
-  homeVoice?: { name: string; image: string | null; initials: string } | null
+  homeVoice?: HomeVoice | null
 }) {
   const router = useRouter()
   const [draft, setDraft] = useState("")
