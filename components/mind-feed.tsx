@@ -56,6 +56,14 @@ import { Button } from "@/components/ui/button"
 import { FormattedTextarea } from "@/components/formatted-textarea"
 import { HomeVoiceSwitch, type HomeVoice } from "@/components/home-voice-switch"
 import { useHomeVoice } from "@/lib/use-home-voice"
+import { PollCard } from "@/components/poll-card"
+import {
+  PollComposer,
+  emptyPollDraft,
+  countUsablePollOptions,
+  MIN_OPTIONS,
+  type PollDraft,
+} from "@/components/poll-composer"
 import { useMentionAutocomplete, MentionAutocompleteList } from "@/components/mention-autocomplete"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card } from "@/components/ui/card"
@@ -71,6 +79,8 @@ import { ReportReasonModal } from "@/components/report-reason-modal"
 import { ImageLightbox } from "@/components/image-lightbox"
 import { ImmersiveImageViewer } from "@/components/immersive-image-viewer"
 import { FeedVideo } from "@/components/feed-video"
+import { PollCard } from "@/components/poll-card"
+import { POLL_MAX_OPTIONS, POLL_MAX_OPTION_LENGTH, POLL_DURATIONS, type PollDurationId } from "@/app/actions/polls"
 import { ReelsFeed } from "@/components/reels-feed"
   import { useMediaAspect } from "@/hooks/use-media-aspect"
 import { StatusBar } from "@/components/status-bar"
@@ -246,6 +256,9 @@ export function MindFeed({
   // right — but can switch to their own name per post.
   const [postAsHome, setPostAsHome] = useState(true)
   const [media, setMedia] = useState<DraftMedia[]>([])
+  // Null when the author hasn't attached a poll. Non-null puts the composer into
+  // "poll" mode: the textarea becomes the question and the media rule is waived.
+  const [poll, setPoll] = useState<PollDraft | null>(null)
   // Files awaiting the crop/trim/cover editor. When set, the full-screen editor
   // flow opens; it uploads the edited results and hands them back via onDone.
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null)
@@ -537,13 +550,24 @@ export function MindFeed({
     e.preventDefault()
     // Serialize picked @mentions into canonical tokens before trimming/sending.
     const text = mentions.serialize().trim()
-    // Individuals cannot publish a text-only top-level feed post — mirror the
-    // server rule here so the failure is instant and friendly.
-    if (mediaRequired && media.length === 0) {
+    // A poll carries its own answers, so it satisfies the "must have content"
+    // rule on its own — but it needs the text as its question.
+    if (poll) {
+      if (!text) {
+        setError("Add a question for your poll.")
+        return
+      }
+      if (countUsablePollOptions(poll) < MIN_OPTIONS) {
+        setError(`Add at least ${MIN_OPTIONS} different options.`)
+        return
+      }
+    } else if (mediaRequired && media.length === 0) {
+      // Individuals cannot publish a text-only top-level feed post — mirror the
+      // server rule here so the failure is instant and friendly.
       setError("Add a photo or video to share on the Feed.")
       return
     }
-    if (!text && media.length === 0) return
+    if (!text && media.length === 0 && !poll) return
     startTransition(async () => {
       const created = await createPost({
         text,
@@ -551,10 +575,12 @@ export function MindFeed({
         // Only meaningful when a Home voice is on offer; otherwise the server
         // resolves the identity on its own.
         asOrganization: homeVoice ? postAsHome : undefined,
+        poll: poll ?? undefined,
       })
       setDraft("")
       mentions.reset()
       clearMedia()
+      setPoll(null)
       // Pin the new post to the top of "For you" and make sure we're on a tab
       // that shows it, so the user sees their post appear first immediately.
       if (created?.id != null) {
@@ -1732,6 +1758,16 @@ export function PostCard({
             {previewUrl && <LinkPreview url={previewUrl} className={cn(text && !textIsOnlyLink && "mt-3")} />}
           </div>
         )
+      )}
+
+      {/* Poll options. Sit directly under the question (the post text) and above
+          any media, so the thing being asked and the way to answer it stay
+          together. canVote is false when signed out, which makes the server
+          reveal the tally instead of withholding it forever. */}
+      {post.poll && (
+        <div className={cn(feed ? "px-4 pb-1" : "px-3 pb-1")}>
+          <PollCard poll={post.poll} canVote={!!currentUser} onVoted={() => void globalMutate("feed")} />
+        </div>
       )}
 
       {/* Media — contained preview; tapping opens the immersive viewer. */}

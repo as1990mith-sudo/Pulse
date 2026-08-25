@@ -132,6 +132,41 @@ export const feedPost = pgTable("feed_post", {
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
+// A poll attached to exactly one feed_post. The POST's `text` is the question,
+// so a poll is an ordinary feed post with options bolted on — it likes, comments
+// and Home-scopes like everything else instead of needing a parallel feed.
+export const poll = pgTable("poll", {
+  id: serial("id").primaryKey(),
+  postId: integer("postId").notNull(),
+  // Whether a voter may pick several options. Fixed at creation: flipping it
+  // later would silently re-interpret votes already cast under the old rule.
+  allowMultiple: boolean("allowMultiple").notNull().default(false),
+  // Optional closing time. Null = open indefinitely.
+  closesAt: timestamp("closesAt"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// One choice on a poll. `position` preserves the author's ordering so options
+// never reshuffle between reads.
+export const pollOption = pgTable("poll_option", {
+  id: serial("id").primaryKey(),
+  pollId: integer("pollId").notNull(),
+  label: text("label").notNull(),
+  position: integer("position").notNull().default(0),
+})
+
+// One row per (poll, user, option). Stored as rows rather than a counter on the
+// option because voters may change their mind while the poll is open: counting
+// rows stays exact under concurrency, and doubles as "has this person voted?".
+// Unique index on (pollId, userId, optionId) enforced in the DB.
+export const pollVote = pgTable("poll_vote", {
+  id: serial("id").primaryKey(),
+  pollId: integer("pollId").notNull(),
+  optionId: integer("optionId").notNull(),
+  userId: text("userId").notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
 // Reposts: one row per (user, post) the user has reposted. Drives the profile
 // "Reposts" tab and keeps feed_post.reposts (a denormalized counter) in sync.
 // Unique index on (userId, postId) enforced in the DB.
