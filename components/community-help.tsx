@@ -1083,7 +1083,19 @@ export function CommunityHelp({
     () => getCommunityPosts(homeId),
     {
       fallbackData: initialPosts,
-      refreshInterval: 20000,
+      // No polling. A 20s refreshInterval reordered the feed under the reader's
+      // thumb mid-scroll and restarted playing video, which is what read as the
+      // feed "refreshing randomly". Community threads are not time-critical, so
+      // the feed now only changes when the user asks: pull-to-refresh, their own
+      // post/like/delete (optimistic via mutatePosts), or a remount.
+      refreshInterval: 0,
+      // Same reasoning for the implicit triggers: returning to the tab, or the
+      // phone reconnecting, must not reshuffle a feed being read.
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      // Keep the server-rendered first page instead of refetching it on mount.
+      revalidateIfStale: false,
+      revalidateOnMount: false,
     },
   )
   const [composerOpen, setComposerOpen] = useState(false)
@@ -1329,7 +1341,10 @@ export function CommunityHelp({
                 </Button>
               </div>
             ) : (
-              <div className="divide-y-4 divide-border pb-28">
+              // Divider: 2px (was 4px) in a deeper tone than --border. Half the
+              // weight reads as less of a trench, while the darker colour keeps
+              // the break between posts just as legible.
+              <div className="divide-y-2 divide-feed-divider pb-28">
                 {posts.map((post) => (
                   <PostItem
                     key={post.id}
