@@ -5,11 +5,8 @@ import Link from "next/link"
 import {
   ArrowLeft,
   ArrowUpRight,
-  Bookmark,
   Building2,
-  Calendar,
   Globe,
-  Heart,
   Info,
   Mail,
   MessageCircle,
@@ -18,25 +15,21 @@ import {
   Newspaper,
   PenLine,
   Phone,
-  Share2,
 } from "lucide-react"
 import type { ArticleCard as ArticleCardType } from "@/lib/article-types"
 import type { OrganizationView } from "@/lib/org-types"
 import { AvatarWithBadge } from "@/components/org/verified-badge"
-import type { OrgPostView } from "@/app/actions/organizations"
-import type { EventView, CatalogueItemView, CatalogueKind } from "@/app/actions/org-content"
-import type { ShareTarget } from "@/lib/share-types"
-import { OrgEventsTab } from "@/components/org/org-events-tab"
+import type { CatalogueItemView, CatalogueKind } from "@/app/actions/org-content"
+import type { FeedPostView } from "@/app/actions/feed"
+import type { CommunityPostView } from "@/app/actions/community"
+import type { CurrentUser } from "@/lib/session"
+import { PostCard } from "@/components/mind-feed"
+import { ProfileThreads } from "@/components/profile/profile-threads"
 import { OrgEpisodeCatalog, NewCatalogueDialog } from "@/components/org/org-catalogue-tab"
 import { ArticleRow } from "@/components/articles/article-card"
-import { FeedVideo } from "@/components/feed-video"
-import { ImageLightbox } from "@/components/image-lightbox"
-import { ShareSheet } from "@/components/share-sheet"
-import { renderMessageBody } from "@/lib/rich-text"
-import { ClampedText, CLAMP_LINES } from "@/components/clamped-text"
 import { cn } from "@/lib/utils"
 
-type TabKey = "posts" | "about" | "events" | "articles" | "catalogue"
+type TabKey = "posts" | "thread" | "about" | "articles" | "catalogue"
 
 const SOCIAL_LABELS: Record<string, string> = {
   instagram: "Instagram",
@@ -58,21 +51,26 @@ const SOCIAL_BRAND_ICON: Record<string, string> = {
 export function OrgTabs({
   org,
   posts,
+  threads,
+  currentUser,
   articles,
-  events,
   catalogue,
 }: {
   org: OrganizationView
-  posts: OrgPostView[]
+  // Main-feed posts published in the org's voice, in the same FeedPostView shape
+  // the feed uses so the Posts tab can render <PostCard> unchanged.
+  posts: FeedPostView[]
+  // Community Help threads published in the org's voice.
+  threads: CommunityPostView[]
+  // The viewer, needed by <PostCard> for engagement/ownership controls.
+  currentUser: CurrentUser | null
   articles: ArticleCardType[]
-  events: { upcoming: EventView[]; past: EventView[] }
   catalogue: CatalogueItemView[]
 }) {
-  const eventCount = events.upcoming.length + events.past.length
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; count?: number }[] = [
     { key: "posts", label: "Posts", icon: <MessageSquareText className="size-4" />, count: posts.length },
+    { key: "thread", label: "Thread", icon: <MessageCircle className="size-4" />, count: threads.length },
     { key: "about", label: "About", icon: <Building2 className="size-4" /> },
-    { key: "events", label: "Events", icon: <Calendar className="size-4" />, count: eventCount },
     { key: "articles", label: "Articles", icon: <Newspaper className="size-4" />, count: articles.length },
     { key: "catalogue", label: "Catalogue", icon: <Mic className="size-4" />, count: catalogue.length },
   ]
@@ -156,11 +154,11 @@ export function OrgTabs({
       {/* Catalogue renders as a full-screen overlay below; other tabs render inline. */}
       <div key={tab} className="animate-in fade-in slide-in-from-bottom-1 pt-4 duration-300">
         {tab === "posts" ? (
-          <PostsTab org={org} posts={posts} />
+          <PostsTab org={org} posts={posts} currentUser={currentUser} />
+        ) : tab === "thread" ? (
+          <ThreadTab org={org} threads={threads} />
         ) : tab === "about" ? (
           <AboutTab org={org} />
-        ) : tab === "events" ? (
-          <OrgEventsTab org={org} events={events} />
         ) : tab === "articles" ? (
           <ArticlesTab org={org} articles={articles} />
         ) : null}
@@ -211,7 +209,15 @@ export function OrgTabs({
   )
 }
 
-function PostsTab({ org, posts }: { org: OrganizationView; posts: OrgPostView[] }) {
+function PostsTab({
+  org,
+  posts,
+  currentUser,
+}: {
+  org: OrganizationView
+  posts: FeedPostView[]
+  currentUser: CurrentUser | null
+}) {
   if (posts.length === 0) {
     return (
       <EmptyState
@@ -235,171 +241,56 @@ function PostsTab({ org, posts }: { org: OrganizationView; posts: OrgPostView[] 
       />
     )
   }
+  // Rendered with the main feed's own <PostCard variant="feed">, so this tab is
+  // the feed rather than a look-alike: real like/comment/save/repost/share
+  // wiring, the same media handling and the same clamp rules, and any future
+  // feed change lands here automatically. The individual profile's Posts tab
+  // does exactly this too, so person and organisation now match.
   return (
     <ul className="-mx-4 divide-y divide-border/60 sm:-mx-6">
       {posts.map((p) => (
         <li key={p.id}>
-          <OrgPostThread org={org} post={p} />
+          <PostCard post={p} currentUser={currentUser} variant="feed" videoFeedPosts={posts} />
         </li>
       ))}
     </ul>
   )
 }
 
-// X (Twitter)-style thread row, matching the Community Help / individual-profile
-// post timeline: edge-to-edge, avatar + inline name/time header, body, media
-// and an engagement row — instead of a boxed card. Exported so the Home Feed
-// (org voice) reuses the exact same premium thread architecture.
-export function OrgPostThread({ org, post }: { org: OrganizationView; post: OrgPostView }) {
-  return (
-    <article className="flex gap-3 px-4 py-4 transition-colors hover:bg-secondary/30 sm:px-6">
-      <OrgAvatar org={org} className="size-11" />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5 text-[15px]">
-          <span className="truncate font-bold tracking-tight text-foreground">{org.name}</span>
-          <span className="text-muted-foreground">·</span>
-          <span className="shrink-0 text-sm text-muted-foreground">{post.postedAt}</span>
-          {post.edited && <span className="shrink-0 text-sm text-muted-foreground">· edited</span>}
-        </div>
-
-        {/* Organisation / Home posts get the seven-line preview. */}
-        {post.text && (
-          <ClampedText
-            lines={CLAMP_LINES.ORG}
-            className="mt-1 whitespace-pre-wrap text-pretty text-[15px] leading-relaxed text-foreground"
-          >
-            {renderMessageBody(post.text, { link: true, mention: true })}
-          </ClampedText>
-        )}
-
-        {post.media.length > 0 && <OrgPostMedia media={post.media} />}
-
-        <OrgPostActions org={org} post={post} />
-      </div>
-    </article>
-  )
-}
-
-// Engagement row matching the Community Help timeline: Like · Reply · Save ·
-// Share, evenly spaced within a bounded width. Like/Save keep local optimistic
-// state (org posts have no per-post backend for these yet); Share opens the
-// shared ShareSheet with a link back to the organisation.
-function OrgPostActions({ org, post }: { org: OrganizationView; post: OrgPostView }) {
-  const [liked, setLiked] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [shareOpen, setShareOpen] = useState(false)
-
-  const likeCount = post.likes + (liked ? 1 : 0)
-
-  const shareTarget: ShareTarget = {
-    type: "post",
-    key: `org-post-${post.id}`,
-    title: org.name,
-    subtitle: post.text ? post.text.slice(0, 80) : null,
-    url: `/org/${org.handle}`,
-    image: post.media[0]?.url ?? org.logo ?? null,
-    downloadUrl: post.media[0]?.type === "image" ? post.media[0]?.url : null,
-    downloadKind: post.media[0]?.type === "image" ? "image" : null,
-  }
-
-  const actionClass =
-    "flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-
-  return (
-    <>
-      <div className="mt-3 flex max-w-[16rem] items-center justify-between">
-        <button
-          type="button"
-          onClick={() => setLiked((v) => !v)}
-          aria-label={liked ? "Unlike" : "Like"}
-          aria-pressed={liked}
-          className={cn(actionClass, liked && "text-rose-500 hover:text-rose-500")}
-        >
-          <Heart className={cn("size-5", liked && "fill-current")} />
-          {likeCount > 0 && <span className="tabular-nums">{likeCount}</span>}
-        </button>
-        <button type="button" aria-label="Reply" className={actionClass}>
-          <MessageCircle className="size-5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => setSaved((v) => !v)}
-          aria-label={saved ? "Remove from saved" : "Save"}
-          aria-pressed={saved}
-          className={cn(actionClass, saved && "text-foreground")}
-        >
-          <Bookmark className={cn("size-5", saved && "fill-current")} />
-        </button>
-        <button type="button" onClick={() => setShareOpen(true)} aria-label="Share" className={actionClass}>
-          <Share2 className="size-5" />
-        </button>
-      </div>
-
-      <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
-    </>
-  )
-}
-
-function OrgPostMedia({ media }: { media: OrgPostView["media"] }) {
-  // Which image (if any) is expanded in the lightbox. Videos keep their own
-  // inline player and are never lightbox targets.
-  const [active, setActive] = useState<string | null>(null)
-
-  const lightbox = active ? <ImageLightbox src={active} onClose={() => setActive(null)} /> : null
-
-  // Single item: keep the image's own aspect ratio (capped) like the Community
-  // Help timeline, rather than forcing a 16:9 crop. Images open in a lightbox.
-  if (media.length === 1) {
-    const m = media[0]
-    if (m.type === "video") {
-      return (
-        <div className="relative mt-3 aspect-video w-full overflow-hidden rounded-2xl border border-border/60 bg-black">
-          <FeedVideo src={m.url} className="h-full w-full object-cover" />
-        </div>
-      )
-    }
+/**
+ * The organisation's Community Help threads. Reuses <ProfileThreads mode="thread">
+ * — the same component the individual profile's Thread tab uses — so the room's
+ * interface is shared rather than reimplemented: identifiable threads show the
+ * org's name and logo, and anonymous ones keep the universal anonymous
+ * treatment. Only org owners/administrators are ever sent anonymous rows.
+ */
+function ThreadTab({ org, threads }: { org: OrganizationView; threads: CommunityPostView[] }) {
+  if (threads.length === 0) {
     return (
-      <>
-        <button
-          type="button"
-          onClick={() => setActive(m.url)}
-          aria-label="Open image"
-          className="mt-3 block w-full overflow-hidden rounded-2xl border border-border/60"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={m.url || "/placeholder.svg"} alt="" loading="lazy" className="max-h-96 w-full object-cover" />
-        </button>
-        {lightbox}
-      </>
+      <EmptyState
+        icon={<MessageCircle className="size-6" />}
+        title="No threads yet"
+        message={
+          org.isOwner
+            ? "Ask a question or share guidance in Community Help as this organisation. Threads posted in the organisation's voice appear here."
+            : `${org.name} hasn't started any threads yet.`
+        }
+        action={
+          org.isOwner ? (
+            <Link
+              href="/chatrooms/community"
+              className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+            >
+              <MessageCircle className="size-4" /> Open Community Help
+            </Link>
+          ) : null
+        }
+      />
     )
   }
-
-  // Multiple items: compact square grid; each image opens in the lightbox.
-  return (
-    <>
-      <div className="mt-3 grid grid-cols-2 gap-1.5">
-        {media.slice(0, 4).map((m, i) => (
-          <div key={i} className="relative aspect-square overflow-hidden rounded-xl border border-border/60 bg-black">
-            {m.type === "video" ? (
-              <FeedVideo src={m.url} className="h-full w-full object-cover" />
-            ) : (
-              <button
-                type="button"
-                onClick={() => setActive(m.url)}
-                aria-label="Open image"
-                className="block h-full w-full"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={m.url || "/placeholder.svg"} alt="" loading="lazy" className="h-full w-full object-cover" />
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
-      {lightbox}
-    </>
-  )
+  return <ProfileThreads posts={threads} mode="thread" />
 }
+
 
 function AboutTab({ org }: { org: OrganizationView }) {
   const sections = [

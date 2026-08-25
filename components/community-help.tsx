@@ -6,6 +6,7 @@ import Link from "next/link"
 import useSWR from "swr"
 import {
   ArrowLeft,
+  Building2,
   Check,
   Copy,
   Flame,
@@ -552,16 +553,25 @@ function Composer({
   onClose,
   onCreated,
   homeId,
+  postAsOrg,
 }: {
   open: boolean
   onClose: () => void
   onCreated: (p: CommunityPostView) => void
   homeId?: string | null
+  // The organisation the viewer may publish as, when they own or administer one.
+  // Undefined/null hides the option entirely; the server re-checks permission
+  // regardless, so this only controls whether the choice is offered.
+  postAsOrg?: { id: string; name: string; logo: string | null } | null
 }) {
   const [body, setBody] = useState("")
   // The author's identity choice for this post. Anonymous by default so the
   // room stays a safe place to ask; the user can opt to post identifiably.
   const [anonymous, setAnonymous] = useState(true)
+  // Whether this thread is published in the organisation's voice. Kept separate
+  // from `anonymous` because they are different questions, and posting as the
+  // org means not anonymous — selecting it clears the anonymous choice below.
+  const [asOrg, setAsOrg] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -614,6 +624,7 @@ function Composer({
       setBody("")
       setError(null)
       setAnonymous(true)
+      setAsOrg(false)
       resetMedia()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -737,7 +748,18 @@ function Composer({
     setError(null)
     startTransition(async () => {
       try {
-        const created = await createCommunityPost(text, imageUrl, videoUrl, anonymous, homeId)
+        // Publishing as the organisation is never anonymous — the whole point is
+        // that the org is named — so force anonymous off rather than trusting
+        // the toggle, which the org option disables but does not clear.
+        const publishAsOrg = asOrg && !!postAsOrg
+        const created = await createCommunityPost(
+          text,
+          imageUrl,
+          videoUrl,
+          publishAsOrg ? false : anonymous,
+          homeId,
+          publishAsOrg ? postAsOrg!.id : null,
+        )
         onCreated(created)
         onClose()
       } catch (err) {
@@ -764,7 +786,14 @@ function Composer({
           tall the media preview is, instead of scrolling away with the form. */}
       <div className="relative z-10 flex max-h-[100dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-border/60 bg-card shadow-2xl duration-200 animate-in slide-in-from-bottom sm:max-h-[90dvh] sm:rounded-3xl">
         <header className="flex shrink-0 items-center gap-3 border-b border-border/50 px-4 py-3.5">
-          {anonymous ? (
+          {asOrg && postAsOrg ? (
+            <Avatar className="size-9 shrink-0 ring-1 ring-border">
+              {postAsOrg.logo ? <AvatarImage src={postAsOrg.logo} alt="" /> : null}
+              <AvatarFallback className="bg-primary/10 text-primary">
+                <Building2 className="size-4" />
+              </AvatarFallback>
+            </Avatar>
+          ) : anonymous ? (
             <Avatar className="size-9 shrink-0 ring-1 ring-border">
               <AvatarImage src={ANON_AVATAR || "/placeholder.svg"} alt="" />
               <AvatarFallback className="bg-muted text-sm font-bold text-muted-foreground">?</AvatarFallback>
@@ -776,10 +805,14 @@ function Composer({
           )}
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold leading-tight text-foreground">
-              {anonymous ? ANON_NAME : "Posting as yourself"}
+              {asOrg && postAsOrg ? postAsOrg.name : anonymous ? ANON_NAME : "Posting as yourself"}
             </p>
             <p className="truncate text-xs leading-tight text-muted-foreground">
-              {anonymous ? "Your identity stays private" : "Your name and photo will be shown"}
+              {asOrg && postAsOrg
+                ? "Posting as this organisation"
+                : anonymous
+                  ? "Your identity stays private"
+                  : "Your name and photo will be shown"}
             </p>
           </div>
           <button
@@ -792,26 +825,41 @@ function Composer({
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
-          {/* Identity choice — anonymous (default) or identifiable. */}
+          {/* Identity choice — anonymous (default), yourself, or (for org
+              owners/admins) the organisation. All three are mutually exclusive,
+              so this stays one radiogroup rather than a toggle plus a checkbox. */}
           <div
             role="radiogroup"
             aria-label="Post identity"
-            className="grid grid-cols-2 gap-1 rounded-lg bg-secondary/60 p-1"
+            className={cn(
+              "grid gap-1 rounded-lg bg-secondary/60 p-1",
+              postAsOrg ? "grid-cols-3" : "grid-cols-2",
+            )}
           >
             {(
               [
-                { on: true, icon: VenetianMask, label: "Anonymous" },
-                { on: false, icon: User, label: "Show my name" },
+                { key: "anon", icon: VenetianMask, label: "Anonymous" },
+                { key: "self", icon: User, label: postAsOrg ? "My name" : "Show my name" },
+                ...(postAsOrg ? ([{ key: "org", icon: Building2, label: postAsOrg.name }] as const) : []),
               ] as const
             ).map((opt) => {
-              const active = anonymous === opt.on
+              const active = opt.key === "org" ? asOrg : !asOrg && anonymous === (opt.key === "anon")
               return (
                 <button
-                  key={opt.label}
+                  key={opt.key}
                   type="button"
                   role="radio"
                   aria-checked={active}
-                  onClick={() => setAnonymous(opt.on)}
+                  title={opt.key === "org" ? `Post as ${postAsOrg!.name}` : undefined}
+                  onClick={() => {
+                    if (opt.key === "org") {
+                      setAsOrg(true)
+                      setAnonymous(false)
+                    } else {
+                      setAsOrg(false)
+                      setAnonymous(opt.key === "anon")
+                    }
+                  }}
                   className={cn(
                     "flex items-center justify-center gap-1.5 rounded-md px-2 py-2 text-[13px] font-semibold transition-colors",
                     active
@@ -819,8 +867,8 @@ function Composer({
                       : "text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  <opt.icon className="size-3.5" />
-                  {opt.label}
+                  <opt.icon className="size-3.5 shrink-0" />
+                  <span className="truncate">{opt.label}</span>
                 </button>
               )
             })}
@@ -1017,10 +1065,14 @@ export function CommunityHelp({
   // When set, this is a PRIVATE Home Community Help: posts are fetched and
   // created scoped to that Home, and never mix with the Universal room.
   homeId = null,
+  // When set, the viewer owns/administers this organisation and may publish
+  // threads in its voice. Those threads appear on the org profile's Thread tab.
+  postAsOrg = null,
 }: {
   initialPosts: CommunityPostView[]
   embedded?: boolean
   homeId?: string | null
+  postAsOrg?: { id: string; name: string; logo: string | null } | null
 }) {
   const {
     data: posts = initialPosts,
@@ -1310,6 +1362,7 @@ export function CommunityHelp({
             onClose={() => setComposerOpen(false)}
             onCreated={handleCreated}
             homeId={homeId}
+            postAsOrg={postAsOrg}
           />
         <CommunityHelpInfoModal open={infoOpen} onClose={() => setInfoOpen(false)} />
 

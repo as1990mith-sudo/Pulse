@@ -83,10 +83,21 @@ export function LiveResourceLayer() {
           desktop the same panel is shown docked to the right of the centred
           room instead (see DesktopResourceDock). */}
       <div className="lg:hidden">
-        <AnimatePresence mode="wait">
+        {/* One card, stable key. Switching resources swaps only the BODY inside
+            the card — it does not unmount and remount the card itself.
+            Previously this was keyed by activePanel with mode="wait", so every
+            switch tore the card down and rebuilt it from initial={{opacity:0}},
+            and the incoming card could only mount once the outgoing one had
+            finished exiting. Any stall in that handoff left activePanel set with
+            nothing on screen — the panel "vanishing" while still active. The
+            desktop dock below never had the bug because it swaps the body the
+            same way. Keeping the card mounted also makes switching instant and
+            removes a distracting out/in flash. */}
+        <AnimatePresence>
           {activePanel && meta && (
             <MiniPanelShell
-              key={activePanel}
+              key="live-resource-panel"
+              panelId={activePanel}
               title={meta.title}
               subtitle={subtitle}
               icon={meta.icon}
