@@ -28,11 +28,13 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
 const DESC_MAX = 280
+const NAME_MAX = 80
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const URL_RE = /^(https?:\/\/)?([\w-]+\.)+[\w-]{2,}(\/\S*)?$/i
 
 type Snapshot = {
+  name: string
   logo: string
   cover: string
   description: string
@@ -54,6 +56,7 @@ type Snapshot = {
 
 function snapshotFromOrg(org: OrganizationView): Snapshot {
   return {
+    name: org.name,
     logo: org.logo ?? "",
     cover: org.cover ?? "",
     description: org.description ?? "",
@@ -92,6 +95,7 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
 
   const initial = useRef<Snapshot>(snapshotFromOrg(org))
 
+  const [name, setName] = useState(initial.current.name)
   const [logo, setLogo] = useState(initial.current.logo)
   const [cover, setCover] = useState(initial.current.cover)
   const [description, setDescription] = useState(initial.current.description)
@@ -111,6 +115,7 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
   const [vision, setVision] = useState(initial.current.vision)
 
   const current: Snapshot = {
+    name,
     logo,
     cover,
     description,
@@ -137,7 +142,10 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
 
   const emailError = contactEmail.trim() && !EMAIL_RE.test(contactEmail.trim()) ? "Enter a valid email address." : null
   const websiteError = website.trim() && !URL_RE.test(website.trim()) ? "Enter a valid website address." : null
-  const hasErrors = Boolean(emailError || websiteError)
+  // The name is the organisation's public identity, so unlike the optional
+  // fields it can never be blanked out.
+  const nameError = !name.trim() ? "Your organisation needs a name." : null
+  const hasErrors = Boolean(emailError || websiteError || nameError)
 
   const completion = useMemo(() => {
     const checks = [
@@ -155,6 +163,7 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
 
   function reset() {
     const s = initial.current
+    setName(s.name)
     setLogo(s.logo)
     setCover(s.cover)
     setDescription(s.description)
@@ -186,6 +195,7 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
     startTransition(async () => {
       try {
         await updateOrganization(org.id, {
+          name: name.trim(),
           logo: logo.trim() || null,
           cover: cover.trim() || null,
           description: description.trim() || null,
@@ -283,10 +293,31 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
               {/* Form column */}
               <div className="min-h-0 overflow-y-auto px-5 py-6 sm:px-8 sm:py-7">
                 <div className="mx-auto flex w-full max-w-lg flex-col gap-8">
+                  {/* Name — the organisation's public identity. Owner-editable;
+                      the server action already enforces owner-only writes. The
+                      @handle is intentionally NOT editable here, since links and
+                      mentions across the app resolve through it. */}
+                  <Section title="Identity" hint="The name members see on your profile, posts, and events.">
+                    <Field label="Organisation name" error={nameError}>
+                      <input
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        maxLength={NAME_MAX}
+                        placeholder="Grace Chapel"
+                        aria-invalid={Boolean(nameError)}
+                        className={INPUT_CLS}
+                      />
+                    </Field>
+                    <p className="text-xs text-muted-foreground/70">
+                      Your handle stays <span className="font-medium text-muted-foreground">@{org.handle}</span> so
+                      existing links keep working.
+                    </p>
+                  </Section>
+
                   {/* Brand imagery */}
                   <Section title="Brand" hint="Your profile picture and cover art appear at the top of your public page.">
                     <BrandImages
-                      orgName={org.name}
+                      orgName={name || org.name}
                       initials={org.initials}
                       color={org.color}
                       logo={logo}
@@ -463,6 +494,7 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
                 <div className="min-h-0 flex-1 overflow-y-auto px-7 pb-8">
                   <ProfilePreview
                     org={org}
+                    name={name}
                     logo={logo}
                     cover={cover}
                     description={description}
@@ -530,6 +562,7 @@ export function OrgManageSheet({ org }: { org: OrganizationView }) {
 
 function ProfilePreview({
   org,
+  name,
   logo,
   cover,
   description,
@@ -541,6 +574,8 @@ function ProfilePreview({
   contactEmail,
 }: {
   org: OrganizationView
+  /** Live-edited name, so the preview reflects a rename as you type. */
+  name: string
   logo: string
   cover: string
   description: string
@@ -593,7 +628,7 @@ function ProfilePreview({
           >
             {logo.trim() ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={logo || "/placeholder.svg"} alt={org.name} className="size-full object-cover" />
+              <img src={logo || "/placeholder.svg"} alt={name.trim() || org.name} className="size-full object-cover" />
             ) : (
               org.initials
             )}
@@ -601,7 +636,9 @@ function ProfilePreview({
         </div>
 
         <h3 className="mt-3 inline-flex items-center gap-1.5 text-balance font-display text-lg font-bold tracking-tight text-foreground">
-          {org.name}
+          {/* Falls back to the saved name while the field is momentarily empty,
+              so the preview never collapses mid-edit. */}
+          {name.trim() || org.name}
           {org.verified && <VerifiedBadge size="sm" />}
         </h3>
 

@@ -6,6 +6,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { X, Heart, Bookmark, Share2, ChevronLeft, ChevronRight } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
+import { MediaCaption } from "@/components/media-caption"
 import { CommentSheet } from "@/components/comment-sheet"
 import { ShareSheet } from "@/components/share-sheet"
 import { addPostComment, setPostLike, setCommentLike, type FeedPostView } from "@/app/actions/feed"
@@ -14,7 +15,6 @@ import type { ThreadComment } from "@/components/comment-thread"
 import type { CurrentUser } from "@/lib/session"
 import type { ShareTarget } from "@/lib/share-types"
 import { haptic } from "@/lib/haptics"
-import { renderMessageBody } from "@/lib/rich-text"
 import { cn } from "@/lib/utils"
 
 /**
@@ -48,6 +48,17 @@ export function ImmersiveImageViewer({
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [, startTransition] = useTransition()
+  // Tap the image to fade ALL overlay chrome (author, caption, action rail,
+  // close, paging) out for an unobstructed view; tap again to bring it back.
+  const [chromeVisible, setChromeVisible] = useState(true)
+
+  // Applied to every overlay layer. `pointer-events-none` while hidden matters:
+  // without it the invisible rail would keep swallowing the tap meant to reveal
+  // the chrome again, leaving the user stuck with no way back.
+  const chromeCls = cn(
+    "transition-opacity duration-300",
+    chromeVisible ? "opacity-100" : "pointer-events-none opacity-0",
+  )
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -65,7 +76,8 @@ export function ImmersiveImageViewer({
   }, [onClose, images.length])
 
   function toggleLike() {
-    if (!currentUser || post.isSelf) return
+    // Authors may like their own posts, matching the main feed.
+    if (!currentUser) return
     const next = !liked
     setLiked(next)
     setLikes((n) => (next ? n + 1 : n - 1))
@@ -81,7 +93,8 @@ export function ImmersiveImageViewer({
   }
 
   function toggleSave() {
-    if (!currentUser || post.isSelf) return
+    // Authors may save their own posts, matching the main feed.
+    if (!currentUser) return
     const next = !saved
     setSaved(next)
     haptic(next ? "light" : "select")
@@ -126,7 +139,12 @@ export function ImmersiveImageViewer({
     >
       {/* Top bar: close only. The creator identity now lives bottom-left to match
           the Reels viewer. */}
-      <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-end bg-gradient-to-b from-black/60 to-transparent px-4 pb-8 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
+      <div
+        className={cn(
+          "absolute inset-x-0 top-0 z-20 flex items-center justify-end bg-gradient-to-b from-black/60 to-transparent px-4 pb-8 pt-[calc(env(safe-area-inset-top)+0.75rem)]",
+          chromeCls,
+        )}
+      >
         <button
           type="button"
           onClick={onClose}
@@ -137,8 +155,13 @@ export function ImmersiveImageViewer({
         </button>
       </div>
 
-      {/* Image stage — natural aspect ratio, letterboxed on the black backdrop. */}
-      <div className="relative flex flex-1 items-center justify-center overflow-hidden">
+      {/* Image stage — natural aspect ratio, letterboxed on the black backdrop.
+          Tapping anywhere on the stage toggles the overlay chrome. The paging
+          controls inside it stop propagation so paging never fades the chrome. */}
+      <div
+        className="relative flex flex-1 items-center justify-center overflow-hidden"
+        onClick={() => setChromeVisible((v) => !v)}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={images[index] || "/placeholder.svg"}
@@ -156,9 +179,15 @@ export function ImmersiveImageViewer({
             {index > 0 && (
               <button
                 type="button"
-                onClick={() => setIndex((i) => i - 1)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setIndex((i) => i - 1)
+                }}
                 aria-label="Previous image"
-                className="absolute left-3 top-1/2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur transition-colors hover:bg-black/70"
+                className={cn(
+                  "absolute left-3 top-1/2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur transition-colors hover:bg-black/70",
+                  chromeCls,
+                )}
               >
                 <ChevronLeft className="size-6" />
               </button>
@@ -166,14 +195,20 @@ export function ImmersiveImageViewer({
             {index < images.length - 1 && (
               <button
                 type="button"
-                onClick={() => setIndex((i) => i + 1)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setIndex((i) => i + 1)
+                }}
                 aria-label="Next image"
-                className="absolute right-3 top-1/2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur transition-colors hover:bg-black/70"
+                className={cn(
+                  "absolute right-3 top-1/2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur transition-colors hover:bg-black/70",
+                  chromeCls,
+                )}
               >
                 <ChevronRight className="size-6" />
               </button>
             )}
-            <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1.5">
+            <div className={cn("absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1.5", chromeCls)}>
               {images.map((_, i) => (
                 <span
                   key={i}
@@ -189,13 +224,12 @@ export function ImmersiveImageViewer({
       </div>
 
       {/* Action rail (right side), consistent with the reels layout. */}
-      <div className="absolute bottom-24 right-3 z-20 flex flex-col items-center gap-5">
+      <div className={cn("absolute bottom-24 right-3 z-20 flex flex-col items-center gap-5", chromeCls)}>
         <RailButton
           onClick={toggleLike}
           label={liked ? "Unlike" : "Like"}
           count={likes}
           active={liked}
-          disabled={post.isSelf}
         >
           <Heart className={cn("size-7", liked && "fill-current text-red-500")} />
         </RailButton>
@@ -209,7 +243,6 @@ export function ImmersiveImageViewer({
           onClick={toggleSave}
           label={saved ? "Saved" : "Save"}
           active={saved}
-          disabled={post.isSelf}
         >
           <Bookmark className={cn("size-7", saved && "fill-current")} />
         </RailButton>
@@ -218,7 +251,12 @@ export function ImmersiveImageViewer({
       {/* Author + caption, bottom-left — mirrors the Reels viewer (position,
           avatar size, and font sizes) so the creator identity is consistent
           across both viewers. `pr-24` keeps the block clear of the action rail. */}
-      <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-4 pb-8 pt-12 pr-24 text-white">
+      <div
+        className={cn(
+          "absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-4 pb-8 pt-12 pr-24 text-white",
+          chromeCls,
+        )}
+      >
         <Link href={`/u/${post.authorId}`} onClick={onClose} className="flex min-w-0 items-center gap-2.5">
           <span
             className={cn(
@@ -239,20 +277,11 @@ export function ImmersiveImageViewer({
           </span>
         </Link>
 
-        {/* Caption. Rendered with the shared rich-text renderer (not raw text) so
-            mention tokens like `@[Name](id)`, bold/italic markers, and links match
-            exactly what the feed shows instead of leaking the raw markup. Shown in
-            full (no line-clamp / "Read more") — a long caption scrolls within a
-            capped height so it never covers the whole image. */}
-        {post.text && (
-          <p className="mt-2 max-h-[40vh] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-white/90">
-            {renderMessageBody(post.text, {
-              link: true,
-              linkClassName: "font-medium text-white underline-offset-2 [overflow-wrap:anywhere] hover:underline",
-              mentionClassName: "font-semibold text-white hover:underline",
-            })}
-          </p>
-        )}
+        {/* Caption — the same component the Reels viewer uses, so the font size
+            and the one-line collapse with an inline "… Read more" are identical
+            across both viewers by construction. Expanded captions scroll within
+            a capped height so a long one never covers the whole image. */}
+        {post.text && <MediaCaption text={post.text} className="max-h-[45vh] overflow-y-auto" />}
       </div>
 
       <CommentSheet
