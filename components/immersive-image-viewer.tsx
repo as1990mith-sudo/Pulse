@@ -138,10 +138,14 @@ export function ImmersiveImageViewer({
       className="fixed inset-0 z-[70] flex flex-col bg-black"
     >
       {/* Top bar: close only. The creator identity now lives bottom-left to match
-          the Reels viewer. */}
+          the Reels viewer.
+          `pointer-events-none` on the gradient itself is essential: it spans the
+          full width over the image, so without it the bar would swallow taps
+          meant for the stage and the fade toggle would only work in a thin strip.
+          The close button re-enables pointer events for itself. */}
       <div
         className={cn(
-          "absolute inset-x-0 top-0 z-20 flex items-center justify-end bg-gradient-to-b from-black/60 to-transparent px-4 pb-8 pt-[calc(env(safe-area-inset-top)+0.75rem)]",
+          "pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-end bg-gradient-to-b from-black/60 to-transparent px-4 pb-8 pt-[calc(env(safe-area-inset-top)+0.75rem)]",
           chromeCls,
         )}
       >
@@ -149,7 +153,7 @@ export function ImmersiveImageViewer({
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="flex size-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/20"
+          className="pointer-events-auto flex size-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/20"
         >
           <X className="size-5" />
         </button>
@@ -251,13 +255,20 @@ export function ImmersiveImageViewer({
       {/* Author + caption, bottom-left — mirrors the Reels viewer (position,
           avatar size, and font sizes) so the creator identity is consistent
           across both viewers. `pr-24` keeps the block clear of the action rail. */}
+      {/* Same pointer-events treatment as the top bar: the gradient is decorative
+          and full-width, so it must not intercept stage taps. The author link and
+          caption opt back in individually. */}
       <div
         className={cn(
-          "absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-4 pb-8 pt-12 pr-24 text-white",
+          "pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-4 pb-8 pt-12 pr-24 text-white",
           chromeCls,
         )}
       >
-        <Link href={`/u/${post.authorId}`} onClick={onClose} className="flex min-w-0 items-center gap-2.5">
+        <Link
+          href={`/u/${post.authorId}`}
+          onClick={onClose}
+          className="pointer-events-auto inline-flex min-w-0 items-center gap-2.5"
+        >
           <span
             className={cn(
               "flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-bold ring-2 ring-white/70",
@@ -281,7 +292,9 @@ export function ImmersiveImageViewer({
             and the one-line collapse with an inline "… Read more" are identical
             across both viewers by construction. Expanded captions scroll within
             a capped height so a long one never covers the whole image. */}
-        {post.text && <MediaCaption text={post.text} className="max-h-[45vh] overflow-y-auto" />}
+        {post.text && (
+          <MediaCaption text={post.text} className="pointer-events-auto max-h-[45vh] overflow-y-auto" />
+        )}
       </div>
 
       <CommentSheet
