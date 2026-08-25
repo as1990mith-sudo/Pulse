@@ -5,7 +5,8 @@ import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { follow, homeMembership, notification } from "@/lib/db/schema"
+import { follow, home as home_, homeMembership, notification } from "@/lib/db/schema"
+import { sendPushToUsers } from "@/lib/push"
 
 export type NotificationType =
   | "post"
@@ -50,6 +51,43 @@ export async function notifyUser(input: {
     link: input.link,
     homeId: input.homeId ?? null,
   })
+
+  // Personal activity: the actor IS the subject, so they lead the title.
+  await sendPushToUsers([input.userId], {
+    title: `${input.actorName} ${pushVerb(input.type)}`,
+    body: input.message,
+    link: input.link,
+    // Collapse repeat activity on the same target (three likes on one post
+    // should not stack three notifications), but keep distinct targets apart.
+    tag: `${input.type}:${input.link}`,
+    type: input.type,
+  })
+}
+
+/**
+ * Short phrasing for the device notification. Separate from the in-app `verb()`
+ * because a push title has no avatar or icon beside it to supply context, so it
+ * has to read as a complete sentence on its own.
+ */
+function pushVerb(type: NotificationType): string {
+  switch (type) {
+    case "like":
+      return "liked your post"
+    case "comment":
+      return "replied to you"
+    case "live":
+      return "is live now"
+    case "post":
+      return "posted"
+    case "follow":
+      return "started following you"
+    case "repost":
+      return "reposted you"
+    case "mention":
+      return "mentioned you"
+    case "announcement":
+      return "shared an announcement"
+  }
 }
 
 function timeAgo(date: Date): string {
@@ -90,6 +128,17 @@ export async function notifyFollowers(input: {
       message: input.message,
       link: input.link,
     })),
+  )
+
+  await sendPushToUsers(
+    followers.map((f) => f.followerId),
+    {
+      title: `${input.actorName} ${pushVerb(input.type)}`,
+      body: input.message,
+      link: input.link,
+      tag: `${input.type}:${input.link}`,
+      type: input.type,
+    },
   )
 }
 
@@ -193,6 +242,14 @@ export async function notifyHomeMembers(input: {
   type: NotificationType
   message: string
   link: string
+  /** Overrides the device notification body; defaults to `message`. */
+  pushBody?: string
+  /**
+   * Overrides the device collapse key. Callers representing a distinct,
+   * concurrently-possible event (a live session) MUST pass a unique value, or
+   * the OS will replace the previous notification instead of adding to it.
+   */
+  pushTag?: string
 }): Promise<void> {
   const recipients = await activeMemberIds(input.homeId, input.actorId)
   if (recipients.length === 0) return
@@ -207,6 +264,29 @@ export async function notifyHomeMembers(input: {
       homeId: input.homeId,
     })),
   )
+
+  // Home-scoped events are attributed to the HOME, not to the admin who
+  // happened to trigger them: a member should read "Kingdom Academy is live",
+  // never "Sarah is live". The actor is demoted to the body, which is also what
+  // keeps two admins' concurrent events distinguishable.
+  const [home] = await db
+    .select({ name: home_.name })
+    .from(home_)
+    .where(eq(home_.id, input.homeId))
+    .limit(1)
+  const homeName = home?.name ?? "Your Home"
+
+  await sendPushToUsers(recipients, {
+    title: input.type === "live" ? `${homeName} is live` : `${homeName} · ${pushVerb(input.type)}`,
+    body: input.pushBody ?? input.message,
+    link: input.link,
+    // Defaults to the link, which collapses repeats of the same Home post.
+    // Live passes an explicit per-session tag so two simultaneous lives from
+    // one Home survive as two notifications.
+    tag: input.pushTag ?? `${input.type}:${input.homeId}:${input.link}`,
+    type: input.type,
+    homeName,
+  })
 }
 
 /** Tells a Home's members that a private session just went live (member-gated). */
@@ -224,6 +304,13 @@ export async function notifyHomeLive(input: {
     type: "live",
     message: input.title,
     link: `/live/${input.roomName}`,
+    // Name the host in the body so two concurrent lives from the same Home are
+    // told apart at a glance ("Andrew · Morning Prayer" vs "Sarah · Bible
+    // Study") while the title still belongs to the Home.
+    pushBody: `${input.actorName} · ${input.title}`,
+    // The room name is the live session's identity, so this is what keeps
+    // simultaneous sessions from collapsing into one notification.
+    pushTag: `live:${input.roomName}`,
   })
 }
 

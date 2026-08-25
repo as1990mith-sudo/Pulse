@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import Link from "next/link"
+import { Bell, ChevronRight } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
 import { MentionPrivacyControl } from "@/components/settings/mention-privacy-control"
 import { getMyMentionPrivacy } from "@/app/actions/mentions"
@@ -51,7 +52,26 @@ export default async function PrivacySettingsPage() {
             Manage how other members can interact with you.
           </p>
         </header>
-        <MentionPrivacyControl initialValue={privacy} />
+        <div className="flex flex-col gap-4">
+          <MentionPrivacyControl initialValue={privacy} />
+
+          {/* Notifications live on their own screen — device permission, per-category
+              toggles and platform-specific help are too much to inline here. */}
+          <Link href="/settings/notifications" className="block">
+            <Card interactive className="flex-row items-center gap-3 p-5 transition-colors hover:bg-muted/50">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-secondary text-foreground">
+                <Bell className="size-4" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold leading-tight">Manage notifications</span>
+                <span className="mt-0.5 block text-pretty text-sm leading-relaxed text-muted-foreground">
+                  Choose what reaches your devices, from lives to replies.
+                </span>
+              </span>
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            </Card>
+          </Link>
+        </div>
       </main>
     </div>
   )
