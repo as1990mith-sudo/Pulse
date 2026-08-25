@@ -133,6 +133,27 @@ export function publishingColumns(identity: PublishingIdentity) {
 }
 
 /**
+ * The active Home's organisation identity when the viewer may speak for it, for
+ * rendering the composer's identity switcher. Returns null for ordinary members
+ * and in personal mode, so the switcher simply never appears.
+ *
+ * This mirrors `resolvePublishingIdentity` exactly rather than re-deriving the
+ * rule, so what the UI offers can never drift from what the server will accept.
+ */
+export async function getActiveHomeVoice(): Promise<{ name: string; image: string | null; initials: string } | null> {
+  const identity = await resolvePublishingIdentity({ name: "", handle: "", image: null })
+  if (identity.type !== "home") return null
+  const initials =
+    identity.name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0]!.toUpperCase())
+      .join("") || "H"
+  return { name: identity.name, image: identity.image, initials }
+}
+
+/**
  * Whether the acting user may publish organisational content in the currently
  * active Home. Scoped to that Home alone — administering another Home grants
  * nothing here.

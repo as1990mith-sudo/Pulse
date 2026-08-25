@@ -54,6 +54,7 @@ import { toggleFollow } from "@/app/actions/follow"
 import type { CurrentUser } from "@/lib/session"
 import { Button } from "@/components/ui/button"
 import { FormattedTextarea } from "@/components/formatted-textarea"
+import { HomeVoiceSwitch } from "@/components/home-voice-switch"
 import { useMentionAutocomplete, MentionAutocompleteList } from "@/components/mention-autocomplete"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card } from "@/components/ui/card"
@@ -225,6 +226,7 @@ export function MindFeed({
   myRequests = [],
   isAdmin = false,
   canPublish = false,
+  homeVoice = null,
 }: {
   posts: FeedPostView[]
   currentUser: CurrentUser | null
@@ -233,9 +235,15 @@ export function MindFeed({
   myRequests?: AnnouncementView[]
   isAdmin?: boolean
   canPublish?: boolean
+  // The organisation of the ACTIVE Home when the viewer may speak for it. Null
+  // for ordinary members, so the identity switcher simply never renders.
+  homeVoice?: { name: string; image: string | null; initials: string } | null
 }) {
   const router = useRouter()
   const [draft, setDraft] = useState("")
+  // Admins of the active Home default to its voice — that is why they have the
+  // right — but can switch to their own name per post.
+  const [postAsHome, setPostAsHome] = useState(true)
   const [media, setMedia] = useState<DraftMedia[]>([])
   // Files awaiting the crop/trim/cover editor. When set, the full-screen editor
   // flow opens; it uploads the edited results and hands them back via onDone.
@@ -479,7 +487,20 @@ export function MindFeed({
   // The main feed accepts posts from both individuals and organisations, but
   // individuals must share a photo or video (organisations may post text-only).
   const isOrg = currentUser?.accountType === "organization"
-  const mediaRequired = !isOrg
+  // Speaking for the Home lifts the photo/video requirement the same way an
+  // organisation account does: it is an official update, not personal sharing.
+  const mediaRequired = !isOrg && !(homeVoice && postAsHome)
+  // Who the composer is currently speaking as — drives the avatar so the choice
+  // is visible at a glance rather than only in the control below it.
+  const speakingAsHome = !!homeVoice && postAsHome
+  const activeVoice = speakingAsHome
+    ? { name: homeVoice.name, image: homeVoice.image, initials: homeVoice.initials, color: "bg-primary/15 text-primary" }
+    : {
+        name: currentUser?.name ?? "",
+        image: currentUser?.image ?? null,
+        initials: currentUser?.initials ?? "",
+        color: currentUser?.color ?? "",
+      }
 
   function publish(e: React.FormEvent) {
     e.preventDefault()
@@ -493,7 +514,13 @@ export function MindFeed({
     }
     if (!text && media.length === 0) return
     startTransition(async () => {
-      const created = await createPost({ text, media })
+      const created = await createPost({
+        text,
+        media,
+        // Only meaningful when a Home voice is on offer; otherwise the server
+        // resolves the identity on its own.
+        asOrganization: homeVoice ? postAsHome : undefined,
+      })
       setDraft("")
       mentions.reset()
       clearMedia()
@@ -633,13 +660,18 @@ export function MindFeed({
             className="tap-scale shrink-0 self-start rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <Avatar className="size-12 ring-2 ring-border/60">
-              {currentUser.image && (
-                <AvatarImage src={currentUser.image || "/placeholder.svg"} alt={currentUser.name} />
-              )}
-              <AvatarFallback className={currentUser.color}>{currentUser.initials}</AvatarFallback>
+              {activeVoice.image && <AvatarImage src={activeVoice.image || "/placeholder.svg"} alt={activeVoice.name} />}
+              <AvatarFallback className={activeVoice.color}>{activeVoice.initials}</AvatarFallback>
             </Avatar>
           </Link>
           <div className="flex-1 space-y-3">
+            <HomeVoiceSwitch
+              voice={homeVoice}
+              asHome={postAsHome}
+              onChange={setPostAsHome}
+              personalName={currentUser.name}
+              className="w-full"
+            />
             <div className="relative">
               <FormattedTextarea
                 textareaRef={composeTextareaRef}

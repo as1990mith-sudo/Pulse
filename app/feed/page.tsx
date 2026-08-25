@@ -9,17 +9,21 @@ import {
 } from "@/app/actions/announcements"
 import { getStatusFeed } from "@/app/actions/status"
 import { getCurrentUser } from "@/lib/session"
+import { getActiveHomeVoice } from "@/lib/home/publishing"
 
 export default async function FeedPage() {
-  const [posts, currentUser, announcements, myRequests, statusGroups, isAdmin, canPublish] = await Promise.all([
-    getFeed(),
-    getCurrentUser(),
-    getActiveAnnouncements(),
-    getMyAnnouncements(),
-    getStatusFeed(),
-    isPlatformAdmin(),
-    canPublishEvents(),
-  ])
+  const [posts, currentUser, announcements, myRequests, statusGroups, isAdmin, canPublish, homeVoice] =
+    await Promise.all([
+      getFeed(),
+      getCurrentUser(),
+      getActiveAnnouncements(),
+      getMyAnnouncements(),
+      getStatusFeed(),
+      isPlatformAdmin(),
+      canPublishEvents(),
+      // Non-null only for admins of the active Home, who may post in its voice.
+      getActiveHomeVoice(),
+    ])
 
   return (
     <div className="min-h-screen">
@@ -38,6 +42,7 @@ export default async function FeedPage() {
             myRequests={myRequests}
             isAdmin={isAdmin}
             canPublish={canPublish}
+            homeVoice={homeVoice}
           />
         </div>
       </main>
