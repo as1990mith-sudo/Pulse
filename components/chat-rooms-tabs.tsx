@@ -56,39 +56,42 @@ export function ChatRoomsTabs({
       {/* Top-level tab bar — same language as the profile tabs: full-width
           columns, uppercase labels revealed only on the active tab, and a
           sliding top indicator. Stays static; only the app header hides on
-          scroll. The Community info (ⓘ) button is reached from the feed header
-          instead of living inside a tab, which keeps each column a single
-          control and the two tabs visually symmetrical. */}
+          scroll. */}
       <div className="shrink-0 overflow-hidden border-b border-border/60 bg-background/95 backdrop-blur">
-        <div
-          role="tablist"
-          aria-label="Chat Rooms sections"
-          className="relative mx-auto grid w-full max-w-md grid-cols-2 border-t border-border/60"
-        >
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              role="tab"
-              aria-selected={tab === t.key}
-              title={t.label}
-              onClick={() => switchTab(t.key)}
-              className={cn(
-                "flex items-center justify-center gap-2 py-3 text-xs font-semibold uppercase tracking-wider transition-colors",
-                tab === t.key ? "text-foreground" : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {t.icon}
-              {/* Only the active tab shows its label; the rest stay icon-only. */}
-              <span className={cn("whitespace-nowrap", tab !== t.key && "sr-only")}>{t.label}</span>
-            </button>
-          ))}
-          {/* Sliding active indicator */}
-          <span
-            className="absolute -top-px left-0 h-0.5 w-1/2 bg-foreground transition-transform duration-300 ease-out"
-            style={{ transform: `translateX(${TABS.findIndex((t) => t.key === tab) * 100}%)` }}
-            aria-hidden
-          />
+        {/* The positioning context is this wrapper rather than the tablist, so
+            the info button can sit visually inside the bar while staying OUTSIDE
+            `role="tablist"` — a tablist must only contain tabs. */}
+        <div className="relative mx-auto w-full max-w-md">
+          <div
+            role="tablist"
+            aria-label="Chat Rooms sections"
+            className="relative grid w-full grid-cols-2 border-t border-border/60"
+          >
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.key}
+                title={t.label}
+                onClick={() => switchTab(t.key)}
+                className={cn(
+                  "flex items-center justify-center gap-2 py-3 text-xs font-semibold uppercase tracking-wider transition-colors",
+                  tab === t.key ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t.icon}
+                {/* Only the active tab shows its label; the rest stay icon-only. */}
+                <span className={cn("whitespace-nowrap", tab !== t.key && "sr-only")}>{t.label}</span>
+              </button>
+            ))}
+            {/* Sliding active indicator */}
+            <span
+              className="absolute -top-px left-0 h-0.5 w-1/2 bg-foreground transition-transform duration-300 ease-out"
+              style={{ transform: `translateX(${TABS.findIndex((t) => t.key === tab) * 100}%)` }}
+              aria-hidden
+            />
+          </div>
           {/* "How Community works" — absolutely positioned so the two tab
               columns stay exactly equal, and only offered on that tab. */}
           {tab === "community" && (
