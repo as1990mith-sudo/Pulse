@@ -306,8 +306,15 @@ export function MindFeed({
   // It reshuffles on a manual page refresh (reload) and when the app is closed
   // and reopened (sessionStorage is cleared on close). We detect a reload via the
   // Navigation Timing API and mint a fresh seed only in that case.
-  const [shuffleSeed] = useState(() => {
-    if (typeof window === "undefined") return (Math.random() * 0x7fffffff) | 0
+  //
+  // The seed is deliberately NOT resolved during render. The server has no
+  // sessionStorage, so it can only invent a seed, and the client would then read
+  // a different one — producing a different post order and a hydration mismatch
+  // (React discarded the whole feed tree and re-rendered it on every load).
+  // Instead the seed starts null, meaning "server order", and is set in an effect
+  // after mount so the first client render matches the server exactly.
+  const [shuffleSeed, setShuffleSeed] = useState<number | null>(null)
+  useEffect(() => {
     const newSeed = () => {
       const seed = (Math.random() * 0x7fffffff) | 0
       window.sessionStorage.setItem("feed:shuffleSeed", String(seed))
@@ -315,14 +322,23 @@ export function MindFeed({
     }
     const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined
     // A manual refresh should produce a brand-new order.
-    if (nav?.type === "reload") return newSeed()
+    if (nav?.type === "reload") {
+      setShuffleSeed(newSeed())
+      return
+    }
     const stored = window.sessionStorage.getItem("feed:shuffleSeed")
     if (stored !== null) {
       const parsed = Number.parseInt(stored, 10)
-      if (Number.isFinite(parsed)) return parsed
+      if (Number.isFinite(parsed)) {
+        setShuffleSeed(parsed)
+        return
+      }
     }
-    return newSeed()
-  })
+    setShuffleSeed(newSeed())
+    // Runs once on mount: the seed is a per-session decision, not a reaction to
+    // changing props.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // IDs of posts the user just created this session. They're pinned to the very
   // top of "For you" (newest first) so a new post is always seen first, then the
@@ -334,7 +350,9 @@ export function MindFeed({
   // admin of the Home on behalf of the organisation (`orgHandle` set),
   // newest-first.
   const forYouPosts = useMemo(() => {
-    const shuffled = seededShuffle(allPosts, shuffleSeed)
+    // Before the seed is known (server render + first client render) keep the
+    // server's order untouched, so both sides agree and hydration is clean.
+    const shuffled = shuffleSeed === null ? allPosts : seededShuffle(allPosts, shuffleSeed)
     if (pinnedIds.length === 0) return shuffled
     const pinned = pinnedIds
       .map((id) => allPosts.find((p) => String(p.id) === id))
@@ -1394,8 +1412,8 @@ export function PostCard({
     void setCommentLike({ commentId, liked })
   }
 
-  async function handleCommentReply(parentId: number, value: string) {
-    await addPostComment({ postId: post.id, text: value, parentId })
+  async function handleCommentReply(parentId: number, value: string, asHome?: boolean) {
+    await addPostComment({ postId: post.id, text: value, parentId, asOrganization: asHome })
     await globalMutate("feed")
     router.refresh()
   }

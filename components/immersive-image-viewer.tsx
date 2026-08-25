@@ -12,6 +12,7 @@ import { ShareSheet } from "@/components/share-sheet"
 import { addPostComment, setPostLike, setCommentLike, type FeedPostView } from "@/app/actions/feed"
 import { toggleSaveItem } from "@/app/actions/share"
 import type { ThreadComment } from "@/components/comment-thread"
+import { useHomeVoice } from "@/lib/use-home-voice"
 import type { CurrentUser } from "@/lib/session"
 import type { ShareTarget } from "@/lib/share-types"
 import { haptic } from "@/lib/haptics"
@@ -41,6 +42,10 @@ export function ImmersiveImageViewer({
   onClose: () => void
 }) {
   const router = useRouter()
+  // Read from the shared SWR cache the feed already populates, so the expanded
+  // view offers an admin the same identity choice as the inline comment box
+  // rather than silently forcing every comment to their personal name.
+  const homeVoice = useHomeVoice()
   const [index, setIndex] = useState(startIndex)
   const [liked, setLiked] = useState(post.liked)
   const [likes, setLikes] = useState(post.likes)
@@ -108,9 +113,9 @@ export function ImmersiveImageViewer({
     })
   }
 
-  async function submitComment(text: string) {
+  async function submitComment(text: string, asHome?: boolean) {
     if (!currentUser) return
-    await addPostComment({ postId: post.id, text })
+    await addPostComment({ postId: post.id, text, asOrganization: asHome })
     router.refresh()
   }
 
@@ -313,9 +318,10 @@ export function ImmersiveImageViewer({
             : undefined
         }
         onSubmit={submitComment}
+        homeVoice={homeVoice}
         onLike={(commentId, isLiked) => void setCommentLike({ commentId, liked: isLiked })}
-        onReply={async (parentId, text) => {
-          await addPostComment({ postId: post.id, text, parentId })
+        onReply={async (parentId, text, asHome) => {
+          await addPostComment({ postId: post.id, text, parentId, asOrganization: asHome })
           router.refresh()
         }}
       />

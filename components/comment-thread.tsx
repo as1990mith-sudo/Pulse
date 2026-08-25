@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { type SheetAction } from "@/components/action-sheet"
+import { HomeVoiceSwitch, type HomeVoice } from "@/components/home-voice-switch"
 import { canEdit, canDelete } from "@/lib/interactions"
 import { renderMessageBody } from "@/lib/rich-text"
 import { cn } from "@/lib/utils"
@@ -39,9 +40,23 @@ export type CommentThreadProps = {
   comments: ThreadComment[]
   canInteract: boolean
   onLike: (commentId: number, liked: boolean) => void
-  onReply: (parentId: number, text: string) => Promise<void> | void
+  /**
+   * `asHome` is the identity chosen in the reply composer's switcher, and is
+   * undefined on surfaces without one (i.e. whenever `homeVoice` is null), so
+   * callers can distinguish "chose personal" from "no choice offered".
+   */
+  onReply: (parentId: number, text: string, asHome?: boolean) => Promise<void> | void
   onEdit: (commentId: number, text: string) => Promise<void> | void
   onDelete: (commentId: number) => Promise<void> | void
+  /**
+   * The organisation the viewer may speak for. When set, each reply composer
+   * offers the same individual/organisation choice as the top-level comment box,
+   * so a reply can't be silently forced to a different identity than the comment
+   * it hangs from. Null (the default) hides the control entirely.
+   */
+  homeVoice?: HomeVoice | null
+  /** The viewer's own name, shown as the personal option in that switcher. */
+  personalName?: string
   /**
    * Whether the action menu offers a "Copy" option. Disabled for feed (post
    * tab) comments per product rules; enabled everywhere else.
@@ -99,6 +114,8 @@ export function CommentThread({
   onAuthorClick,
   allowReply = true,
   density = "default",
+  homeVoice = null,
+  personalName = "",
 }: CommentThreadProps) {
   // Delete window inherits the edit/general window unless explicitly overridden.
   const deleteWindow = enforceDeleteWindow ?? enforceTimeWindows
@@ -140,6 +157,8 @@ export function CommentThread({
             enforceDeleteWindow={deleteWindow}
             onAuthorClick={onAuthorClick}
             density={density}
+            homeVoice={homeVoice}
+            personalName={personalName}
           />
         </li>
       ))}
@@ -170,6 +189,8 @@ function CommentNode({
   enforceDeleteWindow,
   onAuthorClick,
   density = "default",
+  homeVoice = null,
+  personalName = "",
 }: {
   comment: ThreadComment
   depth: number
@@ -177,7 +198,7 @@ function CommentNode({
   canInteract: boolean
   allowReply?: boolean
   onLike: (commentId: number, liked: boolean) => void
-  onReply: (parentId: number, text: string) => Promise<void> | void
+  onReply: (parentId: number, text: string, asHome?: boolean) => Promise<void> | void
   onEdit: (commentId: number, text: string) => Promise<void> | void
   onDelete: (commentId: number) => Promise<void> | void
   showCopy: boolean
@@ -185,6 +206,8 @@ function CommentNode({
   enforceDeleteWindow: boolean
   onAuthorClick?: (authorId: string) => void
   density?: "default" | "comfortable"
+  homeVoice?: HomeVoice | null
+  personalName?: string
 }) {
   const replies = repliesByParent.get(comment.id) ?? []
   const [collapsed, setCollapsed] = useState(true)
@@ -205,6 +228,8 @@ function CommentNode({
         enforceDeleteWindow={enforceDeleteWindow}
         onAuthorClick={onAuthorClick}
         density={density}
+        homeVoice={homeVoice}
+        personalName={personalName}
       />
 
       {replies.length > 0 && (
@@ -239,6 +264,8 @@ function CommentNode({
                     enforceDeleteWindow={enforceDeleteWindow}
                     onAuthorClick={onAuthorClick}
                     density={density}
+                    homeVoice={homeVoice}
+                    personalName={personalName}
                   />
                 </li>
               ))}
@@ -264,12 +291,14 @@ function CommentItem({
   isReply = false,
   onAuthorClick,
   density = "default",
+  homeVoice = null,
+  personalName = "",
 }: {
   comment: ThreadComment
   canInteract: boolean
   canReply?: boolean
   onLike: (commentId: number, liked: boolean) => void
-  onReply: (parentId: number, text: string) => Promise<void> | void
+  onReply: (parentId: number, text: string, asHome?: boolean) => Promise<void> | void
   onEdit: (commentId: number, text: string) => Promise<void> | void
   onDelete: (commentId: number) => Promise<void> | void
   showCopy: boolean
@@ -278,12 +307,18 @@ function CommentItem({
   isReply?: boolean
   onAuthorClick?: (authorId: string) => void
   density?: "default" | "comfortable"
+  homeVoice?: HomeVoice | null
+  personalName?: string
 }) {
   const [liked, setLiked] = useState(comment.liked)
   const [likes, setLikes] = useState(comment.likes)
   const [menuOpen, setMenuOpen] = useState(false)
   const [replying, setReplying] = useState(false)
   const [replyDraft, setReplyDraft] = useState("")
+  // Replies default to the organisation's voice for the same reason posts do:
+  // holding the right is what makes the option available. Resets each time the
+  // composer closes, so a one-off personal reply doesn't stick.
+  const [replyAsHome, setReplyAsHome] = useState(true)
   const [editing, setEditing] = useState(false)
   const [editDraft, setEditDraft] = useState(comment.text)
   const [text, setText] = useState(comment.text)
@@ -354,10 +389,12 @@ function CommentItem({
     const value = replyDraft.trim()
     if (!value) return
     // Replies attach to the comment being replied to, so threads can nest
-    // (capped at MAX_DEPTH by hiding the reply button deeper down).
-    await onReply(comment.id, value)
+    // (capped at MAX_DEPTH by hiding the reply button deeper down). The chosen
+    // identity is only meaningful when a switcher was actually offered.
+    await onReply(comment.id, value, homeVoice ? replyAsHome : undefined)
     setReplyDraft("")
     setReplying(false)
+    setReplyAsHome(true)
   }
 
   async function submitEdit(e: React.FormEvent) {
@@ -529,21 +566,40 @@ function CommentItem({
         </div>
 
         {replying && (
-          <form onSubmit={submitReply} className="mt-2 flex items-start gap-2">
-            <Textarea
-              autoFocus
-              value={replyDraft}
-              onChange={(e) => setReplyDraft(e.target.value)}
-              placeholder={`Reply to ${comment.name}…`}
-              className="min-h-9 resize-none text-sm"
-              aria-label="Write a reply"
+          <form onSubmit={submitReply} className="mt-2 space-y-2">
+            {/* Only rendered for admins of the active Home; see HomeVoiceSwitch.
+                Sized "sm" and capped in width so it reads as a property of this
+                inline reply box rather than a second page-level control. */}
+            <HomeVoiceSwitch
+              voice={homeVoice}
+              asHome={replyAsHome}
+              onChange={setReplyAsHome}
+              personalName={personalName}
+              size="sm"
+              className="max-w-[16rem]"
             />
-            <Button type="submit" size="icon" disabled={!replyDraft.trim()} aria-label="Send reply">
-              <Send className="size-4" />
-            </Button>
-            <Button type="button" size="icon" variant="ghost" onClick={() => setReplying(false)} aria-label="Cancel reply">
-              <X className="size-4" />
-            </Button>
+            <div className="flex items-start gap-2">
+              <Textarea
+                autoFocus
+                value={replyDraft}
+                onChange={(e) => setReplyDraft(e.target.value)}
+                placeholder={`Reply to ${comment.name}…`}
+                className="min-h-9 resize-none text-sm"
+                aria-label="Write a reply"
+              />
+              <Button type="submit" size="icon" disabled={!replyDraft.trim()} aria-label="Send reply">
+                <Send className="size-4" />
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                onClick={() => setReplying(false)}
+                aria-label="Cancel reply"
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
           </form>
         )}
       </div>

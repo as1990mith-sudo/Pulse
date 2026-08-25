@@ -46,7 +46,8 @@ export type CommentSheetProps = {
    */
   homeVoice?: HomeVoice | null
   onLike?: (commentId: number, liked: boolean) => void
-  onReply?: (parentId: number, text: string) => Promise<void> | void
+  /** `asHome` mirrors `onSubmit`: the identity chosen in the reply composer. */
+  onReply?: (parentId: number, text: string, asHome?: boolean) => Promise<void> | void
   onEdit?: (commentId: number, text: string) => Promise<void> | void
   onDelete?: (commentId: number) => Promise<void> | void
   /**
@@ -257,6 +258,11 @@ export function CommentSheet({
               onDelete={onDelete ?? (() => {})}
               onAuthorClick={onAuthorClick}
               allowReply={allowReply}
+              // Replies get the same identity choice as the top-level composer,
+              // so an admin isn't offered the Home's voice for a comment and
+              // then silently reverted to their own name for a reply.
+              homeVoice={homeVoice}
+              personalName={currentUser?.name ?? "You"}
             />
           )}
         </div>
