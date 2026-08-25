@@ -6,8 +6,8 @@
 // and a smoothly animated body. The live plays on underneath the whole time —
 // this is an overlay, never a navigation.
 
-import { useRef, useState } from "react"
-import { motion, useDragControls } from "motion/react"
+import { useEffect, useRef, useState } from "react"
+import { animate, motion, useDragControls, useMotionValue } from "motion/react"
 import {
   BookOpen,
   FileText,
@@ -31,12 +31,16 @@ const SWITCHER: { id: ResourcePanelId; icon: LucideIcon; label: string }[] = [
 ]
 
 export function MiniPanelShell({
+  panelId,
   title,
   subtitle,
   icon: Icon,
   children,
   constraintsRef,
 }: {
+  // Which resource is showing. The card itself stays mounted across switches,
+  // so this is used to react to a change rather than to key the component.
+  panelId: ResourcePanelId
   title: string
   subtitle?: string
   icon: LucideIcon
@@ -51,6 +55,20 @@ export function MiniPanelShell({
   // of the resource is visible, while staying an overlay the live plays behind.
   const [expanded, setExpanded] = useState(false)
 
+  // Drag offset is held in explicit motion values rather than Motion's internal
+  // ones so it can be reset. The card now survives a resource switch, so a
+  // position the user dragged to (possibly measured while the mobile keyboard
+  // was open and the viewport was shorter) would otherwise carry over and could
+  // leave the card parked outside the visible area.
+  const x = useMotionValue(0)
+  const y = useMotionValue(0)
+
+  useEffect(() => {
+    const opts = { type: "spring", stiffness: 320, damping: 30 } as const
+    animate(x, 0, opts)
+    animate(y, 0, opts)
+  }, [panelId, x, y])
+
   return (
     <motion.div
       ref={panelRef}
@@ -60,9 +78,12 @@ export function MiniPanelShell({
       dragConstraints={constraintsRef}
       dragElastic={0.06}
       dragMomentum={false}
-      initial={{ opacity: 0, scale: 0.94, y: 24 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.94, y: 24 }}
+      style={{ x, y }}
+      // Open/close only — and deliberately no `y` here, since `y` is now owned
+      // by the drag motion value above and the two would fight each other.
+      initial={{ opacity: 0, scale: 0.94 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.94 }}
       transition={{ type: "spring", stiffness: 320, damping: 30 }}
       className={cn(
         "pointer-events-auto absolute bottom-4 left-1/2 z-[15] flex w-[calc(100%-1.5rem)] -translate-x-1/2 flex-col overflow-hidden rounded-3xl border border-white/12 bg-zinc-950/95 shadow-2xl ring-1 ring-black/50 backdrop-blur-2xl transition-[height,max-width,max-height] duration-300 ease-out",
