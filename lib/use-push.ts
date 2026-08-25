@@ -61,7 +61,10 @@ export function usePush() {
       return
     }
     try {
-      const reg = await navigator.serviceWorker.getRegistration("/sw.js")
+      // getRegistration() takes a SCOPE, not a script URL — passing "/sw.js"
+      // silently matches nothing and would report every subscribed device as
+      // off. The worker registers at the root scope, so look that up.
+      const reg = await navigator.serviceWorker.getRegistration("/")
       const existing = await reg?.pushManager.getSubscription()
       setStatus(existing ? "on" : "off")
     } catch {
@@ -84,9 +87,12 @@ export function usePush() {
         return { ok: false, error: "Notifications weren't allowed." }
       }
 
-      const reg = await navigator.serviceWorker.register("/sw.js")
-      // A registration that is still installing has no usable pushManager yet.
-      await navigator.serviceWorker.ready
+      await navigator.serviceWorker.register("/sw.js")
+      // Subscribe against the ACTIVE registration: a worker that is still
+      // installing has no usable pushManager, and `ready` is what guarantees an
+      // activated one. Using the resolved value (rather than the register()
+      // result) avoids subscribing on a registration that is not yet live.
+      const reg = await navigator.serviceWorker.ready
 
       // Reuse the existing subscription when there is one: re-subscribing
       // rotates the endpoint and would orphan the previous database row.
@@ -125,7 +131,7 @@ export function usePush() {
   const disable = useCallback(async () => {
     setBusy(true)
     try {
-      const reg = await navigator.serviceWorker.getRegistration("/sw.js")
+      const reg = await navigator.serviceWorker.getRegistration("/")
       const sub = await reg?.pushManager.getSubscription()
       if (sub) {
         // Forget it server-side first: if unsubscribe succeeds but the action

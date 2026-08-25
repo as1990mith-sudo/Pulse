@@ -16,17 +16,19 @@ export default function manifest(): MetadataRoute.Manifest {
       "Go live, build your audience, and stream audio + video podcasts in real time. Listen in, chat, and call in to the conversation.",
     start_url: "/",
     display: "standalone",
-    // Matches the --background token so the launch screen does not flash white
-    // on the way into a dark app.
-    background_color: "#161618",
-    theme_color: "#161618",
+    // The sRGB value of the dark --background token (oklch(0.16 0.006 285)),
+    // so the launch screen does not flash a lighter colour on the way in.
+    background_color: "#0d0d10",
+    theme_color: "#0d0d10",
     orientation: "portrait",
     icons: [
       {
         src: "/apple-icon.png",
         sizes: "180x180",
         type: "image/png",
-        purpose: "maskable",
+        // Declared "any", NOT "maskable": the icon has no safe-zone padding, so
+        // Android would crop into the artwork to fit its mask.
+        purpose: "any",
       },
       {
         src: "/icon.svg",

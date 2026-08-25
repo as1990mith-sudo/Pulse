@@ -1,4 +1,4 @@
-/* Pulse service worker — push receipt and notification deep linking.
+/* Frequency service worker — push receipt and notification deep linking.
  *
  * Deliberately minimal: no asset precaching or offline shell, because the app
  * shell is server-rendered and a stale cached shell would be worse than a
@@ -10,6 +10,9 @@
 // so a notification fix does not sit behind a user's long-lived tab.
 self.addEventListener("install", () => self.skipWaiting())
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()))
+
+/** Types that should not vibrate the device — ambient, not urgent. */
+const QUIET_TYPES = ["like", "follow", "repost", "post"]
 
 self.addEventListener("push", (event) => {
   if (!event.data) return
@@ -25,7 +28,7 @@ self.addEventListener("push", (event) => {
   const { title, body, link, tag, type, homeName } = payload
 
   event.waitUntil(
-    self.registration.showNotification(title || "Pulse", {
+    self.registration.showNotification(title || "Frequency", {
       body: body || "",
       icon: "/apple-icon.png",
       badge: "/apple-icon.png",
@@ -39,9 +42,11 @@ self.addEventListener("push", (event) => {
       // Everything needed to route the tap, carried on the notification itself:
       // the worker may be restarted between display and click.
       data: { link: link || "/", type: type || null, homeName: homeName || null },
-      // A live is time-critical and should survive an unattended screen; the
-      // rest can be dismissed by the system.
-      requireInteraction: type === "live",
+      // A live is time-critical and earns a vibration; a like does not, so the
+      // low-value categories arrive quietly and are picked up later in the
+      // notification centre. Deliberately NOT `requireInteraction`, which makes
+      // a notification sticky and forces the user to dismiss it by hand.
+      vibrate: QUIET_TYPES.includes(type) ? undefined : [80, 40, 80],
     }),
   )
 })

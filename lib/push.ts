@@ -55,7 +55,6 @@ async function eligibleRecipients(userIds: string[], type: string): Promise<stri
   // An unregistered type is a wiring oversight rather than a user preference —
   // deliver it instead of silently dropping it.
   if (!category) return userIds
-  if (defaultPreferences()[category] === undefined) return userIds
 
   const rows = await db
     .select({ userId: notificationPreference.userId, enabled: notificationPreference.enabled })
@@ -67,8 +66,12 @@ async function eligibleRecipients(userIds: string[], type: string): Promise<stri
       ),
     )
 
-  const optedOut = new Set(rows.filter((r) => !r.enabled).map((r) => r.userId))
-  return userIds.filter((id) => !optedOut.has(id))
+  // Resolve against the category default rather than assuming "on", so a
+  // future opt-in category (defaultEnabled: false) is honoured here without
+  // this function needing to change again.
+  const stored = new Map(rows.map((r) => [r.userId, r.enabled]))
+  const fallback = defaultPreferences()[category]
+  return userIds.filter((id) => stored.get(id) ?? fallback)
 }
 
 /**

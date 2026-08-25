@@ -7,16 +7,12 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { follow, home as home_, homeMembership, notification } from "@/lib/db/schema"
 import { sendPushToUsers } from "@/lib/push"
+import type { NotificationType } from "@/lib/notification-categories"
 
-export type NotificationType =
-  | "post"
-  | "live"
-  | "like"
-  | "comment"
-  | "follow"
-  | "repost"
-  | "mention"
-  | "announcement"
+// Re-exported from the category registry instead of redeclared, so a new type
+// cannot end up known here but unregistered for delivery (or the reverse).
+// Existing importers of `NotificationType` from this module keep working.
+export type { NotificationType }
 
 export type NotificationView = {
   id: number
