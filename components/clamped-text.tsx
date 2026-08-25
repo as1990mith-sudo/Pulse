@@ -11,13 +11,16 @@ import { cn } from "@/lib/utils"
  *                 iTestify, user/organisation profile timelines and inbox chat.
  * - `ORG` (7)   — organisation / Home posts get one extra line, since ministry
  *                 announcements are typically a touch longer than a member's.
- * - `MEDIA` (2) — a main-feed member post that carries media: the media does
- *                 the visual work, so the caption stays a tight two-line lede.
+ * - `MEDIA` (4) — a main-feed post that carries media: the media does the visual
+ *                 work, so the caption stays a short lede. Applies to member and
+ *                 organisation posts alike — once an image or video is attached,
+ *                 the caption is a preview rather than the substance of the post,
+ *                 so it takes precedence over the longer ORG allowance.
  */
 export const CLAMP_LINES = {
   POST: 6,
   ORG: 7,
-  MEDIA: 2,
+  MEDIA: 4,
   // Chat bubbles are much narrower than a post card, so the same line count
   // fills far more of the screen. A tighter clamp keeps one long message from
   // taking over the whole conversation view.

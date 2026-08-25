@@ -64,6 +64,13 @@ export function MediaCaption({ text, className }: { text: string; className?: st
           "relative whitespace-pre-line text-base leading-tight drop-shadow transition-all",
           isClamped && "overflow-hidden",
           clampable && expanded && "cursor-pointer",
+          // An expanded caption covers a large area of the photo, and a
+          // drop-shadow alone is not enough to keep white text legible over a
+          // bright or busy image (a sunlit background renders it near-invisible).
+          // A dimmed, blurred panel behind the text guarantees contrast. Only
+          // applied when expanded: a single collapsed line reads fine on its own,
+          // and a permanent panel would needlessly obscure the media.
+          expanded && "-mx-2 rounded-xl bg-black/55 px-3 py-2 backdrop-blur-sm",
         )}
         style={isClamped ? { maxHeight: `${collapsedMaxEm}em` } : undefined}
         onClick={

@@ -27,7 +27,8 @@ import { useSharedMute } from "@/lib/shared-mute"
 import { getVideoPosition, setImmersiveViewerOpen } from "@/lib/video-handoff"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { CommentThread, type ThreadComment } from "@/components/comment-thread"
+import { CommentThread } from "@/components/comment-thread"
+import { toThreadComment, makeOptimisticComment } from "@/lib/feed-comment-view"
 
 // Instagram-style cap: reels may run up to 3 minutes 15 seconds. Anything longer
 // is filtered out client-side once its metadata reveals the true duration.
@@ -913,26 +914,6 @@ function ReelItem({
 
 // Maps a reel's feed comment into the shared CommentThread shape (identical to
 // the "For you" feed), so reels get the same likes + nested replies UI.
-function toThreadComment(c: FeedCommentView): ThreadComment {
-  return {
-    id: c.id,
-    parentId: c.parentId,
-    authorId: c.authorId,
-    isSelf: c.isSelf,
-    name: c.user,
-    handle: c.handle,
-    initials: c.initials,
-    color: c.color,
-    image: c.authorImage,
-    text: c.text,
-    likes: c.likes,
-    liked: c.liked,
-    edited: c.edited,
-    postedAt: c.postedAt,
-    createdAtMs: c.createdAtMs,
-  }
-}
-
 /**
  * Bottom-sheet comments for a reel. Uses the shared CommentThread — the exact
  * same component the "For you" feed uses — so reels support per-comment likes,
@@ -961,7 +942,8 @@ function CommentsSheet({
     const text = draft.trim()
     if (!text || !currentUser || sending) return
     setSending(true)
-    const optimistic = makeOptimistic(currentUser, text, null)
+    // Reels comments are always personal — this surface has no org voice switch.
+    const optimistic = makeOptimisticComment({ currentUser, text })
     setComments((prev) => [...prev, optimistic])
     setDraft("")
     haptic("light")
@@ -980,7 +962,7 @@ function CommentsSheet({
 
   async function handleReply(parentId: number, value: string) {
     if (!currentUser) return
-    const optimistic = makeOptimistic(currentUser, value, parentId)
+    const optimistic = makeOptimisticComment({ currentUser, text: value, parentId })
     setComments((prev) => [...prev, optimistic])
     haptic("light")
     try {
@@ -1105,25 +1087,4 @@ function CommentsSheet({
   )
 }
 
-// Builds an optimistic comment/reply from the current user for instant display.
-function makeOptimistic(currentUser: CurrentUser, text: string, parentId: number | null): FeedCommentView {
-  return {
-    id: Date.now(),
-    parentId,
-    authorId: currentUser.id,
-    isSelf: true,
-    user: currentUser.name,
-    handle: currentUser.handle,
-    initials: currentUser.initials,
-    color: currentUser.color,
-    authorImage: currentUser.image,
-    // Reels comments are always personal — no org voice switcher on this surface.
-    orgVerified: false,
-    text,
-    likes: 0,
-    liked: false,
-    edited: false,
-    postedAt: "Just now",
-    createdAtMs: Date.now(),
-  }
-}
+
