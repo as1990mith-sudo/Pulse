@@ -1,14 +1,16 @@
 "use client"
 
-import { useRouter } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
 
+import { useBack } from "@/lib/navigation/use-back"
+
 /**
- * Generic "Back" control that returns to whatever page the user came from,
- * mirroring the browser/device back button. We use router.back() so it reflects
- * the actual navigation history (the page where the video link was clicked),
- * and fall back to a provided href when there's no in-app history to pop
- * (e.g. the page was opened directly from a shared link or a new tab).
+ * Generic "Back" control. All of the behaviour lives in `useBack`, which unwinds
+ * the user's real navigation history instead of guessing a destination from the
+ * current route — see the note there for why that distinction matters.
+ *
+ * `fallbackHref` applies ONLY when there is no in-app history to pop (a deep link
+ * or a notification opened in a fresh tab).
  */
 export function BackButton({
   fallbackHref = "/",
@@ -19,21 +21,12 @@ export function BackButton({
   label?: string
   className?: string
 }) {
-  const router = useRouter()
-
-  const handleClick = () => {
-    // history.length > 1 means there's a previous entry to return to.
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back()
-    } else {
-      router.push(fallbackHref)
-    }
-  }
+  const goBack = useBack(fallbackHref)
 
   return (
     <button
       type="button"
-      onClick={handleClick}
+      onClick={goBack}
       className={`inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground ${className}`}
     >
       <ArrowLeft className="size-4" /> {label}

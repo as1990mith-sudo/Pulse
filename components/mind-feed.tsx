@@ -30,6 +30,8 @@ import {
   AtSign,
   UserX,
   BarChart3,
+  Pin,
+  PinOff,
 } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import {
@@ -42,6 +44,7 @@ import {
   getFeed,
   setCommentLike,
   setPostLike,
+  setPostPinned,
   type FeedPostView,
   type PostMedia,
 } from "@/app/actions/feed"
@@ -50,6 +53,7 @@ import { removeMyMention, reportMention } from "@/app/actions/mentions"
 import { toast } from "sonner"
 import { toThreadComment } from "@/lib/feed-comment-view"
 import { CommentSheet } from "@/components/comment-sheet"
+import { PinnedBadge } from "@/components/pinned-badge"
 import { toggleFollow } from "@/app/actions/follow"
 import type { CurrentUser } from "@/lib/session"
 import { Button } from "@/components/ui/button"
@@ -170,6 +174,16 @@ function mulberry32(seed: number): () => number {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
+}
+
+/**
+ * Moves admin-pinned posts to the front, preserving the relative order of both
+ * groups. Applied AFTER any shuffling or sorting, because those would otherwise
+ * undo the pin.
+ */
+function hoistPinned(posts: FeedPostView[]): FeedPostView[] {
+  if (!posts.some((p) => p.pinned)) return posts
+  return [...posts.filter((p) => p.pinned), ...posts.filter((p) => !p.pinned)]
 }
 
 /** Returns a new array shuffled deterministically from `seed` (Fisher–Yates). */
@@ -344,15 +358,22 @@ export function MindFeed({
     // Before the seed is known (server render + first client render) keep the
     // server's order untouched, so both sides agree and hydration is clean.
     const shuffled = shuffleSeed === null ? allPosts : seededShuffle(allPosts, shuffleSeed)
-    if (pinnedIds.length === 0) return shuffled
-    const pinned = pinnedIds
-      .map((id) => allPosts.find((p) => String(p.id) === id))
-      .filter((p): p is (typeof allPosts)[number] => Boolean(p))
-    const pinnedSet = new Set(pinnedIds)
-    return [...pinned, ...shuffled.filter((p) => !pinnedSet.has(String(p.id)))]
+    let ordered = shuffled
+    if (pinnedIds.length > 0) {
+      const justPosted = pinnedIds
+        .map((id) => allPosts.find((p) => String(p.id) === id))
+        .filter((p): p is (typeof allPosts)[number] => Boolean(p))
+      const justPostedSet = new Set(pinnedIds)
+      ordered = [...justPosted, ...shuffled.filter((p) => !justPostedSet.has(String(p.id)))]
+    }
+    // Admin-pinned posts are hoisted LAST so they end up above everything, including
+    // the viewer's own just-posted items. Sorting on the server is not sufficient
+    // here: the shuffle above would scatter them straight back into the pile, which
+    // is precisely what pinning exists to prevent.
+    return hoistPinned(ordered)
   }, [allPosts, shuffleSeed, pinnedIds])
   const adminPosts = useMemo(
-    () => allPosts.filter((p) => Boolean(p.orgHandle)).sort((a, b) => b.createdAtMs - a.createdAtMs),
+    () => hoistPinned(allPosts.filter((p) => Boolean(p.orgHandle)).sort((a, b) => b.createdAtMs - a.createdAtMs)),
     [allPosts],
   )
 
@@ -1314,9 +1335,36 @@ export function PostCard({
   const [edited, setEdited] = useState(post.edited)
   const [text, setText] = useState(post.text)
   const [isPending, startTransition] = useTransition()
+  // Local mirror so the badge flips immediately; the server reorders the feed on
+  // the following refresh.
+  const [pinned, setPinned] = useState(!!post.pinned)
   // Immersive media viewers, opened by tapping media in the contained preview.
   const [imageViewer, setImageViewer] = useState<number | null>(null)
   const [videoViewerKey, setVideoViewerKey] = useState<string | null>(null)
+
+  // Keep in step when the server sends a new ordering (e.g. another admin pinned
+  // something), otherwise this local copy would go stale and show the wrong state.
+  useEffect(() => {
+    setPinned(!!post.pinned)
+  }, [post.pinned])
+
+  function handleTogglePin() {
+    const next = !pinned
+    setPinned(next)
+    startTransition(async () => {
+      try {
+        await setPostPinned({ postId: post.id, pinned: next })
+        toast.success(next ? "Pinned to the top of the feed." : "Unpinned.")
+        await globalMutate("feed")
+        router.refresh()
+      } catch (err) {
+        // Roll back so the badge can't claim a pin the server refused — most
+        // often because the feed is already at the three-pin cap.
+        setPinned(!next)
+        toast.error(err instanceof Error ? err.message : "Couldn't update the pin.")
+      }
+    })
+  }
 
   function handleDelete() {
     startTransition(async () => {
@@ -1539,8 +1587,20 @@ export function PostCard({
         highlighted && "ring-2 ring-primary ring-offset-2 ring-offset-background",
       )}
     >
+      {/* Pinned marker sits above the author row, so the reason the post is at the
+          top of the feed is the first thing read. */}
+      {pinned && <PinnedBadge className={cn(feed ? "px-4 pt-3" : "px-3 pt-3")} />}
+
       {/* Header */}
-      <div className={cn("flex items-center justify-between gap-2", feed ? "px-4 py-3" : "px-3 py-3")}>
+      <div
+        className={cn(
+          "flex items-center justify-between gap-2",
+          feed ? "px-4 py-3" : "px-3 py-3",
+          // The badge already supplies the top gap; keep the avatar from being
+          // pushed too far from it.
+          pinned && "pt-1.5",
+        )}
+      >
         <div className="flex min-w-0 items-center gap-3">
           <Link
             href={post.orgHandle ? `/org/${post.orgHandle}` : `/u/${post.authorId}`}
@@ -1600,6 +1660,15 @@ export function PostCard({
                 <DropdownMenuItem onClick={copyPost} className={POPUP_MENU_ITEM}>
                   {copied ? <Check /> : <Copy />}
                   {copied ? "Copied" : "Copy text"}
+                </DropdownMenuItem>
+              )}
+
+              {/* Admin pinning sits OUTSIDE the isSelf branch on purpose: the whole
+                  point is that an admin can pin anyone's post, not just their own. */}
+              {post.canPin && (
+                <DropdownMenuItem onClick={handleTogglePin} disabled={isPending} className={POPUP_MENU_ITEM}>
+                  {pinned ? <PinOff /> : <Pin />}
+                  {pinned ? "Unpin from feed" : "Pin to top of feed"}
                 </DropdownMenuItem>
               )}
 

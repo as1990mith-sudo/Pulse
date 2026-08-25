@@ -15,6 +15,8 @@ import {
   Loader2,
   MoreHorizontal,
   Pencil,
+  Pin,
+  PinOff,
   Plus,
   Send,
   Share2,
@@ -38,8 +40,10 @@ import {
   deleteCommunityPost,
   editCommunityPost,
   getCommunityPosts,
+  setCommunityPostPinned,
   type CommunityPostView,
 } from "@/app/actions/community"
+import { PinnedBadge } from "@/components/pinned-badge"
 import { MiniChatProvider, useMiniChat } from "@/components/mini-chat"
 import { CommunityConversation } from "@/components/community-conversation"
 import { FeedVideo } from "@/components/feed-video"
@@ -140,11 +144,13 @@ function FeedPostVideo({ src }: { src: string }) {
 function PostItem({
   post,
   onDeleted,
+  onPinned,
   onOpen,
   highlighted = false,
 }: {
   post: CommunityPostView
   onDeleted: (id: number) => void
+  onPinned: () => void
   onOpen: () => void
   highlighted?: boolean
 }) {
@@ -161,7 +167,15 @@ function PostItem({
   // instead of the conversation, so the media can be viewed at its true ratio.
   const [mediaOpen, setMediaOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
+  // Local mirror so the badge flips at once; the refresh below reorders the room.
+  const [pinned, setPinned] = useState(!!post.pinned)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  // Track server updates (e.g. another admin pinned something) so this local copy
+  // cannot drift out of date.
+  useEffect(() => {
+    setPinned(!!post.pinned)
+  }, [post.pinned])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -206,6 +220,23 @@ function PostItem({
     }
   }
 
+  function handleTogglePin() {
+    setMenuOpen(false)
+    const next = !pinned
+    setPinned(next)
+    startTransition(async () => {
+      try {
+        await setCommunityPostPinned({ postId: post.id, pinned: next })
+        // Re-reads the list so the thread moves to its new position.
+        onPinned()
+      } catch (err) {
+        // Roll back: the server refuses once the room is at the three-pin cap.
+        setPinned(!next)
+        setError(err instanceof Error ? err.message : "Couldn't update the pin.")
+      }
+    })
+  }
+
   function startEdit() {
     setMenuOpen(false)
     setDraft(body)
@@ -240,6 +271,10 @@ function PostItem({
         highlighted && "bg-emerald-500/5",
       )}
     >
+      {/* Explains why this thread is at the top, rather than leaving it looking
+          like the newest question. */}
+      {pinned && <PinnedBadge className="mb-2" />}
+
       {/* Header: the avatar and the name/date sit on ONE centered row, so the
           name aligns to the vertical middle of the avatar rather than its top.
           The body, media and actions then flow in an indented block below. */}
@@ -284,6 +319,19 @@ function PostItem({
                 >
                   <Copy className="size-4" /> Copy text
                 </button>
+                {/* Deliberately not gated on isSelf: an admin pins ANY thread. */}
+                {post.canPin && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={handleTogglePin}
+                    disabled={isPending}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-secondary disabled:opacity-50"
+                  >
+                    {pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+                    {pinned ? "Unpin" : "Pin to top"}
+                  </button>
+                )}
                 {post.isSelf && (
                   <button
                     type="button"
@@ -1239,6 +1287,13 @@ export function CommunityHelp({
     })
   }
 
+  // A pin changes the ORDER of the room, not just one row, so unlike the updates
+  // above this one revalidates instead of patching locally — the server decides
+  // where the pinned thread now sits.
+  function handlePinned() {
+    void mutatePosts()
+  }
+
   // Keep feed reply counts in sync when replies are added/removed in the
   // conversation screen (optimistic, no refetch).
   function handleCountChange(postId: number, delta: number) {
@@ -1350,6 +1405,7 @@ export function CommunityHelp({
                     key={post.id}
                     post={post}
                     onDeleted={handleDeleted}
+                    onPinned={handlePinned}
                     onOpen={() => setActiveId(post.id)}
                     highlighted={highlightedQ === String(post.id)}
                   />
