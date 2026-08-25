@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { communityComment, communityPost, home, homeMembership, organization, user as userTable } from "@/lib/db/schema"
 import { getProfileScope, scopeToHome } from "@/lib/home/profile-scope"
+import { canPinInScope, MAX_PINNED_PER_SCOPE, pinWithinCap } from "@/lib/home/can-pin"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { formatPostTimestamp } from "@/lib/format-timestamp"
 import { EDIT_WINDOW_MS } from "@/lib/interactions"
@@ -59,6 +60,11 @@ export type CommunityPostView = {
   // and authorId stays null so the row never links to the individual who typed
   // it. Null for personal threads, which keep normal author attribution.
   organizationId: string | null
+  // Admin pinning, mirroring the main feed. Optional because only the Community
+  // Help list (getCommunityPosts) honours pinning — profile and org-profile
+  // thread lists stay chronological.
+  pinned?: boolean
+  canPin?: boolean
 }
 
 export type CommunityCommentView = {
@@ -195,12 +201,26 @@ export async function getCommunityPosts(homeId?: string | null): Promise<Communi
   // buries older unanswered questions forever while the newest few soak up all
   // the attention. Shuffling on every load gives every open thread a fair shot
   // at being seen, so refreshing surfaces a different mix each time.
-  for (let i = posts.length - 1; i > 0; i--) {
+  //
+  // Pinned threads are held OUT of the shuffle and put back on top afterwards.
+  // Ordering them in SQL alone would not work here — the shuffle below would
+  // scatter them straight back into the pile, which is exactly what pinning is
+  // supposed to prevent.
+  const pinned = posts.filter((p) => p.pinnedAt !== null)
+  const rest = posts.filter((p) => p.pinnedAt === null)
+  for (let i = rest.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
-    ;[posts[i], posts[j]] = [posts[j], posts[i]]
+    ;[rest[i], rest[j]] = [rest[j], rest[i]]
   }
+  // Most recently pinned first, so a new pin is seen before older ones.
+  pinned.sort((a, b) => b.pinnedAt!.getTime() - a.pinnedAt!.getTime())
 
-  return buildCommunityPostViews(posts, viewerId)
+  const viewerCanPin = await canPinInScope(homeId ?? null)
+  // Keyed by id rather than by position: the flag must stay attached to the right
+  // thread even if the view builder ever changes the order it returns.
+  const pinnedIds = new Set(pinned.map((p) => p.id))
+  const views = await buildCommunityPostViews([...pinned, ...rest], viewerId)
+  return views.map((v) => ({ ...v, pinned: pinnedIds.has(v.id), canPin: viewerCanPin }))
 }
 
 /**
@@ -614,6 +634,42 @@ export async function deleteCommunityPost(postId: number) {
   if (!post) throw new Error("Post not found.")
   if (post.userId !== user.id) throw new Error("You can only delete your own post.")
   await db.update(communityPost).set({ deleted: true }).where(eq(communityPost.id, postId))
+  revalidatePath("/chatrooms/community")
+}
+
+/**
+ * Pins or unpins ANY Community Help thread in the room it belongs to. Mirrors
+ * setPostPinned in app/actions/feed.ts, including the atomic cap check.
+ *
+ * Authority is derived from the THREAD's own `homeId`, never the caller's active
+ * Home, so an admin of one Home cannot pin inside another's private room.
+ */
+export async function setCommunityPostPinned(input: { postId: number; pinned: boolean }) {
+  const user = await requireUser()
+  const [row] = await db
+    .select({ homeId: communityPost.homeId, pinnedAt: communityPost.pinnedAt })
+    .from(communityPost)
+    .where(eq(communityPost.id, input.postId))
+  if (!row) throw new Error("That thread no longer exists.")
+
+  if (!(await canPinInScope(row.homeId))) {
+    throw new Error("Only admins of this Home can pin threads.")
+  }
+
+  if (input.pinned === (row.pinnedAt !== null)) return
+
+  if (input.pinned) {
+    const ok = await pinWithinCap("community_post", input.postId, row.homeId, user.id)
+    if (!ok) {
+      throw new Error(`You can pin up to ${MAX_PINNED_PER_SCOPE} threads. Unpin one before pinning another.`)
+    }
+  } else {
+    await db
+      .update(communityPost)
+      .set({ pinnedAt: null, pinnedBy: null })
+      .where(eq(communityPost.id, input.postId))
+  }
+
   revalidatePath("/chatrooms/community")
 }
 
