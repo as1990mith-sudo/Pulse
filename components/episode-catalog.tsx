@@ -1,16 +1,19 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { useSearchParams } from "next/navigation"
 import { Headphones, Radio, Search, Video } from "lucide-react"
+import { useUrlState } from "@/lib/navigation/use-url-state"
+import { useRestoredScroll } from "@/lib/navigation/use-restored-scroll"
 import type { Show } from "@/lib/data"
 import { EpisodeRow } from "@/components/profile/episode-row"
 import { VideoCard } from "@/components/profile/video-card"
 import { isPlayable } from "@/components/episode-player-provider"
 import { cn } from "@/lib/utils"
 
-type MediaTab = "audio" | "video" | "live"
-type LiveKind = "video" | "audio"
+const MEDIA_TABS = ["audio", "video", "live"] as const
+const LIVE_KINDS = ["video", "audio"] as const
+type MediaTab = (typeof MEDIA_TABS)[number]
+type LiveKind = (typeof LIVE_KINDS)[number]
 
 /** Media kind of an episode: video when it has a video recording, else audio. */
 function mediaKind(e: Show): "audio" | "video" {
@@ -39,40 +42,19 @@ export function EpisodeCatalog({
 }) {
   const [query, setQuery] = useState("")
 
-  // Persist the active top-level tab (?cat=) and the Live subtab (?kind=) in the
-  // URL so the selection survives navigation. Opening a live video replay routes
-  // to /live/[id]; the back button restores /u/[id]?tab=catalogue&cat=live&kind=video,
-  // so the user returns to the live *video* Catalogue rather than resetting to Audio.
-  const searchParams = useSearchParams()
-  const catParam = searchParams.get("cat")
-  const kindParam = searchParams.get("kind")
-  const [tab, setTab] = useState<MediaTab>(
-    catParam === "live" || catParam === "video" || catParam === "audio" ? catParam : "audio",
-  )
-  // Video / Audio subtab within the Live tab.
-  const [liveKind, setLiveKind] = useState<LiveKind>(kindParam === "audio" ? "audio" : "video")
-
-  // Reflect a tab/subtab change in the URL without navigating, preserving any
-  // other params already present (e.g. ?tab=catalogue). Next.js keeps
-  // useSearchParams in sync with replaceState.
-  function syncUrl(nextTab: MediaTab, nextKind: LiveKind) {
-    if (typeof window === "undefined") return
-    const params = new URLSearchParams(window.location.search)
-    params.set("cat", nextTab)
-    if (nextTab === "live") params.set("kind", nextKind)
-    else params.delete("kind")
-    window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`)
-  }
-
-  function selectTab(next: MediaTab) {
-    setTab(next)
-    syncUrl(next, liveKind)
-  }
-
-  function selectLiveKind(next: LiveKind) {
-    setLiveKind(next)
-    syncUrl(tab, next)
-  }
+  // The active top-level tab (?cat=) and the Live subtab (?kind=) live in the URL
+  // so the selection survives navigation. Opening a live video replay routes to
+  // /live/[id]; Back restores /u/[id]?tab=catalogue&cat=live&kind=video, so the
+  // user returns to the live *video* Catalogue rather than resetting to Audio.
+  //
+  // This used to hand-roll the sync with `replaceState(null, ...)`, which wiped the
+  // Next.js router state stored on the entry. The shared hook merges into the
+  // existing state and preserves unrelated params such as ?tab=catalogue.
+  const [tab, selectTab] = useUrlState<MediaTab>("cat", "audio", { valid: MEDIA_TABS })
+  const [liveKind, selectLiveKind] = useUrlState<LiveKind>("kind", "video", { valid: LIVE_KINDS })
+  // Return from an episode to the same place in a long catalogue. Keyed by tab (and
+  // the Live subtab) so each list keeps its own position instead of sharing one.
+  useRestoredScroll(`catalogue:${tab}${tab === "live" ? `:${liveKind}` : ""}`)
   // Selected playlist filter for the (upload) video tab ("all" = every playlist).
   const [playlist, setPlaylist] = useState<string>("all")
 

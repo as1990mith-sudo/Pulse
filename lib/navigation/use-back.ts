@@ -28,9 +28,7 @@ export function useBack(fallbackHref = "/") {
     // Not history.length: that counts other origins visited in this tab, so on a
     // deep link it is frequently already > 1 and Back would exit the app.
     if (hasInAppHistory()) {
-      // No manual decrement: router.back() fires popstate, and the app-wide
-      // listener in useNavDepthTracking accounts for it. Decrementing here as
-      // well would double-count.
+      // Nothing to adjust: the entry we land on already carries its own depth.
       router.back()
     } else {
       router.replace(fallbackHref)

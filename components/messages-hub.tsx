@@ -3,6 +3,7 @@
 import { MessageCircle, Users } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUrlState } from "@/lib/navigation/use-url-state"
+import { useRestoredScroll } from "@/lib/navigation/use-restored-scroll"
 import { useHideOnScrollDown } from "@/lib/chat-chrome"
 import { DmInbox } from "@/components/dm-inbox"
 import { ChatroomBrowser } from "@/components/chatroom-browser"
@@ -47,6 +48,9 @@ export function MessagesHub({
   // `replaceState(null, ...)`, which WIPED the Next.js router state stored on the
   // history entry. The shared hook preserves it.
   const [tab, selectTab] = useUrlState<Tab>("tab", "chats", { valid: TAB_KEYS })
+  // Come back from a conversation to the same place in the list. Scoped per tab so
+  // Chats and Requests keep independent positions rather than sharing one offset.
+  useRestoredScroll(`messages:${tab}`)
   const chromeHidden = useHideOnScrollDown()
 
   return (

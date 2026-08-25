@@ -1,8 +1,8 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { useSearchParams } from "next/navigation"
 import { Plus, Newspaper, PenLine, LayoutGrid, MessagesSquare } from "lucide-react"
+import { useUrlState } from "@/lib/navigation/use-url-state"
 import Link from "next/link"
 import type { CommunityPostView } from "@/app/actions/community"
 import type { FeedPostView } from "@/app/actions/feed"
@@ -13,7 +13,8 @@ import { PostCard } from "@/components/mind-feed"
 import { ArticleRow } from "@/components/articles/article-card"
 import { cn } from "@/lib/utils"
 
-type TabKey = "posts" | "thread" | "articles"
+const TAB_KEYS = ["posts", "thread", "articles"] as const
+type TabKey = (typeof TAB_KEYS)[number]
 
 export function ProfileTabs({
   name,
@@ -65,32 +66,23 @@ export function ProfileTabs({
     { key: "articles", label: "Articles", icon: <Newspaper className="size-4" />, count: articles.length },
   ]
 
-  // Initialize the active tab from the URL (?tab=…) so the selection survives
-  // navigation — opening an item and coming back reopens the same tab rather
-  // than resetting to Posts.
-  const searchParams = useSearchParams()
-  const tabFromUrl = ((): TabKey => {
-    const t = searchParams.get("tab")
-    // "anonymous" is the legacy key for what is now the "Thread" tab.
-    if (t === "anonymous") return "thread"
-    return t === "thread" || t === "articles" || t === "posts" ? t : "posts"
-  })()
-  const [tab, setTab] = useState<TabKey>(tabFromUrl)
+  // The active tab lives in the URL (?tab=…) so opening an item and coming back
+  // reopens the same tab rather than resetting to Posts.
+  //
+  // The previous hand-rolled version rebuilt the URL as `pathname?tab=key`, which
+  // silently DROPPED every other query param on the profile, and passed `null` to
+  // replaceState, wiping the Next.js router state stored on the entry. The shared
+  // hook edits a copy of the existing params and merges into the existing state.
+  const [tab, selectTab] = useUrlState<TabKey>("tab", "posts", {
+    valid: TAB_KEYS,
+    // "anonymous" was the old key for what is now "Thread"; keep already-shared
+    // links working instead of bouncing them to Posts.
+    alias: { anonymous: "thread" },
+  })
   const activeIndex = Math.max(
     0,
     tabs.findIndex((t) => t.key === tab),
   )
-
-  function selectTab(key: TabKey) {
-    setTab(key)
-    // Reflect the tab in the URL (without a navigation) so it's restored when
-    // the user returns from an opened item. Next.js syncs replaceState with
-    // useSearchParams. Posts is the default, so it needs no query param.
-    if (typeof window !== "undefined") {
-      const url = key === "posts" ? window.location.pathname : `${window.location.pathname}?tab=${key}`
-      window.history.replaceState(null, "", url)
-    }
-  }
 
   return (
     <section className="mt-2">

@@ -45,6 +45,7 @@ import {
 } from "@/app/actions/community"
 import { PinnedBadge } from "@/components/pinned-badge"
 import { useOverlayHistory } from "@/lib/navigation/use-overlay-history"
+import { useRestoredScroll } from "@/lib/navigation/use-restored-scroll"
 import { hasInAppHistory } from "@/lib/navigation/history-key"
 import { MiniChatProvider, useMiniChat } from "@/components/mini-chat"
 import { CommunityConversation } from "@/components/community-conversation"
@@ -1152,6 +1153,10 @@ export function CommunityHelp({
   const [infoOpen, setInfoOpen] = useState(false)
   const [highlightedQ, setHighlightedQ] = useState<string | null>(null)
   const [activeId, setActiveId] = useState<number | null>(null)
+  // Closing a conversation returns to the feed at the same place. Disabled while a
+  // conversation is open: that overlay is its own history entry, and restoring the
+  // feed offset underneath it would fight the overlay's own scrolling.
+  useRestoredScroll("community", undefined, activeId === null)
   // One-shot flag consumed by the history effect below: true only for the
   // conversation opened directly by an incoming ?q=<id> deep link (e.g. tapping
   // a post on someone's profile). In that case the current history entry already

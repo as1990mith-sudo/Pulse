@@ -25,10 +25,10 @@ import { useSearchParams } from "next/navigation"
 export function useUrlState<T extends string>(
   key: string,
   fallback: T,
-  options: { valid?: readonly T[] } = {},
+  options: { valid?: readonly T[]; alias?: Readonly<Record<string, T>> } = {},
 ): [T, (next: T) => void] {
   const searchParams = useSearchParams()
-  const { valid } = options
+  const { valid, alias } = options
 
   // Reading through a validator means a hand-edited or stale URL (?tab=deleted)
   // degrades to the fallback instead of rendering an empty screen.
@@ -36,10 +36,14 @@ export function useUrlState<T extends string>(
     (params: URLSearchParams | null): T => {
       const raw = params?.get(key)
       if (!raw) return fallback
+      // Renamed values map old → new, so links shared before a tab was renamed
+      // still land on the right place instead of silently falling back.
+      const aliased = alias?.[raw]
+      if (aliased) return aliased
       if (valid && !valid.includes(raw as T)) return fallback
       return raw as T
     },
-    [key, fallback, valid],
+    [key, fallback, valid, alias],
   )
 
   // Local state is the render source of truth so updates are instant, with the
