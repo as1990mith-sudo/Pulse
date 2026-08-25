@@ -55,6 +55,7 @@ import type { CurrentUser } from "@/lib/session"
 import { Button } from "@/components/ui/button"
 import { FormattedTextarea } from "@/components/formatted-textarea"
 import { HomeVoiceSwitch } from "@/components/home-voice-switch"
+import { useHomeVoice } from "@/lib/use-home-voice"
 import { useMentionAutocomplete, MentionAutocompleteList } from "@/components/mention-autocomplete"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card } from "@/components/ui/card"
@@ -1223,6 +1224,9 @@ export function PostCard({
 }) {
   const feed = variant === "feed"
   const router = useRouter()
+  // Non-null only for admins of the active Home, letting them reply in the
+  // organisation's voice. Deduped by SWR across every card on screen.
+  const homeVoice = useHomeVoice()
   const [liked, setLiked] = useState(post.liked)
   const [likes, setLikes] = useState(post.likes)
   const [likeBurst, setLikeBurst] = useState(false)
@@ -1366,9 +1370,9 @@ export function PostCard({
     downloadKind: post.image ? "image" : post.video ? "video" : null,
   }
 
-  async function submitComment(text: string) {
+  async function submitComment(text: string, asHome?: boolean) {
     if (!currentUser) return
-    await addPostComment({ postId: post.id, text })
+    await addPostComment({ postId: post.id, text, asOrganization: asHome })
     // Refresh the polled feed (used on the Tweet tab) and the server tree
     // (used on profile pages where the feed isn't polled).
     await globalMutate("feed")
@@ -1788,6 +1792,7 @@ export function PostCard({
         showCopy={false}
         enforceTimeWindows={false}
         onSubmit={submitComment}
+        homeVoice={homeVoice}
         onLike={handleCommentLike}
         onReply={handleCommentReply}
         onEdit={handleCommentEdit}
