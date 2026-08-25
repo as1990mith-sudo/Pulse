@@ -54,7 +54,7 @@ import { toggleFollow } from "@/app/actions/follow"
 import type { CurrentUser } from "@/lib/session"
 import { Button } from "@/components/ui/button"
 import { FormattedTextarea } from "@/components/formatted-textarea"
-import { HomeVoiceSwitch } from "@/components/home-voice-switch"
+import { HomeVoiceSwitch, type HomeVoice } from "@/components/home-voice-switch"
 import { useHomeVoice } from "@/lib/use-home-voice"
 import { useMentionAutocomplete, MentionAutocompleteList } from "@/components/mention-autocomplete"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -494,13 +494,25 @@ export function MindFeed({
   // Who the composer is currently speaking as — drives the avatar so the choice
   // is visible at a glance rather than only in the control below it.
   const speakingAsHome = !!homeVoice && postAsHome
+  // `href` follows the selected voice: tapping the avatar opens the profile of
+  // whoever the post would be published as — the organisation while speaking for
+  // the Home, otherwise the viewer's own profile. Null when we can't resolve a
+  // destination (e.g. signed out), in which case the avatar renders unlinked.
   const activeVoice = speakingAsHome
-    ? { name: homeVoice.name, image: homeVoice.image, initials: homeVoice.initials, color: "bg-primary/15 text-primary" }
+    ? {
+        name: homeVoice.name,
+        image: homeVoice.image,
+        initials: homeVoice.initials,
+        color: "bg-primary/15 text-primary",
+        href: homeVoice.handle ? `/org/${homeVoice.handle}` : null,
+      }
     : {
         name: currentUser?.name ?? "",
         image: currentUser?.image ?? null,
         initials: currentUser?.initials ?? "",
         color: currentUser?.color ?? "",
+        // /u/[id] is keyed by user id, not handle.
+        href: currentUser?.id ? `/u/${currentUser.id}` : null,
       }
 
   function publish(e: React.FormEvent) {
@@ -652,9 +664,14 @@ export function MindFeed({
       {tab === "for-you" && (
       <div className="border-y border-border/60 bg-gradient-to-b from-card/60 to-background px-4 py-5 sm:px-5">
         <form onSubmit={publish} className="flex gap-4">
+          {/* The avatar follows the selected voice, so it opens the profile of
+              whoever the post would be published as: the organisation while
+              "organisation" is selected, the person while "individual" is. It
+              already SHOWS the active voice, so linking anywhere else would
+              contradict the face on screen. */}
           <Link
-            href={`/u/${currentUser.id}`}
-            aria-label="View your profile"
+            href={activeVoice.href ?? `/u/${currentUser.id}`}
+            aria-label={speakingAsHome ? `View ${activeVoice.name}'s profile` : "View your profile"}
             // self-start stops the link from stretching to the full row height
             // (flex default), so only the avatar itself opens the profile — not
             // the empty column below it.
