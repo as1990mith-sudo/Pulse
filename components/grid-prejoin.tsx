@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react"
 import { Mic, MicOff, Video, VideoOff, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { LIVE_MIC_CONSTRAINTS } from "@/lib/live-audio-chain"
+import { applyAudioRouting, prepareAudioRouting } from "@/lib/audio-routing"
 
 /**
  * Pre-join preview for a grid ("landscape") video meeting. A participant sees
@@ -39,7 +41,18 @@ export function GridPrejoin({
     let cancelled = false
     async function start() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        // Same capture constraints the session will actually publish with. Bare
+        // `audio: true` made the pre-join mic check a poor predictor of the real
+        // thing: the preview ran without AEC or mono capture, so a device that
+        // sounded fine here could still echo or arrive one-eared once live.
+        prepareAudioRouting()
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: LIVE_MIC_CONSTRAINTS,
+        })
+        // The preview itself opens a mic, so it can strand iOS in the earpiece
+        // before the session even starts. Route it like the real thing.
+        applyAudioRouting()
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop())
           return

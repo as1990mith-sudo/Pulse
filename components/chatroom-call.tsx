@@ -18,6 +18,8 @@ import { Button } from "@/components/ui/button"
 import { CallButton } from "@/components/call-controls"
 import { cn } from "@/lib/utils"
 import { getAvatarColor, getInitials } from "@/lib/identity"
+import { LIVE_MIC_CONSTRAINTS, LIVE_VOICE_PRESET } from "@/lib/live-audio-chain"
+import { applyAudioRouting, prepareAudioRouting, releaseAudioRouting } from "@/lib/audio-routing"
 import { getChatroomCallStatus, getChatroomCallToken } from "@/app/actions/chatroom-call"
 
 /**
@@ -63,6 +65,9 @@ export function ChatroomCall({
     if (room) {
       room.disconnect()
       roomRef.current = null
+      // Restore the high-fidelity output profile, otherwise media played after
+      // the call stays muffled until reload.
+      releaseAudioRouting()
     }
     setJoined(false)
     setParticipants([])
@@ -122,8 +127,13 @@ export function ChatroomCall({
         .on(RoomEvent.ParticipantDisconnected, refreshParticipants)
         .on(RoomEvent.Disconnected, () => leave())
 
+      // Neutral session before the mic opens, loudspeaker re-asserted after.
+      // Without this an iOS caller lands in the earpiece the instant their mic
+      // goes live. See lib/audio-routing.ts.
+      prepareAudioRouting()
       await room.connect(creds.url, creds.token)
       await room.localParticipant.setMicrophoneEnabled(true)
+      applyAudioRouting()
       setJoined(true)
       setMicOn(true)
       refreshParticipants()
