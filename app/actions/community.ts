@@ -276,6 +276,41 @@ export async function getOrgCommunityPosts(organizationId: string): Promise<Comm
 }
 
 /**
+ * The organisation the signed-in viewer may publish Community Help threads as,
+ * or null. Returns a single org — the one they own, preferring it over an
+ * admin-role membership — so the composer's identity picker gains one extra
+ * choice rather than an open-ended list.
+ */
+export async function getPublishableOrg(): Promise<{ id: string; name: string; logo: string | null } | null> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  const viewerId = session?.user?.id
+  if (!viewerId) return null
+
+  const [owned] = await db
+    .select({ id: organization.id, name: organization.name, logo: organization.logo })
+    .from(organization)
+    .where(eq(organization.ownerId, viewerId))
+    .limit(1)
+  if (owned) return owned
+
+  const [administered] = await db
+    .select({ id: organization.id, name: organization.name, logo: organization.logo })
+    .from(organization)
+    .innerJoin(home, eq(home.organizationId, organization.id))
+    .innerJoin(homeMembership, eq(homeMembership.homeId, home.id))
+    .where(
+      and(
+        eq(homeMembership.userId, viewerId),
+        eq(homeMembership.status, "active"),
+        eq(homeMembership.role, "administrator"),
+        isNull(home.deletedAt),
+      ),
+    )
+    .limit(1)
+  return administered ?? null
+}
+
+/**
  * True when the viewer owns the organisation or holds an admin-level role in its
  * Home. Used to gate anonymous org-voice threads on the org profile.
  */

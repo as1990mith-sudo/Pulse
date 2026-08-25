@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { SiteHeader } from "@/components/site-header"
 import { ChatRoomsTabs } from "@/components/chat-rooms-tabs"
-import { getCommunityPosts } from "@/app/actions/community"
+import { getCommunityPosts, getPublishableOrg } from "@/app/actions/community"
 import { getChannelFeed } from "@/app/actions/feed"
 import { getCurrentUser } from "@/lib/session"
 
@@ -16,7 +16,13 @@ export default async function ChatroomsPage() {
 
   // Both tab feeds are fetched up front so switching between Community Help and
   // iTestify is instant (no intermediate screen, nothing to "open").
-  const [communityPosts, itestifyPosts] = await Promise.all([getCommunityPosts(), getChannelFeed("itestify")])
+  // postAsOrg is non-null only for org owners/admins, letting them publish a
+  // Community Help thread in the organisation's voice.
+  const [communityPosts, itestifyPosts, postAsOrg] = await Promise.all([
+    getCommunityPosts(),
+    getChannelFeed("itestify"),
+    getPublishableOrg(),
+  ])
 
   return (
     // Full-viewport immersive shell: the main Frequency header stays visible on
@@ -26,7 +32,12 @@ export default async function ChatroomsPage() {
     <div className="flex h-[100dvh] flex-col overflow-hidden">
       <SiteHeader collapsible />
       <div className="min-h-0 flex-1">
-        <ChatRoomsTabs communityPosts={communityPosts} itestifyPosts={itestifyPosts} currentUser={currentUser} />
+        <ChatRoomsTabs
+          communityPosts={communityPosts}
+          itestifyPosts={itestifyPosts}
+          currentUser={currentUser}
+          postAsOrg={postAsOrg}
+        />
       </div>
     </div>
   )

@@ -24,10 +24,12 @@ export function ChatRoomsTabs({
   communityPosts,
   itestifyPosts,
   currentUser,
+  postAsOrg = null,
 }: {
   communityPosts: React.ComponentProps<typeof CommunityHelp>["initialPosts"]
   itestifyPosts: React.ComponentProps<typeof ITestify>["initialPosts"]
   currentUser: React.ComponentProps<typeof ITestify>["currentUser"]
+  postAsOrg?: React.ComponentProps<typeof CommunityHelp>["postAsOrg"]
 }) {
   const [tab, setTab] = useState<Tab>("community")
   // The Community Help info (ⓘ) sheet — its content moved here from the old
@@ -109,7 +111,7 @@ export function ChatRoomsTabs({
       {/* Active experience fills the rest and owns its own scroll. */}
       <div className="relative flex-1 overflow-hidden">
         {tab === "community" ? (
-          <CommunityHelp embedded initialPosts={communityPosts} />
+          <CommunityHelp embedded initialPosts={communityPosts} postAsOrg={postAsOrg} />
         ) : (
           <ITestify embedded initialPosts={itestifyPosts} currentUser={currentUser} />
         )}
