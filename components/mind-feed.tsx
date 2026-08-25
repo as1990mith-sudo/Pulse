@@ -1463,9 +1463,6 @@ export function PostCard({
           : []
   const hasMedia = mediaItems.length > 0
 
-  // Captions fade into an inline "Read more" toggle based on line count.
-  // Line height here is 1.25 (leading-tight).
-  const POST_LINE_HEIGHT = 1.25
   // Media is checked BEFORE the organisation allowance: with an image or video
   // attached the caption is a lede for the media, so a Home post with media gets
   // the same short clamp as a member's rather than the longer text-post length.
@@ -1478,7 +1475,15 @@ export function PostCard({
           CLAMP_LINES.ORG
         : // Everything else (text-only, or the same post on a profile/channel).
           CLAMP_LINES.POST
-  const collapsedMaxEm = clampLines * POST_LINE_HEIGHT
+  // Collapsed height, in px, MEASURED from the caption's real line-height rather
+  // than assumed. This was previously `lines * 1.25em`, hardcoding leading-tight
+  // while the caption actually renders at 1.5 — so a 4-line clamp produced a
+  // 5em box that fits only 3.3 lines and sliced the fourth in half. Measuring
+  // keeps the clamp honest if the type scale ever changes again.
+  //
+  // Null until measured; the caption stays unclamped for that first paint, which
+  // is invisible because the effect runs before the browser paints.
+  const [collapsedMaxPx, setCollapsedMaxPx] = useState<number | null>(null)
   // A clamped, un-expanded caption that actually overflows shows the fade.
   const isClamped = clampable && !expanded
   // The fade blends into whatever sits behind the caption: the immersive feed
@@ -1493,9 +1498,26 @@ export function PostCard({
       setClampable(false)
       return
     }
-    const lineHeightPx = collapsedMaxEm * Number.parseFloat(getComputedStyle(el).fontSize || "16")
-    setClampable(el.scrollHeight > lineHeightPx + 2)
-  }, [text, collapsedMaxEm, expanded])
+    const measure = () => {
+      const style = getComputedStyle(el)
+      const fontSize = Number.parseFloat(style.fontSize) || 16
+      // `line-height: normal` computes to the literal string rather than a px
+      // value, so fall back to the ~1.2 ratio browsers use for it.
+      const parsed = Number.parseFloat(style.lineHeight)
+      const lineHeight = Number.isFinite(parsed) ? parsed : fontSize * 1.2
+      const maxPx = lineHeight * clampLines
+      setCollapsedMaxPx(maxPx)
+      // Half a line of slack: sub-pixel rounding on scrollHeight would otherwise
+      // flag an exactly-full caption as overflowing and show a pointless toggle.
+      setClampable(el.scrollHeight > maxPx + lineHeight / 2)
+    }
+    measure()
+    // Re-measure on reflow (rotation, font swap, container resize) so the clamp
+    // and the "Read more" toggle stay correct instead of going stale.
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [text, clampLines, expanded])
 
   // The first link in the post (if any) gets a rich preview card rendered below
   // the text, with the bare link beneath it.
@@ -1712,7 +1734,7 @@ export function PostCard({
                 <div
                   ref={textWrapRef}
                   className={cn("relative", isClamped && "overflow-hidden", clampable && expanded && "cursor-pointer")}
-                  style={isClamped ? { maxHeight: `${collapsedMaxEm}em` } : undefined}
+                  style={isClamped && collapsedMaxPx != null ? { maxHeight: `${collapsedMaxPx}px` } : undefined}
                   onClick={
                     clampable && expanded
                       ? (e) => {
