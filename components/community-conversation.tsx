@@ -1,9 +1,9 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import useSWR from "swr"
-import { ArrowLeft, ChevronDown, Loader2, Send, Share2, X } from "lucide-react"
+import { ArrowLeft, ChevronDown, Loader2, Send, Share2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ShareSheet } from "@/components/share-sheet"
@@ -21,7 +21,7 @@ import {
 } from "@/app/actions/community"
 import { CommentThread, type ThreadComment } from "@/components/comment-thread"
 import { FeedVideo } from "@/components/feed-video"
-import { VideoLightbox } from "@/components/community-video-lightbox"
+import { CommunityMediaViewer } from "@/components/community-media-viewer"
 import { setImmersiveViewerOpen } from "@/lib/video-handoff"
 import { useMiniChat } from "@/components/mini-chat"
 import { BibleChips, FeedPostImage, LikeButton, PostIdentity, SaveButton, ANON_AVATAR } from "@/components/community-help-shared"
@@ -165,6 +165,9 @@ export function CommunityConversation({
 }) {
   const [shareOpen, setShareOpen] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
+  // This thread first, then its related questions — the order the full-screen
+  // viewer swipes through, so the clip that was tapped is always slide one.
+  const mediaStack = useMemo(() => [post, ...related.filter((r) => r.id !== post.id)], [post, related])
   const scrollRef = useRef<HTMLDivElement>(null)
   const { openProfile } = useMiniChat()
 
@@ -257,7 +260,9 @@ export function CommunityConversation({
           {post.imageUrl && (
             <FeedPostImage src={post.imageUrl} onClick={() => setLightboxOpen(true)} className="mt-4" />
           )}
-          {post.videoUrl && <PostVideo src={post.videoUrl} />}
+          {post.videoUrl && (
+            <PostVideo src={post.videoUrl} post={post} siblings={mediaStack} onAuthorClick={openProfile} />
+          )}
           <BibleChips text={post.body} className="mt-4" />
 
           <div className="mt-5 flex items-center gap-2 text-sm font-medium text-muted-foreground">
@@ -321,60 +326,23 @@ export function CommunityConversation({
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
 
       {lightboxOpen && post.imageUrl && (
-        <ImageLightbox src={post.imageUrl} onClose={() => setLightboxOpen(false)} />
+        <CommunityMediaViewer
+          kind="image"
+          posts={mediaStack}
+          startId={post.id}
+          onClose={() => setLightboxOpen(false)}
+          onOpenComments={() => setLightboxOpen(false)}
+          onAuthorClick={openProfile}
+        />
       )}
     </div>,
     document.body,
   )
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Full-screen image lightbox                                                */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Minimal full-screen viewer for a single attached image. Shows the image at
- * its natural aspect ratio (object-contain) on a black backdrop; tapping the
- * backdrop or the close button dismisses it. Rendered in its own portal so it
- * sits above the conversation dialog.
- */
-function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose()
-    }
-    document.addEventListener("keydown", onKey)
-    return () => document.removeEventListener("keydown", onKey)
-  }, [onClose])
-
-  if (typeof document === "undefined") return null
-
-  return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Attached image"
-      onClick={onClose}
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black duration-200 animate-in fade-in"
-    >
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Close"
-        className="absolute right-4 top-[calc(0.75rem+env(safe-area-inset-top))] z-10 flex size-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/20"
-      >
-        <X className="size-5" />
-      </button>
-      <img
-        src={src || "/placeholder.svg"}
-        alt="Attached to the question"
-        onClick={(e) => e.stopPropagation()}
-        className="max-h-full max-w-full object-contain"
-      />
-    </div>,
-    document.body,
-  )
-}
+/* The bespoke full-screen image lightbox that used to live here was replaced by
+   the shared `CommunityMediaViewer`, so photos and videos in Community now carry
+   the same chrome and actions as the main feed's viewers. */
 
 /* -------------------------------------------------------------------------- */
 /*  Inline video player                                                       */
@@ -391,7 +359,18 @@ function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
  * a sensible portrait↔landscape range) so vertical and horizontal videos both
  * sit naturally in the thread.
  */
-function PostVideo({ src }: { src: string }) {
+function PostVideo({
+  src,
+  post,
+  siblings,
+  onAuthorClick,
+}: {
+  src: string
+  post: CommunityPostView
+  /** This thread plus its related questions, so full screen can swipe clips. */
+  siblings: CommunityPostView[]
+  onAuthorClick?: (authorId: string) => void
+}) {
   const [ratio, setRatio] = useState<number | null>(null)
   // Tapping the inline clip opens a full-screen viewer with the premium player.
   const [fullscreen, setFullscreen] = useState(false)
@@ -418,7 +397,18 @@ function PostVideo({ src }: { src: string }) {
           onExpand={() => setFullscreen(true)}
         />
       )}
-      {fullscreen && <VideoLightbox src={src} onClose={() => setFullscreen(false)} />}
+      {fullscreen && (
+        <CommunityMediaViewer
+          kind="video"
+          posts={siblings}
+          startId={post.id}
+          onClose={() => setFullscreen(false)}
+          // The comment thread is already the screen underneath, so Comment just
+          // dismisses the overlay and lands the reader back on it.
+          onOpenComments={() => setFullscreen(false)}
+          onAuthorClick={onAuthorClick}
+        />
+      )}
     </div>
   )
 }
