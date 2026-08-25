@@ -301,6 +301,11 @@ export async function updateOrganization(orgId: string, input: UpdateOrganizatio
 
   await db.update(organization).set(patch).where(eq(organization.id, orgId))
   revalidatePath(`/org/${org.handle}`)
+  // A rename (or new logo) also changes how this org is attributed on every post
+  // it has published. Attribution is resolved live from `organizationId` rather
+  // than the stored `authorName`, so no backfill is needed — but the feed still
+  // needs revalidating for the new identity to appear without a hard reload.
+  if (input.name !== undefined || input.logo !== undefined) revalidatePath("/feed")
   return { ok: true }
 }
 

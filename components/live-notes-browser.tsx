@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import useSWR from "swr"
 import { ChevronDown, Mic, Pencil, Search, Trash2, Video, X } from "lucide-react"
 import { ConfirmDialog } from "@/components/confirm-dialog"
+import { HomeMark } from "@/components/home/home-mark"
 import {
   deleteLiveNote,
   getLiveNotes,
@@ -123,7 +124,18 @@ function HostGroup({ group, onOpen }: { group: LiveNoteHostGroup; onOpen: (n: Gr
           aria-expanded={open}
           className="tap-scale flex w-full items-center justify-between gap-3 rounded-xl py-1 text-left transition-colors"
         >
-          <span className="flex min-w-0 items-center gap-2">
+          <span className="flex min-w-0 items-center gap-2.5">
+            {/* The hosting Home's mark, same primitive and square-with-soft-corners
+                shape the My Homes cards use, so a meeting's host is recognisable
+                by its logo here exactly as it is there. */}
+            <HomeMark
+              name={group.hostName}
+              logo={group.hostLogo}
+              initials={group.hostInitials}
+              color={group.hostColor}
+              className="size-9 text-xs"
+              rounded="rounded-lg"
+            />
             <span className="truncate font-display text-[15px] font-semibold tracking-tight text-foreground">
               {group.hostName}
             </span>

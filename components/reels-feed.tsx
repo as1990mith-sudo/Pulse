@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
+import { MediaCaption } from "@/components/media-caption"
 import type { FeedPostView, FeedCommentView } from "@/app/actions/feed"
 import { addPostComment, setPostLike, setCommentLike, editPostComment, deletePostComment } from "@/app/actions/feed"
 import { toggleSaveItem } from "@/app/actions/share"
@@ -33,93 +34,6 @@ import { CommentThread, type ThreadComment } from "@/components/comment-thread"
 const MAX_REEL_SECONDS = 3 * 60 + 15
 
 type Reel = { post: FeedPostView; url: string; key: string; poster?: string; trimStart?: number; trimEnd?: number }
-
-/**
- * Caption under the author row. Mirrors the feed post caption exactly so the
- * two read identically: the same base font size and tight leading, clamped to a
- * single line when collapsed, with the last visible line fading directly into an
- * inline "… Read more" (never a separate line). Because the whole author/caption
- * block is bottom-anchored, expanding grows the block *upward*; tapping the body
- * text collapses it again. Line breaks are preserved and *markdown* emphasis is
- * parsed to bold.
- */
-function ReelCaption({ text }: { text: string }) {
-  const [expanded, setExpanded] = useState(false)
-  const [clampable, setClampable] = useState(false)
-  const textRef = useRef<HTMLDivElement>(null)
-
-  // Match the feed caption's metrics: 1 collapsed line at leading-tight (1.25).
-  const LINE_HEIGHT = 1.25
-  const collapsedMaxEm = LINE_HEIGHT
-  const isClamped = clampable && !expanded
-
-  // Render with the shared rich-text renderer so `@[Name](id)` mentions,
-  // **bold**/*bold*/_italic_ and links all match the feed exactly (newlines are
-  // preserved by the container's `whitespace-pre-line`).
-  const nodes = useMemo(
-    () =>
-      renderMessageBody(text, {
-        link: true,
-        linkClassName: "font-medium text-white underline-offset-2 [overflow-wrap:anywhere] hover:underline",
-        mentionClassName: "font-semibold text-white hover:underline",
-      }),
-    [text],
-  )
-
-  // Only surface "Read more" when the caption genuinely overflows one line.
-  // Re-measured on resize and when the text/expansion changes.
-  useEffect(() => {
-    const el = textRef.current
-    if (!el) {
-      setClampable(false)
-      return
-    }
-    const measure = () => {
-      const lineHeightPx = collapsedMaxEm * Number.parseFloat(getComputedStyle(el).fontSize || "16")
-      setClampable(el.scrollHeight > lineHeightPx + 2)
-    }
-    measure()
-    const ro = new ResizeObserver(measure)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [text, collapsedMaxEm, expanded])
-
-  return (
-    <div className="mt-2 max-w-md" data-no-swipe>
-      <div
-        ref={textRef}
-        className={cn(
-          "relative whitespace-pre-line text-base leading-tight drop-shadow transition-all",
-          isClamped && "overflow-hidden",
-          clampable && expanded && "cursor-pointer",
-        )}
-        style={isClamped ? { maxHeight: `${collapsedMaxEm}em` } : undefined}
-        onClick={
-          clampable && expanded
-            ? (e) => {
-                // Collapse when tapping the body, but let links/buttons through.
-                if (!(e.target as HTMLElement).closest("a,button")) setExpanded(false)
-              }
-            : undefined
-        }
-      >
-        {nodes}
-        {isClamped && (
-          // Sits on the last visible line; the text fades directly into the
-          // inline "… Read more" via the horizontal gradient (same as the feed).
-          <button
-            type="button"
-            onClick={() => setExpanded(true)}
-            className="absolute bottom-0 right-0 flex items-baseline bg-gradient-to-l from-black from-50% to-transparent pl-14 text-base font-semibold leading-tight text-white/70 drop-shadow transition-colors hover:text-white"
-          >
-            <span aria-hidden className="text-white/90">…&nbsp;</span>
-            Read more
-          </button>
-        )}
-      </div>
-    </div>
-  )
-}
 
 /**
  * Full-screen, vertically-snapping reels experience. Flattens every video in the
@@ -826,16 +740,18 @@ function ReelItem({
       {/* Bottom gradient for legibility of the caption/author. */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/80 to-transparent" />
 
-      {/* Right-hand action rail. Sits low near the caption (bottom-20) so it
-          reads as anchored to the bottom controls rather than floating high up
-          the clip; the caption's pr-24 reserves this right column so the two
-          never overlap, and it still clears the full-width scrubber below.
+      {/* Right-hand action rail. Sits low so the last item (Mute) lands on the
+          same visual line as the caption's first line — the caption block below
+          is bottom-anchored with pb-12, putting that line ~48-68px off the
+          bottom, and bottom-9 centres Mute's icon+label against it. The
+          caption's pr-24 reserves this right column so the two never overlap,
+          and the rail still clears the full-width scrubber underneath.
           z-[3] keeps it above the full-width caption block (z-[1]) so its taps
           aren't swallowed by the caption's invisible box. Only shown for the
           active reel so a neighbouring reel's rail can't bleed in while scrolling. */}
       <div
         className={cn(
-          "absolute bottom-20 right-3 z-[3] flex flex-col items-center gap-5 text-white transition-opacity duration-200",
+          "absolute bottom-9 right-3 z-[3] flex flex-col items-center gap-5 text-white transition-opacity duration-200",
           active ? "opacity-100" : "pointer-events-none opacity-0",
         )}
         data-no-swipe
@@ -940,7 +856,7 @@ function ReelItem({
             </button>
           )}
         </div>
-        {post.text && <ReelCaption text={post.text} />}
+        {post.text && <MediaCaption text={post.text} />}
       </div>
 
       {/* Draggable play tracker — full-width at the very bottom. Tap or drag the

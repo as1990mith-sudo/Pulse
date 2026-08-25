@@ -29,6 +29,7 @@ import {
   Maximize2,
   AtSign,
   UserX,
+  BarChart3,
 } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import {
@@ -54,8 +55,16 @@ import { toggleFollow } from "@/app/actions/follow"
 import type { CurrentUser } from "@/lib/session"
 import { Button } from "@/components/ui/button"
 import { FormattedTextarea } from "@/components/formatted-textarea"
-import { HomeVoiceSwitch } from "@/components/home-voice-switch"
+import { HomeVoiceSwitch, type HomeVoice } from "@/components/home-voice-switch"
 import { useHomeVoice } from "@/lib/use-home-voice"
+import { PollCard } from "@/components/poll-card"
+import {
+  PollComposer,
+  emptyPollDraft,
+  countUsablePollOptions,
+  MIN_OPTIONS,
+  type PollDraft,
+} from "@/components/poll-composer"
 import { useMentionAutocomplete, MentionAutocompleteList } from "@/components/mention-autocomplete"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card } from "@/components/ui/card"
@@ -238,7 +247,7 @@ export function MindFeed({
   canPublish?: boolean
   // The organisation of the ACTIVE Home when the viewer may speak for it. Null
   // for ordinary members, so the identity switcher simply never renders.
-  homeVoice?: { name: string; image: string | null; initials: string } | null
+  homeVoice?: HomeVoice | null
 }) {
   const router = useRouter()
   const [draft, setDraft] = useState("")
@@ -246,6 +255,10 @@ export function MindFeed({
   // right — but can switch to their own name per post.
   const [postAsHome, setPostAsHome] = useState(true)
   const [media, setMedia] = useState<DraftMedia[]>([])
+  // Null when the author hasn't attached a poll. Non-null puts the composer into
+  // "poll" mode: the textarea becomes the question and the media rule is waived.
+  const [poll, setPoll] = useState<PollDraft | null>(null)
+
   // Files awaiting the crop/trim/cover editor. When set, the full-screen editor
   // flow opens; it uploads the edited results and hands them back via onDone.
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null)
@@ -306,8 +319,15 @@ export function MindFeed({
   // It reshuffles on a manual page refresh (reload) and when the app is closed
   // and reopened (sessionStorage is cleared on close). We detect a reload via the
   // Navigation Timing API and mint a fresh seed only in that case.
-  const [shuffleSeed] = useState(() => {
-    if (typeof window === "undefined") return (Math.random() * 0x7fffffff) | 0
+  //
+  // The seed is deliberately NOT resolved during render. The server has no
+  // sessionStorage, so it can only invent a seed, and the client would then read
+  // a different one — producing a different post order and a hydration mismatch
+  // (React discarded the whole feed tree and re-rendered it on every load).
+  // Instead the seed starts null, meaning "server order", and is set in an effect
+  // after mount so the first client render matches the server exactly.
+  const [shuffleSeed, setShuffleSeed] = useState<number | null>(null)
+  useEffect(() => {
     const newSeed = () => {
       const seed = (Math.random() * 0x7fffffff) | 0
       window.sessionStorage.setItem("feed:shuffleSeed", String(seed))
@@ -315,14 +335,23 @@ export function MindFeed({
     }
     const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined
     // A manual refresh should produce a brand-new order.
-    if (nav?.type === "reload") return newSeed()
+    if (nav?.type === "reload") {
+      setShuffleSeed(newSeed())
+      return
+    }
     const stored = window.sessionStorage.getItem("feed:shuffleSeed")
     if (stored !== null) {
       const parsed = Number.parseInt(stored, 10)
-      if (Number.isFinite(parsed)) return parsed
+      if (Number.isFinite(parsed)) {
+        setShuffleSeed(parsed)
+        return
+      }
     }
-    return newSeed()
-  })
+    setShuffleSeed(newSeed())
+    // Runs once on mount: the seed is a per-session decision, not a reaction to
+    // changing props.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // IDs of posts the user just created this session. They're pinned to the very
   // top of "For you" (newest first) so a new post is always seen first, then the
@@ -334,7 +363,9 @@ export function MindFeed({
   // admin of the Home on behalf of the organisation (`orgHandle` set),
   // newest-first.
   const forYouPosts = useMemo(() => {
-    const shuffled = seededShuffle(allPosts, shuffleSeed)
+    // Before the seed is known (server render + first client render) keep the
+    // server's order untouched, so both sides agree and hydration is clean.
+    const shuffled = shuffleSeed === null ? allPosts : seededShuffle(allPosts, shuffleSeed)
     if (pinnedIds.length === 0) return shuffled
     const pinned = pinnedIds
       .map((id) => allPosts.find((p) => String(p.id) === id))
@@ -494,26 +525,56 @@ export function MindFeed({
   // Who the composer is currently speaking as — drives the avatar so the choice
   // is visible at a glance rather than only in the control below it.
   const speakingAsHome = !!homeVoice && postAsHome
+  // A poll can only be published BY a Home, so the option is offered only while
+  // the Home voice is both available and actually selected. Switching back to
+  // the personal voice drops any draft, since it could no longer be published.
+  const canPollHere = speakingAsHome
+  useEffect(() => {
+    if (!canPollHere) setPoll(null)
+  }, [canPollHere])
+  // `href` follows the selected voice: tapping the avatar opens the profile of
+  // whoever the post would be published as — the organisation while speaking for
+  // the Home, otherwise the viewer's own profile. Null when we can't resolve a
+  // destination (e.g. signed out), in which case the avatar renders unlinked.
   const activeVoice = speakingAsHome
-    ? { name: homeVoice.name, image: homeVoice.image, initials: homeVoice.initials, color: "bg-primary/15 text-primary" }
+    ? {
+        name: homeVoice.name,
+        image: homeVoice.image,
+        initials: homeVoice.initials,
+        color: "bg-primary/15 text-primary",
+        href: homeVoice.handle ? `/org/${homeVoice.handle}` : null,
+      }
     : {
         name: currentUser?.name ?? "",
         image: currentUser?.image ?? null,
         initials: currentUser?.initials ?? "",
         color: currentUser?.color ?? "",
+        // /u/[id] is keyed by user id, not handle.
+        href: currentUser?.id ? `/u/${currentUser.id}` : null,
       }
 
   function publish(e: React.FormEvent) {
     e.preventDefault()
     // Serialize picked @mentions into canonical tokens before trimming/sending.
     const text = mentions.serialize().trim()
-    // Individuals cannot publish a text-only top-level feed post — mirror the
-    // server rule here so the failure is instant and friendly.
-    if (mediaRequired && media.length === 0) {
+    // A poll carries its own answers, so it satisfies the "must have content"
+    // rule on its own — but it needs the text as its question.
+    if (poll) {
+      if (!text) {
+        setError("Add a question for your poll.")
+        return
+      }
+      if (countUsablePollOptions(poll) < MIN_OPTIONS) {
+        setError(`Add at least ${MIN_OPTIONS} different options.`)
+        return
+      }
+    } else if (mediaRequired && media.length === 0) {
+      // Individuals cannot publish a text-only top-level feed post — mirror the
+      // server rule here so the failure is instant and friendly.
       setError("Add a photo or video to share on the Feed.")
       return
     }
-    if (!text && media.length === 0) return
+    if (!text && media.length === 0 && !poll) return
     startTransition(async () => {
       const created = await createPost({
         text,
@@ -521,10 +582,12 @@ export function MindFeed({
         // Only meaningful when a Home voice is on offer; otherwise the server
         // resolves the identity on its own.
         asOrganization: homeVoice ? postAsHome : undefined,
+        poll: poll ?? undefined,
       })
       setDraft("")
       mentions.reset()
       clearMedia()
+      setPoll(null)
       // Pin the new post to the top of "For you" and make sure we're on a tab
       // that shows it, so the user sees their post appear first immediately.
       if (created?.id != null) {
@@ -652,9 +715,14 @@ export function MindFeed({
       {tab === "for-you" && (
       <div className="border-y border-border/60 bg-gradient-to-b from-card/60 to-background px-4 py-5 sm:px-5">
         <form onSubmit={publish} className="flex gap-4">
+          {/* The avatar follows the selected voice, so it opens the profile of
+              whoever the post would be published as: the organisation while
+              "organisation" is selected, the person while "individual" is. It
+              already SHOWS the active voice, so linking anywhere else would
+              contradict the face on screen. */}
           <Link
-            href={`/u/${currentUser.id}`}
-            aria-label="View your profile"
+            href={activeVoice.href ?? `/u/${currentUser.id}`}
+            aria-label={speakingAsHome ? `View ${activeVoice.name}'s profile` : "View your profile"}
             // self-start stops the link from stretching to the full row height
             // (flex default), so only the avatar itself opens the profile — not
             // the empty column below it.
@@ -803,6 +871,10 @@ export function MindFeed({
                 </ul>
               </div>
             )}
+            {/* Poll builder. Sits below the question (the textarea) so the
+                composer reads top-to-bottom as "what you're asking, then the
+                answers you're offering". */}
+            {poll && <PollComposer draft={poll} onChange={setPoll} onRemove={() => setPoll(null)} />}
             {error && <p className="text-xs text-destructive">{error}</p>}
             <div className="flex items-center justify-between">
               <DropdownMenu>
@@ -836,6 +908,14 @@ export function MindFeed({
                   <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className={POPUP_MENU_ITEM}>
                     <ImageIcon /> Upload from library
                   </DropdownMenuItem>
+                  {/* Polls are a Home feature, so the entry only exists while an
+                      admin is actually speaking as the Home. The server enforces
+                      the same rule; this just avoids offering a dead action. */}
+                  {canPollHere && (
+                    <DropdownMenuItem onClick={() => setPoll(emptyPollDraft())} className={POPUP_MENU_ITEM}>
+                      <BarChart3 /> Create poll
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
               {/* Library picker (photos + videos, multi-select) */}
@@ -871,7 +951,14 @@ export function MindFeed({
                 disabled={
                   isPending ||
                   uploading ||
-                  (mediaRequired ? media.length === 0 : !draft.trim() && media.length === 0)
+                  // A poll needs its question plus enough real options; it also
+                  // waives the media requirement, since the options ARE the
+                  // content. Without this branch an org poll stayed unpostable.
+                  (poll
+                    ? !draft.trim() || countUsablePollOptions(poll) < MIN_OPTIONS
+                    : mediaRequired
+                      ? media.length === 0
+                      : !draft.trim() && media.length === 0)
                 }
                 className="gap-2 rounded-full bg-foreground px-6 font-semibold text-background hover:bg-foreground/90"
               >
@@ -1377,8 +1464,8 @@ export function PostCard({
     void setCommentLike({ commentId, liked })
   }
 
-  async function handleCommentReply(parentId: number, value: string) {
-    await addPostComment({ postId: post.id, text: value, parentId })
+  async function handleCommentReply(parentId: number, value: string, asHome?: boolean) {
+    await addPostComment({ postId: post.id, text: value, parentId, asOrganization: asHome })
     await globalMutate("feed")
     router.refresh()
   }
@@ -1484,7 +1571,7 @@ export function PostCard({
               <span className="truncate">{post.user}</span>
               {post.orgVerified && <VerifiedBadge size="sm" className="shrink-0" />}
             </Link>
-            {/* Username/handle intentionally omitted — only the display name
+            {/* Username/handle intentionally omitted �� only the display name
                 (above) and the date are shown. Flex row lets the date truncate
                 while the edited info icon stays fixed (shrink-0). */}
             <span className={cn("flex min-w-0 items-center gap-1 text-muted-foreground", feed ? "text-sm" : "text-xs")}>
@@ -1697,6 +1784,16 @@ export function PostCard({
             {previewUrl && <LinkPreview url={previewUrl} className={cn(text && !textIsOnlyLink && "mt-3")} />}
           </div>
         )
+      )}
+
+      {/* Poll options. Sit directly under the question (the post text) and above
+          any media, so the thing being asked and the way to answer it stay
+          together. canVote is false when signed out, which makes the server
+          reveal the tally instead of withholding it forever. */}
+      {post.poll && (
+        <div className={cn(feed ? "px-4 pb-1" : "px-3 pb-1")}>
+          <PollCard poll={post.poll} canVote={!!currentUser} onVoted={() => void globalMutate("feed")} />
+        </div>
       )}
 
       {/* Media — contained preview; tapping opens the immersive viewer. */}

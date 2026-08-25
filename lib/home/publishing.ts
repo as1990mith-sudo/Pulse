@@ -140,7 +140,13 @@ export function publishingColumns(identity: PublishingIdentity) {
  * This mirrors `resolvePublishingIdentity` exactly rather than re-deriving the
  * rule, so what the UI offers can never drift from what the server will accept.
  */
-export async function getActiveHomeVoice(): Promise<{ name: string; image: string | null; initials: string } | null> {
+export async function getActiveHomeVoice(): Promise<{
+  name: string
+  /** The organisation's handle, so the UI can link to /org/<handle>. */
+  handle: string
+  image: string | null
+  initials: string
+} | null> {
   const identity = await resolvePublishingIdentity({ name: "", handle: "", image: null })
   if (identity.type !== "home") return null
   const initials =
@@ -150,7 +156,7 @@ export async function getActiveHomeVoice(): Promise<{ name: string; image: strin
       .slice(0, 2)
       .map((w) => w[0]!.toUpperCase())
       .join("") || "H"
-  return { name: identity.name, image: identity.image, initials }
+  return { name: identity.name, handle: identity.handle, image: identity.image, initials }
 }
 
 /**

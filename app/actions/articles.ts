@@ -17,6 +17,7 @@ import {
   user as userTable,
 } from "@/lib/db/schema"
 import { getActiveHomeContext, getActiveHomeMemberIds } from "@/lib/home/active-home"
+import { getProfileScope, scopeToHome } from "@/lib/home/profile-scope"
 import { publishingColumns, resolvePublishingIdentity } from "@/lib/home/publishing"
 import { isHomeAdminRole } from "@/lib/home/roles"
 import { getStaffUserIds } from "@/lib/admin-auth"
@@ -399,19 +400,40 @@ export async function getEditableArticle(id: string): Promise<(ArticleCard & { b
 
 // --- Writer profile reads --------------------------------------------------
 
-/** Published articles by a given writer, for the profile Articles tab. */
+/**
+ * Published articles by a given writer, for the profile Articles tab.
+ *
+ * Home-scoped like every other profile surface, so writing a member published in
+ * one Home is not exposed to a different Home's audience.
+ */
 export async function getWriterArticles(userId: string): Promise<ArticleCard[]> {
+  const scope = await getProfileScope()
   const rows = await db
     .select()
     .from(article)
-    .where(and(eq(article.authorId, userId), eq(article.status, "published")))
+    .where(
+      and(
+        eq(article.authorId, userId),
+        eq(article.status, "published"),
+        scopeToHome(article.homeId, scope),
+      ),
+    )
     .orderBy(desc(article.publishedAt))
   return toCards(rows)
 }
 
-/** Aggregate reach for a writer + the viewer's follow state. */
+/**
+ * Aggregate reach for a writer + the viewer's follow state.
+ *
+ * The article aggregates are Home-scoped to match getWriterArticles: a profile
+ * that lists three Home A pieces must not headline a cross-Home total, which
+ * would both contradict the list below it and leak how active the person is
+ * elsewhere. Follower counts stay global — following a writer is an
+ * account-level relationship, not a per-Home one.
+ */
 export async function getWriterStats(userId: string): Promise<WriterStats> {
   const viewer = await getSessionUser()
+  const scope = await getProfileScope()
   const [agg, followerRow, followingRow] = await Promise.all([
     db
       .select({
@@ -420,7 +442,13 @@ export async function getWriterStats(userId: string): Promise<WriterStats> {
         totalLikes: sql<number>`coalesce(sum(${article.likeCount}), 0)`,
       })
       .from(article)
-      .where(and(eq(article.authorId, userId), eq(article.status, "published"))),
+      .where(
+        and(
+          eq(article.authorId, userId),
+          eq(article.status, "published"),
+          scopeToHome(article.homeId, scope),
+        ),
+      ),
     db.select({ n: count() }).from(articleFollow).where(eq(articleFollow.writerId, userId)),
     viewer
       ? db

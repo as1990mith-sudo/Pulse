@@ -17,6 +17,7 @@ import {
   user as userTable,
 } from "@/lib/db/schema"
 import { getActiveHomeContext } from "@/lib/home/active-home"
+import { getProfileScope, scopeToHome } from "@/lib/home/profile-scope"
 import { resolvePublishingIdentity } from "@/lib/home/publishing"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { formatPostTimestamp } from "@/lib/format-timestamp"
@@ -24,6 +25,8 @@ import { getLikedSet, setLike } from "@/lib/likes"
 import { notifyUser } from "@/app/actions/notifications"
 import { downgradeBlockedMentions, extractMentionRefs, type MentionRef } from "@/lib/mentions"
 import { filterAllowedMentions } from "@/lib/mentions-server"
+import { createPollForPost, getPollsForPosts } from "@/app/actions/polls"
+import type { PollView } from "@/lib/polls"
 
 /**
  * Resolves @mention tokens in freshly-authored plain text against each target's
@@ -151,6 +154,32 @@ export type FeedPostView = {
   // the UI can offer "Remove my mention" without exposing the full list.
   mentionedMe: boolean
   comments: FeedCommentView[]
+  // Set only when this post carries a poll; the post's `text` is the question.
+  // Vote counts inside are withheld until the viewer votes — see getPollsForPosts.
+  poll?: PollView | null
+}
+
+/**
+ * Fills in the `poll` field for a batch of already-built post views.
+ *
+ * Kept as a post-processing pass rather than folded into each of the feed
+ * queries: they all build FeedPostView the same way, so one shared step means a
+ * poll renders identically wherever the post surfaces (main feed, profile, org
+ * page, search) instead of only on the feed it was created in.
+ */
+async function attachPolls<T extends { id: number; poll?: PollView | null }>(
+  views: T[],
+  viewerId: string | null,
+): Promise<T[]> {
+  if (views.length === 0) return views
+  const polls = await getPollsForPosts(
+    views.map((v) => v.id),
+    viewerId,
+  )
+  // Almost every feed page has no polls at all, so skip the rewrite entirely.
+  if (polls.size === 0) return views
+  for (const view of views) view.poll = polls.get(view.id) ?? null
+  return views
 }
 
 /** Returns the set of userIds the given user follows (empty if signed out). */
@@ -407,7 +436,7 @@ export async function getFeed(): Promise<FeedPostView[]> {
     else commentsByPost.set(c.postId, [view])
   }
 
-  return posts.map((p) => ({
+  const views = posts.map((p) => ({
     id: p.id,
     authorId: p.userId,
     ...resolveAuthor(p, infoMap, orgMap),
@@ -430,20 +459,29 @@ export async function getFeed(): Promise<FeedPostView[]> {
     mentionedMe: currentUserId ? (p.mentions ?? []).some((m) => m.userId === currentUserId) : false,
     comments: commentsByPost.get(p.id) ?? [],
   }))
+  // Polls hang off the post, so they are hydrated after the view is built.
+  return attachPolls(views, currentUserId)
 }
 
 /**
  * Newest-first MAIN-FEED posts authored by a single user, powering their
  * profile "Posts" timeline. Personal posts only (organizationId null) so
  * organisation-attributed posts stay on the org profile, and top-level posts
- * only (channel null) so community-room posts stay in their rooms. Global (not
- * Home-scoped): a profile is the person's own surface, mirroring the per-user
- * community-post timelines. Returns the same rich FeedPostView the main feed
- * uses so the profile can reuse <PostCard> unchanged.
+ * only (channel null) so community-room posts stay in their rooms. Returns the
+ * same rich FeedPostView the main feed uses so the profile can reuse
+ * <PostCard> unchanged.
+ *
+ * SCOPED TO THE ACTIVE HOME. A profile is "this person within this Home", not a
+ * combined cross-Home archive: a member of Home A opening someone's profile sees
+ * only their Home A posts, and never learns what they post in Home B. This
+ * applies to the owner's own profile too, so what they see is what their Home
+ * sees. Switching Homes re-scopes it automatically, which is why the filter is
+ * derived from the active context rather than accepted as an argument.
  */
 export async function getFeedPostsByUser(userId: string): Promise<FeedPostView[]> {
   const session = await auth.api.getSession({ headers: await headers() })
   const currentUserId = session?.user?.id ?? null
+  const scope = await getProfileScope()
 
   const posts = await db
     .select()
@@ -454,6 +492,7 @@ export async function getFeedPostsByUser(userId: string): Promise<FeedPostView[]
         isNull(feedPost.organizationId),
         eq(feedPost.deleted, false),
         eq(feedPost.userId, userId),
+        scopeToHome(feedPost.homeId, scope),
       ),
     )
     .orderBy(desc(feedPost.createdAt))
@@ -486,7 +525,7 @@ export async function getFeedPostsByUser(userId: string): Promise<FeedPostView[]
     else commentsByPost.set(c.postId, [view])
   }
 
-  return posts.map((p) => ({
+  const views = posts.map((p) => ({
     id: p.id,
     authorId: p.userId,
     ...resolveAuthor(p, infoMap),
@@ -509,6 +548,8 @@ export async function getFeedPostsByUser(userId: string): Promise<FeedPostView[]
     mentionedMe: currentUserId ? (p.mentions ?? []).some((m) => m.userId === currentUserId) : false,
     comments: commentsByPost.get(p.id) ?? [],
   }))
+  // Polls hang off the post, so they are hydrated after the view is built.
+  return attachPolls(views, currentUserId)
 }
 
 /**
@@ -565,7 +606,7 @@ export async function getFeedPostsByOrganization(organizationId: string): Promis
     else commentsByPost.set(c.postId, [view])
   }
 
-  return posts.map((p) => ({
+  const views = posts.map((p) => ({
     id: p.id,
     authorId: p.userId,
     ...resolveAuthor(p, infoMap, orgMap),
@@ -588,6 +629,8 @@ export async function getFeedPostsByOrganization(organizationId: string): Promis
     mentionedMe: currentUserId ? (p.mentions ?? []).some((m) => m.userId === currentUserId) : false,
     comments: commentsByPost.get(p.id) ?? [],
   }))
+  // Polls hang off the post, so they are hydrated after the view is built.
+  return attachPolls(views, currentUserId)
 }
 
 /**
@@ -642,7 +685,7 @@ export async function getChannelFeed(channel: string): Promise<FeedPostView[]> {
     ...comments.map((c) => c.organizationId),
   ])
 
-  return posts.map((p) => ({
+  const views = posts.map((p) => ({
     id: p.id,
     authorId: p.userId,
     ...resolveAuthor(p, infoMap, orgMap),
@@ -667,6 +710,8 @@ export async function getChannelFeed(channel: string): Promise<FeedPostView[]> {
       .filter((c) => c.postId === p.id)
       .map((c) => toCommentView(c, infoMap, currentUserId, likedCommentSet, orgMap)),
   }))
+  // Polls hang off the post, so they are hydrated after the view is built.
+  return attachPolls(views, currentUserId)
 }
 
 /**
@@ -740,7 +785,7 @@ export async function searchPosts(query: string): Promise<FeedPostView[]> {
     ...comments.map((c) => c.organizationId),
   ])
 
-  return posts.map((p) => ({
+  const views = posts.map((p) => ({
     id: p.id,
     authorId: p.userId,
     ...resolveAuthor(p, infoMap, orgMap),
@@ -765,6 +810,8 @@ export async function searchPosts(query: string): Promise<FeedPostView[]> {
       .filter((c) => c.postId === p.id)
       .map((c) => toCommentView(c, infoMap, currentUserId, likedCommentSet, orgMap)),
   }))
+  // Polls hang off the post, so they are hydrated after the view is built.
+  return attachPolls(views, currentUserId)
 }
 
 export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
@@ -808,7 +855,7 @@ export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
     ...comments.map((c) => c.organizationId),
   ])
 
-  return posts.map((p) => ({
+  const views = posts.map((p) => ({
     id: p.id,
     authorId: p.userId,
     ...resolveAuthor(p, infoMap, orgMap),
@@ -833,6 +880,8 @@ export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
       .filter((c) => c.postId === p.id)
       .map((c) => toCommentView(c, infoMap, currentUserId, likedCommentSet, orgMap)),
   }))
+  // Polls hang off the post, so they are hydrated after the view is built.
+  return attachPolls(views, currentUserId)
 }
 
 /**
@@ -890,7 +939,7 @@ export async function getRepostsByUser(userId: string): Promise<FeedPostView[]> 
   // Preserve repost recency order (the query above doesn't guarantee it).
   const ordered = [...posts].sort((a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0))
 
-  return ordered.map((p) => ({
+  const views = ordered.map((p) => ({
     id: p.id,
     authorId: p.userId,
     ...resolveAuthor(p, infoMap, orgMap),
@@ -915,6 +964,8 @@ export async function getRepostsByUser(userId: string): Promise<FeedPostView[]> 
       .filter((c) => c.postId === p.id)
       .map((c) => toCommentView(c, infoMap, currentUserId, likedCommentSet, orgMap)),
   }))
+  // Polls hang off the post, so they are hydrated after the view is built.
+  return attachPolls(views, currentUserId)
 }
 
 /**
@@ -977,6 +1028,9 @@ export async function createPost(input: {
   // the organisation or as themselves; everyone else is personal regardless, so
   // this can only ever narrow what the server would otherwise grant.
   asOrganization?: boolean
+  // Attaches a poll to this post. Admin-only, and only on the main feed — the
+  // server re-checks both below rather than trusting the composer.
+  poll?: { options: string[]; allowMultiple: boolean; durationHours: number | null }
 }) {
   const user = await requireUser()
 
@@ -1035,6 +1089,15 @@ export async function createPost(input: {
     if (input.image) media.push({ type: "image", url: input.image })
     else if (input.video) media.push({ type: "video", url: input.video })
   }
+  // Polls are an organisation feature: only an admin publishing AS the Home may
+  // create one, and only on the main feed (community rooms have their own
+  // formats). Re-derived from `isOrganization` — the identity the server just
+  // resolved — so a crafted request can't attach a poll by asking nicely.
+  const wantsPoll = !!input.poll && input.poll.options.length > 0
+  if (wantsPoll && (channel !== null || !isOrganization)) {
+    throw new Error("Only a Home can publish a poll to the Feed.")
+  }
+
   // Business rule (top-level main-feed posts only): individual accounts MUST
   // include at least one photo or video. "Media" means photos/videos only —
   // text, links, and other attachments never satisfy this. Organisations may
@@ -1042,7 +1105,10 @@ export async function createPost(input: {
   if (channel === null && !isOrganization && media.length === 0) {
     throw new Error("Add a photo or video to share on the Feed.")
   }
-  if (!text && media.length === 0) throw new Error("Post cannot be empty.")
+  // A poll's question lives in the post text, so it is the one post type where
+  // text is mandatory — options with no question are unanswerable.
+  if (wantsPoll && !text) throw new Error("Add a question for your poll.")
+  if (!text && media.length === 0 && !wantsPoll) throw new Error("Post cannot be empty.")
 
   // Mirror the first item into the legacy columns so older readers still work.
   const first = media[0] ?? null
@@ -1065,6 +1131,25 @@ export async function createPost(input: {
       mentions: mentions.length > 0 ? mentions : null,
     })
     .returning({ id: feedPost.id })
+
+  // Attach the poll now that the post exists to hang it off. If this throws
+  // (e.g. fewer than two distinct options survive normalisation) the post is
+  // already saved, so remove it again rather than leaving a question with no
+  // options — a post that looks like a poll but can't be voted on is worse than
+  // no post at all.
+  if (wantsPoll && inserted?.id) {
+    try {
+      await createPollForPost({
+        postId: inserted.id,
+        options: input.poll!.options,
+        allowMultiple: input.poll!.allowMultiple,
+        durationHours: input.poll!.durationHours,
+      })
+    } catch (err) {
+      await db.delete(feedPost).where(eq(feedPost.id, inserted.id))
+      throw err
+    }
+  }
 
   // Note: new posts intentionally do NOT notify followers. Notifications are
   // reserved for when a followed user goes live (see app/actions/live.ts).

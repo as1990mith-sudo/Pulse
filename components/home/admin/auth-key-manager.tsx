@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useTransition } from "react"
-import { Check, Copy, KeyRound, Loader2, RefreshCw, ShieldOff } from "lucide-react"
+import { useEffect, useState, useTransition } from "react"
+import { Check, Copy, KeyRound, Loader2, RefreshCw, Share2, ShieldOff } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { regenerateAuthKey, disableAuthKey, setJoinPolicy } from "@/app/actions/home"
 import type { HomeAuthKeyView, HomeJoinPolicy } from "@/lib/home/types"
@@ -18,14 +18,48 @@ export function AuthKeyManager({
   const [authKey, setAuthKey] = useState(initialKey)
   const [policy, setPolicy] = useState<HomeJoinPolicy>(initialPolicy)
   const [copied, setCopied] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
   const [pending, startTransition] = useTransition()
   const [confirmDisable, setConfirmDisable] = useState(false)
+
+  // The invite link needs the real origin, which only exists in the browser.
+  // Read it after mount rather than during render so the server and client
+  // markup agree — building it inline would hydrate-mismatch on every load.
+  const [origin, setOrigin] = useState("")
+  useEffect(() => setOrigin(window.location.origin), [])
+
+  // /home/join already reads ?key=, so the link just deep-links into the same
+  // confirm-then-join flow an admin would otherwise talk someone through.
+  const inviteLink = authKey && origin ? `${origin}/home/join?key=${encodeURIComponent(authKey.key)}` : ""
 
   function copy() {
     if (!authKey) return
     navigator.clipboard.writeText(authKey.key)
     setCopied(true)
     setTimeout(() => setCopied(false), 1600)
+  }
+
+  function copyLink() {
+    if (!inviteLink) return
+    navigator.clipboard.writeText(inviteLink)
+    setLinkCopied(true)
+    setTimeout(() => setLinkCopied(false), 1600)
+  }
+
+  async function share() {
+    if (!inviteLink) return
+    // Native share sheet on mobile (WhatsApp, Messages, email); fall back to a
+    // plain copy on desktop, where navigator.share mostly doesn't exist.
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({ title: "Join our Home", text: "Join our Home on Pulse", url: inviteLink })
+        return
+      } catch {
+        // Cancelling the sheet throws; that isn't an error worth surfacing.
+        return
+      }
+    }
+    copyLink()
   }
 
   function regenerate() {
@@ -87,6 +121,44 @@ export function AuthKeyManager({
         ) : (
           <div className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-6 text-center text-sm text-muted-foreground">
             No active key. Regenerate one to let new members join.
+          </div>
+        )}
+
+        {/* Ready-to-send invite link. Most people are invited over WhatsApp or
+            email, where a tappable link is far more reliable than asking someone
+            to retype a key into the right screen. */}
+        {authKey && (
+          <div className="mt-4 rounded-xl border border-border bg-muted/20 p-3">
+            <p className="mb-2 text-xs font-semibold text-muted-foreground">Invite link</p>
+            <p className="mb-3 break-all font-mono text-xs leading-relaxed text-foreground/80">
+              {inviteLink || "Preparing link…"}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={copyLink}
+                disabled={!inviteLink}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-semibold transition-colors hover:bg-muted disabled:opacity-60",
+                  linkCopied && "border-emerald-500/40 text-emerald-500",
+                )}
+              >
+                {linkCopied ? <Check className="size-4" /> : <Copy className="size-4" />}
+                {linkCopied ? "Link copied" : "Copy link"}
+              </button>
+              <button
+                type="button"
+                onClick={share}
+                disabled={!inviteLink}
+                className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted disabled:opacity-60"
+              >
+                <Share2 className="size-4" /> Share
+              </button>
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Opens straight to a confirmation screen. If they don&apos;t have an account yet, they&apos;ll join this
+              Home right after signing up.
+            </p>
           </div>
         )}
 

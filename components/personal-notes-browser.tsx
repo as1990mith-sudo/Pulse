@@ -42,7 +42,7 @@ export function PersonalNotesBrowser({
 
   if (!signedIn) {
     return (
-      <div className="rounded-2xl border border-border/60 bg-card p-8 text-center">
+      <div className="rounded-lg border border-border bg-card p-8 text-center">
         <p className="text-sm text-muted-foreground">Sign in to write and keep your notes.</p>
       </div>
     )
@@ -84,11 +84,11 @@ export function PersonalNotesBrowser({
       </div>
 
       {notes.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border/60 bg-card/50 p-10 text-center">
+        <div className="rounded-lg border border-border bg-card/50 p-10 text-center">
           <p className="text-sm font-medium text-muted-foreground">Nothing here yet</p>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border/60 bg-card/50 p-10 text-center">
+        <div className="rounded-lg border border-border bg-card/50 p-10 text-center">
           <p className="text-sm font-medium text-muted-foreground">No notes match &ldquo;{query.trim()}&rdquo;</p>
         </div>
       ) : (
@@ -98,7 +98,10 @@ export function PersonalNotesBrowser({
               <button
                 type="button"
                 onClick={() => setOpenNote(note)}
-                className="tap-scale flex h-full min-h-[128px] w-full flex-col rounded-2xl border border-border/60 bg-card p-3.5 text-left transition-colors hover:border-primary/40 hover:bg-secondary/30"
+                // Tighter corners and a full-opacity border: personal notes read
+                // as firm, paper-like cards, which also sets them apart from the
+                // softer Live Notes grouping.
+                className="tap-scale flex h-full min-h-[128px] w-full flex-col rounded-lg border border-border bg-card p-3.5 text-left transition-colors hover:border-primary/60 hover:bg-secondary/30"
               >
                 <span className="line-clamp-1 text-sm font-semibold text-foreground">
                   {note.title.trim() || firstLine(note.body) || "Untitled"}
@@ -174,9 +177,11 @@ function NoteEditor({
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-6">
-      <div className="flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-border/60 bg-card shadow-2xl sm:rounded-3xl">
+      {/* Squarer corners and solid borders here too, so an opened note matches the
+          firm treatment of the cards it was opened from. */}
+      <div className="flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-xl border border-border bg-card shadow-2xl sm:rounded-xl">
         {/* Header: title input + close. Close persists. */}
-        <div className="flex items-center gap-2 border-b border-border/60 p-3">
+        <div className="flex items-center gap-2 border-b border-border p-3">
           <input
             value={title}
             onChange={(e) => {
@@ -211,7 +216,7 @@ function NoteEditor({
         </div>
 
         {/* Footer: delete only — save is implicit on close. */}
-        <div className="flex items-center justify-between border-t border-border/60 p-3">
+        <div className="flex items-center justify-between border-t border-border p-3">
           <button
             type="button"
             onClick={() => setConfirmOpen(true)}
