@@ -42,28 +42,53 @@ export function getHistoryKey(): string {
 }
 
 /**
- * Session-scoped counter of in-app navigations.
+ * How deep into the app this history entry is.
  *
- * `window.history.length` cannot answer "is there somewhere of OURS to go
- * back to": it counts entries from other origins visited in the same tab, so on
- * a deep link opened from an email it is often already > 1 and Back would throw
- * the user out of the app. This counter only ever increments for navigations
- * that happened inside Frequency.
+ * `window.history.length` cannot answer "is there somewhere of OURS to go back
+ * to": it counts entries from other origins visited in the same tab, so on a link
+ * opened from an email it is often already > 1 and Back would throw the user out
+ * of the app entirely.
+ *
+ * The depth is stored ON each history entry rather than as a single session-wide
+ * counter that gets incremented and decremented. A running counter has to be
+ * adjusted from several places at once — a forward navigation, a popstate, an
+ * overlay opening — and any missed or doubled adjustment silently corrupts it for
+ * the rest of the session, which is very hard to notice and even harder to debug.
+ *
+ * Stamping the value instead makes it self-correcting: going Back restores the
+ * entry that already carries its own depth, so the number is always right for
+ * wherever the user actually is, no matter how they got there.
  */
-const DEPTH_KEY = "freq:nav-depth"
+const DEPTH_KEY = "__freqNavDepth"
 
+/** The current entry's depth: 0 means "this is where the user entered the app". */
 export function getNavDepth(): number {
-  if (typeof window === "undefined") return 0
-  const raw = window.sessionStorage?.getItem(DEPTH_KEY)
-  const n = raw ? Number.parseInt(raw, 10) : 0
-  return Number.isFinite(n) && n > 0 ? n : 0
+  if (!canUseHistory()) return 0
+  const raw = (window.history.state as Record<string, unknown> | null)?.[DEPTH_KEY]
+  return typeof raw === "number" && Number.isFinite(raw) && raw > 0 ? raw : 0
 }
 
-export function bumpNavDepth(delta: 1 | -1) {
-  if (typeof window === "undefined") return
+/**
+ * True when there is an in-app entry to go back to.
+ *
+ * Prefer this over `window.history.length > 1`, which is also true for a link
+ * opened from an email or another site and would send the user out of the app.
+ */
+export function hasInAppHistory(): boolean {
+  return getNavDepth() > 0
+}
+
+/**
+ * Stamps a depth onto the CURRENT history entry, without disturbing Next.js's
+ * router internals stored alongside it.
+ */
+export function setNavDepth(depth: number) {
+  if (!canUseHistory()) return
+  const state = window.history.state as Record<string, unknown> | null
   try {
-    window.sessionStorage.setItem(DEPTH_KEY, String(Math.max(0, getNavDepth() + delta)))
+    window.history.replaceState({ ...(state ?? {}), [DEPTH_KEY]: Math.max(0, depth) }, "")
   } catch {
-    // Private-mode storage failures degrade to the fallbackHref path.
+    // Some embedded webviews reject replaceState; Back then degrades to the
+    // fallbackHref, which is a safe outcome rather than a broken one.
   }
 }

@@ -1,9 +1,9 @@
 "use client"
 
-import { useCallback, useEffect } from "react"
+import { useCallback, useEffect, useRef } from "react"
 import { usePathname, useRouter } from "next/navigation"
 
-import { bumpNavDepth, getNavDepth } from "./history-key"
+import { getNavDepth, hasInAppHistory, setNavDepth } from "./history-key"
 
 /**
  * The single Back behaviour for the whole app.
@@ -27,8 +27,10 @@ export function useBack(fallbackHref = "/") {
   return useCallback(() => {
     // Not history.length: that counts other origins visited in this tab, so on a
     // deep link it is frequently already > 1 and Back would exit the app.
-    if (getNavDepth() > 0) {
-      bumpNavDepth(-1)
+    if (hasInAppHistory()) {
+      // No manual decrement: router.back() fires popstate, and the app-wide
+      // listener in useNavDepthTracking accounts for it. Decrementing here as
+      // well would double-count.
       router.back()
     } else {
       router.replace(fallbackHref)
@@ -37,37 +39,39 @@ export function useBack(fallbackHref = "/") {
 }
 
 /**
- * Counts in-app navigations so `useBack` can tell "went somewhere here" from
- * "arrived cold from outside".
+ * Records how deep each history entry is, so `useBack` can tell "navigated here
+ * from inside the app" from "arrived cold from a link".
  *
- * Mounted once, app-wide. Every pathname change after the first is a forward
- * navigation (+1); a popstate is the user going back (-1).
+ * Mounted once, app-wide. On each forward navigation the new entry is stamped
+ * with the previous entry's depth + 1. Nothing needs to be decremented: going
+ * Back restores an entry that already carries its own depth.
  */
 export function useNavDepthTracking() {
   const pathname = usePathname()
+  // The depth of the entry we were on before this navigation.
+  const prevDepth = useRef<number | null>(null)
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    // The first pathname seen in a session is the entry point, not a navigation,
-    // so it must not count as something to go back to.
-    const isFirst = window.sessionStorage?.getItem("freq:nav-seen") === null
-    if (isFirst) {
-      try {
-        window.sessionStorage.setItem("freq:nav-seen", "1")
-      } catch {
-        /* private mode */
-      }
+
+    const stamped = getNavDepth()
+    if (prevDepth.current === null) {
+      // First render of the session. If this entry is already stamped we are
+      // returning to it via Back/Forward or a reload, so its depth stands; an
+      // unstamped entry is a fresh entry point and stays at 0.
+      prevDepth.current = stamped
       return
     }
-    bumpNavDepth(1)
-  }, [pathname])
 
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    // Back/Forward performed with the device or browser control rather than our
-    // button still has to keep the counter honest.
-    const onPop = () => bumpNavDepth(-1)
-    window.addEventListener("popstate", onPop)
-    return () => window.removeEventListener("popstate", onPop)
-  }, [])
+    // A pathname change with the depth already stamped means the browser restored
+    // an existing entry (Back/Forward) rather than pushing a new one.
+    if (stamped > 0 && stamped !== prevDepth.current) {
+      prevDepth.current = stamped
+      return
+    }
+
+    const next = prevDepth.current + 1
+    setNavDepth(next)
+    prevDepth.current = next
+  }, [pathname])
 }
