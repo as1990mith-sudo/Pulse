@@ -38,6 +38,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
+import { useUrlState } from "@/lib/navigation/use-url-state"
 
 type Tab = "published" | "draft" | "archived"
 
@@ -51,7 +52,9 @@ export function MyArticlesView({ initial }: { initial: ArticleCard[] }) {
   const router = useRouter()
   const { isAdmin } = useHomeContext()
   const [items, setItems] = useState<ArticleCard[]>(initial)
-  const [tab, setTab] = useState<Tab>("published")
+  // In the URL so opening a draft to edit and coming Back returns to Drafts
+  // instead of dumping the author on Published.
+  const [tab, setTab] = useUrlState<Tab>("tab", "published", { valid: TABS.map((t) => t.key) })
   const [, startTransition] = useTransition()
 
   const counts = useMemo(

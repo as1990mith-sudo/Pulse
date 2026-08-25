@@ -54,6 +54,8 @@ import { toast } from "sonner"
 import { toThreadComment } from "@/lib/feed-comment-view"
 import { CommentSheet } from "@/components/comment-sheet"
 import { PinnedBadge } from "@/components/pinned-badge"
+import { useUrlState } from "@/lib/navigation/use-url-state"
+import { useRestoredScroll } from "@/lib/navigation/use-restored-scroll"
 import { toggleFollow } from "@/app/actions/follow"
 import type { CurrentUser } from "@/lib/session"
 import { Button } from "@/components/ui/button"
@@ -176,6 +178,9 @@ function mulberry32(seed: number): () => number {
   }
 }
 
+const FEED_TABS = ["for-you", "admin", "status", "events", "reels"] as const
+type FeedTab = (typeof FEED_TABS)[number]
+
 /**
  * Moves admin-pinned posts to the front, preserving the relative order of both
  * groups. Applied AFTER any shuffling or sorting, because those would otherwise
@@ -264,7 +269,19 @@ export function MindFeed({
   // "status" is kept in the union (still deep-linkable via /status and ?tab=status)
   // but is intentionally NOT surfaced as a feed sub-tab anymore — "events" takes
   // its place and hosts the announcements/events feature.
-  const [tab, setTab] = useState<"for-you" | "admin" | "status" | "events" | "reels">("for-you")
+  //
+  // Lives in the URL so the chosen tab survives a reload and is still there when
+  // the user comes Back from a post. Previously the URL was read once on mount
+  // but never written, so switching tabs and refreshing dropped you on "For you".
+  const [tab, setTab] = useUrlState<FeedTab>("tab", "for-you", { valid: FEED_TABS })
+  // Restore the reading position when returning to the feed, scoped per tab so
+  // "For you" and "Admin" keep independent positions. Skipped when a ?post= deep
+  // link is present, since that scrolls to a specific post and the two would fight.
+  useRestoredScroll(
+    `feed:${tab}`,
+    undefined,
+    typeof window === "undefined" || !new URLSearchParams(window.location.search).get("post"),
+  )
   const fileInputRef = useRef<HTMLInputElement>(null)
   // Separate inputs so we can request the device camera directly: one for
   // capturing a photo and one for recording a video. The "capture" attribute
@@ -379,24 +396,12 @@ export function MindFeed({
 
   const visiblePosts = tab === "admin" ? adminPosts : forYouPosts
 
-  // Open a specific feed tab directly when arriving with ?tab=<id> — this backs
-  // the /reels redirect (?tab=reels) and lets us deep-link to Status too, so old
-  // links/bookmarks land on the right view.
+  // ?tab=<id> is now handled by useUrlState above, which both reads AND writes it.
+  // All that remains is the legacy alias: old links and bookmarks used
+  // ?tab=following for what is now the Admin tab.
   useEffect(() => {
     if (typeof window === "undefined") return
-    const requested = new URLSearchParams(window.location.search).get("tab")
-    // Accept the legacy ?tab=following link and land it on the renamed Admin tab.
-    if (requested === "following") {
-      setTab("admin")
-    } else if (
-      requested === "reels" ||
-      requested === "status" ||
-      requested === "events" ||
-      requested === "admin" ||
-      requested === "for-you"
-    ) {
-      setTab(requested)
-    }
+    if (new URLSearchParams(window.location.search).get("tab") === "following") setTab("admin")
     // Run once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

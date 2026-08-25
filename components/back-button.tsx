@@ -15,11 +15,20 @@ import { useBack } from "@/lib/navigation/use-back"
 export function BackButton({
   fallbackHref = "/",
   label = "Back",
-  className = "",
+  className,
+  children,
+  "aria-label": ariaLabel,
 }: {
   fallbackHref?: string
   label?: string
   className?: string
+  /**
+   * Custom contents (e.g. a bare chevron in an icon-only header button). When
+   * given, `label` is not rendered — pass `aria-label` so the control still has
+   * an accessible name.
+   */
+  children?: React.ReactNode
+  "aria-label"?: string
 }) {
   const goBack = useBack(fallbackHref)
 
@@ -27,9 +36,17 @@ export function BackButton({
     <button
       type="button"
       onClick={goBack}
-      className={`inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground ${className}`}
+      aria-label={ariaLabel}
+      className={
+        className ??
+        "inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      }
     >
-      <ArrowLeft className="size-4" /> {label}
+      {children ?? (
+        <>
+          <ArrowLeft className="size-4" /> {label}
+        </>
+      )}
     </button>
   )
 }

@@ -32,9 +32,13 @@ import {
   archiveQuestion,
   restoreQuestion,
 } from "@/app/actions/admin-qotd"
+import { useUrlState } from "@/lib/navigation/use-url-state"
 import { QotdEditor } from "./qotd-editor"
 
 type Tab = QotdStatus | "all"
+// Single source for both the filter chips and the URL validator, so a stale
+// ?status= value degrades to "all" rather than rendering an empty list.
+const TAB_KEYS = ["all", ...QOTD_STATUSES] as readonly Tab[]
 
 const STATUS_TONE: Record<QotdStatus, "success" | "warning" | "info" | "neutral"> = {
   published: "success",
@@ -52,7 +56,8 @@ export function QotdManager({
   canManage: boolean
   openNew?: boolean
 }) {
-  const [tab, setTab] = useState<Tab>("all")
+  // In the URL so the filter survives a reload and is shareable.
+  const [tab, setTab] = useUrlState<Tab>("status", "all", { valid: TAB_KEYS })
   const [editing, setEditing] = useState<QotdQuestionRow | null>(null)
   const [creating, setCreating] = useState(openNew)
   const [isPending, startTransition] = useTransition()
@@ -114,7 +119,7 @@ export function QotdManager({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {(["all", ...QOTD_STATUSES] as Tab[]).map((t) => (
+        {TAB_KEYS.map((t) => (
           <button
             key={t}
             type="button"

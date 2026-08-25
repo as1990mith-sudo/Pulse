@@ -5,9 +5,12 @@ import { Flame, Info, MessagesSquare } from "lucide-react"
 import { CommunityHelp, CommunityHelpInfoModal } from "@/components/community-help"
 import { ITestify } from "@/components/itestify"
 import { setChatChromeHidden } from "@/lib/chat-chrome"
+import { useUrlState } from "@/lib/navigation/use-url-state"
+import { useOverlayHistory } from "@/lib/navigation/use-overlay-history"
 import { cn } from "@/lib/utils"
 
-type Tab = "community" | "itestify"
+const TAB_KEYS = ["community", "itestify"] as const
+type Tab = (typeof TAB_KEYS)[number]
 
 // Declared once so the tab bar and its sliding indicator derive from a single
 // ordered source rather than duplicating the order in markup.
@@ -38,10 +41,14 @@ export function ChatRoomsTabs({
   currentUser: React.ComponentProps<typeof ITestify>["currentUser"]
   postAsOrg?: React.ComponentProps<typeof CommunityHelp>["postAsOrg"]
 }) {
-  const [tab, setTab] = useState<Tab>("community")
+  // In the URL so a reload — or returning from a thread — keeps the room the user
+  // was reading instead of snapping back to Community.
+  const [tab, setTab] = useUrlState<Tab>("room", "community", { valid: TAB_KEYS })
   // The Community Help info (ⓘ) sheet — its content moved here from the old
   // standalone Community Help header, which no longer renders inside the hub.
   const [infoOpen, setInfoOpen] = useState(false)
+  // A sheet, so Back should dismiss it rather than leave Chat Rooms entirely.
+  useOverlayHistory(infoOpen, () => setInfoOpen(false), "community-info")
 
   function switchTab(next: Tab) {
     if (next === tab) return

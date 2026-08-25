@@ -1,15 +1,16 @@
 "use client"
 
-import { useState } from "react"
-import Link from "next/link"
 import { ChevronLeft } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { BackButton } from "@/components/back-button"
+import { useUrlState } from "@/lib/navigation/use-url-state"
 import { LiveNotesBrowser } from "@/components/live-notes-browser"
 import { PersonalNotesBrowser } from "@/components/personal-notes-browser"
 import type { LiveNoteHostGroup } from "@/app/actions/live-notes"
 import type { PersonalNoteView } from "@/app/actions/personal-notes"
 
-type Tab = "personal" | "live"
+const TAB_KEYS = ["personal", "live"] as const
+type Tab = (typeof TAB_KEYS)[number]
 
 /**
  * Notes hub. A single destination with two lanes:
@@ -27,19 +28,22 @@ export function NotesHub({
   initialPersonalNotes: PersonalNoteView[]
   signedIn: boolean
 }) {
-  const [tab, setTab] = useState<Tab>("personal")
+  // In the URL so a reload keeps the lane the user was in.
+  const [tab, setTab] = useUrlState<Tab>("lane", "personal", { valid: TAB_KEYS })
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 pb-24 pt-4 sm:px-6">
       {/* Compact top bar: back + title inline, no descriptions. */}
       <div className="mb-4 flex items-center gap-3">
-        <Link
-          href="/"
-          aria-label="Back home"
+        {/* Unwinds real history — whatever screen the user came from — and only
+            falls back to home when Notes was the entry point (deep link). */}
+        <BackButton
+          fallbackHref="/"
+          aria-label="Back"
           className="tap-scale flex size-9 shrink-0 items-center justify-center rounded-full border border-border/60 bg-secondary/40 text-muted-foreground transition-colors hover:text-foreground"
         >
           <ChevronLeft className="size-5" />
-        </Link>
+        </BackButton>
         <h1 className="font-display text-xl font-semibold tracking-tight text-foreground">Notes</h1>
       </div>
 

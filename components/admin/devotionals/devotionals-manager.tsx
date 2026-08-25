@@ -34,6 +34,7 @@ import {
   type DevotionalRow,
   type DevotionalStatus,
 } from "@/lib/admin/devotionals-types"
+import { useUrlState } from "@/lib/navigation/use-url-state"
 import {
   fetchDevotionals,
   publishDevotional,
@@ -56,6 +57,9 @@ type Analytics = {
 }
 
 type Tab = DevotionalStatus | "all"
+// Single source for both the filter chips and the URL validator, so a stale
+// ?status= value degrades to "all" rather than rendering an empty list.
+const TAB_KEYS = ["all", ...DEVOTIONAL_STATUSES] as readonly Tab[]
 
 const STATUS_TONE: Record<DevotionalStatus, "success" | "warning" | "info" | "neutral"> = {
   published: "success",
@@ -77,7 +81,8 @@ export function DevotionalsManager({
   analytics: Analytics
   canManage: boolean
 }) {
-  const [tab, setTab] = useState<Tab>("all")
+  // In the URL so the filter survives a reload and is shareable.
+  const [tab, setTab] = useUrlState<Tab>("status", "all", { valid: TAB_KEYS })
   const [editing, setEditing] = useState<DevotionalRow | null>(null)
   const [creating, setCreating] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -128,7 +133,7 @@ export function DevotionalsManager({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {(["all", ...DEVOTIONAL_STATUSES] as Tab[]).map((t) => (
+        {TAB_KEYS.map((t) => (
           <button
             key={t}
             type="button"

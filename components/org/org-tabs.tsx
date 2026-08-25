@@ -1,6 +1,9 @@
 "use client"
 
 import { useEffect, useState } from "react"
+
+import { useUrlState } from "@/lib/navigation/use-url-state"
+import { useOverlayHistory } from "@/lib/navigation/use-overlay-history"
 import Link from "next/link"
 import {
   ArrowLeft,
@@ -29,7 +32,8 @@ import { OrgEpisodeCatalog, NewCatalogueDialog } from "@/components/org/org-cata
 import { ArticleRow } from "@/components/articles/article-card"
 import { cn } from "@/lib/utils"
 
-type TabKey = "posts" | "thread" | "about" | "articles" | "catalogue"
+const TAB_KEYS = ["posts", "thread", "about", "articles", "catalogue"] as const
+type TabKey = (typeof TAB_KEYS)[number]
 
 const SOCIAL_LABELS: Record<string, string> = {
   instagram: "Instagram",
@@ -75,10 +79,14 @@ export function OrgTabs({
     { key: "catalogue", label: "Catalogue", icon: <Mic className="size-4" />, count: catalogue.length },
   ]
 
-  const [tab, setTab] = useState<TabKey>("posts")
-  // The tab the user was on before opening Catalogue, so the back arrow returns
-  // them exactly where they were (mirrors the individual-profile Catalogue).
-  const [prevTab, setPrevTab] = useState<TabKey>("posts")
+  // Held in the URL rather than useState so a reload — or coming Back to this
+  // profile — lands on the tab the user was actually reading, instead of snapping
+  // to Posts. Switching tabs replaces the history entry, so Back leaves the
+  // profile rather than stepping through every tab that was opened.
+  const [tab, setTab] = useUrlState<TabKey>("tab", "posts", { valid: TAB_KEYS })
+  // The tab to return to when Catalogue closes. Also in the URL, so a reload
+  // while Catalogue is open still knows where to go back to.
+  const [returnTab, setReturnTab] = useUrlState<TabKey>("from", "posts", { valid: TAB_KEYS })
   // Active Catalogue kind (Audio / Live / Documents), lifted here so the header's
   // upload dialog can tailor itself to the current tab — and hide on Live, which
   // can't be manually uploaded. Defaults to the first kind that has items.
@@ -107,9 +115,18 @@ export function OrgTabs({
   }, [catalogueOpen])
 
   function selectTab(key: TabKey) {
-    if (key === "catalogue" && tab !== "catalogue") setPrevTab(tab)
+    if (key === "catalogue" && tab !== "catalogue") setReturnTab(tab)
     setTab(key)
   }
+
+  function closeCatalogue() {
+    setTab(returnTab)
+  }
+
+  // Catalogue is a full-screen overlay, so it gets its own history entry: the
+  // device Back button and iOS swipe-back close it and reveal the tab underneath,
+  // instead of navigating away from the profile entirely.
+  useOverlayHistory(catalogueOpen, closeCatalogue, "org-catalogue")
 
   return (
     <section className="mt-2">
@@ -172,7 +189,7 @@ export function OrgTabs({
           <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border/60 bg-background/80 px-4 py-3 backdrop-blur-xl">
             <button
               type="button"
-              onClick={() => selectTab(prevTab)}
+              onClick={closeCatalogue}
               aria-label="Back"
               className="tap-scale -ml-1 flex size-9 items-center justify-center rounded-full text-foreground transition-colors hover:bg-secondary/60"
             >
