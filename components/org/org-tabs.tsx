@@ -272,7 +272,7 @@ function ThreadTab({ org, threads }: { org: OrganizationView; threads: Community
         title="No threads yet"
         message={
           org.isOwner
-            ? "Ask a question or share guidance in Community Help as this organisation. Threads posted in the organisation's voice appear here."
+            ? "Ask a question or share guidance in Community as this organisation. Threads posted in the organisation's voice appear here."
             : `${org.name} hasn't started any threads yet.`
         }
         action={
@@ -281,7 +281,7 @@ function ThreadTab({ org, threads }: { org: OrganizationView; threads: Community
               href="/chatrooms/community"
               className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
             >
-              <MessageCircle className="size-4" /> Open Community Help
+              <MessageCircle className="size-4" /> Open Community
             </Link>
           ) : null
         }

@@ -1,13 +1,20 @@
 "use client"
 
 import { useState } from "react"
-import { Flame, Info } from "lucide-react"
+import { Flame, Info, MessagesSquare } from "lucide-react"
 import { CommunityHelp, CommunityHelpInfoModal } from "@/components/community-help"
 import { ITestify } from "@/components/itestify"
 import { setChatChromeHidden } from "@/lib/chat-chrome"
 import { cn } from "@/lib/utils"
 
 type Tab = "community" | "itestify"
+
+// Declared once so the tab bar and its sliding indicator derive from a single
+// ordered source rather than duplicating the order in markup.
+const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
+  { key: "community", label: "Community", icon: <MessagesSquare className="size-4" /> },
+  { key: "itestify", label: "iTestify", icon: <Flame className="size-4" /> },
+]
 
 /**
  * Chat Rooms content hub. Replaces the old room-directory landing (big
@@ -46,65 +53,57 @@ export function ChatRoomsTabs({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Top-level tab bar — editorial underline style matching the Catalogue
-          tabs: a bottom border baseline with the active tab carrying a
-          `border-primary` underline. Stays static (always visible) — only the
-          global app header hides/reveals on scroll. */}
-      <div className="shrink-0 overflow-hidden border-b border-border/60 bg-background/95 px-4 pt-1 backdrop-blur sm:px-6">
-        <div
-          role="tablist"
-          aria-label="Chat Rooms sections"
-          className="mx-auto flex w-full max-w-md"
-        >
-          {/* Community Help tab: the tab selector plus an adjacent info (ⓘ)
-              button, both sharing one underline. Sibling buttons (not nested)
-              keep the markup valid and accessible. */}
+      {/* Top-level tab bar — same language as the profile tabs: full-width
+          columns, uppercase labels revealed only on the active tab, and a
+          sliding top indicator. Stays static; only the app header hides on
+          scroll. */}
+      <div className="shrink-0 overflow-hidden border-b border-border/60 bg-background/95 backdrop-blur">
+        {/* The positioning context is this wrapper rather than the tablist, so
+            the info button can sit visually inside the bar while staying OUTSIDE
+            `role="tablist"` — a tablist must only contain tabs. */}
+        <div className="relative mx-auto w-full max-w-md">
           <div
-            className={cn(
-              "-mb-px flex flex-1 items-center justify-center gap-1.5 border-b-2 transition-colors",
-              tab === "community" ? "border-primary" : "border-transparent",
-            )}
+            role="tablist"
+            aria-label="Chat Rooms sections"
+            className="relative grid w-full grid-cols-2 border-t border-border/60"
           >
-            {/* Info (ⓘ) sits *before* the label so it reads as a leading marker
-                for the section header. */}
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.key}
+                title={t.label}
+                onClick={() => switchTab(t.key)}
+                className={cn(
+                  "flex items-center justify-center gap-2 py-3 text-xs font-semibold uppercase tracking-wider transition-colors",
+                  tab === t.key ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t.icon}
+                {/* Only the active tab shows its label; the rest stay icon-only. */}
+                <span className={cn("whitespace-nowrap", tab !== t.key && "sr-only")}>{t.label}</span>
+              </button>
+            ))}
+            {/* Sliding active indicator */}
+            <span
+              className="absolute -top-px left-0 h-0.5 w-1/2 bg-foreground transition-transform duration-300 ease-out"
+              style={{ transform: `translateX(${TABS.findIndex((t) => t.key === tab) * 100}%)` }}
+              aria-hidden
+            />
+          </div>
+          {/* "How Community works" — absolutely positioned so the two tab
+              columns stay exactly equal, and only offered on that tab. */}
+          {tab === "community" && (
             <button
               type="button"
               onClick={() => setInfoOpen(true)}
-              aria-label="How Community Help works"
-              className="rounded-full p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+              aria-label="How Community works"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-muted-foreground transition-colors hover:text-foreground"
             >
               <Info className="size-4" />
             </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={tab === "community"}
-              onClick={() => switchTab("community")}
-              className={cn(
-                "flex items-center whitespace-nowrap py-3 text-base font-semibold tracking-tight transition-colors",
-                tab === "community" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              Community Help
-            </button>
-          </div>
-
-          {/* iTestify tab */}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "itestify"}
-            onClick={() => switchTab("itestify")}
-            className={cn(
-              "-mb-px flex flex-1 items-center justify-center gap-1.5 border-b-2 py-3 text-base font-semibold tracking-tight transition-colors",
-              tab === "itestify"
-                ? "border-primary text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <Flame className="size-4" />
-            iTestify
-          </button>
+          )}
         </div>
       </div>
 

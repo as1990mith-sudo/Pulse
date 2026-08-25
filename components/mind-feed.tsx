@@ -54,6 +54,8 @@ import { toggleFollow } from "@/app/actions/follow"
 import type { CurrentUser } from "@/lib/session"
 import { Button } from "@/components/ui/button"
 import { FormattedTextarea } from "@/components/formatted-textarea"
+import { HomeVoiceSwitch } from "@/components/home-voice-switch"
+import { useHomeVoice } from "@/lib/use-home-voice"
 import { useMentionAutocomplete, MentionAutocompleteList } from "@/components/mention-autocomplete"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card } from "@/components/ui/card"
@@ -225,6 +227,7 @@ export function MindFeed({
   myRequests = [],
   isAdmin = false,
   canPublish = false,
+  homeVoice = null,
 }: {
   posts: FeedPostView[]
   currentUser: CurrentUser | null
@@ -233,9 +236,15 @@ export function MindFeed({
   myRequests?: AnnouncementView[]
   isAdmin?: boolean
   canPublish?: boolean
+  // The organisation of the ACTIVE Home when the viewer may speak for it. Null
+  // for ordinary members, so the identity switcher simply never renders.
+  homeVoice?: { name: string; image: string | null; initials: string } | null
 }) {
   const router = useRouter()
   const [draft, setDraft] = useState("")
+  // Admins of the active Home default to its voice — that is why they have the
+  // right — but can switch to their own name per post.
+  const [postAsHome, setPostAsHome] = useState(true)
   const [media, setMedia] = useState<DraftMedia[]>([])
   // Files awaiting the crop/trim/cover editor. When set, the full-screen editor
   // flow opens; it uploads the edited results and hands them back via onDone.
@@ -479,7 +488,20 @@ export function MindFeed({
   // The main feed accepts posts from both individuals and organisations, but
   // individuals must share a photo or video (organisations may post text-only).
   const isOrg = currentUser?.accountType === "organization"
-  const mediaRequired = !isOrg
+  // Speaking for the Home lifts the photo/video requirement the same way an
+  // organisation account does: it is an official update, not personal sharing.
+  const mediaRequired = !isOrg && !(homeVoice && postAsHome)
+  // Who the composer is currently speaking as — drives the avatar so the choice
+  // is visible at a glance rather than only in the control below it.
+  const speakingAsHome = !!homeVoice && postAsHome
+  const activeVoice = speakingAsHome
+    ? { name: homeVoice.name, image: homeVoice.image, initials: homeVoice.initials, color: "bg-primary/15 text-primary" }
+    : {
+        name: currentUser?.name ?? "",
+        image: currentUser?.image ?? null,
+        initials: currentUser?.initials ?? "",
+        color: currentUser?.color ?? "",
+      }
 
   function publish(e: React.FormEvent) {
     e.preventDefault()
@@ -493,7 +515,13 @@ export function MindFeed({
     }
     if (!text && media.length === 0) return
     startTransition(async () => {
-      const created = await createPost({ text, media })
+      const created = await createPost({
+        text,
+        media,
+        // Only meaningful when a Home voice is on offer; otherwise the server
+        // resolves the identity on its own.
+        asOrganization: homeVoice ? postAsHome : undefined,
+      })
       setDraft("")
       mentions.reset()
       clearMedia()
@@ -633,13 +661,18 @@ export function MindFeed({
             className="tap-scale shrink-0 self-start rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <Avatar className="size-12 ring-2 ring-border/60">
-              {currentUser.image && (
-                <AvatarImage src={currentUser.image || "/placeholder.svg"} alt={currentUser.name} />
-              )}
-              <AvatarFallback className={currentUser.color}>{currentUser.initials}</AvatarFallback>
+              {activeVoice.image && <AvatarImage src={activeVoice.image || "/placeholder.svg"} alt={activeVoice.name} />}
+              <AvatarFallback className={activeVoice.color}>{activeVoice.initials}</AvatarFallback>
             </Avatar>
           </Link>
           <div className="flex-1 space-y-3">
+            <HomeVoiceSwitch
+              voice={homeVoice}
+              asHome={postAsHome}
+              onChange={setPostAsHome}
+              personalName={currentUser.name}
+              className="w-full"
+            />
             <div className="relative">
               <FormattedTextarea
                 textareaRef={composeTextareaRef}
@@ -1191,6 +1224,9 @@ export function PostCard({
 }) {
   const feed = variant === "feed"
   const router = useRouter()
+  // Non-null only for admins of the active Home, letting them reply in the
+  // organisation's voice. Deduped by SWR across every card on screen.
+  const homeVoice = useHomeVoice()
   const [liked, setLiked] = useState(post.liked)
   const [likes, setLikes] = useState(post.likes)
   const [likeBurst, setLikeBurst] = useState(false)
@@ -1277,11 +1313,8 @@ export function PostCard({
 
   function toggleLike() {
     if (!currentUser) return
-    // You can't like your own post — tapping shows who liked it instead.
-    if (post.isSelf) {
-      setEngagementKind("likes")
-      return
-    }
+    // Authors can like their own posts too; the "who liked this" list moved to
+    // the count beside the icon so the icon itself always just likes.
     const next = !liked
     setLiked(next)
     setLikes((n) => (next ? n + 1 : n - 1))
@@ -1299,11 +1332,8 @@ export function PostCard({
 
   function toggleSave() {
     if (!currentUser) return
-    // You can't save your own post — tapping shows who saved it instead.
-    if (post.isSelf) {
-      setEngagementKind("saves")
-      return
-    }
+    // Authors can save their own posts too; the "who saved this" list moved to
+    // the count beside the icon.
     const next = !saved
     setSaved(next) // optimistic
     setSaveCount((n) => Math.max(0, n + (next ? 1 : -1)))
@@ -1334,9 +1364,9 @@ export function PostCard({
     downloadKind: post.image ? "image" : post.video ? "video" : null,
   }
 
-  async function submitComment(text: string) {
+  async function submitComment(text: string, asHome?: boolean) {
     if (!currentUser) return
-    await addPostComment({ postId: post.id, text })
+    await addPostComment({ postId: post.id, text, asOrganization: asHome })
     // Refresh the polled feed (used on the Tweet tab) and the server tree
     // (used on profile pages where the feed isn't polled).
     await globalMutate("feed")
@@ -1696,14 +1726,27 @@ export function PostCard({
             !currentUser && "cursor-not-allowed opacity-60",
           )}
           aria-pressed={liked}
-          aria-label={post.isSelf ? "See who liked this post" : "Like"}
+          aria-label={liked ? "Unlike" : "Like"}
         >
           <Heart
             onAnimationEnd={() => setLikeBurst(false)}
             className={cn(feed ? "size-7" : "size-6", liked && "fill-current", likeBurst && "animate-like-pop")}
           />
-          {likes > 0 && <span>{likes}</span>}
         </button>
+        {/* The count is its own control: for the author it opens the list of
+            accounts that liked the post, so the icon stays a pure like toggle. */}
+        {likes > 0 &&
+          (post.isSelf ? (
+            <button
+              onClick={() => setEngagementKind("likes")}
+              className={cn("-ml-1 tabular-nums transition-colors hover:text-primary", feed ? "text-[15px]" : "text-sm")}
+              aria-label="See who liked this post"
+            >
+              {likes}
+            </button>
+          ) : (
+            <span className={cn("-ml-1 tabular-nums", feed ? "text-[15px]" : "text-sm")}>{likes}</span>
+          ))}
 
         <button
           onClick={() => setShowComments((v) => !v)}
@@ -1726,14 +1769,25 @@ export function PostCard({
             !currentUser && "cursor-not-allowed opacity-60",
           )}
           aria-pressed={saved}
-          aria-label={post.isSelf ? "See who saved this post" : saved ? "Remove bookmark" : "Save post"}
+          aria-label={saved ? "Remove bookmark" : "Save post"}
         >
           <Bookmark
             onAnimationEnd={() => setSaveBurst(false)}
             className={cn(feed ? "size-7" : "size-6", saved && "fill-current", saveBurst && "motion-pop")}
           />
-          {saveCount > 0 && <span>{saveCount}</span>}
         </button>
+        {saveCount > 0 &&
+          (post.isSelf ? (
+            <button
+              onClick={() => setEngagementKind("saves")}
+              className={cn("-ml-1 tabular-nums transition-colors hover:text-primary", feed ? "text-[15px]" : "text-sm")}
+              aria-label="See who saved this post"
+            >
+              {saveCount}
+            </button>
+          ) : (
+            <span className={cn("-ml-1 tabular-nums", feed ? "text-[15px]" : "text-sm")}>{saveCount}</span>
+          ))}
 
         <button
           onClick={() => setShareOpen(true)}
@@ -1756,6 +1810,7 @@ export function PostCard({
         showCopy={false}
         enforceTimeWindows={false}
         onSubmit={submitComment}
+        homeVoice={homeVoice}
         onLike={handleCommentLike}
         onReply={handleCommentReply}
         onEdit={handleCommentEdit}

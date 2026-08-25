@@ -7,6 +7,7 @@ import { Loader2, Send, X } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import { CommentThread, type ThreadComment } from "@/components/comment-thread"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { HomeVoiceSwitch, type HomeVoice } from "@/components/home-voice-switch"
 import { cn } from "@/lib/utils"
 
 /** Minimal current-user shape the composer needs for its avatar. */
@@ -33,8 +34,17 @@ export type CommentSheetProps = {
   comments?: ThreadComment[]
   /** Signed-in user (enables the composer). Null shows a sign-in prompt. */
   currentUser?: CommentSheetUser
-  /** Posts a new top-level comment. Should resolve once the add is queued. */
-  onSubmit?: (text: string) => Promise<void> | void
+  /**
+   * Posts a new top-level comment. Should resolve once the add is queued.
+   * `asHome` is the identity chosen in the switcher, and is undefined on
+   * surfaces that don't offer one — existing callers can ignore it entirely.
+   */
+  onSubmit?: (text: string, asHome?: boolean) => Promise<void> | void
+  /**
+   * When set, an admin of the active Home may post the comment in the
+   * organisation's voice. Omit to hide the switcher.
+   */
+  homeVoice?: HomeVoice | null
   onLike?: (commentId: number, liked: boolean) => void
   onReply?: (parentId: number, text: string) => Promise<void> | void
   onEdit?: (commentId: number, text: string) => Promise<void> | void
@@ -94,8 +104,11 @@ export function CommentSheet({
   emptyHint = "Start the conversation.",
   allowReply = true,
   heightClassName,
+  homeVoice = null,
 }: CommentSheetProps) {
   const [draft, setDraft] = useState("")
+  // Admins default to their Home's voice, matching the main composer.
+  const [asHome, setAsHome] = useState(true)
   const [sending, setSending] = useState(false)
   // Portals need the DOM; only render into document.body after mount (SSR-safe).
   const [mounted, setMounted] = useState(false)
@@ -158,7 +171,7 @@ export function CommentSheet({
     if (!value || sending || !onSubmit) return
     setSending(true)
     try {
-      await onSubmit(value)
+      await onSubmit(value, homeVoice ? asHome : undefined)
       setDraft("")
     } finally {
       setSending(false)
@@ -251,12 +264,36 @@ export function CommentSheet({
         {children ? null : showComposer ? (
           <form
             onSubmit={submit}
-            className="flex shrink-0 items-center gap-2.5 border-t border-border bg-background/95 px-3.5 py-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] backdrop-blur"
+            className="flex shrink-0 flex-col gap-2 border-t border-border bg-background/95 px-3.5 py-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] backdrop-blur"
           >
+            {/* Only rendered for admins of the active Home; see HomeVoiceSwitch. */}
+            <HomeVoiceSwitch
+              voice={homeVoice}
+              asHome={asHome}
+              onChange={setAsHome}
+              personalName={currentUser?.name ?? "You"}
+              size="sm"
+            />
+            <div className="flex items-center gap-2.5">
             {currentUser && (
               <Avatar className="size-8 shrink-0 ring-1 ring-border">
-                {currentUser.image && <AvatarImage src={currentUser.image || "/placeholder.svg"} alt={currentUser.name} />}
-                <AvatarFallback className={cn("text-[11px]", currentUser.color)}>{currentUser.initials}</AvatarFallback>
+                {homeVoice && asHome ? (
+                  <>
+                    {homeVoice.image && <AvatarImage src={homeVoice.image || "/placeholder.svg"} alt={homeVoice.name} />}
+                    <AvatarFallback className="bg-primary/15 text-[11px] text-primary">
+                      {homeVoice.initials}
+                    </AvatarFallback>
+                  </>
+                ) : (
+                  <>
+                    {currentUser.image && (
+                      <AvatarImage src={currentUser.image || "/placeholder.svg"} alt={currentUser.name} />
+                    )}
+                    <AvatarFallback className={cn("text-[11px]", currentUser.color)}>
+                      {currentUser.initials}
+                    </AvatarFallback>
+                  </>
+                )}
               </Avatar>
             )}
             <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-full bg-secondary pl-4 pr-1.5 ring-1 ring-inset ring-border transition focus-within:ring-ring">
@@ -275,6 +312,7 @@ export function CommentSheet({
               >
                 {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
               </button>
+            </div>
             </div>
           </form>
         ) : (

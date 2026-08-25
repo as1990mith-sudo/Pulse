@@ -108,6 +108,8 @@ export type FeedCommentView = {
   initials: string
   color: string
   authorImage: string | null
+  /** True when the comment speaks for a verified organisation. */
+  orgVerified: boolean
   text: string
   likes: number
   liked: boolean
@@ -208,18 +210,23 @@ function toCommentView(
   infoMap: Map<string, { name: string; image: string | null }>,
   currentUserId: string | null,
   likedCommentSet: Set<number>,
+  orgMap?: Map<string, OrgInfo>,
 ): FeedCommentView {
-  const name = infoMap.get(c.userId)?.name ?? c.authorName
+  // Shares the post resolver so an org-voice comment is attributed to the
+  // organisation exactly like an org-voice post, and both stay live against
+  // renames rather than trusting the denormalized authorName.
+  const author = resolveAuthor(c, infoMap, orgMap)
   return {
     id: c.id,
     parentId: c.parentId ?? null,
     authorId: c.userId,
     isSelf: currentUserId === c.userId,
-    user: name,
-    handle: getHandle(name),
-    initials: getInitials(name),
-    color: getAvatarColor(c.userId),
-    authorImage: infoMap.get(c.userId)?.image ?? null,
+    user: author.user,
+    handle: author.handle,
+    initials: author.initials,
+    color: author.color,
+    authorImage: author.authorImage,
+    orgVerified: author.orgVerified,
     text: c.text,
     likes: c.likes,
     liked: likedCommentSet.has(c.id),
@@ -383,7 +390,9 @@ export async function getFeed(): Promise<FeedPostView[]> {
   // always appear as their organisation, never by personal name.
   const [infoMap, orgMap, likedCommentSet] = await Promise.all([
     getUserInfoMap([...posts.map((p) => p.userId), ...comments.map((c) => c.userId)]),
-    getOrgInfoMap(posts.map((p) => p.organizationId)),
+    // Comment org ids are included too: an admin can reply in the org's voice on
+    // a personal post, so the comment's org may not appear on any post here.
+    getOrgInfoMap([...posts.map((p) => p.organizationId), ...comments.map((c) => c.organizationId)]),
     getLikedSet(currentUserId, "feed_comment", comments.map((c) => c.id)),
   ])
 
@@ -392,7 +401,7 @@ export async function getFeed(): Promise<FeedPostView[]> {
   // post (which was O(posts × comments)).
   const commentsByPost = new Map<number, FeedCommentView[]>()
   for (const c of comments) {
-    const view = toCommentView(c, infoMap, currentUserId, likedCommentSet)
+    const view = toCommentView(c, infoMap, currentUserId, likedCommentSet, orgMap)
     const arr = commentsByPost.get(c.postId)
     if (arr) arr.push(view)
     else commentsByPost.set(c.postId, [view])
@@ -461,14 +470,17 @@ export async function getFeedPostsByUser(userId: string): Promise<FeedPostView[]
     getLikedSet(currentUserId, "post", postIds),
   ])
 
-  const [infoMap, likedCommentSet] = await Promise.all([
+  // These posts are personal by definition, but a Home admin can still reply in
+  // their organisation's voice, so comments need org identity resolved.
+  const [infoMap, commentOrgMap, likedCommentSet] = await Promise.all([
     getUserInfoMap([...posts.map((p) => p.userId), ...comments.map((c) => c.userId)]),
+    getOrgInfoMap(comments.map((c) => c.organizationId)),
     getLikedSet(currentUserId, "feed_comment", comments.map((c) => c.id)),
   ])
 
   const commentsByPost = new Map<number, FeedCommentView[]>()
   for (const c of comments) {
-    const view = toCommentView(c, infoMap, currentUserId, likedCommentSet)
+    const view = toCommentView(c, infoMap, currentUserId, likedCommentSet, commentOrgMap)
     const arr = commentsByPost.get(c.postId)
     if (arr) arr.push(view)
     else commentsByPost.set(c.postId, [view])
@@ -541,13 +553,13 @@ export async function getFeedPostsByOrganization(organizationId: string): Promis
   // live name/logo/verified state rather than to the admin who typed it.
   const [infoMap, orgMap, likedCommentSet] = await Promise.all([
     getUserInfoMap([...posts.map((p) => p.userId), ...comments.map((c) => c.userId)]),
-    getOrgInfoMap(posts.map((p) => p.organizationId)),
+    getOrgInfoMap([...posts.map((p) => p.organizationId), ...comments.map((c) => c.organizationId)]),
     getLikedSet(currentUserId, "feed_comment", comments.map((c) => c.id)),
   ])
 
   const commentsByPost = new Map<number, FeedCommentView[]>()
   for (const c of comments) {
-    const view = toCommentView(c, infoMap, currentUserId, likedCommentSet)
+    const view = toCommentView(c, infoMap, currentUserId, likedCommentSet, orgMap)
     const arr = commentsByPost.get(c.postId)
     if (arr) arr.push(view)
     else commentsByPost.set(c.postId, [view])
@@ -623,11 +635,17 @@ export async function getChannelFeed(channel: string): Promise<FeedPostView[]> {
     ...posts.map((p) => p.userId),
     ...comments.map((c) => c.userId),
   ])
+  // Org identity for both posts and comments, so an org-voice row is attributed
+  // to the organisation's live name/logo instead of the admin who typed it.
+  const orgMap = await getOrgInfoMap([
+    ...posts.map((p) => p.organizationId),
+    ...comments.map((c) => c.organizationId),
+  ])
 
   return posts.map((p) => ({
     id: p.id,
     authorId: p.userId,
-    ...resolveAuthor(p, infoMap),
+    ...resolveAuthor(p, infoMap, orgMap),
     postedAt: timeAgo(p.createdAt),
     createdAtMs: p.createdAt.getTime(),
     text: p.text,
@@ -647,7 +665,7 @@ export async function getChannelFeed(channel: string): Promise<FeedPostView[]> {
     mentionedMe: currentUserId ? (p.mentions ?? []).some((m) => m.userId === currentUserId) : false,
     comments: comments
       .filter((c) => c.postId === p.id)
-      .map((c) => toCommentView(c, infoMap, currentUserId, likedCommentSet)),
+      .map((c) => toCommentView(c, infoMap, currentUserId, likedCommentSet, orgMap)),
   }))
 }
 
@@ -715,11 +733,17 @@ export async function searchPosts(query: string): Promise<FeedPostView[]> {
     ...posts.map((p) => p.userId),
     ...comments.map((c) => c.userId),
   ])
+  // Org identity for both posts and comments, so an org-voice row is attributed
+  // to the organisation's live name/logo instead of the admin who typed it.
+  const orgMap = await getOrgInfoMap([
+    ...posts.map((p) => p.organizationId),
+    ...comments.map((c) => c.organizationId),
+  ])
 
   return posts.map((p) => ({
     id: p.id,
     authorId: p.userId,
-    ...resolveAuthor(p, infoMap),
+    ...resolveAuthor(p, infoMap, orgMap),
     postedAt: timeAgo(p.createdAt),
     createdAtMs: p.createdAt.getTime(),
     text: p.text,
@@ -739,7 +763,7 @@ export async function searchPosts(query: string): Promise<FeedPostView[]> {
     mentionedMe: currentUserId ? (p.mentions ?? []).some((m) => m.userId === currentUserId) : false,
     comments: comments
       .filter((c) => c.postId === p.id)
-      .map((c) => toCommentView(c, infoMap, currentUserId, likedCommentSet)),
+      .map((c) => toCommentView(c, infoMap, currentUserId, likedCommentSet, orgMap)),
   }))
 }
 
@@ -777,11 +801,17 @@ export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
     ...posts.map((p) => p.userId),
     ...comments.map((c) => c.userId),
   ])
+  // Org identity for both posts and comments, so an org-voice row is attributed
+  // to the organisation's live name/logo instead of the admin who typed it.
+  const orgMap = await getOrgInfoMap([
+    ...posts.map((p) => p.organizationId),
+    ...comments.map((c) => c.organizationId),
+  ])
 
   return posts.map((p) => ({
     id: p.id,
     authorId: p.userId,
-    ...resolveAuthor(p, infoMap),
+    ...resolveAuthor(p, infoMap, orgMap),
     postedAt: timeAgo(p.createdAt),
     createdAtMs: p.createdAt.getTime(),
     text: p.text,
@@ -801,7 +831,7 @@ export async function getPostsByUser(userId: string): Promise<FeedPostView[]> {
     mentionedMe: currentUserId ? (p.mentions ?? []).some((m) => m.userId === currentUserId) : false,
     comments: comments
       .filter((c) => c.postId === p.id)
-      .map((c) => toCommentView(c, infoMap, currentUserId, likedCommentSet)),
+      .map((c) => toCommentView(c, infoMap, currentUserId, likedCommentSet, orgMap)),
   }))
 }
 
@@ -850,6 +880,12 @@ export async function getRepostsByUser(userId: string): Promise<FeedPostView[]> 
     ...posts.map((p) => p.userId),
     ...comments.map((c) => c.userId),
   ])
+  // Org identity for both posts and comments, so an org-voice row is attributed
+  // to the organisation's live name/logo instead of the admin who typed it.
+  const orgMap = await getOrgInfoMap([
+    ...posts.map((p) => p.organizationId),
+    ...comments.map((c) => c.organizationId),
+  ])
 
   // Preserve repost recency order (the query above doesn't guarantee it).
   const ordered = [...posts].sort((a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0))
@@ -857,7 +893,7 @@ export async function getRepostsByUser(userId: string): Promise<FeedPostView[]> 
   return ordered.map((p) => ({
     id: p.id,
     authorId: p.userId,
-    ...resolveAuthor(p, infoMap),
+    ...resolveAuthor(p, infoMap, orgMap),
     postedAt: timeAgo(p.createdAt),
     createdAtMs: p.createdAt.getTime(),
     text: p.text,
@@ -877,7 +913,7 @@ export async function getRepostsByUser(userId: string): Promise<FeedPostView[]> 
     mentionedMe: currentUserId ? (p.mentions ?? []).some((m) => m.userId === currentUserId) : false,
     comments: comments
       .filter((c) => c.postId === p.id)
-      .map((c) => toCommentView(c, infoMap, currentUserId, likedCommentSet)),
+      .map((c) => toCommentView(c, infoMap, currentUserId, likedCommentSet, orgMap)),
   }))
 }
 
@@ -937,6 +973,10 @@ export async function createPost(input: {
   // "itestify" (a testimony) or "qotd:<questionId>" (a Question of the Day
   // response). Omitted/null for a normal feed post.
   channel?: string | null
+  // Identity choice from the composer. Admins of the active Home may publish as
+  // the organisation or as themselves; everyone else is personal regardless, so
+  // this can only ever narrow what the server would otherwise grant.
+  asOrganization?: boolean
 }) {
   const user = await requireUser()
 
@@ -966,11 +1006,14 @@ export async function createPost(input: {
       throw new Error("Join or select a Home before posting to the Feed.")
     }
 
-    const identity = await resolvePublishingIdentity({
-      name: user.name,
-      handle: getHandle(user.name),
-      image: user.image ?? null,
-    })
+    const identity = await resolvePublishingIdentity(
+      {
+        name: user.name,
+        handle: getHandle(user.name),
+        image: user.image ?? null,
+      },
+      { preferPersonal: input.asOrganization === false },
+    )
 
     homeId = identity.homeId
     authorName = identity.name
@@ -1084,17 +1127,35 @@ export async function deletePost(postId: number) {
   revalidatePath(`/u/${user.id}`)
 }
 
-export async function addPostComment(input: { postId: number; text: string; parentId?: number | null }) {
+export async function addPostComment(input: {
+  postId: number
+  text: string
+  parentId?: number | null
+  // Identity choice from the comment box. Admins of the active Home may reply as
+  // the organisation; for everyone else the server resolves to personal anyway.
+  asOrganization?: boolean
+}) {
   const user = await requireUser()
   const text = input.text.trim()
   if (!text) throw new Error("Comment cannot be empty.")
+
+  const identity = await resolvePublishingIdentity(
+    {
+      name: user.name,
+      handle: getHandle(user.name),
+      image: user.image ?? null,
+    },
+    { preferPersonal: input.asOrganization === false },
+  )
 
   await db.insert(feedComment).values({
     postId: input.postId,
     parentId: input.parentId ?? null,
     userId: user.id,
-    authorName: user.name,
-    authorHandle: getHandle(user.name),
+    authorName: identity.name,
+    authorHandle: identity.handle,
+    organizationId: identity.type === "home" ? identity.organizationId : null,
+    publishedAsType: identity.type,
     text,
   })
 
@@ -1124,16 +1185,15 @@ export async function setPostLike(input: { postId: number; liked: boolean }) {
     .from(feedPost)
     .where(eq(feedPost.id, input.postId))
   if (!row) return
-  // A user can never like their own post — silently ignore any such request
-  // (the UI already hides the action for the author, this is the server guard).
-  if (row.userId === user.id) return
+  // Authors may like their own posts in the main feed.
   const { changed } = await setLike(user.id, "post", input.postId, input.liked)
   if (!changed) return
   const next = Math.max(0, row.likes + (input.liked ? 1 : -1))
   await db.update(feedPost).set({ likes: next }).where(eq(feedPost.id, input.postId))
 
-  // Notify the author when their post is liked (not on un-like).
-  if (input.liked) {
+  // Notify the author when their post is liked (not on un-like, and never for
+  // your own like — self-notifications are noise).
+  if (input.liked && row.userId !== user.id) {
     await notifyUser({
       userId: row.userId,
       actorId: user.id,

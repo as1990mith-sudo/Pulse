@@ -281,6 +281,11 @@ export const feedComment = pgTable(
     userId: text("userId").notNull(),
     authorName: text("authorName").notNull(),
     authorHandle: text("authorHandle").notNull(),
+    // Set when an admin comments in their Home organisation's voice. As with
+    // feedPost, the identity is denormalized at write time and never recomputed
+    // on read, so a later role change cannot rewrite who said what.
+    organizationId: text("organizationId"),
+    publishedAsType: text("publishedAsType").notNull().default("personal"),
     text: text("text").notNull(),
     likes: integer("likes").notNull().default(0),
     editedAt: timestamp("editedAt"),

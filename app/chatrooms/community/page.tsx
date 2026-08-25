@@ -4,7 +4,7 @@ import { getCommunityPosts, getPublishableOrg } from "@/app/actions/community"
 import { getCurrentUser } from "@/lib/session"
 
 export const metadata = {
-  title: "Community Help — Frequency",
+  title: "Community — Frequency",
   description: "Ask anything anonymously and get help from the Frequency community.",
 }
 

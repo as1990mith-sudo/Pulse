@@ -1201,6 +1201,8 @@ function makeOptimistic(currentUser: CurrentUser, text: string, parentId: number
     initials: currentUser.initials,
     color: currentUser.color,
     authorImage: currentUser.image,
+    // Reels comments are always personal — no org voice switcher on this surface.
+    orgVerified: false,
     text,
     likes: 0,
     liked: false,

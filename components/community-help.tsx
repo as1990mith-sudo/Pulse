@@ -175,7 +175,7 @@ function PostItem({
   const shareTarget: ShareTarget = {
     type: "community",
     key: String(post.id),
-    title: "A question on Community Help",
+    title: "A question on Community",
     subtitle: body.length > 120 ? `${body.slice(0, 120)}…` : body,
     url: `/chatrooms/community?q=${post.id}`,
     image: null,
@@ -1008,7 +1008,7 @@ export function CommunityHelpInfoModal({ open, onClose }: { open: boolean; onClo
       <button className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} aria-label="Close" />
       <div className="relative z-10 w-full max-w-lg rounded-t-3xl border border-border/60 bg-card p-6 shadow-2xl duration-200 animate-in slide-in-from-bottom sm:rounded-3xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold tracking-tight">How Community Help works</h2>
+          <h2 className="text-lg font-bold tracking-tight">How Community works</h2>
           <button onClick={onClose} className="rounded-full p-2 text-muted-foreground hover:bg-secondary" aria-label="Close">
             <X className="size-5" />
           </button>
@@ -1261,12 +1261,12 @@ export function CommunityHelp({
             </Avatar>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <h1 className="truncate text-xl font-bold tracking-tight">Community Help</h1>
+                <h1 className="truncate text-xl font-bold tracking-tight">Community</h1>
                 <button
                   type="button"
                   onClick={() => setInfoOpen(true)}
                   className="rounded-full p-0.5 text-muted-foreground transition-colors hover:text-primary"
-                  aria-label="How Community Help works"
+                  aria-label="How Community works"
                 >
                   <Info className="size-4" />
                 </button>
