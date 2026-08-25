@@ -6,12 +6,13 @@
 // is no RLS on Neon, so the eq(userId) in each where clause is what keeps one
 // user's notes private to them.
 
-import { and, desc, eq } from "drizzle-orm"
+import { and, desc, eq, inArray } from "drizzle-orm"
 import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { liveNote } from "@/lib/db/schema"
+import { home, liveNote, liveStream, organization } from "@/lib/db/schema"
+import { getAvatarColor, getInitials } from "@/lib/identity"
 
 const MAX_BODY = 20000
 const MAX_META = 300
@@ -154,6 +155,18 @@ export type GroupedLiveNote = {
 export type LiveNoteHostGroup = {
   hostId: string | null
   hostName: string
+  /**
+   * The hosting Home's branding, so the group header can render the same
+   * <HomeMark> the My Homes switcher uses instead of a bare name. Resolved by
+   * joining the note's `streamId` back to the live session's Home — `hostId` is
+   * the host USER, while `hostName` carries the Home's name, so the logo can't
+   * come from `hostId`. `hostLogo` stays null for a note taken in a personal
+   * (non-Home) live or one whose stream row is gone, in which case the mark
+   * falls back to initials on the accent colour.
+   */
+  hostLogo: string | null
+  hostInitials: string
+  hostColor: string
   notes: GroupedLiveNote[]
 }
 
@@ -172,13 +185,58 @@ export async function getLiveNotes(): Promise<LiveNoteHostGroup[]> {
     .where(eq(liveNote.userId, userId))
     .orderBy(desc(liveNote.updatedAt))
 
+  // Resolve the hosting Home's logo for every note that came from a Home live.
+  // One batched query keyed by streamId, rather than a lookup per group, so the
+  // number of round trips doesn't grow with the number of hosts.
+  const streamIds = Array.from(
+    new Set(rows.map((r) => r.streamId).filter((id): id is number => typeof id === "number")),
+  )
+  const brandingByStreamId = new Map<number, { logo: string | null; name: string; orgId: string }>()
+  if (streamIds.length > 0) {
+    const branded = await db
+      .select({
+        streamId: liveStream.id,
+        logo: organization.logo,
+        orgName: organization.name,
+        orgId: organization.id,
+      })
+      .from(liveStream)
+      .innerJoin(home, eq(home.id, liveStream.homeId))
+      .innerJoin(organization, eq(organization.id, home.organizationId))
+      .where(inArray(liveStream.id, streamIds))
+    for (const b of branded) {
+      brandingByStreamId.set(b.streamId, { logo: b.logo, name: b.orgName, orgId: b.orgId })
+    }
+  }
+
   const groups = new Map<string, LiveNoteHostGroup>()
   for (const r of rows) {
     const key = r.hostId ?? r.hostName ?? "unknown"
     let g = groups.get(key)
     if (!g) {
-      g = { hostId: r.hostId, hostName: r.hostName || "Unknown host", notes: [] }
+      const name = r.hostName || "Unknown host"
+      const branding = r.streamId != null ? brandingByStreamId.get(r.streamId) : undefined
+      g = {
+        hostId: r.hostId,
+        hostName: name,
+        hostLogo: branding?.logo ?? null,
+        hostInitials: getInitials(branding?.name ?? name),
+        // Colour the fallback mark from the org id where we know it, so a Home's
+        // mark is the same colour here as everywhere else in the app; otherwise
+        // key off the display name so it is at least stable per host.
+        hostColor: getAvatarColor(branding?.orgId ?? r.hostId ?? name),
+        notes: [],
+      }
       groups.set(key, g)
+    } else if (g.hostLogo == null && r.streamId != null) {
+      // A host's earlier notes may predate their Home stream link; take the logo
+      // from whichever of their notes can resolve one.
+      const branding = brandingByStreamId.get(r.streamId)
+      if (branding?.logo) {
+        g.hostLogo = branding.logo
+        g.hostInitials = getInitials(branding.name)
+        g.hostColor = getAvatarColor(branding.orgId)
+      }
     }
     const body = (r.body ?? "").trim()
     g.notes.push({
