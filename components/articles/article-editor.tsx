@@ -20,7 +20,7 @@ import {
   X,
 } from "lucide-react"
 import { ARTICLE_CATEGORIES } from "@/lib/article-types"
-import { ARTICLE_MIN_WORDS, countWords } from "@/lib/article-sanitize"
+import { ARTICLE_MIN_WORDS, countWords, sanitizeArticleHtml } from "@/lib/article-sanitize"
 import { saveArticle, publishArticle } from "@/app/actions/articles"
 import { uploadMedia } from "@/lib/upload-media"
 import { CropModal } from "@/components/media-editor/crop-modal"
@@ -52,6 +52,12 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
   // Object URL of the just-picked cover, shown in the 16:9 crop editor before
   // it's uploaded. The user only chooses which region is framed (ratio locked).
   const [coverToCrop, setCoverToCrop] = useState<string | null>(null)
+  // Same pre-upload crop step for in-body images. Unlike the cover — which is
+  // ratio-locked to 16:9 so cards and the reader header stay uniform — an inline
+  // illustration can legitimately be any shape, so the ratio is the writer's
+  // choice and defaults to Free (the image's own aspect).
+  const [bodyImageToCrop, setBodyImageToCrop] = useState<string | null>(null)
+  const [uploadingBodyImage, setUploadingBodyImage] = useState(false)
   const [preview, setPreview] = useState(false)
   const [previewHtml, setPreviewHtml] = useState("")
   const [saving, startSaving] = useTransition()
@@ -68,11 +74,15 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
   // the caret; the publish action re-derives the mention list from the HTML.
   const mentions = useEditableMentionAutocomplete(editorRef)
 
-  // Seed the contentEditable body once on mount.
+  // Seed the contentEditable body once on mount. The seed is normalized first
+  // so editing an article written before the paragraph fix starts from clean
+  // block structure — otherwise the writer would keep editing the malformed
+  // markup and see different spacing in the editor than in the reader.
   useEffect(() => {
     if (editorRef.current && seed?.bodyHtml) {
-      editorRef.current.innerHTML = seed.bodyHtml
-      setWords(countWords(seed.bodyHtml))
+      const normalized = sanitizeArticleHtml(seed.bodyHtml)
+      editorRef.current.innerHTML = normalized
+      setWords(countWords(normalized))
     }
   }, [seed?.bodyHtml])
 
@@ -90,6 +100,65 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
   // Recount words from the live editor (called on every input).
   function recountWords() {
     setWords(countWords(editorRef.current?.innerHTML ?? ""))
+  }
+
+  // Caret bookmark for insertions that go through a modal. Opening an overlay
+  // moves focus out of the contentEditable and collapses its selection, so
+  // without this the image would land at the top of the body instead of where
+  // the writer was typing.
+  const savedRangeRef = useRef<Range | null>(null)
+
+  function saveCaret() {
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0) return
+    const range = sel.getRangeAt(0)
+    // Only trust a selection that actually sits inside the body editor.
+    if (editorRef.current?.contains(range.commonAncestorContainer)) {
+      savedRangeRef.current = range.cloneRange()
+    }
+  }
+
+  function restoreCaret() {
+    const el = editorRef.current
+    if (!el) return
+    el.focus()
+    const range = savedRangeRef.current
+    if (!range || !el.contains(range.commonAncestorContainer)) return
+    const sel = window.getSelection()
+    sel?.removeAllRanges()
+    sel?.addRange(range)
+  }
+
+  /**
+   * Paste as clean paragraphs.
+   *
+   * A default contentEditable paste injects the source document's own markup —
+   * Word/Docs/web wrappers with inline fonts, colours, nested divs and stray
+   * `<span>` fragments. That was a main cause of erratic article spacing: the
+   * writer saw one thing while editing and the publish-time sanitizer, having
+   * to unpick that foreign structure, produced another. Taking the plain text
+   * and rebuilding the blocks ourselves means pasted and typed text are
+   * structurally identical.
+   *
+   * Blank lines separate paragraphs; single newlines inside a paragraph become
+   * <br>, matching how the text was written.
+   */
+  function onPaste(e: React.ClipboardEvent<HTMLDivElement>) {
+    const text = e.clipboardData.getData("text/plain")
+    if (!text) return // let images/files fall through to the default handler
+    e.preventDefault()
+
+    const html = text
+      .replace(/\r\n?/g, "\n")
+      .split(/\n{2,}/)
+      .map((block) => block.trim())
+      .filter(Boolean)
+      .map((block) => `<p>${block.split("\n").map((line) => escapeHtml(line)).join("<br />")}</p>`)
+      .join("")
+
+    document.execCommand("insertHTML", false, html || "<p></p>")
+    setDirty(true)
+    recountWords()
   }
 
   function exec(command: string, value?: string) {
@@ -147,22 +216,46 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
     }
   }
 
-  async function onBodyImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+  // Picking a body image opens the crop editor first; nothing is uploaded until
+  // the writer confirms the framing.
+  function onBodyImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    if (!file.type.startsWith("image/")) {
+      setError("Please choose an image.")
+      if (bodyImageInputRef.current) bodyImageInputRef.current.value = ""
+      return
+    }
+    // The crop overlay takes focus, which collapses the editor's selection, so
+    // remember the caret now and insert back at that exact spot afterwards.
+    saveCaret()
+    setBodyImageToCrop(URL.createObjectURL(file))
+    if (bodyImageInputRef.current) bodyImageInputRef.current.value = ""
+  }
+
+  function closeBodyImageCrop() {
+    const src = bodyImageToCrop
+    setBodyImageToCrop(null)
+    if (src) URL.revokeObjectURL(src)
+  }
+
+  // Cropped body image confirmed — upload the canvas output and insert it.
+  async function onBodyImageCropApply(blob: Blob) {
+    closeBodyImageCrop()
+    setUploadingBodyImage(true)
     try {
-      const { url } = await uploadMedia(file, "covers")
-      editorRef.current?.focus()
-      document.execCommand(
-        "insertHTML",
-        false,
-        `<img src="${url}" alt="" /><p><br/></p>`,
-      )
+      const cropped = new File([blob], "image.jpg", { type: "image/jpeg" })
+      const { url } = await uploadMedia(cropped, "covers")
+      restoreCaret()
+      // The trailing paragraph gives the caret somewhere to keep typing below
+      // the image; the sanitizer drops it later if it stays empty.
+      document.execCommand("insertHTML", false, `<img src="${url}" alt="" /><p><br/></p>`)
       setDirty(true)
+      recountWords()
     } catch {
       setError("Image upload failed. Try again.")
     } finally {
-      if (bodyImageInputRef.current) bodyImageInputRef.current.value = ""
+      setUploadingBodyImage(false)
     }
   }
 
@@ -442,8 +535,16 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
         <ToolbarButton onClick={addLink} label="Link">
           <Link2 className="size-4" />
         </ToolbarButton>
-        <ToolbarButton onClick={() => bodyImageInputRef.current?.click()} label="Image">
-          <ImageIcon className="size-4" />
+        <ToolbarButton
+          onClick={() => bodyImageInputRef.current?.click()}
+          label={uploadingBodyImage ? "Uploading image" : "Image"}
+          disabled={uploadingBodyImage}
+        >
+          {uploadingBodyImage ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <ImageIcon className="size-4" />
+          )}
         </ToolbarButton>
         <ToolbarButton onClick={insertVerse} label="Bible verse">
           <BookOpen className="size-4" />
@@ -468,6 +569,7 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
             recountWords()
           }}
           onKeyDown={(e) => mentions.onKeyDown(e)}
+          onPaste={onPaste}
           data-placeholder="Tell your story…"
           className="article-editor article-prose mt-5 min-h-[40vh] outline-none"
         />
@@ -508,7 +610,8 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
         </div>
       )}
 
-      {/* Cover crop — locked to 4:5; the user only frames the region. */}
+      {/* Cover crop — locked to 16:9 (matching the reader's cover frame and the
+          article cards); the writer only chooses which region is framed. */}
       {coverToCrop && (
         <CropModal
           imageSrc={coverToCrop}
@@ -520,6 +623,24 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
             if (src) URL.revokeObjectURL(src)
           }}
           onApply={onCoverCropApply}
+        />
+      )}
+
+      {/* Body image crop — ratio is the writer's choice (defaults to Free, the
+          image's own shape) since inline illustrations aren't a fixed frame. */}
+      {bodyImageToCrop && (
+        <CropModal
+          imageSrc={bodyImageToCrop}
+          title="Crop image"
+          ratios={[
+            { label: "Free", value: null, hint: "Original" },
+            { label: "16:9", value: 16 / 9, hint: "Landscape" },
+            { label: "4:3", value: 4 / 3, hint: "Classic" },
+            { label: "1:1", value: 1, hint: "Square" },
+            { label: "4:5", value: 4 / 5, hint: "Portrait" },
+          ]}
+          onCancel={closeBodyImageCrop}
+          onApply={onBodyImageCropApply}
         />
       )}
 
@@ -570,14 +691,24 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
   )
 }
 
+/** Escapes pasted plain text so it can be inserted as HTML verbatim. */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+}
+
 function ToolbarButton({
   onClick,
   label,
   children,
+  disabled = false,
 }: {
   onClick: () => void
   label: string
   children: React.ReactNode
+  disabled?: boolean
 }) {
   return (
     <button
@@ -585,8 +716,9 @@ function ToolbarButton({
       // Prevent the button from stealing the editor selection.
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
+      disabled={disabled}
       aria-label={label}
-      className="flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
+      className="flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-50"
     >
       {children}
     </button>

@@ -1296,6 +1296,19 @@ svg.lucide {
 .article-prose > * + * {
   margin-top: 1.25em;
 }
+/* Paragraph rhythm. Every gap between paragraphs comes from this one rule, so
+   spacing can't vary with whichever spacer markup the editor happened to emit
+   (the sanitizer drops blank-line spacers for the same reason). */
+.article-prose > p + p {
+  margin-top: 1.45em;
+}
+/* Belt-and-braces: if an empty paragraph ever reaches the reader, it must not
+   open a phantom gap — it would otherwise contribute a full line box plus a
+   margin. Excluded inside the editor, where the paragraph the caret sits in is
+   momentarily empty; hiding it there would make the caret vanish mid-typing. */
+.article-prose:not(.article-editor) p:empty {
+  display: none;
+}
 .article-prose h1,
 .article-prose h2,
 .article-prose h3 {

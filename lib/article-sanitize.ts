@@ -112,50 +112,175 @@ export function sanitizeArticleHtml(input: string): string {
     .replace(/<style[\s\S]*?<\/style>/gi, "")
     .replace(/<(iframe|object|embed|noscript|svg|math|form|input|button|textarea|select)[\s\S]*?<\/\1>/gi, "")
 
-  // 1b) Restore paragraph structure. contentEditable (and pasted content) wrap
-  // each line in a <div> (Chrome/Safari) or a bare <span>, neither of which is a
-  // block on its own — so published bodies collapsed into one run-on paragraph
-  // with no gaps. Promote those line wrappers to real <p> elements so the breaks
-  // survive. Verses use <blockquote> and mentions use <a>, so <div>/<span> never
-  // carry meaning in an article body and are always safe to treat as paragraphs.
-  html = html
-    .replace(/<div\b[^>]*>/gi, "<p>")
-    .replace(/<\/div>\s*/gi, "</p>")
-    .replace(/<span\b[^>]*>/gi, "<p>")
-    .replace(/<\/span>\s*/gi, "</p>")
+  // 2) Tokenize to an allowlisted token stream, then re-serialize with a
+  //    block-aware writer (below) that guarantees well-formed paragraphs.
+  return serializeBlocks(tokenize(html))
+}
 
-  // 2) Tokenize and rebuild only allowlisted tags.
-  let out = ""
+/* -------------------------------------------------------------------------- */
+/*  Block normalization                                                       */
+/* -------------------------------------------------------------------------- */
+
+// Tags that stand on their own line. Everything else in ALLOWED is inline and
+// therefore lives *inside* a paragraph.
+const BLOCK = new Set(["p", "h1", "h2", "h3", "blockquote", "ul", "ol", "li", "figure", "figcaption", "pre", "hr", "img"])
+
+type Token =
+  | { k: "text"; text: string }
+  | { k: "open"; tag: string; attrs: Record<string, string> }
+  | { k: "close"; tag: string }
+  | { k: "void"; tag: string; attrs: Record<string, string> }
+  // A <div> boundary. contentEditable wraps lines in divs, which are not in the
+  // allowlist; they carry no styling, only "a line ended here".
+  | { k: "boundary" }
+
+function tokenize(html: string): Token[] {
+  const tokens: Token[] = []
   const tagRe = /<\/?([a-zA-Z][a-zA-Z0-9]*)((?:[^>"']|"[^"]*"|'[^']*')*)\/?>/g
   let lastIndex = 0
   let m: RegExpExecArray | null
   while ((m = tagRe.exec(html))) {
-    // Text before this tag is kept verbatim (already entity-encoded by the editor).
-    out += html.slice(lastIndex, m.index)
+    const text = html.slice(lastIndex, m.index)
+    if (text) tokens.push({ k: "text", text })
     lastIndex = tagRe.lastIndex
 
-    const full = m[0]
     const tag = m[1].toLowerCase()
-    const isClosing = full.startsWith("</")
+    const isClosing = m[0].startsWith("</")
 
-    if (!(tag in ALLOWED)) continue // unwrap: drop the tag markup, keep surrounding text
-
-    if (isClosing) {
-      if (!VOID.has(tag)) out += `</${tag}>`
+    // <div> is a line wrapper, not content: record it as a paragraph boundary.
+    if (tag === "div") {
+      tokens.push({ k: "boundary" })
       continue
     }
+    if (!(tag in ALLOWED)) continue // unwrap: drop markup, keep surrounding text
 
+    if (isClosing) {
+      if (!VOID.has(tag)) tokens.push({ k: "close", tag })
+      continue
+    }
     const attrs = parseAttrs(m[2] ?? "")
-    if (VOID.has(tag)) {
-      out += `<${tag}${buildAttrs(tag, attrs)} />`
-    } else {
-      out += `<${tag}${buildAttrs(tag, attrs)}>`
+    tokens.push(VOID.has(tag) ? { k: "void", tag, attrs } : { k: "open", tag, attrs })
+  }
+  const tail = html.slice(lastIndex)
+  if (tail) tokens.push({ k: "text", text: tail })
+  return tokens
+}
+
+/** True when a paragraph's buffered inner HTML holds something worth showing. */
+function hasVisibleContent(inner: string): boolean {
+  return inner
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .trim().length > 0
+}
+
+/**
+ * Re-serializes tokens as clean block HTML.
+ *
+ * Bodies come from a contentEditable, so the raw markup is routinely malformed
+ * in ways that made paragraph spacing erratic:
+ *   - the first paragraph arrives as a bare text node with no <p> at all, so it
+ *     never picked up the prose spacing rule;
+ *   - paragraphs arrive nested (`<p><p>…</p></p>`) or unclosed (`<p><br><p>`),
+ *     and since HTML forbids nesting <p> the browser silently restructured them
+ *     into extra empty paragraphs — the random large gaps;
+ *   - blank lines arrive as `<p></p>`, `<p><br></p>`, or nothing at all, so the
+ *     gap between two paragraphs depended on which the editor happened to emit.
+ *
+ * The writer below removes that variance at the source: paragraphs are opened
+ * and closed by this function alone (never nested), bare text is wrapped, and
+ * blank-line spacers are dropped so *all* paragraph spacing comes from one CSS
+ * rule. Inline tags are kept inside their paragraph rather than promoted to
+ * blocks, which is what previously split sentences mid-word.
+ */
+function serializeBlocks(tokens: Token[]): string {
+  const out: string[] = []
+  // Buffered inner HTML of the paragraph currently being written. Buffering is
+  // what lets us discard a paragraph that turns out to be empty.
+  let pBuf: string[] | null = null
+  // Depth of open non-paragraph block containers (blockquote, ul, li, figure…).
+  // Inside one, that element owns its own layout and we don't add paragraphs.
+  let depth = 0
+
+  const flushP = () => {
+    if (!pBuf) return
+    const inner = pBuf.join("").replace(/(?:\s|&nbsp;)+$/gi, "")
+    pBuf = null
+    if (hasVisibleContent(inner)) out.push(`<p>${inner}</p>`)
+  }
+  const ensureP = () => {
+    if (depth === 0 && !pBuf) pBuf = []
+  }
+  const emit = (s: string) => (pBuf ? pBuf.push(s) : out.push(s))
+
+  for (const t of tokens) {
+    switch (t.k) {
+      case "boundary":
+        if (depth === 0) flushP()
+        break
+
+      case "text":
+        if (depth > 0) {
+          out.push(t.text)
+        } else if (t.text.trim() || pBuf) {
+          // Whitespace between blocks is layout noise; whitespace inside a live
+          // paragraph is a real word gap.
+          ensureP()
+          pBuf!.push(t.text)
+        }
+        break
+
+      case "open":
+        if (t.tag === "p") {
+          // Never nest: a new <p> always ends the previous one.
+          if (depth === 0) {
+            flushP()
+            pBuf = []
+          }
+        } else if (BLOCK.has(t.tag)) {
+          flushP()
+          out.push(`<${t.tag}${buildAttrs(t.tag, t.attrs)}>`)
+          depth++
+        } else {
+          ensureP()
+          emit(`<${t.tag}${buildAttrs(t.tag, t.attrs)}>`)
+        }
+        break
+
+      case "close":
+        if (t.tag === "p") {
+          if (depth === 0) flushP()
+        } else if (BLOCK.has(t.tag)) {
+          flushP()
+          // Guard against stray closers the editor never opened.
+          if (depth > 0) {
+            depth--
+            out.push(`</${t.tag}>`)
+          }
+        } else {
+          emit(`</${t.tag}>`)
+        }
+        break
+
+      case "void":
+        if (t.tag === "br") {
+          // A <br> that is a paragraph's only content is a blank-line spacer,
+          // not a line break — drop it so spacing comes from CSS alone.
+          if (depth > 0) out.push("<br />")
+          else if (pBuf && hasVisibleContent(pBuf.join(""))) pBuf.push("<br />")
+        } else if (BLOCK.has(t.tag)) {
+          // <img>/<hr> stand alone so they get predictable spacing.
+          flushP()
+          out.push(`<${t.tag}${buildAttrs(t.tag, t.attrs)} />`)
+        } else {
+          ensureP()
+          emit(`<${t.tag}${buildAttrs(t.tag, t.attrs)} />`)
+        }
+        break
     }
   }
-  out += html.slice(lastIndex)
-
-  // 3) Collapse runs of empty paragraphs the editor tends to leave behind.
-  return out.replace(/(?:<p>\s*<\/p>\s*){2,}/g, "<p></p>").trim()
+  flushP()
+  return out.join("").trim()
 }
 
 const ENTITIES: Record<string, string> = {
