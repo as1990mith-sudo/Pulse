@@ -35,11 +35,19 @@ export function ChatRoomsTabs({
   itestifyPosts,
   currentUser,
   postAsOrg = null,
+  homeId = null,
 }: {
   communityPosts: React.ComponentProps<typeof CommunityHelp>["initialPosts"]
   itestifyPosts: React.ComponentProps<typeof ITestify>["initialPosts"]
   currentUser: React.ComponentProps<typeof ITestify>["currentUser"]
   postAsOrg?: React.ComponentProps<typeof CommunityHelp>["postAsOrg"]
+  /**
+   * The Home both rooms are scoped to, or null for the Universal (global) rooms.
+   * Passed down so each room's SWR key and revalidation stay inside the same
+   * scope the server rendered — without it, the 20s refresh would swap the
+   * Home's threads for the global ones.
+   */
+  homeId?: string | null
 }) {
   // In the URL so a reload — or returning from a thread — keeps the room the user
   // was reading instead of snapping back to Community.
@@ -117,9 +125,9 @@ export function ChatRoomsTabs({
       {/* Active experience fills the rest and owns its own scroll. */}
       <div className="relative flex-1 overflow-hidden">
         {tab === "community" ? (
-          <CommunityHelp embedded initialPosts={communityPosts} postAsOrg={postAsOrg} />
+          <CommunityHelp embedded initialPosts={communityPosts} postAsOrg={postAsOrg} homeId={homeId} />
         ) : (
-          <ITestify embedded initialPosts={itestifyPosts} currentUser={currentUser} />
+          <ITestify embedded initialPosts={itestifyPosts} currentUser={currentUser} homeId={homeId} />
         )}
       </div>
 

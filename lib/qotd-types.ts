@@ -18,6 +18,16 @@ export function qotdChannel(questionId: number): string {
   return `qotd:${questionId}`
 }
 
+/**
+ * The channel key for the iTestify room.
+ *
+ * Shared here (rather than redeclared per file) because it is the value that
+ * decides Home scoping on write: iTestify posts are stamped with the author's
+ * active Home, while QOTD responses stay global. Two copies drifting apart would
+ * silently send testimonies to the wrong scope.
+ */
+export const ITESTIFY_CHANNEL = "itestify"
+
 export type QotdQuestionRow = {
   id: number
   questionText: string
