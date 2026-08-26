@@ -5,7 +5,15 @@ import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { communityComment, communityPost, home, homeMembership, organization, user as userTable } from "@/lib/db/schema"
+import {
+  communityComment,
+  communityPost,
+  follow,
+  home,
+  homeMembership,
+  organization,
+  user as userTable,
+} from "@/lib/db/schema"
 import { getProfileScope, scopeToHome } from "@/lib/home/profile-scope"
 import { canPinInScope, MAX_PINNED_PER_SCOPE, pinWithinCap } from "@/lib/home/can-pin"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
@@ -50,6 +58,10 @@ export type CommunityPostView = {
   // authorId is exposed under the same rules so an identifiable author's
   // profile can be opened; it stays null for anonymous posts by others.
   authorId: string | null
+  // Whether the viewer already follows this thread's author. Only ever true for
+  // an identifiable, non-org author (the same rule that populates authorId), so
+  // an anonymous thread can't leak a follow relationship that would identify it.
+  isFollowing: boolean
   authorName: string | null
   authorHandle: string | null
   authorInitials: string | null
@@ -136,6 +148,19 @@ async function buildCommunityPostViews(
     for (const r of rows) orgMap.set(r.id, { name: r.name, handle: r.handle, logo: r.logo })
   }
 
+  // Which of the revealed authors the viewer already follows, so the author row
+  // can offer Follow / Following inline. Scoped to `revealIds` so we never probe
+  // the follow graph for authors whose identity is being withheld, and skipped
+  // entirely for signed-out viewers, who have no follow state to show.
+  const followingIds = new Set<string>()
+  if (viewerId && revealIds.length) {
+    const rows = await db
+      .select({ followingId: follow.followingId })
+      .from(follow)
+      .where(and(eq(follow.followerId, viewerId), inArray(follow.followingId, revealIds)))
+    for (const r of rows) followingIds.add(r.followingId)
+  }
+
   return posts.map((p) => {
     const isSelf = viewerId === p.userId
     // Identity is visible when the post is identifiable (to everyone) or when
@@ -163,6 +188,8 @@ async function buildCommunityPostViews(
       anonymous: p.anonymous,
       organizationId: p.organizationId ?? null,
       authorId: org ? null : reveal ? p.userId : null,
+      // Mirrors authorId: no identifiable author means nothing to follow.
+      isFollowing: !org && reveal ? followingIds.has(p.userId) : false,
       authorName: org ? org.name : profile ? profile.name : null,
       authorHandle: org ? org.handle ?? getHandle(org.name) : profile ? getHandle(profile.name) : null,
       authorInitials: org ? getInitials(org.name) : profile ? getInitials(profile.name) : null,
@@ -455,6 +482,8 @@ export async function createCommunityPost(
     anonymous: row.anonymous,
     organizationId: row.organizationId ?? null,
     authorId: orgRow ? null : user.id,
+    // You can't follow yourself, and this row is always the author's own post.
+    isFollowing: false,
     authorName: orgRow ? orgRow.name : user.name,
     authorHandle: orgRow ? orgRow.handle ?? getHandle(orgRow.name) : getHandle(user.name),
     authorInitials: orgRow ? getInitials(orgRow.name) : getInitials(user.name),

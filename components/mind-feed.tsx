@@ -8,8 +8,6 @@ import {
   Plus,
   X,
   Send,
-  UserPlus,
-  UserCheck,
   Loader2,
   Trash2,
   MoreHorizontal,
@@ -56,7 +54,7 @@ import { CommentSheet } from "@/components/comment-sheet"
 import { PinnedBadge } from "@/components/pinned-badge"
 import { useUrlState } from "@/lib/navigation/use-url-state"
 import { useRestoredScroll } from "@/lib/navigation/use-restored-scroll"
-import { toggleFollow } from "@/app/actions/follow"
+import { FollowIconButton } from "@/components/follow-icon-button"
 import type { CurrentUser } from "@/lib/session"
 import { Button } from "@/components/ui/button"
 import { FormattedTextarea } from "@/components/formatted-textarea"
@@ -1677,7 +1675,7 @@ export function PostCard({
             metadata line that carries the edited info icon on longer usernames. */}
         <div className="flex shrink-0 items-center gap-1 self-start">
           {currentUser && !post.isSelf && (
-            <FollowButton authorId={post.authorId} authorName={post.user} initialFollowing={post.isFollowing} />
+            <FollowIconButton authorId={post.authorId} authorName={post.user} initialFollowing={post.isFollowing} />
           )}
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -2061,54 +2059,3 @@ export function PostCard({
   )
 }
 
-function FollowButton({
-  authorId,
-  authorName,
-  initialFollowing,
-}: {
-  authorId: string
-  authorName: string
-  initialFollowing: boolean
-}) {
-  const router = useRouter()
-  const [following, setFollowing] = useState(initialFollowing)
-  const [followBurst, setFollowBurst] = useState(false)
-  const [isPending, startTransition] = useTransition()
-
-  function onClick() {
-    const next = !following
-    setFollowing(next)
-    if (next) {
-      haptic("medium")
-      setFollowBurst(true) // delightful pop only when following
-    }
-    startTransition(async () => {
-      try {
-        await toggleFollow({ targetUserId: authorId, follow: next })
-        router.refresh()
-      } catch {
-        setFollowing(!next)
-      }
-    })
-  }
-
-  return (
-    <Button
-      type="button"
-      size="icon"
-      variant={following ? "secondary" : "default"}
-      onClick={onClick}
-      disabled={isPending}
-      className="size-8 shrink-0 rounded-full"
-      aria-label={following ? `Unfollow ${authorName}` : `Follow ${authorName}`}
-      title={following ? "Following" : "Follow"}
-    >
-      <span
-        onAnimationEnd={() => setFollowBurst(false)}
-        className={cn("inline-flex", followBurst && "motion-pop")}
-      >
-        {following ? <UserCheck className="size-4" /> : <UserPlus className="size-4" />}
-      </span>
-    </Button>
-  )
-}
