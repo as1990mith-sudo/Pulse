@@ -27,7 +27,7 @@ import type { FeedPostView } from "@/app/actions/feed"
 import type { CommunityPostView } from "@/app/actions/community"
 import type { CurrentUser } from "@/lib/session"
 import { PostCard } from "@/components/mind-feed"
-import { ProfileThreads } from "@/components/profile/profile-threads"
+import { CommunityThreadFeed } from "@/components/community-help"
 import { OrgEpisodeCatalog, NewCatalogueDialog } from "@/components/org/org-catalogue-tab"
 import { ArticleRow } from "@/components/articles/article-card"
 import { cn } from "@/lib/utils"
@@ -292,11 +292,13 @@ function PostsTab({
 }
 
 /**
- * The organisation's Community Help threads. Reuses <ProfileThreads mode="thread">
- * — the same component the individual profile's Thread tab uses — so the room's
- * interface is shared rather than reimplemented: identifiable threads show the
- * org's name and logo, and anonymous ones keep the universal anonymous
- * treatment. Only org owners/administrators are ever sent anonymous rows.
+ * The organisation's Community threads, rendered with <CommunityThreadFeed> —
+ * the room's own `PostItem` and conversation overlay. This replaced
+ * <ProfileThreads>, which looked like a Community post but navigated away to
+ * `/chatrooms/community?q=<id>` on tap, so the reader lost their place on the
+ * profile and got none of the in-place behaviour. Sharing the room's components
+ * means tap-to-expand, the comment sheet, media full screen and swiping between
+ * clips all behave here exactly as they do in Community.
  */
 function ThreadTab({ org, threads }: { org: OrganizationView; threads: CommunityPostView[] }) {
   if (threads.length === 0) {
@@ -322,7 +324,7 @@ function ThreadTab({ org, threads }: { org: OrganizationView; threads: Community
       />
     )
   }
-  return <ProfileThreads posts={threads} mode="thread" />
+  return <CommunityThreadFeed posts={threads} />
 }
 
 
