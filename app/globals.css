@@ -1037,6 +1037,92 @@ svg.lucide {
      animation doesn't need the hint. */
 }
 
+/* ---- Home switch transition -----------------------------------------------
+   Switching Home changes every scoped surface at once (feed, staff, theme), so
+   an abrupt swap reads as a glitch. This covers the swap with the destination
+   Home's own mark: the veil fades up, the mark blooms with a widening ring, and
+   the name rises beneath it — then the whole thing fades out over the new Home.
+   The ring uses the Home's accent, so the transition is different per Home. */
+@keyframes home-veil-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes home-mark-bloom {
+  0% {
+    opacity: 0;
+    transform: scale(0.82) translateY(6px);
+  }
+  55% {
+    transform: scale(1.06) translateY(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes home-ring-expand {
+  0% {
+    opacity: 0.55;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.1);
+  }
+}
+
+@keyframes home-label-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.home-switch-veil {
+  animation: home-veil-in 220ms var(--ease-emphasized) both;
+}
+
+/* Leaving state: the provider flips this on once the new Home has painted. */
+.home-switch-veil[data-leaving="true"] {
+  animation: home-veil-in 260ms var(--ease-emphasized) reverse both;
+}
+
+.home-switch-mark {
+  animation: home-mark-bloom 520ms var(--ease-emphasized) both;
+}
+
+.home-switch-ring {
+  animation: home-ring-expand 1100ms var(--ease-emphasized) infinite;
+}
+
+.home-switch-label {
+  animation: home-label-rise 420ms var(--ease-emphasized) 120ms both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-switch-mark,
+  .home-switch-ring,
+  .home-switch-label,
+  .home-switch-veil,
+  .home-switch-veil[data-leaving="true"] {
+    animation: none;
+  }
+  /* Reduced motion still needs the veil to hide the swap, just without movement. */
+  .home-switch-veil {
+    opacity: 1;
+  }
+}
+
 /* Active nav pill: a spring pop when a tab becomes active. */
 @keyframes nav-pill-pop {
   0% {

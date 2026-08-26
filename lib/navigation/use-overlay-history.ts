@@ -75,7 +75,7 @@ export function useOverlayHistory(
   onClose: () => void,
   id = "overlay",
   opts: { skipPush?: boolean } = {},
-) {
+): { releaseForNavigation: () => void } {
   // Read through a ref: this is evaluated only when the overlay opens, and we do
   // not want a later change to re-run the effect and push a duplicate entry.
   const skipPushRef = useRef(opts.skipPush)
@@ -84,6 +84,34 @@ export function useOverlayHistory(
   // rebuild the history entry, which would corrupt the stack.
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
+
+  // The live entry, so `releaseForNavigation` can retire the same object the
+  // effect registered.
+  const entryRef = useRef<OverlayEntry | null>(null)
+
+  /**
+   * Give up this overlay's history entry WITHOUT calling `history.back()`,
+   * because the caller is about to navigate over it (with `router.replace`, so
+   * the entry is overwritten rather than left behind).
+   *
+   * This exists to close a race that made drawer/menu taps look dead. Cleanup
+   * below runs when the overlay unmounts, which is on a close ANIMATION timer,
+   * while the tap also starts a route change. If the new route's server render
+   * took longer than that timer — normal for a data-heavy page — the entry was
+   * still the current one, so cleanup fired `history.back()` and yanked the user
+   * off the page they were navigating to. The tap appeared to do nothing, and a
+   * reload "fixed" it only because it cleared the stale entry.
+   *
+   * Callers must navigate with `replace` after calling this, so the entry this
+   * hook pushed is consumed instead of lingering and eating the next Back.
+   */
+  const releaseForNavigation = () => {
+    const entry = entryRef.current
+    if (!entry) return
+    const i = stack.indexOf(entry)
+    if (i !== -1) stack.splice(i, 1)
+    entryRef.current = null
+  }
 
   useEffect(() => {
     if (!open || typeof window === "undefined") return
@@ -106,8 +134,10 @@ export function useOverlayHistory(
 
     const entry: OverlayEntry = { token, close: () => onCloseRef.current() }
     stack.push(entry)
+    entryRef.current = entry
 
     return () => {
+      entryRef.current = null
       const i = stack.indexOf(entry)
       // Still registered means this close came from the UI (an X button, a route
       // change) rather than from Back, so our entry is live and has to be retired
@@ -121,4 +151,6 @@ export function useOverlayHistory(
       }
     }
   }, [open, id])
+
+  return { releaseForNavigation }
 }

@@ -51,7 +51,12 @@ export function HomeContextProvider({
   children: React.ReactNode
 }) {
   const router = useRouter()
-  const [activeHome] = useState<ActiveHomeSummary>(initialActiveHome)
+  // Read the prop directly rather than seeding state from it. `useState` captures
+  // only the FIRST value, so after a switch (`router.refresh()` re-renders this
+  // provider with the new Home) the context kept serving the previous Home — the
+  // header badge and any `isAdmin` check stayed on the old organisation until a
+  // full page reload.
+  const activeHome = initialActiveHome
   const [pending, startTransition] = useTransition()
   const [switchingTo, setSwitchingTo] = useState<string | null>(null)
 
