@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, useCallback } from "react"
 import { Play, Pause, Volume2, VolumeX, RotateCcw, RotateCw } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { getSharedMuted, setSharedMuted, useSharedMute } from "@/lib/shared-mute"
+import { exclusivePlaybackProps, installExclusivePlayback } from "@/lib/exclusive-playback"
+import { getSharedMuted, noteAutoplayBlocked, setSharedMuted, useSharedMute } from "@/lib/shared-mute"
 import {
   rememberVideoPosition,
   getVideoPosition,
@@ -134,6 +135,12 @@ export function FeedVideo({
     if (el) el.muted = muted
   }, [muted])
 
+  // Arm the app-wide "only one recorded media element plays" guard. Idempotent,
+  // so every player can safely ask for it.
+  useEffect(() => {
+    installExclusivePlayback()
+  }, [])
+
   // Try to play with sound; if the browser blocks it, fall back to muted.
   const attemptPlay = useCallback((el: HTMLVideoElement) => {
     // Never autoplay while another player owns playback (expanded reel viewer or
@@ -150,7 +157,12 @@ export function FeedVideo({
     el.muted = getSharedMuted()
     el.play().catch(() => {
       if (!getSharedMuted()) {
-        setSharedMuted(true)
+        // The browser refused to start with sound because the page hasn't been
+        // interacted with yet. Fall back to muted playback, but record it as an
+        // autoplay block rather than a mute preference — that way the first tap
+        // anywhere restores sound instead of leaving the clip silently muted for
+        // the rest of the session.
+        noteAutoplayBlocked()
         el.muted = true
         el.play().catch(() => {})
       }
@@ -370,6 +382,7 @@ export function FeedVideo({
         playsInline
         muted={muted}
         preload="metadata"
+        {...exclusivePlaybackProps}
         className={cn("h-full w-full", className)}
         onClick={surfaceClick}
         onPlay={() => {

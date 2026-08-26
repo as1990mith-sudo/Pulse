@@ -23,7 +23,8 @@ import { toggleSaveItem } from "@/app/actions/share"
 import type { CurrentUser } from "@/lib/session"
 import { haptic } from "@/lib/haptics"
 import { renderMessageBody } from "@/lib/rich-text"
-import { useSharedMute } from "@/lib/shared-mute"
+import { exclusivePlaybackProps, installExclusivePlayback } from "@/lib/exclusive-playback"
+import { noteAutoplayBlocked, useSharedMute } from "@/lib/shared-mute"
 import { getVideoPosition, setImmersiveViewerOpen } from "@/lib/video-handoff"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -422,6 +423,10 @@ function ReelItem({
     const p = v.play()
     if (p && typeof p.catch === "function") {
       p.catch(() => {
+        // Report the block so the shared mute state knows this silence was the
+        // browser's doing, not the user's — the first gesture then restores
+        // sound here and on every other player at once.
+        noteAutoplayBlocked()
         v.muted = true
         v.play().catch(() => {})
       })
@@ -454,6 +459,11 @@ function ReelItem({
     mutedRef.current = muted
     if (videoRef.current) videoRef.current.muted = muted
   }, [muted])
+
+  // Arm the app-wide "only one recorded media element plays" guard (idempotent).
+  useEffect(() => {
+    installExclusivePlayback()
+  }, [])
 
   // Render-window observer: fires while the reel is still ~1.4 screens away, so
   // the <video> mounts and preloads (holding its first frame) well before it
@@ -683,6 +693,10 @@ function ReelItem({
         />
       )}
       <div aria-hidden="true" className="absolute inset-0 bg-black/30" />
+      {/* Only the real clip joins exclusive playback — never the blurred backdrop
+          above, which is a second, permanently-muted copy of the SAME clip played
+          in sync. Enrolling both would make them pause each other on every start
+          and the backdrop would freeze. */}
       <video
         ref={videoRef}
         src={shouldRender ? posterSrc : undefined}
@@ -692,6 +706,7 @@ function ReelItem({
         loop
         muted={muted}
         preload={shouldRender ? "auto" : "none"}
+        {...exclusivePlaybackProps}
         onClick={togglePlay}
         onTimeUpdate={onTimeUpdate}
         onLoadedMetadata={(e) => {
