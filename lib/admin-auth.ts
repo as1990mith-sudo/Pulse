@@ -1,3 +1,4 @@
+import { cache } from "react"
 import { headers } from "next/headers"
 import { eq, inArray, sql } from "drizzle-orm"
 import { auth } from "@/lib/auth"
@@ -34,7 +35,7 @@ function bootstrapEmails(): Set<string> {
  * even if the DB row is missing — this guarantees the owner can never be locked
  * out of their own console. Returns null for non-admins.
  */
-export async function getAdminActor(): Promise<AdminActor | null> {
+export const getAdminActor = cache(async function getAdminActor(): Promise<AdminActor | null> {
   const session = await auth.api.getSession({ headers: await headers() })
   const u = session?.user
   if (!u) return null
@@ -56,7 +57,7 @@ export async function getAdminActor(): Promise<AdminActor | null> {
     color: getAvatarColor(u.id),
     role,
   }
-}
+})
 
 /** Throws if the current user is not an admin. Returns the actor otherwise. */
 export async function requireAdmin(): Promise<AdminActor> {
@@ -87,7 +88,7 @@ export function actorCan(actor: AdminActor | null, permission: Permission): bool
  * profile shows the Catalogue tab. Failures degrade to whatever was resolved so
  * a DB hiccup can't accidentally grant staff to everyone.
  */
-export async function getStaffUserIds(): Promise<Set<string>> {
+export const getStaffUserIds = cache(async function getStaffUserIds(): Promise<Set<string>> {
   const ids = new Set<string>()
   try {
     const rows = await db.select({ userId: adminMember.userId }).from(adminMember)
@@ -108,7 +109,7 @@ export async function getStaffUserIds(): Promise<Set<string>> {
     }
   }
   return ids
-}
+})
 
 /** Whether a specific userId is platform admin/staff. */
 export async function isStaffUser(userId: string): Promise<boolean> {

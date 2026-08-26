@@ -1,5 +1,6 @@
 import "server-only"
 
+import { cache } from "react"
 import { and, count, desc, eq, isNull } from "drizzle-orm"
 import { headers } from "next/headers"
 import { notFound, redirect } from "next/navigation"
@@ -23,10 +24,10 @@ type OrgRow = typeof organization.$inferSelect
  */
 export const HOME_GO_LIVE_COOKIE = "freq_home_live"
 
-export async function getViewerId(): Promise<string | null> {
+export const getViewerId = cache(async function getViewerId(): Promise<string | null> {
   const session = await auth.api.getSession({ headers: await headers() })
   return session?.user?.id ?? null
-}
+})
 
 async function memberCountFor(homeId: string): Promise<number> {
   const rows = await db
@@ -136,8 +137,14 @@ export async function getHomeRosterByOrg(organizationId: string): Promise<HomeRo
     .sort((a, b) => (a.isOwner === b.isOwner ? 0 : a.isOwner ? -1 : 1))
 }
 
-/** Every Home the current user is an ACTIVE member of, newest membership first. */
-export async function getMyHomes(): Promise<HomeView[]> {
+/**
+ * Every Home the current user is an ACTIVE member of, newest membership first.
+ *
+ * Memoized per request: this is reached from the active-Home context, which is
+ * itself consulted by nearly every server surface, so it was re-running its join
+ * (plus a member-count query per Home) many times over for a single page render.
+ */
+export const getMyHomes = cache(async function getMyHomes(): Promise<HomeView[]> {
   const viewerId = await getViewerId()
   if (!viewerId) return []
   const rows = await db
@@ -152,7 +159,7 @@ export async function getMyHomes(): Promise<HomeView[]> {
     .where(and(eq(homeMembership.userId, viewerId), eq(homeMembership.status, "active"), isNull(home.deletedAt)))
     .orderBy(desc(homeMembership.createdAt))
   return Promise.all(rows.map(async (r) => toHomeView(r.h, r.org, await memberCountFor(r.h.id))))
-}
+})
 
 /**
  * Whether a specific user is an ACTIVE member of a Home. A lightweight boolean

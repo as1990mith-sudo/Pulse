@@ -97,7 +97,15 @@ export function VideoControlsBar({
         // load-bearing: `pt-10` makes this box tall enough to cover a chunk of
         // the frame, and while it was hit-testable it swallowed taps meant for
         // the video surface underneath.
-        "pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-3 pt-10 transition-opacity duration-300",
+        // `z-[4]` is what keeps the controls BRIGHT. The community viewer paints
+        // a `from-black/80` legibility gradient over the bottom 2/5 of the slide
+        // *after* the player in DOM order, so with the default `z-auto` that
+        // scrim washed straight over these icons — while the viewer's action
+        // rail (`z-[3]`) sat above it and stayed crisp white. That mismatch is
+        // exactly why the bar looked dim next to the rail. The player's root is
+        // `absolute` with no z-index, so it creates no stacking context and this
+        // value competes directly with the scrim and rail.
+        "pointer-events-none absolute inset-x-0 bottom-0 z-[4] bg-gradient-to-t from-black/80 via-black/40 to-transparent px-3 pt-10 transition-opacity duration-300",
         safeArea ? "pb-[calc(0.625rem+env(safe-area-inset-bottom))]" : "pb-2.5",
         visible ? "opacity-100" : "opacity-0",
         className,

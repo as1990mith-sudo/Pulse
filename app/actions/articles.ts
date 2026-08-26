@@ -193,7 +193,12 @@ export async function getArticleHub(): Promise<{
       .select()
       .from(article)
       .where(and(eq(article.status, "published"), inArray(article.authorId, memberIds)))
-      .orderBy(desc(article.publishedAt))
+      // Tie-broken by id to match getArticleFeed's ordering EXACTLY. The
+      // Articles page seeds its first feed page from `latest` and then pages
+      // deeper through getArticleFeed by offset; if the two differed on ties
+      // (same publishedAt), an article could be duplicated or skipped at the
+      // page boundary.
+      .orderBy(desc(article.publishedAt), desc(article.id))
       .limit(30),
     // Editor's Pick: strictly hand-curated. Only articles an admin explicitly
     // flagged appear here — no engagement fallback, so nothing can drift into
@@ -214,11 +219,24 @@ export async function getArticleHub(): Promise<{
 
   // Fall back to the newest published article when nothing is flagged featured.
   const featuredRow = featuredRows[0] ?? latestRows[0] ?? null
-  const [featuredCard] = featuredRow ? await toCards([featuredRow]) : [null]
-  const latest = await toCards(latestRows.filter((r) => r.id !== featuredRow?.id))
+  const latestRest = latestRows.filter((r) => r.id !== featuredRow?.id)
   // Exclude the hero from the picks rail so the same piece isn't rendered twice
   // on one screen (it stays flagged — it's just already visible above).
-  const editorsPicks = await toCards(pickRows.filter((r) => r.id !== featuredRow?.id))
+  const pickRest = pickRows.filter((r) => r.id !== featuredRow?.id)
+
+  // Resolve the authors for all three groups in ONE query. Calling `toCards`
+  // three times ran three sequential author lookups per page load, even though
+  // the same handful of staff authors appears across every group.
+  const allRows = [...(featuredRow ? [featuredRow] : []), ...latestRest, ...pickRest]
+  const authors = await resolveAuthors(
+    allRows.map((r) => r.authorId),
+    new Map(allRows.map((r) => [r.authorId, { name: r.authorName, image: r.authorImage }])),
+  )
+  const card = (r: ArticleRow) => toCard(r, authors.get(r.authorId)!)
+
+  const featuredCard = featuredRow ? card(featuredRow) : null
+  const latest = latestRest.map(card)
+  const editorsPicks = pickRest.map(card)
 
   return {
     featured: featuredCard ?? null,

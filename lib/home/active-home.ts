@@ -1,5 +1,6 @@
 import "server-only"
 
+import { cache } from "react"
 import { and, eq } from "drizzle-orm"
 import { cookies } from "next/headers"
 import { getAdminActor } from "@/lib/admin-auth"
@@ -56,7 +57,7 @@ export type ActiveHomeContext = {
  * This never trusts the cookie blindly: an orphaned/foreign handle silently
  * falls back rather than leaking another organisation's context.
  */
-export async function getActiveHomeContext(): Promise<ActiveHomeContext> {
+export const getActiveHomeContext = cache(async function getActiveHomeContext(): Promise<ActiveHomeContext> {
   const store = await cookies()
   const preferred = store.get(ACTIVE_HOME_COOKIE)?.value
 
@@ -75,7 +76,7 @@ export async function getActiveHomeContext(): Promise<ActiveHomeContext> {
   const membership = await getViewerMembership(selected.id)
 
   return { home: selected, membership, homes, mode: "home" }
-}
+})
 
 /** Convenience: just the active Home (or null), without the full context. */
 export async function getActiveHome(): Promise<HomeView | null> {
@@ -140,7 +141,10 @@ export async function canViewerManageEvents(): Promise<boolean> {
  * "nothing to show", so a viewer can only ever see content from people who
  * actually belong to the Home they are currently inside.
  */
-export async function getActiveHomeMemberIds(): Promise<{ home: HomeView | null; memberIds: string[] }> {
+export const getActiveHomeMemberIds = cache(async function getActiveHomeMemberIds(): Promise<{
+  home: HomeView | null
+  memberIds: string[]
+}> {
   const { home } = await getActiveHomeContext()
   if (!home) return { home: null, memberIds: [] }
   const rows = await db
@@ -148,4 +152,4 @@ export async function getActiveHomeMemberIds(): Promise<{ home: HomeView | null;
     .from(homeMembership)
     .where(and(eq(homeMembership.homeId, home.id), eq(homeMembership.status, "active")))
   return { home, memberIds: rows.map((r) => r.userId) }
-}
+})
