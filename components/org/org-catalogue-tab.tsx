@@ -10,6 +10,7 @@ import {
   ImageIcon,
   Loader2,
   MoreVertical,
+  Pencil,
   Play,
   Plus,
   Radio,
@@ -21,9 +22,13 @@ import { compressImage, uploadMedia } from "@/lib/upload-media"
 import {
   createCatalogueItem,
   deleteCatalogueItem,
+  renameCatalogueItem,
   type CatalogueItemView,
   type CatalogueKind,
 } from "@/app/actions/org-content"
+// Live replays are episodes, not catalogue rows, so they rename/delete through
+// the episode actions (which enforce "host owns it" server-side).
+import { deleteEpisode, updateEpisode } from "@/app/actions/shows"
 import {
   Dialog,
   DialogContent,
@@ -465,11 +470,57 @@ function OrgCatalogueRow({
   const href = isLive ? `/live/${item.slug}` : externalHref(item.url)
   const linkProps = isLive ? {} : { target: "_blank", rel: "noopener noreferrer" }
 
+  // Rename dialog state. Seeded from the current title each time it opens so a
+  // cancelled edit never leaks into the next one.
+  const [renaming, setRenaming] = useState(false)
+  const [draftTitle, setDraftTitle] = useState(item.title)
+  const [error, setError] = useState<string | null>(null)
+
   function handleDelete() {
     startTransition(async () => {
-      await deleteCatalogueItem({ id: item.id, organizationId: orgId })
-      setConfirming(false)
-      router.refresh()
+      setError(null)
+      try {
+        if (isLive) {
+          // Live replays live in the `episode` table; `item.slug` identifies them.
+          const res = await deleteEpisode(String(item.slug))
+          if (!res.ok) {
+            setError(res.error ?? "Couldn't delete this.")
+            return
+          }
+        } else {
+          await deleteCatalogueItem({ id: item.id, organizationId: orgId })
+        }
+        setConfirming(false)
+        router.refresh()
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Couldn't delete this.")
+      }
+    })
+  }
+
+  function handleRename() {
+    const next = draftTitle.trim()
+    if (!next || next === item.title) {
+      setRenaming(false)
+      return
+    }
+    startTransition(async () => {
+      setError(null)
+      try {
+        if (isLive) {
+          const res = await updateEpisode({ slug: String(item.slug), title: next })
+          if (!res.ok) {
+            setError(res.error ?? "Couldn't rename this.")
+            return
+          }
+        } else {
+          await renameCatalogueItem({ id: item.id, organizationId: orgId, title: next })
+        }
+        setRenaming(false)
+        router.refresh()
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Couldn't rename this.")
+      }
     })
   }
 
@@ -576,10 +627,16 @@ function OrgCatalogueRow({
           </a>
         )}
 
-        {isOwner && !isLive && (
+        {/* Owner actions. This used to be gated on `!isLive`, which is why the
+            Live tab showed no overflow menu at all — live replays simply route
+            through the episode actions instead of the catalogue ones. */}
+        {isOwner && (
           <DropdownMenu
             onOpenChange={(open) => {
-              if (!open) setConfirming(false)
+              if (!open) {
+                setConfirming(false)
+                setError(null)
+              }
             }}
           >
             <DropdownMenuTrigger
@@ -589,6 +646,15 @@ function OrgCatalogueRow({
               <MoreVertical className="size-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem
+                onClick={() => {
+                  setDraftTitle(item.title)
+                  setError(null)
+                  setRenaming(true)
+                }}
+              >
+                <Pencil className="size-4" /> Rename
+              </DropdownMenuItem>
               {confirming ? (
                 <DropdownMenuItem variant="destructive" closeOnClick={false} onClick={handleDelete} disabled={isPending}>
                   {isPending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
@@ -599,10 +665,43 @@ function OrgCatalogueRow({
                   <Trash2 className="size-4" /> Delete
                 </DropdownMenuItem>
               )}
+              {error && <p className="px-2 py-1.5 text-xs text-destructive">{error}</p>}
             </DropdownMenuContent>
           </DropdownMenu>
         )}
       </div>
+
+      <Dialog open={renaming} onOpenChange={setRenaming}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Rename</DialogTitle>
+            <DialogDescription>Give this resource a clearer title.</DialogDescription>
+          </DialogHeader>
+          <Input
+            value={draftTitle}
+            autoFocus
+            onChange={(e) => setDraftTitle(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter saves. Guard against CJK IME composition, where Enter is
+              // confirming candidate text rather than submitting.
+              if (e.key !== "Enter" || e.nativeEvent.isComposing || e.keyCode === 229) return
+              e.preventDefault()
+              handleRename()
+            }}
+            placeholder="Title"
+            aria-label="Title"
+          />
+          {error && <p className="text-xs text-destructive">{error}</p>}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setRenaming(false)} disabled={isPending}>
+              Cancel
+            </Button>
+            <Button onClick={handleRename} disabled={isPending || !draftTitle.trim()}>
+              {isPending ? <Loader2 className="size-4 animate-spin" /> : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

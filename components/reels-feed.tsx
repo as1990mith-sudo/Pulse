@@ -344,7 +344,12 @@ export function ReelsFeed({
               onToggleMute={() => setMuted(!muted)}
               onTooLong={() => markTooLong(reel.key)}
               currentUser={currentUser}
-              resumeFrom={reel.key === initialKey ? getVideoPosition(reel.url) : undefined}
+              // Pass the SOURCE, not a position read now. At this first render
+              // the inline feed clip has not yet run its hand-off effect, so the
+              // stored position is still missing or up to a `timeupdate` (~250ms)
+              // stale. The reel reads it when its metadata loads instead, by
+              // which point the exact value has been written.
+              resumeSrc={reel.key === initialKey ? reel.url : undefined}
             />
           ))
         )}
@@ -389,7 +394,7 @@ function ReelItem({
   onToggleMute,
   onTooLong,
   currentUser,
-  resumeFrom,
+  resumeSrc,
 }: {
   reel: Reel
   root: React.RefObject<HTMLDivElement | null>
@@ -397,9 +402,11 @@ function ReelItem({
   onToggleMute: () => void
   onTooLong: () => void
   currentUser: CurrentUser | null
-  /** Absolute time (seconds) to resume from when this reel was expanded from a
-   *  playing feed clip. Applied once so the reel continues instead of restarting. */
-  resumeFrom?: number
+  /** Source URL whose handed-off playback position this reel should resume from,
+   *  set only for the clip the viewer was opened on. Read when metadata loads
+   *  (not at render) so the inline player has had time to record its exact spot.
+   *  Applied once, so the reel continues instead of restarting. */
+  resumeSrc?: string
 }) {
   const { post, url } = reel
   // Ensures the feed-handoff resume position is applied only on the first
@@ -439,7 +446,21 @@ function ReelItem({
     v.muted = forceMuted
     const p = v.play()
     if (p && typeof p.catch === "function") {
-      p.catch(() => {
+      p.catch((err: unknown) => {
+        // ONLY an autoplay-policy refusal (`NotAllowedError`) justifies falling
+        // back to muted playback. Every other rejection must be left alone.
+        //
+        // This is why expanding a clip that was playing with sound went silent:
+        // a fresh <video> mounting in the overlay routinely rejects `play()`
+        // with `AbortError` ("interrupted by a new load request" / by the
+        // pause() that the hand-off fires a moment later). That is a timing
+        // artefact, not a policy block — but it used to run this same branch,
+        // which called `noteAutoplayBlocked()`. Since mute is a single app-wide
+        // value, that muted EVERY player at once, including the feed clip that
+        // was happily audible a second earlier. The retry then re-issued a
+        // muted play() and the sound never came back.
+        const name = (err as { name?: string } | null)?.name
+        if (name && name !== "NotAllowedError") return
         // Report the block so the shared mute state knows this silence was the
         // browser's doing, not the user's — the first gesture then restores
         // sound here and on every other player at once.
@@ -481,6 +502,10 @@ function ReelItem({
 
   // Latest muted value readable inside the (non-re-subscribing) observer.
   const mutedRef = useRef(muted)
+
+  // Whether this reel has ever been the centered/playing one. Gates the rewind
+  // so a not-yet-scrolled-into-place reel keeps its hand-off position.
+  const hasBeenActiveRef = useRef(false)
 
   // Keep the element's mute state in sync with the global toggle. The blurred
   // backdrop copy is always muted.
@@ -544,16 +569,27 @@ function ReelItem({
         const bg = backdropRef.current
         if (!v) return
         if (isActive) {
+          hasBeenActiveRef.current = true
           setPaused(false)
           playVideo(v, mutedRef.current)
           playVideo(bg, true)
         } else {
+          // Rewind ONLY a reel that actually played, so returning to it restarts.
+          //
+          // This observer fires once on mount with `isIntersecting: false` for
+          // the reel we were opened on (it isn't scrolled into place yet), and
+          // this branch used to unconditionally zero `currentTime` — destroying
+          // the hand-off position a moment after it was seeked and making full
+          // screen restart from the beginning instead of continuing.
+          if (!hasBeenActiveRef.current) return
           v.pause()
-          v.currentTime = 0
+          // Rewind to the START OF THE TRIM WINDOW, not absolute zero: for a
+          // trimmed clip, 0 is outside the window and shows the wrong frame.
+          v.currentTime = windowStartRef.current
           setProgress(0)
           if (bg) {
             bg.pause()
-            bg.currentTime = 0
+            bg.currentTime = windowStartRef.current
           }
         }
       },
@@ -787,9 +823,12 @@ function ReelItem({
           // beginning. The resume applies only once.
           const end = Number.isFinite(windowEndRef.current) ? windowEndRef.current : real
           let startAt = ws
-          if (resumeFrom != null && !resumedRef.current) {
+          if (resumeSrc && !resumedRef.current) {
             resumedRef.current = true
-            startAt = Math.min(Math.max(resumeFrom, ws), Math.max(ws, end - 0.25))
+            // Read the handed-off position HERE rather than at render time, so
+            // the inline clip's pause-and-record has already happened.
+            const handoff = getVideoPosition(resumeSrc)
+            if (handoff != null) startAt = Math.min(Math.max(handoff, ws), Math.max(ws, end - 0.25))
           }
           if (startAt > 0) {
             try {
