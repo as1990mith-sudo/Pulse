@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { SiteHeader } from "@/components/site-header"
 import { ArticlesHub } from "@/components/articles/articles-hub"
-import { getArticleHub } from "@/app/actions/articles"
+import { getArticleHub, getArticleFeed } from "@/app/actions/articles"
 
 export const metadata: Metadata = {
   title: "Articles · Frequency",
@@ -11,19 +11,18 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic"
 
 export default async function ArticlesPage() {
-  // `getArticleHub` already returns up to 30 of the latest published articles
-  // with the hero removed, so the first feed page is sliced from that instead of
-  // issuing a second, near-identical query. The old code awaited the hub and
-  // THEN awaited the feed — a strict waterfall where the feed's whole
-  // author-scoping chain re-ran before any HTML could be sent. Both orderings
-  // are tie-broken identically, so paging deeper via getArticleFeed(offset: 12)
-  // continues exactly where this slice ends.
+  // Fetch the featured article first so the latest feed can omit it (otherwise
+  // the hero article shows up again as the first "Latest articles" card).
+  //
+  // The first page is fetched through `getArticleFeed` rather than sliced from
+  // `hub.latest`, even though that costs one more query. The two are NOT
+  // interchangeable: `hub.latest` already has the hero removed, while
+  // `getArticleFeed` applies `offset` in SQL and excludes the hero as a
+  // predicate. Seeding from the slice and then paging with offset 12 therefore
+  // skipped an article at the boundary, and `hub.latest` also ignores the
+  // category/search filters the hub's own load-more path passes.
   const hub = await getArticleHub()
-  const PAGE = 12
-  const feed = {
-    items: hub.latest.slice(0, PAGE),
-    nextOffset: hub.latest.length > PAGE ? PAGE : null,
-  }
+  const feed = await getArticleFeed({ limit: 12, excludeId: hub.featured?.id })
 
   return (
     <div className="min-h-screen">

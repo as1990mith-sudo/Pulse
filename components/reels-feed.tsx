@@ -24,7 +24,7 @@ import type { CurrentUser } from "@/lib/session"
 import { haptic } from "@/lib/haptics"
 import { renderMessageBody } from "@/lib/rich-text"
 import { exclusivePlaybackProps, installExclusivePlayback } from "@/lib/exclusive-playback"
-import { noteAutoplayBlocked, useSharedMute } from "@/lib/shared-mute"
+import { noteAutoplayBlocked, noteUserGesture, useSharedMute } from "@/lib/shared-mute"
 import { getVideoPosition, rememberVideoPosition, setImmersiveViewerOpen } from "@/lib/video-handoff"
 import { VIDEO_CONTROLS_HEIGHT, VideoControlsBar } from "@/components/video-controls-bar"
 import { useOverlayHistory } from "@/lib/navigation/use-overlay-history"
@@ -125,6 +125,12 @@ export function ReelsFeed({
   useEffect(() => {
     if (!initialKey) return
     setImmersiveViewerOpen(true)
+    // Expanding a clip is a deliberate "I want to watch this" gesture, so clear
+    // any autoplay-forced mute carried over from the feed's muted-autoplay
+    // fallback — otherwise full screen opens silently despite the user never
+    // choosing mute, with no later gesture left to undo it. An explicit mute
+    // still stands.
+    noteUserGesture()
     return () => setImmersiveViewerOpen(false)
   }, [initialKey])
 
@@ -142,7 +148,9 @@ export function ReelsFeed({
 
   // Sound is a single app-wide preference shared with the feed video previews,
   // so muting/unmuting here carries to the feed and vice-versa (and across reels
-  // too). Starts muted so autoplay is allowed by the browser.
+  // too). Starts UNMUTED — sound is the intent. A browser that refuses unmuted
+  // autoplay is handled separately as a transient forced mute, so it no longer
+  // masquerades as a user preference.
   const [muted, setMuted] = useSharedMute()
 
   // NOTE: We intentionally do NOT track a parent "activeIndex" here. Doing so

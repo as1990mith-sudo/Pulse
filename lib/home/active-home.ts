@@ -1,6 +1,5 @@
 import "server-only"
 
-import { cache } from "react"
 import { and, eq } from "drizzle-orm"
 import { cookies } from "next/headers"
 import { getAdminActor } from "@/lib/admin-auth"
@@ -56,8 +55,17 @@ export type ActiveHomeContext = {
  *
  * This never trusts the cookie blindly: an orphaned/foreign handle silently
  * falls back rather than leaking another organisation's context.
+ *
+ * DO NOT wrap this in React `cache()`. It reads the `freq_active_home` cookie,
+ * and `setActiveHome` mutates that cookie and then calls
+ * `revalidatePath("/", "layout")`, which re-renders within the SAME request.
+ * Memoizing meant the re-render kept resolving the PREVIOUS Home, so switching
+ * Homes rendered the old Home's posts, staff and theme under the new Home's
+ * shell — and because Articles/Library scope their queries through this, they
+ * came back empty or belonging to the wrong Home. Every read here must observe
+ * the live cookie.
  */
-export const getActiveHomeContext = cache(async function getActiveHomeContext(): Promise<ActiveHomeContext> {
+export async function getActiveHomeContext(): Promise<ActiveHomeContext> {
   const store = await cookies()
   const preferred = store.get(ACTIVE_HOME_COOKIE)?.value
 
@@ -76,7 +84,7 @@ export const getActiveHomeContext = cache(async function getActiveHomeContext():
   const membership = await getViewerMembership(selected.id)
 
   return { home: selected, membership, homes, mode: "home" }
-})
+}
 
 /** Convenience: just the active Home (or null), without the full context. */
 export async function getActiveHome(): Promise<HomeView | null> {
@@ -140,8 +148,11 @@ export async function canViewerManageEvents(): Promise<boolean> {
  * or a Home with no active members, `memberIds` is empty — callers treat that as
  * "nothing to show", so a viewer can only ever see content from people who
  * actually belong to the Home they are currently inside.
+ *
+ * Not memoized: this is the scoping boundary between Homes, so it must always
+ * reflect the live active Home. See `getActiveHomeContext`.
  */
-export const getActiveHomeMemberIds = cache(async function getActiveHomeMemberIds(): Promise<{
+export async function getActiveHomeMemberIds(): Promise<{
   home: HomeView | null
   memberIds: string[]
 }> {
@@ -152,4 +163,4 @@ export const getActiveHomeMemberIds = cache(async function getActiveHomeMemberId
     .from(homeMembership)
     .where(and(eq(homeMembership.homeId, home.id), eq(homeMembership.status, "active")))
   return { home, memberIds: rows.map((r) => r.userId) }
-})
+}
