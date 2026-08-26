@@ -20,7 +20,7 @@ import {
   X,
 } from "lucide-react"
 import { ARTICLE_CATEGORIES } from "@/lib/article-types"
-import { ARTICLE_MIN_WORDS, countWords } from "@/lib/article-sanitize"
+import { ARTICLE_MIN_WORDS, countWords, sanitizeArticleHtml } from "@/lib/article-sanitize"
 import { saveArticle, publishArticle } from "@/app/actions/articles"
 import { uploadMedia } from "@/lib/upload-media"
 import { CropModal } from "@/components/media-editor/crop-modal"
@@ -74,11 +74,15 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
   // the caret; the publish action re-derives the mention list from the HTML.
   const mentions = useEditableMentionAutocomplete(editorRef)
 
-  // Seed the contentEditable body once on mount.
+  // Seed the contentEditable body once on mount. The seed is normalized first
+  // so editing an article written before the paragraph fix starts from clean
+  // block structure — otherwise the writer would keep editing the malformed
+  // markup and see different spacing in the editor than in the reader.
   useEffect(() => {
     if (editorRef.current && seed?.bodyHtml) {
-      editorRef.current.innerHTML = seed.bodyHtml
-      setWords(countWords(seed.bodyHtml))
+      const normalized = sanitizeArticleHtml(seed.bodyHtml)
+      editorRef.current.innerHTML = normalized
+      setWords(countWords(normalized))
     }
   }, [seed?.bodyHtml])
 
@@ -123,6 +127,38 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
     const sel = window.getSelection()
     sel?.removeAllRanges()
     sel?.addRange(range)
+  }
+
+  /**
+   * Paste as clean paragraphs.
+   *
+   * A default contentEditable paste injects the source document's own markup —
+   * Word/Docs/web wrappers with inline fonts, colours, nested divs and stray
+   * `<span>` fragments. That was a main cause of erratic article spacing: the
+   * writer saw one thing while editing and the publish-time sanitizer, having
+   * to unpick that foreign structure, produced another. Taking the plain text
+   * and rebuilding the blocks ourselves means pasted and typed text are
+   * structurally identical.
+   *
+   * Blank lines separate paragraphs; single newlines inside a paragraph become
+   * <br>, matching how the text was written.
+   */
+  function onPaste(e: React.ClipboardEvent<HTMLDivElement>) {
+    const text = e.clipboardData.getData("text/plain")
+    if (!text) return // let images/files fall through to the default handler
+    e.preventDefault()
+
+    const html = text
+      .replace(/\r\n?/g, "\n")
+      .split(/\n{2,}/)
+      .map((block) => block.trim())
+      .filter(Boolean)
+      .map((block) => `<p>${block.split("\n").map((line) => escapeHtml(line)).join("<br />")}</p>`)
+      .join("")
+
+    document.execCommand("insertHTML", false, html || "<p></p>")
+    setDirty(true)
+    recountWords()
   }
 
   function exec(command: string, value?: string) {
@@ -533,6 +569,7 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
             recountWords()
           }}
           onKeyDown={(e) => mentions.onKeyDown(e)}
+          onPaste={onPaste}
           data-placeholder="Tell your story…"
           className="article-editor article-prose mt-5 min-h-[40vh] outline-none"
         />
@@ -652,6 +689,14 @@ export function ArticleEditor({ seed }: { seed?: EditorSeed }) {
       )}
     </div>
   )
+}
+
+/** Escapes pasted plain text so it can be inserted as HTML verbatim. */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
 }
 
 function ToolbarButton({

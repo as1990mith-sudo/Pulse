@@ -1303,8 +1303,10 @@ svg.lucide {
   margin-top: 1.45em;
 }
 /* Belt-and-braces: if an empty paragraph ever reaches the reader, it must not
-   open a phantom gap. It would otherwise contribute a full line box + margin. */
-.article-prose p:empty {
+   open a phantom gap — it would otherwise contribute a full line box plus a
+   margin. Excluded inside the editor, where the paragraph the caret sits in is
+   momentarily empty; hiding it there would make the caret vanish mid-typing. */
+.article-prose:not(.article-editor) p:empty {
   display: none;
 }
 .article-prose h1,
