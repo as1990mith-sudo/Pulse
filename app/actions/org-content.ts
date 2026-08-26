@@ -217,13 +217,22 @@ export async function getOrganizationCatalogue(orgId: string): Promise<Catalogue
     new Set([...adminRows.map((r) => r.userId), ...(orgRow?.ownerId ? [orgRow.ownerId] : [])]),
   )
 
+  // A private replay stays listed for the host who owns it, so "Make private" is
+  // reversible from the Catalogue. Hiding it from its owner too would strand the
+  // recording: the only control that can make it public again lives on this row.
+  // Everyone else still never sees it.
+  const session = await auth.api.getSession({ headers: await headers() })
+  const viewerId = session?.user?.id ?? null
+
   const replays = await db
     .select()
     .from(episode)
     .where(
       and(
         eq(episode.source, "live"),
-        eq(episode.isPrivate, false),
+        viewerId
+          ? or(eq(episode.isPrivate, false), eq(episode.hostUserId, viewerId))
+          : eq(episode.isPrivate, false),
         eq(episode.processingStatus, "ready"),
         adminIds.length > 0
           ? or(

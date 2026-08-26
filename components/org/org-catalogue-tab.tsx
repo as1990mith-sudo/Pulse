@@ -6,9 +6,11 @@ import {
   BookOpen,
   Clock,
   FileText,
+  Globe,
   Headphones,
   ImageIcon,
   Loader2,
+  Lock,
   MoreVertical,
   Pencil,
   Play,
@@ -26,9 +28,9 @@ import {
   type CatalogueItemView,
   type CatalogueKind,
 } from "@/app/actions/org-content"
-// Live replays are episodes, not catalogue rows, so they rename/delete through
-// the episode actions (which enforce "host owns it" server-side).
-import { deleteEpisode, updateEpisode } from "@/app/actions/shows"
+// Live replays are episodes, not catalogue rows, so they rename/delete/hide
+// through the episode actions (which enforce "host owns it" server-side).
+import { deleteEpisode, setEpisodePrivacy, updateEpisode } from "@/app/actions/shows"
 import {
   Dialog,
   DialogContent,
@@ -201,7 +203,7 @@ export function OrgEpisodeCatalog({
   orgLogo: string | null
   orgHandle: string
   // Active kind is owned by the parent (OrgTabs) so the header's upload dialog
-  // can tailor itself to — and be hidden on — the current tab.
+  // can tailor itself to �� and be hidden on — the current tab.
   tab: CatalogueKind
   onTabChange: (kind: CatalogueKind) => void
 }) {
@@ -498,6 +500,27 @@ function OrgCatalogueRow({
     })
   }
 
+  // Privacy is an episode-only capability: `catalogue_item` (manual uploads,
+  // documents, external links) has no privacy column, so the menu below offers
+  // it for live replays only rather than showing a control that can't work.
+  const [isPrivate, setIsPrivate] = useState(Boolean(item.isPrivate))
+
+  function handleTogglePrivacy() {
+    const next = !isPrivate
+    // Flip optimistically, then roll back if the server rejects it, so the label
+    // never disagrees with the stored state.
+    setIsPrivate(next)
+    startTransition(async () => {
+      setError(null)
+      const res = await setEpisodePrivacy(String(item.slug), next)
+      if (res.ok) router.refresh()
+      else {
+        setIsPrivate(!next)
+        setError(res.error ?? "Couldn't update this.")
+      }
+    })
+  }
+
   function handleRename() {
     const next = draftTitle.trim()
     if (!next || next === item.title) {
@@ -571,6 +594,13 @@ function OrgCatalogueRow({
           {item.duration && (
             <span className="inline-flex items-center gap-1">
               <Clock className="size-3" /> {item.duration}
+            </span>
+          )}
+          {/* A private replay is listed only for its host, so this badge explains
+              why the row is visible here but nowhere else. */}
+          {isPrivate && (
+            <span className="inline-flex items-center gap-1 text-muted-foreground">
+              <Lock className="size-3" /> Private
             </span>
           )}
         </div>
@@ -655,6 +685,18 @@ function OrgCatalogueRow({
               >
                 <Pencil className="size-4" /> Rename
               </DropdownMenuItem>
+              {isLive && (
+                <DropdownMenuItem closeOnClick={false} onClick={handleTogglePrivacy} disabled={isPending}>
+                  {isPending ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : isPrivate ? (
+                    <Globe className="size-4" />
+                  ) : (
+                    <Lock className="size-4" />
+                  )}
+                  {isPrivate ? "Make public" : "Make private"}
+                </DropdownMenuItem>
+              )}
               {confirming ? (
                 <DropdownMenuItem variant="destructive" closeOnClick={false} onClick={handleDelete} disabled={isPending}>
                   {isPending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
