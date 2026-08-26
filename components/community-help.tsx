@@ -1197,15 +1197,20 @@ export function CommunityHelpInfoModal({ open, onClose }: { open: boolean; onClo
 
 /**
  * The Community feed's post list, reusable outside the Community room itself.
+ * Used by BOTH the organisation profile's and the personal profile's Thread tab.
  *
- * The organisation profile's Thread tab previously rendered its own card
- * (`ProfileThreads`), which only *looked* like a Community post: tapping it
- * navigated away to `/chatrooms/community?q=<id>` and the reply button was a
- * plain link, so the reader lost their place on the profile and none of the
- * in-place behaviour (expand, comment sheet, media full screen, swipe between
- * clips) was available. Rather than reimplement that behaviour a third time,
- * this shares the real `PostItem` and `CommunityConversation` the room uses, so
- * the two surfaces cannot drift apart again.
+ * Those tabs previously rendered their own card (`ProfileThreads`), which only
+ * *looked* like a Community post: tapping it navigated away to
+ * `/chatrooms/community?q=<id>` and the reply button was a plain link, so the
+ * reader lost their place on the profile and none of the in-place behaviour
+ * (expand, comment sheet, media full screen, swipe between clips) was
+ * available. Rather than reimplement that behaviour per surface, this shares the
+ * real `PostItem` and `CommunityConversation` the room uses, so the three
+ * surfaces cannot drift apart again.
+ *
+ * Anonymous threads are safe here: `PostItem` renders the universal anonymous
+ * identity from `post.anonymous`, and only a profile's owner is ever sent their
+ * anonymous rows in the first place.
  *
  * The room's own chrome — composer, Ask button, pull-to-refresh, deep-link
  * handling — deliberately stays behind in `CommunityHelp`: that belongs to the
@@ -1228,7 +1233,7 @@ export function CommunityThreadFeed({ posts }: { posts: CommunityPostView[] }) {
 
   // Same contract as the room: the open conversation is a navigable screen, so
   // Back closes it instead of leaving the profile.
-  useOverlayHistory(activeId !== null, () => setActiveId(null), "org-thread-conversation")
+  useOverlayHistory(activeId !== null, () => setActiveId(null), "profile-thread-conversation")
 
   function handleDeleted(id: number) {
     if (activeId === id) setActiveId(null)
