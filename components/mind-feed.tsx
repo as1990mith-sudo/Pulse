@@ -1144,6 +1144,11 @@ function MediaSlide({
           trimStart={item.trimStart}
           trimEnd={item.trimEnd}
           className="h-full w-full object-cover"
+          // Continue from wherever the expanded viewer left off instead of
+          // restarting at 0 when the reader comes back. The Community preview
+          // already passed this; the main feed's never did, which is why only
+          // the main feed restarted on the way back from full screen.
+          resume
           onExpand={onOpenVideo}
         />
       </div>

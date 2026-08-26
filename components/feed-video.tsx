@@ -1,8 +1,9 @@
 "use client"
 
 import { useEffect, useRef, useState, useCallback } from "react"
-import { Play, Pause, Volume2, VolumeX, RotateCcw, RotateCw } from "lucide-react"
+import { Play } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { SKIP_SECONDS, VIDEO_CONTROLS_HEIGHT, VideoControlsBar } from "@/components/video-controls-bar"
 import { exclusivePlaybackProps, installExclusivePlayback } from "@/lib/exclusive-playback"
 import { getSharedMuted, noteAutoplayBlocked, setSharedMuted, useSharedMute } from "@/lib/shared-mute"
 import {
@@ -36,22 +37,10 @@ import { registerActiveVideo, reconcileActiveVideo, setManualActiveVideo } from 
  *   time track (pointer + keyboard).
  */
 
-function formatTime(seconds: number) {
-  if (!Number.isFinite(seconds) || seconds < 0) return "0:00"
-  const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  return `${m}:${s.toString().padStart(2, "0")}`
-}
-
-const SKIP_SECONDS = 10
-
-/** How much room the bottom control bar takes up above its container's bottom
- *  edge: `pb-2.5` (0.625rem) plus the 1.25rem-tall control row (`size-5` icons
- *  and the `h-5` scrubber). Exported so full-screen overlays that stack their own
- *  chrome above the player can clear it by reference instead of hard-coding a
- *  number here and drifting out of step. Excludes the safe-area inset that
- *  `safeAreaControls` adds, so callers add that themselves. */
-export const FEED_VIDEO_CONTROLS_HEIGHT = "1.875rem"
+/** Re-exported from the shared control bar, which now owns the bar's markup and
+ *  therefore its height. Kept under this name so existing overlays that clear
+ *  the bar by reference keep working. */
+export const FEED_VIDEO_CONTROLS_HEIGHT = VIDEO_CONTROLS_HEIGHT
 
 export function FeedVideo({
   src,
@@ -65,6 +54,8 @@ export function FeedVideo({
   ignoreViewerGate = false,
   hideMuteControl = false,
   safeAreaControls = false,
+  chromeVisible,
+  onToggleChrome,
 }: {
   src: string
   className?: string
@@ -99,6 +90,14 @@ export function FeedVideo({
    *  scrubber out of the home-indicator / gesture strip. Off for inline cards,
    *  which sit mid-page where that inset would only add stray padding. */
   safeAreaControls?: boolean
+  /** Full-screen chrome state, owned by the overlay so the author row, caption,
+   *  action rail and this control bar all fade as one. When `onToggleChrome` is
+   *  supplied, tapping the video surface toggles that chrome INSTEAD of pausing —
+   *  pausing is then exclusively the play/pause button's job, which is how
+   *  full-screen video players are expected to behave. Leave both unset for
+   *  inline cards, where a surface tap keeps its existing meaning. */
+  chromeVisible?: boolean
+  onToggleChrome?: () => void
 }) {
   const ref = useRef<HTMLVideoElement>(null)
   const seekRef = useRef<HTMLDivElement>(null)
@@ -246,6 +245,12 @@ export function FeedVideo({
     // The owner instance (e.g. the expanded post overlay) ignores the gate.
     if (ignoreViewerGate) return
     if (viewerOpen) {
+      // Record the exact position BEFORE pausing. `timeupdate` only fires every
+      // ~250ms, so the last value it stored can be a quarter-second stale — and
+      // if the clip was paused when the reader expanded it, `timeupdate` never
+      // fired at all and no position was ever stored. Writing it here means the
+      // expanded player always has an accurate point to pick up from.
+      rememberVideoPosition(src, el.currentTime)
       programmaticPauseRef.current = true
       el.pause()
     } else if (inViewRef.current && !userPausedRef.current) {
@@ -285,10 +290,19 @@ export function FeedVideo({
     }
   }
 
-  // Tapping the video surface / poster / center affordance: expand when a
-  // parent opted in (community feed), otherwise the default play/pause toggle.
-  const surfaceClick = onExpand ?? togglePlay
-  const surfaceLabel = onExpand ? "Open post" : "Play video"
+  // Tapping the video SURFACE. Full screen fades the chrome, community's inline
+  // card expands the post, and a plain inline card toggles playback. Note the
+  // order: chrome wins over expand, because the full-screen player is already
+  // expanded and has nowhere further to go.
+  const surfaceClick = onToggleChrome ?? onExpand ?? togglePlay
+  const surfaceLabel = onToggleChrome ? "Show or hide controls" : onExpand ? "Open post" : "Play video"
+
+  // Tapping the center play GLYPH, which is a distinct affordance from the
+  // surface: it is a play button, so it must start playback even in full screen
+  // where a surface tap only moves chrome. Without this split, the glyph would
+  // fade the chrome and the clip would stay frozen with no way to resume.
+  const glyphClick = onExpand ?? togglePlay
+  const glyphLabel = onExpand ? "Open post" : "Play video"
 
   function toggleMute() {
     const el = ref.current
