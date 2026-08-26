@@ -4,6 +4,7 @@ import { memo, useEffect, useMemo, useRef, useState, useTransition } from "react
 import useSWR, { mutate as globalMutate } from "swr"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useHomeContext } from "@/components/home/home-context"
 import {
   Plus,
   X,
@@ -163,6 +164,18 @@ function getVideoDuration(file: File): Promise<number> {
   })
 }
 
+/**
+ * Revalidates the feed for EVERY Home the session has cached.
+ *
+ * The feed cache key is now `feed:<handle>` rather than a bare "feed" (see the
+ * note at the useSWR call), so a literal `mutate("feed")` would no longer match
+ * anything and posting/liking would silently stop refreshing the list. SWR
+ * accepts a predicate, so match the family by prefix instead.
+ */
+function revalidateFeeds() {
+  return globalMutate((key) => typeof key === "string" && key.startsWith("feed:"))
+}
+
 // Tiny seeded PRNG (mulberry32) so a given seed always yields the same order.
 // This keeps the "For you" shuffle stable across SWR polls within a session
 // while producing a brand-new order each time the app is loaded or reopened.
@@ -266,6 +279,8 @@ export function MindFeed({
   homeVoice?: HomeVoice | null
 }) {
   const router = useRouter()
+  // Scopes the feed's SWR cache so each Home keeps its own entry.
+  const { activeHome } = useHomeContext()
   const [draft, setDraft] = useState("")
   // Admins of the active Home default to its voice — that is why they have the
   // right — but can switch to their own name per post.
@@ -329,11 +344,23 @@ export function MindFeed({
   // shuffle that reordered every card, it read as the feed refreshing or
   // scrolling itself. The 20s interval below keeps it fresh, and pull-to-refresh
   // covers the deliberate case.
-  const { data: livePosts, mutate: mutateFeed } = useSWR("feed", () => getFeed(), {
+  // The cache key MUST include the active Home. It used to be the constant
+  // "feed", so every Home shared one cache entry: after switching, `router.refresh()`
+  // handed down the new Home's `posts` as fallbackData, but SWR already held the
+  // PREVIOUS Home's array under "feed" and `livePosts ?? posts` preferred it —
+  // so the old Home's feed stayed on screen until a reload cleared the cache.
+  // Keying by handle makes each Home its own entry, so a switch reads the right
+  // one immediately (and Personal mode gets its own bucket too).
+  const feedKey = `feed:${activeHome?.handle ?? "__personal"}`
+  const { data: livePosts, mutate: mutateFeed } = useSWR(feedKey, () => getFeed(), {
     fallbackData: posts,
     refreshInterval: 20000,
     revalidateOnFocus: false,
-    keepPreviousData: true,
+    // Deliberately NOT `keepPreviousData`. That option only matters when the key
+    // changes, which now happens precisely on a Home switch — and it would hold
+    // the previous Home's posts on screen while the new ones load, recreating
+    // the exact bug above. The server-rendered `fallbackData` is already correct
+    // for the new Home, so there is nothing to bridge.
     dedupingInterval: 8000,
   })
   const allPosts = livePosts ?? posts
@@ -342,7 +369,10 @@ export function MindFeed({
   // "For you"/"Admin"; the "discover" keys back the Find tab's results.
   async function refreshFeed() {
     await globalMutate(
-      (key) => key === "feed" || (Array.isArray(key) && key[0] === "discover"),
+      // `feed:` prefix, not the old exact "feed" — the key is per-Home now, and
+      // an exact match would silently make pull-to-refresh a no-op.
+      (key) =>
+        (typeof key === "string" && key.startsWith("feed:")) || (Array.isArray(key) && key[0] === "discover"),
       undefined,
       { revalidate: true },
     )
@@ -768,6 +798,8 @@ export function MindFeed({
               asHome={postAsHome}
               onChange={setPostAsHome}
               personalName={currentUser.name}
+              personalImage={currentUser.image}
+              personalInitials={currentUser.initials}
               className="w-full"
             />
             <div className="relative">
@@ -1389,7 +1421,7 @@ export function PostCard({
       try {
         await setPostPinned({ postId: post.id, pinned: next })
         toast.success(next ? "Pinned to the top of the feed." : "Unpinned.")
-        await globalMutate("feed")
+        await revalidateFeeds()
         router.refresh()
       } catch (err) {
         // Roll back so the badge can't claim a pin the server refused — most
@@ -1404,7 +1436,7 @@ export function PostCard({
     startTransition(async () => {
       await deletePost(post.id)
       setDeleted(true)
-      await globalMutate("feed")
+      await revalidateFeeds()
       router.refresh()
     })
   }
@@ -1418,7 +1450,7 @@ export function PostCard({
       }
       setMentionRemoved(true)
       toast.success("Your mention was removed from this post.")
-      await globalMutate("feed")
+      await revalidateFeeds()
       router.refresh()
     })
   }
@@ -1445,7 +1477,7 @@ export function PostCard({
       setText(next)
       setEdited(true)
       setIsEditing(false)
-      await globalMutate("feed")
+      await revalidateFeeds()
       router.refresh()
     })
   }
@@ -1504,7 +1536,7 @@ export function PostCard({
     await addPostComment({ postId: post.id, text, asOrganization: asHome })
     // Refresh the polled feed (used on the Tweet tab) and the server tree
     // (used on profile pages where the feed isn't polled).
-    await globalMutate("feed")
+    await revalidateFeeds()
     router.refresh()
   }
 
@@ -1514,19 +1546,19 @@ export function PostCard({
 
   async function handleCommentReply(parentId: number, value: string, asHome?: boolean) {
     await addPostComment({ postId: post.id, text: value, parentId, asOrganization: asHome })
-    await globalMutate("feed")
+    await revalidateFeeds()
     router.refresh()
   }
 
   async function handleCommentEdit(commentId: number, value: string) {
     await editPostComment({ commentId, text: value })
-    await globalMutate("feed")
+    await revalidateFeeds()
     router.refresh()
   }
 
   async function handleCommentDelete(commentId: number) {
     await deletePostComment(commentId)
-    await globalMutate("feed")
+    await revalidateFeeds()
     router.refresh()
   }
 
@@ -1931,7 +1963,7 @@ export function PostCard({
           reveal the tally instead of withholding it forever. */}
       {post.poll && (
         <div className={cn(feed ? "px-4 pb-1" : "px-3 pb-1")}>
-          <PollCard poll={post.poll} canVote={!!currentUser} onVoted={() => void globalMutate("feed")} />
+          <PollCard poll={post.poll} canVote={!!currentUser} onVoted={() => void revalidateFeeds()} />
         </div>
       )}
 

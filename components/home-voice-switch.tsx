@@ -25,6 +25,8 @@ export function HomeVoiceSwitch({
   asHome,
   onChange,
   personalName,
+  personalImage = null,
+  personalInitials = "",
   size = "default",
   className,
 }: {
@@ -33,15 +35,37 @@ export function HomeVoiceSwitch({
   onChange: (asHome: boolean) => void
   /** The viewer's own name, shown as the personal option. */
   personalName: string
+  /** The viewer's profile photo, so "post as me" shows the real face. */
+  personalImage?: string | null
+  /** Initials fallback for the personal option when there is no photo. */
+  personalInitials?: string
   /** `sm` fits inline comment boxes; `default` suits the main composer. */
   size?: "sm" | "default"
   className?: string
 }) {
   if (!voice) return null
 
+  // Each option carries its real identity image. Choosing between the two is a
+  // choice between two *identities*, so both sides show the face/logo the post
+  // will actually carry — a generic person glyph for the personal option made it
+  // read as an abstract setting rather than "this is me".
   const options = [
-    { key: "home" as const, icon: Building2, label: voice.name, active: asHome },
-    { key: "self" as const, icon: User, label: personalName, active: !asHome },
+    {
+      key: "home" as const,
+      icon: Building2,
+      label: voice.name,
+      image: voice.image,
+      initials: voice.initials,
+      active: asHome,
+    },
+    {
+      key: "self" as const,
+      icon: User,
+      label: personalName,
+      image: personalImage,
+      initials: personalInitials,
+      active: !asHome,
+    },
   ]
 
   return (
@@ -70,7 +94,31 @@ export function HomeVoiceSwitch({
               : "text-muted-foreground hover:text-foreground",
           )}
         >
-          <opt.icon className={cn("shrink-0", size === "sm" ? "size-3" : "size-3.5")} />
+          {/* Real avatar first, initials next, and only then the generic glyph —
+              so an identity always looks like itself wherever an image exists. */}
+          <span
+            className={cn(
+              "grid shrink-0 place-items-center overflow-hidden rounded-full",
+              opt.active ? "ring-1 ring-border/70" : "opacity-80",
+              size === "sm" ? "size-4" : "size-5",
+            )}
+          >
+            {opt.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={opt.image || "/placeholder.svg"} alt="" className="size-full object-cover" />
+            ) : opt.initials ? (
+              <span
+                className={cn(
+                  "grid size-full place-items-center bg-primary/15 font-bold leading-none text-primary",
+                  size === "sm" ? "text-[7px]" : "text-[8px]",
+                )}
+              >
+                {opt.initials}
+              </span>
+            ) : (
+              <opt.icon className={size === "sm" ? "size-3" : "size-3.5"} />
+            )}
+          </span>
           <span className="truncate">{opt.label}</span>
         </button>
       ))}

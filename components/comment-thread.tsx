@@ -58,6 +58,9 @@ export type CommentThreadProps = {
   homeVoice?: HomeVoice | null
   /** The viewer's own name, shown as the personal option in that switcher. */
   personalName?: string
+  /** Viewer's photo + initials, so the personal voice chip shows their face. */
+  personalImage?: string | null
+  personalInitials?: string
   /**
    * Whether the action menu offers a "Copy" option. Disabled for feed (post
    * tab) comments per product rules; enabled everywhere else.
@@ -117,6 +120,8 @@ export function CommentThread({
   density = "default",
   homeVoice = null,
   personalName = "",
+  personalImage = null,
+  personalInitials = "",
 }: CommentThreadProps) {
   // Delete window inherits the edit/general window unless explicitly overridden.
   const deleteWindow = enforceDeleteWindow ?? enforceTimeWindows
@@ -160,6 +165,8 @@ export function CommentThread({
             density={density}
             homeVoice={homeVoice}
             personalName={personalName}
+            personalImage={personalImage}
+            personalInitials={personalInitials}
           />
         </li>
       ))}
@@ -192,6 +199,8 @@ function CommentNode({
   density = "default",
   homeVoice = null,
   personalName = "",
+  personalImage = null,
+  personalInitials = "",
 }: {
   comment: ThreadComment
   depth: number
@@ -209,6 +218,9 @@ function CommentNode({
   density?: "default" | "comfortable"
   homeVoice?: HomeVoice | null
   personalName?: string
+  /** Viewer's photo + initials, so the personal voice chip shows their face. */
+  personalImage?: string | null
+  personalInitials?: string
 }) {
   const replies = repliesByParent.get(comment.id) ?? []
   const [collapsed, setCollapsed] = useState(true)
@@ -231,6 +243,8 @@ function CommentNode({
         density={density}
         homeVoice={homeVoice}
         personalName={personalName}
+            personalImage={personalImage}
+            personalInitials={personalInitials}
       />
 
       {replies.length > 0 && (
@@ -267,6 +281,8 @@ function CommentNode({
                     density={density}
                     homeVoice={homeVoice}
                     personalName={personalName}
+            personalImage={personalImage}
+            personalInitials={personalInitials}
                   />
                 </li>
               ))}
@@ -294,6 +310,8 @@ function CommentItem({
   density = "default",
   homeVoice = null,
   personalName = "",
+  personalImage = null,
+  personalInitials = "",
 }: {
   comment: ThreadComment
   canInteract: boolean
@@ -310,6 +328,9 @@ function CommentItem({
   density?: "default" | "comfortable"
   homeVoice?: HomeVoice | null
   personalName?: string
+  /** Viewer's photo + initials, so the personal voice chip shows their face. */
+  personalImage?: string | null
+  personalInitials?: string
 }) {
   const [liked, setLiked] = useState(comment.liked)
   const [likes, setLikes] = useState(comment.likes)
@@ -576,6 +597,8 @@ function CommentItem({
               asHome={replyAsHome}
               onChange={setReplyAsHome}
               personalName={personalName}
+            personalImage={personalImage}
+            personalInitials={personalInitials}
               size="sm"
               className="max-w-[16rem]"
             />
