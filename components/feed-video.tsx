@@ -154,7 +154,13 @@ export function FeedVideo({
       }
     }
     el.muted = getSharedMuted()
-    el.play().catch(() => {
+    el.play().catch((err: unknown) => {
+      // Only an autoplay-policy refusal means "the browser wants silence". An
+      // `AbortError` just means this play() was superseded by a load or pause
+      // (constant during scroll and hand-off); treating it as a policy block
+      // muted every player app-wide for the rest of the session.
+      const name = (err as { name?: string } | null)?.name
+      if (name && name !== "NotAllowedError") return
       if (!getSharedMuted()) {
         // The browser refused to start with sound because the page hasn't been
         // interacted with yet. Fall back to muted playback, but record it as an

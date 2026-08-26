@@ -1883,7 +1883,15 @@ export function PostCard({
                   {(() => {
                     const paras = text.split(/\n{2,}/)
                     return paras.map((para, i) => (
-                      <p key={i} className={cn("whitespace-pre-wrap leading-tight", i > 0 && "mt-1.5")}>
+                      // Gap between paragraphs = ONE BLANK LINE, matching the
+                      // full-screen caption. That surface renders the raw text
+                      // with `whitespace-pre-line`, so a `\n\n` becomes a real
+                      // empty line — a full line-height of space. Here the text
+                      // is split into <p>s instead (so links and clamping work),
+                      // and the old `mt-1.5` (6px) was under a third of that, which
+                      // is why the feed read as a cramped wall next to full screen.
+                      // `mt-5` (20px) equals one 16px line at leading-tight (1.25).
+                      <p key={i} className={cn("whitespace-pre-wrap leading-tight", i > 0 && "mt-5")}>
                         {renderMessageBody(para, {
                           link: true,
                           linkClassName:

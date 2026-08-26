@@ -276,6 +276,24 @@ export async function createCatalogueItem(input: CreateCatalogueInput) {
   return { ok: true }
 }
 
+/**
+ * Renames a manually-added catalogue resource. Owner-only, and the update is
+ * scoped by BOTH id and organizationId so a valid owner of one Home can't rename
+ * a row belonging to another by passing a foreign id.
+ */
+export async function renameCatalogueItem(input: { id: number; organizationId: string; title: string }) {
+  await requireOrgOwner(input.organizationId)
+  const title = input.title.trim()
+  if (!title) throw new Error("Please give the resource a title.")
+  await db
+    .update(catalogueItem)
+    .set({ title })
+    .where(and(eq(catalogueItem.id, input.id), eq(catalogueItem.organizationId, input.organizationId)))
+  const org = await orgHandle(input.organizationId)
+  if (org) revalidatePath(`/org/${org}`)
+  return { ok: true }
+}
+
 export async function deleteCatalogueItem(input: { id: number; organizationId: string }) {
   await requireOrgOwner(input.organizationId)
   await db
