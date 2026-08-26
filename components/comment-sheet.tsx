@@ -263,6 +263,8 @@ export function CommentSheet({
               // then silently reverted to their own name for a reply.
               homeVoice={homeVoice}
               personalName={currentUser?.name ?? "You"}
+              personalImage={currentUser?.image ?? null}
+              personalInitials={currentUser?.initials ?? ""}
             />
           )}
         </div>

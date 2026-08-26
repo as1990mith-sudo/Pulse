@@ -194,6 +194,7 @@ function PostItem({
   onPinned,
   onOpen,
   highlighted = false,
+  enterIndex = 0,
 }: {
   post: CommunityPostView
   /** The full visible list, so full-screen video can swipe between clips. */
@@ -205,6 +206,8 @@ function PostItem({
    *  after swiping, that is NOT the post whose card was originally tapped. */
   onOpen: (postId?: number) => void
   highlighted?: boolean
+  /** Position in the list, used to stagger the entrance animation. */
+  enterIndex?: number
 }) {
   const { openProfile } = useMiniChat()
   const [shareOpen, setShareOpen] = useState(false)
@@ -318,8 +321,12 @@ function PostItem({
   return (
     <article
       id={`q-${post.id}`}
+      // The cascade runs on mount, so it plays on first paint and whenever a
+      // new question arrives — and, usefully, after a Home switch, where the
+      // whole list remounts and visibly re-forms as the new Home's feed.
+      style={{ "--enter-index": enterIndex } as React.CSSProperties}
       className={cn(
-        "scroll-mt-24 px-4 py-5 transition-colors sm:px-6",
+        "feed-item-in scroll-mt-24 px-4 py-5 transition-colors sm:px-6",
         highlighted && "bg-emerald-500/5",
       )}
     >
@@ -474,7 +481,7 @@ function PostItem({
             // as that id.
             onClick={() => onOpen()}
             aria-label="Reply"
-            className="flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            className="action-tap flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
           >
             <CommentIcon className="size-5" />
             {post.commentCount > 0 && <span className="tabular-nums">{post.commentCount}</span>}
@@ -483,7 +490,7 @@ function PostItem({
             type="button"
             onClick={() => setShareOpen(true)}
             aria-label="Share"
-            className="flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            className="action-tap flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
           >
             <Share2 className="size-5" />
           </button>
@@ -1482,10 +1489,13 @@ export function CommunityHelp({
               // weight reads as less of a trench, while the darker colour keeps
               // the break between posts just as legible.
               <div className="divide-y-2 divide-feed-divider pb-28">
-                {posts.map((post) => (
+                {posts.map((post, i) => (
                   <PostItem
                     key={post.id}
                     post={post}
+                    // Only the first few cascade; the rest are offscreen and
+                    // shouldn't wait on a delay to become visible.
+                    enterIndex={Math.min(i, 6)}
                     siblings={posts}
                     onDeleted={handleDeleted}
                     onPinned={handlePinned}

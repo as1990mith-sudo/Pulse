@@ -243,8 +243,8 @@ function CommentNode({
         density={density}
         homeVoice={homeVoice}
         personalName={personalName}
-            personalImage={personalImage}
-            personalInitials={personalInitials}
+        personalImage={personalImage}
+        personalInitials={personalInitials}
       />
 
       {replies.length > 0 && (
@@ -281,8 +281,8 @@ function CommentNode({
                     density={density}
                     homeVoice={homeVoice}
                     personalName={personalName}
-            personalImage={personalImage}
-            personalInitials={personalInitials}
+                    personalImage={personalImage}
+                    personalInitials={personalInitials}
                   />
                 </li>
               ))}
@@ -597,8 +597,8 @@ function CommentItem({
               asHome={replyAsHome}
               onChange={setReplyAsHome}
               personalName={personalName}
-            personalImage={personalImage}
-            personalInitials={personalInitials}
+              personalImage={personalImage}
+              personalInitials={personalInitials}
               size="sm"
               className="max-w-[16rem]"
             />

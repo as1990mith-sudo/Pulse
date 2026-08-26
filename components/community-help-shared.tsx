@@ -425,7 +425,10 @@ export function LikeButton({
       aria-pressed={liked}
       aria-label={liked ? "Unlike" : "Like"}
       className={cn(
-        "flex items-center gap-1.5 rounded-full font-medium transition-colors",
+        // `action-tap` adds the press dip. It deliberately does NOT reach the
+        // heart: LikeHeart wraps its icon in a span, so the `> svg` icon spring
+        // can't match it and the bespoke like-pop animation stays untouched.
+        "action-tap flex items-center gap-1.5 rounded-full font-medium",
         variant === "inline" && "px-2 py-1.5 text-sm",
         variant === "row" && "px-2 py-1.5 text-sm",
         variant === "icon" && "p-2",
@@ -456,7 +459,7 @@ export function SaveButton({
       aria-pressed={saved}
       aria-label={saved ? "Remove from saved" : "Save question"}
       className={cn(
-        "flex items-center gap-1.5 rounded-full text-sm font-medium transition-colors",
+        "action-tap flex items-center gap-1.5 rounded-full text-sm font-medium",
         variant === "inline" && "px-2 py-1.5",
         variant === "row" && "px-2 py-1.5",
         variant === "icon" && "p-2",
