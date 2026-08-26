@@ -54,6 +54,7 @@ export function FeedVideo({
   onExpand,
   resume = false,
   ignoreViewerGate = false,
+  hideMuteControl = false,
 }: {
   src: string
   className?: string
@@ -78,6 +79,11 @@ export function FeedVideo({
    *  keep playing even while the immersive-viewer pause gate is active — that
    *  gate exists to silence the *inline* feed clip behind it, not this one. */
   ignoreViewerGate?: boolean
+  /** Drop the mute toggle from the bottom control bar. For overlays that publish
+   *  their own mute button (the full-screen action rails), where keeping this one
+   *  would show two controls for the same shared mute state. Everything else in
+   *  the bar — play/pause, skip, elapsed time, seek — is unaffected. */
+  hideMuteControl?: boolean
 }) {
   const ref = useRef<HTMLVideoElement>(null)
   const seekRef = useRef<HTMLDivElement>(null)
@@ -515,14 +521,16 @@ export function FeedVideo({
             />
           </div>
 
-          <button
-            type="button"
-            onClick={toggleMute}
-            aria-label={muted ? "Unmute" : "Mute"}
-            className="text-white transition-transform hover:scale-110"
-          >
-            {muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
-          </button>
+          {!hideMuteControl && (
+            <button
+              type="button"
+              onClick={toggleMute}
+              aria-label={muted ? "Unmute" : "Mute"}
+              className="text-white transition-transform hover:scale-110"
+            >
+              {muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
+            </button>
+          )}
         </div>
       </div>
     </div>
