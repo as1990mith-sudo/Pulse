@@ -40,7 +40,16 @@ function toHomeView(h: HomeRow, org: OrgRow, memberCount: number): HomeView {
   return {
     id: h.id,
     organizationId: h.organizationId,
-    name: h.name,
+    // The Home's display name resolves from its linked organisation, NOT from
+    // the `home.name` column. That column is a copy captured at creation time
+    // ("<Org> Home") which nothing updates on rename, so it silently goes stale:
+    // renaming an organisation to "Prayer Palace International" left My Homes
+    // still listing "Tuesday Afternoon Prayer Home" while the profile chip —
+    // which already reads the organisation — showed the new name. The
+    // organisation is the one place a name is edited, so it is the only place
+    // worth reading. Deriving here rather than syncing the copy means the two
+    // cannot drift apart again.
+    name: org.name,
     handle: org.handle,
     plan: h.plan as HomePlanId,
     planStatus: h.planStatus,

@@ -260,7 +260,10 @@ export async function previewHomeByKey(rawKey: string): Promise<HomeKeyPreview> 
   const { h, org } = rows[0]
   return {
     handle: org.handle,
-    homeName: h.name,
+    // Names resolve from the organisation, the only place a name is ever edited.
+    // `home.name` is a creation-time copy ("<Org> Home") that rename never
+    // touches, so reading it here would show a stale name on the join screen.
+    homeName: org.name,
     orgInitials: getInitials(org.name),
     orgColor: getAvatarColor(org.id),
     orgLogo: org.logo,
@@ -307,7 +310,7 @@ export async function joinHomeByKey(rawKey: string): Promise<JoinHomeResult> {
     .limit(1)
   if (existing.length > 0) {
     const status = existing[0].status === "pending" ? "pending" : "already_member"
-    return { status, handle: org.handle, homeName: h.name }
+    return { status, handle: org.handle, homeName: org.name }
   }
 
   const autoJoin = h.joinPolicy === "auto"
@@ -336,7 +339,7 @@ export async function joinHomeByKey(rawKey: string): Promise<JoinHomeResult> {
   }
 
   revalidatePath("/", "layout")
-  return { status: autoJoin ? "joined" : "pending", handle: org.handle, homeName: h.name }
+  return { status: autoJoin ? "joined" : "pending", handle: org.handle, homeName: org.name }
 }
 
 /** Owner/admin sets whether a valid key auto-joins or requires approval. */
@@ -578,7 +581,7 @@ export async function getMyDeletedHomes(): Promise<DeletedHomeLink[]> {
     const purgeAt = h.purgeAfter ?? new Date(now)
     return {
       handle: org.handle,
-      name: h.name,
+      name: org.name,
       purgeAt: purgeAt.toISOString(),
       daysRemaining: Math.max(0, Math.ceil((purgeAt.getTime() - now) / (24 * 60 * 60 * 1000))),
     }
@@ -605,7 +608,9 @@ export async function reactivateHome(handle: string): Promise<{ ok: true }> {
   // has to be looked up directly here — by definition it can't be fetched
   // through the normal path.
   const [row] = await db
-    .select({ h: home })
+    // The organisation is selected, not just joined, because it owns the Home's
+    // display name — `home.name` is a stale creation-time copy.
+    .select({ h: home, org: organization })
     .from(home)
     .innerJoin(organization, eq(organization.id, home.organizationId))
     .where(and(eq(organization.handle, handle), isNotNull(home.deletedAt)))
@@ -637,7 +642,7 @@ export async function reactivateHome(handle: string): Promise<{ ok: true }> {
     actorId: user.id,
     actorName: user.name,
     type: "announcement",
-    message: `${row.h.name} is back. Everything that was here has been restored.`,
+    message: `${row.org.name} is back. Everything that was here has been restored.`,
     link: `/home/${handle}`,
   })
 

@@ -28,7 +28,22 @@ export function useUrlState<T extends string>(
   options: { valid?: readonly T[]; alias?: Readonly<Record<string, T>> } = {},
 ): [T, (next: T) => void] {
   const searchParams = useSearchParams()
-  const { valid, alias } = options
+
+  // `valid` and `alias` are read through a ref rather than closed over, so that
+  // callers can pass inline literals (`alias: { anonymous: "thread" }`) without
+  // breaking this hook.
+  //
+  // This is load-bearing, not tidying. `fromUrl` feeds the URL-sync effect
+  // below, and listing these objects as deps made `fromUrl` — and therefore the
+  // effect — fire on EVERY render for any caller that didn't hoist them to a
+  // module constant. `set` updates the URL via `replaceState`, which reaches
+  // `useSearchParams` a beat later, so that extra run read a STALE `searchParams`
+  // and immediately overwrote the value the user had just chosen. The tab
+  // snapped back and the whole bar looked unresponsive, while the URL showed the
+  // new tab. Depending only on primitives keeps the effect tied to real URL
+  // changes (Back/Forward, deep links), which is all it was ever for.
+  const optionsRef = useRef(options)
+  optionsRef.current = options
 
   // Reading through a validator means a hand-edited or stale URL (?tab=deleted)
   // degrades to the fallback instead of rendering an empty screen.
@@ -36,6 +51,7 @@ export function useUrlState<T extends string>(
     (params: URLSearchParams | null): T => {
       const raw = params?.get(key)
       if (!raw) return fallback
+      const { valid, alias } = optionsRef.current
       // Renamed values map old → new, so links shared before a tab was renamed
       // still land on the right place instead of silently falling back.
       const aliased = alias?.[raw]
@@ -43,7 +59,7 @@ export function useUrlState<T extends string>(
       if (valid && !valid.includes(raw as T)) return fallback
       return raw as T
     },
-    [key, fallback, valid, alias],
+    [key, fallback],
   )
 
   // Local state is the render source of truth so updates are instant, with the
