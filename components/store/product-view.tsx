@@ -12,7 +12,6 @@ import {
   Clock,
   Globe,
   GraduationCap,
-  Heart,
   Layers,
   Loader2,
   Lock,
@@ -24,6 +23,7 @@ import type { Book, Course } from "@/lib/store-data"
 import { formatPrice } from "@/lib/store-data"
 import { purchaseProduct } from "@/app/actions/store"
 import { useStoreState } from "@/lib/use-store-state"
+import { LikeHeart } from "@/components/like-heart"
 import { ShareButton, Stars, BookRailCard, CourseRailCard } from "@/components/store/store-cards"
 import { cn } from "@/lib/utils"
 
