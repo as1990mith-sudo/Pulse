@@ -1,6 +1,6 @@
 "use server"
 
-import { and, asc, desc, eq, gt, inArray, isNull, lt, or } from "drizzle-orm"
+import { and, asc, count, desc, eq, gt, inArray, isNull, lt, or } from "drizzle-orm"
 import { cookies, headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
@@ -878,6 +878,36 @@ export async function getAudience(input: {
   // Audience count excludes the host (it's the listener count).
   const count = members.filter((m) => !m.isHost).length
   return { count, members }
+}
+
+/**
+ * Audience counts for many rooms at once, for the Live tab's broadcast tiles.
+ *
+ * Read-only and purely for display. It deliberately reuses `getAudience`'s two
+ * rules verbatim — only presence rows fresher than `PRESENCE_STALE_MS` count, and
+ * hosts are excluded so the number is the *listener* count — so a tile can never
+ * disagree with the count shown inside the room itself.
+ *
+ * Grouped into one query rather than a call per room: the Live tab renders every
+ * on-air stream at once, so per-room queries would scale with the broadcast count.
+ */
+export async function getLiveAudienceCounts(roomNames: string[]): Promise<Record<string, number>> {
+  if (roomNames.length === 0) return {}
+  const rows = await db
+    .select({ roomName: livePresence.roomName, n: count() })
+    .from(livePresence)
+    .where(
+      and(
+        inArray(livePresence.roomName, roomNames),
+        eq(livePresence.isHost, false),
+        gt(livePresence.lastSeenAt, new Date(Date.now() - PRESENCE_STALE_MS)),
+      ),
+    )
+    .groupBy(livePresence.roomName)
+
+  const out: Record<string, number> = {}
+  for (const r of rows) out[r.roomName] = Number(r.n)
+  return out
 }
 
 /** Removes the caller's presence row when they intentionally leave a room. */
