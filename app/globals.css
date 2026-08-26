@@ -1514,3 +1514,99 @@ svg.lucide {
     animation: none;
   }
 }
+
+/* --- Live tab: broadcast signal visualiser -------------------------------- */
+/* The Live tab's signature element — concentric frequency rings radiating from
+   the hero, plus a slow ambient glow drift and a soft equaliser rail. Every
+   keyframe animates ONLY `transform` and `opacity` so the whole visualiser stays
+   on the compositor: no layout or paint work per frame, which matters because
+   this sits behind a scrolling list on mobile. */
+
+/* One concentric ring expanding outward and fading. Rings are staggered via an
+   inline `animation-delay` so a single keyframe produces a continuous pulse. */
+@keyframes broadcast-ring {
+  0% {
+    transform: scale(0.35);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+.broadcast-ring {
+  animation: broadcast-ring 4.8s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+/* Slow, barely-there breathing of the ambient orange/red bloom behind the hero.
+   Long duration keeps it atmospheric rather than attention-grabbing. */
+@keyframes broadcast-bloom {
+  0%,
+  100% {
+    transform: scale(1) translate3d(0, 0, 0);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.12) translate3d(0, -2%, 0);
+    opacity: 0.8;
+  }
+}
+.broadcast-bloom {
+  animation: broadcast-bloom 9s ease-in-out infinite;
+}
+
+/* Equaliser rail under the hero copy. Each bar carries its own delay + duration
+   via inline vars so the rail reads as an irregular, living waveform from one
+   shared keyframe. */
+@keyframes broadcast-bar {
+  0%,
+  100% {
+    transform: scaleY(0.28);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+.broadcast-bar {
+  transform-origin: bottom;
+  animation: broadcast-bar var(--bar-dur, 1.6s) ease-in-out infinite;
+  animation-delay: var(--bar-delay, 0s);
+}
+
+/* Empty state ("the air is quiet"): a single dormant ring that merely breathes,
+   signalling a carrier wave with nothing riding on it. */
+@keyframes quiet-air {
+  0%,
+  100% {
+    transform: scale(0.92);
+    opacity: 0.25;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 0.5;
+  }
+}
+.quiet-air {
+  animation: quiet-air 6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .broadcast-ring,
+  .broadcast-bloom,
+  .broadcast-bar,
+  .quiet-air {
+    animation: none;
+  }
+  /* Without motion the rings would collapse to their invisible 0% frame, so
+     pin them to a legible static state instead of hiding the visual entirely. */
+  .broadcast-ring {
+    transform: scale(0.8);
+    opacity: 0.18;
+  }
+  .broadcast-bar {
+    transform: scaleY(0.6);
+  }
+}
