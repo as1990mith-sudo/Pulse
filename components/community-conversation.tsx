@@ -275,8 +275,13 @@ export function CommunityConversation({
         {/* Connector line bridging the question into the replies (Threads-style) */}
         {replyCount > 0 && <div className="ml-[2.35rem] h-5 w-px bg-border/70 sm:ml-[3.1rem]" aria-hidden />}
 
-        {/* Replies — real, non-anonymous Frequency identities */}
-        <div className="px-4 pb-6 sm:px-6">
+        {/* Replies — real, non-anonymous Frequency identities.
+            `data-comments` marks the scroll target used when the reader taps the
+            Comment button in the full-screen media viewer: that closes the
+            overlay onto this thread, and landing on the question header would
+            leave the replies below the fold, making the tap look like it did
+            nothing. */}
+        <div data-comments className="px-4 pb-6 sm:px-6">
           {replyCount === 0 ? (
             <div className="flex flex-col items-center gap-2 py-12 text-center">
               <p className="text-base font-semibold text-foreground">Be the first to respond</p>
@@ -331,7 +336,16 @@ export function CommunityConversation({
           posts={mediaStack}
           startId={post.id}
           onClose={() => setLightboxOpen(false)}
-          onOpenComments={() => setLightboxOpen(false)}
+          // Same as the video viewer: close onto the thread, then bring the
+          // replies into view rather than leaving them below the fold.
+          onOpenComments={() => {
+            setLightboxOpen(false)
+            requestAnimationFrame(() => {
+              scrollRef.current
+                ?.querySelector("[data-comments]")
+                ?.scrollIntoView({ behavior: "smooth", block: "start" })
+            })
+          }}
           onAuthorClick={openProfile}
         />
       )}
@@ -403,9 +417,17 @@ function PostVideo({
           posts={siblings}
           startId={post.id}
           onClose={() => setFullscreen(false)}
-          // The comment thread is already the screen underneath, so Comment just
-          // dismisses the overlay and lands the reader back on it.
-          onOpenComments={() => setFullscreen(false)}
+          // The comment thread is already the screen underneath, so Comment
+          // dismisses the overlay — then scrolls the replies into view, since
+          // closing onto the question header would hide them below the fold and
+          // make the tap read as a no-op.
+          onOpenComments={() => {
+            setFullscreen(false)
+            // Next frame, so the overlay has unmounted and the thread is laid out.
+            requestAnimationFrame(() => {
+              document.querySelector("[data-comments]")?.scrollIntoView({ behavior: "smooth", block: "start" })
+            })
+          }}
           onAuthorClick={onAuthorClick}
         />
       )}

@@ -157,8 +157,17 @@ function FeedPostVideo({
           onOpenComments={() => {
             // Comments live in the conversation thread, so hand off to it rather
             // than stacking a second overlay on top of this one.
+            //
+            // The two steps must NOT be batched into one render. Both overlays
+            // own a history entry (useOverlayHistory): closing this viewer pops
+            // the entry it pushed, while opening the conversation pushes one. Run
+            // together, React commits both in a single pass and the viewer's
+            // cleanup pops the entry the conversation had just pushed — the
+            // thread opened and immediately closed, which looked like the tap
+            // dumped you back on the preview. Closing first, then opening on the
+            // next frame, keeps the pop and the push in the right order.
             setFullscreen(false)
-            onOpenComments()
+            requestAnimationFrame(() => onOpenComments())
           }}
           onAuthorClick={onAuthorClick}
         />
@@ -480,9 +489,12 @@ function PostItem({
           posts={siblings}
           startId={post.id}
           onClose={() => setMediaOpen(false)}
+          // Close first, then open the thread on the next frame — see the note in
+          // FeedPostVideo: batching the two lets this viewer's history cleanup
+          // pop the entry the conversation just pushed, closing it instantly.
           onOpenComments={() => {
             setMediaOpen(false)
-            onOpen()
+            requestAnimationFrame(() => onOpen())
           }}
           onAuthorClick={openProfile}
         />

@@ -24,10 +24,16 @@ import { uploadMedia } from "@/lib/upload-media"
 import { useHideOnScrollDown } from "@/lib/chat-chrome"
 import { cn } from "@/lib/utils"
 
+/**
+ * Links straight into the Chat Rooms hub's Community tab. The old standalone
+ * `/chatrooms/community` shell — Community with a bare back arrow and no
+ * iTestify tab — was the broken path, so no entry point offers it any more; the
+ * route itself now just redirects here.
+ */
 function CommunityHelpEntry() {
   return (
     <Link
-      href="/chatrooms/community"
+      href="/chatrooms?room=community"
       className="group flex items-center gap-3 rounded-xl border border-emerald-300/20 bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-700 px-4 py-3 shadow-lg shadow-emerald-950/40 transition-all hover:from-emerald-800 hover:via-emerald-700 hover:to-teal-600 hover:shadow-emerald-950/50 sm:px-5"
     >
       <Avatar className="size-12 shrink-0 ring-2 ring-white/50 transition-transform duration-200 group-hover:scale-105">
