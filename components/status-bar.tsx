@@ -773,7 +773,7 @@ export function StatusViewer({
   // user's next Back press did nothing. The shared hook tags its entry and only
   // pops when that tag is still current, so it is safe under React's dev
   // double-invoke without leaking.
-  useOverlayHistory(true, onClose, "status-viewer")
+  const { releaseForNavigation } = useOverlayHistory(true, onClose, "status-viewer")
 
   const group = groups[groupIndex]
   const item: StatusItem | undefined = group?.items[itemIndex]
@@ -1033,13 +1033,15 @@ export function StatusViewer({
           <Link
             href={`/u/${group.userId}`}
             onClick={(e) => {
-              // Navigate imperatively first, then close the viewer. Closing
-              // unmounts this portal, which would otherwise interrupt the
-              // Link's own client-side navigation transition.
+              // Hand off the viewer's history entry, then `replace` over it.
+              // Closing unmounts this portal, and its history cleanup would
+              // otherwise fire `history.back()` mid-navigation and bounce the
+              // user straight back out of the profile they just tapped.
               e.preventDefault()
               e.stopPropagation()
-              router.push(`/u/${group.userId}`)
+              releaseForNavigation()
               onClose()
+              router.replace(`/u/${group.userId}`)
             }}
             className="flex items-center gap-2 rounded-full transition-opacity hover:opacity-90"
             aria-label={group.isSelf ? "View your profile" : `View ${group.authorName}'s profile`}

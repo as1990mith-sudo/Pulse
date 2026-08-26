@@ -36,10 +36,13 @@ export function HomeSwitchOverlay({
       aria-label={`Switching to ${home.name}`}
     >
       <div className="relative flex items-center justify-center">
-        {/* Accent ring pulsing outward, tinted with the Home's own colour. */}
+        {/* Accent ring pulsing outward, tinted with the Home's own colour.
+            `accent` is a raw CSS colour (e.g. "#f97316"), not a utility class,
+            so it has to go through `style` — as a className it renders nothing. */}
         <span
           aria-hidden="true"
-          className={`home-switch-ring absolute size-24 rounded-3xl ${home.accent} opacity-40`}
+          className="home-switch-ring absolute size-24 rounded-3xl"
+          style={{ backgroundColor: home.accent }}
         />
         <span className="home-switch-mark relative">
           <HomeMark
@@ -48,7 +51,10 @@ export function HomeSwitchOverlay({
             initials={home.initials}
             color={home.accent}
             rounded="rounded-3xl"
-            className="size-24 shadow-floating"
+            // HomeMark's default type size is tuned for a ~20px mark, so the
+            // initials need scaling up explicitly at this size or they read as a
+            // speck in the middle of the tile.
+            className="size-24 text-2xl shadow-floating"
             labelled
           />
         </span>
