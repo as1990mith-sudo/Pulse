@@ -5,6 +5,7 @@ import { createPortal } from "react-dom"
 import { X, Bookmark, Share2, Volume2, VolumeX } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import { LikeHeart } from "@/components/like-heart"
+import { MediaCaption } from "@/components/media-caption"
 import { FEED_VIDEO_CONTROLS_HEIGHT, FeedVideo } from "@/components/feed-video"
 import { ShareSheet } from "@/components/share-sheet"
 import { ANON_AVATAR, communityMediaIdentity, toggleSaved, useIsSaved } from "@/components/community-help-shared"
@@ -362,11 +363,25 @@ function Slide({
       {/* Author row, bottom-left. Identity comes from the shared rule, so an
           anonymous asker shows the universal avatar and "Anonymous" here exactly
           as they do on the card. */}
+      {/* `pointer-events-none` on the container is load-bearing. This block is
+          anchored to `bottom-0` and grown upward by `paddingBottom`, so its box
+          extends down over the video's control bar. While it was hit-testable it
+          swallowed every tap aimed at play/pause, the ±10s skips and the scrub
+          bar — the controls were visible but dead. Only the row itself takes
+          pointer events now, so the padding that clears the control bar no longer
+          covers it. */}
       <div
-        className={cn("absolute inset-x-0 bottom-0 z-[1] p-4 pr-24 text-white", chromeCls)}
+        className={cn("pointer-events-none absolute inset-x-0 bottom-0 z-[1] p-4 pr-24 text-white", chromeCls)}
         style={{ paddingBottom: bottomClearance }}
       >
-        <IdentityRow identity={identity} postedAt={post.postedAt} onAuthorClick={onAuthorClick} />
+        <div className="pointer-events-auto flex flex-col gap-1.5">
+          <IdentityRow identity={identity} postedAt={post.postedAt} onAuthorClick={onAuthorClick} />
+          {/* The question text is the post's caption. It was never rendered here,
+              so a clip opened full screen lost the words it was answering — the
+              same MediaCaption the feed's viewers use, with its one-line clamp
+              and "Read more". */}
+          {post.body.trim() ? <MediaCaption text={post.body} /> : null}
+        </div>
       </div>
 
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
