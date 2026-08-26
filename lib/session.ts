@@ -1,3 +1,4 @@
+import { cache } from "react"
 import { headers } from "next/headers"
 import { eq } from "drizzle-orm"
 import { auth } from "@/lib/auth"
@@ -29,8 +30,19 @@ export type CurrentUser = {
   preferredLiveTheme: string | null
 }
 
-/** Returns the signed-in user (with derived handle + initials), or null. */
-export async function getCurrentUser(): Promise<CurrentUser | null> {
+/**
+ * Returns the signed-in user (with derived handle + initials), or null.
+ *
+ * Wrapped in React `cache()` so it runs AT MOST ONCE per request. There are ~40
+ * call sites (layout, header, page, nested server components, actions) and each
+ * call previously issued its own session lookup plus one or two user/org
+ * queries. On a single page render that stacked up into dozens of sequential
+ * round trips before any HTML was flushed, which is what made pages feel like
+ * they were hanging rather than loading. `cache()` is per-request and per-render,
+ * so this changes timing only — never correctness, and never leaks one viewer's
+ * identity into another's request.
+ */
+export const getCurrentUser = cache(async function getCurrentUser(): Promise<CurrentUser | null> {
   // Treat any failure (no session, or the auth/session lookup erroring because
   // the database is unreachable) as "logged out" rather than throwing, so a
   // transient DB outage doesn't crash every page that reads the current user.
@@ -86,4 +98,4 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     organization: org,
     preferredLiveTheme,
   }
-}
+})
