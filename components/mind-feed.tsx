@@ -5,7 +5,6 @@ import useSWR, { mutate as globalMutate } from "swr"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
-  Heart,
   Plus,
   X,
   Send,
@@ -34,6 +33,7 @@ import {
   PinOff,
 } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
+import { LikeHeart } from "@/components/like-heart"
 import {
   addPostComment,
   createPost,
@@ -1312,7 +1312,6 @@ export function PostCard({
   const homeVoice = useHomeVoice()
   const [liked, setLiked] = useState(post.liked)
   const [likes, setLikes] = useState(post.likes)
-  const [likeBurst, setLikeBurst] = useState(false)
   const [saved, setSaved] = useState(post.saved)
   const [saveCount, setSaveCount] = useState(post.saves)
   const [shareCount, setShareCount] = useState(post.shares)
@@ -1428,13 +1427,9 @@ export function PostCard({
     const next = !liked
     setLiked(next)
     setLikes((n) => (next ? n + 1 : n - 1))
-    // Trigger the springy pop only when liking (not when un-liking).
-    if (next) {
-      haptic("light")
-      setLikeBurst(false)
-      // Re-arm on the next frame so the animation replays on rapid taps.
-      requestAnimationFrame(() => setLikeBurst(true))
-    }
+    // The pop is now owned by LikeHeart, which fires it off the liked
+    // transition; only the haptic stays here.
+    if (next) haptic("light")
     startTransition(async () => {
       await setPostLike({ postId: post.id, liked: next })
     })
@@ -1925,16 +1920,13 @@ export function PostCard({
           className={cn(
             "flex items-center gap-1.5 tabular-nums transition-colors hover:text-primary",
             feed ? "text-[15px]" : "text-sm",
-            liked && "text-primary",
+            liked && "text-like",
             !currentUser && "cursor-not-allowed opacity-60",
           )}
           aria-pressed={liked}
           aria-label={liked ? "Unlike" : "Like"}
         >
-          <Heart
-            onAnimationEnd={() => setLikeBurst(false)}
-            className={cn(feed ? "size-7" : "size-6", liked && "fill-current", likeBurst && "animate-like-pop")}
-          />
+          <LikeHeart liked={liked} className={feed ? "size-7" : "size-6"} />
         </button>
         {/* The count is its own control: for the author it opens the list of
             accounts that liked the post, so the icon stays a pure like toggle. */}

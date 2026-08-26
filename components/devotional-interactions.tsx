@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useTransition } from "react"
 import useSWR from "swr"
-import { Heart, Share2 } from "lucide-react"
+import { Share2 } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
+import { LikeHeart } from "@/components/like-heart"
 import {
   addDevotionalComment,
   getDevotionalComments,
@@ -123,8 +124,15 @@ export function DevotionalInteractions({
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-3">
-        <Button variant={liked ? "default" : "secondary"} onClick={toggleLike} className="gap-2" aria-pressed={liked}>
-          <Heart className={cn("size-4", liked && "fill-current")} />
+        <Button
+          variant={liked ? "default" : "secondary"}
+          onClick={toggleLike}
+          className={cn("gap-2", liked && "bg-like text-primary-foreground hover:bg-like/90")}
+          aria-pressed={liked}
+        >
+          {/* On the filled button the surface itself turns red, so the heart
+              stays white — red-on-red would erase it. */}
+          <LikeHeart liked={liked} className="size-4" likedClassName="fill-current text-current" />
           {likes.toLocaleString()}
         </Button>
 

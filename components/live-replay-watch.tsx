@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Bookmark, Heart, Share2, X } from "lucide-react"
+import { Bookmark, Share2, X } from "lucide-react"
+import { LikeHeart } from "@/components/like-heart"
 import { CommentIcon } from "@/components/comment-icon"
 import type { Show } from "@/lib/data"
 import type { CurrentUser } from "@/lib/session"
@@ -351,7 +352,7 @@ function ReplaySlide({
           aria-label="Like replay"
         >
           <span className="flex size-11 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm">
-            <Heart className={cn("size-6", liked && "fill-live text-live")} />
+            <LikeHeart liked={liked} className="size-6" idleClassName="text-white" />
           </span>
           {likes > 0 && <span className="text-xs font-semibold tabular-nums">{formatCount(likes)}</span>}
         </button>

@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useTransition } from "react"
 import Link from "next/link"
-import { Bookmark, Heart, Send } from "lucide-react"
+import { Bookmark, Send } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
+import { LikeHeart } from "@/components/like-heart"
 import { authClient } from "@/lib/auth-client"
 import type { Show } from "@/lib/data"
 import type { ShareTarget } from "@/lib/share-types"
@@ -196,9 +197,9 @@ export function EpisodeNowPlayingActions({
           disabled={!signedIn}
           aria-pressed={liked}
           aria-label="Like episode"
-          className={cn(baseBtn, liked && "text-live hover:text-live")}
+          className={cn(baseBtn, liked && "text-like hover:text-like")}
         >
-          <Heart className={cn("size-6", liked && "fill-current")} />
+          <LikeHeart liked={liked} className="size-6" />
           {likes > 0 && <span className="tabular-nums">{likes}</span>}
         </button>
 

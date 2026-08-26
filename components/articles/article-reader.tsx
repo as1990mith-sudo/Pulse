@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   Bookmark,
   Eye,
-  Heart,
   MessageCircle,
   Pencil,
   RotateCcw,
@@ -20,6 +19,7 @@ import { ArticleComments, countComments } from "@/components/articles/article-co
 import { ArticleRow } from "@/components/articles/article-card"
 import { AuthorAvatar } from "@/components/articles/author-avatar"
 import { WriterFollowButton } from "@/components/articles/writer-follow-button"
+import { LikeHeart } from "@/components/like-heart"
 import { ShareSheet } from "@/components/share-sheet"
 import { toggleSaveItem } from "@/app/actions/share"
 import type { ShareTarget } from "@/lib/share-types"
@@ -265,10 +265,10 @@ export function ArticleReader({
           onClick={toggleLike}
           className={cn(
             "flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition",
-            liked ? "bg-live/10 text-live" : "text-muted-foreground hover:bg-muted",
+            liked ? "bg-like/10 text-like" : "text-muted-foreground hover:bg-muted",
           )}
         >
-          <Heart className={cn("size-5", liked && "fill-current")} />
+          <LikeHeart liked={liked} className="size-5" idleClassName="text-current" />
           {likes > 0 && likes}
         </button>
         <button

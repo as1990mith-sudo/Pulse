@@ -25,6 +25,7 @@ import {
 } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import { CommentSheet } from "@/components/comment-sheet"
+import { LikeHeart } from "@/components/like-heart"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -220,12 +221,12 @@ function DreamReplyItem({
               onClick={toggleLike}
               className={cn(
                 "flex items-center gap-1 rounded-full px-2 py-1 transition-colors hover:bg-secondary",
-                liked && "text-live",
+                liked && "text-like",
               )}
               aria-pressed={liked}
               aria-label="Like interpretation"
             >
-              <Heart className={cn("size-3.5", liked && "fill-current")} />
+              <LikeHeart liked={liked} className="size-3.5" />
               {likes > 0 ? <span className="tabular-nums">{likes}</span> : "Like"}
             </button>
             <button
