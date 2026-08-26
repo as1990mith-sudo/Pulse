@@ -243,7 +243,8 @@ export function ProductView({
             aria-pressed={wished}
             className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-border/60 bg-secondary/40 text-foreground transition-transform active:scale-90"
           >
-            <Heart className={cn("size-5", wished && "fill-rose-500 text-rose-500 motion-pop")} />
+            {/* Wishlist, but the same heart gesture — one red, one animation. */}
+            <LikeHeart liked={wished} className="size-5" idleClassName="text-foreground" />
           </button>
           <ShareButton
             title={product.title}

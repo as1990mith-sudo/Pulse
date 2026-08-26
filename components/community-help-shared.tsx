@@ -1,7 +1,8 @@
 "use client"
 
 import { useCallback, useState, useSyncExternalStore, useTransition } from "react"
-import { BookOpen, Bookmark, Heart } from "lucide-react"
+import { BookOpen, Bookmark } from "lucide-react"
+import { LikeHeart } from "@/components/like-heart"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { EditedIndicator } from "@/components/edited-indicator"
 import { IdentityPen } from "@/components/identity-pen"
@@ -428,15 +429,10 @@ export function LikeButton({
         variant === "inline" && "px-2 py-1.5 text-sm",
         variant === "row" && "px-2 py-1.5 text-sm",
         variant === "icon" && "p-2",
-        liked ? "text-rose-500" : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+        liked ? "text-like" : "text-muted-foreground hover:bg-secondary hover:text-foreground",
       )}
     >
-      <Heart
-        className={cn(
-          variant === "inline" ? "size-4" : "size-5",
-          liked && "fill-current",
-        )}
-      />
+      <LikeHeart liked={liked} className={variant === "inline" ? "size-4" : "size-5"} />
       {variant !== "icon" && likes > 0 && <span className="tabular-nums">{likes}</span>}
     </button>
   )
