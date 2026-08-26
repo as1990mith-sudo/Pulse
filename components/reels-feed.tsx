@@ -26,6 +26,7 @@ import { renderMessageBody } from "@/lib/rich-text"
 import { exclusivePlaybackProps, installExclusivePlayback } from "@/lib/exclusive-playback"
 import { noteAutoplayBlocked, useSharedMute } from "@/lib/shared-mute"
 import { getVideoPosition, rememberVideoPosition, setImmersiveViewerOpen } from "@/lib/video-handoff"
+import { VIDEO_CONTROLS_HEIGHT, VideoControlsBar } from "@/components/video-controls-bar"
 import { useOverlayHistory } from "@/lib/navigation/use-overlay-history"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -458,6 +459,18 @@ function ReelItem({
   const scrubbingRef = useRef(false)
   const seekRef = useRef<HTMLDivElement>(null)
 
+  // Elapsed / total seconds INSIDE the trim window, so a trimmed clip reads
+  // 0:00 at its own start rather than the source file's. The control bar needs
+  // real numbers for its time readout; the old bare scrubber only ever tracked a
+  // percentage, which is why this reel viewer had no clock to show.
+  const [current, setCurrent] = useState(0)
+  const [duration, setDuration] = useState(0)
+
+  // Full-screen chrome. A tap on the frame fades the author row, caption, action
+  // rail and control bar together instead of pausing — pausing belongs to the
+  // play/pause button.
+  const [chromeVisible, setChromeVisible] = useState(true)
+
   // Latest muted value readable inside the (non-re-subscribing) observer.
   const mutedRef = useRef(muted)
 
@@ -653,7 +666,22 @@ function ReelItem({
     rememberVideoPosition(url, v.currentTime)
     if (scrubbingRef.current) return
     const len = windowLen(v)
+    setDuration(len)
+    setCurrent(Math.max(0, Math.min(len, v.currentTime - windowStartRef.current)))
     if (len > 0) setProgress(((v.currentTime - windowStartRef.current) / len) * 100)
+  }
+
+  // ±10s, clamped to the trim window so skipping can't escape the visible clip.
+  function skip(delta: number) {
+    const v = videoRef.current
+    if (!v || !v.duration) return
+    const end = Number.isFinite(windowEndRef.current) ? windowEndRef.current : v.duration
+    const next = Math.max(windowStartRef.current, Math.min(end - 0.25, v.currentTime + delta))
+    try {
+      v.currentTime = next
+    } catch {
+      /* not seekable yet */
+    }
   }
 
   // Translate a pointer x-position over the track into a seek time within the
@@ -724,7 +752,16 @@ function ReelItem({
         muted={muted}
         preload={shouldRender ? "auto" : "none"}
         {...exclusivePlaybackProps}
-        onClick={togglePlay}
+        aria-label="Show or hide controls"
+        // A tap on the frame fades chrome; it must NOT pause. Pausing is the
+        // play/pause button's job now that this viewer has one.
+        onClick={() => setChromeVisible((v) => !v)}
+        // Mirror the element's real state so the bar's icon can never disagree
+        // with what the video is doing — autoplay, the exclusive-playback guard
+        // and scroll handling all start/stop playback without going through
+        // `togglePlay`.
+        onPlay={() => setPaused(false)}
+        onPause={() => setPaused(true)}
         onTimeUpdate={onTimeUpdate}
         onLoadedMetadata={(e) => {
           const el = e.currentTarget
@@ -756,18 +793,23 @@ function ReelItem({
         }}
       />
 
-      {/* Center play glyph when the user has manually paused. */}
+      {/* Center play glyph while paused. The wrapper is `pointer-events-none`
+          with only the button itself tappable: it spans the whole frame, and if
+          it stayed hit-testable it would swallow every surface tap while paused,
+          defeating tap-to-toggle-chrome exactly when it is most likely to be
+          tried. */}
       {active && paused && (
-        <button
-          type="button"
-          onClick={togglePlay}
-          aria-label="Play"
-          className="absolute inset-0 flex items-center justify-center"
-        >
-          <span className="flex size-16 items-center justify-center rounded-full bg-black/45 backdrop-blur">
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <button
+            type="button"
+            onClick={togglePlay}
+            aria-label="Play"
+            data-no-swipe
+            className="pointer-events-auto flex size-16 items-center justify-center rounded-full bg-black/45 backdrop-blur transition-transform active:scale-95"
+          >
             <Play className="size-8 fill-white text-white" />
-          </span>
-        </button>
+          </button>
+        </div>
       )}
 
       {/* Bottom gradient for legibility of the caption/author. */}
@@ -784,9 +826,12 @@ function ReelItem({
           active reel so a neighbouring reel's rail can't bleed in while scrolling. */}
       <div
         className={cn(
-          "absolute bottom-9 right-3 z-[3] flex flex-col items-center gap-5 text-white transition-opacity duration-200",
-          active ? "opacity-100" : "pointer-events-none opacity-0",
+          "absolute right-3 z-[3] flex flex-col items-center gap-5 text-white transition-opacity duration-300",
+          active && chromeVisible ? "opacity-100" : "pointer-events-none opacity-0",
         )}
+        // Clear the control bar by reference rather than a hard-coded offset, so
+        // this can't drift when the bar's height changes.
+        style={{ bottom: `calc(env(safe-area-inset-bottom) + ${VIDEO_CONTROLS_HEIGHT} + 1.25rem)` }}
         data-no-swipe
       >
         <button type="button" onClick={toggleLike} className="flex flex-col items-center gap-1" aria-pressed={liked}>
@@ -844,10 +889,17 @@ function ReelItem({
           scrolling — matching how Instagram/TikTok hide inactive-reel chrome. */}
       <div
         className={cn(
-          "absolute inset-x-0 bottom-0 z-[1] p-4 pb-12 pr-24 text-white transition-opacity duration-200",
-          active ? "opacity-100" : "pointer-events-none opacity-0",
+          // `pointer-events-none` on the box with the content re-enabling it is
+          // load-bearing: this block is bottom-anchored and grown upward by its
+          // padding, so its box extends down across the control bar. While it was
+          // hit-testable that transparent padding swallowed every tap aimed at
+          // play/pause, the skips and the scrub track.
+          "pointer-events-none absolute inset-x-0 bottom-0 z-[1] p-4 pr-24 text-white transition-opacity duration-300",
+          active && chromeVisible ? "opacity-100" : "pointer-events-none opacity-0",
         )}
+        style={{ paddingBottom: `calc(env(safe-area-inset-bottom) + ${VIDEO_CONTROLS_HEIGHT} + 1.5rem)` }}
       >
+        <div className="pointer-events-auto flex flex-col gap-1.5">
         <div className="flex items-center gap-2.5">
           <Link href={`/u/${post.authorId}`} className="flex min-w-0 items-center gap-2.5">
             <span
@@ -889,44 +941,31 @@ function ReelItem({
           )}
         </div>
         {post.text && <MediaCaption text={post.text} />}
+        </div>
       </div>
 
-      {/* Draggable play tracker — full-width at the very bottom. Tap or drag the
-          thumb anywhere along the track to seek to that point in the clip. Only
-          the active reel's scrubber is shown so it can't bleed in from a
-          neighbour while scrolling. */}
-      <div
-        className={cn(
-          "absolute inset-x-0 bottom-0 z-[2] px-3 pb-[max(env(safe-area-inset-bottom),0.4rem)] pt-3 transition-opacity duration-200",
-          active ? "opacity-100" : "pointer-events-none opacity-0",
-        )}
-        data-no-swipe
-      >
-        <div
-          ref={seekRef}
-          role="slider"
-          aria-label="Seek"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(progress)}
-          tabIndex={0}
-          onPointerDown={onSeekPointerDown}
-          onPointerMove={onSeekPointerMove}
-          onPointerUp={onSeekPointerUp}
-          onPointerCancel={onSeekPointerUp}
-          className="group relative flex h-6 touch-none items-center"
-        >
-          <span className="block h-1 w-full overflow-hidden rounded-full bg-white/30">
-            <span className="block h-full rounded-full bg-white" style={{ width: `${progress}%` }} />
-          </span>
-          <span
-            className={cn(
-              "absolute size-3 -translate-x-1/2 rounded-full bg-white shadow transition-transform",
-              dragging ? "scale-150" : "scale-100 group-hover:scale-125",
-            )}
-            style={{ left: `${progress}%` }}
-          />
-        </div>
+      {/* The shared control bar — the very same component the community viewer
+          renders through FeedVideo, so the two full-screen players are identical
+          rather than lookalikes that drift. This replaces the bare seek line
+          that used to live here, which had no play/pause, no skip and no clock.
+          Mute is deliberately omitted: the action rail above already publishes a
+          mute button driving the same shared state. */}
+      <div className={cn("absolute inset-x-0 bottom-0 z-[2]", active ? "" : "pointer-events-none opacity-0")} data-no-swipe>
+        <VideoControlsBar
+          playing={!paused}
+          current={current}
+          duration={duration}
+          progress={progress}
+          onTogglePlay={togglePlay}
+          onSkip={skip}
+          seekRef={seekRef}
+          onSeekPointerDown={onSeekPointerDown}
+          onSeekPointerMove={onSeekPointerMove}
+          onSeekPointerUp={onSeekPointerUp}
+          dragging={dragging}
+          safeArea
+          visible={active && chromeVisible}
+        />
       </div>
 
       {/* Comments — a bottom sheet layered over this reel. */}

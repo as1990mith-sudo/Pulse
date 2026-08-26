@@ -191,8 +191,9 @@ function Slide({
   const saved = useIsSaved(post.id)
   const [muted, setMuted] = useSharedMute()
 
-  // Photos fade their chrome on tap (feed photo-viewer behaviour). Videos leave
-  // taps to the player so tap = play/pause, as in Reels.
+  // Both photos and videos fade their chrome on tap. Videos route the tap
+  // through the player (which owns the frame's click target) via
+  // `onToggleChrome`, so the control bar fades in step with everything else.
   const [chromeVisible, setChromeVisible] = useState(true)
   const chromeCls = cn(
     "transition-opacity duration-300",
@@ -265,6 +266,11 @@ function Slide({
             // Full screen, so the control bar sits on the device's bottom edge
             // and needs the safe-area inset to stay clear of the gesture strip.
             safeAreaControls
+            // Hand the player this slide's chrome state so a tap on the frame
+            // fades the author row, caption, action rail AND the control bar as
+            // one, instead of pausing. Pausing is the play/pause button's job.
+            chromeVisible={chromeVisible}
+            onToggleChrome={() => setChromeVisible((v) => !v)}
           />
         ) : null
       ) : post.imageUrl ? (

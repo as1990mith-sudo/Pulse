@@ -67,10 +67,13 @@ export function VideoControlsBar({
   onTogglePlay: () => void
   onSkip: (deltaSeconds: number) => void
   seekRef: React.RefObject<HTMLDivElement | null>
-  onSeekPointerDown: (e: React.PointerEvent) => void
-  onSeekPointerMove: (e: React.PointerEvent) => void
-  onSeekPointerUp: (e: React.PointerEvent) => void
-  onSeekKeyDown?: (e: React.KeyboardEvent) => void
+  // Typed against the div these land on. A bare `React.PointerEvent` defaults to
+  // `Element`, which callers that annotate their handlers as `HTMLDivElement`
+  // cannot satisfy (handler params are checked contravariantly).
+  onSeekPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void
+  onSeekPointerMove: (e: React.PointerEvent<HTMLDivElement>) => void
+  onSeekPointerUp: (e: React.PointerEvent<HTMLDivElement>) => void
+  onSeekKeyDown?: (e: React.KeyboardEvent<HTMLDivElement>) => void
   /** Enlarges the thumb while scrubbing. */
   dragging?: boolean
   /** Omit both to drop the mute toggle — for overlays whose action rail already

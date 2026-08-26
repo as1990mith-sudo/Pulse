@@ -398,6 +398,7 @@ export function FeedVideo({
         preload="metadata"
         {...exclusivePlaybackProps}
         className={cn("h-full w-full", className)}
+        aria-label={surfaceLabel}
         onClick={surfaceClick}
         onPlay={() => {
           setPlaying(true)
@@ -473,8 +474,8 @@ export function FeedVideo({
       {!started && (
         <button
           type="button"
-          onClick={surfaceClick}
-          aria-label={surfaceLabel}
+          onClick={glyphClick}
+          aria-label={glyphLabel}
           className="absolute inset-0 flex items-center justify-center bg-gradient-to-t from-black/45 via-black/15 to-black/25"
         >
           <span className="flex size-16 items-center justify-center rounded-full bg-white/15 text-white shadow-lg ring-1 ring-white/25 backdrop-blur-md transition-transform duration-200 group-hover:scale-105">
@@ -483,100 +484,49 @@ export function FeedVideo({
         </button>
       )}
 
-      {/* Center play affordance — shown only while paused after first play. */}
+      {/* Center play affordance — shown only while paused after first play.
+          `pointer-events-none` on the wrapper with the button itself as the only
+          hit target is deliberate: this box spans the whole frame, and if it
+          stayed tappable it would swallow every surface tap while paused. In
+          full screen that would defeat tap-to-toggle-chrome exactly when the
+          reader is most likely to try it. */}
       {started && !playing && (
-        <button
-          type="button"
-          onClick={surfaceClick}
-          aria-label={surfaceLabel}
-          className="absolute inset-0 flex items-center justify-center"
-        >
-          <span className="flex size-16 items-center justify-center rounded-full bg-black/45 text-white ring-1 ring-white/20 backdrop-blur-md transition-transform duration-200 hover:scale-105">
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <button
+            type="button"
+            onClick={glyphClick}
+            aria-label={glyphLabel}
+            className="pointer-events-auto flex size-16 items-center justify-center rounded-full bg-black/45 text-white ring-1 ring-white/20 backdrop-blur-md transition-transform duration-200 active:scale-95"
+          >
             <Play className="size-7 translate-x-0.5 fill-current" />
-          </span>
-        </button>
+          </button>
+        </div>
       )}
 
-      {/* Bottom control bar. Its occupied height is published as
-          FEED_VIDEO_CONTROLS_HEIGHT — keep the two in step if the padding or the
-          row's tallest child changes. */}
-      <div
-        className={cn(
-          "pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pt-10 transition-opacity duration-200",
-          safeAreaControls ? "pb-[calc(0.625rem+env(safe-area-inset-bottom))]" : "pb-2.5",
-          started ? "opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100" : "opacity-0",
-        )}
-      >
-        <div className="pointer-events-auto flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={togglePlay}
-            aria-label={playing ? "Pause" : "Play"}
-            className="text-white transition-transform hover:scale-110"
-          >
-            {playing ? <Pause className="size-5 fill-current" /> : <Play className="size-5 fill-current" />}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => skip(-SKIP_SECONDS)}
-            aria-label="Back 10 seconds"
-            className="relative text-white transition-transform hover:scale-110"
-          >
-            <RotateCcw className="size-5" />
-            <span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold">10</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => skip(SKIP_SECONDS)}
-            aria-label="Forward 10 seconds"
-            className="relative text-white transition-transform hover:scale-110"
-          >
-            <RotateCw className="size-5" />
-            <span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold">10</span>
-          </button>
-
-          <span className="select-none text-xs font-medium tabular-nums text-white/90">
-            {formatTime(current)} / {formatTime(duration)}
-          </span>
-
-          {/* Draggable seek bar */}
-          <div
-            ref={seekRef}
-            onPointerDown={onSeekPointerDown}
-            onPointerMove={onSeekPointerMove}
-            onPointerUp={onSeekPointerUp}
-            onKeyDown={onSeekKeyDown}
-            role="slider"
-            aria-label="Seek"
-            aria-valuemin={0}
-            aria-valuemax={Math.round(duration)}
-            aria-valuenow={Math.round(current)}
-            tabIndex={0}
-            className="relative flex h-5 flex-1 cursor-pointer touch-none items-center"
-          >
-            <span className="h-1.5 w-full overflow-hidden rounded-full bg-white/25">
-              <span className="block h-full rounded-full bg-white" style={{ width: `${progress}%` }} />
-            </span>
-            <span
-              className="absolute size-3.5 -translate-x-1/2 rounded-full bg-white shadow ring-2 ring-black/20"
-              style={{ left: `${progress}%` }}
-            />
-          </div>
-
-          {!hideMuteControl && (
-            <button
-              type="button"
-              onClick={toggleMute}
-              aria-label={muted ? "Unmute" : "Mute"}
-              className="text-white transition-transform hover:scale-110"
-            >
-              {muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
-            </button>
-          )}
-        </div>
-      </div>
+      {/* Bottom control bar — the shared one, so the community viewer and the
+          main feed's reel viewer render identical controls. Its occupied height
+          is published as VIDEO_CONTROLS_HEIGHT for overlays that stack chrome
+          above it. */}
+      <VideoControlsBar
+        playing={playing}
+        current={current}
+        duration={duration}
+        progress={progress}
+        onTogglePlay={togglePlay}
+        onSkip={skip}
+        seekRef={seekRef}
+        onSeekPointerDown={onSeekPointerDown}
+        onSeekPointerMove={onSeekPointerMove}
+        onSeekPointerUp={onSeekPointerUp}
+        onSeekKeyDown={onSeekKeyDown}
+        muted={hideMuteControl ? undefined : muted}
+        onToggleMute={hideMuteControl ? undefined : toggleMute}
+        safeArea={safeAreaControls}
+        // Full screen ties the bar to the overlay's chrome so it fades together
+        // with the author row and action rail. Inline cards keep the old rule of
+        // appearing once playback has started.
+        visible={onToggleChrome ? !!chromeVisible : started}
+      />
     </div>
   )
 }
