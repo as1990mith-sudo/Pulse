@@ -1020,7 +1020,16 @@ svg.lucide {
 @keyframes page-enter {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(14px);
+  }
+  /* An explicit opacity midpoint is what stops this reading as an instant snap.
+     `--ease-emphasized` is a strong-settle curve, so it front-loads: with only
+     two stops the screen was ~90% opaque within the first quarter of the
+     animation and the remainder was an invisible tail. Holding opacity back to
+     55% at the 40% mark spreads the fade across the whole duration while the
+     transform keeps the quick, responsive settle. */
+  40% {
+    opacity: 0.55;
   }
   to {
     opacity: 1;
@@ -1029,7 +1038,11 @@ svg.lucide {
 }
 
 .page-enter {
-  animation: page-enter var(--motion-slow) var(--ease-emphasized);
+  /* Deliberately longer than `--motion-slow` (300ms): a route change replaces the
+     entire screen, so it needs more room to read as a transition than an
+     in-place control does. Kept off the shared token because raising that would
+     slow every hover and tap in the app as well. */
+  animation: page-enter 420ms var(--ease-emphasized);
   /* NOTE: do NOT set `will-change: transform` here. A persistent will-change of
      transform makes this wrapper a containing block for `position: fixed`
      descendants *forever* (even when the transform is none), which traps and
