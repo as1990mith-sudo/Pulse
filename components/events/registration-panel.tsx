@@ -57,9 +57,13 @@ export function RegistrationPanel({
           <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
           <div className="flex flex-col gap-2">
             <h2 className="font-display text-base font-semibold text-card-foreground">You&apos;re registered</h2>
+            {/* The event name is given its own line rather than being inlined
+                into the sentence: it echoes the title above, and interpolating
+                it mid-paragraph also swallowed the leading space in JSX. */}
+            <p className="font-display text-sm font-semibold text-card-foreground text-balance">{eventTitle}</p>
             <p className="text-sm leading-relaxed text-muted-foreground text-pretty">
-              Your place at {eventTitle} is confirmed. We&apos;ve sent the details to your email — keep an eye out for
-              anything the hosts send closer to the day.
+              Your place is confirmed. We&apos;ve sent the details to your email — keep an eye out for anything the hosts
+              send closer to the day.
             </p>
           </div>
         </div>

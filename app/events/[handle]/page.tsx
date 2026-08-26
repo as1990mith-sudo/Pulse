@@ -72,45 +72,65 @@ export default async function PublicEventsPage({ params }: Params) {
             </p>
           </div>
         ) : (
-          <ul className="flex flex-col gap-4">
+          /* The flyer leads. Event posters carry the whole visual identity of a
+             church event — date, speaker, venue are all designed into the
+             artwork — so shrinking one to a thumbnail throws away the reason
+             someone stops to look. One column on phones, two from `sm`. */
+          <ul className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             {events.map((ev) => {
               const when = formatEventWhen(ev.eventDate, ev.eventTime)
               return (
                 <li key={ev.id}>
                   <Link
                     href={`/events/${host.handle}/${ev.id}`}
-                    className="group flex gap-4 rounded-2xl border border-border bg-card p-4 transition-colors hover:border-foreground/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    className="group flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card transition-colors hover:border-foreground/25 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                   >
                     {ev.flyer ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={ev.flyer || "/placeholder.svg"}
-                        alt=""
-                        className="size-20 shrink-0 rounded-xl object-cover sm:size-24"
-                      />
-                    ) : null}
-                    <div className="flex min-w-0 flex-1 flex-col gap-2">
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <h2 className="font-display text-base font-semibold leading-snug text-card-foreground text-balance">
-                          {ev.title}
-                        </h2>
+                      <div className="relative aspect-[4/5] overflow-hidden bg-secondary">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={ev.flyer || "/placeholder.svg"}
+                          alt={`Poster for ${ev.title}`}
+                          className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                        />
+                        {/* Status rides on the artwork rather than competing with
+                            the title below, mirroring the "Free" chip already
+                            used on event cards elsewhere in Frequency. */}
                         {ev.isFull ? (
-                          <span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
+                          <span className="absolute left-3 top-3 rounded-full bg-background/85 px-2.5 py-1 text-xs font-semibold text-foreground backdrop-blur-sm">
                             Full
                           </span>
                         ) : ev.open ? (
-                          <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
-                            Registration open
+                          <span className="absolute left-3 top-3 rounded-full bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground">
+                            Register
                           </span>
                         ) : null}
                       </div>
-                      <div className="flex flex-col gap-1 text-sm text-muted-foreground">
-                        {when ? (
-                          <span className="flex items-center gap-2">
-                            <CalendarDays className="size-4 shrink-0" aria-hidden="true" />
-                            {when}
-                          </span>
-                        ) : null}
+                    ) : null}
+                    <div className="flex min-w-0 flex-1 flex-col gap-2 p-4">
+                      {when ? (
+                        <span className="flex items-center gap-1.5 text-xs font-semibold text-primary">
+                          <CalendarDays className="size-3.5 shrink-0" aria-hidden="true" />
+                          {when}
+                        </span>
+                      ) : null}
+                      <h2 className="font-display text-base font-semibold leading-snug text-card-foreground text-balance">
+                        {ev.title}
+                      </h2>
+                      {/* No flyer? The status chip has nowhere to ride, so show
+                          it inline instead of dropping it entirely. */}
+                      {!ev.flyer && (ev.isFull || ev.open) ? (
+                        <span
+                          className={
+                            ev.isFull
+                              ? "w-fit rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground"
+                              : "w-fit rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground"
+                          }
+                        >
+                          {ev.isFull ? "Full" : "Register"}
+                        </span>
+                      ) : null}
+                      <div className="mt-auto flex flex-col gap-1 text-sm text-muted-foreground">
                         {ev.location ? (
                           <span className="flex items-center gap-2">
                             <MapPin className="size-4 shrink-0" aria-hidden="true" />
