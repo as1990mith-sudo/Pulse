@@ -124,7 +124,11 @@
   --chart-3: oklch(0.78 0.15 75);
   --chart-4: oklch(0.6 0.16 40);
   --chart-5: oklch(0.7 0.006 285);
-  --radius: 0.75rem;
+  /* Slightly tighter corners app-wide. Every `--radius-*` step above is derived
+     from this one value (sm/md are fractions of it, xl→4xl are multiples), so
+     nudging it down one notch — 12px → 10px — firms up cards, sheets and the
+     large hero images without flattening anything into hard square corners. */
+  --radius: 0.625rem;
   --sidebar: oklch(0.18 0.006 285);
   --sidebar-foreground: oklch(0.97 0.002 285);
   --sidebar-primary: oklch(0.72 0.18 55);

@@ -7,7 +7,7 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { episode, episodeComment, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
-import { EDIT_WINDOW_MS, DELETE_WINDOW_MS } from "@/lib/interactions"
+import { EDIT_WINDOW_MS } from "@/lib/interactions"
 import { getLikedSet, setLike } from "@/lib/likes"
 import { notifyUser } from "@/app/actions/notifications"
 
@@ -186,16 +186,19 @@ export async function editEpisodeComment(input: { commentId: number; text: strin
   if (ep) revalidatePath(`/live/${ep.slug}`)
 }
 
-/** Delete one of the signed-in user's own episode comments (and replies), within the delete window. */
+/**
+ * Delete one of the signed-in user's own episode comments (and replies).
+ * Deliberately NOT time-limited — an author can always remove their own words,
+ * however old the comment is. Ownership is still enforced; only the expiry is gone.
+ */
 export async function deleteEpisodeComment(commentId: number) {
   const user = await requireUser()
   const [row] = await db
-    .select({ userId: episodeComment.userId, createdAt: episodeComment.createdAt, episodeId: episodeComment.episodeId })
+    .select({ userId: episodeComment.userId, episodeId: episodeComment.episodeId })
     .from(episodeComment)
     .where(eq(episodeComment.id, commentId))
   if (!row) return
   if (row.userId !== user.id) throw new Error("You can only delete your own comments.")
-  if (Date.now() - row.createdAt.getTime() > DELETE_WINDOW_MS) throw new Error("This comment can no longer be deleted.")
   await db.delete(episodeComment).where(eq(episodeComment.parentId, commentId))
   await db.delete(episodeComment).where(eq(episodeComment.id, commentId))
   const [ep] = await db.select({ slug: episode.slug }).from(episode).where(eq(episode.id, row.episodeId))

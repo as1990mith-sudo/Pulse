@@ -7,7 +7,7 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { devotionalComment } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
-import { EDIT_WINDOW_MS, DELETE_WINDOW_MS } from "@/lib/interactions"
+import { EDIT_WINDOW_MS } from "@/lib/interactions"
 import { getLikeCount, getLikedSet, setLike } from "@/lib/likes"
 
 async function requireUser() {
@@ -164,16 +164,19 @@ export async function editDevotionalComment(input: { commentId: number; text: st
   revalidatePath("/devotional")
 }
 
-/** Delete one of the user's own devotional comments (and replies), within the delete window. */
+/**
+ * Delete one of the user's own devotional comments (and replies). Deliberately
+ * NOT time-limited — an author can always remove their own words, however old
+ * the comment is. Ownership is still enforced; only the expiry is gone.
+ */
 export async function deleteDevotionalComment(commentId: number) {
   const user = await requireUser()
   const [row] = await db
-    .select({ userId: devotionalComment.userId, createdAt: devotionalComment.createdAt })
+    .select({ userId: devotionalComment.userId })
     .from(devotionalComment)
     .where(eq(devotionalComment.id, commentId))
   if (!row) return
   if (row.userId !== user.id) throw new Error("You can only delete your own comments.")
-  if (Date.now() - row.createdAt.getTime() > DELETE_WINDOW_MS) throw new Error("This comment can no longer be deleted.")
   await db.delete(devotionalComment).where(eq(devotionalComment.parentId, commentId))
   await db.delete(devotionalComment).where(eq(devotionalComment.id, commentId))
   revalidatePath("/devotional")

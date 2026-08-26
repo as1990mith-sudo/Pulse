@@ -366,9 +366,13 @@ function CommentItem({
     return () => document.removeEventListener("pointerdown", onDown)
   }, [menuOpen])
 
-  const deleteWindow = enforceDeleteWindow ?? enforceTimeWindows
   const editable = comment.isSelf && (!enforceTimeWindows || canEdit(comment.createdAtMs))
-  const deletable = comment.isSelf && (!deleteWindow || canDelete(comment.createdAtMs))
+  // Deleting your own comment is permanent, never time-limited. Editing still
+  // expires (a comment others have already replied to shouldn't change meaning
+  // under them), but removal is the author's own content decision and there's no
+  // point at which they should lose it. The matching server-side window was
+  // removed too, so this isn't offering an action the action would then reject.
+  const deletable = comment.isSelf
   const comfortable = density === "comfortable"
 
   function toggleLike() {
