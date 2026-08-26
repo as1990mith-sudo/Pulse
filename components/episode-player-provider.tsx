@@ -637,6 +637,10 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                   disablePictureInPicture
                   preload="metadata"
                   className="size-full object-contain"
+                  // This player is mounted above the router and survives
+                  // navigation, so without joining exclusive playback an episode
+                  // keeps narrating underneath feed clips on the next page.
+                  {...exclusivePlaybackProps}
                   onPlay={() => setPlaying(true)}
                   onPause={() => setPlaying(false)}
                   onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
@@ -851,6 +855,10 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
                   playsInline
                   preload="metadata"
                   className="sr-only"
+                  // The audio-episode branch of the same persistent player: it has
+                  // no visible frame but is the loudest thing in the app, so it
+                  // must yield to a video the user is actually watching.
+                  {...exclusivePlaybackProps}
                   onPlay={() => setPlaying(true)}
                   onPause={() => setPlaying(false)}
                   onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}

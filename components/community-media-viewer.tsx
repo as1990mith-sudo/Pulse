@@ -5,7 +5,7 @@ import { createPortal } from "react-dom"
 import { X, Bookmark, Share2, Volume2, VolumeX } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import { LikeHeart } from "@/components/like-heart"
-import { FeedVideo } from "@/components/feed-video"
+import { FEED_VIDEO_CONTROLS_HEIGHT, FeedVideo } from "@/components/feed-video"
 import { ShareSheet } from "@/components/share-sheet"
 import { ANON_AVATAR, communityMediaIdentity, toggleSaved, useIsSaved } from "@/components/community-help-shared"
 import { setCommunityPostLike, type CommunityPostView } from "@/app/actions/community"
@@ -203,12 +203,16 @@ function Slide({
   const identity = communityMediaIdentity(post)
 
   // How far the bottom chrome sits above the screen edge. A video's player draws
-  // its own control bar (seek + elapsed time) across the bottom ~2rem, so the
-  // rail and author row have to clear that as well as the home indicator —
-  // otherwise the avatar crowds the duration tracker. A photo has no such bar,
-  // so it only needs the safe-area inset.
+  // its own control bar across the bottom, so the rail and author row have to
+  // clear the bar's real height (taken from the player rather than guessed, so
+  // the two can't drift) plus the safe-area inset the bar now carries, plus a
+  // 2rem gap. Without that gap the avatar sits directly on top of the play and
+  // skip buttons in the same left-hand column, and the controls read as tucked
+  // underneath it. A photo has no control bar, so it only needs the inset.
   const bottomClearance =
-    kind === "video" ? "calc(env(safe-area-inset-bottom) + 4rem)" : "calc(env(safe-area-inset-bottom) + 2.25rem)"
+    kind === "video"
+      ? `calc(env(safe-area-inset-bottom) + ${FEED_VIDEO_CONTROLS_HEIGHT} + 3.5rem)`
+      : "calc(env(safe-area-inset-bottom) + 2.25rem)"
 
   const shareTarget: ShareTarget = {
     type: "community",
@@ -257,6 +261,9 @@ function Slide({
             // shared state, so the player's own would be a second control for
             // one setting sitting directly beneath the first.
             hideMuteControl
+            // Full screen, so the control bar sits on the device's bottom edge
+            // and needs the safe-area inset to stay clear of the gesture strip.
+            safeAreaControls
           />
         ) : null
       ) : post.imageUrl ? (
