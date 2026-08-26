@@ -8,7 +8,7 @@ import type { CommunityPostView } from "@/app/actions/community"
 import type { FeedPostView } from "@/app/actions/feed"
 import type { CurrentUser } from "@/lib/session"
 import type { ArticleCard as ArticleCardType } from "@/lib/article-types"
-import { ProfileThreads } from "@/components/profile/profile-threads"
+import { CommunityThreadFeed } from "@/components/community-help"
 import { PostCard } from "@/components/mind-feed"
 import { ArticleRow } from "@/components/articles/article-card"
 import { cn } from "@/lib/utils"
@@ -162,7 +162,13 @@ export function ProfileTabs({
               }
             />
           ) : (
-            <ProfileThreads posts={threadPosts} mode="thread" />
+            /* Same component the Community room and the organisation profile's
+               Thread tab use, so tap-to-expand, the comment sheet, media full
+               screen and swiping between clips behave identically on all three.
+               This replaced <ProfileThreads>, whose card only looked like a
+               Community post but navigated away to /chatrooms/community?q=<id>,
+               losing the reader's place on the profile. */
+            <CommunityThreadFeed posts={threadPosts} />
           )
         ) : tab === "posts" ? (
           feedPosts.length === 0 ? (

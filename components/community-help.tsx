@@ -442,7 +442,11 @@ function PostItem({
           </div>
         ) : (
           <>
-            {body && <QuestionText text={body} onOpen={onOpen} />}
+            {/* Wrapped, not passed bare (same reason as the media tap below):
+                QuestionText calls this straight from onClick, so passing `onOpen`
+                itself handed the click event to a parameter that means "post id"
+                and the caller opened a conversation for an event object. */}
+            {body && <QuestionText text={body} onOpen={() => onOpen()} />}
             <BibleChips text={body} className="mt-3" />
           </>
         )}
@@ -1184,6 +1188,97 @@ export function CommunityHelpInfoModal({ open, onClose }: { open: boolean; onClo
       </div>
     </div>,
     document.body,
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Embeddable feed (profile / organisation tabs)                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The Community feed's post list, reusable outside the Community room itself.
+ * Used by BOTH the organisation profile's and the personal profile's Thread tab.
+ *
+ * Those tabs previously rendered their own card (`ProfileThreads`), which only
+ * *looked* like a Community post: tapping it navigated away to
+ * `/chatrooms/community?q=<id>` and the reply button was a plain link, so the
+ * reader lost their place on the profile and none of the in-place behaviour
+ * (expand, comment sheet, media full screen, swipe between clips) was
+ * available. Rather than reimplement that behaviour per surface, this shares the
+ * real `PostItem` and `CommunityConversation` the room uses, so the three
+ * surfaces cannot drift apart again.
+ *
+ * Anonymous threads are safe here: `PostItem` renders the universal anonymous
+ * identity from `post.anonymous`, and only a profile's owner is ever sent their
+ * anonymous rows in the first place.
+ *
+ * The room's own chrome — composer, Ask button, pull-to-refresh, deep-link
+ * handling — deliberately stays behind in `CommunityHelp`: that belongs to the
+ * room, not to a profile tab that is only ever a read view of one author's
+ * threads.
+ */
+export function CommunityThreadFeed({ posts }: { posts: CommunityPostView[] }) {
+  // The tab receives its posts as props (server-rendered with the profile), not
+  // from the room's SWR cache, so edits/deletes are reconciled locally here.
+  const [items, setItems] = useState(posts)
+  const [activeId, setActiveId] = useState<number | null>(null)
+
+  // Keep in step if the parent re-renders with a fresh server payload.
+  useEffect(() => {
+    setItems(posts)
+  }, [posts])
+
+  const activePost = activeId === null ? null : items.find((p) => p.id === activeId) ?? null
+  const related = activeId === null ? [] : items.filter((p) => p.id !== activeId).slice(0, 5)
+
+  // Same contract as the room: the open conversation is a navigable screen, so
+  // Back closes it instead of leaving the profile.
+  useOverlayHistory(activeId !== null, () => setActiveId(null), "profile-thread-conversation")
+
+  function handleDeleted(id: number) {
+    if (activeId === id) setActiveId(null)
+    setItems((prev) => prev.filter((p) => p.id !== id))
+  }
+
+  function handleCountChange(postId: number, delta: number) {
+    setItems((prev) =>
+      prev.map((p) => (p.id === postId ? { ...p, commentCount: Math.max(0, p.commentCount + delta) } : p)),
+    )
+  }
+
+  return (
+    <MiniChatProvider>
+      {/* Full-bleed like the room's list: the tab's own padding would otherwise
+          inset the cards and their dividers. */}
+      <div className="-mx-4 divide-y-2 divide-feed-divider sm:-mx-6">
+        {items.map((post, i) => (
+          <PostItem
+            key={post.id}
+            post={post}
+            enterIndex={Math.min(i, 6)}
+            siblings={items}
+            onDeleted={handleDeleted}
+            // Pinning is a room-moderation action; there is no ordering to
+            // rebuild here, so this is a no-op rather than a refetch.
+            onPinned={() => {}}
+            onCountChange={handleCountChange}
+            // The full-screen viewer passes the id of whichever clip is on
+            // screen after a swipe, which may not be this card's own post.
+            onOpen={(id) => setActiveId(id ?? post.id)}
+          />
+        ))}
+      </div>
+
+      {activePost && (
+        <CommunityConversation
+          post={activePost}
+          related={related}
+          onClose={() => setActiveId(null)}
+          onOpenRelated={(p) => setActiveId(p.id)}
+          onCountChange={handleCountChange}
+        />
+      )}
+    </MiniChatProvider>
   )
 }
 
