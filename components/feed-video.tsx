@@ -44,6 +44,14 @@ function formatTime(seconds: number) {
 
 const SKIP_SECONDS = 10
 
+/** How much room the bottom control bar takes up above its container's bottom
+ *  edge: `pb-2.5` (0.625rem) plus the 1.25rem-tall control row (`size-5` icons
+ *  and the `h-5` scrubber). Exported so full-screen overlays that stack their own
+ *  chrome above the player can clear it by reference instead of hard-coding a
+ *  number here and drifting out of step. Excludes the safe-area inset that
+ *  `safeAreaControls` adds, so callers add that themselves. */
+export const FEED_VIDEO_CONTROLS_HEIGHT = "1.875rem"
+
 export function FeedVideo({
   src,
   className,
@@ -55,6 +63,7 @@ export function FeedVideo({
   resume = false,
   ignoreViewerGate = false,
   hideMuteControl = false,
+  safeAreaControls = false,
 }: {
   src: string
   className?: string
@@ -84,6 +93,11 @@ export function FeedVideo({
    *  would show two controls for the same shared mute state. Everything else in
    *  the bar — play/pause, skip, elapsed time, seek — is unaffected. */
   hideMuteControl?: boolean
+  /** The player fills the screen, so its control bar sits on the device's bottom
+   *  edge. Adds the safe-area inset beneath the bar to lift play/pause and the
+   *  scrubber out of the home-indicator / gesture strip. Off for inline cards,
+   *  which sit mid-page where that inset would only add stray padding. */
+  safeAreaControls?: boolean
 }) {
   const ref = useRef<HTMLVideoElement>(null)
   const seekRef = useRef<HTMLDivElement>(null)
@@ -456,10 +470,13 @@ export function FeedVideo({
         </button>
       )}
 
-      {/* Bottom control bar */}
+      {/* Bottom control bar. Its occupied height is published as
+          FEED_VIDEO_CONTROLS_HEIGHT — keep the two in step if the padding or the
+          row's tallest child changes. */}
       <div
         className={cn(
-          "pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2.5 pt-10 transition-opacity duration-200",
+          "pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pt-10 transition-opacity duration-200",
+          safeAreaControls ? "pb-[calc(0.625rem+env(safe-area-inset-bottom))]" : "pb-2.5",
           started ? "opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100" : "opacity-0",
         )}
       >
