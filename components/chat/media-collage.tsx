@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { ChevronLeft, ChevronRight, Play, X } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { exclusivePlaybackProps, installExclusivePlayback } from "@/lib/exclusive-playback"
 import { ActionSheet, type SheetAction } from "@/components/action-sheet"
 import { SmartImage } from "@/components/ui/smart-image"
 
@@ -213,6 +214,11 @@ function CollageViewer({
   const total = items.length
   const current = items[index]
 
+  // Arm the app-wide "only one recorded media element plays" guard (idempotent).
+  useEffect(() => {
+    installExclusivePlayback()
+  }, [])
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose()
@@ -289,6 +295,9 @@ function CollageViewer({
           playsInline
           className="max-h-[90vh] max-w-[90vw] rounded-lg"
           onClick={(e) => e.stopPropagation()}
+          // Opened from a tap and plays with sound, so it must silence any feed
+          // clip or episode still running behind the lightbox.
+          {...exclusivePlaybackProps}
         />
       ) : (
         <SmartImage

@@ -5,7 +5,8 @@ import { Pause, Play, RotateCcw, RotateCw, Maximize, Minimize, ChevronDown, X, P
 import type { Show } from "@/lib/data"
 import { cn } from "@/lib/utils"
 import { useSharedPlayback, formatTime } from "@/lib/hooks/use-shared-playback"
-import { useSharedMute } from "@/lib/shared-mute"
+import { noteAutoplayBlocked, useSharedMute } from "@/lib/shared-mute"
+import { exclusivePlaybackProps, installExclusivePlayback } from "@/lib/exclusive-playback"
 
 /**
  * LiveReplayPlayer — a dedicated player for archived *video livestream* replays
@@ -87,12 +88,18 @@ export function LiveReplayPlayer({
   } = engine
 
   // App-wide mute preference (shared with the feed + reels players). It starts
-  // muted so the reel can autoplay — browsers only allow gesture-free autoplay
-  // on muted media — and the viewer can unmute with the toggle below.
+  // *unmuted* — media the viewer put in focus should have sound. If the browser
+  // then refuses gesture-free playback, the player falls back to muted and
+  // reports it via noteAutoplayBlocked() so the first tap restores sound.
   const [muted, setMuted] = useSharedMute()
   useEffect(() => {
     if (mediaRef.current) mediaRef.current.muted = muted
   }, [muted, mediaRef])
+
+  // Arm the app-wide "only one recorded media element plays" guard (idempotent).
+  useEffect(() => {
+    installExclusivePlayback()
+  }, [])
 
   // YouTube-style auto-hiding controls.
   const [controlsVisible, setControlsVisible] = useState(true)
@@ -172,9 +179,11 @@ export function LiveReplayPlayer({
     if (autoPlay) {
       el.muted = muted
       el.play().catch(() => {
-        // Autoplay with sound is blocked by browsers; fall back to muted playback
-        // so the replay still starts, then the viewer can unmute with the toggle.
-        setMuted(true)
+        // The browser blocked gesture-free playback with sound. Fall back to
+        // muted so the replay still starts, but record it as an autoplay block
+        // rather than writing a mute *preference* — otherwise this silence would
+        // latch for the whole session and the next tap would leave it muted.
+        noteAutoplayBlocked()
         el.muted = true
         el.play().catch(() => {})
       })
@@ -259,6 +268,7 @@ export function LiveReplayPlayer({
             if (d !== Infinity && !Number.isNaN(d)) setDuration(d)
           }}
           onEnded={() => setPlaying(false)}
+          {...exclusivePlaybackProps}
         />
 
         {minimized ? (
