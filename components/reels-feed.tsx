@@ -25,7 +25,7 @@ import { haptic } from "@/lib/haptics"
 import { renderMessageBody } from "@/lib/rich-text"
 import { exclusivePlaybackProps, installExclusivePlayback } from "@/lib/exclusive-playback"
 import { noteAutoplayBlocked, useSharedMute } from "@/lib/shared-mute"
-import { getVideoPosition, setImmersiveViewerOpen } from "@/lib/video-handoff"
+import { getVideoPosition, rememberVideoPosition, setImmersiveViewerOpen } from "@/lib/video-handoff"
 import { useOverlayHistory } from "@/lib/navigation/use-overlay-history"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -642,6 +642,15 @@ function ReelItem({
         /* ignore */
       }
     }
+    // Publish the absolute position so closing the viewer hands it back to the
+    // inline preview, which resumes from here rather than from the stale spot it
+    // paused at when the viewer opened. This is the return half of the hand-off:
+    // the inline player already writes its position for us to pick up on the way
+    // in, but nothing wrote it on the way out, so the preview always rewound.
+    // Keyed on the bare `url`, matching how the inline player stores it —
+    // `posterSrc` carries a `#t=` media fragment, and although the store strips
+    // fragments, using the raw URL keeps both sides keyed identically.
+    rememberVideoPosition(url, v.currentTime)
     if (scrubbingRef.current) return
     const len = windowLen(v)
     if (len > 0) setProgress(((v.currentTime - windowStartRef.current) / len) * 100)

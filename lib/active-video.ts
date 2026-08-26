@@ -77,6 +77,20 @@ export function registerActiveVideo(entry: VideoEntry): () => void {
     entries.delete(entry)
     if (wasActive) active = null
     if (manual === entry) manual = null
+    // Pause the leaving player EXPLICITLY. `reconcile()` only iterates `entries`,
+    // and this entry has just been removed from it — so reconcile alone can never
+    // pause the very player that stopped being eligible. Unregistering is what
+    // happens when a clip scrolls out of view, so without this a clip scrolled
+    // off-screen kept playing, and kept its audio, indefinitely.
+    //
+    // This appeared to work in Community only by accident: that feed is
+    // video-dense, so the next clip scrolling in would register, win the active
+    // slot and start playing — and the document-level `play` guard in
+    // `exclusive-playback.ts` would pause the orphaned clip as a side effect. The
+    // main feed mixes text and image posts between clips, so scrolling a video
+    // away often starts no new video, nothing fired that guard, and the orphan
+    // played on. Pausing here fixes it at the source for every feed.
+    entry.pause()
     reconcile()
   }
 }

@@ -246,6 +246,12 @@ export function FeedVideo({
     // The owner instance (e.g. the expanded post overlay) ignores the gate.
     if (ignoreViewerGate) return
     if (viewerOpen) {
+      // Record the exact position BEFORE pausing. `timeupdate` only fires every
+      // ~250ms, so the last value it stored can be a quarter-second stale — and
+      // if the clip was paused when the reader expanded it, `timeupdate` never
+      // fired at all and no position was ever stored. Writing it here means the
+      // expanded player always has an accurate point to pick up from.
+      rememberVideoPosition(src, el.currentTime)
       programmaticPauseRef.current = true
       el.pause()
     } else if (inViewRef.current && !userPausedRef.current) {
