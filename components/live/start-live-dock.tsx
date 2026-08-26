@@ -52,7 +52,10 @@ export function StartLiveDock({ canGoLive }: { canGoLive: boolean }) {
             accent
             onClick={() => go("video")}
           />
-          <DockButton icon={Mic} label="Audio" hint="Start an audio room" onClick={() => go("audio")} />
+          {/* "Start audio room" rather than "Start an audio room": the article
+              made the hint wrap to two lines at 360px, which pushed this
+              control's label off the baseline of the Video one beside it. */}
+          <DockButton icon={Mic} label="Audio" hint="Start audio room" onClick={() => go("audio")} />
         </div>
       </div>
     </div>
@@ -88,12 +91,12 @@ function DockButton({
       >
         <Icon className="size-4" />
       </span>
-      {/* The hint wraps rather than truncates: at 360px two columns leave ~110px
-          for text, and "Start an audio room" would clip to "Start an audio ro…"
-          — which reads as a bug rather than a label. */}
+      {/* Both hints are kept short enough to sit on one line at 360px, so the
+          two controls stay vertically symmetrical. `whitespace-nowrap` makes
+          that a hard guarantee — a wrap here would visibly misalign the pair. */}
       <span className="flex min-w-0 flex-col gap-0.5">
         <span className="text-sm font-bold leading-tight">{label}</span>
-        <span className="text-pretty text-[11px] leading-[1.25] text-muted-foreground">{hint}</span>
+        <span className="whitespace-nowrap text-[11px] leading-tight text-muted-foreground">{hint}</span>
       </span>
     </button>
   )
