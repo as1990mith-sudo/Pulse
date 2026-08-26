@@ -31,6 +31,7 @@ import {
 } from "@/app/actions/status"
 import type { CurrentUser } from "@/lib/session"
 import { compressImage, uploadMedia } from "@/lib/upload-media"
+import { exclusivePlaybackProps, installExclusivePlayback } from "@/lib/exclusive-playback"
 import { useOverlayHistory } from "@/lib/navigation/use-overlay-history"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { VideoTrimmer } from "@/components/video-trimmer"
@@ -569,7 +570,15 @@ function StatusComposer({
 
       <div className="flex flex-1 items-center justify-center overflow-hidden px-4">
         {media.type === "video" ? (
-          <video src={media.url} className="max-h-full max-w-full rounded-lg" controls autoPlay loop playsInline />
+          <video
+            src={media.url}
+            className="max-h-full max-w-full rounded-lg"
+            controls
+            autoPlay
+            loop
+            playsInline
+            {...exclusivePlaybackProps}
+          />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={media.url || "/placeholder.svg"} alt="Status preview" className="max-h-full max-w-full rounded-lg object-contain" />
@@ -740,6 +749,10 @@ export function StatusViewer({
   // if the WebView/browser blocks autoplay-with-sound (see playVideo below).
   const [muted, setMuted] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
+  // Arm the app-wide "only one recorded media element plays" guard (idempotent).
+  useEffect(() => {
+    installExclusivePlayback()
+  }, [])
   const pausedRef = useRef(false)
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const wasHold = useRef(false)
@@ -1104,6 +1117,9 @@ export function StatusViewer({
                 if (v.duration) setProgress((v.currentTime / v.duration) * 100)
               }}
               onEnded={goNext}
+              // A status takes over the screen with sound, so it must silence a
+              // feed clip or episode still playing underneath the viewer.
+              {...exclusivePlaybackProps}
             />
           ) : item.mediaType === "text" ? (
             <p className="text-balance px-8 text-center text-3xl font-bold leading-snug tracking-tight text-white drop-shadow-lg sm:text-4xl">

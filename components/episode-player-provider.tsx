@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
 import { ChevronDown, Gauge, ListMusic, Maximize, Minimize, MoreVertical, Pause, Pencil, Play, Radio, Repeat, Repeat1, RotateCcw, RotateCw, Shuffle, SkipBack, SkipForward, X } from "lucide-react"
 import type { Show } from "@/lib/data"
+import { exclusivePlaybackProps, installExclusivePlayback } from "@/lib/exclusive-playback"
 import { cn } from "@/lib/utils"
 import { authClient } from "@/lib/auth-client"
 import { getEpisodeComments } from "@/app/actions/episodes"
@@ -183,6 +184,12 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
     setQueue([])
     setMinimized(false)
     setPlaying(false)
+  }, [])
+
+  // Arm the app-wide "only one recorded media element plays at a time" guard
+  // (idempotent, so every participating player can safely ask for it).
+  useEffect(() => {
+    installExclusivePlayback()
   }, [])
 
   // When the active track changes, (re)load and start playback. This runs off a
