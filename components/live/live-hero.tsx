@@ -12,7 +12,11 @@ import { BroadcastSignal } from "@/components/live/broadcast-signal"
  */
 export function LiveHero({ count }: { count: number }) {
   return (
-    <header className="relative overflow-hidden pb-7 pt-9">
+    // Deliberately restrained vertical rhythm: the hero sets the tone, but the
+    // featured broadcast has to be visible on a short phone viewport without
+    // scrolling, so the hero gets presence through type and light rather than
+    // through height.
+    <header className="relative overflow-hidden pb-5 pt-6">
       <BroadcastSignal />
 
       {/* Fade the visualiser into the page background so there's no hard seam
@@ -31,11 +35,11 @@ export function LiveHero({ count }: { count: number }) {
           Live right now
         </span>
 
-        <h1 className="mt-3 max-w-[15ch] text-balance text-[clamp(2rem,10vw,3.25rem)] font-extrabold leading-[0.98] tracking-[-0.02em]">
+        <h1 className="mt-2.5 max-w-[16ch] text-balance text-[clamp(1.75rem,8.6vw,2.75rem)] font-extrabold leading-[1.0] tracking-[-0.02em]">
           Find the conversation happening now.
         </h1>
 
-        <div className="mt-5 flex items-center gap-3">
+        <div className="mt-4 flex items-center gap-3">
           <span aria-hidden="true" className="h-px w-8 shrink-0 bg-live/60" />
           <p className="text-sm font-medium text-foreground/75">
             <span className="tabular-nums font-bold text-foreground">{count}</span>{" "}

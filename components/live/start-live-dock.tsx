@@ -88,9 +88,12 @@ function DockButton({
       >
         <Icon className="size-4" />
       </span>
-      <span className="flex min-w-0 flex-col">
+      {/* The hint wraps rather than truncates: at 360px two columns leave ~110px
+          for text, and "Start an audio room" would clip to "Start an audio ro…"
+          — which reads as a bug rather than a label. */}
+      <span className="flex min-w-0 flex-col gap-0.5">
         <span className="text-sm font-bold leading-tight">{label}</span>
-        <span className="truncate text-[11px] leading-tight text-muted-foreground">{hint}</span>
+        <span className="text-pretty text-[11px] leading-[1.25] text-muted-foreground">{hint}</span>
       </span>
     </button>
   )

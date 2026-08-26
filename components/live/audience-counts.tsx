@@ -115,3 +115,36 @@ export function AudienceCount({
     </span>
   )
 }
+
+/**
+ * Listener count that hides itself entirely when nobody is listening yet.
+ *
+ * A freshly opened room genuinely has zero listeners, and a bare "0" chip reads
+ * as a broken value rather than a real one — so the chip is omitted until there
+ * is an audience to report.
+ *
+ * Lives here, in the client module, rather than beside the tiles: the tiles are
+ * server components, and a client hook can only be called from a client module.
+ * Keeping the count logic on this side of the boundary lets the tiles stay
+ * server-rendered while the numbers still update live.
+ */
+export function AudienceChip({ roomName, className }: { roomName: string; className?: string }) {
+  const count = useAudienceCount(roomName)
+  if (count === 0) return null
+  return (
+    <span className={className}>
+      <AudienceCount roomName={roomName} showLabel={false} />
+    </span>
+  )
+}
+
+/**
+ * The featured tile's audience line. At zero it reports the broadcast's *state*
+ * instead of a meaningless "0 listening" — which is the more useful thing to
+ * know about a room that has only just opened.
+ */
+export function FeaturedAudience({ roomName, className }: { roomName: string; className?: string }) {
+  const count = useAudienceCount(roomName)
+  if (count === 0) return <span className={className}>Just went live</span>
+  return <AudienceCount roomName={roomName} className={className} />
+}

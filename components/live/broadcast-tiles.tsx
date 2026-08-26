@@ -1,9 +1,11 @@
 import Link from "next/link"
 import { ChevronRight, Mic, Radio, Video } from "lucide-react"
 import type { LiveStreamView } from "@/app/actions/live"
-import { AudienceCount } from "@/components/live/audience-counts"
+import { AudienceChip, FeaturedAudience } from "@/components/live/audience-counts"
 import { getInitials } from "@/lib/identity"
 import { cn } from "@/lib/utils"
+
+
 
 /**
  * A broadcast's one-line description. `topic` is the host's own "what this room
@@ -123,7 +125,7 @@ export function FeaturedBroadcast({ stream }: { stream: LiveStreamView }) {
           <div className="flex items-center gap-2.5 text-xs text-foreground/70">
             <HostLine stream={stream} className="min-w-0 flex-1 font-medium" />
             <span className="size-1 shrink-0 rounded-full bg-foreground/25" />
-            <AudienceCount roomName={stream.roomName} className="shrink-0 text-live" />
+            <FeaturedAudience roomName={stream.roomName} className="shrink-0 text-live" />
           </div>
 
           <span className="mt-1 flex items-center justify-center gap-2 rounded-2xl bg-live px-5 py-3.5 text-sm font-bold uppercase tracking-[0.12em] text-live-foreground shadow-lg shadow-live/25 transition-transform duration-200 group-active:scale-[0.985]">
@@ -154,9 +156,10 @@ export function CompactBroadcast({ stream }: { stream: LiveStreamView }) {
           <OnAirDot />
           Live
         </span>
-        <span className="absolute bottom-2.5 right-2.5 rounded-full bg-background/55 px-2 py-1 text-[10px] font-semibold text-foreground ring-1 ring-inset ring-foreground/10 backdrop-blur-md">
-          <AudienceCount roomName={stream.roomName} showLabel={false} />
-        </span>
+        <AudienceChip
+          roomName={stream.roomName}
+          className="absolute bottom-2.5 right-2.5 rounded-full bg-background/55 px-2 py-1 text-[10px] font-semibold text-foreground ring-1 ring-inset ring-foreground/10 backdrop-blur-md"
+        />
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -205,7 +208,7 @@ export function BroadcastRow({ stream }: { stream: LiveStreamView }) {
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5">
-        <AudienceCount roomName={stream.roomName} showLabel={false} className="text-xs text-live" />
+        <AudienceChip roomName={stream.roomName} className="text-xs text-live" />
         <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
       </div>
     </Link>
