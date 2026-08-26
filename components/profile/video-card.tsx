@@ -3,9 +3,9 @@
 import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Globe, Loader2, Lock, MoreVertical, Play, Trash2 } from "lucide-react"
+import { Globe, Loader2, Lock, MoreVertical, Pencil, Play, Trash2 } from "lucide-react"
 import type { Show } from "@/lib/data"
-import { deleteEpisode, setEpisodePrivacy } from "@/app/actions/shows"
+import { deleteEpisode, setEpisodePrivacy, updateEpisode } from "@/app/actions/shows"
 import { isPlayable, useEpisodePlayer } from "@/components/episode-player-provider"
 import {
   DropdownMenu,
@@ -14,6 +14,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 
 /**
@@ -89,6 +99,29 @@ export function VideoCard({
         setIsPrivate(!next)
         setError(res.error)
       }
+    })
+  }
+
+  // Rename dialog state. The draft is re-seeded from the live title each time the
+  // dialog opens, so a cancelled edit never leaks into the next attempt.
+  const [renaming, setRenaming] = useState(false)
+  const [draftTitle, setDraftTitle] = useState(show.title)
+
+  function handleRename() {
+    const next = draftTitle.trim()
+    // Nothing to save: treat an empty or unchanged title as a plain cancel
+    // rather than a no-op round trip to the server.
+    if (!next || next === show.title) {
+      setRenaming(false)
+      return
+    }
+    startTransition(async () => {
+      setError(null)
+      const res = await updateEpisode({ slug: show.id, title: next })
+      if (res.ok) {
+        setRenaming(false)
+        router.refresh()
+      } else setError(res.error ?? "Couldn't rename this.")
     })
   }
 
@@ -206,6 +239,15 @@ export function VideoCard({
               <MoreVertical className="size-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem
+                onClick={() => {
+                  setDraftTitle(show.title)
+                  setError(null)
+                  setRenaming(true)
+                }}
+              >
+                <Pencil className="size-4" /> Rename
+              </DropdownMenuItem>
               <DropdownMenuItem closeOnClick={false} onClick={handleTogglePrivacy} disabled={isPending}>
                 {isPending ? (
                   <Loader2 className="size-4 animate-spin" />
@@ -233,6 +275,38 @@ export function VideoCard({
       </div>
 
       {error && <p className="text-xs text-destructive">{error}</p>}
+
+      <Dialog open={renaming} onOpenChange={setRenaming}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Rename</DialogTitle>
+            <DialogDescription>Give this recording a clearer title.</DialogDescription>
+          </DialogHeader>
+          <Input
+            value={draftTitle}
+            autoFocus
+            onChange={(e) => setDraftTitle(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter saves. Guard against CJK IME composition, where Enter is
+              // confirming candidate text rather than submitting.
+              if (e.key !== "Enter" || e.nativeEvent.isComposing || e.keyCode === 229) return
+              e.preventDefault()
+              handleRename()
+            }}
+            placeholder="Title"
+            aria-label="Title"
+          />
+          {error && <p className="text-xs text-destructive">{error}</p>}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setRenaming(false)} disabled={isPending}>
+              Cancel
+            </Button>
+            <Button onClick={handleRename} disabled={isPending || !draftTitle.trim()}>
+              {isPending ? <Loader2 className="size-4 animate-spin" /> : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
