@@ -253,12 +253,20 @@ export function FeedVideo({
       rememberVideoPosition(src, el.currentTime)
       programmaticPauseRef.current = true
       el.pause()
-    } else if (inViewRef.current && !userPausedRef.current) {
+    } else {
       // Reverse hand-off: while the expanded player owned playback it advanced
-      // the shared position for this src. Seek the inline preview there before
-      // resuming so closing the expand continues from where it reached (not the
+      // the shared position for this src. Seek the inline preview there so
+      // closing the expand continues from where full screen reached (not the
       // stale spot where the preview paused). For any other clip this resolves
       // to its own last position — a harmless no-op.
+      //
+      // The SEEK is deliberately unconditional, while only the resume respects
+      // scroll position and an explicit pause. Previously both sat behind the
+      // same guard, so a preview the reader had paused before expanding stayed
+      // frozen on its old frame after watching a chunk full screen — the
+      // position was known and simply never applied. Syncing regardless keeps
+      // the two surfaces on the same frame; whether it then plays is a separate
+      // question.
       const handoff = getVideoPosition(src)
       if (handoff != null && handoff >= windowStartRef.current && handoff < windowEndRef.current) {
         try {
@@ -268,7 +276,7 @@ export function FeedVideo({
           /* not seekable yet — attemptPlay clamps into the window anyway */
         }
       }
-      attemptPlay(el)
+      if (inViewRef.current && !userPausedRef.current) attemptPlay(el)
     }
   }, [viewerOpen, attemptPlay, ignoreViewerGate, src])
 

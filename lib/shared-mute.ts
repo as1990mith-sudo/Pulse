@@ -76,8 +76,14 @@ export function noteAutoplayBlocked() {
 /**
  * Clear an autoplay-forced mute once the page has been interacted with. Audio is
  * unlocked from here on, so the in-focus video can play with sound.
+ *
+ * Exported because some audio-unlocking gestures need to be reported directly
+ * rather than observed. Opening the full-screen viewer is the important one: the
+ * tap that opens it is a real gesture, but the new <video> mounts *after* that
+ * tap has already been handled, so a `play()` rejection there would otherwise
+ * re-arm the forced mute with no further gesture left to clear it.
  */
-function unlockAudio() {
+export function noteUserGesture() {
   if (!autoplayBlocked) return
   autoplayBlocked = false
   notify()
@@ -86,23 +92,26 @@ function unlockAudio() {
 let gestureListenerInstalled = false
 
 /**
- * Listen once for the first real user gesture anywhere on the page and use it to
- * lift an autoplay-forced mute. Registered in the capture phase and marked
- * passive so it never interferes with the UI it observes, and removed as soon as
- * it fires. `click` is intentionally omitted: `pointerdown` already precedes it,
- * so audio unlocks on press rather than release.
+ * Listen for real user gestures anywhere on the page and use them to lift an
+ * autoplay-forced mute. Registered in the capture phase and marked passive so it
+ * never interferes with the UI it observes. `click` is intentionally omitted:
+ * `pointerdown` already precedes it, so audio unlocks on press rather than
+ * release.
+ *
+ * The listeners stay installed for the life of the page instead of detaching
+ * after the first gesture. Detaching made the forced mute a ONE-WAY LATCH: a
+ * block that happened after that first gesture (most obviously a fresh <video>
+ * mounting in the full-screen viewer) set `autoplayBlocked` with no listener
+ * left to ever clear it, so every player stayed muted for the rest of the
+ * session. `noteUserGesture` is a cheap no-op once the flag is already clear,
+ * so leaving these attached costs nothing.
  */
 function installGestureListener() {
   if (gestureListenerInstalled || typeof window === "undefined") return
   gestureListenerInstalled = true
 
-  const events = ["pointerdown", "touchstart", "keydown"] as const
-  const onGesture = () => {
-    unlockAudio()
-    for (const type of events) window.removeEventListener(type, onGesture, true)
-  }
-  for (const type of events) {
-    window.addEventListener(type, onGesture, { capture: true, passive: true })
+  for (const type of ["pointerdown", "touchstart", "keydown"] as const) {
+    window.addEventListener(type, noteUserGesture, { capture: true, passive: true })
   }
 }
 

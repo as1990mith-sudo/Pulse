@@ -11,7 +11,7 @@ import { ShareSheet } from "@/components/share-sheet"
 import { ANON_AVATAR, communityMediaIdentity, toggleSaved, useIsSaved } from "@/components/community-help-shared"
 import { setCommunityPostLike, type CommunityPostView } from "@/app/actions/community"
 import { setImmersiveViewerOpen } from "@/lib/video-handoff"
-import { useSharedMute } from "@/lib/shared-mute"
+import { noteUserGesture, useSharedMute } from "@/lib/shared-mute"
 import { useOverlayHistory } from "@/lib/navigation/use-overlay-history"
 import { haptic } from "@/lib/haptics"
 import type { ShareTarget } from "@/lib/share-types"
@@ -81,6 +81,14 @@ export function CommunityMediaViewer({
     // Pause any feed video behind the overlay (ref-counted, so it composes with
     // an already-open conversation gate).
     setImmersiveViewerOpen(true)
+
+    // Opening full screen is a deliberate "I want to watch this" gesture, so
+    // clear any autoplay-forced mute inherited from the feed's muted-autoplay
+    // fallback. Without this the viewer opens silently even though the user
+    // never chose mute, and because the opening tap is consumed before this
+    // player mounts there'd be no later gesture left to recover from it. An
+    // explicit mute is untouched — only the browser-forced one clears.
+    noteUserGesture()
     const prevOverflow = document.body.style.overflow
     document.body.style.overflow = "hidden"
 
