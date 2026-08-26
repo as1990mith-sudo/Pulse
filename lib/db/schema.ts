@@ -18,6 +18,10 @@ export const user = pgTable("user", {
   // Who may @mention this user: "everyone" | "followers" | "none". Enforced
   // server-side; blocked mentions render as plain text and send no notification.
   mentionPrivacy: text("mentionPrivacy").notNull().default("everyone"),
+  // Optional mobile number. Frequency never asks for this at signup — it is
+  // captured lazily the first time an event genuinely requires it, then reused,
+  // so a member is asked at most once ever. Nullable by design.
+  phone: text("phone"),
   // Optional self-reported location, used to surface nearby organisations in
   // discovery. All nullable — matched against organisation country/city text.
   country: text("country"),
@@ -554,8 +558,43 @@ export const announcement = pgTable("announcement", {
   // starts (expiresAt is set to start+5h); "manual" keeps it until an admin
   // deletes it (expiresAt stays null). Legacy paid ads have neither.
   deleteMode: text("deleteMode"), // "auto5h" | "manual" | null
+
+  // --- Registration configuration ------------------------------------------
+  // Opt-in per event. When false the event behaves exactly as before (feed RSVP
+  // only), so every existing event keeps its current behaviour untouched.
+  registrationEnabled: boolean("registrationEnabled").notNull().default(false),
+  // Publishes a standalone public page at /events/[handle]/[id] that requires no
+  // account and no Home membership. Separate from registrationEnabled because an
+  // admin may want a public listing without taking registrations, or take
+  // registrations from members only without a public page.
+  publicPageEnabled: boolean("publicPageEnabled").notNull().default(false),
+  // Optional cap on total registrations. Null = unlimited. Enforced server-side
+  // inside the same transaction that inserts the registration, so a burst of
+  // simultaneous submissions cannot oversell the event.
+  capacity: integer("capacity"),
+  // Optional hard close for registrations, independent of the feed `expiresAt`.
+  // A registration page must be able to outlive the feed advert (which may
+  // auto-expire 5h after the start) — and equally to close before it.
+  registrationClosesAt: timestamp("registrationClosesAt"),
+  // Admin-authored extra questions, asked of members AND non-members. Only ever
+  // information Frequency does not already hold: never name/email, and never
+  // phone (that lives on `user.phone`). Ordered as authored.
+  questions: jsonb("questions").$type<
+    {
+      id: string
+      label: string
+      // "short" | "long" | "select" | "number" | "boolean"
+      type: string
+      required: boolean
+      // Choices for "select" only.
+      options?: string[]
+    }[]
+  >(),
+  // Whether this event needs a mobile number. Members are asked once and the
+  // answer is saved to `user.phone`; non-members always provide one.
+  requiresPhone: boolean("requiresPhone").notNull().default(true),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
-})
+  })
 
 // RSVP to a community event. One row per (event, user); the response toggles
 // between attending and not attending. Drives the RSVP buttons on the feed and
@@ -572,8 +611,146 @@ export const eventRsvp = pgTable(
     updatedAt: timestamp("updatedAt").notNull().defaultNow(),
   },
   (t) => ({
-    eventIdx: index("event_rsvp_event_idx").on(t.announcementId),
-    uniqueMember: uniqueIndex("event_rsvp_unique").on(t.announcementId, t.userId),
+  eventIdx: index("event_rsvp_event_idx").on(t.announcementId),
+  uniqueMember: uniqueIndex("event_rsvp_unique").on(t.announcementId, t.userId),
+  }),
+  )
+
+// --- Event registration & audiences ----------------------------------------
+// `eventRsvp` above and `eventRegistration` below intentionally coexist and are
+// NOT merged. They answer different questions:
+//
+//   eventRsvp          a member's lightweight in-feed signal ("I'm coming"),
+//                      freely toggled, members only, no contact details.
+//   eventRegistration  the formal record of a place taken at an event, open to
+//                      non-members with no Frequency account, carrying contact
+//                      details, question answers and attendance.
+//
+// Collapsing them would either strip RSVP of its one-tap reversibility or force
+// every casual RSVP to become a contact record. An admin sees both.
+
+// A person known to ONE Home through event registration. This is the contact
+// identity that lets "Jane Doe" registering for three events be recognised as
+// one person rather than three anonymous form submissions.
+//
+// Home-scoped by design: the unique index is on (homeId, emailLower), never on
+// email alone. The same human registering with Home A and Home B is two
+// independent contact rows, so one Home's registrant list can never surface
+// inside another Home — even when the same admin runs both.
+export const eventContact = pgTable(
+  "event_contact",
+  {
+    id: serial("id").primaryKey(),
+    homeId: text("homeId").notNull(),
+    // Set when this contact is a Frequency account holder (member or not).
+    // Null for a pure external registrant with no account.
+    userId: text("userId"),
+    fullName: text("fullName").notNull(),
+    email: text("email").notNull(),
+    // Case/whitespace-normalised email used for matching and for the unique
+    // index. Stored as its own column so the index is a plain b-tree and the
+    // original casing the person typed is preserved in `email` for display.
+    emailLower: text("emailLower").notNull(),
+    phone: text("phone"),
+    // Consent is deliberately split. Registering for an event is NOT consent to
+    // marketing — `marketingOptIn` defaults to false and is only ever set by an
+    // explicit, separate action by the person themselves.
+    marketingOptIn: boolean("marketingOptIn").notNull().default(false),
+    marketingOptInAt: timestamp("marketingOptInAt"),
+    // Set if the person asks to stop receiving event mail. Event mail is
+    // transactional (confirmations, venue changes), so this is respected for
+    // broadcasts while still allowing genuine registration confirmations.
+    eventEmailUnsubscribedAt: timestamp("eventEmailUnsubscribedAt"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    homeEmailIdx: uniqueIndex("event_contact_home_email_idx").on(t.homeId, t.emailLower),
+    homeIdx: index("event_contact_home_idx").on(t.homeId),
+    userIdx: index("event_contact_user_idx").on(t.userId),
+  }),
+)
+
+// One person's place at one event.
+export const eventRegistration = pgTable(
+  "event_registration",
+  {
+    id: serial("id").primaryKey(),
+    announcementId: integer("announcementId").notNull(),
+    // Denormalised from the event so every Home-scoped query and every
+    // authorisation check can filter without joining announcement first.
+    homeId: text("homeId").notNull(),
+    contactId: integer("contactId").notNull(),
+    // Null for registrants with no Frequency account.
+    userId: text("userId"),
+    // Whether the registrant was a member of the Home AT THE MOMENT of
+    // registering, stamped once and never recomputed. Mirrors how feedPost
+    // stamps publishedAsType: if someone later joins or leaves the Home, the
+    // historical record of how they registered must not silently rewrite
+    // itself. Admin lists read this column rather than re-checking membership.
+    isMember: boolean("isMember").notNull().default(false),
+    // Contact details AS GIVEN for this registration. A member's details come
+    // from their account; a non-member types them. Snapshotted so a later
+    // profile edit cannot rewrite the event's historical roll.
+    fullName: text("fullName").notNull(),
+    email: text("email").notNull(),
+    phone: text("phone"),
+    // Answers to the event's `questions`, keyed by question id.
+    answers: jsonb("answers").$type<Record<string, string | number | boolean>>(),
+    // Party size for events that allow guests. 1 = just the registrant.
+    guests: integer("guests").notNull().default(1),
+    // "registered" | "cancelled". Cancelled rows are retained so the audience
+    // system can tell "never registered" from "registered then withdrew".
+    status: text("status").notNull().default("registered"),
+    // Attendance, set by an admin at the event. Null = not yet marked, which is
+    // distinct from explicitly marked absent.
+    attendedAt: timestamp("attendedAt"),
+    // How the registration arrived: "member" (one tap, authenticated) or
+    // "public" (the no-account public page). Useful for the admin breakdown.
+    source: text("source").notNull().default("member"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    // One place per person per event. Makes a double-tapped Register button or a
+    // resubmitted public form idempotent at the database level rather than
+    // relying on the UI to prevent it.
+    uniquePerson: uniqueIndex("event_registration_unique").on(t.announcementId, t.contactId),
+    eventIdx: index("event_registration_event_idx").on(t.announcementId),
+    homeIdx: index("event_registration_home_idx").on(t.homeId),
+    contactIdx: index("event_registration_contact_idx").on(t.contactId),
+  }),
+)
+
+// Audit record of one broadcast sent to one resolved audience. Stores the
+// audience descriptor and the recipient count rather than the recipient list:
+// the list is re-derivable, and copying every address into a second table would
+// duplicate personal data for no benefit.
+export const eventBroadcast = pgTable(
+  "event_broadcast",
+  {
+    id: serial("id").primaryKey(),
+    homeId: text("homeId").notNull(),
+    // Which admin sent it.
+    sentByUserId: text("sentByUserId").notNull(),
+    // Audience selector, e.g. "home_members", "event_registrants",
+    // "non_member_registrants", "event_attended".
+    audienceKind: text("audienceKind").notNull(),
+    // Set when the audience is scoped to a single event.
+    announcementId: integer("announcementId"),
+    // "event" (transactional, event-related) or "marketing" (requires opt-in).
+    // Drives which consent gate the resolver applies.
+    purpose: text("purpose").notNull().default("event"),
+    subject: text("subject").notNull(),
+    body: text("body").notNull(),
+    recipientCount: integer("recipientCount").notNull().default(0),
+    // Deliveries that failed at the provider. Sending is fail-soft, so a partial
+    // failure is recorded rather than aborting the whole broadcast.
+    failedCount: integer("failedCount").notNull().default(0),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    homeIdx: index("event_broadcast_home_idx").on(t.homeId),
   }),
 )
 
