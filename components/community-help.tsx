@@ -62,6 +62,7 @@ import {
   SaveButton,
 } from "@/components/community-help-shared"
 import { ClampedText, CLAMP_LINES } from "@/components/clamped-text"
+import { FollowIconButton } from "@/components/follow-icon-button"
 
 /* -------------------------------------------------------------------------- */
 /*  Question text with graceful "See more" collapse                           */
@@ -314,6 +315,19 @@ function PostItem({
         <CommunityAvatar post={post} onAuthorClick={openProfile} />
         <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
           <PostMeta post={post} edited={edited} onAuthorClick={openProfile} />
+          <div className="flex shrink-0 items-center gap-1">
+            {/* Follow the member who asked, so people met in a thread can be
+                followed without a detour via their profile. authorId is null for
+                anonymous threads and for ones posted in an organisation's voice,
+                so this only ever appears on identifiable MEMBER posts — and the
+                follow is recorded as the viewer's own account, never the Home. */}
+            {post.authorId && !post.isSelf && (
+              <FollowIconButton
+                authorId={post.authorId}
+                authorName={post.authorName ?? "this member"}
+                initialFollowing={post.isFollowing}
+              />
+            )}
           <div ref={menuRef} className="relative">
             <button
               type="button"
@@ -376,6 +390,7 @@ function PostItem({
                 )}
               </div>
             )}
+          </div>
           </div>
         </div>
       </div>

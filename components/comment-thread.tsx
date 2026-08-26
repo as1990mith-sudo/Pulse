@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { Heart, MoreHorizontal, Copy, Pencil, Trash2, Send, X } from "lucide-react"
+import { MoreHorizontal, Copy, Pencil, Trash2, Send, X } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
+import { LikeHeart } from "@/components/like-heart"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -503,11 +504,11 @@ function CommentItem({
             type="button"
             onClick={toggleLike}
             disabled={!canInteract}
-            className={cn("flex items-center gap-1 transition-colors hover:text-primary", liked && "text-primary")}
+            className={cn("flex items-center gap-1 transition-colors hover:text-like", liked && "text-like")}
             aria-pressed={liked}
             aria-label="Like comment"
           >
-            <Heart className={cn("size-4", liked && "fill-current")} />
+            <LikeHeart liked={liked} className="size-4" />
             {likes > 0 && <span className="tabular-nums">{likes}</span>}
           </button>
           {canReply && (

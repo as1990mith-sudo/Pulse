@@ -19,7 +19,9 @@ export function EnterHomeLink({ handle }: { handle: string }) {
       onClick={() =>
         startTransition(async () => {
           await setActiveHome(handle)
-          router.push("/")
+          // The feed, not "/" — the root route renders the Daily Devotional, so
+          // "see what members see" used to land on one article, not the Home.
+          router.push("/feed")
           router.refresh()
         })
       }

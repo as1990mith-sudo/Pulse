@@ -5,12 +5,9 @@ import useSWR, { mutate as globalMutate } from "swr"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
-  Heart,
   Plus,
   X,
   Send,
-  UserPlus,
-  UserCheck,
   Loader2,
   Trash2,
   MoreHorizontal,
@@ -34,6 +31,7 @@ import {
   PinOff,
 } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
+import { LikeHeart } from "@/components/like-heart"
 import {
   addPostComment,
   createPost,
@@ -56,7 +54,7 @@ import { CommentSheet } from "@/components/comment-sheet"
 import { PinnedBadge } from "@/components/pinned-badge"
 import { useUrlState } from "@/lib/navigation/use-url-state"
 import { useRestoredScroll } from "@/lib/navigation/use-restored-scroll"
-import { toggleFollow } from "@/app/actions/follow"
+import { FollowIconButton } from "@/components/follow-icon-button"
 import type { CurrentUser } from "@/lib/session"
 import { Button } from "@/components/ui/button"
 import { FormattedTextarea } from "@/components/formatted-textarea"
@@ -1312,7 +1310,6 @@ export function PostCard({
   const homeVoice = useHomeVoice()
   const [liked, setLiked] = useState(post.liked)
   const [likes, setLikes] = useState(post.likes)
-  const [likeBurst, setLikeBurst] = useState(false)
   const [saved, setSaved] = useState(post.saved)
   const [saveCount, setSaveCount] = useState(post.saves)
   const [shareCount, setShareCount] = useState(post.shares)
@@ -1428,13 +1425,9 @@ export function PostCard({
     const next = !liked
     setLiked(next)
     setLikes((n) => (next ? n + 1 : n - 1))
-    // Trigger the springy pop only when liking (not when un-liking).
-    if (next) {
-      haptic("light")
-      setLikeBurst(false)
-      // Re-arm on the next frame so the animation replays on rapid taps.
-      requestAnimationFrame(() => setLikeBurst(true))
-    }
+    // The pop is now owned by LikeHeart, which fires it off the liked
+    // transition; only the haptic stays here.
+    if (next) haptic("light")
     startTransition(async () => {
       await setPostLike({ postId: post.id, liked: next })
     })
@@ -1682,7 +1675,7 @@ export function PostCard({
             metadata line that carries the edited info icon on longer usernames. */}
         <div className="flex shrink-0 items-center gap-1 self-start">
           {currentUser && !post.isSelf && (
-            <FollowButton authorId={post.authorId} authorName={post.user} initialFollowing={post.isFollowing} />
+            <FollowIconButton authorId={post.authorId} authorName={post.user} initialFollowing={post.isFollowing} />
           )}
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -1925,16 +1918,13 @@ export function PostCard({
           className={cn(
             "flex items-center gap-1.5 tabular-nums transition-colors hover:text-primary",
             feed ? "text-[15px]" : "text-sm",
-            liked && "text-primary",
+            liked && "text-like",
             !currentUser && "cursor-not-allowed opacity-60",
           )}
           aria-pressed={liked}
           aria-label={liked ? "Unlike" : "Like"}
         >
-          <Heart
-            onAnimationEnd={() => setLikeBurst(false)}
-            className={cn(feed ? "size-7" : "size-6", liked && "fill-current", likeBurst && "animate-like-pop")}
-          />
+          <LikeHeart liked={liked} className={feed ? "size-7" : "size-6"} />
         </button>
         {/* The count is its own control: for the author it opens the list of
             accounts that liked the post, so the icon stays a pure like toggle. */}
@@ -2069,54 +2059,3 @@ export function PostCard({
   )
 }
 
-function FollowButton({
-  authorId,
-  authorName,
-  initialFollowing,
-}: {
-  authorId: string
-  authorName: string
-  initialFollowing: boolean
-}) {
-  const router = useRouter()
-  const [following, setFollowing] = useState(initialFollowing)
-  const [followBurst, setFollowBurst] = useState(false)
-  const [isPending, startTransition] = useTransition()
-
-  function onClick() {
-    const next = !following
-    setFollowing(next)
-    if (next) {
-      haptic("medium")
-      setFollowBurst(true) // delightful pop only when following
-    }
-    startTransition(async () => {
-      try {
-        await toggleFollow({ targetUserId: authorId, follow: next })
-        router.refresh()
-      } catch {
-        setFollowing(!next)
-      }
-    })
-  }
-
-  return (
-    <Button
-      type="button"
-      size="icon"
-      variant={following ? "secondary" : "default"}
-      onClick={onClick}
-      disabled={isPending}
-      className="size-8 shrink-0 rounded-full"
-      aria-label={following ? `Unfollow ${authorName}` : `Follow ${authorName}`}
-      title={following ? "Following" : "Follow"}
-    >
-      <span
-        onAnimationEnd={() => setFollowBurst(false)}
-        className={cn("inline-flex", followBurst && "motion-pop")}
-      >
-        {following ? <UserCheck className="size-4" /> : <UserPlus className="size-4" />}
-      </span>
-    </Button>
-  )
-}

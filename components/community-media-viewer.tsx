@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { createPortal } from "react-dom"
-import { X, Heart, Bookmark, Share2, Volume2, VolumeX } from "lucide-react"
+import { X, Bookmark, Share2, Volume2, VolumeX } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
+import { LikeHeart } from "@/components/like-heart"
 import { FeedVideo } from "@/components/feed-video"
 import { ShareSheet } from "@/components/share-sheet"
 import { ANON_AVATAR, communityMediaIdentity, toggleSaved, useIsSaved } from "@/components/community-help-shared"
@@ -201,6 +202,14 @@ function Slide({
 
   const identity = communityMediaIdentity(post)
 
+  // How far the bottom chrome sits above the screen edge. A video's player draws
+  // its own control bar (seek + elapsed time) across the bottom ~2rem, so the
+  // rail and author row have to clear that as well as the home indicator —
+  // otherwise the avatar crowds the duration tracker. A photo has no such bar,
+  // so it only needs the safe-area inset.
+  const bottomClearance =
+    kind === "video" ? "calc(env(safe-area-inset-bottom) + 4rem)" : "calc(env(safe-area-inset-bottom) + 2.25rem)"
+
   const shareTarget: ShareTarget = {
     type: "community",
     key: String(post.id),
@@ -239,7 +248,16 @@ function Slide({
         // `ignoreViewerGate` lets this player own playback while the overlay
         // holds the pause gate up for everything behind it.
         active && post.videoUrl ? (
-          <FeedVideo src={post.videoUrl} className="h-full w-full object-contain" resume ignoreViewerGate />
+          <FeedVideo
+            src={post.videoUrl}
+            className="h-full w-full object-contain"
+            resume
+            ignoreViewerGate
+            // The rail below already carries a mute button driving the same
+            // shared state, so the player's own would be a second control for
+            // one setting sitting directly beneath the first.
+            hideMuteControl
+          />
         ) : null
       ) : post.imageUrl ? (
         <button
@@ -267,22 +285,19 @@ function Slide({
 
       {/* Action rail. Reels can use a bare `bottom-9` because its rail stacks on
           a bottom bar that already carries the safe-area padding; this overlay
-          has none, so the same 2.25rem is added on top of the inset to keep the
-          last item clear of the home indicator. The author row's `pr-24`
-          reserves this column so the two never overlap. */}
+          has none, so `bottomClearance` adds that inset (plus the player's
+          control bar on video) to keep the last item reachable. The author row's
+          `pr-24` reserves this column so the two never overlap. */}
       <div
-        className={cn(
-          "absolute bottom-[calc(env(safe-area-inset-bottom)+2.25rem)] right-3 z-[3] flex flex-col items-center gap-5 text-white",
-          chromeCls,
-        )}
+        className={cn("absolute right-3 z-[3] flex flex-col items-center gap-5 text-white", chromeCls)}
+        style={{ bottom: bottomClearance }}
         data-no-swipe
       >
         <button type="button" onClick={toggleLike} className="flex flex-col items-center gap-1" aria-pressed={liked}>
-          <Heart
-            className={cn(
-              "size-8 drop-shadow transition-transform active:scale-90",
-              liked && "fill-red-500 text-red-500",
-            )}
+          <LikeHeart
+            liked={liked}
+            className="size-8 drop-shadow transition-transform active:scale-90"
+            idleClassName="text-white"
           />
           <span className="text-xs font-semibold tabular-nums">{likes}</span>
         </button>
@@ -340,7 +355,10 @@ function Slide({
       {/* Author row, bottom-left. Identity comes from the shared rule, so an
           anonymous asker shows the universal avatar and "Anonymous" here exactly
           as they do on the card. */}
-      <div className={cn("absolute inset-x-0 bottom-0 z-[1] p-4 pb-12 pr-24 text-white", chromeCls)}>
+      <div
+        className={cn("absolute inset-x-0 bottom-0 z-[1] p-4 pr-24 text-white", chromeCls)}
+        style={{ paddingBottom: bottomClearance }}
+      >
         <IdentityRow identity={identity} postedAt={post.postedAt} onAuthorClick={onAuthorClick} />
       </div>
 
@@ -381,7 +399,9 @@ function IdentityRow({
     <span className="min-w-0">
       <span className="block truncate text-sm font-bold leading-tight drop-shadow">{identity.name}</span>
       <span className="block truncate text-xs text-white/70">
-        {identity.handle ? `@${identity.handle}` : postedAt}
+        {/* Handles are stored with the "@" already, so strip it before prefixing
+            or it renders as "@@name" — same guard the feed's viewer uses. */}
+        {identity.handle ? `@${identity.handle.replace(/^@/, "")}` : postedAt}
       </span>
     </span>
   )

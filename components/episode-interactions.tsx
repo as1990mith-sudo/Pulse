@@ -1,8 +1,9 @@
 "use client"
 
 import { useEffect, useState, useTransition } from "react"
-import { Bookmark, Heart, Share2 } from "lucide-react"
+import { Bookmark, Share2 } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
+import { LikeHeart } from "@/components/like-heart"
 import { ShareSheet } from "@/components/share-sheet"
 import { isItemSaved, toggleSaveItem } from "@/app/actions/share"
 import type { ShareTarget } from "@/lib/share-types"
@@ -132,12 +133,12 @@ export function EpisodeInteractions({
           disabled={!currentUser}
           className={cn(
             "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors hover:bg-secondary disabled:opacity-50",
-            liked ? "text-live" : "text-foreground",
+            liked ? "text-like" : "text-foreground",
           )}
           aria-pressed={liked}
           aria-label="Like episode"
         >
-          <Heart className={cn("size-5", liked && "fill-current")} />
+          <LikeHeart liked={liked} className="size-5" />
           {likes > 0 && <span className="tabular-nums">{likes}</span>}
         </button>
 

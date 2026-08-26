@@ -61,6 +61,7 @@
   --color-background: var(--background);
   --color-live: var(--live);
   --color-live-foreground: var(--live-foreground);
+  --color-like: var(--like);
   --color-call-accept: var(--call-accept);
   --color-call-accept-foreground: var(--call-accept-foreground);
   --radius-sm: calc(var(--radius) * 0.6);
@@ -106,6 +107,12 @@
   --ring: oklch(0.72 0.18 55);
   --live: oklch(0.66 0.21 24);
   --live-foreground: oklch(0.99 0.005 60);
+  /* Like red — deliberately theme-independent (not overridden by .theme-light
+     or any dark skin) so a liked heart reads as the exact same red in every
+     surface: light rows, dark rows, and white-on-video action rails. Kept
+     separate from --live so retuning the "live broadcast" red never silently
+     restyles likes. */
+  --like: oklch(0.63 0.24 21);
   /* Phone-call accept green — consistent across all themes. */
   --call-accept: oklch(0.65 0.18 145);
   --call-accept-foreground: oklch(0.99 0.005 145);
@@ -593,24 +600,72 @@
   animation: tap-heart 1s ease-out forwards;
 }
 
-/* Springy pop when a post's like button is tapped on. */
+/* ---------------------------------------------------------------------------
+   LIKE MOTION
+   Fires only on the unliked → liked transition (never on mount, and never on
+   un-liking) so a screen full of already-liked posts stays still. Two layers
+   play together: the heart itself springs with a slight tilt, while a ring
+   radiates out from underneath it.
+   --------------------------------------------------------------------------- */
+
+/* The heart: a fast asymmetric overshoot, a small settle below its resting
+   size, then a spring back. The brief rotation keeps it from feeling like a
+   mechanical scale() — it reads as a physical flick of the thumb. */
 @keyframes like-pop {
   0% {
-    transform: scale(1);
+    transform: scale(1) rotate(0deg);
   }
-  35% {
-    transform: scale(1.4);
+  15% {
+    transform: scale(0.88) rotate(-3deg);
   }
-  60% {
-    transform: scale(0.85);
+  40% {
+    transform: scale(1.32) rotate(4deg);
+  }
+  65% {
+    transform: scale(0.94) rotate(-2deg);
+  }
+  85% {
+    transform: scale(1.06) rotate(1deg);
   }
   100% {
-    transform: scale(1);
+    transform: scale(1) rotate(0deg);
   }
 }
 
 .animate-like-pop {
-  animation: like-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: like-pop 0.52s cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Hint the compositor so the pop stays smooth mid-scroll on low-end phones. */
+  will-change: transform;
+}
+
+/* The ring: expands past the icon and fades, giving the tap a point of origin.
+   Drawn by a pseudo-element so no extra DOM node is needed per button. */
+@keyframes like-ring {
+  0% {
+    opacity: 0.65;
+    transform: scale(0.35);
+  }
+  70% {
+    opacity: 0.12;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.1);
+  }
+}
+
+.like-ring::after {
+  content: "";
+  position: absolute;
+  /* Centred on the icon regardless of the icon's size. */
+  inset: 0;
+  border-radius: 9999px;
+  border: 2px solid var(--like);
+  /* Finishes just before the 0.52s heart pop, so the single `animationend` the
+     heart fires can safely tear down both layers without clipping the ring. */
+  animation: like-ring 0.5s ease-out forwards;
+  /* Never intercept the tap meant for the button underneath. */
+  pointer-events: none;
 }
 
 /* Soft equalizer bounce for the "now speaking" mini bars. */
@@ -711,6 +766,12 @@
   .sheet-up,
   .speaker-in {
     animation: none;
+  }
+  /* The ring only exists as motion, so it has to be removed outright — merely
+     stopping its animation would freeze a permanent red circle around the
+     heart at the keyframes' starting opacity. */
+  .like-ring::after {
+    display: none;
   }
   html {
     scroll-behavior: auto;

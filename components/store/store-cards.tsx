@@ -1,7 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { Heart, Star, Play, Share2 } from "lucide-react"
+import { Star, Play, Share2 } from "lucide-react"
+import { LikeHeart } from "@/components/like-heart"
 import type { Book, Course } from "@/lib/store-data"
 import { formatPrice } from "@/lib/store-data"
 import { useStoreState } from "@/lib/use-store-state"
@@ -36,7 +37,9 @@ function WishlistButton({ id, className }: { id: string; className?: string }) {
         className,
       )}
     >
-      <Heart className={cn("size-4 transition-colors", active ? "fill-rose-500 text-rose-500 motion-pop" : "text-foreground")} />
+      {/* A wishlist rather than a like, but it reads as the same heart gesture,
+          so it shares the one red and the one animation. */}
+      <LikeHeart liked={active} className="size-4" idleClassName="text-foreground" />
     </button>
   )
 }

@@ -3,7 +3,8 @@
 import { useEffect, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Bookmark, Download, Heart, MoreVertical, Pencil, Send } from "lucide-react"
+import { Bookmark, Download, MoreVertical, Pencil, Send } from "lucide-react"
+import { LikeHeart } from "@/components/like-heart"
 import { CommentIcon } from "@/components/comment-icon"
 import type { Show } from "@/lib/data"
 import type { CurrentUser } from "@/lib/session"
@@ -300,12 +301,12 @@ export function EpisodeWatch({
                   disabled={!currentUser}
                   className={cn(
                     "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors hover:bg-secondary disabled:opacity-50",
-                    liked ? "text-live" : "text-foreground",
+                    liked ? "text-like" : "text-foreground",
                   )}
                   aria-pressed={liked}
                   aria-label="Like episode"
                 >
-                  <Heart className={cn("size-5", liked && "fill-current")} />
+                  <LikeHeart liked={liked} className="size-5" />
                   {likes > 0 && <span className="tabular-nums">{likes}</span>}
                 </button>
 

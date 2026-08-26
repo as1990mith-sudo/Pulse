@@ -4,8 +4,9 @@ import { useEffect, useState, useTransition } from "react"
 import { createPortal } from "react-dom"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { X, Heart, Bookmark, Share2, ChevronLeft, ChevronRight } from "lucide-react"
+import { X, Bookmark, Share2, ChevronLeft, ChevronRight } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
+import { LikeHeart } from "@/components/like-heart"
 import { MediaCaption } from "@/components/media-caption"
 import { CommentSheet } from "@/components/comment-sheet"
 import { ShareSheet } from "@/components/share-sheet"
@@ -306,7 +307,8 @@ export function ImmersiveImageViewer({
           count={likes}
           active={liked}
         >
-          <Heart className={cn("size-7", liked && "fill-current text-red-500")} />
+          {/* Idle white so it reads against the photo; red once liked. */}
+          <LikeHeart liked={liked} className="size-7" idleClassName="text-white" />
         </RailButton>
         <RailButton onClick={() => setCommentsOpen(true)} label="Comments" count={commentCount}>
           <CommentIcon className="size-7" />

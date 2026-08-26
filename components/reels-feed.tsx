@@ -6,7 +6,6 @@ import Link from "next/link"
 import {
   Bookmark,
   Film,
-  Heart,
   Loader2,
   Play,
   Send,
@@ -16,6 +15,7 @@ import {
   X,
 } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
+import { LikeHeart } from "@/components/like-heart"
 import { MediaCaption } from "@/components/media-caption"
 import type { FeedPostView, FeedCommentView } from "@/app/actions/feed"
 import { addPostComment, setPostLike, setCommentLike, editPostComment, deletePostComment } from "@/app/actions/feed"
@@ -758,11 +758,10 @@ function ReelItem({
         data-no-swipe
       >
         <button type="button" onClick={toggleLike} className="flex flex-col items-center gap-1" aria-pressed={liked}>
-          <Heart
-            className={cn(
-              "size-8 drop-shadow transition-transform active:scale-90",
-              liked && "fill-red-500 text-red-500",
-            )}
+          <LikeHeart
+            liked={liked}
+            className="size-8 drop-shadow transition-transform active:scale-90"
+            idleClassName="text-white"
           />
           <span className="text-xs font-semibold tabular-nums">{likes}</span>
         </button>
