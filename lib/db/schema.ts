@@ -1589,7 +1589,13 @@ export const home = pgTable(
     // The public organisation this Home belongs to (1↔1). Drives name/handle/
     // branding; the Home is reached at /home/[organization.handle].
     organizationId: text("organizationId").notNull().unique(),
-    // Display name of the Home, e.g. "Kingdom Academy Home".
+    // DEPRECATED for display — do not read this to show a Home's name.
+    //
+    // A creation-time snapshot ("<Org> Home") that nothing updates when the
+    // organisation is renamed, so it goes stale the first time an owner edits
+    // their name. The display name is derived from `organization.name` (see
+    // `toHomeView` in lib/home/access.ts), which is the only place a name is
+    // ever edited. Retained because it is NOT NULL on existing rows.
     name: text("name").notNull(),
     // Subscription plan: "premium" | "premium_pro". Pro unlocks publishing
     // selected content to the wider Universal community (future phase).

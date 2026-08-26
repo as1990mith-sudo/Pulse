@@ -114,11 +114,14 @@ function FeedPostVideo({
   siblings,
   onOpenComments,
   onAuthorClick,
+  onCountChange,
 }: {
   src: string
   post: CommunityPostView
   /** Every visible question, so full screen can swipe between their clips. */
   siblings: CommunityPostView[]
+  /** Patches feed reply counts for replies sent inside full screen. */
+  onCountChange?: (postId: number, delta: number) => void
   /** Opens comments for a specific post — the one currently on screen in the
    *  full-screen viewer, which changes as the user swipes between clips. */
   onOpenComments: (postId: number) => void
@@ -161,6 +164,7 @@ function FeedPostVideo({
           // whichever slide is on screen. Tapping Comment therefore keeps you in
           // full screen instead of dismissing the video you were watching.
           onAuthorClick={onAuthorClick}
+          onCountChange={onCountChange}
         />
       )}
     </div>
@@ -177,6 +181,7 @@ function PostItem({
   onDeleted,
   onPinned,
   onOpen,
+  onCountChange,
   highlighted = false,
   enterIndex = 0,
 }: {
@@ -185,6 +190,8 @@ function PostItem({
   siblings: CommunityPostView[]
   onDeleted: (id: number) => void
   onPinned: () => void
+  /** Patches this row's reply count for replies sent inside full screen. */
+  onCountChange?: (postId: number, delta: number) => void
   /** Opens a question's conversation thread. Defaults to this card's own post,
    *  but the full-screen viewer passes the id of whichever clip is on screen —
    *  after swiping, that is NOT the post whose card was originally tapped. */
@@ -451,6 +458,7 @@ function PostItem({
             // screen rather than this card.
             onOpenComments={(id) => onOpen(id)}
             onAuthorClick={openProfile}
+            onCountChange={onCountChange}
           />
         )}
 
@@ -497,6 +505,7 @@ function PostItem({
           onClose={() => setMediaOpen(false)}
           // Comments open as a sheet over the photo (see the video viewer above).
           onAuthorClick={openProfile}
+          onCountChange={onCountChange}
         />
       )}
 
@@ -1475,6 +1484,10 @@ export function CommunityHelp({
                     siblings={posts}
                     onDeleted={handleDeleted}
                     onPinned={handlePinned}
+                    // Replies sent from inside full screen patch this row's
+                    // count locally; the comment actions no longer rebuild the
+                    // route to do it.
+                    onCountChange={handleCountChange}
                     // Honour an explicit target id (sent by the full-screen
                     // viewer after swiping); fall back to this card's own post.
                     onOpen={(id) => setActiveId(id ?? post.id)}

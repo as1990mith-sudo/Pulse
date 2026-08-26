@@ -633,7 +633,20 @@ export async function addCommunityComment(input: {
 
   const name = org?.name ?? identity.name
 
-  revalidatePath("/chatrooms")
+  // Deliberately NOT revalidatePath("/chatrooms").
+  //
+  // /chatrooms has a loading.tsx, and its page awaits the session, the active
+  // Home and both room feeds. Revalidating from a comment action tore the whole
+  // route down and replayed that skeleton, so sending a reply from the
+  // full-screen media viewer blew the viewer away: the sheet is portaled to
+  // <body> and survived, but the photo/video behind it did not, leaving an empty
+  // screen with no explanation. It only looked instant on a fast desktop; on a
+  // phone the refetch is long enough to see the collapse.
+  //
+  // Nothing on the server needs the route rebuilt for a comment: the sheet holds
+  // the thread in SWR and appends the returned row, and the feed's reply count is
+  // patched through `onCountChange`. Returning the created row is the whole
+  // contract.
   return {
     id: row.id,
     parentId: row.parentId ?? null,
@@ -686,7 +699,8 @@ export async function editCommunityComment(input: { commentId: number; body: str
     .update(communityComment)
     .set({ body: text, editedAt: new Date() })
     .where(eq(communityComment.id, input.commentId))
-  revalidatePath("/chatrooms")
+  // No revalidatePath — see addCommunityComment. Rebuilding /chatrooms replays
+  // its loading skeleton and unmounts an open media viewer mid-edit.
   return text
 }
 
@@ -702,7 +716,8 @@ export async function setCommunityCommentLike(input: { commentId: number; liked:
   if (!changed) return
   const next = Math.max(0, row.likes + (input.liked ? 1 : -1))
   await db.update(communityComment).set({ likes: next }).where(eq(communityComment.id, input.commentId))
-  revalidatePath("/chatrooms")
+  // No revalidatePath — see addCommunityComment. The heart is already filled
+  // optimistically on the client; a route rebuild would only cost the viewer.
 }
 
 /** Toggle a like on an anonymous community post. Idempotent — persists per-user state. */
@@ -717,7 +732,9 @@ export async function setCommunityPostLike(input: { postId: number; liked: boole
   if (!changed) return
   const next = Math.max(0, row.likes + (input.liked ? 1 : -1))
   await db.update(communityPost).set({ likes: next }).where(eq(communityPost.id, input.postId))
-  revalidatePath("/chatrooms")
+  // No revalidatePath — see addCommunityComment. Like is tapped from the
+  // full-screen viewer's action rail too, and that slide already owns its own
+  // liked/likes state, so rebuilding the route only risked closing the viewer.
 }
 
 /** Author-only soft delete of their own anonymous post. */
@@ -773,5 +790,6 @@ export async function deleteCommunityComment(commentId: number) {
   if (!comment) throw new Error("Comment not found.")
   if (comment.userId !== user.id) throw new Error("You can only delete your own reply.")
   await db.update(communityComment).set({ deleted: true }).where(eq(communityComment.id, commentId))
-  revalidatePath("/chatrooms")
+  // No revalidatePath — see addCommunityComment. The sheet drops the row from
+  // its SWR cache and the feed count is patched via `onCountChange`.
 }

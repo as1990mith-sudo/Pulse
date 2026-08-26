@@ -90,6 +90,10 @@ export function AppMenu() {
   const [active, setActive] = useState(false) // slid fully into view
   const [deleteOpen, setDeleteOpen] = useState(false) // account-deletion dialog
 
+  // Set once a menu tap has committed to leaving, so the drawer's exit animation
+  // can play to completion without a second tap queueing another navigation.
+  const leavingRef = useRef(false)
+
   // Live drag state for swipe-to-close.
   const [dragX, setDragX] = useState(0)
   const [dragging, setDragging] = useState(false)
@@ -183,6 +187,21 @@ export function AppMenu() {
    *
    * The stack goes [page] → [page][drawer] → [page][destination]: forward feels
    * instant and Back from the destination returns to the page, one press.
+   *
+   * ## Why the route change waits for the exit animation
+   *
+   * `AppMenu` renders inside the per-page header (see `drawerOpenIntent` above),
+   * so a route change unmounts the drawer along with the rest of the page.
+   * Navigating in the same tick as `close()` therefore destroyed the drawer
+   * mid-slide: it did not animate out, it simply blinked away, and the
+   * destination snapped in behind it. Sampling the transform every 40ms during a
+   * tap caught zero intermediate frames — open on one sample, gone on the next.
+   * That instant swap is what made these pages feel cheap rather than fast.
+   *
+   * So the exit is allowed to finish first, and the destination is prefetched
+   * during it so the wait costs nothing: the drawer slides out over `ANIM_MS`
+   * while the route warms in parallel, then `replace` runs against an
+   * already-fetched route and `.page-enter` carries the new screen in.
    */
   function navigate(e: React.MouseEvent, href: string) {
     // Let modified clicks (new tab/window) behave natively.
@@ -194,12 +213,20 @@ export function AppMenu() {
       return
     }
     e.preventDefault()
+    // A second tap during the exit would queue a second `replace` and leave the
+    // released history entry unconsumed, so the first tap wins.
+    if (leavingRef.current) return
+    leavingRef.current = true
     // Record where we came from so the destination page can offer a Back control
     // that steps back to where the menu was opened.
     startMenuFlow(window.location.pathname)
     releaseForNavigation()
+    // Warm the destination while the drawer is still on screen. Without this the
+    // deliberate exit would add its duration to the perceived load instead of
+    // hiding it.
+    router.prefetch(href)
     close()
-    router.replace(href)
+    window.setTimeout(() => router.replace(href), ANIM_MS)
   }
 
   function navigateHome(e: React.MouseEvent, href: string) {
@@ -207,9 +234,14 @@ export function AppMenu() {
     // so it shows the normal hamburger instead of Back/Close controls.
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return
     e.preventDefault()
+    if (leavingRef.current) return
+    leavingRef.current = true
     releaseForNavigation()
+    // Same sequencing as `navigate`: let the drawer actually slide out before the
+    // route change unmounts it, with the destination warmed in the meantime.
+    router.prefetch(href)
     close()
-    router.replace(href)
+    window.setTimeout(() => router.replace(href), ANIM_MS)
   }
 
   async function handleSignOut() {

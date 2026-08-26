@@ -277,7 +277,13 @@ export function CommunityConversation({
             <FeedPostImage src={post.imageUrl} onClick={() => setLightboxOpen(true)} className="mt-4" />
           )}
           {post.videoUrl && (
-            <PostVideo src={post.videoUrl} post={post} siblings={mediaStack} onAuthorClick={openProfile} />
+            <PostVideo
+              src={post.videoUrl}
+              post={post}
+              siblings={mediaStack}
+              onAuthorClick={openProfile}
+              onCountChange={onCountChange}
+            />
           )}
           <BibleChips text={post.body} className="mt-4" />
 
@@ -360,6 +366,10 @@ export function CommunityConversation({
           // The viewer now stacks the comment sheet over the photo itself, so
           // Comment no longer dismisses the lightbox to scroll the thread.
           onAuthorClick={openProfile}
+          // Replies sent from that stacked sheet patch this thread's count.
+          // The comment actions no longer revalidate /chatrooms (doing so tore
+          // down the route and closed this lightbox mid-send).
+          onCountChange={onCountChange}
         />
       )}
     </div>,
@@ -391,12 +401,15 @@ function PostVideo({
   post,
   siblings,
   onAuthorClick,
+  onCountChange,
 }: {
   src: string
   post: CommunityPostView
   /** This thread plus its related questions, so full screen can swipe clips. */
   siblings: CommunityPostView[]
   onAuthorClick?: (authorId: string) => void
+  /** Patches reply counts for replies sent from inside full screen. */
+  onCountChange?: (postId: number, delta: number) => void
 }) {
   const [ratio, setRatio] = useState<number | null>(null)
   // Tapping the inline clip opens a full-screen viewer with the premium player.
@@ -433,6 +446,7 @@ function PostVideo({
           // Comments are a sheet over the clip now, so watching and replying no
           // longer trade off against each other.
           onAuthorClick={onAuthorClick}
+          onCountChange={onCountChange}
         />
       )}
     </div>

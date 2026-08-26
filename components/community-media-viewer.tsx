@@ -55,6 +55,7 @@ export function CommunityMediaViewer({
   startId,
   onClose,
   onAuthorClick,
+  onCountChange,
 }: {
   kind: "video" | "image"
   /** Candidate stack. For video, every clip in it becomes swipeable. */
@@ -62,6 +63,13 @@ export function CommunityMediaViewer({
   startId: number
   onClose: () => void
   onAuthorClick?: (authorId: string) => void
+  /**
+   * Patches the feed row's reply count when a reply is sent or removed from the
+   * sheet stacked over this viewer. The comment actions no longer revalidate
+   * /chatrooms (that unmounted this viewer mid-send), so this callback is what
+   * keeps the count behind the viewer truthful.
+   */
+  onCountChange?: (postId: number, delta: number) => void
 }) {
   // Video browses its siblings; a photo stands alone (see the note above).
   const stack = useMemo(() => {
@@ -196,6 +204,7 @@ export function CommunityMediaViewer({
 
       {activePost && (
         <ViewerComments
+          onCountChange={onCountChange}
           post={activePost}
           open={commentsOpen}
           onClose={() => setCommentsOpen(false)}
@@ -225,11 +234,13 @@ function ViewerComments({
   open,
   onClose,
   onAuthorClick,
+  onCountChange,
 }: {
   post: CommunityPostView
   open: boolean
   onClose: () => void
   onAuthorClick?: (authorId: string) => void
+  onCountChange?: (postId: number, delta: number) => void
 }) {
   // Admins of the active Home get the same identity choice here as in the feed's
   // comment box, so a Home can answer a question in its own voice.
@@ -270,6 +281,7 @@ function ViewerComments({
       asOrganization: asHome,
     })
     await mutate((prev) => [...(prev ?? []), created], { revalidate: false })
+    onCountChange?.(post.id, 1)
   }
 
   return (
@@ -294,6 +306,7 @@ function ViewerComments({
       onDelete={async (commentId) => {
         await deleteCommunityComment(commentId)
         await mutate((prev) => (prev ?? []).filter((c) => c.id !== commentId), { revalidate: false })
+        onCountChange?.(post.id, -1)
       }}
     />
   )
