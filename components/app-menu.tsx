@@ -162,19 +162,54 @@ export function AppMenu() {
   }, [open, close])
 
   // Back / Android back gesture closes the drawer instead of navigating away.
-  useOverlayHistory(open, close, "app-menu")
+  const { releaseForNavigation } = useOverlayHistory(open, close, "app-menu")
 
-  function navigate() {
+  /**
+   * Leave the drawer for `href`.
+   *
+   * Taps used to be swallowed here — often needing a tap, a reload, then another
+   * tap. The drawer owns a history entry (so Back closes it), and that entry was
+   * retired on the drawer's 300ms close animation by calling `history.back()`.
+   * A tap starts that timer AND a route change at the same time, so whenever the
+   * destination's server render outlasted the animation — routine for Bible,
+   * Notes, Articles, Library, My Homes, none of which had a loading boundary —
+   * the `back()` landed mid-navigation and threw the user back to where they
+   * started.
+   *
+   * So we drive the navigation ourselves instead of letting it race:
+   *  1. release the history entry without popping it, then
+   *  2. `replace` over it, so the entry the drawer pushed is consumed rather than
+   *     lingering to eat the user's next Back.
+   *
+   * The stack goes [page] → [page][drawer] → [page][destination]: forward feels
+   * instant and Back from the destination returns to the page, one press.
+   */
+  function navigate(e: React.MouseEvent, href: string) {
+    // Let modified clicks (new tab/window) behave natively.
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return
+    // mailto:/tel:/off-origin links are the browser's job, not the router's:
+    // just dismiss the drawer and let the default action run.
+    if (!href.startsWith("/")) {
+      close()
+      return
+    }
+    e.preventDefault()
     // Record where we came from so the destination page can offer a Back control
     // that steps back to where the menu was opened.
     startMenuFlow(window.location.pathname)
+    releaseForNavigation()
     close()
+    router.replace(href)
   }
 
-  function navigateHome() {
+  function navigateHome(e: React.MouseEvent, href: string) {
     // The user profile is a home base, not a menu-flow page: don't start a flow,
     // so it shows the normal hamburger instead of Back/Close controls.
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return
+    e.preventDefault()
+    releaseForNavigation()
     close()
+    router.replace(href)
   }
 
   async function handleSignOut() {
@@ -311,7 +346,8 @@ export function AppMenu() {
                   )}
                   <Link
                     href={profileHref}
-                    onClick={navigateHome}
+                    prefetch
+                    onClick={(e) => navigateHome(e, profileHref)}
                     className="tap-scale flex min-w-0 flex-1 items-center gap-3 rounded-xl px-1 py-1 transition-colors hover:bg-secondary/50"
                   >
                     <span className="min-w-0 flex-1">
@@ -456,13 +492,15 @@ function DrawerItem({
   href: string
   icon: LucideIcon
   label: string
-  onNavigate: () => void
+  onNavigate: (e: React.MouseEvent, href: string) => void
   external?: boolean
   badge?: number
 }) {
   if (external) {
+    // External links (mailto:, other origins) must navigate natively — the app
+    // router can't handle them — so they only close the drawer.
     return (
-      <a href={href} onClick={onNavigate} className={itemClasses}>
+      <a href={href} onClick={(e) => onNavigate(e, href)} className={itemClasses}>
         <IconBubble icon={icon} />
         <span className="flex-1 text-[15px] font-medium text-foreground">{label}</span>
         <CountBadge count={badge} />
@@ -471,7 +509,7 @@ function DrawerItem({
     )
   }
   return (
-    <Link href={href} onClick={onNavigate} className={itemClasses}>
+    <Link href={href} prefetch onClick={(e) => onNavigate(e, href)} className={itemClasses}>
       <IconBubble icon={icon} />
       <span className="flex-1 text-[15px] font-medium text-foreground">{label}</span>
       <CountBadge count={badge} />

@@ -175,6 +175,107 @@ export function LiveSkeleton() {
   )
 }
 
+/**
+ * Shell for the drawer destinations: a title, an optional toolbar, then a list.
+ *
+ * These routes (Bible, Notes, Articles, Library, My Homes, Bookmarks) had no
+ * `loading.tsx`, so Next had nothing to show while their server components ran
+ * and held the old screen in place — tapping the menu item looked like it did
+ * nothing at all. A loading boundary lets the shell paint immediately.
+ */
+function ListPageSkeleton({
+  rows = 6,
+  toolbar = false,
+  media = false,
+  width = "max-w-3xl",
+}: {
+  rows?: number
+  toolbar?: boolean
+  media?: boolean
+  width?: string
+}) {
+  return (
+    <div className="min-h-screen">
+      <SiteHeader />
+      <main>
+        <div className={`mx-auto w-full ${width} px-4 py-6 sm:px-6`}>
+          <div className="flex items-center justify-between gap-3">
+            <Skeleton className="h-7 w-36 rounded-lg" />
+            {toolbar && <Skeleton className="h-10 w-24 rounded-full" />}
+          </div>
+          {toolbar && (
+            <div className="mt-4 flex items-center gap-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-8 w-20 rounded-full" />
+              ))}
+            </div>
+          )}
+          <div className="mt-5 flex flex-col gap-3">
+            {Array.from({ length: rows }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card p-4">
+                {media && <Skeleton className="size-14 shrink-0 rounded-xl" />}
+                <div className="flex flex-1 flex-col gap-2">
+                  <Skeleton className="h-4 w-[55%] rounded-md" />
+                  <Skeleton className="h-3 w-[80%] rounded-md" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </main>
+    </div>
+  )
+}
+
+/** Bible: book/chapter picker then verse lines. */
+export function BibleSkeleton() {
+  return (
+    <div className="min-h-screen">
+      <SiteHeader />
+      <main>
+        <div className="mx-auto w-full max-w-3xl px-4 pb-6 sm:px-6 sm:pb-8">
+          <div className="flex items-center gap-2 py-4">
+            <Skeleton className="h-10 flex-1 rounded-full" />
+            <Skeleton className="h-10 w-20 rounded-full" />
+          </div>
+          <div className="flex flex-col gap-3">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <div key={i} className="flex gap-3">
+                <Skeleton className="mt-0.5 h-3 w-4 shrink-0 rounded" />
+                <div className="flex flex-1 flex-col gap-2">
+                  <Skeleton className="h-3.5 w-full rounded-md" />
+                  <Skeleton className="h-3.5 w-[82%] rounded-md" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </main>
+    </div>
+  )
+}
+
+export function NotesSkeleton() {
+  return <ListPageSkeleton rows={6} toolbar />
+}
+
+export function ArticlesSkeleton() {
+  return <ListPageSkeleton rows={5} toolbar media />
+}
+
+export function LibrarySkeleton() {
+  return <ListPageSkeleton rows={5} media />
+}
+
+export function SavedSkeleton() {
+  return <ListPageSkeleton rows={5} media />
+}
+
+/** My Homes is a narrow, card-per-Home list. */
+export function HomesSkeleton() {
+  return <ListPageSkeleton rows={3} media width="max-w-md" />
+}
+
 export function ProfileSkeleton() {
   return (
     <div className="min-h-screen">

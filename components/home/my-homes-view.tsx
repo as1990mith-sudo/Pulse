@@ -29,6 +29,8 @@ import {
 } from "@/app/actions/home"
 import { homeRoleLabel, isHomeAdminRole } from "@/lib/home/roles"
 import { Sheet, SheetClose, SheetContent, SheetTitle } from "@/components/ui/sheet"
+import { HomeSwitchOverlay } from "@/components/home/home-switch-overlay"
+import { haptic } from "@/lib/haptics"
 import { cn } from "@/lib/utils"
 
 /**
@@ -65,6 +67,8 @@ export function MyHomesView() {
   const [restoring, setRestoring] = useState<string | null>(null)
   const [restoreError, setRestoreError] = useState<string | null>(null)
   const [switching, setSwitching] = useState<string | null>(null)
+  // The Home being switched TO, driving the full-screen transition veil.
+  const [switchingTo, setSwitchingTo] = useState<MyHomeLink | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   // The Home whose 3-dot actions sheet is open (null = closed).
   const [actionsFor, setActionsFor] = useState<MyHomeLink | null>(null)
@@ -106,11 +110,26 @@ export function MyHomesView() {
       router.push("/feed")
       return
     }
+    // Raise the transition veil BEFORE any awaiting, so the destination Home's
+    // mark covers the moment every scoped surface re-resolves. Without it the
+    // screen visibly rebuilds in pieces and the switch reads as a glitch.
+    const target = homes.find((h) => h.handle === handle) ?? null
+    setSwitchingTo(target)
     setSwitching(handle)
-    await setActiveHome(handle)
-    await mutate()
-    router.push("/feed")
-    router.refresh()
+    haptic("medium")
+    try {
+      await setActiveHome(handle)
+      await mutate()
+      router.push("/feed")
+      router.refresh()
+      // Hold the veil briefly so the new Home's feed paints underneath it rather
+      // than the old one flashing back for a frame as the router transitions.
+      window.setTimeout(() => setSwitchingTo(null), 620)
+    } catch {
+      // A failed switch must not leave the veil stuck over a working screen.
+      setSwitchingTo(null)
+      setSwitching(null)
+    }
   }
 
   // Leave a Home membership. Owners never reach this (no trigger is rendered).
@@ -173,6 +192,8 @@ export function MyHomesView() {
 
   return (
     <div className="flex flex-col">
+      {/* Covers the moment every Home-scoped surface re-resolves. */}
+      <HomeSwitchOverlay home={switchingTo} />
       {/* Native sub-header: back + title (left) · add (right). Nothing else. */}
       <header className="relative flex h-12 items-center">
         <button
