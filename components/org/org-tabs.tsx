@@ -151,13 +151,30 @@ export function OrgTabs({
               tab === t.key ? "text-foreground" : "text-muted-foreground hover:text-foreground",
             )}
           >
-            {t.icon}
-            {/* Keep the label on one line so the icon stays vertically aligned
-                with the icon-only tabs instead of centring against wrapped text. */}
-            <span className={cn("whitespace-nowrap", tab !== t.key && "sr-only")}>
-              {t.label}
-              {t.count ? ` ${t.count}` : ""}
-            </span>
+            {/* Icon and label are mutually exclusive: an inactive tab is its icon
+                alone, and the active tab swaps that icon out for its name. Showing
+                both on the active tab made it read as a different kind of control
+                than its neighbours and cost the label horizontal room it needs at
+                this width. The label carries `title` + the icon's own meaning, so
+                nothing is lost by dropping the glyph once a tab is selected. */}
+            {tab === t.key ? (
+              // `whitespace-nowrap` keeps the label on one line so a long name
+              // ("Catalogue") can't wrap and make this tab taller than the rest.
+              <span className="whitespace-nowrap">
+                {t.label}
+                {t.count ? ` ${t.count}` : ""}
+              </span>
+            ) : (
+              <>
+                {t.icon}
+                {/* The name still reaches assistive tech on inactive tabs, which
+                    would otherwise announce as unlabelled icon buttons. */}
+                <span className="sr-only">
+                  {t.label}
+                  {t.count ? ` ${t.count}` : ""}
+                </span>
+              </>
+            )}
           </button>
         ))}
         {/* Sliding active indicator */}
