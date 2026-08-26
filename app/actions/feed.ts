@@ -17,6 +17,7 @@ import {
   user as userTable,
 } from "@/lib/db/schema"
 import { getActiveHomeContext } from "@/lib/home/active-home"
+import { ITESTIFY_CHANNEL } from "@/lib/qotd-types"
 import { canPinInScope, MAX_PINNED_PER_SCOPE, pinWithinCap } from "@/lib/home/can-pin"
 import { getProfileScope, scopeToHome } from "@/lib/home/profile-scope"
 import { resolvePublishingIdentity } from "@/lib/home/publishing"
@@ -660,8 +661,21 @@ export async function getFeedPostsByOrganization(organizationId: string): Promis
  * ("itestify" or "qotd:<questionId>"). Returns the same rich FeedPostView the
  * main feed uses, so room UIs can reuse <PostCard> and all its engagement,
  * comment, media and moderation wiring unchanged.
+ *
+ * Home scoping mirrors `getCommunityPosts`:
+ * - `homeId` omitted / null → the Universal (global) room. Only posts with no
+ *   Home scope are returned, so a private Home's testimonies never surface in
+ *   the public room.
+ * - `homeId` set → that organisation's PRIVATE room. Callers must have already
+ *   verified the viewer is an active member of the Home.
+ *
+ * Filtering on `channel` alone (the previous behaviour) meant every Home saw one
+ * shared iTestify, which read as testimonies leaking between organisations.
  */
-export async function getChannelFeed(channel: string): Promise<FeedPostView[]> {
+export async function getChannelFeed(
+  channel: string,
+  opts?: { homeId?: string | null },
+): Promise<FeedPostView[]> {
   const session = await auth.api.getSession({ headers: await headers() })
   const currentUserId = session?.user?.id ?? null
 
@@ -676,10 +690,13 @@ export async function getChannelFeed(channel: string): Promise<FeedPostView[]> {
       )
     : new Set<string>()
 
+  const homeId = opts?.homeId ?? null
+  const scope = homeId ? eq(feedPost.homeId, homeId) : isNull(feedPost.homeId)
+
   const posts = await db
     .select()
     .from(feedPost)
-    .where(and(eq(feedPost.channel, channel), eq(feedPost.deleted, false)))
+    .where(and(eq(feedPost.channel, channel), eq(feedPost.deleted, false), scope))
     .orderBy(desc(feedPost.createdAt))
   if (posts.length === 0) return []
 
@@ -1062,8 +1079,12 @@ export async function createPost(input: {
   // THAT Home — never from any global "does this user own an organisation?"
   // lookup. See lib/home/publishing.ts for the full rule and the bug it fixes.
   //
-  // Room posts (channel !== null) stay Home-agnostic: they live in their own
-  // community rooms, so they're always personal and carry no Home.
+  // Room posts (channel !== null) always keep a PERSONAL publishing identity — a
+  // testimony is the author's own voice, never the organisation's. iTestify is
+  // additionally stamped with the active Home below so each Home gets its own
+  // private room; QOTD is NOT, because a Question of the Day is one
+  // platform-wide question (dailyQuestion has no Home column) and its answers
+  // are meant to be seen across all Homes.
   let organizationId: string | null = null
   let isOrganization = false
   let authorName = user.name
@@ -1100,6 +1121,13 @@ export async function createPost(input: {
       isOrganization = true
       organizationId = identity.organizationId
     }
+  } else if (channel === ITESTIFY_CHANNEL) {
+    // Scope the testimony to the Home the author is currently in, so it only
+    // appears in that Home's room. Identity stays personal (set above): only the
+    // audience is narrowed, not the voice. In Personal mode `home` is null, which
+    // correctly leaves the post in the Universal room.
+    const { home } = await getActiveHomeContext()
+    homeId = home?.id ?? null
   }
 
   // Resolve @mentions (privacy-checked); blocked ones become inert text.

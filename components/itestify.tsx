@@ -10,9 +10,11 @@ import { ChannelComposer } from "@/components/channel-composer"
 import { PostCard } from "@/components/mind-feed"
 import { getChannelFeed, type FeedPostView } from "@/app/actions/feed"
 import { useAutoHideChatChrome, useChatChromeHidden } from "@/lib/chat-chrome"
+import { ITESTIFY_CHANNEL } from "@/lib/qotd-types"
 import type { CurrentUser } from "@/lib/session"
 
-const ITESTIFY_CHANNEL = "itestify"
+// Imported rather than redeclared: this value decides Home scoping on write, so
+// a local copy drifting from the server's would misroute testimonies.
 // Testimonies can include a video up to 10 minutes long.
 const MAX_VIDEO_SECONDS = 10 * 60
 
@@ -22,19 +24,29 @@ export function ITestify({
   // Hidden back arrow when embedded in the Chat Rooms two-tab hub (the page is
   // already /chatrooms, so a "Back to chatrooms" link would loop to itself).
   embedded = false,
+  homeId = null,
 }: {
   initialPosts: FeedPostView[]
   currentUser: CurrentUser
   embedded?: boolean
+  /**
+   * The Home this room is scoped to, or null for the Universal (global) room.
+   * Part of the SWR key so each Home caches its own list, and forwarded to the
+   * fetcher so revalidation stays in the same scope the server rendered.
+   */
+  homeId?: string | null
 }) {
   const [composerOpen, setComposerOpen] = useState(false)
   const onFeedScroll = useAutoHideChatChrome()
   // Collapse this room's header in sync with the global chrome scroll signal.
   const chromeHidden = useChatChromeHidden()
 
+  // `homeId` is in the key so switching Home cannot serve another Home's cached
+  // testimonies, and in the fetcher so the 20s refresh re-fetches the SAME scope
+  // the server rendered rather than falling back to the global room.
   const { data: posts = initialPosts, mutate } = useSWR(
-    ["itestify-feed", ITESTIFY_CHANNEL],
-    () => getChannelFeed(ITESTIFY_CHANNEL),
+    ["itestify-feed", ITESTIFY_CHANNEL, homeId],
+    () => getChannelFeed(ITESTIFY_CHANNEL, { homeId }),
     { fallbackData: initialPosts, refreshInterval: 20000 },
   )
 
