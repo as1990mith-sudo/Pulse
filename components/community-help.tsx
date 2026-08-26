@@ -156,26 +156,10 @@ function FeedPostVideo({
           posts={siblings}
           startId={post.id}
           onClose={() => setFullscreen(false)}
-          // `active` is the clip currently on screen, which differs from `post`
-          // as soon as the user swipes. This used to ignore the argument and
-          // call `onOpenComments()` bare, so the thread always opened for the
-          // card that was originally tapped — you'd comment on the first video
-          // no matter which one you had scrolled to.
-          onOpenComments={(active) => {
-            // Comments live in the conversation thread, so hand off to it rather
-            // than stacking a second overlay on top of this one.
-            //
-            // The two steps must NOT be batched into one render. Both overlays
-            // own a history entry (useOverlayHistory): closing this viewer pops
-            // the entry it pushed, while opening the conversation pushes one. Run
-            // together, React commits both in a single pass and the viewer's
-            // cleanup pops the entry the conversation had just pushed — the
-            // thread opened and immediately closed, which looked like the tap
-            // dumped you back on the preview. Closing first, then opening on the
-            // next frame, keeps the pop and the push in the right order.
-            setFullscreen(false)
-            requestAnimationFrame(() => onOpenComments(active.id))
-          }}
+          // Comments are no longer handed off to the conversation thread: the
+          // viewer stacks the shared CommentSheet over the clip itself, keyed to
+          // whichever slide is on screen. Tapping Comment therefore keeps you in
+          // full screen instead of dismissing the video you were watching.
           onAuthorClick={onAuthorClick}
         />
       )}
@@ -511,15 +495,7 @@ function PostItem({
           posts={siblings}
           startId={post.id}
           onClose={() => setMediaOpen(false)}
-          // Close first, then open the thread on the next frame — see the note in
-          // FeedPostVideo: batching the two lets this viewer's history cleanup
-          // pop the entry the conversation just pushed, closing it instantly.
-          // Same swipe-aware hand-off as the video viewer above: photos are
-          // swipeable too, so use the post on screen, not this card's.
-          onOpenComments={(active) => {
-            setMediaOpen(false)
-            requestAnimationFrame(() => onOpen(active.id))
-          }}
+          // Comments open as a sheet over the photo (see the video viewer above).
           onAuthorClick={openProfile}
         />
       )}
