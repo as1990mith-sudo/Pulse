@@ -119,7 +119,9 @@ function FeedPostVideo({
   post: CommunityPostView
   /** Every visible question, so full screen can swipe between their clips. */
   siblings: CommunityPostView[]
-  onOpenComments: () => void
+  /** Opens comments for a specific post — the one currently on screen in the
+   *  full-screen viewer, which changes as the user swipes between clips. */
+  onOpenComments: (postId: number) => void
   onAuthorClick?: (authorId: string) => void
 }) {
   // Default to 4:5 before metadata loads (the common portrait case here), then
@@ -154,7 +156,12 @@ function FeedPostVideo({
           posts={siblings}
           startId={post.id}
           onClose={() => setFullscreen(false)}
-          onOpenComments={() => {
+          // `active` is the clip currently on screen, which differs from `post`
+          // as soon as the user swipes. This used to ignore the argument and
+          // call `onOpenComments()` bare, so the thread always opened for the
+          // card that was originally tapped — you'd comment on the first video
+          // no matter which one you had scrolled to.
+          onOpenComments={(active) => {
             // Comments live in the conversation thread, so hand off to it rather
             // than stacking a second overlay on top of this one.
             //
@@ -167,7 +174,7 @@ function FeedPostVideo({
             // dumped you back on the preview. Closing first, then opening on the
             // next frame, keeps the pop and the push in the right order.
             setFullscreen(false)
-            requestAnimationFrame(() => onOpenComments())
+            requestAnimationFrame(() => onOpenComments(active.id))
           }}
           onAuthorClick={onAuthorClick}
         />
@@ -187,14 +194,20 @@ function PostItem({
   onPinned,
   onOpen,
   highlighted = false,
+  enterIndex = 0,
 }: {
   post: CommunityPostView
   /** The full visible list, so full-screen video can swipe between clips. */
   siblings: CommunityPostView[]
   onDeleted: (id: number) => void
   onPinned: () => void
-  onOpen: () => void
+  /** Opens a question's conversation thread. Defaults to this card's own post,
+   *  but the full-screen viewer passes the id of whichever clip is on screen —
+   *  after swiping, that is NOT the post whose card was originally tapped. */
+  onOpen: (postId?: number) => void
   highlighted?: boolean
+  /** Position in the list, used to stagger the entrance animation. */
+  enterIndex?: number
 }) {
   const { openProfile } = useMiniChat()
   const [shareOpen, setShareOpen] = useState(false)
@@ -308,8 +321,12 @@ function PostItem({
   return (
     <article
       id={`q-${post.id}`}
+      // The cascade runs on mount, so it plays on first paint and whenever a
+      // new question arrives — and, usefully, after a Home switch, where the
+      // whole list remounts and visibly re-forms as the new Home's feed.
+      style={{ "--enter-index": enterIndex } as React.CSSProperties}
       className={cn(
-        "scroll-mt-24 px-4 py-5 transition-colors sm:px-6",
+        "feed-item-in scroll-mt-24 px-4 py-5 transition-colors sm:px-6",
         highlighted && "bg-emerald-500/5",
       )}
     >
@@ -446,7 +463,9 @@ function PostItem({
             src={post.videoUrl}
             post={post}
             siblings={siblings}
-            onOpenComments={onOpen}
+            // Forward the swiped-to post id so the thread matches the clip on
+            // screen rather than this card.
+            onOpenComments={(id) => onOpen(id)}
             onAuthorClick={openProfile}
           />
         )}
@@ -457,9 +476,12 @@ function PostItem({
           <LikeButton postId={post.id} initialLikes={post.likes} initialLiked={post.liked} variant="row" />
           <button
             type="button"
-            onClick={onOpen}
+            // Wrapped, not passed bare: `onOpen` now takes an optional post id,
+            // and handing it to onClick directly would pass React's MouseEvent
+            // as that id.
+            onClick={() => onOpen()}
             aria-label="Reply"
-            className="flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            className="action-tap flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
           >
             <CommentIcon className="size-5" />
             {post.commentCount > 0 && <span className="tabular-nums">{post.commentCount}</span>}
@@ -468,7 +490,7 @@ function PostItem({
             type="button"
             onClick={() => setShareOpen(true)}
             aria-label="Share"
-            className="flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            className="action-tap flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
           >
             <Share2 className="size-5" />
           </button>
@@ -492,9 +514,11 @@ function PostItem({
           // Close first, then open the thread on the next frame — see the note in
           // FeedPostVideo: batching the two lets this viewer's history cleanup
           // pop the entry the conversation just pushed, closing it instantly.
-          onOpenComments={() => {
+          // Same swipe-aware hand-off as the video viewer above: photos are
+          // swipeable too, so use the post on screen, not this card's.
+          onOpenComments={(active) => {
             setMediaOpen(false)
-            requestAnimationFrame(() => onOpen())
+            requestAnimationFrame(() => onOpen(active.id))
           }}
           onAuthorClick={openProfile}
         />
@@ -1465,14 +1489,19 @@ export function CommunityHelp({
               // weight reads as less of a trench, while the darker colour keeps
               // the break between posts just as legible.
               <div className="divide-y-2 divide-feed-divider pb-28">
-                {posts.map((post) => (
+                {posts.map((post, i) => (
                   <PostItem
                     key={post.id}
                     post={post}
+                    // Only the first few cascade; the rest are offscreen and
+                    // shouldn't wait on a delay to become visible.
+                    enterIndex={Math.min(i, 6)}
                     siblings={posts}
                     onDeleted={handleDeleted}
                     onPinned={handlePinned}
-                    onOpen={() => setActiveId(post.id)}
+                    // Honour an explicit target id (sent by the full-screen
+                    // viewer after swiping); fall back to this card's own post.
+                    onOpen={(id) => setActiveId(id ?? post.id)}
                     highlighted={highlightedQ === String(post.id)}
                   />
                 ))}

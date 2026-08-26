@@ -1423,3 +1423,64 @@ svg.lucide {
     animation: none;
   }
 }
+
+/* --- Row actions: give instant taps a sense of physical response ------------
+   These controls already reacted immediately, but only by swapping a colour,
+   which reads as blunt. The background now eases in and the icon dips under the
+   finger, so the same fast action gains weight without costing latency —
+   nothing here delays the click handler. */
+.action-tap {
+  transition:
+    color 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.action-tap > svg {
+  transition: transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.action-tap:active {
+  transform: scale(0.94);
+}
+.action-tap:active > svg {
+  transform: scale(0.86);
+}
+/* Hover-only lift, so touch devices don't get a sticky enlarged icon. */
+@media (hover: hover) {
+  .action-tap:hover > svg {
+    transform: scale(1.12);
+  }
+}
+
+/* --- Feed items: settle in rather than appear -------------------------------
+   Used with an inline `--enter-index` so consecutive rows cascade. Only the
+   first handful are staggered; anything further down is offscreen anyway and
+   should not wait to become visible. */
+@keyframes feed-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.feed-item-in {
+  animation: feed-item-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--enter-index, 0) * 45ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .action-tap,
+  .action-tap > svg {
+    transition: none;
+  }
+  .action-tap:active,
+  .action-tap:active > svg,
+  .action-tap:hover > svg {
+    transform: none;
+  }
+  .feed-item-in {
+    animation: none;
+  }
+}

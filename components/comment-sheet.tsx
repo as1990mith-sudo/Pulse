@@ -263,6 +263,8 @@ export function CommentSheet({
               // then silently reverted to their own name for a reply.
               homeVoice={homeVoice}
               personalName={currentUser?.name ?? "You"}
+              personalImage={currentUser?.image ?? null}
+              personalInitials={currentUser?.initials ?? ""}
             />
           )}
         </div>
@@ -278,6 +280,8 @@ export function CommentSheet({
               asHome={asHome}
               onChange={setAsHome}
               personalName={currentUser?.name ?? "You"}
+              personalImage={currentUser?.image ?? null}
+              personalInitials={currentUser?.initials ?? ""}
               size="sm"
             />
             <div className="flex items-center gap-2.5">
