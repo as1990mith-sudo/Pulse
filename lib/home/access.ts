@@ -1,6 +1,5 @@
 import "server-only"
 
-import { cache } from "react"
 import { and, count, desc, eq, isNull } from "drizzle-orm"
 import { headers } from "next/headers"
 import { notFound, redirect } from "next/navigation"
@@ -24,10 +23,10 @@ type OrgRow = typeof organization.$inferSelect
  */
 export const HOME_GO_LIVE_COOKIE = "freq_home_live"
 
-export const getViewerId = cache(async function getViewerId(): Promise<string | null> {
+export async function getViewerId(): Promise<string | null> {
   const session = await auth.api.getSession({ headers: await headers() })
   return session?.user?.id ?? null
-})
+}
 
 async function memberCountFor(homeId: string): Promise<number> {
   const rows = await db
@@ -140,11 +139,12 @@ export async function getHomeRosterByOrg(organizationId: string): Promise<HomeRo
 /**
  * Every Home the current user is an ACTIVE member of, newest membership first.
  *
- * Memoized per request: this is reached from the active-Home context, which is
- * itself consulted by nearly every server surface, so it was re-running its join
- * (plus a member-count query per Home) many times over for a single page render.
+ * Not memoized: creating, joining, leaving and deleting a Home all mutate this
+ * set and then revalidate within the same request, and the active-Home resolver
+ * picks its fallback Home from the first entry here. A stale list would resolve
+ * the wrong Home (or a just-deleted one) after those mutations.
  */
-export const getMyHomes = cache(async function getMyHomes(): Promise<HomeView[]> {
+export async function getMyHomes(): Promise<HomeView[]> {
   const viewerId = await getViewerId()
   if (!viewerId) return []
   const rows = await db
@@ -159,7 +159,7 @@ export const getMyHomes = cache(async function getMyHomes(): Promise<HomeView[]>
     .where(and(eq(homeMembership.userId, viewerId), eq(homeMembership.status, "active"), isNull(home.deletedAt)))
     .orderBy(desc(homeMembership.createdAt))
   return Promise.all(rows.map(async (r) => toHomeView(r.h, r.org, await memberCountFor(r.h.id))))
-})
+}
 
 /**
  * Whether a specific user is an ACTIVE member of a Home. A lightweight boolean
