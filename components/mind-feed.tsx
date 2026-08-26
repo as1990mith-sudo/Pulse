@@ -189,15 +189,36 @@ function hoistPinned(posts: FeedPostView[]): FeedPostView[] {
   return [...posts.filter((p) => p.pinned), ...posts.filter((p) => !p.pinned)]
 }
 
-/** Returns a new array shuffled deterministically from `seed` (Fisher–Yates). */
-function seededShuffle<T>(arr: T[], seed: number): T[] {
-  const out = [...arr]
-  const rand = mulberry32(seed)
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1))
-    ;[out[i], out[j]] = [out[j], out[i]]
+/**
+ * Deterministic feed order from `seed`, keyed PER POST rather than per position.
+ *
+ * This replaces a Fisher–Yates shuffle, which was the cause of the feed
+ * "jumping" while being read. Fisher–Yates walks the array by index, so its
+ * output depends on the array's LENGTH: when the 20s poll returned one new post,
+ * every subsequent swap drew a different random value and the entire order was
+ * reshuffled underneath the reader. Nothing scrolled, but every card changed
+ * place, so the post being read was suddenly somewhere else — indistinguishable
+ * from the feed scrolling itself back to the top.
+ *
+ * Sorting on a hash of each post's own id fixes that: a post's rank depends only
+ * on its id and the session seed, never on how many other posts are present. New
+ * posts slot into their own stable position and everything already on screen
+ * keeps the place it had. The order is still fully shuffled and still reshuffles
+ * on a manual refresh, when the seed changes.
+ */
+function seededShuffle<T extends { id: string | number }>(arr: T[], seed: number): T[] {
+  const rank = new Map<string, number>()
+  for (const item of arr) {
+    const key = String(item.id)
+    // Fold the id's characters into the seed so each post gets its own stable
+    // pseudo-random rank for this session.
+    let h = seed ^ 0x9e3779b9
+    for (let i = 0; i < key.length; i++) {
+      h = Math.imul(h ^ key.charCodeAt(i), 0x01000193) >>> 0
+    }
+    rank.set(key, mulberry32(h)())
   }
-  return out
+  return [...arr].sort((a, b) => (rank.get(String(a.id)) ?? 0) - (rank.get(String(b.id)) ?? 0))
 }
 
 /**
@@ -302,10 +323,16 @@ export function MindFeed({
   // caused visible lag; 20s keeps the feed fresh while cutting that churn ~4x.
   // `keepPreviousData` avoids a flash/reflow on each revalidation, and
   // `dedupingInterval` collapses overlapping requests (focus + interval).
+  // `revalidateOnFocus` is off: on mobile, opening a video full screen, closing a
+  // sheet or the address bar taking focus all count as a focus event, so the feed
+  // refetched constantly while being read. Combined with the old positional
+  // shuffle that reordered every card, it read as the feed refreshing or
+  // scrolling itself. The 20s interval below keeps it fresh, and pull-to-refresh
+  // covers the deliberate case.
   const { data: livePosts, mutate: mutateFeed } = useSWR("feed", () => getFeed(), {
     fallbackData: posts,
     refreshInterval: 20000,
-    revalidateOnFocus: true,
+    revalidateOnFocus: false,
     keepPreviousData: true,
     dedupingInterval: 8000,
   })

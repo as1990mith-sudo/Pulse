@@ -37,9 +37,19 @@ export function AutoRefresh() {
       router.refresh()
     }
 
-    // Returning to the tab (or reconnecting) should show fresh data right away.
+    // Returning to the tab (or reconnecting) should show fresh data right away —
+    // except on the scroll-heavy reading surfaces that already poll their own
+    // data via SWR. There, a router.refresh() re-renders the whole Server
+    // Component tree and remounts the media inside it, which the reader sees as
+    // the feed lurching or losing their place. On mobile this fired constantly:
+    // opening a video full screen, dismissing a sheet or the address bar
+    // reclaiming focus all count as a focus event. Those surfaces stay fresh on
+    // their own, so the full-app refresh is redundant there.
+    const SELF_POLLING = ["/feed", "/chatrooms"]
     const onVisible = () => {
-      if (document.visibilityState === "visible") refresh()
+      if (document.visibilityState !== "visible") return
+      if (SELF_POLLING.some((p) => window.location.pathname.startsWith(p))) return
+      refresh()
     }
     document.addEventListener("visibilitychange", onVisible)
     window.addEventListener("focus", onVisible)

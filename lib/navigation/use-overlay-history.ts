@@ -10,13 +10,26 @@ import { getNavDepth } from "./history-key"
  * and returns to the screen underneath — rather than navigating the whole app
  * away and leaving the user to find their place again.
  *
- * Nesting works without any extra bookkeeping: each open overlay owns one entry,
- * so a media viewer opened from inside a conversation unwinds one layer per Back
- * (viewer → conversation → list).
- *
  * This replaces several near-identical hand-rolled pushState/popstate blocks that
  * had drifted apart — some closed on Back, some left an orphan entry that made
  * the next Back a no-op, requiring two presses to leave.
+ *
+ * ## Why the dispatcher below is module-level rather than per-hook
+ *
+ * `popstate` is a *window* event: every listener attached to it receives every
+ * pop. The earlier version of this hook added one listener per open overlay, so a
+ * single Back press notified all of them and they all closed at once. Nesting
+ * therefore collapsed instead of unwinding — Back from a video opened inside a
+ * conversation dismissed the viewer *and* the conversation, dropping the reader
+ * back on the list rather than on the post they were watching.
+ *
+ * Closing an overlay from its own UI had the mirror-image bug: cleanup calls
+ * `history.back()` to retire its entry, and that synthetic pop was delivered to
+ * the layer underneath, which closed too.
+ *
+ * So a single listener owns the event and dispatches it to the TOPMOST overlay
+ * only, and pops this hook itself issues are counted and skipped. One Back — or
+ * one X button — moves exactly one layer.
  *
  * @param open    Whether the overlay is currently shown.
  * @param onClose Invoked when Back dismisses it. Should only update state — do
@@ -29,6 +42,34 @@ import { getNavDepth } from "./history-key"
  *   screen they never chose to visit; skipping it lets one Back return them to
  *   wherever they actually came from.
  */
+
+type OverlayEntry = { token: string; close: () => void }
+
+/** Open overlays that own a history entry, deepest last. */
+const stack: OverlayEntry[] = []
+/**
+ * Pops this module issued itself (retiring an entry after a UI-driven close).
+ * The browser delivers those as ordinary `popstate` events, so they have to be
+ * counted and ignored or they would close the layer underneath as well.
+ */
+let selfPops = 0
+let listening = false
+
+function ensureListener() {
+  if (listening || typeof window === "undefined") return
+  listening = true
+  window.addEventListener("popstate", () => {
+    if (selfPops > 0) {
+      selfPops--
+      return
+    }
+    // Only the topmost overlay consumes this Back; anything beneath it keeps its
+    // entry and closes on a later press.
+    const top = stack.pop()
+    top?.close()
+  })
+}
+
 export function useOverlayHistory(
   open: boolean,
   onClose: () => void,
@@ -51,6 +92,8 @@ export function useOverlayHistory(
     // pop. Back leaves the page naturally, which is what the user expects.
     if (skipPushRef.current) return
 
+    ensureListener()
+
     const token = `${id}:${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
     // An overlay pushes a real entry without changing the pathname, so the
     // app-wide tracker (which watches the pathname) never sees it. Stamp the depth
@@ -61,23 +104,20 @@ export function useOverlayHistory(
       "",
     )
 
-    // Tracks whether OUR entry is still on the stack, so cleanup can tell a
-    // Back-driven close (entry already gone) from a programmatic one (still there).
-    let ours = true
-
-    const onPop = () => {
-      ours = false
-      onCloseRef.current()
-    }
-    window.addEventListener("popstate", onPop)
+    const entry: OverlayEntry = { token, close: () => onCloseRef.current() }
+    stack.push(entry)
 
     return () => {
-      window.removeEventListener("popstate", onPop)
-      // Closed from within the UI (an X button, a route change) while our marker
-      // is still current: pop it, or it would linger and swallow the user's next
-      // Back press as a no-op.
-      if (ours && (window.history.state as { __freqOverlay?: string } | null)?.__freqOverlay === token) {
-        window.history.back()
+      const i = stack.indexOf(entry)
+      // Still registered means this close came from the UI (an X button, a route
+      // change) rather than from Back, so our entry is live and has to be retired
+      // — otherwise it would linger and swallow the user's next Back as a no-op.
+      if (i !== -1) {
+        stack.splice(i, 1)
+        if ((window.history.state as { __freqOverlay?: string } | null)?.__freqOverlay === token) {
+          selfPops++
+          window.history.back()
+        }
       }
     }
   }, [open, id])

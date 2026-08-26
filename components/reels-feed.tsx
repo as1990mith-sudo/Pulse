@@ -26,6 +26,7 @@ import { renderMessageBody } from "@/lib/rich-text"
 import { exclusivePlaybackProps, installExclusivePlayback } from "@/lib/exclusive-playback"
 import { noteAutoplayBlocked, useSharedMute } from "@/lib/shared-mute"
 import { getVideoPosition, setImmersiveViewerOpen } from "@/lib/video-handoff"
+import { useOverlayHistory } from "@/lib/navigation/use-overlay-history"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { CommentThread } from "@/components/comment-thread"
@@ -68,6 +69,13 @@ export function ReelsFeed({
   initialKey?: string
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null)
+
+  // Back / the iOS back-gesture closes the viewer and returns the reader to the
+  // post they opened it from. This only applies in overlay mode: `onClose` is
+  // absent when ReelsFeed IS the Reels tab, and pushing an entry there would
+  // make Back merely re-render the tab instead of leaving the feed.
+  useOverlayHistory(!!onClose, () => onClose?.(), "reels-viewer")
+
   // Manual, velocity-aware vertical navigation (replaces native scroll-snap so
   // transitions are a short, snappy tween rather than the browser's floaty snap).
   const animRef = useRef<number | null>(null)

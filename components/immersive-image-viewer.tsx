@@ -25,6 +25,7 @@ import { useHomeVoice } from "@/lib/use-home-voice"
 import type { CurrentUser } from "@/lib/session"
 import type { ShareTarget } from "@/lib/share-types"
 import { haptic } from "@/lib/haptics"
+import { useOverlayHistory } from "@/lib/navigation/use-overlay-history"
 import { cn } from "@/lib/utils"
 
 /**
@@ -66,6 +67,10 @@ export function ImmersiveImageViewer({
   // Tap the image to fade ALL overlay chrome (author, caption, action rail,
   // close, paging) out for an unobstructed view; tap again to bring it back.
   const [chromeVisible, setChromeVisible] = useState(true)
+
+  // Back / the iOS back-gesture closes the viewer and returns the reader to the
+  // post they opened it from, instead of navigating away from the feed entirely.
+  useOverlayHistory(true, onClose, "immersive-image")
 
   // Applied to every overlay layer. `pointer-events-none` while hidden matters:
   // without it the invisible rail would keep swallowing the tap meant to reveal

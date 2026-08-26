@@ -466,7 +466,7 @@ export async function createCommunityPost(
   // personal name and avatar on a thread published as the organisation.
   const orgRow = orgId && !row.anonymous ? await getOrgIdentity(orgId) : null
 
-  revalidatePath("/chatrooms/community")
+  revalidatePath("/chatrooms")
   return {
     id: row.id,
     body: row.body,
@@ -570,7 +570,7 @@ export async function addCommunityComment(input: {
     .from(userTable)
     .where(eq(userTable.id, user.id))
 
-  revalidatePath("/chatrooms/community")
+  revalidatePath("/chatrooms")
   return {
     id: row.id,
     parentId: row.parentId ?? null,
@@ -602,7 +602,7 @@ export async function editCommunityPost(input: { postId: number; body: string })
   if (post.userId !== user.id) throw new Error("You can only edit your own post.")
 
   await db.update(communityPost).set({ body: text, editedAt: new Date() }).where(eq(communityPost.id, input.postId))
-  revalidatePath("/chatrooms/community")
+  revalidatePath("/chatrooms")
   return text
 }
 
@@ -622,7 +622,7 @@ export async function editCommunityComment(input: { commentId: number; body: str
     .update(communityComment)
     .set({ body: text, editedAt: new Date() })
     .where(eq(communityComment.id, input.commentId))
-  revalidatePath("/chatrooms/community")
+  revalidatePath("/chatrooms")
   return text
 }
 
@@ -638,7 +638,7 @@ export async function setCommunityCommentLike(input: { commentId: number; liked:
   if (!changed) return
   const next = Math.max(0, row.likes + (input.liked ? 1 : -1))
   await db.update(communityComment).set({ likes: next }).where(eq(communityComment.id, input.commentId))
-  revalidatePath("/chatrooms/community")
+  revalidatePath("/chatrooms")
 }
 
 /** Toggle a like on an anonymous community post. Idempotent — persists per-user state. */
@@ -653,7 +653,7 @@ export async function setCommunityPostLike(input: { postId: number; liked: boole
   if (!changed) return
   const next = Math.max(0, row.likes + (input.liked ? 1 : -1))
   await db.update(communityPost).set({ likes: next }).where(eq(communityPost.id, input.postId))
-  revalidatePath("/chatrooms/community")
+  revalidatePath("/chatrooms")
 }
 
 /** Author-only soft delete of their own anonymous post. */
@@ -663,7 +663,7 @@ export async function deleteCommunityPost(postId: number) {
   if (!post) throw new Error("Post not found.")
   if (post.userId !== user.id) throw new Error("You can only delete your own post.")
   await db.update(communityPost).set({ deleted: true }).where(eq(communityPost.id, postId))
-  revalidatePath("/chatrooms/community")
+  revalidatePath("/chatrooms")
 }
 
 /**
@@ -699,7 +699,7 @@ export async function setCommunityPostPinned(input: { postId: number; pinned: bo
       .where(eq(communityPost.id, input.postId))
   }
 
-  revalidatePath("/chatrooms/community")
+  revalidatePath("/chatrooms")
 }
 
 /** Author-only soft delete of their own comment. */
@@ -709,5 +709,5 @@ export async function deleteCommunityComment(commentId: number) {
   if (!comment) throw new Error("Comment not found.")
   if (comment.userId !== user.id) throw new Error("You can only delete your own reply.")
   await db.update(communityComment).set({ deleted: true }).where(eq(communityComment.id, commentId))
-  revalidatePath("/chatrooms/community")
+  revalidatePath("/chatrooms")
 }
