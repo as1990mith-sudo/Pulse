@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { MoreHorizontal, Copy, Pencil, Trash2, Send, X } from "lucide-react"
+import { BadgeCheck, MoreHorizontal, Copy, Pencil, Trash2, Send, X } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import { LikeHeart } from "@/components/like-heart"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -29,6 +29,12 @@ export type ThreadComment = {
   initials: string
   color: string
   image: string | null
+  /**
+   * True when the comment speaks for a verified organisation, which shows a tick
+   * beside the name. Optional so the many surfaces that have no notion of an
+   * organisation voice (devotional, QOTD, articles…) need not pass it.
+   */
+  orgVerified?: boolean
   text: string
   likes: number
   liked: boolean
@@ -486,6 +492,9 @@ function CommentItem({
             <NameTag {...nameProps} className={cn(comfortable ? "text-[15px]" : "text-sm", "font-semibold", comment.authorId && "hover:underline")}>
               {comment.name}
             </NameTag>
+            {comment.orgVerified && (
+              <BadgeCheck className="size-4 shrink-0 text-sky-400" aria-label="Verified organisation" />
+            )}
             {comment.handle && <span className="text-xs text-muted-foreground">{comment.handle}</span>}
             <span className="text-xs text-muted-foreground">· {comment.postedAt}</span>
             {edited && <span className="text-xs text-muted-foreground">· edited</span>}

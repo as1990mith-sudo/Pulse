@@ -7,6 +7,8 @@ import { ArrowLeft, ChevronDown, Loader2, Send, Share2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ShareSheet } from "@/components/share-sheet"
+import { HomeVoiceSwitch } from "@/components/home-voice-switch"
+import { useHomeVoice } from "@/lib/use-home-voice"
 import type { ShareTarget } from "@/lib/share-types"
 import { linkify } from "@/lib/linkify"
 import { cn } from "@/lib/utils"
@@ -37,6 +39,8 @@ function toThreadComment(c: CommunityCommentView): ThreadComment {
     initials: c.initials,
     color: c.color,
     image: c.image,
+    // Carries the verified tick when the reply speaks for an organisation.
+    orgVerified: c.orgVerified,
     text: c.body,
     likes: c.likes,
     liked: c.liked,
@@ -50,16 +54,22 @@ function toThreadComment(c: CommunityCommentView): ThreadComment {
 /*  Reply composer (sticky bottom)                                            */
 /* -------------------------------------------------------------------------- */
 
-function ReplyComposer({ onSubmit }: { onSubmit: (text: string) => Promise<void> }) {
+function ReplyComposer({ onSubmit }: { onSubmit: (text: string, asHome?: boolean) => Promise<void> }) {
   const [value, setValue] = useState("")
   const [sending, setSending] = useState(false)
+  // Admins of the active Home may answer as the organisation. Null for everyone
+  // else, which renders nothing — ordinary members never see an inert control.
+  const homeVoice = useHomeVoice()
+  // Default to the Home's voice when one is available, matching the main feed's
+  // composer so an admin's reply doesn't silently go out under their own name.
+  const [asHome, setAsHome] = useState(true)
 
   async function submit() {
     const text = value.trim()
     if (!text || sending) return
     setSending(true)
     try {
-      await onSubmit(text)
+      await onSubmit(text, homeVoice ? asHome : undefined)
       setValue("")
     } finally {
       setSending(false)
@@ -67,7 +77,12 @@ function ReplyComposer({ onSubmit }: { onSubmit: (text: string) => Promise<void>
   }
 
   return (
-    <div className="flex items-end gap-2 border-t border-border/60 bg-background/95 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:px-6">
+    <div className="border-t border-border/60 bg-background/95 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:px-6">
+      {/* Community doesn't load the viewer's profile (it's a signed-in-only
+          surface that never needed one), so the personal option is labelled
+          "You" — the same fallback the shared comment sheet uses. */}
+      <HomeVoiceSwitch voice={homeVoice} asHome={asHome} onChange={setAsHome} personalName="You" size="sm" />
+      <div className="flex items-end gap-2">
       <Textarea
         value={value}
         onChange={(e) => setValue(e.target.value)}
@@ -93,6 +108,7 @@ function ReplyComposer({ onSubmit }: { onSubmit: (text: string) => Promise<void>
       >
         {sending ? <Loader2 className="size-5 animate-spin" /> : <Send className="size-5" />}
       </Button>
+      </div>
     </div>
   )
 }
@@ -297,8 +313,13 @@ export function CommunityConversation({
               enforceDeleteWindow={false}
               onAuthorClick={openProfile}
               onLike={(commentId, liked) => void setCommunityCommentLike({ commentId, liked })}
-              onReply={async (parentId, value) => {
-                const created = await addCommunityComment({ postId: post.id, body: value, parentId })
+              onReply={async (parentId, value, asHome) => {
+                const created = await addCommunityComment({
+                  postId: post.id,
+                  body: value,
+                  parentId,
+                  asOrganization: asHome,
+                })
                 onCountChange(post.id, 1)
                 await mutate((prev) => [...(prev ?? []), created], { revalidate: false })
               }}
@@ -321,8 +342,8 @@ export function CommunityConversation({
 
       {/* Sticky reply composer */}
       <ReplyComposer
-        onSubmit={async (text) => {
-          const created = await addCommunityComment({ postId: post.id, body: text })
+        onSubmit={async (text, asHome) => {
+          const created = await addCommunityComment({ postId: post.id, body: text, asOrganization: asHome })
           onCountChange(post.id, 1)
           await mutate((prev) => [...(prev ?? []), created], { revalidate: false })
         }}
@@ -336,16 +357,8 @@ export function CommunityConversation({
           posts={mediaStack}
           startId={post.id}
           onClose={() => setLightboxOpen(false)}
-          // Same as the video viewer: close onto the thread, then bring the
-          // replies into view rather than leaving them below the fold.
-          onOpenComments={() => {
-            setLightboxOpen(false)
-            requestAnimationFrame(() => {
-              scrollRef.current
-                ?.querySelector("[data-comments]")
-                ?.scrollIntoView({ behavior: "smooth", block: "start" })
-            })
-          }}
+          // The viewer now stacks the comment sheet over the photo itself, so
+          // Comment no longer dismisses the lightbox to scroll the thread.
           onAuthorClick={openProfile}
         />
       )}
@@ -417,17 +430,8 @@ function PostVideo({
           posts={siblings}
           startId={post.id}
           onClose={() => setFullscreen(false)}
-          // The comment thread is already the screen underneath, so Comment
-          // dismisses the overlay — then scrolls the replies into view, since
-          // closing onto the question header would hide them below the fold and
-          // make the tap read as a no-op.
-          onOpenComments={() => {
-            setFullscreen(false)
-            // Next frame, so the overlay has unmounted and the thread is laid out.
-            requestAnimationFrame(() => {
-              document.querySelector("[data-comments]")?.scrollIntoView({ behavior: "smooth", block: "start" })
-            })
-          }}
+          // Comments are a sheet over the clip now, so watching and replying no
+          // longer trade off against each other.
           onAuthorClick={onAuthorClick}
         />
       )}

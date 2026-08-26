@@ -1032,6 +1032,11 @@ export const communityComment = pgTable("community_comment", {
   parentId: integer("parentId"),
   userId: text("userId").notNull(),
   userName: text("userName").notNull(),
+  // Set when an admin replies in their Home organisation's voice, mirroring
+  // feedComment. The identity is denormalized at write time and never recomputed
+  // on read, so a later role change cannot rewrite who said what.
+  organizationId: text("organizationId"),
+  publishedAsType: text("publishedAsType").notNull().default("personal"),
   body: text("body").notNull(),
   likes: integer("likes").notNull().default(0),
   deleted: boolean("deleted").notNull().default(false),

@@ -2,14 +2,27 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { createPortal } from "react-dom"
+import useSWR from "swr"
 import { X, Bookmark, Share2, Volume2, VolumeX } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
+import { CommentSheet } from "@/components/comment-sheet"
+import type { ThreadComment } from "@/components/comment-thread"
 import { LikeHeart } from "@/components/like-heart"
 import { MediaCaption } from "@/components/media-caption"
 import { FEED_VIDEO_CONTROLS_HEIGHT, FeedVideo } from "@/components/feed-video"
 import { ShareSheet } from "@/components/share-sheet"
 import { ANON_AVATAR, communityMediaIdentity, toggleSaved, useIsSaved } from "@/components/community-help-shared"
-import { setCommunityPostLike, type CommunityPostView } from "@/app/actions/community"
+import { useHomeVoice } from "@/lib/use-home-voice"
+import {
+  addCommunityComment,
+  deleteCommunityComment,
+  editCommunityComment,
+  getCommunityComments,
+  setCommunityCommentLike,
+  setCommunityPostLike,
+  type CommunityCommentView,
+  type CommunityPostView,
+} from "@/app/actions/community"
 import { setImmersiveViewerOpen } from "@/lib/video-handoff"
 import { noteUserGesture, useSharedMute } from "@/lib/shared-mute"
 import { useOverlayHistory } from "@/lib/navigation/use-overlay-history"
@@ -41,7 +54,6 @@ export function CommunityMediaViewer({
   posts,
   startId,
   onClose,
-  onOpenComments,
   onAuthorClick,
 }: {
   kind: "video" | "image"
@@ -49,8 +61,6 @@ export function CommunityMediaViewer({
   posts: CommunityPostView[]
   startId: number
   onClose: () => void
-  /** Opens the post's conversation thread, where Community comments live. */
-  onOpenComments?: (post: CommunityPostView) => void
   onAuthorClick?: (authorId: string) => void
 }) {
   // Video browses its siblings; a photo stands alone (see the note above).
@@ -68,13 +78,30 @@ export function CommunityMediaViewer({
   )
   const [active, setActive] = useState(startIndex)
   const scrollerRef = useRef<HTMLDivElement>(null)
+  // Comments open as a sheet ON TOP of full screen (the main feed's behaviour),
+  // rather than dismissing the viewer to hand off to the conversation thread —
+  // tapping Comment no longer costs you the clip you were watching.
+  const [commentsOpen, setCommentsOpen] = useState(false)
+
+  // The post the sheet belongs to is whichever slide is centred, so swiping to
+  // another clip and tapping Comment loads that clip's replies.
+  const activePost = stack[active] ?? stack[0]
 
   // Back / back-gesture dismisses the overlay instead of leaving the page.
   useOverlayHistory(true, onClose, "community-media")
 
+  // Read through a ref inside the key handler below. Putting `commentsOpen` in
+  // that effect's deps would re-run the whole mount block — noteUserGesture, the
+  // body-overflow save/restore and the immersive-viewer gate — on every toggle of
+  // the sheet, which would churn state that is meant to be set up once.
+  const commentsOpenRef = useRef(commentsOpen)
+  commentsOpenRef.current = commentsOpen
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose()
+      // While the comment sheet is stacked on top, Escape belongs to it — the
+      // sheet closes and the clip stays open, matching the visual stacking.
+      if (e.key === "Escape" && !commentsOpenRef.current) onClose()
     }
     document.addEventListener("keydown", onKey)
 
@@ -161,13 +188,114 @@ export function CommunityMediaViewer({
             kind={kind}
             active={i === active}
             onClose={onClose}
-            onOpenComments={onOpenComments}
+            onOpenComments={() => setCommentsOpen(true)}
             onAuthorClick={onAuthorClick}
           />
         ))}
       </div>
+
+      {activePost && (
+        <ViewerComments
+          post={activePost}
+          open={commentsOpen}
+          onClose={() => setCommentsOpen(false)}
+          onAuthorClick={onAuthorClick}
+        />
+      )}
     </div>,
     document.body,
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Comment sheet, stacked over full screen                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The shared CommentSheet, wired to the `community_comment` actions for one
+ * post. Split out as its own component so its SWR fetch is keyed to a single
+ * post id and unmounts with the sheet — mounting the hook in the viewer would
+ * refetch on every swipe, even when the sheet was never opened.
+ *
+ * `canComment` is forced rather than derived from a `currentUser`: Community is
+ * a signed-in-only surface, and the actions re-check the session anyway.
+ */
+function ViewerComments({
+  post,
+  open,
+  onClose,
+  onAuthorClick,
+}: {
+  post: CommunityPostView
+  open: boolean
+  onClose: () => void
+  onAuthorClick?: (authorId: string) => void
+}) {
+  // Admins of the active Home get the same identity choice here as in the feed's
+  // comment box, so a Home can answer a question in its own voice.
+  const homeVoice = useHomeVoice()
+  // Same SWR key the conversation thread uses, so a reply sent from either
+  // surface shows up in the other without a refetch.
+  const { data: comments = [], mutate } = useSWR(
+    open ? ["community-comments", post.id] : null,
+    () => getCommunityComments(post.id),
+  )
+
+  const threaded: ThreadComment[] = comments.map((c) => ({
+    id: c.id,
+    parentId: c.parentId,
+    authorId: c.userId,
+    isSelf: c.isSelf,
+    name: c.userName,
+    handle: c.handle,
+    initials: c.initials,
+    color: c.color,
+    image: c.image,
+    orgVerified: c.orgVerified,
+    text: c.body,
+    likes: c.likes,
+    liked: c.liked,
+    edited: c.edited,
+    postedAt: c.postedAt,
+    createdAtMs: c.createdAtMs,
+  }))
+
+  // Appends the server's own row rather than a placeholder, so the reply renders
+  // with its real id and resolved identity (org name/logo when sent as a Home).
+  async function send(body: string, asHome?: boolean, parentId?: number | null) {
+    const created: CommunityCommentView = await addCommunityComment({
+      postId: post.id,
+      body,
+      parentId: parentId ?? null,
+      asOrganization: asHome,
+    })
+    await mutate((prev) => [...(prev ?? []), created], { revalidate: false })
+  }
+
+  return (
+    <CommentSheet
+      open={open}
+      onClose={onClose}
+      comments={threaded}
+      count={comments.length}
+      canComment
+      homeVoice={homeVoice}
+      onAuthorClick={onAuthorClick}
+      placeholder="Write a reply…"
+      emptyText="No replies yet"
+      emptyHint="Be the first to help."
+      onSubmit={(text, asHome) => send(text, asHome)}
+      onReply={(parentId, text, asHome) => send(text, asHome, parentId)}
+      onLike={(commentId, liked) => void setCommunityCommentLike({ commentId, liked })}
+      onEdit={async (commentId, text) => {
+        await editCommunityComment({ commentId, body: text })
+        await mutate()
+      }}
+      onDelete={async (commentId) => {
+        await deleteCommunityComment(commentId)
+        await mutate((prev) => (prev ?? []).filter((c) => c.id !== commentId), { revalidate: false })
+      }}
+    />
   )
 }
 
@@ -189,7 +317,8 @@ function Slide({
   kind: "video" | "image"
   active: boolean
   onClose: () => void
-  onOpenComments?: (post: CommunityPostView) => void
+  /** Opens the comment sheet the viewer stacks over this slide. */
+  onOpenComments: () => void
   onAuthorClick?: (authorId: string) => void
 }) {
   const [liked, setLiked] = useState(post.liked)
@@ -326,7 +455,7 @@ function Slide({
 
         <button
           type="button"
-          onClick={() => onOpenComments?.(post)}
+          onClick={onOpenComments}
           className="flex flex-col items-center gap-1"
           aria-label="Comments"
         >

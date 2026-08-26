@@ -15,6 +15,7 @@ import {
   user as userTable,
 } from "@/lib/db/schema"
 import { getProfileScope, scopeToHome } from "@/lib/home/profile-scope"
+import { resolvePublishingIdentity } from "@/lib/home/publishing"
 import { canPinInScope, MAX_PINNED_PER_SCOPE, pinWithinCap } from "@/lib/home/can-pin"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { formatPostTimestamp } from "@/lib/format-timestamp"
@@ -88,6 +89,8 @@ export type CommunityCommentView = {
   initials: string
   color: string
   image: string | null
+  /** True when this reply speaks for a verified organisation. */
+  orgVerified: boolean
   body: string
   likes: number
   liked: boolean
@@ -527,23 +530,52 @@ export async function getCommunityComments(postId: number): Promise<CommunityCom
 
   const likedSet = await getLikedSet(viewerId, "community_comment", rows.map((r) => r.id))
 
-  return rows.map((r) => ({
-    id: r.id,
-    parentId: r.parentId ?? null,
-    userId: r.userId,
-    userName: r.userName,
-    handle: getHandle(r.userName),
-    initials: getInitials(r.userName),
-    color: getAvatarColor(r.userId),
-    image: imageMap.get(r.userId) ?? null,
-    body: r.body,
-    likes: r.likes,
-    liked: likedSet.has(r.id),
-    edited: !!r.editedAt,
-    postedAt: timeAgo(r.createdAt),
-    createdAtMs: r.createdAt.getTime(),
-    isSelf: viewerId === r.userId,
-  }))
+  // Live organisation identity for replies written in a Home's voice. Resolved
+  // from the org row (not the denormalized name) so renaming an organisation
+  // retroactively updates its past replies, matching the main feed.
+  const orgIds = [...new Set(rows.map((r) => r.organizationId).filter((id): id is string => !!id))]
+  const orgMap = new Map<string, { name: string; handle: string; logo: string | null; verified: boolean }>()
+  if (orgIds.length) {
+    const orgs = await db
+      .select({
+        id: organization.id,
+        name: organization.name,
+        handle: organization.handle,
+        logo: organization.logo,
+        verified: organization.verified,
+      })
+      .from(organization)
+      .where(inArray(organization.id, orgIds))
+    for (const o of orgs) {
+      orgMap.set(o.id, { name: o.name, handle: o.handle, logo: o.logo, verified: o.verified ?? false })
+    }
+  }
+
+  return rows.map((r) => {
+    const org = r.organizationId ? orgMap.get(r.organizationId) : undefined
+    // An org reply is attributed to the ORGANISATION, so the admin who wrote it
+    // is never named. `isSelf` still tracks the real author, which is what the
+    // edit/delete affordances are keyed on.
+    const name = org?.name ?? r.userName
+    return {
+      id: r.id,
+      parentId: r.parentId ?? null,
+      userId: r.userId,
+      userName: name,
+      handle: org ? org.handle || getHandle(org.name) : getHandle(r.userName),
+      initials: getInitials(name),
+      color: getAvatarColor(r.organizationId ?? r.userId),
+      image: org ? org.logo : (imageMap.get(r.userId) ?? null),
+      orgVerified: org?.verified ?? false,
+      body: r.body,
+      likes: r.likes,
+      liked: likedSet.has(r.id),
+      edited: !!r.editedAt,
+      postedAt: timeAgo(r.createdAt),
+      createdAtMs: r.createdAt.getTime(),
+      isSelf: viewerId === r.userId,
+    }
+  })
 }
 
 /** Adds a non-anonymous reply to a post. */
@@ -551,6 +583,10 @@ export async function addCommunityComment(input: {
   postId: number
   body: string
   parentId?: number | null
+  // Identity choice from the reply box. Admins of the active Home may answer as
+  // the organisation; for everyone else the server resolves to personal anyway,
+  // so this can't be used to impersonate a Home.
+  asOrganization?: boolean
 }): Promise<CommunityCommentView> {
   const user = await requireUser()
   const text = input.body.trim()
@@ -560,26 +596,54 @@ export async function addCommunityComment(input: {
   const [post] = await db.select().from(communityPost).where(eq(communityPost.id, input.postId))
   if (!post || post.deleted) throw new Error("This post no longer exists.")
 
+  // Identity is resolved server-side from the ACTIVE Home and this user's role in
+  // it — the client's `asOrganization` only expresses a preference for personal.
+  const identity = await resolvePublishingIdentity(
+    { name: user.name, handle: getHandle(user.name), image: user.image ?? null },
+    { preferPersonal: input.asOrganization === false },
+  )
+  const asOrg = identity.type === "home"
+  const orgId = asOrg ? identity.organizationId : null
+
   const [row] = await db
     .insert(communityComment)
-    .values({ postId: input.postId, parentId: input.parentId ?? null, userId: user.id, userName: user.name, body: text })
+    .values({
+      postId: input.postId,
+      parentId: input.parentId ?? null,
+      userId: user.id,
+      userName: identity.name,
+      organizationId: orgId,
+      publishedAsType: identity.type,
+      body: text,
+    })
     .returning()
 
-  const [profile] = await db
-    .select({ image: userTable.image })
-    .from(userTable)
-    .where(eq(userTable.id, user.id))
+  // Only needed for a personal reply; an org reply shows the Home's logo.
+  const [profile] = asOrg
+    ? [undefined]
+    : await db.select({ image: userTable.image }).from(userTable).where(eq(userTable.id, user.id))
+
+  // Mirror the read path so the optimistic row matches what a refetch returns.
+  const [org] = orgId
+    ? await db
+        .select({ name: organization.name, handle: organization.handle, logo: organization.logo, verified: organization.verified })
+        .from(organization)
+        .where(eq(organization.id, orgId))
+    : [undefined]
+
+  const name = org?.name ?? identity.name
 
   revalidatePath("/chatrooms")
   return {
     id: row.id,
     parentId: row.parentId ?? null,
     userId: user.id,
-    userName: user.name,
-    handle: getHandle(user.name),
-    initials: getInitials(user.name),
-    color: getAvatarColor(user.id),
-    image: profile?.image ?? null,
+    userName: name,
+    handle: org ? org.handle || getHandle(org.name) : getHandle(name),
+    initials: getInitials(name),
+    color: getAvatarColor(orgId ?? user.id),
+    image: org ? org.logo : (profile?.image ?? null),
+    orgVerified: org?.verified ?? false,
     body: row.body,
     likes: 0,
     liked: false,
