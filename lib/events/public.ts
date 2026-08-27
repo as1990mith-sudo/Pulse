@@ -128,6 +128,78 @@ export async function listPublicEvents(homeId: string): Promise<PublicEventCard[
   })
 }
 
+export type PublicEventBrowserCard = PublicEventCard & {
+  /** Event's own date is strictly before today. Undated events are never past. */
+  isPast: boolean
+}
+
+/**
+ * Every public event for a Home — upcoming AND past — for the discovery browser.
+ *
+ * Unlike {@link listPublicEvents} (upcoming-only, used by simpler surfaces),
+ * this keeps past events so the browser can offer a "Past events / View recap"
+ * section. Same `publicPageEnabled` + `approved` gate: nothing reaches the open
+ * web that an admin didn't publish. Returned upcoming-first (soonest first),
+ * then past (most recent first); the caller groups by date.
+ */
+export async function listPublicEventsForBrowser(homeId: string): Promise<PublicEventBrowserCard[]> {
+  const today = new Date().toISOString().slice(0, 10)
+
+  const rows = await db
+    .select({
+      ad: announcement,
+      // See listPublicEvents for why this subquery is written with an explicit
+      // `er` alias and fully-qualified announcement.id (Drizzle raw-sql trap).
+      registered: sql<number>`(
+        select coalesce(sum(er."guests"), 0)::int
+        from "event_registration" er
+        where er."announcementId" = "announcement"."id"
+          and er."status" = 'registered'
+      )`,
+    })
+    .from(announcement)
+    .where(
+      and(
+        eq(announcement.homeId, homeId),
+        eq(announcement.adType, "event"),
+        eq(announcement.publicPageEnabled, true),
+        eq(announcement.status, "approved"),
+      ),
+    )
+
+  const now = new Date()
+  const cards: PublicEventBrowserCard[] = rows.map(({ ad, registered }) => {
+    const isFull = ad.capacity !== null && registered >= ad.capacity
+    const closed = ad.registrationClosesAt ? ad.registrationClosesAt.getTime() <= now.getTime() : false
+    const isPast = ad.eventDate !== null && ad.eventDate < today
+    return {
+      id: ad.id,
+      title: ad.title,
+      description: ad.description,
+      flyer: ad.flyer,
+      location: ad.location,
+      eventDate: ad.eventDate,
+      eventTime: ad.eventTime,
+      registrationEnabled: ad.registrationEnabled,
+      capacity: ad.capacity ?? null,
+      registeredCount: registered,
+      isFull,
+      // A past event is never "open" regardless of its registration window.
+      open: !isPast && ad.registrationEnabled && !isFull && !closed,
+      isPast,
+    }
+  })
+
+  // Upcoming soonest-first, then past most-recent-first. Undated events sort as
+  // upcoming and last within that group (nothing to anchor them earlier).
+  const rank = (c: PublicEventBrowserCard) => c.eventDate ?? "9999-12-31"
+  return cards.sort((a, b) => {
+    if (a.isPast !== b.isPast) return a.isPast ? 1 : -1
+    if (a.isPast) return rank(a) < rank(b) ? 1 : rank(a) > rank(b) ? -1 : 0
+    return rank(a) < rank(b) ? -1 : rank(a) > rank(b) ? 1 : 0
+  })
+}
+
 /** Formats an event's date/time for display, tolerant of missing values. */
 export function formatEventWhen(date: string | null, time: string | null): string | null {
   if (!date) return time ? time : null
