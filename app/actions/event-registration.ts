@@ -234,7 +234,10 @@ export async function registerForEvent(input: {
   // moment a place is booked. Without this it kept advertising "Register" on an
   // event that had just sold out.
   revalidatePath(`/events/${homeHandle}`)
-  revalidatePath(`/home/${homeHandle}/registrations`)
+  // The Admin Console's Events section shows live registration counts. Note the
+  // path is `/org/<handle>/admin/events` — there is no `/home/<handle>/...`
+  // route, so the previous path here silently revalidated nothing.
+  revalidatePath(`/org/${homeHandle}/admin/events`)
   revalidatePath("/feed")
 
   return { ok: true, registrationId, alreadyRegistered }
@@ -286,7 +289,7 @@ export async function cancelRegistration(input: {
   // Cancelling frees a seat, so the listing's Full chip and remaining-places
   // count must be refreshed as well.
   revalidatePath(`/events/${loaded.homeHandle}`)
-  revalidatePath(`/home/${loaded.homeHandle}/registrations`)
+  revalidatePath(`/org/${loaded.homeHandle}/admin/events`)
   return { ok: true }
 }
 
