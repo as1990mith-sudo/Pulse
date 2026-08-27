@@ -42,6 +42,11 @@ function isImmersive(p: string): boolean {
   if (/^\/home\/(?!join$|create$)[^/]+/.test(p)) return true
   // A specific chat room (but keep the bar on the browse lists).
   if (/^\/chatrooms\/(?!community$|dreams$)[^/]+/.test(p)) return true
+  // Public event pages. These are the one surface designed for people with no
+  // Frequency account, so the member tab bar is actively unhelpful: every tab
+  // would lead a non-member straight into a sign-in wall. The pages carry their
+  // own lightweight public chrome instead.
+  if (/^\/events(\/|$)/.test(p)) return true
   return false
 }
 

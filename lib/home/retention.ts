@@ -30,6 +30,9 @@ import {
   episodeComment,
   event,
   eventRsvp,
+  eventContact,
+  eventRegistration,
+  eventBroadcast,
   feedComment,
   feedPost,
   home,
@@ -154,6 +157,15 @@ export async function purgeHomeData(homeId: string, orgId: string | null): Promi
       await tx.delete(announcementInteraction).where(inArray(announcementInteraction.announcementId, announcementIds))
       await tx.delete(announcement).where(inArray(announcement.id, announcementIds))
     }
+
+    // --- Event registration data -------------------------------------------
+    // Deleted by homeId rather than by announcementId: a registration's Home is
+    // denormalized onto the row, so this also sweeps rows whose parent event was
+    // already removed. Purging a Home must leave no contact behind — these rows
+    // hold personal data (name, email, mobile) belonging to that Home alone.
+    await tx.delete(eventRegistration).where(eq(eventRegistration.homeId, homeId))
+    await tx.delete(eventContact).where(eq(eventContact.homeId, homeId))
+    await tx.delete(eventBroadcast).where(eq(eventBroadcast.homeId, homeId))
 
     // --- Remaining Home-scoped rows ----------------------------------------
     await tx.delete(devotional).where(eq(devotional.homeId, homeId))
