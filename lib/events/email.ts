@@ -176,8 +176,13 @@ export async function sendBroadcast(input: {
               escapeHtml(input.reason),
             ),
           })
+          // Log the provider's reason. Without this a whole failed broadcast
+          // reports only a count, leaving no way to tell an unverified sending
+          // domain from a bad address or a rate limit.
+          if (error) console.log("[v0] Broadcast recipient failed:", error.name, error.message)
           return !error
-        } catch {
+        } catch (err) {
+          console.log("[v0] Broadcast recipient threw:", err instanceof Error ? err.message : err)
           return false
         }
       }),
