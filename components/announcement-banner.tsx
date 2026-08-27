@@ -1,9 +1,11 @@
 "use client"
 
-import { useRef, useState, useTransition } from "react"
+import { useMemo, useRef, useState, useTransition } from "react"
 import { createPortal } from "react-dom"
 import Image from "next/image"
 import {
+  Bookmark,
+  CalendarDays,
   CalendarPlus,
   Check,
   ClipboardList,
@@ -12,6 +14,7 @@ import {
   Loader2,
   MapPin,
   Megaphone,
+  MoreHorizontal,
   MoreVertical,
   Plus,
   Share2,
@@ -40,6 +43,59 @@ import type { CurrentUser } from "@/lib/session"
 import { cn } from "@/lib/utils"
 import { uploadMedia } from "@/lib/upload-media"
 
+/* ---------------------------------------------------------------------------
+ * Date grouping for the premium events list
+ *
+ * The feed only ever holds approved, unexpired events (see getActiveAnnouncements),
+ * so there's no "past" bucket here — every card is upcoming. We group by how soon
+ * the event is (Today / Tomorrow / This Week / Later), mirroring the public
+ * /events/[handle] browser so the two surfaces feel like one product.
+ * ------------------------------------------------------------------------- */
+
+type FeedGroupKey = "today" | "tomorrow" | "week" | "later"
+
+const FEED_GROUP_LABELS: Record<FeedGroupKey, string> = {
+  today: "Today",
+  tomorrow: "Tomorrow",
+  week: "This Week",
+  later: "Later",
+}
+
+const FEED_GROUP_ORDER: FeedGroupKey[] = ["today", "tomorrow", "week", "later"]
+
+const FEED_MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+const FEED_DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
+/** Local midnight for a YYYY-MM-DD string, avoiding UTC parse drift. */
+function feedMidnight(dateStr: string): Date {
+  const [y, m, d] = dateStr.split("-").map(Number)
+  return new Date(y, m - 1, d)
+}
+
+/** Whole days from today's midnight to the event's midnight (negative = past). */
+function feedDaysFromToday(dateStr: string): number {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return Math.round((feedMidnight(dateStr).getTime() - today.getTime()) / 86_400_000)
+}
+
+/** Which section an event belongs in; undated events fall to "Later". */
+function feedBucket(dateStr: string | null): FeedGroupKey {
+  if (!dateStr) return "later"
+  const d = feedDaysFromToday(dateStr)
+  if (d <= 0) return "today"
+  if (d === 1) return "tomorrow"
+  if (d <= 7) return "week"
+  return "later"
+}
+
+/** { mon, day, dow } for the date block; a gentle placeholder when undated. */
+function feedDateParts(dateStr: string | null): { mon: string; day: string; dow: string } {
+  if (!dateStr) return { mon: "—", day: "··", dow: "TBC" }
+  const d = feedMidnight(dateStr)
+  return { mon: FEED_MONTHS[d.getMonth()], day: String(d.getDate()), dow: FEED_DOW[d.getDay()] }
+}
+
 export function AnnouncementBanner({
   announcements,
   myRequests,
@@ -58,6 +114,9 @@ export function AnnouncementBanner({
   const [showForm, setShowForm] = useState(false)
   // The id of the event whose detail sheet is open (opened by tapping a card).
   const [openId, setOpenId] = useState<number | null>(null)
+  // Cosmetic saved/bookmark state per card (matches the public browser). Purely
+  // client-side for now — bookmarking has no server model yet.
+  const [saved, setSaved] = useState<Record<number, boolean>>({})
 
   // Pending/declined requests still worth surfacing to their owner.
   const trackable = myRequests.filter((r) => r.status !== "approved")
@@ -69,20 +128,32 @@ export function AnnouncementBanner({
   // (which revalidate the feed) reflect immediately; close it if it's gone.
   const openEvent = openId != null ? announcements.find((e) => e.id === openId) ?? null : null
 
+  // Bucket every visible event into its date section, preserving the server's
+  // ascending-by-date order within each section.
+  const grouped = useMemo(() => {
+    const groups: Record<FeedGroupKey, AnnouncementView[]> = { today: [], tomorrow: [], week: [], later: [] }
+    for (const a of events) groups[feedBucket(a.eventDate)].push(a)
+    return groups
+  }, [events])
+  const visibleGroups = FEED_GROUP_ORDER.filter((g) => grouped[g].length > 0)
+
   return (
     <section aria-label="Events" className="space-y-4 pb-4">
       {/* Header + publish entry point */}
-      <div className="flex items-center justify-between gap-3 px-4 sm:px-0">
-        <div className="flex items-center gap-2">
-          <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <CalendarPlus className="size-5" />
+      <div className="flex items-start justify-between gap-3 px-4 sm:px-0">
+        <div className="flex items-center gap-2.5">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-[0_0_22px_-4px] shadow-primary/60">
+            <CalendarDays className="size-6" />
           </span>
-          <div className="leading-tight">
-            <h2 className="text-base font-semibold">Events</h2>
+          <div className="min-w-0 leading-tight">
+            <h2 className="text-2xl font-bold tracking-tight">Events</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
+              Discover upcoming events and experiences
+            </p>
           </div>
         </div>
         {canPublish && (
-          <Button size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
+          <Button size="sm" className="mt-1 shrink-0 gap-1.5" onClick={() => setShowForm(true)}>
             <Plus className="size-4" /> Publish
           </Button>
         )}
@@ -98,11 +169,32 @@ export function AnnouncementBanner({
         </div>
       )}
 
-      {/* Two-column grid of every published event. */}
+      {/* Premium grouped sections: Today / Tomorrow / This Week / Later. */}
       {events.length > 0 ? (
-        <div className="grid grid-cols-2 gap-x-3 gap-y-6 px-4 sm:gap-x-4 sm:px-0">
-          {events.map((a, i) => (
-            <EventGridCard key={a.id} event={a} index={i} onOpen={() => setOpenId(a.id)} />
+        <div className="space-y-7 px-4 sm:px-0">
+          {visibleGroups.map((g) => (
+            <section key={g} aria-label={FEED_GROUP_LABELS[g]}>
+              <div className="mb-3 flex items-center gap-2">
+                <CalendarDays className="size-4 text-primary" />
+                <h3 className="text-base font-semibold tracking-tight">{FEED_GROUP_LABELS[g]}</h3>
+                <span className="grid h-5 min-w-5 place-items-center rounded-full bg-secondary px-1.5 text-xs font-semibold tabular-nums text-muted-foreground">
+                  {grouped[g].length}
+                </span>
+              </div>
+              <ul className="grid grid-cols-1 gap-3">
+                {grouped[g].map((a, i) => (
+                  <li key={a.id}>
+                    <EventGridCard
+                      event={a}
+                      index={i}
+                      saved={Boolean(saved[a.id])}
+                      onToggleSave={() => setSaved((s) => ({ ...s, [a.id]: !s[a.id] }))}
+                      onOpen={() => setOpenId(a.id)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </section>
           ))}
         </div>
       ) : (
@@ -128,72 +220,130 @@ export function AnnouncementBanner({
 }
 
 /**
- * Premium bookstore-style grid card: a portrait flyer/poster with a Free/paid
- * chip, then the event name and publisher beneath. Tapping opens full details.
+ * Premium horizontal event card: poster + date block + title/meta, with a
+ * prominent Register CTA. The poster/meta region opens the full detail sheet
+ * (delete, share, description, add-to-calendar); the Register button jumps
+ * straight to the public registration page. Mirrors the public /events browser
+ * so the in-feed tab and the shareable page feel like the same product.
  */
 function EventGridCard({
   event: a,
   index = 0,
+  saved,
+  onToggleSave,
   onOpen,
 }: {
   event: AnnouncementView
   index?: number
+  saved: boolean
+  onToggleSave: () => void
   onOpen: () => void
 }) {
+  const { mon, day, dow } = feedDateParts(a.eventDate)
+  const href = a.homeHandle ? `/events/${a.homeHandle}/${a.id}` : null
+  // Members register; owners manage via the detail sheet instead.
+  const canRegister = a.registrationEnabled && Boolean(href) && !a.isOwner
+
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="group flex flex-col text-left animate-in fade-in slide-in-from-bottom-3 duration-500 fill-mode-both"
+    <div
+      className="group relative flex flex-col gap-3 rounded-[18px] border border-border bg-card p-3 transition-all duration-300 hover:border-primary/40 hover:shadow-[0_0_28px_-8px] hover:shadow-primary/40 animate-in fade-in slide-in-from-bottom-3 fill-mode-both"
       style={{ animationDelay: `${Math.min(index, 5) * 40}ms` }}
     >
-      <div className="relative aspect-[3/4] w-full overflow-hidden rounded-[1.25rem] border border-border/60 bg-muted shadow-elevated transition-transform duration-300 group-active:scale-[0.98]">
-        {a.flyer ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={a.flyer || "/placeholder.svg"}
-            alt={`${a.title} flyer`}
-            // The first row is what the user is waiting on, so it loads eagerly
-            // and at high priority; everything below the fold stays lazy. Loading
-            // every flyer lazily made the grid appear blank on arrival.
-            loading={index < 4 ? "eager" : "lazy"}
-            fetchPriority={index < 4 ? "high" : "auto"}
-            // Intrinsic size gives the browser an aspect ratio before bytes
-            // arrive, so the grid reserves space instead of reflowing per image.
-            width={600}
-            height={800}
-            // Decode off the main thread so a batch of flyers resolving at once
-            // can't block scrolling or the tab transition.
-            decoding="async"
-            className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-          />
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`View details for ${a.title}`}
+        className="flex gap-3 text-left"
+      >
+        {/* Poster thumbnail */}
+        <div className="relative aspect-[3/4] w-20 shrink-0 overflow-hidden rounded-xl border border-border/60 bg-muted">
+          {a.flyer ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={a.flyer || "/placeholder.svg"}
+              alt={`${a.title} flyer`}
+              loading={index < 4 ? "eager" : "lazy"}
+              fetchPriority={index < 4 ? "high" : "auto"}
+              width={300}
+              height={400}
+              decoding="async"
+              className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+            />
+          ) : (
+            <div className="flex size-full items-center justify-center bg-secondary text-muted-foreground">
+              <CalendarPlus className="size-6" />
+            </div>
+          )}
+        </div>
+
+        {/* Date block */}
+        <div className="flex w-14 shrink-0 flex-col items-center justify-center rounded-xl border border-border bg-secondary/40 py-2">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-primary">{mon}</span>
+          <span className="text-2xl font-bold leading-none">{day}</span>
+          <span className="mt-0.5 text-[11px] font-medium text-muted-foreground">{dow}</span>
+        </div>
+
+        {/* Title + meta (leave room for the bookmark, top-right) */}
+        <div className="flex min-w-0 flex-1 flex-col pr-7">
+          <h3 className="text-[15px] font-semibold leading-snug text-balance">{a.title}</h3>
+          <p className="mt-1 flex items-center gap-1.5 text-[13px] text-muted-foreground">
+            <CalendarPlus className="size-3.5 shrink-0 text-primary/80" />
+            <span className="truncate">{formatEventDate(a.eventDate ?? "", a.eventTime)}</span>
+          </p>
+          {a.location && (
+            <p className="mt-1 flex items-center gap-1.5 text-[13px] text-muted-foreground">
+              <MapPin className="size-3.5 shrink-0" />
+              <span className="truncate">{a.location}</span>
+            </p>
+          )}
+          <p className="mt-1 truncate text-xs text-muted-foreground">{a.creatorName}</p>
+        </div>
+      </button>
+
+      {/* Bookmark — layered above the card button, top-right */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggleSave()
+        }}
+        aria-label={saved ? `Remove ${a.title} from saved` : `Save ${a.title}`}
+        aria-pressed={saved}
+        className="absolute right-2 top-2 grid size-8 place-items-center rounded-full text-muted-foreground transition-colors hover:text-primary"
+      >
+        <Bookmark className={cn("size-[18px]", saved && "fill-primary text-primary")} />
+      </button>
+
+      {/* Action row */}
+      <div className="flex items-center gap-2 border-t border-border/60 pt-3">
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label={`More options for ${a.title}`}
+          className="grid size-9 shrink-0 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <MoreHorizontal className="size-4" />
+        </button>
+
+        {canRegister && href ? (
+          <Link
+            href={href}
+            aria-label={`Register for ${a.title}`}
+            className="flex h-9 flex-1 items-center justify-center rounded-lg bg-primary text-sm font-semibold text-primary-foreground shadow-[0_0_20px_-6px] shadow-primary/70 transition-all duration-200 hover:brightness-110 active:scale-[0.98]"
+          >
+            Register
+          </Link>
         ) : (
-          <div className="flex size-full items-center justify-center bg-secondary text-muted-foreground">
-            <CalendarPlus className="size-8" />
-          </div>
-        )}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/45 to-transparent" />
-        <span className="absolute bottom-2 left-2 rounded-full bg-background/85 px-2.5 py-1 text-xs font-semibold text-foreground shadow-soft backdrop-blur-md">
-          {a.price ? `$${a.price}` : "Free"}
-        </span>
-      </div>
-      <div className="mt-2 flex flex-col gap-0.5">
-        <span className="flex items-center gap-1 text-[11px] font-medium text-primary">
-          <CalendarPlus className="size-3" />
-          {formatEventDate(a.eventDate ?? "", a.eventTime)}
-        </span>
-        <h3 className="truncate text-sm font-semibold leading-snug text-foreground">{a.title}</h3>
-        <p className="truncate text-xs text-muted-foreground">{a.creatorName}</p>
-        {/* Registration is the only attendance format, and the real headcount
-            lives in event_registration rather than on this row. */}
-        {a.registrationEnabled && a.homeHandle && (
-          <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-primary">
-            <ClipboardList className="size-3" />
-            Registration open
-          </span>
+          <button
+            type="button"
+            onClick={onOpen}
+            className="flex h-9 flex-1 items-center justify-center rounded-lg border border-border bg-secondary/40 text-sm font-semibold text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+          >
+            View details
+          </button>
         )}
       </div>
-    </button>
+    </div>
   )
 }
 
