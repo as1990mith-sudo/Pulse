@@ -146,10 +146,7 @@ export function AnnouncementBanner({
             <CalendarDays className="size-6" />
           </span>
           <div className="min-w-0 leading-tight">
-            <h2 className="text-2xl font-bold tracking-tight">Events</h2>
-            <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
-              Discover upcoming events and experiences
-            </p>
+            <h2 className="text-2xl font-bold tracking-tight text-balance">Upcoming events</h2>
           </div>
         </div>
         {canPublish && (
