@@ -2,11 +2,20 @@
 
 import { and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { announcement, eventContact, eventRegistration } from "@/lib/db/schema"
+import { revalidatePath } from "next/cache"
+import { announcement, eventBroadcast, eventContact, eventRegistration } from "@/lib/db/schema"
 import { getCurrentUser } from "@/lib/session"
 import { getHomeByHandle, getViewerMembership } from "@/lib/home/access"
 import { homeRoleHasPermission } from "@/lib/home/roles"
 import type { EventQuestion } from "@/lib/events/questions"
+import {
+  getAudienceSizes,
+  isAudienceKind,
+  isEventScoped,
+  resolveAudience,
+  type BroadcastPurpose,
+} from "@/lib/events/audiences"
+import { sendBroadcast } from "@/lib/events/email"
 
 /**
  * Asserts the caller may manage this Home's events, and returns the Home.
@@ -289,4 +298,96 @@ export async function getContactEventHistory(input: {
     attendedAt: r.attendedAt ? r.attendedAt.toISOString() : null,
     createdAt: r.createdAt.toISOString(),
   }))
+}
+
+/** Audience sizes for the compose screen, for the given purpose. */
+export async function getEventAudiences(input: {
+  handle: string
+  announcementId?: number | null
+  purpose: BroadcastPurpose
+}) {
+  const { home } = await requireEventsManager(input.handle)
+  return getAudienceSizes({
+    homeId: home.id,
+    announcementId: input.announcementId ?? null,
+    purpose: input.purpose,
+  })
+}
+
+export type SendBroadcastResult =
+  | { ok: true; sent: number; failed: number }
+  | { ok: false; error: string }
+
+/**
+ * Sends one email per recipient to a resolved audience and records the send.
+ *
+ * The recipient list is resolved SERVER-SIDE from the audience key. The client
+ * never supplies addresses, so a tampered request cannot email arbitrary people
+ * or a different Home's registrants — the worst it can do is pick a different
+ * audience within a Home it already administers.
+ */
+export async function sendEventBroadcast(input: {
+  handle: string
+  kind: string
+  announcementId?: number | null
+  purpose: BroadcastPurpose
+  subject: string
+  body: string
+}): Promise<SendBroadcastResult> {
+  const { user, home } = await requireEventsManager(input.handle)
+
+  if (!isAudienceKind(input.kind)) return { ok: false, error: "Unknown audience." }
+  const subject = input.subject.trim()
+  const body = input.body.trim()
+  if (!subject) return { ok: false, error: "Add a subject." }
+  if (!body) return { ok: false, error: "Add a message." }
+  if (subject.length > 200) return { ok: false, error: "Subject is too long." }
+
+  const announcementId = isEventScoped(input.kind) ? (input.announcementId ?? null) : null
+  if (isEventScoped(input.kind) && !announcementId) {
+    return { ok: false, error: "Choose an event for this audience." }
+  }
+
+  const recipients = await resolveAudience({
+    homeId: home.id,
+    kind: input.kind,
+    announcementId,
+    purpose: input.purpose,
+  })
+
+  if (recipients.length === 0) {
+    // Distinguished from a failure: for a marketing send this usually means
+    // nobody in the audience has opted in, which is a correct outcome.
+    return { ok: false, error: "That audience has nobody in it right now." }
+  }
+
+  const reason =
+    input.purpose === "event"
+      ? "You're receiving this because you registered for an event with this church."
+      : "You're receiving this because you opted in to updates from this church."
+
+  const { sent, failed } = await sendBroadcast({
+    recipients: recipients.map((r) => ({ email: r.email, name: r.name })),
+    subject,
+    body,
+    homeName: home.name,
+    reason,
+  })
+
+  // Audit row regardless of outcome, so a partially failed send is visible
+  // rather than looking like it never happened.
+  await db.insert(eventBroadcast).values({
+    homeId: home.id,
+    sentByUserId: user.id,
+    audienceKind: input.kind,
+    announcementId,
+    purpose: input.purpose,
+    subject,
+    body,
+    recipientCount: recipients.length,
+    failedCount: failed,
+  })
+
+  revalidatePath(`/org/${input.handle}/admin/events`)
+  return { ok: true, sent, failed }
 }

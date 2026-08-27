@@ -6,6 +6,7 @@ import { getHomeEventAttendance } from "@/app/actions/announcements"
 import { EventsAttendanceManager } from "@/components/home/admin/events-attendance-manager"
 import { getHomeEventRegistrations } from "@/app/actions/event-admin"
 import { EventRegistrationsManager } from "@/components/home/admin/event-registrations-manager"
+import { EventAudienceComposer } from "@/components/home/admin/event-audience-composer"
 import { MembersManager } from "@/components/home/admin/members-manager"
 import { SubscriptionManager } from "@/components/home/admin/subscription-manager"
 import { SettingsManager } from "@/components/home/admin/settings-manager"
@@ -87,6 +88,15 @@ async function SectionBody({ handle, section }: { handle: string; section: strin
             Registrations
           </h2>
           <EventRegistrationsManager handle={handle} events={registrations} />
+        </section>
+        <section>
+          <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Audiences
+          </h2>
+          <EventAudienceComposer
+            handle={handle}
+            events={registrations.map((e) => ({ id: e.id, title: e.title }))}
+          />
         </section>
         <section>
           <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-wide text-muted-foreground">
