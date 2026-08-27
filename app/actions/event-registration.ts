@@ -14,11 +14,30 @@ import {
   normalisePhone,
   readConfig,
   registrationWindow,
+  resolveGuests,
   resolveIdentity,
   upsertContact,
   validateAnswers,
   type RegistrationAnswers,
 } from "@/lib/events/registration"
+
+/**
+ * Seats already claimed by one existing registration.
+ *
+ * Used so someone updating their own booking is measured against the event's
+ * remaining capacity net of the place they already hold, rather than being told
+ * the event is full by their own seats.
+ */
+async function seatsHeld(tx: unknown, registrationId: number): Promise<number> {
+  const [row] = await (tx as typeof db)
+    .select({ guests: eventRegistration.guests, status: eventRegistration.status })
+    .from(eventRegistration)
+    .where(eq(eventRegistration.id, registrationId))
+    .limit(1)
+  // A cancelled place holds no seats, so it must not be credited back.
+  if (!row || row.status !== "registered") return 0
+  return row.guests
+}
 
 export type RegisterResult =
   | { ok: true; registrationId: number; alreadyRegistered: boolean }
@@ -100,7 +119,9 @@ export async function registerForEvent(input: {
     return { ok: false, error: "Please check your answers.", fieldErrors }
   }
 
-  const guests = Math.max(1, Math.min(Number(input.guests ?? 1) || 1, 20))
+  // Party size comes from a "guests" question when the event has one, so the
+  // answer drives capacity and head-counts rather than sitting inert.
+  const guests = resolveGuests(config.questions, answers, input.guests)
 
   let registrationId: number
   let alreadyRegistered = false
@@ -111,8 +132,13 @@ export async function registerForEvent(input: {
       // insert, so two people submitting at the same moment cannot both pass a
       // check made outside it and oversell the last place.
       if (config.capacity !== null) {
-        const { total } = await countRegistrations(tx as unknown as typeof db, input.announcementId)
-        if (total >= config.capacity) throw new Error("EVENT_FULL")
+        const { seats } = await countRegistrations(tx as unknown as typeof db, input.announcementId)
+        // Measured in seats, not rows, and includes the party this person is
+        // bringing — otherwise a group booking could tip the event over its cap.
+        // Re-registering subtracts the place already held so someone editing
+        // their own booking is not blocked by their own seats.
+        const held = identity.existingRegistrationId ? await seatsHeld(tx, identity.existingRegistrationId) : 0
+        if (seats - held + guests > config.capacity) throw new Error("EVENT_FULL")
       }
 
       const contactId = await upsertContact(tx as unknown as typeof db, {
@@ -204,6 +230,10 @@ export async function registerForEvent(input: {
   })
 
   revalidatePath(`/events/${homeHandle}/${input.announcementId}`)
+  // The listing shows seats taken and a Full/Register chip, so it goes stale the
+  // moment a place is booked. Without this it kept advertising "Register" on an
+  // event that had just sold out.
+  revalidatePath(`/events/${homeHandle}`)
   revalidatePath(`/home/${homeHandle}/registrations`)
   revalidatePath("/feed")
 
@@ -253,6 +283,9 @@ export async function cancelRegistration(input: {
     )
 
   revalidatePath(`/events/${loaded.homeHandle}/${input.announcementId}`)
+  // Cancelling frees a seat, so the listing's Full chip and remaining-places
+  // count must be refreshed as well.
+  revalidatePath(`/events/${loaded.homeHandle}`)
   revalidatePath(`/home/${loaded.homeHandle}/registrations`)
   return { ok: true }
 }

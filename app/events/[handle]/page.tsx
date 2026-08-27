@@ -140,7 +140,7 @@ export default async function PublicEventsPage({ params }: Params) {
                         {ev.capacity !== null ? (
                           <span className="flex items-center gap-2">
                             <Users className="size-4 shrink-0" aria-hidden="true" />
-                            {ev.registeredCount} of {ev.capacity} registered
+                            {ev.registeredCount} of {ev.capacity} places taken
                           </span>
                         ) : null}
                       </div>

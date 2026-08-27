@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react"
 import { CheckCircle2, Loader2 } from "lucide-react"
 import { registerForEvent } from "@/app/actions/event-registration"
-import type { EventQuestion } from "@/lib/events/registration"
+import { MAX_GUESTS, type EventQuestion } from "@/lib/events/questions"
 
 type Props = {
   handle: string
@@ -203,7 +203,14 @@ export function RegistrationForm({
                 ) : (
                   <input
                     id={id}
-                    type={q.type === "number" ? "number" : "text"}
+                    type={q.type === "number" || q.type === "guests" ? "number" : "text"}
+                    // A party-size answer drives the event's capacity, so the
+                    // field advertises the same bounds the server enforces
+                    // rather than letting someone type 60 and be rejected only
+                    // after submitting.
+                    {...(q.type === "guests"
+                      ? { min: 1, max: MAX_GUESTS, step: 1, inputMode: "numeric" as const }
+                      : {})}
                     required={q.required}
                     value={String(answers[q.id] ?? "")}
                     onChange={(e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value }))}

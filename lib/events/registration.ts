@@ -32,16 +32,12 @@ export type EventIdentity = {
   isRegistrant: boolean
 }
 
-/** An event's registration question, as authored by an admin. */
-export type EventQuestion = {
-  id: string
-  label: string
-  type: "short" | "long" | "select" | "number" | "boolean"
-  required: boolean
-  options?: string[]
-}
+// Question shapes live in a client-safe module because the registration form
+// needs them too, and this file is `server-only`. Re-exported here so server
+// callers can keep importing everything from one place.
+export { MAX_GUESTS, type EventQuestion, type RegistrationAnswers } from "./questions"
 
-export type RegistrationAnswers = Record<string, string | number | boolean>
+import { MAX_GUESTS, type EventQuestion, type RegistrationAnswers } from "./questions"
 
 /**
  * Normalises an email for identity matching.
@@ -295,8 +291,16 @@ export function validateAnswers(
     }
     if (empty) continue
 
-    if (q.type === "number" && Number.isNaN(Number(value))) {
+    if ((q.type === "number" || q.type === "guests") && Number.isNaN(Number(value))) {
       errors[q.id] = "Enter a number."
+    }
+    // A party-size answer feeds the capped `guests` column, so an out-of-range
+    // value is rejected here rather than silently clamped — confirming a party
+    // of 20 to someone who asked for 60 would be worse than telling them.
+    if (q.type === "guests" && !Number.isNaN(Number(value))) {
+      const n = Number(value)
+      if (!Number.isInteger(n) || n < 1) errors[q.id] = "Enter 1 or more."
+      else if (n > MAX_GUESTS) errors[q.id] = `Up to ${MAX_GUESTS} people per registration.`
     }
     if (q.type === "select" && q.options && !q.options.includes(String(value))) {
       errors[q.id] = "Choose one of the options."
@@ -309,6 +313,27 @@ export function validateAnswers(
     }
   }
   return errors
+}
+
+/**
+ * Works out the party size for a registration.
+ *
+ * Prefers a "guests" question's answer, falling back to an explicit `guests`
+ * input and finally to 1. Without this, an admin who adds a "Number of guests"
+ * question would see the answer recorded but every registration still counted
+ * as a single place — capacity and head-counts would quietly understate the
+ * real numbers.
+ */
+export function resolveGuests(
+  questions: EventQuestion[],
+  answers: RegistrationAnswers,
+  explicit?: number,
+): number {
+  const q = questions.find((x) => x.type === "guests")
+  const raw = q ? answers[q.id] : explicit
+  const n = Number(raw ?? 1)
+  if (!Number.isFinite(n)) return 1
+  return Math.max(1, Math.min(Math.floor(n), MAX_GUESTS))
 }
 
 /**
@@ -358,18 +383,31 @@ export async function loadEventByHandle(
   }
 }
 
-/** Counts confirmed places taken, for capacity checks and admin display. */
+/**
+ * Counts confirmed registrations, for capacity checks and admin display.
+ *
+ * `total` counts PEOPLE (rows) while `seats` sums party sizes. They differ as
+ * soon as an event allows guests, and the distinction matters: the admin list
+ * shows people, but capacity has to be enforced against seats or an event with
+ * 100 places could admit 100 registrants each bringing a guest.
+ */
 export async function countRegistrations(
   tx: typeof db,
   announcementId: number,
-): Promise<{ total: number; members: number; nonMembers: number }> {
+): Promise<{ total: number; members: number; nonMembers: number; seats: number }> {
   const [row] = await tx
     .select({
       total: sql<number>`count(*)::int`,
       members: sql<number>`count(*) filter (where ${eventRegistration.isMember})::int`,
       nonMembers: sql<number>`count(*) filter (where not ${eventRegistration.isMember})::int`,
+      seats: sql<number>`coalesce(sum(${eventRegistration.guests}), 0)::int`,
     })
     .from(eventRegistration)
     .where(and(eq(eventRegistration.announcementId, announcementId), eq(eventRegistration.status, "registered")))
-  return { total: row?.total ?? 0, members: row?.members ?? 0, nonMembers: row?.nonMembers ?? 0 }
+  return {
+    total: row?.total ?? 0,
+    members: row?.members ?? 0,
+    nonMembers: row?.nonMembers ?? 0,
+    seats: row?.seats ?? 0,
+  }
 }

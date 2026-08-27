@@ -122,7 +122,12 @@ export default async function PublicEventPage({ params }: Params) {
               <dt className="sr-only">Places</dt>
               <Users className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
               <dd className="text-card-foreground">
-                {isFull ? "Fully booked" : `${config.capacity - counts.total} of ${config.capacity} places left`}
+                {/* Seats, not rows: capacity is enforced against party sizes, so
+                    counting registrations here would advertise places that
+                    cannot actually be booked. */}
+                {isFull
+                  ? "Fully booked"
+                  : `${Math.max(0, config.capacity - counts.seats)} of ${config.capacity} places left`}
               </dd>
             </div>
           ) : null}

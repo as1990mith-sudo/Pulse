@@ -15,6 +15,7 @@ export type PublicEventCard = {
   eventTime: string | null
   registrationEnabled: boolean
   capacity: number | null
+  /** Seats taken (party sizes summed), which is what capacity is measured in. */
   registeredCount: number
   isFull: boolean
   /** Registration open right now (window + capacity). */
@@ -73,8 +74,11 @@ export async function listPublicEvents(homeId: string): Promise<PublicEventCard[
   const rows = await db
     .select({
       ad: announcement,
+      // Seats (summed party sizes), not rows. Capacity is enforced against
+      // seats, so counting registrations here would let a card advertise places
+      // that cannot actually be booked.
       registered: sql<number>`(
-        select count(*)::int from ${eventRegistration}
+        select coalesce(sum(${eventRegistration.guests}), 0)::int from ${eventRegistration}
         where ${eventRegistration.announcementId} = ${announcement.id}
           and ${eventRegistration.status} = 'registered'
       )`,
@@ -92,6 +96,8 @@ export async function listPublicEvents(homeId: string): Promise<PublicEventCard[
       ),
     )
     .orderBy(asc(announcement.eventDate), asc(announcement.eventTime))
+
+  console.log("[v0] listPublicEvents rows:", JSON.stringify(rows.map((r) => ({ id: r.ad.id, reg: r.registered }))))
 
   const now = new Date()
   return rows.map(({ ad, registered }) => {

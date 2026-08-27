@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { CheckCircle2, Lock } from "lucide-react"
 import { RegistrationForm } from "@/components/events/registration-form"
-import type { EventQuestion } from "@/lib/events/registration"
+import type { EventQuestion } from "@/lib/events/questions"
 
 type Props = {
   handle: string
@@ -76,7 +76,7 @@ export function RegistrationPanel({
       <div className="rounded-2xl border border-border bg-card p-6">
         <h2 className="font-display text-base font-semibold text-card-foreground">This event is full</h2>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground text-pretty">
-          Every place has been taken. Follow {""}
+          Every place has been taken. Follow{" "}
           <a href={`/org/${handle}`} className="underline underline-offset-2">
             the hosts
           </a>{" "}
