@@ -12,9 +12,9 @@ import {
   Loader2,
   MapPin,
   Megaphone,
-  MessageSquare,
   MoreVertical,
   Plus,
+  Share2,
   Tag,
   Trash2,
   X,
@@ -28,7 +28,6 @@ import { Badge } from "@/components/ui/badge"
 import { ImageLightbox } from "@/components/image-lightbox"
 import {
   adminDeleteAnnouncement,
-  adminMessageCreator,
   createAnnouncement,
   deleteAnnouncement,
   orgDeleteEvent,
@@ -199,6 +198,34 @@ function EventGridCard({
 }
 
 /**
+ * Shares an event's public page. Uses the native share sheet where available
+ * and falls back to copying the link (with brief "Copied" feedback). Sharing
+ * needs a resolvable host handle, so `canShare` is false for Universal events.
+ */
+function useEventShare(a: AnnouncementView) {
+  const [copied, setCopied] = useState(false)
+  const canShare = Boolean(a.homeHandle)
+
+  async function share() {
+    if (!a.homeHandle || typeof window === "undefined") return
+    const url = `${window.location.origin}/events/${a.homeHandle}/${a.id}`
+    try {
+      if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share({ title: a.title, text: `${a.title} — hosted by ${a.creatorName}`, url })
+      } else if (typeof navigator !== "undefined" && navigator.clipboard) {
+        await navigator.clipboard.writeText(url)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      }
+    } catch {
+      // The user dismissed the share sheet, or it was unavailable — no-op.
+    }
+  }
+
+  return { share, copied, canShare }
+}
+
+/**
  * Full-screen detail sheet for a single event: large flyer, all the details,
  * add-to-calendar shortcuts, and the interest actions (for non-owners).
  */
@@ -214,6 +241,7 @@ function EventDetailSheet({
   const [lightbox, setLightbox] = useState(false)
   const [deleting, startDeleting] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const { share, copied, canShare } = useEventShare(a)
 
   // The handle is required to build the link, so an event with no resolvable
   // host renders no CTA rather than a broken href.
@@ -277,6 +305,20 @@ function EventDetailSheet({
         >
           <X className="size-4" />
         </Button>
+        {/* Members and participants share from here; platform admins share via
+            the three-dot menu, so this icon is hidden for them to avoid two
+            share entry points. Universal events have no public link to share. */}
+        {!isAdmin && canShare && (
+          <Button
+            size="icon"
+            variant="ghost"
+            className="absolute right-3 top-3 bg-background/70 backdrop-blur hover:bg-background"
+            aria-label={copied ? "Link copied" : "Share event"}
+            onClick={share}
+          >
+            {copied ? <Check className="size-4 text-live" /> : <Share2 className="size-4" />}
+          </Button>
+        )}
         <div className="pointer-events-none absolute left-3 top-14 flex flex-col gap-1.5">
           <Badge className="w-fit gap-1 bg-background/75 text-foreground backdrop-blur">
             <CalendarPlus className="size-3" /> Event
@@ -417,11 +459,11 @@ function RequestStatusRow({ request: r }: { request: AnnouncementView }) {
   )
 }
 
-/** Admin-only top-right menu: delete the advert, or DM the creator as Frequency Team. */
+/** Admin-only top-right menu: share the event, or delete the advert. */
 function AdminMenu({ announcement: a }: { announcement: AnnouncementView }) {
   const [open, setOpen] = useState(false)
-  const [composing, setComposing] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const { share, copied, canShare } = useEventShare(a)
 
   return (
     <div className="absolute right-2 top-2 z-20">
@@ -448,17 +490,17 @@ function AdminMenu({ announcement: a }: { announcement: AnnouncementView }) {
             role="menu"
             className="absolute right-0 top-full z-20 mt-1 w-44 overflow-hidden rounded-xl border border-border bg-popover p-1 shadow-lg"
           >
-            <button
-              type="button"
-              role="menuitem"
-              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium hover:bg-secondary"
-              onClick={() => {
-                setOpen(false)
-                setComposing(true)
-              }}
-            >
-              <MessageSquare className="size-4" /> Message
-            </button>
+            {canShare && (
+              <button
+                type="button"
+                role="menuitem"
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium hover:bg-secondary"
+                onClick={share}
+              >
+                {copied ? <Check className="size-4 text-live" /> : <Share2 className="size-4" />}{" "}
+                {copied ? "Copied" : "Share"}
+              </button>
+            )}
             <button
               type="button"
               role="menuitem"
@@ -471,91 +513,7 @@ function AdminMenu({ announcement: a }: { announcement: AnnouncementView }) {
           </div>
         </>
       )}
-      {composing && <AdminMessageDialog announcement={a} onClose={() => setComposing(false)} />}
     </div>
-  )
-}
-
-function AdminMessageDialog({ announcement: a, onClose }: { announcement: AnnouncementView; onClose: () => void }) {
-  const [body, setBody] = useState("")
-  const [error, setError] = useState<string | null>(null)
-  const [sent, setSent] = useState(false)
-  const [isPending, startTransition] = useTransition()
-
-  if (typeof document === "undefined") return null
-
-  function handleSend() {
-    setError(null)
-    startTransition(async () => {
-      try {
-        await adminMessageCreator({ announcementId: a.id, body })
-        setSent(true)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not send the message.")
-      }
-    })
-  }
-
-  return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Message the advert creator"
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-background/90 p-4 backdrop-blur-sm"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose()
-      }}
-    >
-      <Card className="w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <MessageSquare className="size-4" />
-            </span>
-            <div className="leading-tight">
-              <h2 className="font-semibold">Message {a.creatorName}</h2>
-              <p className="text-xs text-muted-foreground">Sent as Frequency Team · priority in their inbox</p>
-            </div>
-          </div>
-          <Button size="icon" variant="ghost" className="shrink-0" aria-label="Close" onClick={onClose}>
-            <X className="size-4" />
-          </Button>
-        </div>
-
-        {sent ? (
-          <div className="flex flex-col items-center gap-4 py-4 text-center">
-            <span className="flex size-12 items-center justify-center rounded-full bg-live/10 text-live">
-              <Check className="size-6" />
-            </span>
-            <p className="text-sm text-muted-foreground">
-              Your message was delivered to {a.creatorName} as Frequency Team.
-            </p>
-            <Button onClick={onClose}>Done</Button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <Textarea
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              placeholder={`Re: "${a.title}" — your message to the creator…`}
-              rows={4}
-              maxLength={1000}
-              autoFocus
-            />
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <div className="flex items-center justify-end gap-2">
-              <Button type="button" variant="ghost" onClick={onClose} disabled={isPending}>
-                Cancel
-              </Button>
-              <Button className="gap-1.5" disabled={isPending || !body.trim()} onClick={handleSend}>
-                {isPending ? <Loader2 className="size-4 animate-spin" /> : <MessageSquare className="size-4" />} Send
-              </Button>
-            </div>
-          </div>
-        )}
-      </Card>
-    </div>,
-    document.body,
   )
 }
 
