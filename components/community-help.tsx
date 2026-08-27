@@ -1595,17 +1595,17 @@ export function CommunityHelp({
         </div>
 
         {/* Floating ask button — hides on scroll-down, returns on scroll-up. */}
-        <button
-          type="button"
-          onClick={() => setComposerOpen(true)}
-          className={cn(
-            "absolute bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-5 z-30 inline-flex w-fit items-center gap-2 rounded-full bg-primary px-4 py-2 text-base font-semibold text-primary-foreground shadow-lg transition-[transform,opacity] duration-300 ease-out hover:scale-105 active:scale-95 sm:right-8",
-            chromeHidden ? "pointer-events-none translate-y-[200%] opacity-0" : "translate-y-0 opacity-100",
-          )}
-        >
-          <Plus className="size-5" />
-          Ask
-        </button>
+          <button
+            type="button"
+            onClick={() => setComposerOpen(true)}
+            aria-label="Ask"
+            className={cn(
+              "absolute bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-5 z-30 inline-flex items-center justify-center rounded-full bg-primary p-3.5 text-primary-foreground shadow-lg transition-[transform,opacity] duration-300 ease-out hover:scale-105 active:scale-95 sm:right-8",
+              chromeHidden ? "pointer-events-none translate-y-[200%] opacity-0" : "translate-y-0 opacity-100",
+            )}
+          >
+            <Plus className="size-5" />
+          </button>
 
           <Composer
             open={composerOpen}

@@ -25,6 +25,10 @@ export function ITestify({
   // already /chatrooms, so a "Back to chatrooms" link would loop to itself).
   embedded = false,
   homeId = null,
+  // The admin-chosen name for this tab in the active Home. Cosmetic — it only
+  // sets the standalone header title; the feed, composer and scoping are
+  // unchanged. Defaults to "iTestify" for the legacy standalone route.
+  label = "iTestify",
 }: {
   initialPosts: FeedPostView[]
   currentUser: CurrentUser
@@ -35,6 +39,7 @@ export function ITestify({
    * fetcher so revalidation stays in the same scope the server rendered.
    */
   homeId?: string | null
+  label?: string
 }) {
   const [composerOpen, setComposerOpen] = useState(false)
   const onFeedScroll = useAutoHideChatChrome()
@@ -74,7 +79,7 @@ export function ITestify({
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-xl font-bold tracking-tight">iTestify</h1>
+            <h1 className="truncate text-xl font-bold tracking-tight">{label}</h1>
             <p className="truncate text-sm text-muted-foreground">Share what God has done</p>
           </div>
         </header>

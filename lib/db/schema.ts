@@ -1762,6 +1762,11 @@ export const home = pgTable(
     // How new members join with a valid key: "auto" (instant membership) or
     // "approval" (creates a pending request an admin must approve).
     joinPolicy: text("joinPolicy").notNull().default("auto"),
+    // What the "iTestify" tab is called in THIS Home. One of the fixed options
+    // in REVIEW_TAB_OPTIONS ("Praise Reports" | "Testimonials" | "Feedback").
+    // Cosmetic only — it renames the tab label and nothing else. The default
+    // matches the option every unconfigured Home shows.
+    reviewTabLabel: text("reviewTabLabel").notNull().default("Testimonials"),
     status: text("status").notNull().default("active"),
     // Soft deletion. Deleting a Home dissolves the ORGANISATION, never the
     // personal accounts of its members: members keep their account, profile and

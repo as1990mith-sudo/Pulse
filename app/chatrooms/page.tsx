@@ -5,6 +5,7 @@ import { getCommunityPosts, getPublishableOrg } from "@/app/actions/community"
 import { getChannelFeed } from "@/app/actions/feed"
 import { getCurrentUser } from "@/lib/session"
 import { getActiveHomeContext } from "@/lib/home/active-home"
+import { REVIEW_TAB_OPTIONS } from "@/lib/home/types"
 
 export const metadata = {
   title: "Chat Rooms — Frequency",
@@ -50,6 +51,7 @@ export default async function ChatroomsPage() {
           currentUser={currentUser}
           postAsOrg={postAsOrg}
           homeId={home?.id ?? null}
+          reviewTabLabel={home?.reviewTabLabel ?? REVIEW_TAB_OPTIONS[0]}
         />
       </div>
     </div>

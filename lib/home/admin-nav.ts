@@ -4,6 +4,7 @@ import {
   FileText,
   Users,
   MessagesSquare,
+  MessageSquareQuote,
   Radio,
   CalendarDays,
   CalendarCheck,
@@ -66,6 +67,14 @@ export const HOME_ADMIN_SECTIONS: HomeAdminSection[] = [
     description: "Moderate your private feed and community help conversations.",
     permission: "community.moderate",
     ready: false,
+  },
+  {
+    slug: "review-tab",
+    label: "Review Tab",
+    icon: MessageSquareQuote,
+    description: "Choose what the reviews tab is called in your Home — Testimonials, Praise Reports or Feedback.",
+    permission: "home.manage",
+    ready: true,
   },
   {
     slug: "rooms",
