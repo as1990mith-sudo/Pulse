@@ -47,9 +47,13 @@ export function Countdown({ targetISO }: { targetISO: string }) {
         {/* atmospheric amber glow bleeding from the top edge */}
         <div
           aria-hidden
-          className="pointer-events-none absolute -top-16 left-1/2 h-40 w-72 -translate-x-1/2 rounded-full bg-[#FF7A1A]/20 blur-[70px]"
+          className="pointer-events-none absolute -top-16 left-1/2 h-40 w-72 -translate-x-1/2 rounded-full blur-[70px]"
+          style={{ backgroundColor: "var(--home-accent, #FF7A1A)", opacity: 0.2 }}
         />
-        <p className="relative text-center text-[11px] font-medium uppercase tracking-[0.28em] text-[#FF9D4D]">
+        <p
+          className="relative text-center text-[11px] font-medium uppercase tracking-[0.28em]"
+          style={{ color: "var(--home-accent, #FF9D4D)" }}
+        >
           {done ? "The night has begun" : "Event starts in"}
         </p>
         <div className="relative mt-5 grid grid-cols-4 gap-2.5">

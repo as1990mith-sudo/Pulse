@@ -1,19 +1,26 @@
 import type { Metadata } from "next"
-import Link from "next/link"
+import { Playfair_Display } from "next/font/google"
 import { notFound } from "next/navigation"
-import { ArrowLeft, CalendarDays, MapPin, Users } from "lucide-react"
 import { db } from "@/lib/db"
 import { getCurrentUser } from "@/lib/session"
 import { RegistrationPanel } from "@/components/events/registration-panel"
+import { CinematicEventDetail } from "@/components/events/cinematic-event-detail"
 import { formatEventWhen } from "@/lib/events/public"
 import {
   countRegistrations,
+  eventStart,
   loadEventByHandle,
   readConfig,
   registrationWindow,
   resolveIdentity,
   type EventQuestion,
 } from "@/lib/events/registration"
+
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  variable: "--font-playfair",
+})
 
 type Params = { params: Promise<{ handle: string; id: string }> }
 
@@ -44,12 +51,13 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 }
 
 /**
- * A single event's public page and registration surface.
+ * A single event's public page and registration surface — cinematic shell.
  *
- * Reachable with no account. A signed-in member sees the same page, but the
- * registration panel collapses to one tap because their details are already
- * known — the identity resolution happens here on the server so nothing about
- * the viewer's status has to be trusted from the client.
+ * Reachable with no account. The heavy lifting (identity, capacity, the open
+ * window) is resolved here on the server; {@link CinematicEventDetail} is a
+ * presentational shell and the real registration still runs through
+ * {@link RegistrationPanel}, handed in as children so this redesign never forks
+ * the working submit flow.
  */
 export default async function PublicEventPage({ params }: Params) {
   const { handle, id } = await params
@@ -59,7 +67,7 @@ export default async function PublicEventPage({ params }: Params) {
   const loaded = await loadEventByHandle(handle, announcementId)
   if (!loaded) notFound()
 
-  const { event, homeId, homeName, homeHandle, orgLogo } = loaded
+  const { event, homeId, homeName, homeHandle, orgLogo, accentColor } = loaded
   const config = readConfig(event)
 
   // The public page is opt-in. Without it the event may still take member
@@ -72,7 +80,8 @@ export default async function PublicEventPage({ params }: Params) {
   const window = registrationWindow(event)
 
   const isFull = config.capacity !== null && counts.total >= config.capacity
-  const when = formatEventWhen(event.eventDate, event.eventTime)
+  const open = window.open && config.enabled
+  const canRegister = config.publicPage || identity.isMember
   const closedReason =
     window.reason === "closed"
       ? "Registration for this event has closed."
@@ -80,112 +89,67 @@ export default async function PublicEventPage({ params }: Params) {
         ? "This event has already taken place."
         : null
 
+  // Display values for the cinematic shell.
+  const dateLabel = formatEventWhen(event.eventDate, null)
+  const timeLabel = event.eventTime && /^\d{2}:\d{2}$/.test(event.eventTime) ? event.eventTime : null
+  const start = eventStart(event)
+  const startISO = start && start.getTime() > Date.now() ? start.toISOString() : null
+  const capacityNote =
+    config.capacity !== null
+      ? isFull
+        ? "Fully booked"
+        : `${Math.max(0, config.capacity - counts.seats)} of ${config.capacity} places left`
+      : null
+
+  // Collapse the overlapping states into one presentational mode for the shell's
+  // sticky bar. The panel below still renders the authoritative explanation.
+  const mode: "open" | "full" | "closed" | "members" | "registered" = identity.isRegistrant
+    ? "registered"
+    : isFull
+      ? "full"
+      : !open
+        ? "closed"
+        : !canRegister
+          ? "members"
+          : "open"
+
   return (
-    <main className="min-h-dvh bg-background">
-      <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-10">
-        <Link
-          href={`/events/${homeHandle}`}
-          className="mb-6 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" aria-hidden="true" />
-          All events
-        </Link>
-
-        {event.flyer ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={event.flyer || "/placeholder.svg"}
-            alt={`Flyer for ${event.title}`}
-            className="mb-6 aspect-[3/2] w-full rounded-2xl object-cover"
-          />
-        ) : null}
-
-        <header className="flex flex-col gap-3">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            {orgLogo ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={orgLogo || "/placeholder.svg"} alt="" className="size-6 rounded-full object-cover" />
-            ) : null}
-            <span>Hosted by {homeName}</span>
-          </div>
-          <h1 className="font-display text-2xl font-semibold leading-tight text-balance text-foreground sm:text-3xl">
-            {event.title}
-          </h1>
-        </header>
-
-        <dl className="mt-6 flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 text-sm">
-          {when ? (
-            <div className="flex items-start gap-3">
-              <dt className="sr-only">When</dt>
-              <CalendarDays className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              <dd className="text-card-foreground">{when}</dd>
-            </div>
-          ) : null}
-          {event.location ? (
-            <div className="flex items-start gap-3">
-              <dt className="sr-only">Where</dt>
-              <MapPin className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              <dd className="text-card-foreground">{event.location}</dd>
-            </div>
-          ) : null}
-          {config.capacity !== null ? (
-            <div className="flex items-start gap-3">
-              <dt className="sr-only">Places</dt>
-              <Users className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              <dd className="text-card-foreground">
-                {/* Seats, not rows: capacity is enforced against party sizes, so
-                    counting registrations here would advertise places that
-                    cannot actually be booked. */}
-                {isFull
-                  ? "Fully booked"
-                  : `${Math.max(0, config.capacity - counts.seats)} of ${config.capacity} places left`}
-              </dd>
-            </div>
-          ) : null}
-        </dl>
-
-        {event.description ? (
-          <div className="mt-6">
-            <h2 className="sr-only">About this event</h2>
-            <div className="flex flex-col gap-3 text-sm leading-relaxed text-foreground/90">
-              {event.description.split(/\n{2,}/).map((para, i) => (
-                <p key={i} className="text-pretty">
-                  {para}
-                </p>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        <div className="mt-8">
-          <RegistrationPanel
-            handle={homeHandle}
-            announcementId={announcementId}
-            eventTitle={event.title}
-            knownName={identity.knownName}
-            knownEmail={identity.knownEmail}
-            knownPhone={identity.knownPhone}
-            isMember={identity.isMember}
-            alreadyRegistered={identity.isRegistrant}
-            requiresPhone={config.requiresPhone}
-            questions={config.questions as EventQuestion[]}
-            open={window.open && config.enabled}
-            closedReason={closedReason}
-            isFull={isFull}
-            // Members-only when the admin took registrations without publishing
-            // a public page. Anyone may register when the public page is on.
-            canRegister={config.publicPage || identity.isMember}
-            signInHref={`/login?next=/events/${homeHandle}/${announcementId}`}
-          />
-        </div>
-
-        <p className="mt-8 text-center text-xs text-muted-foreground">
-          Hosted on Frequency by{" "}
-          <Link href={`/org/${homeHandle}`} className="underline underline-offset-2">
-            {homeName}
-          </Link>
-        </p>
-      </div>
+    <main className={playfair.variable}>
+      <CinematicEventDetail
+        backHref={`/events/${homeHandle}`}
+        title={event.title}
+        homeName={homeName}
+        homeHandle={homeHandle}
+        orgLogo={orgLogo}
+        accentColor={accentColor}
+        flyer={event.flyer}
+        description={event.description}
+        dateLabel={dateLabel}
+        timeLabel={timeLabel}
+        location={event.location}
+        startISO={startISO}
+        capacityNote={capacityNote}
+        mode={mode}
+        signInHref={`/login?next=/events/${homeHandle}/${announcementId}`}
+      >
+        <RegistrationPanel
+          handle={homeHandle}
+          announcementId={announcementId}
+          eventTitle={event.title}
+          knownName={identity.knownName}
+          knownEmail={identity.knownEmail}
+          knownPhone={identity.knownPhone}
+          isMember={identity.isMember}
+          alreadyRegistered={identity.isRegistrant}
+          requiresPhone={config.requiresPhone}
+          questions={config.questions as EventQuestion[]}
+          open={open}
+          closedReason={closedReason}
+          isFull={isFull}
+          canRegister={canRegister}
+          signInHref={`/login?next=/events/${homeHandle}/${announcementId}`}
+        />
+      </CinematicEventDetail>
     </main>
   )
 }

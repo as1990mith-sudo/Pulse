@@ -354,6 +354,7 @@ export async function loadEventByHandle(
   homeHandle: string
   orgLogo: string | null
   orgId: string
+  accentColor: string | null
 } | null> {
   const [row] = await db
     .select({ ad: announcement, h: home, org: organization })
@@ -380,6 +381,7 @@ export async function loadEventByHandle(
     homeHandle: row.org.handle,
     orgLogo: row.org.logo,
     orgId: row.org.id,
+    accentColor: row.h.accentColor ?? null,
   }
 }
 
