@@ -47,6 +47,9 @@ function isImmersive(p: string): boolean {
   // would lead a non-member straight into a sign-in wall. The pages carry their
   // own lightweight public chrome instead.
   if (/^\/events(\/|$)/.test(p)) return true
+  // Cinematic event experience — full-screen takeover with its own overlay nav
+  // and sticky registration bar, so the member tab bar would only get in the way.
+  if (/^\/event-showcase(\/|$)/.test(p)) return true
   return false
 }
 
