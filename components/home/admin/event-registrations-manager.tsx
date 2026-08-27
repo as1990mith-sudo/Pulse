@@ -65,7 +65,7 @@ function eventStatus(ev: EventRegistrationSummary): EventStatus {
 const FILTERS: { key: RegistrationFilter; label: string }[] = [
   { key: "all", label: "All" },
   { key: "members", label: "Members" },
-  { key: "non_members", label: "Non-members" },
+  { key: "non_members", label: "Guests" },
   { key: "attended", label: "Attended" },
 ]
 
@@ -366,7 +366,7 @@ function CountStrip({ counts }: { counts: RegistrationCounts }) {
   const items = [
     { label: "Registered", value: counts.total },
     { label: "Members", value: counts.members },
-    { label: "Non-members", value: counts.nonMembers },
+    { label: "Guests", value: counts.nonMembers },
     { label: "Attended", value: counts.attended },
   ]
   return (
