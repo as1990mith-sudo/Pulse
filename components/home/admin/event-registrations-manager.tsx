@@ -111,7 +111,10 @@ function EventCard({
     <article className="overflow-hidden rounded-2xl border border-border bg-card">
       <div className="flex flex-wrap items-start gap-3 p-4">
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-base font-semibold tracking-tight">{event.title}</h3>
+          {/* Wraps rather than truncates: event titles are long and often differ
+              only near the end ("...Sunday Service" vs "...Sunday Seminar"), so
+              clipping them made two different events look identical. */}
+          <h3 className="text-pretty text-base font-semibold tracking-tight">{event.title}</h3>
           <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               <CalendarDays className="size-3" /> {formatWhen(event.eventDate, event.eventTime)}

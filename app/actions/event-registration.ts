@@ -3,8 +3,17 @@
 import { revalidatePath } from "next/cache"
 import { and, eq, sql } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { announcement, eventContact, eventRegistration, homeMembership, user as userTable } from "@/lib/db/schema"
+import {
+  announcement,
+  eventContact,
+  eventRegistration,
+  home as home_,
+  homeMembership,
+  organization,
+  user as userTable,
+} from "@/lib/db/schema"
 import { getCurrentUser } from "@/lib/session"
+import { homeRoleHasPermission, type HomeRole } from "@/lib/home/roles"
 import { sendRegistrationConfirmation } from "@/lib/events/email"
 import {
   countRegistrations,
@@ -330,7 +339,9 @@ export async function updateEventRegistrationConfig(input: {
       ),
     )
     .limit(1)
-  if (!membership || !["owner", "administrator", "moderator"].includes(membership.role)) {
+  // Same permission matrix as the rest of the events surface, so the roles that
+  // can see the Events admin are exactly the roles that can configure it.
+  if (!homeRoleHasPermission(membership.role as HomeRole, "events.manage")) {
     return { ok: false, error: "You don't have permission to manage this event." }
   }
 
@@ -378,7 +389,13 @@ export async function setAttendance(input: {
       ),
     )
     .limit(1)
-  if (!membership || !["owner", "administrator", "moderator"].includes(membership.role)) {
+  // Defer to the role/permission matrix instead of a hardcoded role list. The
+  // old list disagreed with the `events.manage` permission that gates the
+  // Registrations UI, in BOTH directions: a Content Manager — whose stated
+  // remit covers events — could open the register but got "You don't have
+  // permission." on every tap, while a Moderator could write attendance for a
+  // screen they cannot even open.
+  if (!homeRoleHasPermission(membership.role as HomeRole, "events.manage")) {
     return { ok: false, error: "You don't have permission." }
   }
 
@@ -386,6 +403,16 @@ export async function setAttendance(input: {
     .update(eventRegistration)
     .set({ attendedAt: input.attended ? new Date() : null, updatedAt: new Date() })
     .where(eq(eventRegistration.id, input.registrationId))
+
+  // The Attended tallies are server-rendered, so they would otherwise keep
+  // showing the pre-toggle figure until something else revalidated the page.
+  const [home] = await db
+    .select({ handle: organization.handle })
+    .from(home_)
+    .innerJoin(organization, eq(organization.id, home_.organizationId))
+    .where(eq(home_.id, reg.homeId))
+    .limit(1)
+  if (home?.handle) revalidatePath(`/org/${home.handle}/admin/events`)
 
   return { ok: true }
 }
