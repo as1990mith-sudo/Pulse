@@ -22,7 +22,10 @@ const playfair = Playfair_Display({
   variable: "--font-playfair",
 })
 
-type Params = { params: Promise<{ handle: string; id: string }> }
+type Params = {
+  params: Promise<{ handle: string; id: string }>
+  searchParams: Promise<{ from?: string }>
+}
 
 /**
  * Always rendered per request, never cached.
@@ -59,8 +62,9 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
  * {@link RegistrationPanel}, handed in as children so this redesign never forks
  * the working submit flow.
  */
-export default async function PublicEventPage({ params }: Params) {
+export default async function PublicEventPage({ params, searchParams }: Params) {
   const { handle, id } = await params
+  const { from } = await searchParams
   const announcementId = Number(id)
   if (!Number.isInteger(announcementId)) notFound()
 
@@ -113,10 +117,16 @@ export default async function PublicEventPage({ params }: Params) {
           ? "members"
           : "open"
 
+  // Route Back to wherever the viewer actually came from. Cards in the in-feed
+  // Events tab link with ?from=feed, so a member who opened the event there is
+  // returned to that tab (/feed?tab=events) rather than being dumped on the
+  // public browser they never visited. Everyone else goes to the public browser.
+  const backHref = from === "feed" ? "/feed?tab=events" : `/events/${homeHandle}`
+
   return (
     <main className={playfair.variable}>
       <CinematicEventDetail
-        backHref={`/events/${homeHandle}`}
+        backHref={backHref}
         title={event.title}
         homeName={homeName}
         homeHandle={homeHandle}
