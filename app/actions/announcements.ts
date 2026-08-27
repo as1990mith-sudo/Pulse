@@ -8,24 +8,19 @@ import {
   announcementInteraction,
   dmConversation,
   dmMessage,
-  eventRsvp,
   home,
   homeMembership,
   organization,
-  user as userTable,
 } from "@/lib/db/schema"
 import { getCurrentUser } from "@/lib/session"
 import { getAdminUser, requireAdmin } from "@/lib/admin"
 import { getHomeByHandle, getViewerMembership } from "@/lib/home/access"
 import { canViewerManageEvents, getActiveHome, getViewerEventHome } from "@/lib/home/active-home"
 import { homeRoleHasPermission, type HomeRole } from "@/lib/home/roles"
-import { getAvatarColor, getInitials } from "@/lib/identity"
 import { AD_MAX_HOURS, AD_BLOCK_HOURS, FREQUENCY_TEAM_ID, type AdType, type AdAction } from "@/lib/ads"
 
 /** How a published event leaves the community feed. */
 export type EventDeleteMode = "auto5h" | "manual"
-/** A member's RSVP response to a community event. */
-export type EventRsvpResponse = "coming" | "not_coming"
 
 export type AnnouncementView = {
   id: number
@@ -52,12 +47,9 @@ export type AnnouncementView = {
   homeId: string | null
   organizationId: string | null
   deleteMode: EventDeleteMode | null
-  // RSVP roll-up + the viewer's own response.
-  comingCount: number
-  notComingCount: number
-  myRsvp: EventRsvpResponse | null
-  // When true this event takes real registrations, so the card offers a Register
-  // CTA instead of the lightweight coming/not-coming pair.
+  // Registration is the only attendance format. Newly published events always
+  // have it on; the flag is kept so a legacy row that predates registration
+  // can't render a Register CTA that would lead nowhere useful.
   registrationEnabled: boolean
   // The host org's public handle, needed to build the /events/[handle]/[id]
   // link. Null for Universal events, which have no Home and so no handle.
@@ -92,13 +84,10 @@ async function expireDueAnnouncements() {
     .where(and(eq(announcement.status, "approved"), lte(announcement.expiresAt, new Date())))
 }
 
-type RsvpRollup = { coming: number; notComing: number; mine: EventRsvpResponse | null }
-
 function toView(
   row: typeof announcement.$inferSelect,
   currentUserId: string | null,
   interaction?: { action: string | null; hidden: boolean },
-  rsvp?: RsvpRollup,
   homeHandle?: string | null,
 ): AnnouncementView {
   return {
@@ -123,9 +112,6 @@ function toView(
     homeId: row.homeId ?? null,
     organizationId: row.organizationId ?? null,
     deleteMode: (row.deleteMode as EventDeleteMode | null) ?? null,
-    comingCount: rsvp?.coming ?? 0,
-    notComingCount: rsvp?.notComing ?? 0,
-    myRsvp: rsvp?.mine ?? null,
     registrationEnabled: row.registrationEnabled ?? false,
     homeHandle: homeHandle ?? null,
   }
@@ -148,22 +134,6 @@ async function loadHomeHandles(homeIds: string[]) {
     .innerJoin(organization, eq(organization.id, home.organizationId))
     .where(inArray(home.id, unique))
   for (const r of rows) if (r.handle) map.set(r.homeId, r.handle)
-  return map
-}
-
-/** Loads RSVP roll-ups (counts + the viewer's own response) keyed by event id. */
-async function loadRsvps(adIds: number[], userId: string | null) {
-  const map = new Map<number, RsvpRollup>()
-  if (adIds.length === 0) return map
-  for (const id of adIds) map.set(id, { coming: 0, notComing: 0, mine: null })
-  const rows = await db.select().from(eventRsvp).where(inArray(eventRsvp.announcementId, adIds))
-  for (const r of rows) {
-    const entry = map.get(r.announcementId)
-    if (!entry) continue
-    if (r.response === "coming") entry.coming++
-    else if (r.response === "not_coming") entry.notComing++
-    if (userId && r.userId === userId) entry.mine = r.response as EventRsvpResponse
-  }
   return map
 }
 
@@ -209,13 +179,12 @@ export async function getActiveAnnouncements(): Promise<AnnouncementView[]> {
     )
     .orderBy(asc(announcement.eventDate))
   const ids = rows.map((r) => r.id)
-  const [interactions, rsvps, handles] = await Promise.all([
+  const [interactions, handles] = await Promise.all([
     loadInteractions(ids, user?.id ?? null),
-    loadRsvps(ids, user?.id ?? null),
     loadHomeHandles(rows.flatMap((r) => (r.homeId ? [r.homeId] : []))),
   ])
   return rows.map((r) =>
-    toView(r, user?.id ?? null, interactions.get(r.id), rsvps.get(r.id), r.homeId ? handles.get(r.homeId) : null),
+    toView(r, user?.id ?? null, interactions.get(r.id), r.homeId ? handles.get(r.homeId) : null),
   )
 }
 
@@ -230,14 +199,11 @@ export async function getMyAnnouncements(): Promise<AnnouncementView[]> {
     .where(eq(announcement.userId, user.id))
     .orderBy(desc(announcement.createdAt))
   const ids = rows.map((r) => r.id)
-  const [interactions, rsvps, handles] = await Promise.all([
+  const [interactions, handles] = await Promise.all([
     loadInteractions(ids, user.id),
-    loadRsvps(ids, user.id),
     loadHomeHandles(rows.flatMap((r) => (r.homeId ? [r.homeId] : []))),
   ])
-  return rows.map((r) =>
-    toView(r, user.id, interactions.get(r.id), rsvps.get(r.id), r.homeId ? handles.get(r.homeId) : null),
-  )
+  return rows.map((r) => toView(r, user.id, interactions.get(r.id), r.homeId ? handles.get(r.homeId) : null))
 }
 
 /** Whether the signed-in viewer may publish a community event (drives the UI). */
@@ -319,47 +285,18 @@ export async function createAnnouncement(input: {
     homeId: eventHome.homeId,
     organizationId: eventHome.organizationId,
     deleteMode,
+    // Registration is the only attendance format, so publishing always opens it.
+    // These were previously left at their `false` defaults with no UI anywhere to
+    // turn them on, which is why every published event fell through to RSVP and
+    // its registration page 404'd. Capacity, closing date and custom questions
+    // stay configurable afterwards; `registrationClosesAt` is how an admin closes
+    // registration.
+    registrationEnabled: true,
+    publicPageEnabled: true,
   })
 
   revalidatePath("/feed")
   return { status: "approved" }
-}
-
-/**
- * A signed-in member RSVPs to a community event. Upserts their single response
- * row (one per event) — tapping the same choice again clears it (toggle off).
- */
-export async function rsvpToEvent(input: { id: number; response: EventRsvpResponse }): Promise<void> {
-  const user = await requireUser()
-  const ad = await getLiveAnnouncement(input.id)
-  if (ad.adType !== "event") throw new Error("You can only RSVP to events.")
-
-  const [existing] = await db
-    .select()
-    .from(eventRsvp)
-    .where(and(eq(eventRsvp.announcementId, input.id), eq(eventRsvp.userId, user.id)))
-    .limit(1)
-
-  if (existing) {
-    if (existing.response === input.response) {
-      // Toggling the current choice off removes the RSVP entirely.
-      await db.delete(eventRsvp).where(eq(eventRsvp.id, existing.id))
-    } else {
-      await db
-        .update(eventRsvp)
-        .set({ response: input.response, updatedAt: new Date() })
-        .where(eq(eventRsvp.id, existing.id))
-    }
-  } else {
-    await db.insert(eventRsvp).values({
-      announcementId: input.id,
-      userId: user.id,
-      userName: user.name,
-      response: input.response,
-    })
-  }
-
-  revalidatePath("/feed")
 }
 
 /**
@@ -391,94 +328,10 @@ export async function adminDeleteAnnouncement(id: number) {
   revalidatePath("/admin")
 }
 
-// ── Community-event attendance (org admin console) ──────────────────────────
-
-export type EventAttendee = {
-  userId: string
-  name: string
-  initials: string
-  color: string
-  image: string | null
-}
-
-export type EventAttendance = {
-  id: number
-  title: string
-  flyer: string | null
-  eventDate: string | null
-  eventTime: string | null
-  location: string | null
-  price: string | null
-  deleteMode: EventDeleteMode | null
-  expiresAt: string | null
-  coming: EventAttendee[]
-  notComing: EventAttendee[]
-}
-
-/**
- * Every community event this Home has published, each with the members who are
- * coming vs. not coming (names + avatars). Powers the Events section of the org
- * admin console. Gated on the `events.manage` permission for the Home.
- */
-export async function getHomeEventAttendance(handle: string): Promise<EventAttendance[]> {
-  const user = await requireUser()
-  const homeView = await getHomeByHandle(handle)
-  if (!homeView) throw new Error("Home not found.")
-  const membership = await getViewerMembership(homeView.id)
-  if (!membership || membership.status !== "active" || !homeRoleHasPermission(membership.role, "events.manage")) {
-    throw new Error("You don't have permission to view event attendance.")
-  }
-
-  const events = await db
-    .select()
-    .from(announcement)
-    .where(and(eq(announcement.homeId, homeView.id), eq(announcement.adType, "event")))
-    .orderBy(asc(announcement.eventDate))
-  if (events.length === 0) return []
-
-  const ids = events.map((e) => e.id)
-  const rsvps = await db
-    .select({ r: eventRsvp, u: userTable })
-    .from(eventRsvp)
-    .innerJoin(userTable, eq(userTable.id, eventRsvp.userId))
-    .where(inArray(eventRsvp.announcementId, ids))
-    .orderBy(asc(eventRsvp.createdAt))
-
-  const byEvent = new Map<number, { coming: EventAttendee[]; notComing: EventAttendee[] }>()
-  for (const id of ids) byEvent.set(id, { coming: [], notComing: [] })
-  for (const { r, u } of rsvps) {
-    const bucket = byEvent.get(r.announcementId)
-    if (!bucket) continue
-    const attendee: EventAttendee = {
-      userId: r.userId,
-      name: u.name,
-      initials: getInitials(u.name),
-      color: getAvatarColor(u.id),
-      image: u.image,
-    }
-    if (r.response === "coming") bucket.coming.push(attendee)
-    else if (r.response === "not_coming") bucket.notComing.push(attendee)
-  }
-
-  return events.map((e) => ({
-    id: e.id,
-    title: e.title,
-    flyer: e.flyer,
-    eventDate: e.eventDate,
-    eventTime: e.eventTime,
-    location: e.location,
-    price: e.price,
-    deleteMode: (e.deleteMode as EventDeleteMode | null) ?? null,
-    expiresAt: e.expiresAt ? e.expiresAt.toISOString() : null,
-    coming: byEvent.get(e.id)?.coming ?? [],
-    notComing: byEvent.get(e.id)?.notComing ?? [],
-  }))
-}
-
 /**
  * Org-admin deletion of a community event they published. Verifies the viewer
- * holds `events.manage` on the event's Home, then removes the event and every
- * RSVP for it. Callable from the feed detail sheet and the admin console.
+ * holds `events.manage` on the event's Home, then removes the event. Callable
+ * from the feed detail sheet and the admin console.
  */
 export async function orgDeleteEvent(id: number): Promise<void> {
   const user = await requireUser()
@@ -491,7 +344,6 @@ export async function orgDeleteEvent(id: number): Promise<void> {
     throw new Error("You don't have permission to remove this event.")
   }
 
-  await db.delete(eventRsvp).where(eq(eventRsvp.announcementId, id))
   await db.delete(announcement).where(eq(announcement.id, id))
 
   revalidatePath("/feed")

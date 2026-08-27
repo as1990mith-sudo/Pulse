@@ -476,7 +476,7 @@ export async function leaveHome(handle: string): Promise<{ ok: true }> {
  * The database defines no `ON DELETE CASCADE` for `home`/`organization` (the
  * only cascades live in Better Auth's own `neon_auth` schema), so every child
  * row has to be removed explicitly here — otherwise deleting a Home would
- * silently orphan episodes, chat messages, RSVPs and so on across ~20 tables.
+ * silently orphan episodes, chat messages, registrations and so on across ~20 tables.
  *
  * Deletion runs children-before-parents inside one transaction, so a failure
  * anywhere rolls the whole thing back rather than leaving a half-deleted Home.
