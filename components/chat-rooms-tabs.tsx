@@ -5,17 +5,11 @@ import { CommunityHelp } from "@/components/community-help"
 import { ITestify } from "@/components/itestify"
 import { setChatChromeHidden } from "@/lib/chat-chrome"
 import { useUrlState } from "@/lib/navigation/use-url-state"
+import type { ReviewTabLabel } from "@/lib/home/types"
 import { cn } from "@/lib/utils"
 
 const TAB_KEYS = ["community", "itestify"] as const
 type Tab = (typeof TAB_KEYS)[number]
-
-// Declared once so the tab bar and its sliding indicator derive from a single
-// ordered source rather than duplicating the order in markup.
-const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
-  { key: "community", label: "Community", icon: <MessagesSquare className="size-4" /> },
-  { key: "itestify", label: "iTestify", icon: <Flame className="size-4" /> },
-]
 
 /**
  * Chat Rooms content hub. Replaces the old room-directory landing (big
@@ -34,6 +28,7 @@ export function ChatRoomsTabs({
   currentUser,
   postAsOrg = null,
   homeId = null,
+  reviewTabLabel,
 }: {
   communityPosts: React.ComponentProps<typeof CommunityHelp>["initialPosts"]
   itestifyPosts: React.ComponentProps<typeof ITestify>["initialPosts"]
@@ -46,10 +41,19 @@ export function ChatRoomsTabs({
    * Home's threads for the global ones.
    */
   homeId?: string | null
+  /** The admin-chosen name for the iTestify tab in the active Home (label only). */
+  reviewTabLabel: ReviewTabLabel
 }) {
   // In the URL so a reload — or returning from a thread — keeps the room the user
   // was reading instead of snapping back to Community.
   const [tab, setTab] = useUrlState<Tab>("room", "community", { valid: TAB_KEYS })
+
+  // Built from props so the second tab's label follows the Home's Review Tab
+  // setting, while the ordering/indicator still derive from one source.
+  const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
+    { key: "community", label: "Community", icon: <MessagesSquare className="size-4" /> },
+    { key: "itestify", label: reviewTabLabel, icon: <Flame className="size-4" /> },
+  ]
 
   function switchTab(next: Tab) {
     if (next === tab) return
@@ -66,9 +70,6 @@ export function ChatRoomsTabs({
           sliding top indicator. Stays static; only the app header hides on
           scroll. */}
       <div className="shrink-0 overflow-hidden border-b border-border/60 bg-background/95 backdrop-blur">
-        {/* The positioning context is this wrapper rather than the tablist, so
-            the info button can sit visually inside the bar while staying OUTSIDE
-            `role="tablist"` — a tablist must only contain tabs. */}
         <div className="relative mx-auto w-full max-w-md">
           <div
             role="tablist"
@@ -108,7 +109,13 @@ export function ChatRoomsTabs({
         {tab === "community" ? (
           <CommunityHelp embedded initialPosts={communityPosts} postAsOrg={postAsOrg} homeId={homeId} />
         ) : (
-          <ITestify embedded initialPosts={itestifyPosts} currentUser={currentUser} homeId={homeId} />
+          <ITestify
+            embedded
+            initialPosts={itestifyPosts}
+            currentUser={currentUser}
+            homeId={homeId}
+            label={reviewTabLabel}
+          />
         )}
       </div>
     </div>

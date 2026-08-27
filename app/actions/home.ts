@@ -31,6 +31,7 @@ import { isHomePlanId, type HomePlanId } from "@/lib/home/plans"
 import { homeRoleHasPermission, type HomeRole } from "@/lib/home/roles"
 import { getHomeOrgType } from "@/lib/home/org-types"
 import { orgCategoryLabel, type OrgSocials } from "@/lib/org-types"
+import { REVIEW_TAB_OPTIONS, type ReviewTabLabel } from "@/lib/home/types"
 import type {
   HomeAuthKeyView,
   HomeJoinPolicy,
@@ -690,6 +691,23 @@ export async function updateHomeBranding(
   revalidatePath("/")
   revalidatePath(`/org/${handle}/admin/settings`)
   return { ok: true }
+}
+
+/**
+ * Set what the iTestify tab is called in this Home. Purely a label — it renames
+ * the tab and nothing else about how the tab works. Rejects anything outside the
+ * fixed option set so the stored value always maps to a known label.
+ */
+export async function updateReviewTabLabel(handle: string, label: ReviewTabLabel) {
+  const { home: homeView } = await requireHomeManager(handle, "home.manage")
+  if (!REVIEW_TAB_OPTIONS.includes(label)) throw new Error("Unknown Review Tab name.")
+  await db.update(home).set({ reviewTabLabel: label, updatedAt: new Date() }).where(eq(home.id, homeView.id))
+  // The tab is rendered on the Home ("/") and the chatrooms hub; revalidate both
+  // plus the admin page so the choice reflects immediately.
+  revalidatePath("/")
+  revalidatePath("/chatrooms")
+  revalidatePath(`/org/${handle}/admin/review-tab`)
+  return { label }
 }
 
 /** Change the Home's subscription plan. */

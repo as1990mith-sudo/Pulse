@@ -3,6 +3,7 @@ import { ITestify } from "@/components/itestify"
 import { getChannelFeed } from "@/app/actions/feed"
 import { getCurrentUser } from "@/lib/session"
 import { getActiveHomeContext } from "@/lib/home/active-home"
+import { REVIEW_TAB_OPTIONS } from "@/lib/home/types"
 
 export const metadata = {
   title: "iTestify — Frequency",
@@ -22,7 +23,12 @@ export default async function ITestifyPage() {
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden">
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-hidden">
-        <ITestify initialPosts={initialPosts} currentUser={currentUser} homeId={home?.id ?? null} />
+        <ITestify
+          initialPosts={initialPosts}
+          currentUser={currentUser}
+          homeId={home?.id ?? null}
+          label={home?.reviewTabLabel ?? REVIEW_TAB_OPTIONS[0]}
+        />
       </main>
     </div>
   )
