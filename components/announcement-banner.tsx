@@ -16,6 +16,7 @@ import {
   Megaphone,
   MoreHorizontal,
   MoreVertical,
+  Pencil,
   Plus,
   Share2,
   Tag,
@@ -34,6 +35,7 @@ import {
   createAnnouncement,
   deleteAnnouncement,
   orgDeleteEvent,
+  orgUpdateEvent,
   type AnnouncementView,
   type EventDeleteMode,
 } from "@/app/actions/announcements"
@@ -114,6 +116,8 @@ export function AnnouncementBanner({
   const [showForm, setShowForm] = useState(false)
   // The id of the event whose detail sheet is open (opened by tapping a card).
   const [openId, setOpenId] = useState<number | null>(null)
+  // The id of the event being edited (opened from a card's "…" manage menu).
+  const [editId, setEditId] = useState<number | null>(null)
   // Cosmetic saved/bookmark state per card (matches the public browser). Purely
   // client-side for now — bookmarking has no server model yet.
   const [saved, setSaved] = useState<Record<number, boolean>>({})
@@ -127,6 +131,7 @@ export function AnnouncementBanner({
   // Resolve the open card against the freshest server data so interactions
   // (which revalidate the feed) reflect immediately; close it if it's gone.
   const openEvent = openId != null ? announcements.find((e) => e.id === openId) ?? null : null
+  const editEvent = editId != null ? announcements.find((e) => e.id === editId) ?? null : null
 
   // Bucket every visible event into its date section, preserving the server's
   // ascending-by-date order within each section.
@@ -184,9 +189,11 @@ export function AnnouncementBanner({
                     <EventGridCard
                       event={a}
                       index={i}
+                      isAdmin={isAdmin}
                       saved={Boolean(saved[a.id])}
                       onToggleSave={() => setSaved((s) => ({ ...s, [a.id]: !s[a.id] }))}
                       onOpen={() => setOpenId(a.id)}
+                      onEdit={() => setEditId(a.id)}
                     />
                   </li>
                 ))}
@@ -211,6 +218,7 @@ export function AnnouncementBanner({
       )}
 
       {showForm && currentUser && <AdvertiseForm onClose={() => setShowForm(false)} />}
+      {editEvent && <AdvertiseForm event={editEvent} onClose={() => setEditId(null)} />}
       {openEvent && <EventDetailSheet event={openEvent} isAdmin={isAdmin} onClose={() => setOpenId(null)} />}
     </section>
   )
@@ -226,15 +234,19 @@ export function AnnouncementBanner({
 function EventGridCard({
   event: a,
   index = 0,
+  isAdmin = false,
   saved,
   onToggleSave,
   onOpen,
+  onEdit,
 }: {
   event: AnnouncementView
   index?: number
+  isAdmin?: boolean
   saved: boolean
   onToggleSave: () => void
   onOpen: () => void
+  onEdit: () => void
 }) {
   const { mon, day, dow } = feedDateParts(a.eventDate)
   // Public detail page for this event. `from=feed` tells that page to send the
@@ -329,14 +341,7 @@ function EventGridCard({
 
       {/* Action row */}
       <div className="flex items-center gap-2 border-t border-border/60 pt-3">
-        <button
-          type="button"
-          onClick={onOpen}
-          aria-label={`More options for ${a.title}`}
-          className="grid size-9 shrink-0 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <MoreHorizontal className="size-4" />
-        </button>
+        <EventCardMenu event={a} isAdmin={isAdmin} onEdit={onEdit} onOpen={onOpen} />
 
         {canRegister && href ? (
           <Link
@@ -364,6 +369,176 @@ function EventGridCard({
           </button>
         )}
       </div>
+    </div>
+  )
+}
+
+/**
+ * The leading control on each feed card's action row.
+ *
+ *  • Managers (the event's creator, or a platform admin) get a "…" menu with
+ *    Edit, Share, and Delete. Edit is offered only to the creator, whose
+ *    membership carries `events.manage`; the server action re-verifies that
+ *    permission regardless, so this gate is purely cosmetic. Delete routes to
+ *    the org-scoped deletion for the creator and the platform-wide deletion for
+ *    an admin, and asks for confirmation first.
+ *  • Everyone else (members / guests) gets a single Share button — no menu.
+ *    Handle-less events have no public link to share, so they fall back to a
+ *    plain "…" that opens the detail sheet.
+ */
+function EventCardMenu({
+  event: a,
+  isAdmin,
+  onEdit,
+  onOpen,
+}: {
+  event: AnnouncementView
+  isAdmin: boolean
+  onEdit: () => void
+  onOpen: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
+  const { share, copied, canShare } = useEventShare(a)
+
+  const canManage = a.isOwner || isAdmin
+  const iconBtn =
+    "grid size-9 shrink-0 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:text-foreground"
+
+  // Members / guests: a direct Share button, or a details fallback when the
+  // event has no public link to share.
+  if (!canManage) {
+    if (!canShare) {
+      return (
+        <button type="button" onClick={onOpen} aria-label={`More options for ${a.title}`} className={iconBtn}>
+          <MoreHorizontal className="size-4" />
+        </button>
+      )
+    }
+    return (
+      <button
+        type="button"
+        onClick={share}
+        aria-label={copied ? "Link copied" : `Share ${a.title}`}
+        className={iconBtn}
+      >
+        {copied ? <Check className="size-4 text-live" /> : <Share2 className="size-4" />}
+      </button>
+    )
+  }
+
+  function handleDelete() {
+    setError(null)
+    startTransition(async () => {
+      try {
+        if (a.isOwner) await orgDeleteEvent(a.id)
+        else await adminDeleteAnnouncement(a.id)
+        setOpen(false)
+        setConfirming(false)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not delete this event.")
+      }
+    })
+  }
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => {
+          setOpen((o) => !o)
+          setConfirming(false)
+          setError(null)
+        }}
+        aria-label={`Manage ${a.title}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={iconBtn}
+      >
+        <MoreHorizontal className="size-4" />
+      </button>
+      {open && (
+        <>
+          <button
+            type="button"
+            className="fixed inset-0 z-10 cursor-default"
+            aria-hidden="true"
+            onClick={() => {
+              setOpen(false)
+              setConfirming(false)
+            }}
+          />
+          <div
+            role="menu"
+            className="absolute bottom-full left-0 z-20 mb-1 w-44 overflow-hidden rounded-xl border border-border bg-popover p-1 shadow-lg"
+          >
+            {confirming ? (
+              <div className="p-1.5">
+                <p className="px-1.5 pb-2 text-xs text-muted-foreground text-pretty">
+                  Delete this event? This can&apos;t be undone.
+                </p>
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    className="flex-1 rounded-lg border border-border px-2 py-1.5 text-xs font-medium hover:bg-secondary disabled:opacity-60"
+                    disabled={isPending}
+                    onClick={() => setConfirming(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-destructive px-2 py-1.5 text-xs font-semibold text-destructive-foreground hover:brightness-110 disabled:opacity-60"
+                    disabled={isPending}
+                    onClick={handleDelete}
+                  >
+                    {isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                    Delete
+                  </button>
+                </div>
+                {error && <p className="px-1.5 pt-2 text-xs text-destructive">{error}</p>}
+              </div>
+            ) : (
+              <>
+                {a.isOwner && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium hover:bg-secondary"
+                    onClick={() => {
+                      setOpen(false)
+                      onEdit()
+                    }}
+                  >
+                    <Pencil className="size-4" /> Edit
+                  </button>
+                )}
+                {canShare && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium hover:bg-secondary"
+                    onClick={share}
+                  >
+                    {copied ? <Check className="size-4 text-live" /> : <Share2 className="size-4" />}{" "}
+                    {copied ? "Copied" : "Share"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10"
+                  onClick={() => setConfirming(true)}
+                >
+                  <Trash2 className="size-4" /> Delete
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }
