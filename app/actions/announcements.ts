@@ -357,6 +357,88 @@ export async function orgDeleteEvent(id: number): Promise<void> {
   }
 }
 
+/**
+ * Org-admin edit of a community event they manage. Verifies the viewer holds
+ * `events.manage` on the event's Home (same boundary as {@link orgDeleteEvent}),
+ * then updates only the event's own content columns — title, description, flyer,
+ * venue, date/time, price, and the auto-delete behaviour. Child rows
+ * (registrations, contacts, questions) are never touched, so editing an event's
+ * details can't disturb who has already registered.
+ */
+export async function orgUpdateEvent(
+  id: number,
+  input: {
+    title: string
+    description?: string | null
+    flyer?: string | null
+    location?: string | null
+    eventDate?: string | null
+    eventTime?: string | null
+    price?: string | null
+    deleteMode: EventDeleteMode
+  },
+): Promise<void> {
+  const user = await requireUser()
+  const [row] = await db.select().from(announcement).where(eq(announcement.id, id)).limit(1)
+  if (!row) throw new Error("This event is no longer available.")
+  if (!row.homeId) throw new Error("This event can't be managed here.")
+
+  const membership = await getViewerMembership(row.homeId)
+  if (!membership || membership.status !== "active" || !homeRoleHasPermission(membership.role, "events.manage")) {
+    throw new Error("You don't have permission to edit this event.")
+  }
+
+  const title = input.title.trim()
+  if (!title) throw new Error("Event title is required.")
+  if (!input.eventDate) throw new Error("Event date is required.")
+  if (!input.eventTime) throw new Error("Event time is required.")
+  if (!input.location?.trim()) throw new Error("Event venue is required.")
+  if (input.eventDate < new Date().toISOString().slice(0, 10)) {
+    throw new Error("The event date must be today or in the future.")
+  }
+  const eventDate = input.eventDate
+  const eventTime = input.eventTime
+  const location = input.location.trim()
+  const rawTicket = (input.price ?? "").trim().replace(/^\$/, "").trim()
+  const price = rawTicket || null
+
+  // Recompute when the event leaves the feed, exactly like createAnnouncement:
+  // auto5h → 5 hours after the (possibly new) start; manual → never expires.
+  const deleteMode: EventDeleteMode = input.deleteMode === "manual" ? "manual" : "auto5h"
+  let expiresAt: Date | null = null
+  if (deleteMode === "auto5h") {
+    const start = new Date(`${eventDate}T${eventTime}:00`)
+    expiresAt = Number.isNaN(start.getTime())
+      ? new Date(Date.now() + 5 * 60 * 60 * 1000)
+      : new Date(start.getTime() + 5 * 60 * 60 * 1000)
+  }
+
+  await db
+    .update(announcement)
+    .set({
+      title,
+      description: input.description?.trim() || null,
+      flyer: input.flyer || null,
+      location,
+      eventDate,
+      eventTime,
+      price,
+      deleteMode,
+      expiresAt,
+    })
+    .where(eq(announcement.id, id))
+
+  revalidatePath("/feed")
+  if (row.organizationId) {
+    const [org] = await db
+      .select({ handle: organization.handle })
+      .from(organization)
+      .where(eq(organization.id, row.organizationId))
+      .limit(1)
+    if (org) revalidatePath(`/org/${org.handle}/admin/events`)
+  }
+}
+
 /** Fetches a live advert by id, ensuring it is still approved and unexpired. */
 async function getLiveAnnouncement(id: number) {
   const [row] = await db.select().from(announcement).where(eq(announcement.id, id)).limit(1)

@@ -53,6 +53,9 @@ export function ChannelComposer({
   accent = "primary",
   allowVideo = true,
   maxVideoSeconds = 15 * 60,
+  // Extra classes for the writing surface. Callers use this to pin a taller,
+  // fixed-height box (e.g. iTestify matches the Community composer's `h-32`).
+  textareaClassName,
 }: {
   open: boolean
   onClose: () => void
@@ -65,6 +68,7 @@ export function ChannelComposer({
   accent?: "primary" | "amber" | "rose"
   allowVideo?: boolean
   maxVideoSeconds?: number
+  textareaClassName?: string
 }) {
   const [body, setBody] = useState("")
   const [media, setMedia] = useState<PostMedia[]>([])
@@ -206,9 +210,11 @@ export function ChannelComposer({
               value={body}
               onChange={(e) => setBody(e.target.value)}
               placeholder={placeholder}
-              rows={4}
+              // A custom height class pins its own size; otherwise fall back to
+              // the default 4-row auto-height.
+              {...(textareaClassName ? {} : { rows: 4 })}
               maxLength={2000}
-              className="resize-none rounded-2xl text-base"
+              className={cn("resize-none rounded-2xl text-base", textareaClassName)}
             />
 
             {media.length > 0 && (

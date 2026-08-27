@@ -16,6 +16,7 @@ import {
   Megaphone,
   MoreHorizontal,
   MoreVertical,
+  Pencil,
   Plus,
   Share2,
   Tag,
@@ -34,6 +35,7 @@ import {
   createAnnouncement,
   deleteAnnouncement,
   orgDeleteEvent,
+  orgUpdateEvent,
   type AnnouncementView,
   type EventDeleteMode,
 } from "@/app/actions/announcements"
@@ -114,6 +116,8 @@ export function AnnouncementBanner({
   const [showForm, setShowForm] = useState(false)
   // The id of the event whose detail sheet is open (opened by tapping a card).
   const [openId, setOpenId] = useState<number | null>(null)
+  // The id of the event being edited (opened from a card's "…" manage menu).
+  const [editId, setEditId] = useState<number | null>(null)
   // Cosmetic saved/bookmark state per card (matches the public browser). Purely
   // client-side for now — bookmarking has no server model yet.
   const [saved, setSaved] = useState<Record<number, boolean>>({})
@@ -127,6 +131,7 @@ export function AnnouncementBanner({
   // Resolve the open card against the freshest server data so interactions
   // (which revalidate the feed) reflect immediately; close it if it's gone.
   const openEvent = openId != null ? announcements.find((e) => e.id === openId) ?? null : null
+  const editEvent = editId != null ? announcements.find((e) => e.id === editId) ?? null : null
 
   // Bucket every visible event into its date section, preserving the server's
   // ascending-by-date order within each section.
@@ -146,10 +151,7 @@ export function AnnouncementBanner({
             <CalendarDays className="size-6" />
           </span>
           <div className="min-w-0 leading-tight">
-            <h2 className="text-2xl font-bold tracking-tight">Events</h2>
-            <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
-              Discover upcoming events and experiences
-            </p>
+            <h2 className="text-2xl font-bold tracking-tight text-balance">Upcoming events</h2>
           </div>
         </div>
         {canPublish && (
@@ -187,9 +189,11 @@ export function AnnouncementBanner({
                     <EventGridCard
                       event={a}
                       index={i}
+                      isAdmin={isAdmin}
                       saved={Boolean(saved[a.id])}
                       onToggleSave={() => setSaved((s) => ({ ...s, [a.id]: !s[a.id] }))}
                       onOpen={() => setOpenId(a.id)}
+                      onEdit={() => setEditId(a.id)}
                     />
                   </li>
                 ))}
@@ -214,6 +218,7 @@ export function AnnouncementBanner({
       )}
 
       {showForm && currentUser && <AdvertiseForm onClose={() => setShowForm(false)} />}
+      {editEvent && <AdvertiseForm event={editEvent} onClose={() => setEditId(null)} />}
       {openEvent && <EventDetailSheet event={openEvent} isAdmin={isAdmin} onClose={() => setOpenId(null)} />}
     </section>
   )
@@ -229,15 +234,19 @@ export function AnnouncementBanner({
 function EventGridCard({
   event: a,
   index = 0,
+  isAdmin = false,
   saved,
   onToggleSave,
   onOpen,
+  onEdit,
 }: {
   event: AnnouncementView
   index?: number
+  isAdmin?: boolean
   saved: boolean
   onToggleSave: () => void
   onOpen: () => void
+  onEdit: () => void
 }) {
   const { mon, day, dow } = feedDateParts(a.eventDate)
   // Public detail page for this event. `from=feed` tells that page to send the
@@ -332,14 +341,7 @@ function EventGridCard({
 
       {/* Action row */}
       <div className="flex items-center gap-2 border-t border-border/60 pt-3">
-        <button
-          type="button"
-          onClick={onOpen}
-          aria-label={`More options for ${a.title}`}
-          className="grid size-9 shrink-0 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <MoreHorizontal className="size-4" />
-        </button>
+        <EventCardMenu event={a} isAdmin={isAdmin} onEdit={onEdit} onOpen={onOpen} />
 
         {canRegister && href ? (
           <Link
@@ -367,6 +369,176 @@ function EventGridCard({
           </button>
         )}
       </div>
+    </div>
+  )
+}
+
+/**
+ * The leading control on each feed card's action row.
+ *
+ *  • Managers (the event's creator, or a platform admin) get a "…" menu with
+ *    Edit, Share, and Delete. Edit is offered only to the creator, whose
+ *    membership carries `events.manage`; the server action re-verifies that
+ *    permission regardless, so this gate is purely cosmetic. Delete routes to
+ *    the org-scoped deletion for the creator and the platform-wide deletion for
+ *    an admin, and asks for confirmation first.
+ *  • Everyone else (members / guests) gets a single Share button — no menu.
+ *    Handle-less events have no public link to share, so they fall back to a
+ *    plain "…" that opens the detail sheet.
+ */
+function EventCardMenu({
+  event: a,
+  isAdmin,
+  onEdit,
+  onOpen,
+}: {
+  event: AnnouncementView
+  isAdmin: boolean
+  onEdit: () => void
+  onOpen: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
+  const { share, copied, canShare } = useEventShare(a)
+
+  const canManage = a.isOwner || isAdmin
+  const iconBtn =
+    "grid size-9 shrink-0 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:text-foreground"
+
+  // Members / guests: a direct Share button, or a details fallback when the
+  // event has no public link to share.
+  if (!canManage) {
+    if (!canShare) {
+      return (
+        <button type="button" onClick={onOpen} aria-label={`More options for ${a.title}`} className={iconBtn}>
+          <MoreHorizontal className="size-4" />
+        </button>
+      )
+    }
+    return (
+      <button
+        type="button"
+        onClick={share}
+        aria-label={copied ? "Link copied" : `Share ${a.title}`}
+        className={iconBtn}
+      >
+        {copied ? <Check className="size-4 text-live" /> : <Share2 className="size-4" />}
+      </button>
+    )
+  }
+
+  function handleDelete() {
+    setError(null)
+    startTransition(async () => {
+      try {
+        if (a.isOwner) await orgDeleteEvent(a.id)
+        else await adminDeleteAnnouncement(a.id)
+        setOpen(false)
+        setConfirming(false)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not delete this event.")
+      }
+    })
+  }
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => {
+          setOpen((o) => !o)
+          setConfirming(false)
+          setError(null)
+        }}
+        aria-label={`Manage ${a.title}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={iconBtn}
+      >
+        <MoreHorizontal className="size-4" />
+      </button>
+      {open && (
+        <>
+          <button
+            type="button"
+            className="fixed inset-0 z-10 cursor-default"
+            aria-hidden="true"
+            onClick={() => {
+              setOpen(false)
+              setConfirming(false)
+            }}
+          />
+          <div
+            role="menu"
+            className="absolute bottom-full left-0 z-20 mb-1 w-44 overflow-hidden rounded-xl border border-border bg-popover p-1 shadow-lg"
+          >
+            {confirming ? (
+              <div className="p-1.5">
+                <p className="px-1.5 pb-2 text-xs text-muted-foreground text-pretty">
+                  Delete this event? This can&apos;t be undone.
+                </p>
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    className="flex-1 rounded-lg border border-border px-2 py-1.5 text-xs font-medium hover:bg-secondary disabled:opacity-60"
+                    disabled={isPending}
+                    onClick={() => setConfirming(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-destructive px-2 py-1.5 text-xs font-semibold text-destructive-foreground hover:brightness-110 disabled:opacity-60"
+                    disabled={isPending}
+                    onClick={handleDelete}
+                  >
+                    {isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                    Delete
+                  </button>
+                </div>
+                {error && <p className="px-1.5 pt-2 text-xs text-destructive">{error}</p>}
+              </div>
+            ) : (
+              <>
+                {a.isOwner && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium hover:bg-secondary"
+                    onClick={() => {
+                      setOpen(false)
+                      onEdit()
+                    }}
+                  >
+                    <Pencil className="size-4" /> Edit
+                  </button>
+                )}
+                {canShare && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium hover:bg-secondary"
+                    onClick={share}
+                  >
+                    {copied ? <Check className="size-4 text-live" /> : <Share2 className="size-4" />}{" "}
+                    {copied ? "Copied" : "Share"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10"
+                  onClick={() => setConfirming(true)}
+                >
+                  <Trash2 className="size-4" /> Delete
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -691,21 +863,24 @@ function AdminMenu({ announcement: a }: { announcement: AnnouncementView }) {
   )
 }
 
-function AdvertiseForm({ onClose }: { onClose: () => void }) {
+function AdvertiseForm({ event, onClose }: { event?: AnnouncementView; onClose: () => void }) {
+  // When `event` is present we're editing an existing event; otherwise publishing
+  // a new one. Editing reuses the identical form, prefilled from the event.
+  const isEditing = Boolean(event)
   // Product adverts were removed — this form only publishes events.
   const adType: AdType = "event"
-  const [title, setTitle] = useState("")
-  const [description, setDescription] = useState("")
-  const [location, setLocation] = useState("")
-  const [eventDate, setEventDate] = useState("")
-  const [eventTime, setEventTime] = useState("")
+  const [title, setTitle] = useState(event?.title ?? "")
+  const [description, setDescription] = useState(event?.description ?? "")
+  const [location, setLocation] = useState(event?.location ?? "")
+  const [eventDate, setEventDate] = useState(event?.eventDate ?? "")
+  const [eventTime, setEventTime] = useState(event?.eventTime ?? "")
   // Whether an event is free to attend or ticketed. `price` holds the ticket
   // amount when paid (and doubles as the product price for product adverts).
-  const [eventPricing, setEventPricing] = useState<"free" | "paid">("free")
-  const [price, setPrice] = useState("")
+  const [eventPricing, setEventPricing] = useState<"free" | "paid">(event?.price ? "paid" : "free")
+  const [price, setPrice] = useState(event?.price ?? "")
   // How the event should leave the feed once it's over.
-  const [deleteMode, setDeleteMode] = useState<EventDeleteMode>("auto5h")
-  const [flyer, setFlyer] = useState<string | null>(null)
+  const [deleteMode, setDeleteMode] = useState<EventDeleteMode>(event?.deleteMode === "manual" ? "manual" : "auto5h")
+  const [flyer, setFlyer] = useState<string | null>(event?.flyer ?? null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<{ status: "approved" | "declined"; declineReason?: string } | null>(null)
@@ -747,6 +922,23 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
     const submittedPrice = eventPricing === "paid" ? price : null
     startTransition(async () => {
       try {
+        if (isEditing && event) {
+          // Editing only rewrites the event's own content; registrations and
+          // other child rows are left untouched by orgUpdateEvent. On success we
+          // just close — the feed revalidates server-side.
+          await orgUpdateEvent(event.id, {
+            title,
+            description,
+            flyer,
+            location,
+            eventDate,
+            eventTime,
+            price: submittedPrice,
+            deleteMode,
+          })
+          onClose()
+          return
+        }
         const res = await createAnnouncement({
           adType,
           title,
@@ -760,7 +952,7 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
         })
         setResult(res)
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not publish your event.")
+        setError(err instanceof Error ? err.message : `Could not ${isEditing ? "save" : "publish"} your event.`)
       }
     })
   }
@@ -771,7 +963,7 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Advertise"
+      aria-label={isEditing ? "Edit event" : "Advertise"}
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-background/90 p-4 backdrop-blur-sm sm:items-center"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose()
@@ -784,7 +976,7 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
               <Megaphone className="size-4" />
             </span>
             <div className="leading-tight">
-              <h2 className="font-semibold">Publish an event</h2>
+              <h2 className="font-semibold">{isEditing ? "Edit event" : "Publish an event"}</h2>
             </div>
           </div>
           <Button size="icon" variant="ghost" className="shrink-0" aria-label="Close" onClick={onClose}>
@@ -991,8 +1183,20 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
                 Cancel
               </Button>
               <Button type="submit" className="gap-1.5" disabled={isPending || uploading}>
-                {isPending ? <Loader2 className="size-4 animate-spin" /> : <CalendarPlus className="size-4" />}
-                {isPending ? "Publishing…" : "Publish event"}
+                {isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : isEditing ? (
+                  <Check className="size-4" />
+                ) : (
+                  <CalendarPlus className="size-4" />
+                )}
+                {isPending
+                  ? isEditing
+                    ? "Saving…"
+                    : "Publishing…"
+                  : isEditing
+                    ? "Save changes"
+                    : "Publish event"}
               </Button>
             </div>
           </form>
