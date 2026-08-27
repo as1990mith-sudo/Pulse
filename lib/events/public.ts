@@ -71,16 +71,24 @@ export async function getPublicHost(handle: string): Promise<PublicHostInfo | nu
 export async function listPublicEvents(homeId: string): Promise<PublicEventCard[]> {
   const today = new Date().toISOString().slice(0, 10)
 
-  const rows = await db
+  const q = db
     .select({
       ad: announcement,
       // Seats (summed party sizes), not rows. Capacity is enforced against
       // seats, so counting registrations here would let a card advertise places
       // that cannot actually be booked.
+      //
+      // Written with an explicit `er` alias and a fully-qualified
+      // `announcement.id` rather than interpolated Drizzle columns. Drizzle
+      // emits bare, unqualified names inside a raw `sql` template, which
+      // produced `where "announcementId" = "id"` — Postgres resolved "id" to
+      // event_registration's OWN id, so the subquery compared a registration to
+      // itself, matched nothing, and silently reported 0 seats on every event.
       registered: sql<number>`(
-        select coalesce(sum(${eventRegistration.guests}), 0)::int from ${eventRegistration}
-        where ${eventRegistration.announcementId} = ${announcement.id}
-          and ${eventRegistration.status} = 'registered'
+        select coalesce(sum(er."guests"), 0)::int
+        from "event_registration" er
+        where er."announcementId" = "announcement"."id"
+          and er."status" = 'registered'
       )`,
     })
     .from(announcement)
@@ -97,7 +105,7 @@ export async function listPublicEvents(homeId: string): Promise<PublicEventCard[
     )
     .orderBy(asc(announcement.eventDate), asc(announcement.eventTime))
 
-  console.log("[v0] listPublicEvents rows:", JSON.stringify(rows.map((r) => ({ id: r.ad.id, reg: r.registered }))))
+  const rows = await q
 
   const now = new Date()
   return rows.map(({ ad, registered }) => {

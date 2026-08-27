@@ -17,6 +17,17 @@ import {
 
 type Params = { params: Promise<{ handle: string; id: string }> }
 
+/**
+ * Always rendered per request, never cached.
+ *
+ * This page resolves the VIEWER's identity — whether they are signed in, a
+ * member of this Home, and whether they already hold a place — to decide
+ * between one-tap registration and the full form. Serving a cached copy would
+ * show one visitor's state to another, so the correctness requirement here is
+ * stricter than on the listing (which is merely time-revalidated).
+ */
+export const dynamic = "force-dynamic"
+
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { handle, id } = await params
   const loaded = await loadEventByHandle(handle, Number(id))

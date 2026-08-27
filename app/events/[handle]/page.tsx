@@ -6,6 +6,18 @@ import { getPublicHost, listPublicEvents, formatEventWhen } from "@/lib/events/p
 
 type Params = { params: Promise<{ handle: string }> }
 
+/**
+ * Cacheable, but self-healing within a minute.
+ *
+ * This page reads no request-scoped API, so Next would otherwise prerender it
+ * once and serve that copy indefinitely — which is exactly what happened during
+ * testing: a sold-out event kept advertising "Register" and showing 0 places
+ * taken. Booking a place calls `revalidatePath` for an immediate update, and
+ * this interval is the backstop for changes that occur outside a registration
+ * (an admin editing capacity, or the event date simply rolling over).
+ */
+export const revalidate = 60
+
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { handle } = await params
   const host = await getPublicHost(handle)
