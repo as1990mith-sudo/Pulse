@@ -240,65 +240,81 @@ function EventGridCard({
   onOpen: () => void
 }) {
   const { mon, day, dow } = feedDateParts(a.eventDate)
-  const href = a.homeHandle ? `/events/${a.homeHandle}/${a.id}` : null
+  // Public detail page for this event. `from=feed` tells that page to send the
+  // Back button here (the in-feed Events tab) instead of the public browser.
+  // Universal events have no host handle and thus no public page — those fall
+  // back to the in-app detail sheet.
+  const href = a.homeHandle ? `/events/${a.homeHandle}/${a.id}?from=feed` : null
   // Members register; owners manage via the detail sheet instead.
   const canRegister = a.registrationEnabled && Boolean(href) && !a.isOwner
+
+  // Tapping the card body (poster + meta) — everything except Register and the
+  // "…" menu — opens the full cinematic detail page. Only handle-less events
+  // still open the lightweight sheet, since they have no page to open.
+  const bodyClassName = "flex gap-3 text-left"
+  const bodyLabel = `View details for ${a.title}`
+  const cardBody = (
+    <>
+      {/* Poster thumbnail */}
+      <div className="relative aspect-[3/4] w-20 shrink-0 overflow-hidden rounded-xl border border-border/60 bg-muted">
+        {a.flyer ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={a.flyer || "/placeholder.svg"}
+            alt={`${a.title} flyer`}
+            loading={index < 4 ? "eager" : "lazy"}
+            fetchPriority={index < 4 ? "high" : "auto"}
+            width={300}
+            height={400}
+            decoding="async"
+            className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+          />
+        ) : (
+          <div className="flex size-full items-center justify-center bg-secondary text-muted-foreground">
+            <CalendarPlus className="size-6" />
+          </div>
+        )}
+      </div>
+
+      {/* Date block */}
+      <div className="flex w-14 shrink-0 flex-col items-center justify-center rounded-xl border border-border bg-secondary/40 py-2">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-primary">{mon}</span>
+        <span className="text-2xl font-bold leading-none">{day}</span>
+        <span className="mt-0.5 text-[11px] font-medium text-muted-foreground">{dow}</span>
+      </div>
+
+      {/* Title + meta (leave room for the bookmark, top-right) */}
+      <div className="flex min-w-0 flex-1 flex-col pr-7">
+        <h3 className="text-[15px] font-semibold leading-snug text-balance">{a.title}</h3>
+        <p className="mt-1 flex items-center gap-1.5 text-[13px] text-muted-foreground">
+          <CalendarPlus className="size-3.5 shrink-0 text-primary/80" />
+          <span className="truncate">{formatEventDate(a.eventDate ?? "", a.eventTime)}</span>
+        </p>
+        {a.location && (
+          <p className="mt-1 flex items-center gap-1.5 text-[13px] text-muted-foreground">
+            <MapPin className="size-3.5 shrink-0" />
+            <span className="truncate">{a.location}</span>
+          </p>
+        )}
+        <p className="mt-1 truncate text-xs text-muted-foreground">{a.creatorName}</p>
+      </div>
+    </>
+  )
 
   return (
     <div
       className="group relative flex flex-col gap-3 rounded-[18px] border border-border bg-card p-3 transition-all duration-300 hover:border-primary/40 hover:shadow-[0_0_28px_-8px] hover:shadow-primary/40 animate-in fade-in slide-in-from-bottom-3 fill-mode-both"
       style={{ animationDelay: `${Math.min(index, 5) * 40}ms` }}
     >
-      <button
-        type="button"
-        onClick={onOpen}
-        aria-label={`View details for ${a.title}`}
-        className="flex gap-3 text-left"
-      >
-        {/* Poster thumbnail */}
-        <div className="relative aspect-[3/4] w-20 shrink-0 overflow-hidden rounded-xl border border-border/60 bg-muted">
-          {a.flyer ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={a.flyer || "/placeholder.svg"}
-              alt={`${a.title} flyer`}
-              loading={index < 4 ? "eager" : "lazy"}
-              fetchPriority={index < 4 ? "high" : "auto"}
-              width={300}
-              height={400}
-              decoding="async"
-              className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-            />
-          ) : (
-            <div className="flex size-full items-center justify-center bg-secondary text-muted-foreground">
-              <CalendarPlus className="size-6" />
-            </div>
-          )}
-        </div>
-
-        {/* Date block */}
-        <div className="flex w-14 shrink-0 flex-col items-center justify-center rounded-xl border border-border bg-secondary/40 py-2">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-primary">{mon}</span>
-          <span className="text-2xl font-bold leading-none">{day}</span>
-          <span className="mt-0.5 text-[11px] font-medium text-muted-foreground">{dow}</span>
-        </div>
-
-        {/* Title + meta (leave room for the bookmark, top-right) */}
-        <div className="flex min-w-0 flex-1 flex-col pr-7">
-          <h3 className="text-[15px] font-semibold leading-snug text-balance">{a.title}</h3>
-          <p className="mt-1 flex items-center gap-1.5 text-[13px] text-muted-foreground">
-            <CalendarPlus className="size-3.5 shrink-0 text-primary/80" />
-            <span className="truncate">{formatEventDate(a.eventDate ?? "", a.eventTime)}</span>
-          </p>
-          {a.location && (
-            <p className="mt-1 flex items-center gap-1.5 text-[13px] text-muted-foreground">
-              <MapPin className="size-3.5 shrink-0" />
-              <span className="truncate">{a.location}</span>
-            </p>
-          )}
-          <p className="mt-1 truncate text-xs text-muted-foreground">{a.creatorName}</p>
-        </div>
-      </button>
+      {href ? (
+        <Link href={href} aria-label={bodyLabel} className={bodyClassName}>
+          {cardBody}
+        </Link>
+      ) : (
+        <button type="button" onClick={onOpen} aria-label={bodyLabel} className={bodyClassName}>
+          {cardBody}
+        </button>
+      )}
 
       {/* Bookmark — layered above the card button, top-right */}
       <button
@@ -328,10 +344,18 @@ function EventGridCard({
         {canRegister && href ? (
           <Link
             href={href}
-            aria-label={`Register for ${a.title}`}
+            aria-label={`View details for ${a.title}`}
             className="flex h-9 flex-1 items-center justify-center rounded-lg bg-primary text-sm font-semibold text-primary-foreground shadow-[0_0_20px_-6px] shadow-primary/70 transition-all duration-200 hover:brightness-110 active:scale-[0.98]"
           >
-            Register
+            Info
+          </Link>
+        ) : href ? (
+          <Link
+            href={href}
+            aria-label={`View details for ${a.title}`}
+            className="flex h-9 flex-1 items-center justify-center rounded-lg border border-border bg-secondary/40 text-sm font-semibold text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+          >
+            View details
           </Link>
         ) : (
           <button
