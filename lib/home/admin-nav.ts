@@ -79,7 +79,7 @@ export const HOME_ADMIN_SECTIONS: HomeAdminSection[] = [
     slug: "events",
     label: "Events",
     icon: CalendarDays,
-    description: "See who's coming to the events you've published — attendance at a glance.",
+    description: "See who has registered for the events you've published, and email your attendees.",
     permission: "events.manage",
     ready: true,
   },
