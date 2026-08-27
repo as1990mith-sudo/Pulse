@@ -344,10 +344,10 @@ function EventGridCard({
         {canRegister && href ? (
           <Link
             href={href}
-            aria-label={`Register for ${a.title}`}
+            aria-label={`View details for ${a.title}`}
             className="flex h-9 flex-1 items-center justify-center rounded-lg bg-primary text-sm font-semibold text-primary-foreground shadow-[0_0_20px_-6px] shadow-primary/70 transition-all duration-200 hover:brightness-110 active:scale-[0.98]"
           >
-            Register
+            Info
           </Link>
         ) : href ? (
           <Link
