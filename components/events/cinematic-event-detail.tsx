@@ -123,13 +123,9 @@ export function CinematicEventDetail({
             <div className="absolute inset-0 bg-[#0B0B0B]" />
           )}
 
-          {/* atmospheric accent glow behind the subject */}
-          <div
-            aria-hidden
-            className="pointer-events-none absolute right-[-10%] top-[12%] h-72 w-72 rounded-full blur-[90px]"
-            style={{ backgroundColor: "var(--home-accent)", opacity: 0.28 }}
-          />
-          {/* cinematic gradients: left-to-right, bottom fade into the page, vignette */}
+          {/* Neutral gradients only — no accent glow, so the flyer reads clearly.
+              These stay near-black (not tinted) purely to keep the overlaid back
+              button and the title/host text legible over the image. */}
           <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-[#050505]/85 via-[#050505]/25 to-transparent" />
           <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/35 to-transparent" />
           <div aria-hidden className="absolute inset-0 shadow-[inset_0_0_140px_40px_rgba(5,5,5,0.7)]" />

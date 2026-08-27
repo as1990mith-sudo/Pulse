@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import useSWR from "swr"
-import { ArrowLeft, Flame, PenLine } from "lucide-react"
+import { ArrowLeft, Flame, PenLine, Plus } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { ChannelComposer } from "@/components/channel-composer"
@@ -117,12 +117,12 @@ export function ITestify({
       <button
         type="button"
         onClick={() => setComposerOpen(true)}
-        className={`absolute bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-5 z-30 inline-flex w-fit items-center gap-2 rounded-full bg-primary px-4 py-2 text-base font-semibold text-primary-foreground shadow-lg transition-[transform,opacity] duration-300 ease-out hover:scale-105 active:scale-95 sm:right-8 ${
+        aria-label="Share your testimony"
+        className={`absolute bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-5 z-30 inline-flex items-center justify-center rounded-full bg-primary p-3.5 text-primary-foreground shadow-lg transition-[transform,opacity] duration-300 ease-out hover:scale-105 active:scale-95 sm:right-8 ${
           chromeHidden ? "pointer-events-none translate-y-[200%] opacity-0" : "translate-y-0 opacity-100"
         }`}
       >
-        <Flame className="size-5" />
-        Testify
+        <Plus className="size-5" />
       </button>
 
       <ChannelComposer
@@ -132,10 +132,12 @@ export function ITestify({
         channel={ITESTIFY_CHANNEL}
         currentUser={currentUser}
         title="Your testimony"
-        placeholder="Share what God has done — testimonies that build faith…"
+        placeholder=""
         submitLabel="Share testimony"
         accent="rose"
         maxVideoSeconds={MAX_VIDEO_SECONDS}
+        // Taller writing surface, matching the Community composer's h-32 box.
+        textareaClassName="field-sizing-fixed h-32 min-h-0 overflow-y-auto"
       />
     </div>
   )
