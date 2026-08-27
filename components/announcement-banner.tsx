@@ -863,21 +863,24 @@ function AdminMenu({ announcement: a }: { announcement: AnnouncementView }) {
   )
 }
 
-function AdvertiseForm({ onClose }: { onClose: () => void }) {
+function AdvertiseForm({ event, onClose }: { event?: AnnouncementView; onClose: () => void }) {
+  // When `event` is present we're editing an existing event; otherwise publishing
+  // a new one. Editing reuses the identical form, prefilled from the event.
+  const isEditing = Boolean(event)
   // Product adverts were removed — this form only publishes events.
   const adType: AdType = "event"
-  const [title, setTitle] = useState("")
-  const [description, setDescription] = useState("")
-  const [location, setLocation] = useState("")
-  const [eventDate, setEventDate] = useState("")
-  const [eventTime, setEventTime] = useState("")
+  const [title, setTitle] = useState(event?.title ?? "")
+  const [description, setDescription] = useState(event?.description ?? "")
+  const [location, setLocation] = useState(event?.location ?? "")
+  const [eventDate, setEventDate] = useState(event?.eventDate ?? "")
+  const [eventTime, setEventTime] = useState(event?.eventTime ?? "")
   // Whether an event is free to attend or ticketed. `price` holds the ticket
   // amount when paid (and doubles as the product price for product adverts).
-  const [eventPricing, setEventPricing] = useState<"free" | "paid">("free")
-  const [price, setPrice] = useState("")
+  const [eventPricing, setEventPricing] = useState<"free" | "paid">(event?.price ? "paid" : "free")
+  const [price, setPrice] = useState(event?.price ?? "")
   // How the event should leave the feed once it's over.
-  const [deleteMode, setDeleteMode] = useState<EventDeleteMode>("auto5h")
-  const [flyer, setFlyer] = useState<string | null>(null)
+  const [deleteMode, setDeleteMode] = useState<EventDeleteMode>(event?.deleteMode === "manual" ? "manual" : "auto5h")
+  const [flyer, setFlyer] = useState<string | null>(event?.flyer ?? null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<{ status: "approved" | "declined"; declineReason?: string } | null>(null)
@@ -919,6 +922,23 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
     const submittedPrice = eventPricing === "paid" ? price : null
     startTransition(async () => {
       try {
+        if (isEditing && event) {
+          // Editing only rewrites the event's own content; registrations and
+          // other child rows are left untouched by orgUpdateEvent. On success we
+          // just close — the feed revalidates server-side.
+          await orgUpdateEvent(event.id, {
+            title,
+            description,
+            flyer,
+            location,
+            eventDate,
+            eventTime,
+            price: submittedPrice,
+            deleteMode,
+          })
+          onClose()
+          return
+        }
         const res = await createAnnouncement({
           adType,
           title,
@@ -932,7 +952,7 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
         })
         setResult(res)
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not publish your event.")
+        setError(err instanceof Error ? err.message : `Could not ${isEditing ? "save" : "publish"} your event.`)
       }
     })
   }
@@ -943,7 +963,7 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Advertise"
+      aria-label={isEditing ? "Edit event" : "Advertise"}
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-background/90 p-4 backdrop-blur-sm sm:items-center"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose()
@@ -956,7 +976,7 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
               <Megaphone className="size-4" />
             </span>
             <div className="leading-tight">
-              <h2 className="font-semibold">Publish an event</h2>
+              <h2 className="font-semibold">{isEditing ? "Edit event" : "Publish an event"}</h2>
             </div>
           </div>
           <Button size="icon" variant="ghost" className="shrink-0" aria-label="Close" onClick={onClose}>
@@ -1163,8 +1183,20 @@ function AdvertiseForm({ onClose }: { onClose: () => void }) {
                 Cancel
               </Button>
               <Button type="submit" className="gap-1.5" disabled={isPending || uploading}>
-                {isPending ? <Loader2 className="size-4 animate-spin" /> : <CalendarPlus className="size-4" />}
-                {isPending ? "Publishing…" : "Publish event"}
+                {isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : isEditing ? (
+                  <Check className="size-4" />
+                ) : (
+                  <CalendarPlus className="size-4" />
+                )}
+                {isPending
+                  ? isEditing
+                    ? "Saving…"
+                    : "Publishing…"
+                  : isEditing
+                    ? "Save changes"
+                    : "Publish event"}
               </Button>
             </div>
           </form>
