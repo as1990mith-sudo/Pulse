@@ -6,6 +6,7 @@ import Image from "next/image"
 import {
   CalendarPlus,
   Check,
+  ClipboardList,
   Clock,
   ImageIcon,
   Loader2,
@@ -19,7 +20,8 @@ import {
   Users,
   X,
 } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import Link from "next/link"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -185,11 +187,21 @@ function EventGridCard({
         </span>
         <h3 className="truncate text-sm font-semibold leading-snug text-foreground">{a.title}</h3>
         <p className="truncate text-xs text-muted-foreground">{a.creatorName}</p>
-        {a.comingCount > 0 && (
-          <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
-            <Users className="size-3" />
-            {a.comingCount} {a.comingCount === 1 ? "person" : "people"} coming
+        {/* Registration events show a "Registration open" cue instead of an RSVP
+            tally: their real headcount lives in event_registration, so a coming
+            count here would under-report the actual number of attendees. */}
+        {a.registrationEnabled && a.homeHandle ? (
+          <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-primary">
+            <ClipboardList className="size-3" />
+            Registration open
           </span>
+        ) : (
+          a.comingCount > 0 && (
+            <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+              <Users className="size-3" />
+              {a.comingCount} {a.comingCount === 1 ? "person" : "people"} coming
+            </span>
+          )
         )}
       </div>
     </button>
@@ -213,6 +225,11 @@ function EventDetailSheet({
   const [isPending, startTransition] = useTransition()
   const [deleting, startDeleting] = useTransition()
   const [error, setError] = useState<string | null>(null)
+
+  // The handle is required to build the link, so an event with registration on
+  // but no resolvable host (a Universal event) safely falls back to RSVP rather
+  // than rendering a broken href.
+  const takesRegistrations = a.registrationEnabled && Boolean(a.homeHandle)
 
   if (typeof document === "undefined") return null
 
@@ -318,7 +335,21 @@ function EventDetailSheet({
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{a.description}</p>
           )}
 
-          {!a.isOwner && (
+          {/* An event taking real registrations sends people to its registration
+              page instead of offering RSVP. The two are different commitments —
+              a name on a register vs. a lightweight signal — so showing both
+              would leave people unsure which one actually secured their place. */}
+          {!a.isOwner && takesRegistrations && (
+            <Link
+              href={`/events/${a.homeHandle}/${a.id}`}
+              className={cn(buttonVariants(), "w-full gap-1.5")}
+            >
+              <ClipboardList className="size-4" aria-hidden="true" />
+              Register for this event
+            </Link>
+          )}
+
+          {!a.isOwner && !takesRegistrations && (
             /* Members RSVP; tapping the active choice again clears it. */
             <div className="flex items-center gap-2">
               <Button

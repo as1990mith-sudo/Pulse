@@ -56,6 +56,12 @@ export type AnnouncementView = {
   comingCount: number
   notComingCount: number
   myRsvp: EventRsvpResponse | null
+  // When true this event takes real registrations, so the card offers a Register
+  // CTA instead of the lightweight coming/not-coming pair.
+  registrationEnabled: boolean
+  // The host org's public handle, needed to build the /events/[handle]/[id]
+  // link. Null for Universal events, which have no Home and so no handle.
+  homeHandle: string | null
 }
 
 async function requireUser() {
@@ -93,6 +99,7 @@ function toView(
   currentUserId: string | null,
   interaction?: { action: string | null; hidden: boolean },
   rsvp?: RsvpRollup,
+  homeHandle?: string | null,
 ): AnnouncementView {
   return {
     id: row.id,
@@ -119,7 +126,29 @@ function toView(
     comingCount: rsvp?.coming ?? 0,
     notComingCount: rsvp?.notComing ?? 0,
     myRsvp: rsvp?.mine ?? null,
+    registrationEnabled: row.registrationEnabled ?? false,
+    homeHandle: homeHandle ?? null,
   }
+}
+
+/**
+ * Resolves each event's host handle in one query, keyed by `homeId`.
+ *
+ * Done as a batch lookup rather than a join on the feed queries so the existing
+ * `select()` row stays exactly `announcement.$inferSelect` — a join would change
+ * the row shape and ripple through every `toView` caller.
+ */
+async function loadHomeHandles(homeIds: string[]) {
+  const map = new Map<string, string>()
+  const unique = [...new Set(homeIds)]
+  if (unique.length === 0) return map
+  const rows = await db
+    .select({ homeId: home.id, handle: organization.handle })
+    .from(home)
+    .innerJoin(organization, eq(organization.id, home.organizationId))
+    .where(inArray(home.id, unique))
+  for (const r of rows) if (r.handle) map.set(r.homeId, r.handle)
+  return map
 }
 
 /** Loads RSVP roll-ups (counts + the viewer's own response) keyed by event id. */
@@ -180,11 +209,14 @@ export async function getActiveAnnouncements(): Promise<AnnouncementView[]> {
     )
     .orderBy(asc(announcement.eventDate))
   const ids = rows.map((r) => r.id)
-  const [interactions, rsvps] = await Promise.all([
+  const [interactions, rsvps, handles] = await Promise.all([
     loadInteractions(ids, user?.id ?? null),
     loadRsvps(ids, user?.id ?? null),
+    loadHomeHandles(rows.flatMap((r) => (r.homeId ? [r.homeId] : []))),
   ])
-  return rows.map((r) => toView(r, user?.id ?? null, interactions.get(r.id), rsvps.get(r.id)))
+  return rows.map((r) =>
+    toView(r, user?.id ?? null, interactions.get(r.id), rsvps.get(r.id), r.homeId ? handles.get(r.homeId) : null),
+  )
 }
 
 /** The signed-in user's own requests, so they can track pending/declined status. */
@@ -198,8 +230,14 @@ export async function getMyAnnouncements(): Promise<AnnouncementView[]> {
     .where(eq(announcement.userId, user.id))
     .orderBy(desc(announcement.createdAt))
   const ids = rows.map((r) => r.id)
-  const [interactions, rsvps] = await Promise.all([loadInteractions(ids, user.id), loadRsvps(ids, user.id)])
-  return rows.map((r) => toView(r, user.id, interactions.get(r.id), rsvps.get(r.id)))
+  const [interactions, rsvps, handles] = await Promise.all([
+    loadInteractions(ids, user.id),
+    loadRsvps(ids, user.id),
+    loadHomeHandles(rows.flatMap((r) => (r.homeId ? [r.homeId] : []))),
+  ])
+  return rows.map((r) =>
+    toView(r, user.id, interactions.get(r.id), rsvps.get(r.id), r.homeId ? handles.get(r.homeId) : null),
+  )
 }
 
 /** Whether the signed-in viewer may publish a community event (drives the UI). */
