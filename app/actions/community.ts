@@ -16,6 +16,7 @@ import {
 } from "@/lib/db/schema"
 import { getProfileScope, scopeToHome } from "@/lib/home/profile-scope"
 import { resolvePublishingIdentity } from "@/lib/home/publishing"
+import { homeRoleHasPermission, type HomeRole } from "@/lib/home/roles"
 import { canPinInScope, MAX_PINNED_PER_SCOPE, pinWithinCap } from "@/lib/home/can-pin"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { formatPostTimestamp } from "@/lib/format-timestamp"
@@ -351,37 +352,30 @@ export async function getOrgCommunityPosts(organizationId: string): Promise<Comm
 
 /**
  * The organisation the signed-in viewer may publish Community Help threads as,
- * or null. Returns a single org — the one they own, preferring it over an
- * admin-role membership — so the composer's identity picker gains one extra
- * choice rather than an open-ended list.
+ * or null — always the organisation of the Home that is active RIGHT NOW.
+ *
+ * This delegates to `resolvePublishingIdentity` rather than running its own
+ * query, so what the composer offers cannot drift from what `createCommunityPost`
+ * will accept.
+ *
+ * It previously asked "does this user own or administer an organisation
+ * anywhere?" via `organization.ownerId = viewerId … limit(1)`, with no reference
+ * to the active Home and no ordering. An owner of several organisations
+ * therefore always composed as whichever row Postgres happened to return first:
+ * standing in Prayer Palace International, every thread was attributed to
+ * Kingdom Academy Global. That is the precise mistake `lib/home/publishing.ts`
+ * exists to prevent — a role belongs to one Home, never to the account.
  */
 export async function getPublishableOrg(): Promise<{ id: string; name: string; logo: string | null } | null> {
   const session = await auth.api.getSession({ headers: await headers() })
   const viewerId = session?.user?.id
   if (!viewerId) return null
 
-  const [owned] = await db
-    .select({ id: organization.id, name: organization.name, logo: organization.logo })
-    .from(organization)
-    .where(eq(organization.ownerId, viewerId))
-    .limit(1)
-  if (owned) return owned
-
-  const [administered] = await db
-    .select({ id: organization.id, name: organization.name, logo: organization.logo })
-    .from(organization)
-    .innerJoin(home, eq(home.organizationId, organization.id))
-    .innerJoin(homeMembership, eq(homeMembership.homeId, home.id))
-    .where(
-      and(
-        eq(homeMembership.userId, viewerId),
-        eq(homeMembership.status, "active"),
-        eq(homeMembership.role, "administrator"),
-        isNull(home.deletedAt),
-      ),
-    )
-    .limit(1)
-  return administered ?? null
+  // The actor fields are unused for the "home" branch, which is the only one
+  // that yields an organisation to publish as.
+  const identity = await resolvePublishingIdentity({ name: "", handle: "", image: null })
+  if (identity.type !== "home") return null
+  return { id: identity.organizationId, name: identity.name, logo: identity.image }
 }
 
 /**
@@ -411,7 +405,11 @@ async function isOrgAdmin(organizationId: string, viewerId: string): Promise<boo
     )
     .limit(1)
   if (rows.length === 0) return false
-  return rows[0].role === "owner" || rows[0].role === "administrator"
+  // Gated on the same `content.manage` right that decides who may publish in the
+  // organisation's voice. A hardcoded role list drifted from that rule: a
+  // content_manager could post an anonymous org-voice thread and then not see it
+  // on the organisation's own Thread tab.
+  return homeRoleHasPermission(rows[0].role as HomeRole, "content.manage")
 }
 
 /**
@@ -431,9 +429,29 @@ export async function createCommunityPost(
   organizationId?: string | null,
 ): Promise<CommunityPostView> {
   const user = await requireUser()
-  const orgId = organizationId?.trim() || null
-  if (orgId && !(await isOrgAdmin(orgId, user.id))) {
-    throw new Error("You don't have permission to post as that organisation.")
+  const requestedOrgId = organizationId?.trim() || null
+
+  // The organisation is resolved from the ACTIVE Home, never from the id the
+  // client sent. `isOrgAdmin` was account-wide, so it happily accepted the id of
+  // any organisation the author administers anywhere — meaning a stale or
+  // tampered client could file a thread against a Home the author wasn't in.
+  // The client's id now only expresses intent ("post in the org's voice"); the
+  // identity itself comes from the server.
+  let orgId: string | null = null
+  let orgHomeId: string | null = null
+  if (requestedOrgId) {
+    const identity = await resolvePublishingIdentity({ name: "", handle: "", image: null })
+    if (identity.type !== "home") {
+      throw new Error("You don't have permission to post as that organisation.")
+    }
+    // A mismatch means the active Home changed after the composer opened. Posting
+    // it under the now-active organisation would silently attribute the thread to
+    // an organisation the author never saw named, so ask them to retry instead.
+    if (identity.organizationId !== requestedOrgId) {
+      throw new Error("You've switched Homes since starting this post. Please close the composer and try again.")
+    }
+    orgId = identity.organizationId
+    orgHomeId = identity.homeId
   }
   const text = body.trim()
   const image = imageUrl?.trim() || null
@@ -459,7 +477,9 @@ export async function createCommunityPost(
       imageUrl: image,
       videoUrl: video,
       anonymous,
-      homeId: homeId ?? null,
+      // For an org-voice thread the Home comes from the same resolved identity as
+      // the organisation, so the two can never disagree about where it belongs.
+      homeId: orgHomeId ?? homeId ?? null,
       organizationId: orgId,
     })
     .returning()
