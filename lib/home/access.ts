@@ -9,6 +9,7 @@ import { home, homeMembership, organization, user as userTable } from "@/lib/db/
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { orgCategoryLabel } from "@/lib/org-types"
 import { homeRoleHasPermission, type HomePermission, type HomeRole } from "@/lib/home/roles"
+import { REVIEW_TAB_OPTIONS, type ReviewTabLabel } from "@/lib/home/types"
 import type { HomeJoinPolicy, HomeMembershipView, HomeView } from "@/lib/home/types"
 import type { HomePlanId } from "@/lib/home/plans"
 
@@ -56,6 +57,11 @@ function toHomeView(h: HomeRow, org: OrgRow, memberCount: number): HomeView {
     accentColor: h.accentColor,
     joinPolicy: h.joinPolicy as HomeJoinPolicy,
     status: h.status,
+    // Guard the free-text column against an unexpected value so the tab always
+    // renders a known label rather than whatever happens to be stored.
+    reviewTabLabel: REVIEW_TAB_OPTIONS.includes(h.reviewTabLabel as ReviewTabLabel)
+      ? (h.reviewTabLabel as ReviewTabLabel)
+      : REVIEW_TAB_OPTIONS[0],
     orgName: org.name,
     orgLogo: org.logo,
     orgCover: org.cover,

@@ -1,12 +1,10 @@
 "use client"
 
-import { useState } from "react"
-import { Flame, Info, MessagesSquare } from "lucide-react"
-import { CommunityHelp, CommunityHelpInfoModal } from "@/components/community-help"
+import { Flame, MessagesSquare } from "lucide-react"
+import { CommunityHelp } from "@/components/community-help"
 import { ITestify } from "@/components/itestify"
 import { setChatChromeHidden } from "@/lib/chat-chrome"
 import { useUrlState } from "@/lib/navigation/use-url-state"
-import { useOverlayHistory } from "@/lib/navigation/use-overlay-history"
 import { cn } from "@/lib/utils"
 
 const TAB_KEYS = ["community", "itestify"] as const
@@ -52,11 +50,6 @@ export function ChatRoomsTabs({
   // In the URL so a reload — or returning from a thread — keeps the room the user
   // was reading instead of snapping back to Community.
   const [tab, setTab] = useUrlState<Tab>("room", "community", { valid: TAB_KEYS })
-  // The Community Help info (ⓘ) sheet — its content moved here from the old
-  // standalone Community Help header, which no longer renders inside the hub.
-  const [infoOpen, setInfoOpen] = useState(false)
-  // A sheet, so Back should dismiss it rather than leave Chat Rooms entirely.
-  useOverlayHistory(infoOpen, () => setInfoOpen(false), "community-info")
 
   function switchTab(next: Tab) {
     if (next === tab) return
@@ -107,18 +100,6 @@ export function ChatRoomsTabs({
               aria-hidden
             />
           </div>
-          {/* "How Community works" — absolutely positioned so the two tab
-              columns stay exactly equal, and only offered on that tab. */}
-          {tab === "community" && (
-            <button
-              type="button"
-              onClick={() => setInfoOpen(true)}
-              aria-label="How Community works"
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <Info className="size-4" />
-            </button>
-          )}
         </div>
       </div>
 
@@ -130,8 +111,6 @@ export function ChatRoomsTabs({
           <ITestify embedded initialPosts={itestifyPosts} currentUser={currentUser} homeId={homeId} />
         )}
       </div>
-
-      <CommunityHelpInfoModal open={infoOpen} onClose={() => setInfoOpen(false)} />
     </div>
   )
 }
