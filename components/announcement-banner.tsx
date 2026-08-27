@@ -17,7 +17,6 @@ import {
   Plus,
   Tag,
   Trash2,
-  Users,
   X,
 } from "lucide-react"
 import Link from "next/link"
@@ -33,7 +32,6 @@ import {
   createAnnouncement,
   deleteAnnouncement,
   orgDeleteEvent,
-  rsvpToEvent,
   type AnnouncementView,
   type EventDeleteMode,
 } from "@/app/actions/announcements"
@@ -55,7 +53,7 @@ export function AnnouncementBanner({
   currentUser: CurrentUser | null
   isAdmin?: boolean
   // Whether the viewer may publish events (organisation owner/admin). Members
-  // can browse and RSVP but never see the publish entry points.
+  // can browse and register but never see the publish entry points.
   canPublish?: boolean
 }) {
   const [showForm, setShowForm] = useState(false)
@@ -187,21 +185,13 @@ function EventGridCard({
         </span>
         <h3 className="truncate text-sm font-semibold leading-snug text-foreground">{a.title}</h3>
         <p className="truncate text-xs text-muted-foreground">{a.creatorName}</p>
-        {/* Registration events show a "Registration open" cue instead of an RSVP
-            tally: their real headcount lives in event_registration, so a coming
-            count here would under-report the actual number of attendees. */}
-        {a.registrationEnabled && a.homeHandle ? (
+        {/* Registration is the only attendance format, and the real headcount
+            lives in event_registration rather than on this row. */}
+        {a.registrationEnabled && a.homeHandle && (
           <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-primary">
             <ClipboardList className="size-3" />
             Registration open
           </span>
-        ) : (
-          a.comingCount > 0 && (
-            <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
-              <Users className="size-3" />
-              {a.comingCount} {a.comingCount === 1 ? "person" : "people"} coming
-            </span>
-          )
         )}
       </div>
     </button>
@@ -222,27 +212,14 @@ function EventDetailSheet({
   onClose: () => void
 }) {
   const [lightbox, setLightbox] = useState(false)
-  const [isPending, startTransition] = useTransition()
   const [deleting, startDeleting] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
-  // The handle is required to build the link, so an event with registration on
-  // but no resolvable host (a Universal event) safely falls back to RSVP rather
-  // than rendering a broken href.
+  // The handle is required to build the link, so an event with no resolvable
+  // host renders no CTA rather than a broken href.
   const takesRegistrations = a.registrationEnabled && Boolean(a.homeHandle)
 
   if (typeof document === "undefined") return null
-
-  function handleRsvp(response: "coming" | "not_coming") {
-    setError(null)
-    startTransition(async () => {
-      try {
-        await rsvpToEvent({ id: a.id, response })
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Something went wrong.")
-      }
-    })
-  }
 
   function handleOwnerDelete() {
     setError(null)
@@ -335,10 +312,7 @@ function EventDetailSheet({
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{a.description}</p>
           )}
 
-          {/* An event taking real registrations sends people to its registration
-              page instead of offering RSVP. The two are different commitments —
-              a name on a register vs. a lightweight signal — so showing both
-              would leave people unsure which one actually secured their place. */}
+          {/* Registration is the only way to attend, so this is the single CTA. */}
           {!a.isOwner && takesRegistrations && (
             <Link
               href={`/events/${a.homeHandle}/${a.id}`}
@@ -347,31 +321,6 @@ function EventDetailSheet({
               <ClipboardList className="size-4" aria-hidden="true" />
               Register for this event
             </Link>
-          )}
-
-          {!a.isOwner && !takesRegistrations && (
-            /* Members RSVP; tapping the active choice again clears it. */
-            <div className="flex items-center gap-2">
-              <Button
-                variant={a.myRsvp === "not_coming" ? "default" : "outline"}
-                className="flex-1 gap-1.5"
-                disabled={isPending}
-                aria-pressed={a.myRsvp === "not_coming"}
-                onClick={() => handleRsvp("not_coming")}
-              >
-                <X className="size-4" /> I can&apos;t make it
-              </Button>
-              <Button
-                variant={a.myRsvp === "coming" ? "default" : "outline"}
-                className="flex-1 gap-1.5"
-                disabled={isPending}
-                aria-pressed={a.myRsvp === "coming"}
-                onClick={() => handleRsvp("coming")}
-              >
-                {isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
-                I&apos;m coming
-              </Button>
-            </div>
           )}
 
           {/* The publishing org admin can remove their event straight from here. */}

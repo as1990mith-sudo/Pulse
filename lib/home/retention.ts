@@ -29,7 +29,6 @@ import {
   episode,
   episodeComment,
   event,
-  eventRsvp,
   eventContact,
   eventRegistration,
   eventBroadcast,
@@ -153,7 +152,6 @@ export async function purgeHomeData(homeId: string, orgId: string | null): Promi
       await tx.delete(communityPost).where(inArray(communityPost.id, communityPostIds))
     }
     if (announcementIds.length > 0) {
-      await tx.delete(eventRsvp).where(inArray(eventRsvp.announcementId, announcementIds))
       await tx.delete(announcementInteraction).where(inArray(announcementInteraction.announcementId, announcementIds))
       await tx.delete(announcement).where(inArray(announcement.id, announcementIds))
     }

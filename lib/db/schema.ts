@@ -560,8 +560,9 @@ export const announcement = pgTable("announcement", {
   deleteMode: text("deleteMode"), // "auto5h" | "manual" | null
 
   // --- Registration configuration ------------------------------------------
-  // Opt-in per event. When false the event behaves exactly as before (feed RSVP
-  // only), so every existing event keeps its current behaviour untouched.
+  // Set true on every event published through the feed — registration is the only
+  // attendance format. The column and its `false` default remain for legacy rows
+  // published before registration existed, which have no registration page.
   registrationEnabled: boolean("registrationEnabled").notNull().default(false),
   // Publishes a standalone public page at /events/[handle]/[id] that requires no
   // account and no Home membership. Separate from registrationEnabled because an
@@ -596,38 +597,13 @@ export const announcement = pgTable("announcement", {
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   })
 
-// RSVP to a community event. One row per (event, user); the response toggles
-// between attending and not attending. Drives the RSVP buttons on the feed and
-// the attendance breakdown (counts + names) in the org admin console.
-export const eventRsvp = pgTable(
-  "event_rsvp",
-  {
-    id: serial("id").primaryKey(),
-    announcementId: integer("announcementId").notNull(),
-    userId: text("userId").notNull(),
-    userName: text("userName").notNull(),
-    response: text("response").notNull(), // "coming" | "not_coming"
-    createdAt: timestamp("createdAt").notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
-  },
-  (t) => ({
-  eventIdx: index("event_rsvp_event_idx").on(t.announcementId),
-  uniqueMember: uniqueIndex("event_rsvp_unique").on(t.announcementId, t.userId),
-  }),
-  )
-
 // --- Event registration & audiences ----------------------------------------
-// `eventRsvp` above and `eventRegistration` below intentionally coexist and are
-// NOT merged. They answer different questions:
-//
-//   eventRsvp          a member's lightweight in-feed signal ("I'm coming"),
-//                      freely toggled, members only, no contact details.
-//   eventRegistration  the formal record of a place taken at an event, open to
-//                      non-members with no Frequency account, carrying contact
-//                      details, question answers and attendance.
-//
-// Collapsing them would either strip RSVP of its one-tap reversibility or force
-// every casual RSVP to become a contact record. An admin sees both.
+// Registration is the ONE attendance format. A lightweight `event_rsvp`
+// (coming/not_coming) used to sit alongside it, but two competing attend
+// actions left people unsure which one actually secured their place, so it was
+// removed entirely — table included. `eventRegistration` below is the formal
+// record of a place taken: open to non-members with no Frequency account, and
+// carrying contact details, question answers and attendance.
 
 // A person known to ONE Home through event registration. This is the contact
 // identity that lets "Jane Doe" registering for three events be recognised as
