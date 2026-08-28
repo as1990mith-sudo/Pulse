@@ -292,40 +292,49 @@ export function OrgEpisodeCatalog({
 
   return (
     <div className="space-y-4">
-      {/* Audio / Live / Documents section nav — editorial underline style
-          matching the Articles hub (thin orange active underline + counts). */}
-      <div
-        role="tablist"
-        aria-label="Filter resources by type"
-        className="-mx-4 border-b border-border/50 px-4 sm:-mx-6 sm:px-6"
-      >
-        <div className="flex items-center">
-          {KIND_ORDER.map((k) => {
-            const active = tab === k
-            const Icon = KIND_ICON[k]
-            return (
+      {/* Uploads / Live / Documents section nav — rounded segmented pills. The
+          active pill carries an orange outline + glow, a filled-orange count
+          badge, and a short underline bar beneath; inactive pills sit quietly
+          on a dark card fill with a muted count chip. */}
+      <div role="tablist" aria-label="Filter resources by type" className="flex items-stretch gap-1.5">
+        {KIND_ORDER.map((k) => {
+          const active = tab === k
+          const Icon = KIND_ICON[k]
+          return (
+            <div key={k} className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
               <button
-                key={k}
                 type="button"
                 role="tab"
                 aria-selected={active}
                 onClick={() => onTabChange(k)}
                 className={cn(
-                  "-mb-px flex flex-1 min-w-0 items-center justify-center gap-2 border-b-2 py-3 text-sm font-medium transition-colors",
+                  "flex w-full min-w-0 items-center justify-center gap-1.5 rounded-2xl border px-2 py-3 text-xs font-semibold transition-all duration-200",
                   active
-                    ? "border-primary text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground",
+                    ? "border-primary bg-primary/10 text-foreground shadow-[0_0_22px_-6px] shadow-primary/60"
+                    : "border-border bg-card/40 text-muted-foreground hover:border-border/80 hover:text-foreground",
                 )}
               >
-                <Icon className={cn("size-4 shrink-0", active && "text-primary")} />
+                <Icon className={cn("size-3.5 shrink-0", active ? "text-primary" : "text-muted-foreground")} />
                 <span className="truncate">{KIND_META[k].label}</span>
-                <span className={cn("text-xs tabular-nums", active ? "text-primary" : "text-muted-foreground/60")}>
+                <span
+                  className={cn(
+                    "grid h-[18px] min-w-[18px] shrink-0 place-items-center rounded-full px-1 text-[11px] font-bold tabular-nums",
+                    active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+                  )}
+                >
                   {counts[k]}
                 </span>
               </button>
-            )
-          })}
-        </div>
+              <span
+                aria-hidden
+                className={cn(
+                  "h-1 w-8 rounded-full bg-primary transition-opacity duration-200",
+                  active ? "opacity-100" : "opacity-0",
+                )}
+              />
+            </div>
+          )
+        })}
       </div>
 
       {/* Live subtoggle: Video / Audio — quieter secondary underline row. */}
