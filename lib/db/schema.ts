@@ -1048,9 +1048,11 @@ export const bibleChatSlot = pgTable(
 // --- Direct messages -------------------------------------------------------
 // 1:1 private conversations between two users (WhatsApp-style). A conversation
 // row is created the first time either user messages the other. The pair is
-// stored with the lexicographically-smaller id as userAId so each pair is
-// unique regardless of who started it. lastMessageAt powers inbox ordering and
-// the per-user lastReadAt columns drive unread badges.
+// stored with the lexicographically-smaller id as userAId so the pair is stable
+// regardless of who started it. A PARTIAL unique index (dm_conversation_direct_pair_idx,
+// WHERE kind = 'direct') keeps ordinary 1:1 DMs unique per pair while allowing a
+// pair to also have any number of kind='appointment' conversations. lastMessageAt
+// powers inbox ordering and the per-user lastReadAt columns drive unread badges.
 export const dmConversation = pgTable("dm_conversation", {
   id: serial("id").primaryKey(),
   userAId: text("userAId").notNull(),

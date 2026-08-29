@@ -180,16 +180,25 @@ export async function getOrCreateConversation(otherUserId: string): Promise<numb
 
   const [userAId, userBId] = orderPair(user.id, otherUserId)
 
+  // Scope to the ordinary 1:1 DM only. Appointment-kind conversations share the
+  // same user pair but must never be reused as the pair's general DM, so the
+  // lookup (and the direct-only partial unique index) both filter on kind.
   const [existing] = await db
     .select()
     .from(dmConversation)
-    .where(and(eq(dmConversation.userAId, userAId), eq(dmConversation.userBId, userBId)))
+    .where(
+      and(
+        eq(dmConversation.userAId, userAId),
+        eq(dmConversation.userBId, userBId),
+        eq(dmConversation.kind, "direct"),
+      ),
+    )
     .limit(1)
   if (existing) return existing.id
 
   const [created] = await db
     .insert(dmConversation)
-    .values({ userAId, userBId })
+    .values({ userAId, userBId, kind: "direct" })
     .returning()
   return created.id
 }

@@ -1,8 +1,15 @@
 import Link from "next/link"
 import { SiteHeader } from "@/components/site-header"
 import { AppointmentsHub } from "@/components/appointments/appointments-hub"
-import { getMyAppointments, listBookableTypes, type AppointmentTypeRow } from "@/app/actions/home-appointments"
+import {
+  getHostAppointments,
+  getMyAppointments,
+  listBookableTypes,
+  type AppointmentTypeRow,
+  type MyAppointmentRow,
+} from "@/app/actions/home-appointments"
 import { getActiveHomeContext } from "@/lib/home/active-home"
+import { homeRoleHasPermission, type HomeRole } from "@/lib/home/roles"
 import { getCurrentUser } from "@/lib/session"
 
 export const metadata = {
@@ -33,19 +40,32 @@ export default async function AppointmentsPage() {
     )
   }
 
-  const { home, mode } = await getActiveHomeContext()
+  const { home, membership, mode } = await getActiveHomeContext()
   const activeHandle = mode === "home" && home ? home.handle : null
 
-  let bookableTypes: AppointmentTypeRow[] = []
-  if (activeHandle) {
-    try {
-      bookableTypes = await listBookableTypes(activeHandle)
-    } catch {
-      bookableTypes = []
-    }
-  }
+  // When the viewer administers the active Home, the page is their HOST console:
+  // it shows the sessions booked with them, not the member booking flow.
+  const isHostAdmin =
+    !!activeHandle &&
+    membership?.status === "active" &&
+    homeRoleHasPermission(membership.role as HomeRole, "appointments.manage")
 
-  const appointments = await getMyAppointments()
+  let bookableTypes: AppointmentTypeRow[] = []
+  let appointments: MyAppointmentRow[]
+
+  if (isHostAdmin && activeHandle) {
+    // Host view: their upcoming/hosted appointments, no booking CTA.
+    appointments = await getHostAppointments(activeHandle)
+  } else {
+    if (activeHandle) {
+      try {
+        bookableTypes = await listBookableTypes(activeHandle)
+      } catch {
+        bookableTypes = []
+      }
+    }
+    appointments = await getMyAppointments()
+  }
 
   return (
     <div className="relative min-h-screen bg-gradient-to-b from-primary/15 via-background to-background">
@@ -61,6 +81,7 @@ export default async function AppointmentsPage() {
             bookableTypes={bookableTypes}
             activeHandle={activeHandle}
             activeHomeName={activeHandle ? home?.orgName ?? null : null}
+            hostMode={isHostAdmin}
             publishableKey={process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? ""}
           />
         </main>
