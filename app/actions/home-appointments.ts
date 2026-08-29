@@ -324,6 +324,35 @@ export async function setAvailability(input: { handle: string; typeId: string; w
   revalidatePath(`/org/${input.handle}/admin/appointments`)
 }
 
+/** Every booking in this Home (manager view), newest first, with conversation ids. */
+export async function listHomeBookings(handle: string): Promise<AdminAppointmentDetail[]> {
+  const { homeId, home } = await requireApptManager(handle)
+  const rows = await db
+    .select()
+    .from(homeAppointment)
+    .where(eq(homeAppointment.homeId, homeId))
+    .orderBy(desc(homeAppointment.startsAt))
+  return rows.map((a) => ({
+    id: a.id,
+    title: a.title,
+    homeHandle: handle,
+    homeName: home.orgName,
+    hostName: a.hostName,
+    memberName: a.memberName,
+    notes: a.notes,
+    startsAt: a.startsAt.toISOString(),
+    endsAt: a.endsAt ? a.endsAt.toISOString() : null,
+    durationMinutes: a.durationMinutes,
+    status: a.status,
+    paymentStatus: a.paymentStatus as PaymentStatus,
+    priceCents: a.priceCents,
+    currency: a.currency,
+    useFrequencyLive: a.useFrequencyLive,
+    location: a.location,
+    conversationId: a.conversationId,
+  }))
+}
+
 /** Full admin detail for a single booking, with the linked conversation id. */
 export async function getAdminBookingDetail(handle: string, appointmentId: string): Promise<AdminAppointmentDetail> {
   const { homeId, home } = await requireApptManager(handle)
@@ -684,6 +713,54 @@ export async function getMyAppointments(): Promise<MyAppointmentRow[]> {
     location: a.location,
     conversationId: a.conversationId,
   }))
+}
+
+export type ConversationAppointment = {
+  appointmentId: string
+  title: string
+  hostName: string | null
+  memberName: string
+  startsAt: string
+  endsAt: string | null
+  durationMinutes: number
+  status: string
+  paymentStatus: PaymentStatus
+  priceCents: number | null
+  currency: string
+  useFrequencyLive: boolean
+  location: string | null
+  isHost: boolean
+}
+
+/**
+ * The appointment behind an appointment-kind conversation, for the thread header
+ * card. Returns null for ordinary DMs or when the caller is not a participant —
+ * so the card only ever appears inside the dedicated appointment thread and only
+ * for its two people.
+ */
+export async function getConversationAppointment(conversationId: number): Promise<ConversationAppointment | null> {
+  const user = await requireUser()
+  const [conv] = await db.select().from(dmConversation).where(eq(dmConversation.id, conversationId)).limit(1)
+  if (!conv || conv.kind !== "appointment" || !conv.appointmentId) return null
+  const [a] = await db.select().from(homeAppointment).where(eq(homeAppointment.id, conv.appointmentId)).limit(1)
+  if (!a) return null
+  if (a.memberUserId !== user.id && a.hostUserId !== user.id) return null
+  return {
+    appointmentId: a.id,
+    title: a.title,
+    hostName: a.hostName,
+    memberName: a.memberName,
+    startsAt: a.startsAt.toISOString(),
+    endsAt: a.endsAt ? a.endsAt.toISOString() : null,
+    durationMinutes: a.durationMinutes,
+    status: a.status,
+    paymentStatus: a.paymentStatus as PaymentStatus,
+    priceCents: a.priceCents,
+    currency: a.currency,
+    useFrequencyLive: a.useFrequencyLive,
+    location: a.location,
+    isHost: a.hostUserId === user.id,
+  }
 }
 
 /* -------------------------------------------------------------------------- */

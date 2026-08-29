@@ -10,6 +10,7 @@ import {
   AlignLeft,
   BookOpen,
   Bookmark,
+  CalendarClock,
   ChevronDown,
   ChevronRight,
   Home as HomeIcon,
@@ -425,6 +426,7 @@ export function AppMenu() {
                     badge={notificationCount}
                   />
                   <DrawerItem href="/messages" icon={MessageCircle} label="Messages" onNavigate={navigate} />
+                  <DrawerItem href="/appointments" icon={CalendarClock} label="Appointments" onNavigate={navigate} />
                   <DrawerItem href="/saved" icon={Bookmark} label="Bookmarks" onNavigate={navigate} />
                 </Section>
 
