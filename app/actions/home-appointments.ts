@@ -124,6 +124,53 @@ export type AdminAppointmentDetail = MyAppointmentRow & {
   notes: string | null
 }
 
+/** The status shown to users — derived, never a raw column read. */
+export type DisplayStatus =
+  | "upcoming"
+  | "in_progress"
+  | "completed"
+  | "no_show"
+  | "cancelled"
+  | "pending_payment"
+
+/**
+ * Resolve the lifecycle state a user should see. The stored `status` column only
+ * captures manual/explicit states (cancelled, pending payment, host-completed);
+ * everything time-based is computed here so an appointment never gets stuck on
+ * "Upcoming". Once the meeting window closes, a Frequency Live session resolves
+ * to "completed" when BOTH parties joined and "no_show" otherwise. In-person
+ * sessions (no join signal) are treated as completed once their time has passed.
+ */
+function deriveDisplayStatus(
+  a: {
+    status: string
+    paymentStatus: string
+    startsAt: Date
+    endsAt: Date | null
+    durationMinutes: number
+    useFrequencyLive: boolean
+    memberAttendedAt: Date | null
+    hostAttendedAt: Date | null
+  },
+  now: number = Date.now(),
+): DisplayStatus {
+  if (a.status === "cancelled") return "cancelled"
+  if (a.status === "pending_payment" || a.paymentStatus === "pending") return "pending_payment"
+  if (a.status === "completed") return "completed" // host marked it done explicitly
+
+  const { closesAt } = meetingBounds(a.startsAt, a.endsAt, a.durationMinutes)
+  const start = a.startsAt.getTime()
+
+  if (now < start) return "upcoming"
+  if (now <= closesAt) return "in_progress" // live window (10 min early → 15 min grace)
+
+  // Window has closed with no explicit completion.
+  if (a.useFrequencyLive) {
+    return a.memberAttendedAt && a.hostAttendedAt ? "completed" : "no_show"
+  }
+  return "completed"
+}
+
 /* -------------------------------------------------------------------------- */
 /* Admin: appointment types + availability                                    */
 /* -------------------------------------------------------------------------- */
@@ -343,7 +390,7 @@ export async function listHomeBookings(handle: string): Promise<AdminAppointment
     startsAt: a.startsAt.toISOString(),
     endsAt: a.endsAt ? a.endsAt.toISOString() : null,
     durationMinutes: a.durationMinutes,
-    status: a.status,
+    status: deriveDisplayStatus(a),
     paymentStatus: a.paymentStatus as PaymentStatus,
     priceCents: a.priceCents,
     currency: a.currency,
@@ -373,7 +420,7 @@ export async function getAdminBookingDetail(handle: string, appointmentId: strin
     startsAt: a.startsAt.toISOString(),
     endsAt: a.endsAt ? a.endsAt.toISOString() : null,
     durationMinutes: a.durationMinutes,
-    status: a.status,
+    status: deriveDisplayStatus(a),
     paymentStatus: a.paymentStatus as PaymentStatus,
     priceCents: a.priceCents,
     currency: a.currency,
@@ -705,7 +752,7 @@ export async function getMyAppointments(): Promise<MyAppointmentRow[]> {
     startsAt: a.startsAt.toISOString(),
     endsAt: a.endsAt ? a.endsAt.toISOString() : null,
     durationMinutes: a.durationMinutes,
-    status: a.status,
+    status: deriveDisplayStatus(a),
     paymentStatus: a.paymentStatus as PaymentStatus,
     priceCents: a.priceCents,
     currency: a.currency,
@@ -742,7 +789,7 @@ export async function getHostAppointments(handle: string): Promise<MyAppointment
     startsAt: a.startsAt.toISOString(),
     endsAt: a.endsAt ? a.endsAt.toISOString() : null,
     durationMinutes: a.durationMinutes,
-    status: a.status,
+    status: deriveDisplayStatus(a),
     paymentStatus: a.paymentStatus as PaymentStatus,
     priceCents: a.priceCents,
     currency: a.currency,
@@ -790,7 +837,7 @@ export async function getConversationAppointment(conversationId: number): Promis
     startsAt: a.startsAt.toISOString(),
     endsAt: a.endsAt ? a.endsAt.toISOString() : null,
     durationMinutes: a.durationMinutes,
-    status: a.status,
+    status: deriveDisplayStatus(a),
     paymentStatus: a.paymentStatus as PaymentStatus,
     priceCents: a.priceCents,
     currency: a.currency,
@@ -848,6 +895,21 @@ export async function getAppointmentMeetingToken(
   const now = Date.now()
   if (now < opensAt) throw new Error("The meeting hasn't opened yet.")
   if (now > closesAt) throw new Error("The meeting has ended.")
+
+  // Record attendance the first time each party joins — this is what later
+  // resolves the appointment to "Finished" (both joined) vs "No show".
+  const joinedAt = new Date()
+  if (isHost && !a.hostAttendedAt) {
+    await db
+      .update(homeAppointment)
+      .set({ hostAttendedAt: joinedAt, updatedAt: joinedAt })
+      .where(eq(homeAppointment.id, a.id))
+  } else if (isMember && !a.memberAttendedAt) {
+    await db
+      .update(homeAppointment)
+      .set({ memberAttendedAt: joinedAt, updatedAt: joinedAt })
+      .where(eq(homeAppointment.id, a.id))
+  }
 
   const [profile] = await db.select().from(userTable).where(eq(userTable.id, user.id)).limit(1)
   const roomName = `appt-${a.id}`

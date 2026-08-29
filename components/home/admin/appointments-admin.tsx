@@ -474,9 +474,11 @@ function AvailabilityEditor({
 /* -------------------------------------------------------------------------- */
 
 const STATUS_META: Record<string, { label: string; className: string }> = {
-  upcoming: { label: "Upcoming", className: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" },
+  upcoming: { label: "Upcoming", className: "bg-primary/15 text-primary" },
+  in_progress: { label: "In progress", className: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" },
   pending_payment: { label: "Awaiting payment", className: "bg-amber-500/15 text-amber-600 dark:text-amber-400" },
-  completed: { label: "Completed", className: "bg-muted text-muted-foreground" },
+  completed: { label: "Finished", className: "bg-muted text-muted-foreground" },
+  no_show: { label: "No show", className: "bg-destructive/15 text-destructive" },
   cancelled: { label: "Cancelled", className: "bg-destructive/15 text-destructive" },
 }
 
@@ -550,12 +552,14 @@ function BookingsTab({ handle, initialBookings }: { handle: string; initialBooki
                     Open Conversation
                   </Link>
                 )}
-                {b.useFrequencyLive && b.status !== "completed" && b.status !== "cancelled" && b.paymentStatus !== "pending" && (
-                  <JoinMeetingButton appointmentId={b.id} size="sm" />
-                )}
+                {b.useFrequencyLive &&
+                  b.status !== "completed" &&
+                  b.status !== "no_show" &&
+                  b.status !== "cancelled" &&
+                  b.paymentStatus !== "pending" && <JoinMeetingButton appointmentId={b.id} size="sm" />}
               </div>
             </div>
-            {b.status === "upcoming" && (
+            {b.status !== "completed" && b.status !== "cancelled" && b.status !== "pending_payment" && (
               <button
                 type="button"
                 onClick={() => complete(b.id)}
@@ -563,7 +567,7 @@ function BookingsTab({ handle, initialBookings }: { handle: string; initialBooki
                 className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-muted disabled:opacity-60"
               >
                 {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
-                Complete
+                Mark finished
               </button>
             )}
           </div>

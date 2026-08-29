@@ -46,8 +46,10 @@ function formatWhen(iso: string) {
 
 const STATUS_LABEL: Record<string, string> = {
   upcoming: "Upcoming",
+  in_progress: "In progress",
   pending_payment: "Awaiting payment",
-  completed: "Completed",
+  completed: "Finished",
+  no_show: "No show",
   cancelled: "Cancelled",
 }
 
@@ -55,11 +57,15 @@ function StatusChip({ status, paymentStatus }: { status: string; paymentStatus: 
   const tone =
     status === "completed"
       ? "bg-muted text-muted-foreground"
-      : status === "cancelled"
+      : status === "no_show"
         ? "bg-destructive/15 text-destructive"
-        : status === "pending_payment"
-          ? "bg-amber-500/15 text-amber-500"
-          : "bg-primary/15 text-primary"
+        : status === "cancelled"
+          ? "bg-destructive/15 text-destructive"
+          : status === "pending_payment"
+            ? "bg-amber-500/15 text-amber-500"
+            : status === "in_progress"
+              ? "bg-emerald-500/15 text-emerald-500"
+              : "bg-primary/15 text-primary"
   return (
     <span className={cn("rounded-full px-2.5 py-0.5 text-[11px] font-semibold", tone)}>
       {STATUS_LABEL[status] ?? status}
@@ -245,9 +251,10 @@ function MyAppointments({
               ) : a.status === "pending_payment" ? (
                 <span className="text-xs text-muted-foreground">Complete payment to open your conversation.</span>
               ) : null}
-              {a.useFrequencyLive && a.status !== "completed" && a.paymentStatus !== "pending" && (
-                <JoinMeetingButton appointmentId={a.id} size="sm" />
-              )}
+              {a.useFrequencyLive &&
+                a.status !== "completed" &&
+                a.status !== "no_show" &&
+                a.paymentStatus !== "pending" && <JoinMeetingButton appointmentId={a.id} size="sm" />}
             </div>
           )}
         </li>

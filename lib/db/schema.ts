@@ -1893,8 +1893,17 @@ export const homeAppointment = pgTable(
     location: text("location"),
     startsAt: timestamp("startsAt").notNull(),
     endsAt: timestamp("endsAt"),
-    // "upcoming" | "pending_payment" | "completed" | "cancelled".
+    // Stored lifecycle: "upcoming" | "pending_payment" | "completed" | "cancelled".
+    // NOTE: the value shown to users is DERIVED at read time (see
+    // deriveDisplayStatus in app/actions/home-appointments.ts) — it adds
+    // "in_progress" during the meeting window and resolves a passed live session
+    // to "completed" (both attended) or "no_show" once the window closes. This
+    // column is only the persisted baseline (manual complete / cancel).
     status: text("status").notNull().default("upcoming"),
+    // When each party first joined the meeting (Frequency Live). Both set =>
+    // the session resolves to "Finished"; neither/one set => "No show".
+    memberAttendedAt: timestamp("memberAttendedAt"),
+    hostAttendedAt: timestamp("hostAttendedAt"),
     // The bookable type this appointment was created from (null for legacy /
     // admin-created ad-hoc appointments).
     typeId: text("typeId"),
