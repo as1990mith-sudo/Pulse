@@ -26,6 +26,9 @@ import {
   communityPost,
   contentView,
   devotional,
+  dmCall,
+  dmConversation,
+  dmMessage,
   episode,
   episodeComment,
   event,
@@ -36,6 +39,8 @@ import {
   feedPost,
   home,
   homeAppointment,
+  homeAppointmentAvailability,
+  homeAppointmentType,
   homeAuthKey,
   homeBooking,
   homeMembership,
@@ -165,10 +170,33 @@ export async function purgeHomeData(homeId: string, orgId: string | null): Promi
     await tx.delete(eventContact).where(eq(eventContact.homeId, homeId))
     await tx.delete(eventBroadcast).where(eq(eventBroadcast.homeId, homeId))
 
+    // --- Appointments + their dedicated conversations -----------------------
+    // Each confirmed appointment auto-created a private conversation (kind
+    // 'appointment') carrying the two participants' messages about that
+    // appointment. Those conversations belong to the Home's appointments and
+    // hold personal data, so they die with the Home. We delete by the resolved
+    // conversation ids (captured from the appointments) rather than by user
+    // pair, so ordinary personal DMs between the same two people are untouched.
+    const apptConversationIds = (
+      await tx
+        .select({ id: homeAppointment.conversationId })
+        .from(homeAppointment)
+        .where(and(eq(homeAppointment.homeId, homeId), isNotNull(homeAppointment.conversationId)))
+    )
+      .map((r) => r.id)
+      .filter((id): id is number => id != null)
+    if (apptConversationIds.length > 0) {
+      await tx.delete(dmMessage).where(inArray(dmMessage.conversationId, apptConversationIds))
+      await tx.delete(dmCall).where(inArray(dmCall.conversationId, apptConversationIds))
+      await tx.delete(dmConversation).where(inArray(dmConversation.id, apptConversationIds))
+    }
+
     // --- Remaining Home-scoped rows ----------------------------------------
     await tx.delete(devotional).where(eq(devotional.homeId, homeId))
     await tx.delete(notification).where(eq(notification.homeId, homeId))
     await tx.delete(homeBooking).where(eq(homeBooking.homeId, homeId))
+    await tx.delete(homeAppointmentAvailability).where(eq(homeAppointmentAvailability.homeId, homeId))
+    await tx.delete(homeAppointmentType).where(eq(homeAppointmentType.homeId, homeId))
     await tx.delete(homeAppointment).where(eq(homeAppointment.homeId, homeId))
     await tx.delete(homeAuthKey).where(eq(homeAuthKey.homeId, homeId))
     await tx.delete(homeMembership).where(eq(homeMembership.homeId, homeId))
