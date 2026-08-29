@@ -36,6 +36,17 @@ export function AppointmentThreadBanner({ conversationId }: { conversationId: nu
 
   const cancelled = data.status === "cancelled"
   const awaitingPayment = data.paymentStatus === "pending"
+  const finished = data.status === "completed"
+  const noShow = data.status === "no_show"
+  const note = cancelled
+    ? "This appointment was cancelled."
+    : awaitingPayment
+      ? "Awaiting payment."
+      : finished
+        ? "Session finished."
+        : noShow
+          ? "No show — the meeting window closed without both joining."
+          : null
 
   return (
     <div className="border-b border-border/50 bg-primary/5 px-3 py-3 sm:px-4">
@@ -61,14 +72,19 @@ export function AppointmentThreadBanner({ conversationId }: { conversationId: nu
               {data.useFrequencyLive ? "Frequency Live" : data.location ?? "In person"}
             </span>
           </div>
-          {(cancelled || awaitingPayment) && (
-            <p className={cn("mt-1.5 text-xs font-medium", cancelled ? "text-destructive" : "text-amber-500")}>
-              {cancelled ? "This appointment was cancelled." : "Awaiting payment."}
+          {note && (
+            <p
+              className={cn(
+                "mt-1.5 text-xs font-medium",
+                cancelled || noShow ? "text-destructive" : awaitingPayment ? "text-amber-500" : "text-muted-foreground",
+              )}
+            >
+              {note}
             </p>
           )}
         </div>
 
-        {data.useFrequencyLive && !cancelled && !awaitingPayment && (
+        {data.useFrequencyLive && !cancelled && !awaitingPayment && !finished && !noShow && (
           <div className="shrink-0">
             <JoinMeetingButton appointmentId={data.appointmentId} size="sm" />
           </div>

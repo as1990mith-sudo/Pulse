@@ -1,22 +1,28 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useMemo, useState, useTransition } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import {
   CalendarClock,
+  CalendarDays,
   Check,
   ChevronDown,
+  ChevronRight,
   Clock,
+  CreditCard,
   Loader2,
   MapPin,
   MessageSquare,
   Plus,
   Trash2,
   Video,
+  Wallet,
   X,
 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { JoinMeetingButton } from "@/components/appointments/join-meeting-button"
 import {
   createAppointmentType,
@@ -52,9 +58,23 @@ function formatWhen(iso: string) {
     minute: "2-digit",
   })
 }
+function initials(name: string) {
+  return (
+    name
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((p) => p[0]?.toUpperCase() ?? "")
+      .join("") || "?"
+  )
+}
 
 const inputClass =
   "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+
+/* -------------------------------------------------------------------------- */
+/* Root                                                                       */
+/* -------------------------------------------------------------------------- */
 
 export function AppointmentsAdmin({
   handle,
@@ -65,25 +85,47 @@ export function AppointmentsAdmin({
   initialTypes: AppointmentTypeRow[]
   initialBookings: AdminAppointmentDetail[]
 }) {
-  const [tab, setTab] = useState<"types" | "bookings">("types")
+  const [tab, setTab] = useState<"types" | "bookings">("bookings")
 
   return (
     <div className="space-y-6">
-      <div className="inline-flex rounded-full border border-border bg-card p-1 text-sm">
-        {(["types", "bookings"] as const).map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTab(t)}
-            className={cn(
-              "rounded-full px-4 py-1.5 font-semibold capitalize transition-colors",
-              tab === t ? "text-white" : "text-muted-foreground hover:text-foreground",
-            )}
-            style={tab === t ? { backgroundColor: "var(--home-accent)" } : undefined}
-          >
-            {t === "types" ? "Types & availability" : "Bookings"}
-          </button>
-        ))}
+      <OverviewBand bookings={initialBookings} typeCount={initialTypes.length} />
+
+      <div className="flex items-center gap-1 border-b border-border">
+        {(
+          [
+            { key: "bookings", label: "Bookings", icon: CalendarDays, count: initialBookings.length },
+            { key: "types", label: "Types & availability", icon: Clock, count: initialTypes.length },
+          ] as const
+        ).map((t) => {
+          const active = tab === t.key
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setTab(t.key)}
+              className={cn(
+                "-mb-px inline-flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-semibold transition-colors",
+                active
+                  ? "border-current"
+                  : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
+              style={active ? { color: "var(--home-accent)" } : undefined}
+            >
+              <t.icon className="size-4" />
+              {t.label}
+              <span
+                className={cn(
+                  "rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums",
+                  active ? "bg-[color-mix(in_oklab,var(--home-accent)_18%,transparent)]" : "bg-muted text-muted-foreground",
+                )}
+                style={active ? { color: "var(--home-accent)" } : undefined}
+              >
+                {t.count}
+              </span>
+            </button>
+          )
+        })}
       </div>
 
       {tab === "types" ? (
@@ -91,6 +133,81 @@ export function AppointmentsAdmin({
       ) : (
         <BookingsTab handle={handle} initialBookings={initialBookings} />
       )}
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/* Overview band                                                              */
+/* -------------------------------------------------------------------------- */
+
+function OverviewBand({ bookings, typeCount }: { bookings: AdminAppointmentDetail[]; typeCount: number }) {
+  const stats = useMemo(() => {
+    let upcoming = 0
+    let awaiting = 0
+    let completed = 0
+    let collected = 0
+    let currency = "usd"
+    for (const b of bookings) {
+      if (b.status === "upcoming" || b.status === "in_progress") upcoming++
+      else if (b.status === "pending_payment") awaiting++
+      else if (b.status === "completed") completed++
+      if (b.paymentStatus === "paid" && b.priceCents) {
+        collected += b.priceCents
+        currency = b.currency
+      }
+    }
+    return { upcoming, awaiting, completed, collected, currency }
+  }, [bookings])
+
+  const tiles = [
+    { label: "Upcoming", value: String(stats.upcoming), icon: CalendarClock },
+    { label: "Awaiting payment", value: String(stats.awaiting), icon: CreditCard },
+    { label: "Completed", value: String(stats.completed), icon: Check },
+    { label: "Collected", value: formatMoney(stats.collected, stats.currency), icon: Wallet },
+  ]
+
+  return (
+    <div className="relative overflow-hidden rounded-3xl border border-border bg-card p-5 shadow-soft">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-6 -top-10 size-40 rounded-full opacity-20 blur-3xl"
+        style={{ backgroundColor: "var(--home-accent)" }}
+      />
+      <div className="relative flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            Appointments console
+          </p>
+          <h2 className="mt-1 font-display text-xl font-semibold tracking-tight">
+            {typeCount === 0 ? "Set up your first session type" : "Manage sessions & bookings"}
+          </h2>
+          <p className="mt-1 max-w-md text-sm leading-relaxed text-muted-foreground text-pretty">
+            Every booking opens its own private conversation and, when live, a scheduled meeting room.
+          </p>
+        </div>
+        <div className="relative -mr-1 -mt-2 hidden size-24 shrink-0 sm:block">
+          <Image
+            src="/images/appointments-hero.png"
+            alt=""
+            fill
+            sizes="96px"
+            className="object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.4)]"
+          />
+        </div>
+      </div>
+
+      <div className="relative mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {tiles.map((t) => (
+          <div key={t.label} className="rounded-2xl border border-border/70 bg-background/60 p-3">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <t.icon className="size-3.5" />
+              <span className="text-[11px] font-medium">{t.label}</span>
+            </div>
+            <p className="mt-1.5 text-xl font-semibold tabular-nums tracking-tight">{t.value}</p>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -181,11 +298,14 @@ function TypesTab({ handle, initialTypes }: { handle: string; initialTypes: Appo
 
   return (
     <div className="space-y-5">
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          Define the sessions members can book, then set weekly availability for each.
+        </p>
         <button
           type="button"
           onClick={() => setShowForm((s) => !s)}
-          className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold text-white"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold text-white shadow-sm"
           style={{ backgroundColor: "var(--home-accent)" }}
         >
           {showForm ? <X className="size-4" /> : <Plus className="size-4" />}
@@ -194,7 +314,10 @@ function TypesTab({ handle, initialTypes }: { handle: string; initialTypes: Appo
       </div>
 
       {showForm && (
-        <form onSubmit={submit} className="space-y-3 rounded-2xl border border-border bg-card p-4">
+        <form
+          onSubmit={submit}
+          className="space-y-3 rounded-2xl border border-border bg-card p-4 shadow-soft animate-in fade-in-0 slide-in-from-top-2 duration-200"
+        >
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Title">
               <input
@@ -294,7 +417,7 @@ function TypesTab({ handle, initialTypes }: { handle: string; initialTypes: Appo
       ) : (
         <div className="space-y-3">
           {types.map((t) => (
-            <div key={t.id} className="overflow-hidden rounded-2xl border border-border bg-card">
+            <div key={t.id} className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
               <div className="flex flex-wrap items-start gap-3 p-4">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
@@ -322,7 +445,11 @@ function TypesTab({ handle, initialTypes }: { handle: string; initialTypes: Appo
                       {t.useFrequencyLive ? <Video className="size-3.5" /> : <MapPin className="size-3.5" />}
                       {t.useFrequencyLive ? "Frequency Live" : t.location ?? "In person"}
                     </span>
-                    <span>
+                    <span
+                      className={cn(
+                        t.windows.length === 0 && "font-medium text-amber-600 dark:text-amber-400",
+                      )}
+                    >
                       {t.windows.length} availability window{t.windows.length === 1 ? "" : "s"}
                     </span>
                   </div>
@@ -385,7 +512,6 @@ function AvailabilityEditor({
   }
 
   function save() {
-    // Guard: end must be after start on every row.
     for (const w of windows) {
       if (w.endMinute <= w.startMinute) {
         toast.error("Each window's end time must be after its start time.")
@@ -409,17 +535,18 @@ function AvailabilityEditor({
         Set the recurring weekly windows you&apos;re available. Members can book any {type.durationMinutes}-minute slot
         inside these windows (times are in UTC).
       </p>
-      <div className="space-y-3">
+      <div className="space-y-2">
         {WEEKDAYS.map((label, weekday) => {
-          const dayWindows = windows
-            .map((w, i) => ({ w, i }))
-            .filter(({ w }) => w.weekday === weekday)
+          const dayWindows = windows.map((w, i) => ({ w, i })).filter(({ w }) => w.weekday === weekday)
           return (
-            <div key={weekday} className="flex flex-wrap items-center gap-2">
+            <div key={weekday} className="flex flex-wrap items-center gap-2 rounded-lg px-1 py-1">
               <span className="w-10 shrink-0 text-xs font-semibold text-muted-foreground">{label}</span>
               {dayWindows.length === 0 && <span className="text-xs text-muted-foreground/60">—</span>}
               {dayWindows.map(({ w, i }) => (
-                <div key={i} className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2 py-1">
+                <div
+                  key={i}
+                  className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2 py-1"
+                >
                   <input
                     type="time"
                     value={minutesToTime(w.startMinute)}
@@ -473,15 +600,34 @@ function AvailabilityEditor({
 /* Bookings                                                                   */
 /* -------------------------------------------------------------------------- */
 
-const STATUS_META: Record<string, { label: string; className: string }> = {
-  upcoming: { label: "Upcoming", className: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" },
-  pending_payment: { label: "Awaiting payment", className: "bg-amber-500/15 text-amber-600 dark:text-amber-400" },
-  completed: { label: "Completed", className: "bg-muted text-muted-foreground" },
-  cancelled: { label: "Cancelled", className: "bg-destructive/15 text-destructive" },
+const STATUS_META: Record<string, { label: string; className: string; dot: string }> = {
+  upcoming: { label: "Upcoming", className: "bg-primary/15 text-primary", dot: "bg-primary" },
+  in_progress: {
+    label: "In progress",
+    className: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+    dot: "bg-emerald-500",
+  },
+  pending_payment: {
+    label: "Awaiting payment",
+    className: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+    dot: "bg-amber-500",
+  },
+  completed: { label: "Finished", className: "bg-muted text-muted-foreground", dot: "bg-muted-foreground" },
+  no_show: { label: "No show", className: "bg-destructive/15 text-destructive", dot: "bg-destructive" },
+  cancelled: { label: "Cancelled", className: "bg-destructive/15 text-destructive", dot: "bg-destructive" },
 }
+
+const FILTERS = [
+  { key: "all", label: "All" },
+  { key: "upcoming", label: "Upcoming" },
+  { key: "pending_payment", label: "Awaiting payment" },
+  { key: "completed", label: "Finished" },
+] as const
 
 function BookingsTab({ handle, initialBookings }: { handle: string; initialBookings: AdminAppointmentDetail[] }) {
   const [bookings, setBookings] = useState(initialBookings)
+  const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("all")
+  const [selected, setSelected] = useState<AdminAppointmentDetail | null>(null)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [, startTransition] = useTransition()
 
@@ -491,6 +637,7 @@ function BookingsTab({ handle, initialBookings }: { handle: string; initialBooki
       try {
         await completeAppointment(handle, id)
         setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: "completed" } : b)))
+        setSelected((cur) => (cur && cur.id === id ? { ...cur, status: "completed" } : cur))
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Could not update.")
       } finally {
@@ -498,6 +645,21 @@ function BookingsTab({ handle, initialBookings }: { handle: string; initialBooki
       }
     })
   }
+
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: bookings.length }
+    for (const b of bookings) {
+      const key = b.status === "in_progress" ? "upcoming" : b.status
+      c[key] = (c[key] ?? 0) + 1
+    }
+    return c
+  }, [bookings])
+
+  const visible = useMemo(() => {
+    if (filter === "all") return bookings
+    if (filter === "upcoming") return bookings.filter((b) => b.status === "upcoming" || b.status === "in_progress")
+    return bookings.filter((b) => b.status === filter)
+  }, [bookings, filter])
 
   if (bookings.length === 0) {
     return (
@@ -509,66 +671,225 @@ function BookingsTab({ handle, initialBookings }: { handle: string; initialBooki
   }
 
   return (
-    <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
-      {bookings.map((b) => {
-        const meta = STATUS_META[b.status] ?? STATUS_META.upcoming
-        const busy = pendingId === b.id
-        return (
-          <div key={b.id} className="flex flex-wrap items-start gap-3 p-4">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <p className="truncate text-sm font-semibold">{b.title}</p>
-                <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", meta.className)}>
-                  {meta.label}
+    <div className="space-y-4">
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {FILTERS.map((f) => {
+          const active = filter === f.key
+          return (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => setFilter(f.key)}
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
+                active ? "border-transparent text-white" : "border-border text-muted-foreground hover:text-foreground",
+              )}
+              style={active ? { backgroundColor: "var(--home-accent)" } : undefined}
+            >
+              {f.label}
+              <span
+                className={cn(
+                  "rounded-full px-1.5 text-[11px] tabular-nums",
+                  active ? "bg-white/20" : "bg-muted",
+                )}
+              >
+                {counts[f.key] ?? 0}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      {visible.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-border bg-card/40 px-4 py-10 text-center text-sm text-muted-foreground">
+          No bookings in this view.
+        </p>
+      ) : (
+        <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
+          {visible.map((b) => {
+            const meta = STATUS_META[b.status] ?? STATUS_META.upcoming
+            return (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => setSelected(b)}
+                className="flex w-full items-center gap-3 p-3.5 text-left transition-colors hover:bg-muted/40"
+              >
+                <span
+                  className="flex size-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
+                  style={{ backgroundColor: "var(--home-accent)" }}
+                  aria-hidden
+                >
+                  {initials(b.memberName)}
                 </span>
-                {b.paymentStatus === "paid" && (
-                  <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-semibold text-primary">
-                    Paid
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-semibold">{b.memberName}</p>
+                    <span className={cn("hidden shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold sm:inline", meta.className)}>
+                      {meta.label}
+                    </span>
+                    {b.paymentStatus === "paid" && (
+                      <span className="hidden shrink-0 rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-semibold text-primary sm:inline">
+                        Paid
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{b.title}</p>
+                  <p className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <span className={cn("size-1.5 rounded-full sm:hidden", meta.dot)} />
+                    <CalendarClock className="size-3" />
+                    {formatWhen(b.startsAt)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {b.priceCents != null && (
+                    <span className="hidden text-sm font-semibold tabular-nums sm:inline">
+                      {formatMoney(b.priceCents, b.currency)}
+                    </span>
+                  )}
+                  <ChevronRight className="size-4 text-muted-foreground" />
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      <BookingDetailSheet
+        booking={selected}
+        onOpenChange={(o) => !o && setSelected(null)}
+        onComplete={complete}
+        completing={pendingId}
+      />
+    </div>
+  )
+}
+
+function BookingDetailSheet({
+  booking,
+  onOpenChange,
+  onComplete,
+  completing,
+}: {
+  booking: AdminAppointmentDetail | null
+  onOpenChange: (open: boolean) => void
+  onComplete: (id: string) => void
+  completing: string | null
+}) {
+  const b = booking
+  const meta = b ? STATUS_META[b.status] ?? STATUS_META.upcoming : STATUS_META.upcoming
+  const canComplete =
+    b && b.status !== "completed" && b.status !== "cancelled" && b.status !== "pending_payment"
+  const canJoin =
+    b &&
+    b.useFrequencyLive &&
+    b.status !== "completed" &&
+    b.status !== "no_show" &&
+    b.status !== "cancelled" &&
+    b.paymentStatus !== "pending"
+
+  return (
+    <Sheet open={!!b} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-md">
+        {b && (
+          <div className="flex h-full flex-col">
+            {/* Header */}
+            <div className="border-b border-border p-5">
+              <div className="flex items-center gap-3">
+                <span
+                  className="flex size-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
+                  style={{ backgroundColor: "var(--home-accent)" }}
+                  aria-hidden
+                >
+                  {initials(b.memberName)}
+                </span>
+                <div className="min-w-0">
+                  <h2 className="truncate font-display text-lg font-semibold tracking-tight">{b.memberName}</h2>
+                  <span className={cn("mt-0.5 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold", meta.className)}>
+                    {meta.label}
+                    {b.paymentStatus === "paid" ? " · Paid" : ""}
                   </span>
-                )}
-              </div>
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                With {b.memberName}
-                {b.priceCents != null ? ` · ${formatMoney(b.priceCents, b.currency)}` : ""}
-              </p>
-              <p className="mt-1.5 inline-flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                <span className="inline-flex items-center gap-1">
-                  <CalendarClock className="size-3" /> {formatWhen(b.startsAt)}
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  {b.useFrequencyLive ? <Video className="size-3" /> : <MapPin className="size-3" />}
-                  {b.useFrequencyLive ? "Frequency Live" : b.location ?? "In person"}
-                </span>
-              </p>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                {b.conversationId && (
-                  <Link
-                    href={`/messages/${b.conversationId}`}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-muted"
-                  >
-                    <MessageSquare className="size-3.5" />
-                    Open Conversation
-                  </Link>
-                )}
-                {b.useFrequencyLive && b.status !== "completed" && b.status !== "cancelled" && b.paymentStatus !== "pending" && (
-                  <JoinMeetingButton appointmentId={b.id} size="sm" />
-                )}
+                </div>
               </div>
             </div>
-            {b.status === "upcoming" && (
-              <button
-                type="button"
-                onClick={() => complete(b.id)}
-                disabled={busy}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-muted disabled:opacity-60"
-              >
-                {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
-                Complete
-              </button>
-            )}
+
+            {/* Body */}
+            <div className="flex-1 space-y-4 overflow-y-auto p-5">
+              <DetailRow icon={CalendarDays} label="Session">
+                {b.title}
+              </DetailRow>
+              <DetailRow icon={CalendarClock} label="Date & time">
+                {formatWhen(b.startsAt)}
+              </DetailRow>
+              <DetailRow icon={Clock} label="Duration">
+                {b.durationMinutes} minutes
+              </DetailRow>
+              <DetailRow icon={b.useFrequencyLive ? Video : MapPin} label="Meeting">
+                {b.useFrequencyLive ? "Frequency Live" : b.location ?? "In person"}
+              </DetailRow>
+              <DetailRow icon={CreditCard} label="Payment">
+                {b.priceCents == null
+                  ? "Free session"
+                  : `${formatMoney(b.priceCents, b.currency)} · ${
+                      b.paymentStatus === "paid" ? "Paid" : b.paymentStatus === "pending" ? "Awaiting payment" : b.paymentStatus
+                    }`}
+              </DetailRow>
+              {b.notes && (
+                <DetailRow icon={MessageSquare} label="Notes">
+                  <span className="whitespace-pre-wrap">{b.notes}</span>
+                </DetailRow>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="space-y-2 border-t border-border p-5">
+              {canJoin && <JoinMeetingButton appointmentId={b.id} className="w-full justify-center" />}
+              {b.conversationId && (
+                <Link
+                  href={`/messages/${b.conversationId}`}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2.5 text-sm font-semibold transition-colors hover:bg-muted"
+                >
+                  <MessageSquare className="size-4" />
+                  Open conversation
+                </Link>
+              )}
+              {canComplete && (
+                <button
+                  type="button"
+                  onClick={() => onComplete(b.id)}
+                  disabled={completing === b.id}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2.5 text-sm font-semibold transition-colors hover:bg-muted disabled:opacity-60"
+                >
+                  {completing === b.id ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                  Mark finished
+                </button>
+              )}
+            </div>
           </div>
-        )
-      })}
+        )}
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+function DetailRow({
+  icon: Icon,
+  label,
+  children,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex gap-3">
+      <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+        <Icon className="size-4" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+        <p className="mt-0.5 text-sm font-medium text-pretty">{children}</p>
+      </div>
     </div>
   )
 }
