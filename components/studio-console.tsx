@@ -6,9 +6,7 @@ import useSWR from "swr"
 import {
   AudioLines,
   CheckCircle2,
-  ChevronDown,
   Crown,
-  Globe,
   Loader2,
   Lock,
   MessageSquare,
@@ -73,8 +71,9 @@ import { LIVE_CATEGORIES } from "@/lib/live-categories"
 import { LiveBadge } from "@/components/live-badge"
 import { ReactionLayer } from "@/components/live-reactions"
 import { BackExitMenu } from "@/components/live-back-menu"
-import { CoverUpload, SQUARE_RATIO } from "@/components/admin/cover-upload"
-import { AudioFormatSelector } from "@/components/audio-format-selector"
+import { CoverUpload } from "@/components/admin/cover-upload"
+import { LiveSetupSheet } from "@/components/live/live-setup-sheet"
+import { haptic } from "@/lib/haptics"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -151,6 +150,7 @@ export function StudioConsole({
   const reconnecting = onAir && (state.reconnecting || !state.connected)
   const micOn = state.micEnabled
   // Mirrors of values the disconnect-recovery callback needs without going stale.
+  const router = useRouter()
   const onAirRef = useRef(false)
   const roomNameRef = useRef<string | null>(null)
   const recoverRef = useRef<() => void>(() => {})
@@ -653,167 +653,44 @@ export function StudioConsole({
   // the chance to save the episode.
   if (!live && !endedSession && !saveDecision) {
     return (
-      <div className="relative flex h-full flex-col overflow-y-auto bg-zinc-950 text-white">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 opacity-70"
-          style={{
-            background:
-              "radial-gradient(70% 55% at 20% 0%, color-mix(in oklch, var(--primary) 40%, transparent), transparent 60%), radial-gradient(70% 55% at 90% 15%, color-mix(in oklch, var(--live-accent) 26%, transparent), transparent 55%)",
-          }}
-        />
-        <div className="relative mx-auto w-full max-w-md px-5 pb-10 pt-[calc(env(safe-area-inset-top)+1.25rem)]">
-          <button
-            type="button"
-            onClick={() => onExit?.()}
-            className="mb-6 flex size-10 items-center justify-center rounded-full bg-white/15 ring-1 ring-inset ring-white/15 hover:bg-white/25"
-            aria-label="Back"
-          >
-            <X className="size-5" strokeWidth={2.5} />
-          </button>
-
-          <div className="mb-7 space-y-2.5">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-2.5 py-1 text-xs font-semibold text-primary ring-1 ring-inset ring-primary/25">
-              <Mic className="size-3.5" /> Podcast
-            </span>
-            <h1 className="text-[1.75rem] font-bold leading-tight tracking-tight text-balance">Start a broadcast</h1>
-            <p className="text-sm leading-relaxed text-white/55 text-pretty">
-              A host-led room where you hold the mic. Set the scene, choose a category, and open the doors.
-            </p>
-          </div>
-
-          <div className="space-y-6">
-            <AudioFormatSelector active="podcast" />
-
-            {/* Cover artwork — a compact, centered tile inside its own section
-                card so it reads as a deliberate choice rather than a giant empty
-                well dominating the form. */}
-            <section className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wider text-white/60">Cover artwork</span>
-                <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/60">
-                  Required
-                </span>
-              </div>
-              <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
-                <CoverUpload value={cover} onChange={setCover} ratios={SQUARE_RATIO} allowFit compact hideLabel />
-                <p className="mt-3 text-center text-xs leading-relaxed text-white/45">
-                  A square image shown on the Live shelf and inside your room.
-                </p>
-              </div>
-            </section>
-
-            {/* Details — room name, topic, and category grouped into one calm
-                glass card with hairline dividers for a premium, settled feel. */}
-            <section className="space-y-3">
-              <span className="text-xs font-semibold uppercase tracking-wider text-white/60">Details</span>
-              <div className="divide-y divide-white/8 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
-                <label className="block space-y-1.5 p-4">
-                  <span className="text-sm font-medium text-white/85">Room name</span>
-                  <input
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder={`${currentUser.name} — live session`}
-                    maxLength={80}
-                    className="w-full bg-transparent text-[15px] text-white placeholder:text-white/35 focus:outline-none"
-                  />
-                </label>
-
-                <label className="block space-y-1.5 p-4">
-                  <span className="text-sm font-medium text-white/85">
-                    Topic <span className="font-normal text-white/40">· optional</span>
-                  </span>
-                  <input
-                    value={roomTopic}
-                    onChange={(e) => setRoomTopic(e.target.value)}
-                    placeholder="What's this room about?"
-                    maxLength={120}
-                    className="w-full bg-transparent text-[15px] text-white placeholder:text-white/35 focus:outline-none"
-                  />
-                </label>
-
-                {/* Category — the same option set, styled as an inline row. */}
-                <label className="block space-y-1.5 p-4">
-                  <span className="text-sm font-medium text-white/85">
-                    Category <span className="font-normal text-white/40">· required</span>
-                  </span>
-                  <div className="relative">
-                    <select
-                      value={category}
-                      onChange={(e) => setCategory(e.target.value)}
-                      className={cn(
-                        "w-full appearance-none bg-transparent pr-8 text-[15px] focus:outline-none [&>option]:bg-neutral-900 [&>option]:text-white",
-                        category ? "text-white" : "text-white/40",
-                      )}
-                    >
-                      <option value="" disabled>
-                        Choose a category…
-                      </option>
-                      {LIVE_CATEGORIES.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-0 top-1/2 size-4 -translate-y-1/2 text-white/50" />
-                  </div>
-                </label>
-              </div>
-            </section>
-
-            {/* Privacy — public (discoverable in Live) vs private (invite-only). */}
-            <section className="space-y-3">
-              <span className="text-xs font-semibold uppercase tracking-wider text-white/60">Privacy</span>
-              <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
-                {(
-                  [
-                    { value: "public", label: "Public", icon: Globe },
-                    { value: "private", label: "Private", icon: Lock },
-                  ] as const
-                ).map((opt) => {
-                  const isActive = visibility === opt.value
-                  const Icon = opt.icon
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setVisibility(opt.value)}
-                      aria-pressed={isActive}
-                      className={cn(
-                        "flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors",
-                        isActive ? "bg-primary text-primary-foreground" : "text-white/60 hover:text-white",
-                      )}
-                    >
-                      <Icon className="size-4" /> {opt.label}
-                    </button>
-                  )
-                })}
-              </div>
-              <p className="text-xs leading-relaxed text-white/50">
-                {visibility === "public"
-                  ? "Listed in Live for everyone to discover and join."
-                  : "Unlisted — only people with the link can join."}
-              </p>
-            </section>
-
-            {error && <p className="text-sm text-destructive">{error}</p>}
-
-            <button
-              type="button"
-              onClick={toggleLive}
-              disabled={starting || state.connecting}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-[15px] font-bold text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-[0.99] disabled:opacity-60"
-            >
-              {starting || state.connecting ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Radio className="size-4" strokeWidth={2.5} />
-              )}
-              {starting || state.connecting ? "Opening the room…" : "Go live"}
-            </button>
-          </div>
-        </div>
-      </div>
+      <LiveSetupSheet
+        title={title}
+        onTitleChange={setTitle}
+        titlePlaceholder={`${currentUser.name} — live session`}
+        layoutOptions={[
+          { value: "podcast", label: "Podcast", icon: Mic },
+          { value: "conversation", label: "Conversation", icon: Users },
+        ]}
+        layoutValue="podcast"
+        onLayoutSelect={(v) => {
+          if (v === "podcast") return
+          haptic("light")
+          router.push(`/studio?mode=audio&layout=${v}`)
+        }}
+        layoutHint="Host-led broadcast"
+        summaryLayoutLabel="Podcast"
+        cover={cover}
+        onCoverChange={setCover}
+        coverRequired
+        topic={{
+          value: roomTopic,
+          onChange: setRoomTopic,
+          placeholder: "What's this room about?",
+          label: "Topic",
+          maxLength: 120,
+        }}
+        category={category}
+        onCategoryChange={setCategory}
+        categoryOptions={LIVE_CATEGORIES}
+        visibility={visibility}
+        onVisibilityChange={setVisibility}
+        error={error}
+        submitting={starting || state.connecting}
+        submittingLabel="Opening the room…"
+        onSubmit={toggleLive}
+        onCancel={() => onExit?.()}
+        backdropClassName="bg-zinc-950"
+      />
     )
   }
 

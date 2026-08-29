@@ -269,12 +269,10 @@ export async function startBroadcast(input: {
   // Conversation layout only applies to audio rooms; video/podcast stays "podcast".
   const layout: LiveLayout = mode === "audio" && input.layout === "conversation" ? "conversation" : "podcast"
   // A category is mandatory for every live session — "Uncategorised" is not an
-  // option. Conversation rooms use their own gathering-style category list;
-  // everything else uses the standard live categories.
+  // option. All layouts (podcast, conversation, video) now share the single
+  // standard live category list.
   const category = input.category?.trim()
-  const allowedCategories: readonly string[] =
-    layout === "conversation" ? CONVERSATION_CATEGORIES : LIVE_CATEGORIES
-  if (!category || !allowedCategories.includes(category)) {
+  if (!category || !LIVE_CATEGORIES.includes(category as (typeof LIVE_CATEGORIES)[number])) {
     return { ok: false, error: "Please choose a category before going live." }
   }
   // Cover artwork is required for audio live sessions (there's no video feed to

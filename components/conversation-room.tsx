@@ -6,8 +6,6 @@ import useSWR from "swr"
 import { AnimatePresence, motion } from "motion/react"
 import {
   BookOpen,
-  ChevronDown,
-  Globe,
   HandHeart,
   Loader2,
   Lock,
@@ -20,9 +18,9 @@ import {
   Radio,
   Settings2,
   Share2,
-  Sparkles,
   UserMinus,
   UserPlus,
+  Users,
   Pin,
   PinOff,
   Volume2,
@@ -36,8 +34,8 @@ import type { ShareTarget } from "@/lib/share-types"
 import { ActionSheet, type SheetAction } from "@/components/action-sheet"
 import { CoverArt } from "@/components/cover-art"
 import { MarqueeTitle } from "@/components/marquee-title"
-import { CoverUpload, SQUARE_RATIO } from "@/components/admin/cover-upload"
-import { AudioFormatSelector } from "@/components/audio-format-selector"
+import { LiveSetupSheet } from "@/components/live/live-setup-sheet"
+import { haptic } from "@/lib/haptics"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { ParticipantGrid, type GridParticipant } from "@/components/conversation/participant-grid"
 import { FloatingMessages } from "@/components/conversation/floating-messages"
@@ -49,7 +47,7 @@ import { useLiveAudio } from "@/lib/use-live-audio"
 import { useLivePresence } from "@/lib/use-live-presence"
 import { getAvatarColor } from "@/lib/identity"
 import { liveThemeStyle } from "@/lib/live-themes"
-import { CONVERSATION_CATEGORIES } from "@/lib/live-categories"
+import { LIVE_CATEGORIES } from "@/lib/live-categories"
 import {
   startBroadcast,
   joinBroadcast,
@@ -172,7 +170,7 @@ export function ConversationRoom({
   const [setupTitle, setSetupTitle] = useState("")
   const [setupTopic, setSetupTopic] = useState("")
   const [setupCover, setSetupCover] = useState<string | null>(null)
-  const [setupCategory, setSetupCategory] = useState<string>(CONVERSATION_CATEGORIES[0])
+  const [setupCategory, setSetupCategory] = useState<string>("")
   const [setupVisibility, setSetupVisibility] = useState<"public" | "private">("public")
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -741,137 +739,43 @@ export function ConversationRoom({
   // ── Host setup screen (brand-new room) ───────────────────────────────────
   if (isHostMode && !live) {
     return (
-      <div className="relative flex h-full flex-col overflow-y-auto bg-zinc-950 text-white">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 opacity-70"
-          style={{
-            background:
-              "radial-gradient(70% 55% at 20% 0%, color-mix(in oklch, var(--primary) 40%, transparent), transparent 60%), radial-gradient(70% 55% at 90% 15%, color-mix(in oklch, var(--live-accent) 26%, transparent), transparent 55%)",
-          }}
-        />
-        <div className="relative mx-auto w-full max-w-md px-5 pb-10 pt-[calc(env(safe-area-inset-top)+1.25rem)]">
-          <button
-            type="button"
-            onClick={leaveRoom}
-            className="mb-6 flex size-10 items-center justify-center rounded-full bg-white/15 ring-1 ring-inset ring-white/15 hover:bg-white/25"
-            aria-label="Back"
-          >
-            <X className="size-5" strokeWidth={2.5} />
-          </button>
-
-          <div className="mb-6 space-y-1">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-2.5 py-1 text-xs font-semibold text-primary">
-              <Sparkles className="size-3.5" /> Conversation
-            </span>
-            <h1 className="text-2xl font-bold tracking-tight text-balance">Start a gathering</h1>
-            <p className="text-sm leading-relaxed text-white/60">
-              A warm, come-as-you-are room where everyone can speak. Set the scene and open the doors.
-            </p>
-          </div>
-
-          <div className="space-y-5">
-            <AudioFormatSelector active="conversation" />
-
-            <CoverUpload
-                value={setupCover}
-                onChange={setSetupCover}
-                label="Room cover"
-                ratios={SQUARE_RATIO}
-                allowFit
-                compact
-              />
-
-            <label className="block space-y-1.5">
-              <span className="text-sm font-medium">Room name</span>
-              <input
-                value={setupTitle}
-                onChange={(e) => setSetupTitle(e.target.value)}
-                placeholder={`${hostName} — gathering`}
-                maxLength={80}
-                className="w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-white/35 focus:border-primary/60 focus:outline-none"
-              />
-            </label>
-
-            <label className="block space-y-1.5">
-              <span className="text-sm font-medium">Topic <span className="text-white/40">(optional)</span></span>
-              <input
-                value={setupTopic}
-                onChange={(e) => setSetupTopic(e.target.value)}
-                placeholder="What are we gathering around?"
-                maxLength={120}
-                className="w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-white/35 focus:border-primary/60 focus:outline-none"
-              />
-            </label>
-
-            {/* Category — a dropdown selector (matching the Podcast setup). */}
-            <label className="block space-y-1.5">
-              <span className="text-sm font-medium">Category</span>
-              <div className="relative">
-                <select
-                  value={setupCategory}
-                  onChange={(e) => setSetupCategory(e.target.value)}
-                  className="w-full appearance-none rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 pr-10 text-sm text-white focus:border-primary/60 focus:outline-none [&>option]:bg-neutral-900 [&>option]:text-white"
-                >
-                  {CONVERSATION_CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-white/50" />
-              </div>
-            </label>
-
-            {/* Privacy — public (discoverable in Live) vs private (invite-only). */}
-            <div className="space-y-2">
-              <span className="text-sm font-medium">Privacy</span>
-              <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-white/[0.04] p-1">
-                {(
-                  [
-                    { value: "public", label: "Public", icon: Globe },
-                    { value: "private", label: "Private", icon: Lock },
-                  ] as const
-                ).map((opt) => {
-                  const isActive = setupVisibility === opt.value
-                  const Icon = opt.icon
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setSetupVisibility(opt.value)}
-                      aria-pressed={isActive}
-                      className={cn(
-                        "flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors",
-                        isActive ? "bg-primary text-primary-foreground" : "text-white/60 hover:text-white",
-                      )}
-                    >
-                      <Icon className="size-4" /> {opt.label}
-                    </button>
-                  )
-                })}
-              </div>
-              <p className="text-xs text-white/50">
-                {setupVisibility === "public"
-                  ? "Listed in Live for everyone to discover and join."
-                  : "Only invited users can join."}
-              </p>
-            </div>
-
-            {error && <p className="text-sm text-destructive">{error}</p>}
-
-            <button
-              type="button"
-              onClick={goLive}
-              disabled={starting}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-3.5 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-[0.99] disabled:opacity-60"
-            >
-              {starting ? <Loader2 className="size-4 animate-spin" /> : <Radio className="size-4" strokeWidth={2.5} />}
-              {starting ? "Opening the room…" : "Go live"}
-            </button>
-          </div>
-        </div>
-      </div>
+      <LiveSetupSheet
+        title={setupTitle}
+        onTitleChange={setSetupTitle}
+        titlePlaceholder={`${hostName} — gathering`}
+        layoutOptions={[
+          { value: "podcast", label: "Podcast", icon: Mic },
+          { value: "conversation", label: "Conversation", icon: Users },
+        ]}
+        layoutValue="conversation"
+        onLayoutSelect={(v) => {
+          if (v === "conversation") return
+          haptic("light")
+          router.push(`/studio?mode=audio&layout=${v}`)
+        }}
+        layoutHint="Everyone joins in"
+        summaryLayoutLabel="Conversation"
+        cover={setupCover}
+        onCoverChange={setSetupCover}
+        topic={{
+          value: setupTopic,
+          onChange: setSetupTopic,
+          placeholder: "What are we gathering around?",
+          label: "Topic",
+          maxLength: 120,
+        }}
+        category={setupCategory}
+        onCategoryChange={setSetupCategory}
+        categoryOptions={LIVE_CATEGORIES}
+        visibility={setupVisibility}
+        onVisibilityChange={setSetupVisibility}
+        error={error}
+        submitting={starting}
+        submittingLabel="Opening the room…"
+        onSubmit={goLive}
+        onCancel={leaveRoom}
+        backdropClassName="bg-zinc-950"
+      />
     )
   }
 

@@ -5,12 +5,12 @@ import { createPortal } from "react-dom"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
-import useSWR from "swr"
 import {
   AlignLeft,
   BookOpen,
   Bookmark,
   CalendarClock,
+  CalendarDays,
   ChevronDown,
   ChevronRight,
   Home as HomeIcon,
@@ -18,13 +18,11 @@ import {
   Library as LibraryIcon,
   LifeBuoy,
   LogOut,
-  MessageCircle,
   Moon,
   MoonStar,
   Newspaper,
   NotebookPen,
   Palette,
-  Bell,
   ShieldCheck,
   Sun,
   Trash2,
@@ -34,7 +32,6 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
-import { getUnreadCount } from "@/app/actions/notifications"
 import { AvatarUploadButton } from "@/components/profile/avatar-upload-button"
 import { DeleteAccountDialog } from "@/components/profile/delete-account-dialog"
 import { SKINS, useSkin } from "@/components/skin-provider"
@@ -79,12 +76,6 @@ export function AppMenu() {
   const router = useRouter()
   const { data: session } = authClient.useSession()
   const signedIn = !!session?.user
-
-  // Live unread-notification count, mirroring the header bell.
-  const { data: unread } = useSWR(signedIn ? "notifications-unread" : null, () => getUnreadCount(), {
-    refreshInterval: 20000,
-  })
-  const notificationCount = unread ?? 0
 
   const [mounted, setMounted] = useState(false)
   const [open, setOpen] = useState(false) // portal present (enter + exit)
@@ -413,21 +404,14 @@ export function AppMenu() {
                   {/* Book Store hidden from the front end for now — restore this item to re-enable. */}
                   {/* <DrawerItem href="/store" icon={ShoppingBag} label="Book Store" onNavigate={navigate} /> */}
                   <DrawerItem href="/library" icon={LibraryIcon} label="Library" onNavigate={navigate} />
+                  <DrawerItem href="/saved" icon={Bookmark} label="Bookmarks" onNavigate={navigate} />
                 </Section>
 
                 <Divider />
 
                 <Section label="Activity">
-                  <DrawerItem
-                    href="/notifications"
-                    icon={Bell}
-                    label="Notifications"
-                    onNavigate={navigate}
-                    badge={notificationCount}
-                  />
-                  <DrawerItem href="/messages" icon={MessageCircle} label="Messages" onNavigate={navigate} />
+                  <DrawerItem href="/events" icon={CalendarDays} label="Events" onNavigate={navigate} />
                   <DrawerItem href="/appointments" icon={CalendarClock} label="Appointments" onNavigate={navigate} />
-                  <DrawerItem href="/saved" icon={Bookmark} label="Bookmarks" onNavigate={navigate} />
                 </Section>
 
                 <Divider />
