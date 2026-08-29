@@ -6,9 +6,7 @@ import useSWR from "swr"
 import {
   AudioLines,
   CheckCircle2,
-  ChevronDown,
   Crown,
-  Globe,
   Loader2,
   Lock,
   MessageSquare,
@@ -73,7 +71,7 @@ import { LIVE_CATEGORIES } from "@/lib/live-categories"
 import { LiveBadge } from "@/components/live-badge"
 import { ReactionLayer } from "@/components/live-reactions"
 import { BackExitMenu } from "@/components/live-back-menu"
-import { CoverUpload, SQUARE_RATIO } from "@/components/admin/cover-upload"
+import { CoverUpload } from "@/components/admin/cover-upload"
 import { LiveSetupSheet } from "@/components/live/live-setup-sheet"
 import { haptic } from "@/lib/haptics"
 import { Button } from "@/components/ui/button"

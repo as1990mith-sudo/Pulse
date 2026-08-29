@@ -4,18 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import useSWR from "swr"
 import {
   Check,
-  ChevronDown,
   Clock,
-  Globe,
   Loader2,
-  Lock,
   Mic,
   MicOff,
   MonitorPlay,
   MoreVertical,
   Music,
-  LayoutGrid,
-  Pencil,
   Pin,
   PinOff,
   Radio,
@@ -58,7 +53,6 @@ import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { useLivePresence } from "@/lib/use-live-presence"
 import { ShareSheet } from "@/components/share-sheet"
 import { ConversationVideo } from "@/components/conversation/conversation-video"
-import { CoverUpload, SQUARE_RATIO } from "@/components/admin/cover-upload"
 import { LiveSetupSheet } from "@/components/live/live-setup-sheet"
 import { CoverArt } from "@/components/cover-art"
 import { MarqueeTitle } from "@/components/marquee-title"

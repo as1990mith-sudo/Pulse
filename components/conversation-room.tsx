@@ -6,8 +6,6 @@ import useSWR from "swr"
 import { AnimatePresence, motion } from "motion/react"
 import {
   BookOpen,
-  ChevronDown,
-  Globe,
   HandHeart,
   Loader2,
   Lock,
@@ -20,7 +18,6 @@ import {
   Radio,
   Settings2,
   Share2,
-  Sparkles,
   UserMinus,
   UserPlus,
   Users,
@@ -37,8 +34,8 @@ import type { ShareTarget } from "@/lib/share-types"
 import { ActionSheet, type SheetAction } from "@/components/action-sheet"
 import { CoverArt } from "@/components/cover-art"
 import { MarqueeTitle } from "@/components/marquee-title"
-import { CoverUpload, SQUARE_RATIO } from "@/components/admin/cover-upload"
-import { AudioFormatSelector } from "@/components/audio-format-selector"
+import { LiveSetupSheet } from "@/components/live/live-setup-sheet"
+import { haptic } from "@/lib/haptics"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { ParticipantGrid, type GridParticipant } from "@/components/conversation/participant-grid"
 import { FloatingMessages } from "@/components/conversation/floating-messages"
@@ -50,7 +47,7 @@ import { useLiveAudio } from "@/lib/use-live-audio"
 import { useLivePresence } from "@/lib/use-live-presence"
 import { getAvatarColor } from "@/lib/identity"
 import { liveThemeStyle } from "@/lib/live-themes"
-import { CONVERSATION_CATEGORIES } from "@/lib/live-categories"
+import { LIVE_CATEGORIES } from "@/lib/live-categories"
 import {
   startBroadcast,
   joinBroadcast,
