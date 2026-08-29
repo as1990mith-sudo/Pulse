@@ -715,6 +715,43 @@ export async function getMyAppointments(): Promise<MyAppointmentRow[]> {
   }))
 }
 
+/**
+ * Every appointment the current user HOSTS in the given Home — the admin/host
+ * view. Requires `appointments.manage` in that Home. Shapes rows as
+ * `MyAppointmentRow` but puts the MEMBER's name in `hostName` so the shared card
+ * renders the counterpart correctly (in the member view that field is the host;
+ * here it is the person who booked).
+ */
+export async function getHostAppointments(handle: string): Promise<MyAppointmentRow[]> {
+  const { user, home } = await requireApptManager(handle)
+  const [org] = await db.select().from(organization).where(eq(organization.id, home.organizationId)).limit(1)
+
+  const rows = await db
+    .select()
+    .from(homeAppointment)
+    .where(and(eq(homeAppointment.homeId, home.id), eq(homeAppointment.hostUserId, user.id)))
+    .orderBy(desc(homeAppointment.startsAt))
+
+  return rows.map((a) => ({
+    id: a.id,
+    title: a.title,
+    homeHandle: org?.handle ?? handle,
+    homeName: org?.name ?? "",
+    // Counterpart shown on the card is the member who booked, not the host.
+    hostName: a.memberName,
+    startsAt: a.startsAt.toISOString(),
+    endsAt: a.endsAt ? a.endsAt.toISOString() : null,
+    durationMinutes: a.durationMinutes,
+    status: a.status,
+    paymentStatus: a.paymentStatus as PaymentStatus,
+    priceCents: a.priceCents,
+    currency: a.currency,
+    useFrequencyLive: a.useFrequencyLive,
+    location: a.location,
+    conversationId: a.conversationId,
+  }))
+}
+
 export type ConversationAppointment = {
   appointmentId: string
   title: string

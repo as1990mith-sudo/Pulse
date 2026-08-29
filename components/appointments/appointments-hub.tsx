@@ -73,16 +73,21 @@ export function AppointmentsHub({
   bookableTypes,
   activeHandle,
   activeHomeName,
+  hostMode = false,
   publishableKey,
 }: {
   appointments: MyAppointmentRow[]
   bookableTypes: AppointmentTypeRow[]
   activeHandle: string | null
   activeHomeName: string | null
+  hostMode?: boolean
   publishableKey: string
 }) {
   const router = useRouter()
   const [view, setView] = useState<"list" | "book">("list")
+
+  // Hosts never book — the page is their console of sessions booked with them.
+  const canBook = !hostMode && bookableTypes.length > 0
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 pb-24 pt-6 sm:px-6">
@@ -90,10 +95,12 @@ export function AppointmentsHub({
         <div>
           <h1 className="font-display text-2xl font-semibold tracking-tight text-balance">Appointments</h1>
           <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-            Private sessions — each opens its own conversation and meeting.
+            {hostMode
+              ? "Sessions booked with you — each has its own conversation and meeting."
+              : "Private sessions — each opens its own conversation and meeting."}
           </p>
         </div>
-        {view === "list" && bookableTypes.length > 0 && (
+        {view === "list" && canBook && (
           <button
             type="button"
             onClick={() => setView("book")}
@@ -125,7 +132,8 @@ export function AppointmentsHub({
         ) : (
           <MyAppointments
             appointments={appointments}
-            canBook={bookableTypes.length > 0}
+            canBook={canBook}
+            hostMode={hostMode}
             activeHomeName={activeHomeName}
             onBook={() => setView("book")}
           />
@@ -142,11 +150,13 @@ export function AppointmentsHub({
 function MyAppointments({
   appointments,
   canBook,
+  hostMode = false,
   activeHomeName,
   onBook,
 }: {
   appointments: MyAppointmentRow[]
   canBook: boolean
+  hostMode?: boolean
   activeHomeName: string | null
   onBook: () => void
 }) {
@@ -158,9 +168,11 @@ function MyAppointments({
         </div>
         <h2 className="mt-4 font-medium">No appointments yet</h2>
         <p className="mx-auto mt-1 max-w-xs text-sm leading-relaxed text-muted-foreground">
-          {canBook
-            ? `Book a session${activeHomeName ? ` with ${activeHomeName}` : ""} and it will appear here with its own conversation.`
-            : "When a session is available to book, it will show up here."}
+          {hostMode
+            ? "When a member books a session with you, it will appear here with its own conversation."
+            : canBook
+              ? `Book a session${activeHomeName ? ` with ${activeHomeName}` : ""} and it will appear here with its own conversation.`
+              : "When a session is available to book, it will show up here."}
         </p>
         {canBook && (
           <button
