@@ -1,7 +1,7 @@
 "use client"
 
 import { type CSSProperties, useRef, useState } from "react"
-import { ImagePlus, Loader2, X } from "lucide-react"
+import { ChevronRight, ImagePlus, Loader2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { uploadMedia } from "@/lib/upload-media"
 import { CropModal, type AspectOption } from "@/components/media-editor/crop-modal"
@@ -33,6 +33,7 @@ export function CoverUpload({
   allowFit = false,
   compact = false,
   hideLabel = false,
+  row = false,
 }: {
   value: string | null
   onChange: (url: string | null) => void
@@ -56,6 +57,12 @@ export function CoverUpload({
   compact?: boolean
   /** Hides the built-in label when the caller renders its own section header. */
   hideLabel?: boolean
+  /**
+   * Renders a single compact ~64px horizontal row (thumbnail/upload tile + label
+   * + chevron) instead of the large square/preview box. Used where cover art is
+   * an optional, space-efficient afterthought — e.g. the pre-live setup sheet.
+   */
+  row?: boolean
 }) {
   // Preview aspect follows the first fixed ratio (e.g. 1:1 or 4:5); falls back
   // to 16:9 when the preset only offers a free crop.
@@ -97,6 +104,86 @@ export function CoverUpload({
     } finally {
       setUploading(false)
     }
+  }
+
+  if (row) {
+    return (
+      <div className="space-y-1.5">
+        {!hideLabel && <span className="text-sm font-medium">{label}</span>}
+        {value ? (
+          <div className="flex h-16 items-center gap-3 rounded-2xl border border-border/60 bg-muted/30 px-2.5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={value || "/placeholder.svg"}
+              alt="Selected cover"
+              className="size-11 shrink-0 rounded-xl object-cover"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-foreground">Cover added</p>
+              <button
+                type="button"
+                onClick={() => inputRef.current?.click()}
+                disabled={uploading}
+                className="text-xs font-medium text-primary transition-opacity hover:opacity-80 disabled:opacity-60"
+              >
+                {uploading ? "Uploading…" : "Change image"}
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => onChange(null)}
+              aria-label="Remove cover art"
+              className="flex size-8 shrink-0 items-center justify-center rounded-full bg-background/70 text-muted-foreground ring-1 ring-inset ring-border transition-colors hover:text-foreground active:scale-90"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={uploading}
+            className="group flex h-16 w-full items-center gap-3 rounded-2xl border border-dashed border-border bg-muted/30 px-2.5 text-left transition-colors hover:border-primary/50 hover:bg-muted disabled:opacity-60"
+          >
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-background/70 text-muted-foreground ring-1 ring-inset ring-border transition-colors group-hover:ring-primary/50">
+              {uploading ? <Loader2 className="size-5 animate-spin" /> : <ImagePlus className="size-5" />}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium text-foreground/90">
+                {uploading ? "Uploading…" : "Add cover art"}
+              </span>
+              <span className="block truncate text-xs text-muted-foreground">Optional · shown on the Live shelf</span>
+            </span>
+            <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+          </button>
+        )}
+
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          className="sr-only"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) openCropper(file)
+            e.target.value = ""
+          }}
+        />
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
+
+        {cropSrc && (
+          <CropModal
+            imageSrc={cropSrc}
+            title="Crop cover"
+            ratios={ratios}
+            allowFit={allowFit}
+            onCancel={closeCropper}
+            onApply={handleCropped}
+          />
+        )}
+      </div>
+    )
   }
 
   return (
