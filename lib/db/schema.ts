@@ -1069,6 +1069,12 @@ export const dmConversation = pgTable("dm_conversation", {
   // moment. Messages that arrive afterwards bring the conversation back.
   userADeletedAt: timestamp("userADeletedAt"),
   userBDeletedAt: timestamp("userBDeletedAt"),
+  // "direct" = an ordinary 1:1 DM (unique per pair). "appointment" = a dedicated
+  // conversation auto-created for a Home appointment; it is intentionally NOT
+  // deduped against the pair's general DM, and appointmentId back-references the
+  // home_appointment it belongs to (the two-way appointment↔conversation link).
+  kind: text("kind").notNull().default("direct"),
+  appointmentId: text("appointmentId"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   })
 
@@ -1885,14 +1891,83 @@ export const homeAppointment = pgTable(
     location: text("location"),
     startsAt: timestamp("startsAt").notNull(),
     endsAt: timestamp("endsAt"),
-    // "upcoming" | "completed" | "cancelled".
+    // "upcoming" | "pending_payment" | "completed" | "cancelled".
     status: text("status").notNull().default("upcoming"),
+    // The bookable type this appointment was created from (null for legacy /
+    // admin-created ad-hoc appointments).
+    typeId: text("typeId"),
+    // The dedicated private conversation auto-created for this appointment. This
+    // is the appointment→conversation half of the two-way link (the other half
+    // is dmConversation.appointmentId). Every confirmed appointment has one.
+    conversationId: integer("conversationId"),
+    durationMinutes: integer("durationMinutes").notNull().default(30),
+    // When true the meeting runs on Frequency Live (a private LiveKit room keyed
+    // to this appointment); otherwise it's in-person at `location`.
+    useFrequencyLive: boolean("useFrequencyLive").notNull().default(true),
+    // "not_required" (free) | "pending" (awaiting Stripe) | "paid" | "refunded".
+    paymentStatus: text("paymentStatus").notNull().default("not_required"),
+    priceCents: integer("priceCents"),
+    currency: text("currency").notNull().default("usd"),
+    stripeSessionId: text("stripeSessionId"),
     createdAt: timestamp("createdAt").notNull().defaultNow(),
     updatedAt: timestamp("updatedAt").notNull().defaultNow(),
   },
   (t) => ({
     homeIdx: index("home_appointment_home_idx").on(t.homeId),
     homeStartIdx: index("home_appointment_home_start_idx").on(t.homeId, t.startsAt),
+    conversationIdx: index("home_appointment_conversation_idx").on(t.conversationId),
+    typeIdx: index("home_appointment_type_ref_idx").on(t.typeId),
+  }),
+)
+
+// A bookable appointment type defined by a Home admin — e.g. "Pastoral chat"
+// (30 min, free, Frequency Live) or "1:1 coaching" (60 min, paid). Members
+// choose a type, then an open slot computed from the type's availability
+// windows. Scoped to one Home via homeId.
+export const homeAppointmentType = pgTable(
+  "home_appointment_type",
+  {
+    id: text("id").primaryKey(),
+    homeId: text("homeId").notNull(),
+    // The host who runs sessions of this type (an admin/leader membership).
+    hostUserId: text("hostUserId"),
+    hostName: text("hostName"),
+    title: text("title").notNull(),
+    description: text("description"),
+    durationMinutes: integer("durationMinutes").notNull().default(30),
+    // null = free; otherwise the price charged via Stripe before confirmation.
+    priceCents: integer("priceCents"),
+    currency: text("currency").notNull().default("usd"),
+    useFrequencyLive: boolean("useFrequencyLive").notNull().default(true),
+    // In-person venue, used only when useFrequencyLive is false.
+    location: text("location"),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    homeIdx: index("home_appointment_type_home_idx").on(t.homeId),
+    homeActiveIdx: index("home_appointment_type_home_active_idx").on(t.homeId, t.active),
+  }),
+)
+
+// Recurring weekly availability windows for an appointment type. Open slots are
+// computed by chunking each window into the type's duration and subtracting
+// slots already taken by an upcoming appointment of the same type/host.
+export const homeAppointmentAvailability = pgTable(
+  "home_appointment_availability",
+  {
+    id: text("id").primaryKey(),
+    typeId: text("typeId").notNull(),
+    homeId: text("homeId").notNull(),
+    weekday: integer("weekday").notNull(), // 0 (Sun) .. 6 (Sat)
+    startMinute: integer("startMinute").notNull(), // minutes from local midnight
+    endMinute: integer("endMinute").notNull(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    typeIdx: index("home_appointment_availability_type_idx").on(t.typeId),
+    homeIdx: index("home_appointment_availability_home_idx").on(t.homeId),
   }),
 )
 

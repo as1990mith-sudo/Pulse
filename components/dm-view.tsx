@@ -11,6 +11,7 @@ import { ImageLightbox } from "@/components/image-lightbox"
 import { VoiceRecorder } from "@/components/voice-recorder"
 import { AudioMessage } from "@/components/audio-message"
 import { DmCall } from "@/components/dm-call"
+import { AppointmentThreadBanner } from "@/components/appointments/appointment-thread-banner"
 import { cn } from "@/lib/utils"
 import { haptic } from "@/lib/haptics"
 import { extractFirstUrl } from "@/lib/linkify"
@@ -558,6 +559,9 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
           }}
         />
       )}
+
+      {/* Appointment thread header card (renders only for appointment threads). */}
+      <AppointmentThreadBanner conversationId={detail.id} />
 
       {/* Messages */}
       <div className={cn("relative z-10 flex-1 overflow-y-auto", !hasWallpaper && "bg-card/30")}>

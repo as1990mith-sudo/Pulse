@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation"
 import { getHomeAdminSection } from "@/lib/home/admin-nav"
 import { getHomeMembers, getHomeAdminOverview } from "@/app/actions/home"
-import { getHomeBookings, getHomeAppointments } from "@/app/actions/home-scheduling"
+import { getHomeBookings } from "@/app/actions/home-scheduling"
+import { listAppointmentTypes, listHomeBookings } from "@/app/actions/home-appointments"
 import { getHomeEventRegistrations } from "@/app/actions/event-admin"
 import { EventRegistrationsManager } from "@/components/home/admin/event-registrations-manager"
 import { EventAudienceComposer } from "@/components/home/admin/event-audience-composer"
@@ -11,7 +12,7 @@ import { SettingsManager } from "@/components/home/admin/settings-manager"
 import { ReviewTabManager } from "@/components/home/admin/review-tab-manager"
 import { ContentManager } from "@/components/home/admin/content-manager"
 import { BookingsManager } from "@/components/home/admin/bookings-manager"
-import { AppointmentsManager } from "@/components/home/admin/appointments-manager"
+import { AppointmentsAdmin } from "@/components/home/admin/appointments-admin"
 import { ComingSoonSection } from "@/components/home/admin/coming-soon-section"
 
 export default async function HomeAdminSectionPage({
@@ -72,8 +73,8 @@ async function SectionBody({ handle, section }: { handle: string; section: strin
   }
 
   if (section === "appointments") {
-    const appointments = await getHomeAppointments(handle)
-    return <AppointmentsManager handle={handle} initialAppointments={appointments} />
+    const [types, bookings] = await Promise.all([listAppointmentTypes(handle), listHomeBookings(handle)])
+    return <AppointmentsAdmin handle={handle} initialTypes={types} initialBookings={bookings} />
   }
 
   if (section === "events") {
