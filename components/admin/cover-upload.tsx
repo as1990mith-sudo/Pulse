@@ -34,6 +34,7 @@ export function CoverUpload({
   compact = false,
   hideLabel = false,
   row = false,
+  rowHint = "Optional · shown on the Live shelf",
 }: {
   value: string | null
   onChange: (url: string | null) => void
@@ -63,6 +64,8 @@ export function CoverUpload({
    * an optional, space-efficient afterthought — e.g. the pre-live setup sheet.
    */
   row?: boolean
+  /** Secondary caption shown in the row variant's idle (empty) state. */
+  rowHint?: string
 }) {
   // Preview aspect follows the first fixed ratio (e.g. 1:1 or 4:5); falls back
   // to 16:9 when the preset only offers a free crop.
@@ -152,7 +155,7 @@ export function CoverUpload({
               <span className="block text-sm font-medium text-foreground/90">
                 {uploading ? "Uploading…" : "Add cover art"}
               </span>
-              <span className="block truncate text-xs text-muted-foreground">Optional · shown on the Live shelf</span>
+              <span className="block truncate text-xs text-muted-foreground">{rowHint}</span>
             </span>
             <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
           </button>
