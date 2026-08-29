@@ -123,7 +123,6 @@ import { linkify, extractFirstUrl } from "@/lib/linkify"
 import { renderMessageBody } from "@/lib/rich-text"
 import { CLAMP_LINES } from "@/components/clamped-text"
 import { LinkPreview } from "@/components/link-preview"
-import { AnnouncementBanner } from "@/components/announcement-banner"
 import type { AnnouncementView } from "@/app/actions/announcements"
 import { MediaEditorFlow, type EditedMedia } from "@/components/media-editor/media-editor-flow"
 import { EditedIndicator } from "@/components/edited-indicator"
@@ -189,7 +188,7 @@ function mulberry32(seed: number): () => number {
   }
 }
 
-const FEED_TABS = ["for-you", "admin", "status", "events", "reels"] as const
+const FEED_TABS = ["for-you", "admin", "status", "reels"] as const
 type FeedTab = (typeof FEED_TABS)[number]
 
 /**
@@ -666,7 +665,6 @@ export function MindFeed({
   const TAB_ITEMS = [
     { id: "for-you" as const, label: "For you" },
     { id: "admin" as const, label: "Admin" },
-    { id: "events" as const, label: "Events" },
     { id: "reels" as const, label: "Reels" },
   ]
 
@@ -699,23 +697,8 @@ export function MindFeed({
     </div>
   )
 
-  // The Events feature (formerly the top-of-feed Announcements banner). It now
-  // lives exclusively inside the "Events" sub-tab, where creators publish and
-  // browse upcoming events. Hidden entirely for signed-out visitors — there's
-  // nothing they can do with it (no publishing, no interest actions), so the
-  // whole section (header + empty state) is omitted rather than shown as a
-  // dead-end "Sign in to publish" card.
-  const announcementBanner = currentUser ? (
-    <div className="pt-4 pb-5">
-      <AnnouncementBanner
-        announcements={announcements}
-        myRequests={myRequests}
-        currentUser={currentUser}
-        isAdmin={isAdmin}
-        canPublish={canPublish}
-      />
-    </div>
-  ) : null
+  // The Events feature (formerly a feed sub-tab) has moved out of the feed
+  // entirely — it now lives on its own /events page, reached from the app menu.
 
   // Full-screen, immersive reels tab. Rendered as a fixed overlay so it feels
   // premium and edge-to-edge (nothing "hanging"), with the tab switcher floating
@@ -729,7 +712,6 @@ export function MindFeed({
   if (!currentUser) {
     return (
       <div>
-        {announcementBanner}
         <Card className="mx-4 flex flex-col items-center gap-3 p-8 text-center sm:mx-0">
           <p className="text-lg font-semibold">Join the conversation</p>
           <p className="max-w-sm text-pretty text-sm leading-relaxed text-muted-foreground">
@@ -1078,9 +1060,7 @@ export function MindFeed({
           switch, so moving to Events cross-fades in rather than snapping — the
           swap used to land as one abrupt repaint, which read as a slow load. */}
       <div key={tab} className="animate-in fade-in slide-in-from-bottom-1 duration-300 fill-mode-both">
-        {tab === "events" ? (
-          announcementBanner
-        ) : tab === "status" ? (
+        {tab === "status" ? (
           <div className="px-4 py-3 sm:px-5">
             <StatusBar variant="list" groups={statusGroups} currentUser={currentUser} />
           </div>
