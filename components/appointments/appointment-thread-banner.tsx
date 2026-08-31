@@ -85,8 +85,11 @@ export function AppointmentThreadBanner({ conversationId }: { conversationId: nu
         </div>
 
         {data.useFrequencyLive && !cancelled && !awaitingPayment && !finished && !noShow && (
-          <div className="shrink-0">
-            <JoinMeetingButton appointmentId={data.appointmentId} size="sm" />
+          <div className="shrink-0 self-center">
+            <JoinMeetingButton
+              appointmentId={data.appointmentId}
+              className="rounded-2xl px-6 py-3 text-sm shadow-xl shadow-primary/25 ring-1 ring-inset ring-white/10"
+            />
           </div>
         )}
       </div>
