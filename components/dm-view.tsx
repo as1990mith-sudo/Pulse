@@ -373,7 +373,7 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
         <Link
           href="/messages"
           aria-label="Back to messages"
-          className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "size-9 shrink-0 rounded-full")}
+          className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "size-9 shrink-0 rounded-full text-foreground")}
         >
           <ArrowLeft className="size-[18px]" />
         </Link>
@@ -383,7 +383,7 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
             <AvatarFallback className={cn("text-xs", detail.color)}>{detail.initials}</AvatarFallback>
           </Avatar>
           <div className="min-w-0">
-            <h1 className="truncate text-[15px] font-semibold leading-tight tracking-tight">
+            <h1 className="truncate text-[15px] font-semibold leading-tight tracking-tight text-foreground">
               {detail.otherUserName}
             </h1>
             <p className="truncate text-[11px] leading-tight text-muted-foreground">{detail.otherUserHandle}</p>
