@@ -539,7 +539,7 @@ function AppointmentRow({
           {a.conversationId ? (
             <Link
               href={`/messages/${a.conversationId}`}
-              className="inline-flex min-w-[10rem] flex-1 items-center justify-center gap-2 rounded-2xl border border-white/12 bg-white/[0.06] px-4 py-3 text-sm font-semibold ring-1 ring-inset ring-white/5 transition-all hover:border-white/25 hover:bg-white/[0.1] active:scale-[0.98]"
+              className="inline-flex min-w-[10rem] flex-1 items-center justify-center gap-2 rounded-2xl bg-foreground px-4 py-3 text-sm font-semibold text-background shadow-lg shadow-black/25 ring-1 ring-inset ring-white/10 transition-all hover:opacity-90 active:scale-[0.98]"
             >
               <MessageSquare className="size-4" />
               Open conversation
