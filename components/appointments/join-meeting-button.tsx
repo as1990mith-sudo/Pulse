@@ -62,7 +62,7 @@ export function JoinMeetingButton({
           className,
         )}
       >
-        <Video className={size === "sm" ? "size-3.5" : "size-4"} />
+        <Video className="size-4" />
         {label}
       </button>
       {inMeeting && <AppointmentMeeting appointmentId={appointmentId} onClose={() => setInMeeting(false)} />}

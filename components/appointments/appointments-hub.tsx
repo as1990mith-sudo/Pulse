@@ -161,19 +161,19 @@ function CalendarHeader({ hostMode, appointments }: { hostMode: boolean; appoint
       <div aria-hidden className="pointer-events-none absolute inset-0 rounded-[28px] ring-1 ring-inset ring-white/10" />
 
       <div className="relative">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary/90">{monthLabel}</p>
-            <h1 className="mt-1 font-display text-[2rem] font-semibold leading-none tracking-tight">Appointments</h1>
-            <p className="mt-2 max-w-xs text-[13px] leading-relaxed text-muted-foreground text-pretty">
-              {hostMode ? "Sessions booked with you — each with its own room." : "Your booked sessions and their rooms."}
-            </p>
-          </div>
+        {/* Month + count share the top row so the big title below gets the full
+            width and never slides under the pill. */}
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary/90">{monthLabel}</p>
           <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary/15 px-3 py-1.5 text-xs font-semibold text-primary ring-1 ring-inset ring-primary/25 backdrop-blur">
             <CalendarClock className="size-3.5" />
             {upcomingCount} upcoming
           </span>
         </div>
+        <h1 className="mt-1.5 font-display text-[2rem] font-semibold leading-none tracking-tight">Appointments</h1>
+        <p className="mt-2 max-w-xs text-[13px] leading-relaxed text-muted-foreground text-pretty">
+          {hostMode ? "Sessions booked with you — each with its own room." : "Your booked sessions and their rooms."}
+        </p>
 
         {/* Live week strip */}
         <div className="mt-5 grid grid-cols-7 gap-1.5">
@@ -535,17 +535,23 @@ function AppointmentRow({
       )}
 
       {a.status !== "cancelled" && (a.conversationId || canJoin) && (
-        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/50 pt-3">
+        <div className="mt-3.5 flex flex-wrap items-center gap-2.5 border-t border-border/50 pt-3.5">
           {a.conversationId ? (
             <Link
               href={`/messages/${a.conversationId}`}
-              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3.5 py-1.5 text-xs font-semibold transition-colors hover:bg-muted"
+              className="inline-flex min-w-[10rem] flex-1 items-center justify-center gap-2 rounded-2xl border border-white/12 bg-white/[0.06] px-4 py-3 text-sm font-semibold ring-1 ring-inset ring-white/5 transition-all hover:border-white/25 hover:bg-white/[0.1] active:scale-[0.98]"
             >
-              <MessageSquare className="size-3.5" />
+              <MessageSquare className="size-4" />
               Open conversation
             </Link>
           ) : null}
-          {canJoin && <JoinMeetingButton appointmentId={a.id} size="sm" />}
+          {canJoin && (
+            <JoinMeetingButton
+              appointmentId={a.id}
+              size="sm"
+              className="min-w-[10rem] flex-1 rounded-2xl px-4 py-3 text-sm"
+            />
+          )}
         </div>
       )}
     </li>
