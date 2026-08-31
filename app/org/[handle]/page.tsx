@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
 import { getOrganizationByHandle } from "@/app/actions/organizations"
 import { getOrganizationCatalogue } from "@/app/actions/org-content"
+import { getOrganizationMaterials, getOrganizationPlaylists } from "@/app/actions/materials"
 import { getFeedPostsByOrganization } from "@/app/actions/feed"
 import { getOrgCommunityPosts } from "@/app/actions/community"
 import { getWriterArticles } from "@/app/actions/articles"
@@ -30,10 +31,12 @@ export default async function OrganizationPage({ params }: { params: Promise<{ h
   // Posts are the org's main-feed posts in the same shape the feed uses, so the
   // tab renders with <PostCard>. Threads are the org's Community Help threads;
   // the action itself withholds anonymous rows from non-admins.
-  const [posts, threads, catalogue, articles, members, currentUser] = await Promise.all([
+  const [posts, threads, catalogue, materials, playlists, articles, members, currentUser] = await Promise.all([
     safeSection("posts", () => getFeedPostsByOrganization(org.id), []),
     safeSection("threads", () => getOrgCommunityPosts(org.id), []),
     safeSection("catalogue", () => getOrganizationCatalogue(org.id), []),
+    safeSection("materials", () => getOrganizationMaterials(org.id), []),
+    safeSection("playlists", () => getOrganizationPlaylists(org.id), []),
     safeSection("articles", () => getWriterArticles(org.ownerId), []),
     safeSection("members", () => getHomeRosterByOrg(org.id), []),
     safeSection("currentUser", () => getCurrentUser(), null),
@@ -53,6 +56,8 @@ export default async function OrganizationPage({ params }: { params: Promise<{ h
           currentUser={currentUser}
           articles={articles}
           catalogue={catalogue}
+          materials={materials}
+          playlists={playlists}
         />
       </main>
     </div>

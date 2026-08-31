@@ -348,7 +348,7 @@ export function AnnouncementBanner({
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.12 }}
-          className="space-y-4 px-4 sm:px-0"
+          className="space-y-4 px-2.5 sm:px-0"
         >
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
@@ -606,8 +606,9 @@ function FeaturedEventCard({
 
   const body = (
     <div className="flex min-h-[248px] items-stretch text-left">
-      {/* Poster hero — roughly 42% of the card width, full-bleed. */}
-      <div className="relative w-[42%] shrink-0 self-stretch overflow-hidden rounded-tl-3xl bg-secondary">
+      {/* Poster hero — roughly 38% of the card width, full-bleed. Kept lean so
+          the info column beside it has room to breathe on narrow screens. */}
+      <div className="relative w-[38%] shrink-0 self-stretch overflow-hidden rounded-tl-3xl bg-secondary">
         {a.flyer ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={a.flyer || "/placeholder.svg"} alt={`${a.title} flyer`} className="size-full object-cover" />

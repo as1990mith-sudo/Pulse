@@ -297,8 +297,10 @@ export const event = pgTable(
   }),
 )
 
-// A catalogue resource published by an organisation: audio, video or document.
-// Rendered on the org profile's Catalogue tab, newest first.
+// A catalogue resource published by an organisation. Since the Upload redesign
+// (V1) this is a *Material*: an externally-hosted resource (YouTube, Spotify,
+// Vimeo, Drive, …) that Frequency references by URL + metadata — it never hosts
+// the media itself. Rendered on the org profile's Catalogue → Materials tab.
 export const catalogueItem = pgTable(
   "catalogue_item",
   {
@@ -306,16 +308,76 @@ export const catalogueItem = pgTable(
     organizationId: text("organizationId").notNull(),
     title: text("title").notNull(),
     description: text("description"),
-    // "audio" | "video" | "document".
+    // Broad media kind, kept for backwards compatibility: "audio" | "video" |
+    // "document". Superseded by `contentType` for the new Materials filters but
+    // still populated so any legacy reader keeps working.
     kind: text("kind").notNull().default("audio"),
     url: text("url").notNull(),
     cover: text("cover"),
-    // Free-text duration label, e.g. "42 min".
+    // Free-text duration label, e.g. "42 min" / "48:21".
     duration: text("duration"),
+    // --- Material metadata (added in the Upload redesign) --------------------
+    // The external platform the resource lives on: "youtube" | "spotify" |
+    // "vimeo" | "facebook" | "drive" | "meet" | "other". Backfilled from `url`.
+    source: text("source").notNull().default("other"),
+    // Human author/speaker credited on the card (e.g. "Pastor John Smith").
+    creator: text("creator"),
+    // Fine-grained type for the Materials filter bar: "video" | "audio" |
+    // "article" | "sermon" | "podcast" | "resource". Backfilled from `kind`.
+    contentType: text("contentType").notNull().default("video"),
+    // Optional free-text grouping label (e.g. "Sunday Messages").
+    category: text("category"),
+    // Lower-cased tag slugs for discovery. JSON array stored as text.
+    tags: text("tags").notNull().default("[]"),
+    // The date the resource is *about* (publish/record date), distinct from the
+    // createdAt bookkeeping stamp. Editable by the admin.
+    resourceDate: timestamp("resourceDate"),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+    // Soft-archive: hidden from members but recoverable by admins. Null = live.
+    archivedAt: timestamp("archivedAt"),
     createdAt: timestamp("createdAt").notNull().defaultNow(),
   },
   (t) => ({
     orgIdx: index("catalogue_org_idx").on(t.organizationId),
+  }),
+)
+
+// A curated collection of Materials belonging to one organisation. Playlists
+// only *reference* materials (see playlistMaterial) — a material is never
+// duplicated when added to a playlist.
+export const playlist = pgTable(
+  "playlist",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organizationId").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    // Optional custom cover image. When null the UI renders a 2×2 collage from
+    // the playlist's first four materials.
+    cover: text("cover"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("playlist_org_idx").on(t.organizationId),
+  }),
+)
+
+// Many-to-many join between playlists and materials, ordered by `position`.
+// The same material can appear in many playlists; each pairing is unique.
+export const playlistMaterial = pgTable(
+  "playlist_material",
+  {
+    id: serial("id").primaryKey(),
+    playlistId: integer("playlistId").notNull(),
+    materialId: integer("materialId").notNull(),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    playlistIdx: index("playlist_material_playlist_idx").on(t.playlistId),
+    materialIdx: index("playlist_material_material_idx").on(t.materialId),
+    pairIdx: uniqueIndex("playlist_material_pair_idx").on(t.playlistId, t.materialId),
   }),
 )
 

@@ -29,6 +29,9 @@ import type { CurrentUser } from "@/lib/session"
 import { PostCard } from "@/components/mind-feed"
 import { CommunityThreadFeed } from "@/components/community-help"
 import { OrgEpisodeCatalog, NewCatalogueDialog } from "@/components/org/org-catalogue-tab"
+import { UploadSection } from "@/components/org/upload/upload-section"
+import type { MaterialView } from "@/lib/materials"
+import type { PlaylistView } from "@/app/actions/materials"
 import { ArticleRow } from "@/components/articles/article-card"
 import { cn } from "@/lib/utils"
 
@@ -59,6 +62,8 @@ export function OrgTabs({
   currentUser,
   articles,
   catalogue,
+  materials,
+  playlists,
 }: {
   org: OrganizationView
   // Main-feed posts published in the org's voice, in the same FeedPostView shape
@@ -70,6 +75,9 @@ export function OrgTabs({
   currentUser: CurrentUser | null
   articles: ArticleCardType[]
   catalogue: CatalogueItemView[]
+  // Externally-hosted resources (Upload redesign) + their curated playlists.
+  materials: MaterialView[]
+  playlists: PlaylistView[]
 }) {
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; count?: number }[] = [
     { key: "posts", label: "Posts", icon: <MessageSquareText className="size-4" />, count: posts.length },
@@ -213,27 +221,24 @@ export function OrgTabs({
               <ArrowLeft className="size-5" />
             </button>
             <h2 className="flex-1 text-base font-semibold">Catalogue</h2>
-            {/* Live recordings publish automatically, so hide the upload tool
-                on the Live tab — only Audio & Documents can be added manually. */}
-            {org.isOwner && catalogueKind !== "video" && (
-              <NewCatalogueDialog organizationId={org.id} activeKind={catalogueKind} />
-            )}
+            {/* Management actions now live inside the Upload section itself
+                (per active segment), so the header stays clean. */}
           </header>
 
           <div data-scroll className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
             <div className="mx-auto w-full max-w-4xl">
-              {/* Always render the catalogue so the Uploads / Live / Documents
-                  tabs stay available even when a tab (or the whole catalogue)
-                  is empty — it shows its own per-tab empty message. */}
-              <OrgEpisodeCatalog
-                items={catalogue}
-                isOwner={org.isOwner}
-                orgId={org.id}
+              {/* Redesigned Upload: Materials + Playlists (externally-hosted
+                  resources) with the existing Live listing preserved as a third
+                  segment. Owns its own admin action cluster and detail views. */}
+              <UploadSection
+                organizationId={org.id}
                 orgName={org.name}
-                orgLogo={org.logo}
                 orgHandle={org.handle}
-                tab={catalogueKind}
-                onTabChange={setCatalogueKind}
+                orgLogo={org.logo}
+                isOwner={org.isOwner}
+                materials={materials}
+                playlists={playlists}
+                liveItems={catalogue}
               />
             </div>
           </div>
