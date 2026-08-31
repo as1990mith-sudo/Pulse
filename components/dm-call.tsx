@@ -311,12 +311,15 @@ export function DmCall({
   // something else). Uses the standard API on Android Chrome / desktop and the
   // webkit fallback on iOS Safari. Must be called from a user gesture.
   async function togglePiP() {
-    const v = remoteVideoRef.current as
-      | (HTMLVideoElement & {
-          webkitSetPresentationMode?: (mode: string) => void
-          webkitPresentationMode?: string
-        })
-      | null
+    type PiPVideo = HTMLVideoElement & {
+      webkitSetPresentationMode?: (mode: string) => void
+      webkitPresentationMode?: string
+    }
+    // Prefer the remote feed, but fall back to the self-view when the remote
+    // hasn't connected yet (e.g. still "Calling…") so minimize always works.
+    const remote = remoteVideoRef.current as PiPVideo | null
+    const local = localVideoRef.current as PiPVideo | null
+    const v = remote && remote.readyState >= 2 ? remote : local
     if (!v) return
     try {
       if (document.pictureInPictureElement) {
@@ -512,53 +515,55 @@ export function DmCall({
         />
       )}
 
-      {/* ── Top status bar (+ flip camera) ───────────────────────────────── */}
+      {/* ── Top status bar (+ minimize) ──────────────────────────────────────
+          Three-column flex row so nothing overlaps the centered pill: a spacer
+          balances the minimize button on the right. Flip lives only in the
+          bottom dock now — it used to be duplicated up here and, being absolutely
+          positioned, overlapped the encrypted pill on narrow screens. */}
       <div
         className={cn(
-          "relative z-20 flex items-center justify-center px-6 pt-[calc(env(safe-area-inset-top)+1.25rem)] transition-all duration-300",
+          "relative z-20 flex items-center gap-2 px-5 pt-[calc(env(safe-area-inset-top)+1.25rem)] transition-all duration-300",
           controlsVisible ? "opacity-100" : "pointer-events-none -translate-y-2 opacity-0",
         )}
       >
-        {/* Minimize to Picture-in-Picture — floats top-left, appears once the
-            remote video is live (there must be a playing feed to pop out). */}
-        {showVideo && remoteFilling && (
+        {/* Left spacer, mirrors the minimize button so the pill stays centered. */}
+        {showVideo && <div className="size-11 shrink-0" aria-hidden="true" />}
+
+        <div className="flex min-w-0 flex-1 items-center justify-center">
+          <div className="flex min-w-0 items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-xs font-medium text-white/80 ring-1 ring-inset ring-white/15 backdrop-blur-md">
+            <span className="relative flex size-2 shrink-0">
+              <span
+                className={cn(
+                  "absolute inline-flex size-full rounded-full opacity-75",
+                  isLive ? "bg-call-accept" : "bg-primary",
+                  ringing && "animate-ping",
+                )}
+              />
+              <span
+                className={cn("relative inline-flex size-2 rounded-full", isLive ? "bg-call-accept" : "bg-primary")}
+              />
+            </span>
+            <span className="truncate">
+              {showVideo ? "Video call" : "Voice call"}
+              <span aria-hidden="true" className="text-white/30">
+                {" · "}
+              </span>
+              End-to-end encrypted
+            </span>
+          </div>
+        </div>
+
+        {/* Minimize to Picture-in-Picture. Shown for the whole video call (not
+            just once the remote fills) so it's available while still connecting;
+            togglePiP falls back to the self-view if the remote isn't live yet. */}
+        {showVideo && (
           <button
             type="button"
             onClick={togglePiP}
             aria-label="Minimize to picture-in-picture"
-            className="absolute left-5 top-[calc(env(safe-area-inset-top)+1.05rem)] flex size-11 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-inset ring-white/15 backdrop-blur-md transition-all duration-200 hover:bg-white/20 active:scale-95"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-inset ring-white/15 backdrop-blur-md transition-all duration-200 hover:bg-white/20 active:scale-95"
           >
             <PictureInPicture2 className="size-5" />
-          </button>
-        )}
-
-        <div className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-xs font-medium text-white/80 ring-1 ring-inset ring-white/15 backdrop-blur-md">
-          <span className="relative flex size-2">
-            <span
-              className={cn(
-                "absolute inline-flex size-full rounded-full opacity-75",
-                isLive ? "bg-call-accept" : "bg-primary",
-                ringing && "animate-ping",
-              )}
-            />
-            <span className={cn("relative inline-flex size-2 rounded-full", isLive ? "bg-call-accept" : "bg-primary")} />
-          </span>
-          {showVideo ? "Video call" : "Voice call"}
-          <span aria-hidden="true" className="text-white/30">
-            ·
-          </span>
-          End-to-end encrypted
-        </div>
-
-        {/* Flip-camera button floats top-right and never covers a face. */}
-        {showVideo && camOn && connected && (
-          <button
-            type="button"
-            onClick={flipCamera}
-            aria-label="Flip camera"
-            className="absolute right-5 top-[calc(env(safe-area-inset-top)+1.05rem)] flex size-11 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-inset ring-white/15 backdrop-blur-md transition-all duration-200 hover:bg-white/20 active:scale-95"
-          >
-            <SwitchCamera className="size-5" />
           </button>
         )}
       </div>
