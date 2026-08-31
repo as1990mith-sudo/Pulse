@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import useSWR from "swr"
 import Link from "next/link"
-import { ArrowLeft, Ban, ChevronDown, ChevronUp, Copy, CornerUpLeft, FileText, Flag, ImageIcon, Mic, MoreVertical, Music, Paperclip, Pencil, Phone, Pin, PinOff, Search, Send, Shield, Smile, Trash2, Video, X } from "lucide-react"
+  import { ArrowLeft, Ban, CalendarClock, ChevronDown, ChevronUp, Clock, Copy, CornerUpLeft, FileText, Flag, ImageIcon, Mic, MoreVertical, Music, Paperclip, Pencil, Phone, Pin, PinOff, Search, Send, Shield, Smile, Trash2, Video, X } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -939,6 +939,40 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
   )
 }
 
+// The auto-seeded "Appointment booked" system message is a plain DM row, but we
+// lift it out of the normal left/right bubble and present it as a centered,
+// premium confirmation card. This parses its known line format back into fields.
+function parseAppointmentSummary(body: string | null) {
+  if (!body || !body.startsWith("Appointment booked:")) return null
+  const lines = body.split("\n")
+  const pick = (prefix: string) => {
+    const line = lines.find((l) => l.startsWith(prefix))
+    return line ? line.slice(prefix.length).trim() : null
+  }
+  const title = lines[0].slice("Appointment booked:".length).trim()
+  const whenRaw = pick("When:")
+  let whenLabel = whenRaw
+  if (whenRaw) {
+    const d = new Date(whenRaw)
+    if (!Number.isNaN(d.getTime())) {
+      whenLabel = d.toLocaleString(undefined, {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    }
+  }
+  return {
+    title,
+    when: whenLabel,
+    duration: pick("Duration:"),
+    meeting: pick("Meeting:") ?? pick("Location:"),
+    payment: pick("Payment:"),
+  }
+}
+
 function DmBubble({
   message: m,
   color,
@@ -1029,6 +1063,59 @@ function DmBubble({
           >
             <Trash2 className="size-3.5 shrink-0" /> This message was deleted
           </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Appointment confirmation — a centered, premium card rather than a bubble.
+  const appt = parseAppointmentSummary(m.body)
+  if (appt) {
+    return (
+      <div id={`dm-msg-${m.id}`} className="flex scroll-mt-24 justify-center px-2 py-1">
+        <div className="w-full max-w-sm overflow-hidden rounded-3xl border border-primary/25 bg-gradient-to-b from-primary/[0.12] to-primary/[0.02] p-5 text-center shadow-[0_8px_30px_-12px_rgba(0,0,0,0.6)] backdrop-blur-sm">
+          <div className="mx-auto flex size-11 items-center justify-center rounded-2xl bg-primary/15 text-primary ring-1 ring-inset ring-primary/25">
+            <CalendarClock className="size-5" />
+          </div>
+          <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary/80">Appointment booked</p>
+          {appt.title && (
+            <h3 className="mt-1 font-display text-lg font-semibold tracking-tight text-foreground text-balance">
+              {appt.title}
+            </h3>
+          )}
+          <div className="mx-auto mt-4 flex flex-col items-center gap-2.5 text-sm">
+            {appt.when && (
+              <span className="inline-flex items-center gap-2 font-medium text-foreground">
+                <CalendarClock className="size-4 shrink-0 text-primary/70" />
+                {appt.when}
+              </span>
+            )}
+            {appt.duration && (
+              <span className="inline-flex items-center gap-2 text-muted-foreground">
+                <Clock className="size-4 shrink-0 text-primary/70" />
+                {appt.duration}
+              </span>
+            )}
+            {appt.meeting && (
+              <span className="inline-flex items-center gap-2 text-muted-foreground">
+                <Video className="size-4 shrink-0 text-primary/70" />
+                {appt.meeting}
+              </span>
+            )}
+          </div>
+          {appt.payment && (
+            <span
+              className={cn(
+                "mt-4 inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold capitalize",
+                appt.payment === "pending"
+                  ? "bg-amber-500/15 text-amber-500"
+                  : "bg-primary/15 text-primary",
+              )}
+            >
+              {appt.payment === "paid" ? "Paid" : appt.payment === "free" ? "Free" : "Payment pending"}
+            </span>
+          )}
+          <p className="mt-3 text-[10px] font-medium text-muted-foreground/60">{formatChatClock(m.createdAtMs)}</p>
         </div>
       </div>
     )

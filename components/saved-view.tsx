@@ -20,11 +20,6 @@ export function SavedView({ items }: { items: SavedItemView[] }) {
         </span>
         <div>
           <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">Bookmarks</h1>
-          <p className="text-sm text-muted-foreground">
-            {items.length > 0
-              ? `${items.length} bookmarked item${items.length === 1 ? "" : "s"} — only you can see these`
-              : "Your bookmarked posts, episodes and more live here"}
-          </p>
         </div>
       </header>
 
