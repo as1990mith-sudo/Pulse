@@ -134,6 +134,29 @@ function isOnlineLocation(loc: string | null): boolean {
   return /\b(online|virtual|zoom|stream|livestream|webinar|meet|teams|youtube|facebook|instagram)\b/i.test(loc)
 }
 
+/** A short, human relative label for the featured card's status pill. */
+function relativeDayLabel(dateStr: string | null): string {
+  if (!dateStr) return "EVENT"
+  const d = feedDaysFromToday(dateStr)
+  if (d <= 0) return "TODAY"
+  if (d === 1) return "TOMORROW"
+  const { dow, day, mon } = feedDateParts(dateStr)
+  return `${dow.toUpperCase()} ${day} ${mon}`
+}
+
+/** "7:00 PM (BST)" — the event time with the viewer's timezone abbreviation. */
+function formatTimeWithZone(dateStr: string | null, time: string | null): string {
+  if (!time) return "Time to be confirmed"
+  const [y, m, d] = (dateStr ?? todayStr()).split("-").map(Number)
+  const [hh, mm] = time.split(":").map(Number)
+  const dt = new Date(y, (m ?? 1) - 1, d ?? 1, hh ?? 0, mm ?? 0)
+  const t = dt.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+  const zone = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" })
+    .formatToParts(dt)
+    .find((p) => p.type === "timeZoneName")?.value
+  return zone ? `${t} (${zone})` : t
+}
+
 /** The tabs facet: a broad range, or a single day picked from the rail. */
 type EventView =
   | { type: "range"; key: "all" | "today" | "week" | "later" }
@@ -579,93 +602,82 @@ function FeaturedEventCard({
   onEdit: () => void
 }) {
   const href = eventHref(a)
-  const canRegister = a.registrationEnabled && Boolean(href) && !a.isOwner
-  const { mon, day, dow } = feedDateParts(a.eventDate)
+  const online = isOnlineLocation(a.location)
+  const bodyLabel = `View details for ${a.title}`
 
-  const poster = (
-    <div className="relative aspect-[16/10] w-full overflow-hidden rounded-[20px] border border-border bg-secondary">
-      {a.flyer ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={a.flyer || "/placeholder.svg"}
-          alt={`${a.title} flyer`}
-          className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-        />
-      ) : (
-        <div className="flex size-full items-center justify-center text-muted-foreground">
-          <CalendarPlus className="size-10" />
-        </div>
-      )}
-      <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
-
-      {/* Date badge, top-left */}
-      <div className="absolute left-3 top-3 flex w-14 flex-col items-center justify-center rounded-xl border border-white/15 bg-black/45 py-1.5 backdrop-blur-md">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-primary">{mon}</span>
-        <span className="text-xl font-bold leading-none text-white">{day}</span>
-        <span className="mt-0.5 text-[10px] font-medium text-white/70">{dow}</span>
+  const body = (
+    <div className="flex min-h-[220px] items-stretch text-left">
+      {/* Poster hero — roughly 42% of the card width, full-bleed. */}
+      <div className="relative w-[42%] shrink-0 self-stretch overflow-hidden bg-secondary">
+        {a.flyer ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={a.flyer || "/placeholder.svg"} alt={`${a.title} flyer`} className="size-full object-cover" />
+        ) : (
+          <div className="flex size-full items-center justify-center text-muted-foreground">
+            <CalendarPlus className="size-8" />
+          </div>
+        )}
       </div>
 
-      {/* Title + meta, bottom */}
-      <div className="absolute inset-x-0 bottom-0 p-4 text-left">
-        <h3 className="text-xl font-bold leading-tight text-white text-balance [text-shadow:0_2px_16px_rgba(0,0,0,0.6)]">
-          {a.title}
-        </h3>
-        <p className="mt-1 flex items-center gap-1.5 text-[13px] text-white/80">
-          <CalendarPlus className="size-3.5 shrink-0" />
-          <span className="truncate">{formatEventDate(a.eventDate ?? "", a.eventTime)}</span>
-        </p>
-        {a.location && (
-          <p className="mt-1 flex items-center gap-1.5 text-[13px] text-white/70">
-            <MapPin className="size-3.5 shrink-0" />
-            <span className="truncate">{a.location}</span>
+      {/* Event info */}
+      <div className="flex min-w-0 flex-1 flex-col gap-2.5 p-4">
+        <span className="w-fit rounded-full border border-primary/40 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-primary">
+          {relativeDayLabel(a.eventDate)}
+        </span>
+        <h3 className="text-xl font-bold leading-tight tracking-tight text-balance">{a.title}</h3>
+
+        <div className="mt-0.5 space-y-2">
+          <p className="flex items-center gap-2 text-sm">
+            <Clock className="size-4 shrink-0 text-primary" />
+            <span className="truncate font-medium">{formatTimeWithZone(a.eventDate, a.eventTime)}</span>
           </p>
-        )}
+          <p className="flex items-start gap-2 text-sm text-muted-foreground">
+            {online ? (
+              <Globe className="mt-0.5 size-4 shrink-0 text-live" />
+            ) : (
+              <MapPin className="mt-0.5 size-4 shrink-0" />
+            )}
+            <span className="line-clamp-2">{online ? "Online event" : a.location}</span>
+          </p>
+        </div>
+
+        <div className="mt-auto flex items-center gap-2 border-t border-border/60 pt-2.5">
+          <span
+            aria-hidden="true"
+            className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold uppercase text-primary"
+          >
+            {a.creatorName.slice(0, 2)}
+          </span>
+          <span className="min-w-0 leading-tight">
+            <span className="block truncate text-[13px] font-semibold">{a.creatorName}</span>
+            <span className="block truncate text-[11px] text-muted-foreground">Ministry</span>
+          </span>
+        </div>
       </div>
     </div>
   )
 
   return (
-    <div className="group relative flex flex-col gap-3 rounded-[22px] border border-border bg-card p-3 transition-all duration-300 hover:border-primary/40 hover:shadow-[0_0_36px_-10px] hover:shadow-primary/40">
+    <motion.div
+      whileTap={{ scale: 0.995 }}
+      className="overflow-hidden rounded-3xl border border-border bg-card transition-colors hover:border-primary/30"
+    >
       {href ? (
-        <Link href={href} aria-label={`View details for ${a.title}`} className="block">
-          {poster}
+        <Link href={href} aria-label={bodyLabel} className="block">
+          {body}
         </Link>
       ) : (
-        <button type="button" onClick={onOpen} aria-label={`View details for ${a.title}`} className="block">
-          {poster}
+        <button type="button" onClick={onOpen} aria-label={bodyLabel} className="block w-full">
+          {body}
         </button>
       )}
 
-      {/* Bookmark */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation()
-          onToggleSave()
-        }}
-        aria-label={saved ? `Remove ${a.title} from saved` : `Save ${a.title}`}
-        aria-pressed={saved}
-        className="absolute right-4 top-4 grid size-9 place-items-center rounded-full border border-white/15 bg-black/45 text-white backdrop-blur-md transition-colors hover:text-primary"
-      >
-        <Bookmark className={cn("size-[18px]", saved && "fill-primary text-primary")} />
-      </button>
-
-      {/* Action row */}
-      <div className="flex items-center gap-2">
-        <EventCardMenu event={a} isAdmin={isAdmin} onEdit={onEdit} onOpen={onOpen} />
-        {canRegister && href ? (
+      {/* Full-width action row: primary CTA, bookmark, overflow menu. */}
+      <div className="flex items-center gap-2 border-t border-border/70 p-3">
+        {href ? (
           <Link
             href={href}
-            aria-label={`View details for ${a.title}`}
-            className="flex h-10 flex-1 items-center justify-center rounded-lg bg-primary text-sm font-semibold text-primary-foreground shadow-[0_0_20px_-6px] shadow-primary/70 transition-all duration-200 hover:brightness-110 active:scale-[0.98]"
-          >
-            Register
-          </Link>
-        ) : href ? (
-          <Link
-            href={href}
-            aria-label={`View details for ${a.title}`}
-            className="flex h-10 flex-1 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-sm font-semibold text-primary transition-colors hover:border-primary/50 hover:bg-primary/15"
+            className="flex h-11 flex-1 items-center justify-center rounded-2xl bg-primary text-sm font-semibold text-primary-foreground shadow-[0_0_24px_-8px] shadow-primary/70 transition-[filter] hover:brightness-110 active:scale-[0.99]"
           >
             View details
           </Link>
@@ -673,13 +685,25 @@ function FeaturedEventCard({
           <button
             type="button"
             onClick={onOpen}
-            className="flex h-10 flex-1 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-sm font-semibold text-primary transition-colors hover:border-primary/50 hover:bg-primary/15"
+            className="flex h-11 flex-1 items-center justify-center rounded-2xl bg-primary text-sm font-semibold text-primary-foreground shadow-[0_0_24px_-8px] shadow-primary/70 transition-[filter] hover:brightness-110 active:scale-[0.99]"
           >
             View details
           </button>
         )}
+
+        <button
+          type="button"
+          onClick={onToggleSave}
+          aria-label={saved ? `Remove ${a.title} from saved` : `Save ${a.title}`}
+          aria-pressed={saved}
+          className="grid size-11 shrink-0 place-items-center rounded-2xl border border-border text-muted-foreground transition-colors hover:text-primary"
+        >
+          <Bookmark className={cn("size-[18px]", saved && "fill-primary text-primary")} />
+        </button>
+
+        <EventCardMenu event={a} isAdmin={isAdmin} onEdit={onEdit} onOpen={onOpen} />
       </div>
-    </div>
+    </motion.div>
   )
 }
 
@@ -754,9 +778,9 @@ function CreateEventSheet({
   if (typeof document === "undefined") return null
 
   const options: { icon: typeof Calendar; label: string; hint: string; preset?: string }[] = [
-    { icon: MapPin, label: "In-person event", hint: "A physical venue or address", preset: undefined },
-    { icon: Video, label: "Online event", hint: "Streamed or hosted on a link", preset: "Online" },
-    { icon: CalendarDays, label: "Blank event", hint: "Start from scratch", preset: undefined },
+    { icon: CalendarPlus, label: "Create event", hint: "A standard gathering", preset: undefined },
+    { icon: Video, label: "Create online event", hint: "Streamed or hosted on a link", preset: "Online" },
+    { icon: Building2, label: "Create in-person event", hint: "At a physical venue", preset: "" },
   ]
 
   return createPortal(
