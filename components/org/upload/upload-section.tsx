@@ -206,11 +206,6 @@ export function UploadSection({
 
   return (
     <div className="space-y-5">
-      {/* Strapline */}
-      <p className="text-sm text-muted-foreground text-pretty">
-        Explore and organise our teachings, media and resources.
-      </p>
-
       {/* Segmented nav + owner actions */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div
