@@ -87,7 +87,7 @@ function QuestionText({ text, onOpen }: { text: string; onOpen: () => void }) {
           navigated into the post. */}
       <ClampedText
         lines={CLAMP_LINES.POST}
-        className="whitespace-pre-wrap break-words text-[15.5px] leading-relaxed text-foreground text-pretty"
+        className="whitespace-pre-wrap break-words text-[11.5px] leading-relaxed text-foreground text-pretty"
       >
         {renderMessageBody(text, { link: true, mention: true })}
       </ClampedText>
