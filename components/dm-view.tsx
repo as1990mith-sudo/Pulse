@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import useSWR from "swr"
 import Link from "next/link"
-  import { ArrowLeft, Ban, CalendarClock, ChevronDown, ChevronUp, Clock, Copy, CornerUpLeft, FileText, Flag, ImageIcon, Mic, MoreVertical, Music, Paperclip, Pencil, Phone, Pin, PinOff, Search, Send, Shield, Smile, Trash2, Video, X } from "lucide-react"
+  import { ArrowLeft, Ban, CalendarClock, ChevronDown, ChevronUp, Clock, Copy, CornerUpLeft, FileText, Flag, ImageIcon, Mic, MoreVertical, Music, Paperclip, Pencil, PhoneCall, Pin, PinOff, Search, Send, Shield, Smile, Trash2, Video, X } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -349,7 +349,7 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
 
   return (
     <div
-      className={cn("relative flex h-full flex-1 flex-col overflow-hidden", !hasWallpaper && "bg-background")}
+      className={cn("relative flex h-full flex-1 flex-col overflow-hidden font-display", !hasWallpaper && "bg-background")}
       style={chatBackgroundStyle(bgId)}
     >
       {/* Wallpaper legibility scrim spanning the full chat height so the dark
@@ -391,18 +391,18 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
             type="button"
             variant="ghost"
             size="icon"
-            className="size-9 rounded-full text-muted-foreground hover:text-foreground"
+            className="size-9 rounded-full bg-secondary/70 text-foreground shadow-sm ring-1 ring-inset ring-border/40 transition-colors hover:bg-secondary"
             onClick={() => beginCall("audio")}
             disabled={starting || Boolean(liveCall)}
             aria-label="Start voice call"
           >
-            <Phone className="size-[18px]" />
+            <PhoneCall className="size-[18px]" />
           </Button>
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="size-9 rounded-full text-muted-foreground hover:text-foreground"
+            className="size-9 rounded-full bg-primary/15 text-primary shadow-sm ring-1 ring-inset ring-primary/25 transition-colors hover:bg-primary/25"
             onClick={() => beginCall("video")}
             disabled={starting || Boolean(liveCall)}
             aria-label="Start video call"
@@ -1176,11 +1176,10 @@ function DmBubble({
                   "shadow-sm",
                   m.attachmentType === "image" || m.attachmentType === "video" ? "p-1" : "px-3.5 py-2",
                   m.isSelf
-                    ? // Outgoing: a restrained orange-tinted surface with an orange
-                      // hairline rather than a fully saturated fill, so long threads
-                      // don't read as a wall of orange.
-                      "rounded-br-md border border-primary/35 bg-primary/15 text-foreground"
-                    : "rounded-bl-md border border-border/50 bg-secondary/70 text-foreground",
+                    ? // Outgoing: a solid, fully opaque accent fill so bubbles never
+                      // let a chat wallpaper bleed through.
+                      "rounded-br-md bg-primary text-primary-foreground"
+                    : "rounded-bl-md bg-secondary text-foreground ring-1 ring-inset ring-border/50",
                 ),
           )}
         >
@@ -1253,9 +1252,9 @@ function DmBubble({
             <ClampedText
               lines={CLAMP_LINES.CHAT}
               className={cn("whitespace-pre-wrap [overflow-wrap:anywhere]", m.attachmentUrl && "px-2 pb-1 pt-1.5")}
-              // Orange is reserved for interactive accents, and the expand
-              // toggle is the one interactive element inside a bubble.
-              toggleClassName={cn("text-primary hover:text-primary/80", m.attachmentUrl && "px-2")}
+              // Inherit the bubble's own text colour so the toggle stays legible
+              // on both the solid accent (outgoing) and secondary (incoming) fills.
+              toggleClassName={cn("text-current opacity-70 hover:opacity-100", m.attachmentUrl && "px-2")}
             >
               {renderMessageBody(m.body, {
                 link: true,
