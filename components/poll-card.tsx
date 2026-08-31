@@ -102,34 +102,42 @@ export function PollCard({
                 disabled={!interactive || pending}
                 aria-pressed={isSelected}
                 className={cn(
-                  "relative w-full overflow-hidden rounded-lg border px-3 py-2.5 text-left transition-colors",
+                  "w-full rounded-xl border px-3.5 py-3 text-left transition-colors",
                   isSelected ? "border-primary bg-primary/5" : "border-border",
                   interactive && !pending && "hover:border-primary/60",
                   !interactive && "cursor-default",
                 )}
               >
-                {/* Result bar. Sits behind the label as a fill rather than a
-                    separate track, so the row keeps one height whether or not
-                    results are visible and nothing shifts when they appear. */}
-                {showResults && (
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "absolute inset-y-0 left-0 transition-[width] duration-500",
-                      isSelected ? "bg-primary/20" : "bg-foreground/10",
-                    )}
-                    style={{ width: `${pct}%` }}
-                  />
-                )}
-                <span className="relative flex items-center justify-between gap-3">
+                <span className="flex items-center justify-between gap-3">
                   <span className="flex min-w-0 items-center gap-2">
                     {isSelected && <Check className="size-4 shrink-0 text-primary" />}
-                    <span className={cn("truncate text-sm", isSelected && "font-semibold")}>{option.label}</span>
+                    <span className={cn("truncate text-sm text-foreground", isSelected && "font-semibold")}>
+                      {option.label}
+                    </span>
                   </span>
                   {showResults && (
-                    <span className="shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">{pct}%</span>
+                    <span
+                      className={cn(
+                        "shrink-0 text-xs font-bold tabular-nums",
+                        isSelected ? "text-primary" : "text-muted-foreground",
+                      )}
+                    >
+                      {pct}%
+                    </span>
                   )}
                 </span>
+                {/* Result bar: a full-width track with a 100% solid, deep accent
+                    fill so tallies read as active brand colour, not a pale tint.
+                    Sitting under the label keeps every value legible in light or
+                    dark mode regardless of how full the bar is. */}
+                {showResults && (
+                  <span aria-hidden className="mt-2.5 block h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                    <span
+                      className="block h-full rounded-full bg-primary transition-[width] duration-500"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </span>
+                )}
               </button>
             </li>
           )

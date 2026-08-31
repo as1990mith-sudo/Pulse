@@ -117,11 +117,12 @@ export default async function PublicEventPage({ params, searchParams }: Params) 
           ? "members"
           : "open"
 
-  // Route Back to wherever the viewer actually came from. Cards in the in-feed
-  // Events tab link with ?from=feed, so a member who opened the event there is
-  // returned to that tab (/feed?tab=events) rather than being dumped on the
-  // public browser they never visited. Everyone else goes to the public browser.
-  const backHref = from === "feed" ? "/feed?tab=events" : `/events/${homeHandle}`
+  // Route Back to wherever the viewer actually came from. The Upcoming events
+  // preview links with ?from=events (return to /events); the in-feed Events tab
+  // links with ?from=feed (return to /feed?tab=events). Everyone else (a deep
+  // link) goes to the per-org public browser.
+  const backHref =
+    from === "events" ? "/events" : from === "feed" ? "/feed?tab=events" : `/events/${homeHandle}`
 
   return (
     <main className={playfair.variable}>

@@ -283,11 +283,12 @@ function EventGridCard({
   onEdit: () => void
 }) {
   const { mon, day, dow } = feedDateParts(a.eventDate)
-  // Public detail page for this event. `from=feed` tells that page to send the
-  // Back button here (the in-feed Events tab) instead of the public browser.
-  // Universal events have no host handle and thus no public page — those fall
-  // back to the in-app detail sheet.
-  const href = a.homeHandle ? `/events/${a.homeHandle}/${a.id}?from=feed` : null
+  // Public detail page for this event. `from=events` tells that page to send the
+  // Back button to this Upcoming events preview (where this banner lives) rather
+  // than the per-org public browser the viewer never visited. Universal events
+  // have no host handle and thus no public page — those fall back to the in-app
+  // detail sheet.
+  const href = a.homeHandle ? `/events/${a.homeHandle}/${a.id}?from=events` : null
   // Members register; owners manage via the detail sheet instead.
   const canRegister = a.registrationEnabled && Boolean(href) && !a.isOwner
 

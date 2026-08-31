@@ -1,7 +1,7 @@
 "use client"
 
 import type { LucideIcon } from "lucide-react"
-import { ChevronDown, Globe, LayoutGrid, Loader2, Lock, Pencil, Radio, X } from "lucide-react"
+import { ArrowLeft, ChevronDown, Globe, LayoutGrid, Loader2, Lock, Pencil, Radio } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CoverUpload, SQUARE_RATIO } from "@/components/admin/cover-upload"
 
