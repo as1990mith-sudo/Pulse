@@ -7,6 +7,7 @@ import {
   isPlatformAdmin,
   canPublishEvents,
 } from "@/app/actions/announcements"
+import { getActiveHome } from "@/lib/home/active-home"
 import { getCurrentUser } from "@/lib/session"
 
 export const metadata = {
@@ -37,12 +38,23 @@ export default async function EventsPage() {
     )
   }
 
-  const [announcements, myRequests, isAdmin, canPublish] = await Promise.all([
+  const [announcements, myRequests, isAdmin, canPublish, activeHome] = await Promise.all([
     getActiveAnnouncements(),
     getMyAnnouncements(),
     isPlatformAdmin(),
     canPublishEvents(),
+    getActiveHome(),
   ])
+
+  const home = activeHome
+    ? {
+        name: activeHome.orgName,
+        logo: activeHome.orgLogo,
+        initials: activeHome.orgInitials,
+        color: activeHome.orgColor,
+        categoryLabel: activeHome.orgCategoryLabel,
+      }
+    : null
 
   return (
     <div className="relative min-h-screen bg-gradient-to-b from-primary/15 via-background to-background">
@@ -60,6 +72,7 @@ export default async function EventsPage() {
               currentUser={currentUser}
               isAdmin={isAdmin}
               canPublish={canPublish}
+              home={home}
             />
           </div>
         </main>
