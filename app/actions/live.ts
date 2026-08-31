@@ -20,7 +20,7 @@ import {
   user as userTable,
 } from "@/lib/db/schema"
 import { getHandle, getAvatarColor, getInitials } from "@/lib/identity"
-import { LIVE_CATEGORIES, CONVERSATION_CATEGORIES } from "@/lib/live-categories"
+import { LIVE_CATEGORIES } from "@/lib/live-categories"
 import {
   createAccessToken,
   isLiveKitConfigured,
