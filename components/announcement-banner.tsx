@@ -319,7 +319,6 @@ export function AnnouncementBanner({
         className="px-4 sm:px-0"
       >
         <h1 className="text-3xl font-bold tracking-tight">Events</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">Discover and manage upcoming events</p>
       </motion.div>
 
       {/* Filters + date rail */}
@@ -606,9 +605,9 @@ function FeaturedEventCard({
   const bodyLabel = `View details for ${a.title}`
 
   const body = (
-    <div className="flex min-h-[220px] items-stretch text-left">
+    <div className="flex min-h-[248px] items-stretch text-left">
       {/* Poster hero — roughly 42% of the card width, full-bleed. */}
-      <div className="relative w-[42%] shrink-0 self-stretch overflow-hidden bg-secondary">
+      <div className="relative w-[42%] shrink-0 self-stretch overflow-hidden rounded-tl-3xl bg-secondary">
         {a.flyer ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={a.flyer || "/placeholder.svg"} alt={`${a.title} flyer`} className="size-full object-cover" />
@@ -620,7 +619,7 @@ function FeaturedEventCard({
       </div>
 
       {/* Event info */}
-      <div className="flex min-w-0 flex-1 flex-col gap-2.5 p-4">
+      <div className="flex min-w-0 flex-1 flex-col gap-2.5 p-5">
         <span className="w-fit rounded-full border border-primary/40 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-primary">
           {relativeDayLabel(a.eventDate)}
         </span>
@@ -660,7 +659,7 @@ function FeaturedEventCard({
   return (
     <motion.div
       whileTap={{ scale: 0.995 }}
-      className="overflow-hidden rounded-3xl border border-border bg-card transition-colors hover:border-primary/30"
+      className="rounded-3xl border border-border bg-card transition-colors hover:border-primary/30"
     >
       {href ? (
         <Link href={href} aria-label={bodyLabel} className="block">
@@ -1092,7 +1091,7 @@ function EventCardMenu({
           />
           <div
             role="menu"
-            className="absolute bottom-full left-0 z-20 mb-1 w-44 overflow-hidden rounded-xl border border-border bg-popover p-1 shadow-lg"
+            className="absolute bottom-full right-0 z-20 mb-1 w-44 overflow-hidden rounded-xl border border-border bg-popover p-1 shadow-lg"
           >
             {confirming ? (
               <div className="p-1.5">
