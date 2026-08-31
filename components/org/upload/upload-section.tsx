@@ -211,7 +211,10 @@ export function UploadSection({
         <div
           role="tablist"
           aria-label="Catalogue sections"
-          className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary/40 p-1"
+          // Full-width on mobile so the three segments stretch to fill the row
+          // evenly (no dead space in front of "Live"); natural inline width on
+          // desktop where it sits beside the owner action buttons.
+          className="flex w-full items-center gap-1 rounded-full border border-border bg-secondary/40 p-1 sm:inline-flex sm:w-auto"
         >
           {SEGMENTS.map((s) => {
             const active = segment === s.key
@@ -224,11 +227,13 @@ export function UploadSection({
                 aria-selected={active}
                 onClick={() => setSegment(s.key)}
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full py-1.5 text-sm font-medium transition-all duration-200",
-                  // "Live" carries no count badge, so give it a touch more
-                  // horizontal padding to keep the pill visually even with the
-                  // wider Materials/Playlists segments.
-                  s.key === "live" ? "px-5" : "px-3.5",
+                  "inline-flex items-center justify-center gap-1.5 rounded-full py-1.5 text-sm font-medium transition-all duration-200",
+                  // Each segment shares the row equally on mobile (flex-1) so the
+                  // pills are perfectly even and no space is wasted; on desktop
+                  // they size to content, with "Live" (no count badge) getting a
+                  // touch more padding to stay visually even.
+                  "flex-1 sm:flex-none",
+                  s.key === "live" ? "px-3.5 sm:px-5" : "px-3.5",
                   active
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground",

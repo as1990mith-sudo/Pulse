@@ -7,7 +7,7 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 // Retention + purge live in a plain module: a "use server" file can only export
 // async functions, and an irreversible data purge must never be client-callable.
-import { HOME_RETENTION_DAYS } from "@/lib/home/retention"
+import { HOME_RETENTION_DAYS, purgeHomeData } from "@/lib/home/retention"
 import {
   announcement,
   feedPost,
@@ -651,6 +651,46 @@ export async function reactivateHome(handle: string): Promise<{ ok: true }> {
   return { ok: true }
 }
 
+/**
+ * Permanently purges a soft-deleted Home immediately, forfeiting the remainder
+ * of its 30-day recovery window. Owner-only, and irreversible.
+ *
+ * This is the owner-initiated equivalent of the scheduled purge: it runs the
+ * exact same `purgeHomeData` transaction the cron would eventually run, just
+ * now instead of at `purgeAfter`. It deliberately reuses that single code path
+ * so the "delete now" flow can never diverge from — or destroy more than — the
+ * scheduled one (personal content is still detached, not deleted). Ownership is
+ * re-checked here against the soft-deleted row, since every normal resolver
+ * hides it.
+ */
+export async function purgeHomeNow(handle: string): Promise<{ ok: true }> {
+  const user = await requireUser()
+  const [row] = await db
+    .select({ h: home, org: organization })
+    .from(home)
+    .innerJoin(organization, eq(organization.id, home.organizationId))
+    .where(and(eq(organization.handle, handle), isNotNull(home.deletedAt)))
+    .limit(1)
+  if (!row) throw new Error("Deleted Home not found.")
+
+  const [membership] = await db
+    .select({ role: homeMembership.role, status: homeMembership.status })
+    .from(homeMembership)
+    .where(and(eq(homeMembership.homeId, row.h.id), eq(homeMembership.userId, user.id)))
+    .limit(1)
+  if (!membership || membership.status !== "active" || membership.role !== "owner") {
+    throw new Error("Only the Home owner can delete it.")
+  }
+
+  await purgeHomeData(row.h.id, row.h.organizationId)
+
+  const store = await cookies()
+  if (store.get(ACTIVE_HOME_COOKIE)?.value === handle) {
+    store.delete(ACTIVE_HOME_COOKIE)
+  }
+  revalidatePath("/", "layout")
+  return { ok: true }
+}
 
 /** Change a member's role. Ownership cannot be assigned or removed here. */
 export async function updateMemberRole(handle: string, membershipId: string, role: HomeRole) {

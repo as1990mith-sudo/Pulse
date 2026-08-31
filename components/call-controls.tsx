@@ -14,7 +14,9 @@ export type CallButtonTone = "glass" | "muted" | "accept" | "danger"
  *  - muted : a toggled-off / disabled-feel control (mic off, camera off) — solid white
  *  - accept: answer a call — green
  *  - danger: end / decline a call — red
- * The optional label renders beneath the button for a top-tier, labelled dock.
+ * `label` is retained as an accessibility/intent hint but is no longer rendered
+ * beneath the button — the dock is icon-only for a cleaner, premium look (the
+ * meaning is conveyed by `ariaLabel`).
  */
 export function CallButton({
   icon: Icon,
@@ -46,24 +48,25 @@ export function CallButton({
       "bg-destructive text-destructive-foreground shadow-lg shadow-destructive/40 hover:brightness-110 active:brightness-95",
   }
 
+  // `label` is intentionally unused for rendering (icon-only dock); `ariaLabel`
+  // carries the accessible name.
+  void label
+
   return (
-    <div className="flex flex-col items-center gap-2.5">
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={disabled}
-        aria-label={ariaLabel}
-        className={cn(
-          "flex items-center justify-center rounded-full transition-all duration-200",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black/40",
-          "active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100",
-          dimensions,
-          tones[tone],
-        )}
-      >
-        <Icon className={iconSize} />
-      </button>
-      {label && <span className="text-xs font-medium text-white/70">{label}</span>}
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      className={cn(
+        "flex items-center justify-center rounded-full transition-all duration-200",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black/40",
+        "active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100",
+        dimensions,
+        tones[tone],
+      )}
+    >
+      <Icon className={iconSize} />
+    </button>
   )
 }

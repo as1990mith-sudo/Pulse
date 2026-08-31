@@ -22,9 +22,11 @@ import {
   deleteHome,
   getMyDeletedHomes,
   getMyHomeMemberships,
+  purgeHomeNow,
   reactivateHome,
   setActiveHome,
   leaveHome,
+  type DeletedHomeLink,
   type MyHomeLink,
 } from "@/app/actions/home"
 import { homeRoleLabel, isHomeAdminRole } from "@/lib/home/roles"
@@ -66,6 +68,10 @@ export function MyHomesView() {
   const deletedHomes = deletedData ?? []
   const [restoring, setRestoring] = useState<string | null>(null)
   const [restoreError, setRestoreError] = useState<string | null>(null)
+  // The deleted Home queued for immediate permanent purge (null = no dialog),
+  // and the handle currently mid-purge so its row can show a spinner.
+  const [purgeConfirm, setPurgeConfirm] = useState<DeletedHomeLink | null>(null)
+  const [purging, setPurging] = useState<string | null>(null)
   const [switching, setSwitching] = useState<string | null>(null)
   // The Home being switched TO, driving the full-screen transition veil.
   const [switchingTo, setSwitchingTo] = useState<MyHomeLink | null>(null)
@@ -187,6 +193,24 @@ export function MyHomesView() {
       setRestoreError(e instanceof Error ? e.message : "Couldn't restore this Home.")
     } finally {
       setRestoring(null)
+    }
+  }
+
+  // Permanently purge a deleted Home right now, skipping the rest of the
+  // recovery window. Irreversible, so it's only reached from the confirmation
+  // dialog; the server re-checks ownership before destroying anything.
+  async function handlePurgeNow(handle: string) {
+    setPurging(handle)
+    setRestoreError(null)
+    try {
+      await purgeHomeNow(handle)
+      setPurgeConfirm(null)
+      await Promise.all([mutate(), mutateDeleted()])
+      router.refresh()
+    } catch (e) {
+      setRestoreError(e instanceof Error ? e.message : "Couldn't delete this Home.")
+    } finally {
+      setPurging(null)
     }
   }
 
@@ -360,24 +384,34 @@ export function MyHomesView() {
                         : `${d.daysRemaining} ${d.daysRemaining === 1 ? "day" : "days"} left to restore`}
                     </span>
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => handleRestore(d.handle)}
-                    disabled={!!restoring}
-                    className="flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-3.5 text-xs font-semibold text-foreground transition-all hover:bg-secondary/60 active:scale-95 disabled:opacity-60"
-                  >
-                    {busy ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />}
-                    Restore
-                  </button>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleRestore(d.handle)}
+                      disabled={!!restoring || !!purging}
+                      className="flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-3.5 text-xs font-semibold text-foreground transition-all hover:bg-secondary/60 active:scale-95 disabled:opacity-60"
+                    >
+                      {busy ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />}
+                      Restore
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        haptic("medium")
+                        setPurgeConfirm(d)
+                      }}
+                      disabled={!!restoring || !!purging}
+                      aria-label={`Delete ${d.name} permanently now`}
+                      className="flex size-9 shrink-0 items-center justify-center rounded-full border border-destructive/30 bg-destructive/10 text-destructive transition-all hover:bg-destructive/20 active:scale-95 disabled:opacity-60"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
                 </div>
               )
             })}
           </div>
           {restoreError && <p className="mt-2 px-1 text-sm font-medium text-destructive">{restoreError}</p>}
-          <p className="mt-2.5 px-1 text-xs leading-relaxed text-muted-foreground">
-            Restoring brings back the Home and its members. The join key stays revoked, so generate a new one when
-            you&apos;re ready to admit new members.
-          </p>
         </section>
       )}
 
@@ -586,6 +620,51 @@ export function MyHomesView() {
               )}
             </div>
           )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Delete-now confirmation — permanently purges a deleted Home before its
+          window elapses. Irreversible, so it's gated behind an explicit confirm
+          and a destructive-tinted action. */}
+      <Sheet open={!!purgeConfirm} onOpenChange={(open) => !open && !purging && setPurgeConfirm(null)}>
+        <SheetContent
+          side="bottom"
+          showCloseButton={false}
+          className="rounded-t-3xl border-border/60 p-0 pb-[max(1rem,env(safe-area-inset-bottom))]"
+        >
+          <SheetTitle className="sr-only">Delete Home permanently</SheetTitle>
+          <div className="mx-auto mt-3 h-1 w-9 rounded-full bg-border" aria-hidden />
+          <div className="flex flex-col items-center px-6 pb-2 pt-6 text-center">
+            <span className="flex size-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive ring-1 ring-inset ring-destructive/25">
+              <Trash2 className="size-6" />
+            </span>
+            <p className="mt-4 text-lg font-semibold tracking-tight text-foreground text-balance">
+              Delete {purgeConfirm?.name} now?
+            </p>
+            <p className="mt-1.5 text-sm text-muted-foreground text-pretty">
+              This skips the recovery window and erases everything immediately. It can&apos;t be undone.
+            </p>
+          </div>
+          {restoreError && <p className="px-6 pt-2 text-center text-sm font-medium text-destructive">{restoreError}</p>}
+          <div className="flex flex-col gap-2 p-4 pt-4">
+            <button
+              type="button"
+              onClick={() => purgeConfirm && handlePurgeNow(purgeConfirm.handle)}
+              disabled={!!purging}
+              className="flex h-12 items-center justify-center gap-2 rounded-full bg-destructive text-sm font-semibold text-destructive-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
+            >
+              {purging ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+              Delete permanently
+            </button>
+            <button
+              type="button"
+              onClick={() => setPurgeConfirm(null)}
+              disabled={!!purging}
+              className="flex h-12 items-center justify-center rounded-full text-sm font-semibold text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground disabled:opacity-60"
+            >
+              Cancel
+            </button>
+          </div>
         </SheetContent>
       </Sheet>
     </div>
