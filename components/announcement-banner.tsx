@@ -104,6 +104,7 @@ export function AnnouncementBanner({
   currentUser,
   isAdmin = false,
   canPublish = false,
+  home = null,
 }: {
   announcements: AnnouncementView[]
   myRequests: AnnouncementView[]
@@ -112,6 +113,16 @@ export function AnnouncementBanner({
   // Whether the viewer may publish events (organisation owner/admin). Members
   // can browse and register but never see the publish entry points.
   canPublish?: boolean
+  // The active Home's organisation identity, shown in the header so members can
+  // tell at a glance whose events they're looking at. Null in Personal mode or
+  // when the viewer has no Home.
+  home?: {
+    name: string
+    logo: string | null
+    initials: string
+    color: string
+    categoryLabel: string
+  } | null
 }) {
   const [showForm, setShowForm] = useState(false)
   // The id of the event whose detail sheet is open (opened by tapping a card).
@@ -144,21 +155,44 @@ export function AnnouncementBanner({
 
   return (
     <section aria-label="Events" className="space-y-4 pb-4">
-      {/* Header + publish entry point */}
-      <div className="flex items-start justify-between gap-3 px-4 sm:px-0">
-        <div className="flex items-center gap-2.5">
+      {/* Header: the active Home's identity, then the section title on one line */}
+      <div className="px-4 sm:px-0">
+        <div className="flex items-center justify-between gap-3">
+          {home ? (
+            <div className="flex min-w-0 items-center gap-3">
+              <span
+                aria-hidden="true"
+                className="relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-bold uppercase text-white shadow-[0_0_20px_-6px] shadow-primary/60 ring-2 ring-primary/30"
+                style={{ backgroundColor: home.color }}
+              >
+                {home.logo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={home.logo || "/placeholder.svg"} alt="" className="size-full object-cover" />
+                ) : (
+                  home.initials
+                )}
+              </span>
+              <div className="min-w-0 leading-tight">
+                <p className="truncate text-[15px] font-semibold tracking-tight">{home.name}</p>
+                <p className="truncate text-xs text-muted-foreground">{home.categoryLabel}</p>
+              </div>
+            </div>
+          ) : (
+            <span className="text-sm font-medium text-muted-foreground">Your events</span>
+          )}
+          {canPublish && (
+            <Button size="sm" className="shrink-0 gap-1.5" onClick={() => setShowForm(true)}>
+              <Plus className="size-4" /> Publish
+            </Button>
+          )}
+        </div>
+
+        <div className="mt-4 flex items-center gap-2.5">
           <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-[0_0_22px_-4px] shadow-primary/60">
             <CalendarDays className="size-6" />
           </span>
-          <div className="min-w-0 leading-tight">
-            <h2 className="text-2xl font-bold tracking-tight text-balance">Upcoming events</h2>
-          </div>
+          <h2 className="whitespace-nowrap text-2xl font-bold tracking-tight">Upcoming events</h2>
         </div>
-        {canPublish && (
-          <Button size="sm" className="mt-1 shrink-0 gap-1.5" onClick={() => setShowForm(true)}>
-            <Plus className="size-4" /> Publish
-          </Button>
-        )}
       </div>
 
       {/* Owner's request tracker: pending / declined */}
@@ -355,7 +389,7 @@ function EventGridCard({
           <Link
             href={href}
             aria-label={`View details for ${a.title}`}
-            className="flex h-9 flex-1 items-center justify-center rounded-lg border border-border bg-secondary/40 text-sm font-semibold text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+            className="flex h-9 flex-1 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-sm font-semibold text-primary transition-colors hover:border-primary/50 hover:bg-primary/15"
           >
             View details
           </Link>
@@ -363,7 +397,7 @@ function EventGridCard({
           <button
             type="button"
             onClick={onOpen}
-            className="flex h-9 flex-1 items-center justify-center rounded-lg border border-border bg-secondary/40 text-sm font-semibold text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+            className="flex h-9 flex-1 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-sm font-semibold text-primary transition-colors hover:border-primary/50 hover:bg-primary/15"
           >
             View details
           </button>
