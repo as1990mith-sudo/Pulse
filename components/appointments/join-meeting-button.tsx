@@ -58,7 +58,7 @@ export function JoinMeetingButton({
           size === "sm" ? "px-3.5 py-1.5 text-xs" : "px-5 py-2.5 text-sm",
           isOpen
             ? "bg-primary text-primary-foreground shadow-lg shadow-primary/30 hover:brightness-110 active:scale-95"
-            : "cursor-not-allowed bg-muted text-muted-foreground",
+            : "cursor-not-allowed bg-foreground text-background shadow-sm",
           className,
         )}
       >

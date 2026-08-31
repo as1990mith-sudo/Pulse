@@ -49,7 +49,7 @@ export function AppointmentThreadBanner({ conversationId }: { conversationId: nu
           : null
 
   return (
-    <div className="border-b border-border/50 bg-primary/5 px-3 py-3 sm:px-4">
+    <div className="border-b border-border/50 bg-card px-3 py-3 sm:px-4">
       <div className="mx-auto flex max-w-3xl items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
