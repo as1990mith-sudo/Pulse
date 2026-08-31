@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Check, Link2, Loader2, Sparkles, Wand2 } from "lucide-react"
+import { Check, FileText, Link2, Loader2, Sparkles, Wand2 } from "lucide-react"
 import {
   type MaterialContentType,
   type MaterialSource,
@@ -11,6 +11,7 @@ import {
   normalizeTags,
 } from "@/lib/materials"
 import { createMaterial, recognizeResource, updateMaterial } from "@/app/actions/materials"
+import { uploadMedia } from "@/lib/upload-media"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"

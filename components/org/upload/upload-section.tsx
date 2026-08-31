@@ -107,6 +107,46 @@ export function UploadSection({
     { key: "live", label: "Live", icon: Radio },
   ]
 
+  // Mobile owner add-menu. A single + opens a context menu of the three actions.
+  // It lives inline in the Materials search row (passed as MaterialsView's
+  // leadingAction) so search + sort + add share one line; on the Playlists
+  // segment and the empty Materials state — where there's no search row — it
+  // falls back to the header instead. Sized to match the search/sort controls.
+  const mobileAddMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label="Add"
+        className="inline-flex size-[42px] shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:brightness-110 active:scale-95"
+      >
+        <Plus className="size-5" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-48">
+        <DropdownMenuItem
+          onClick={() => {
+            setEditingMaterial(null)
+            setUploadOpen(true)
+          }}
+        >
+          <Upload className="size-4" />
+          Upload Material
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setImportOpen(true)}>
+          <Link2 className="size-4" />
+          Import Links
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => setCreateOpen(true)}>
+          <ListPlus className="size-4" />
+          Create Playlist
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+
+  // The header hosts the mobile + only when the Materials list (and its search
+  // row) isn't the thing rendering it inline.
+  const headerMobileAdd = segment === "playlists" || (segment === "materials" && materials.length === 0)
+
   // A playlist is open → show the editor full-bleed within the section.
   if (openPlaylist) {
     return (
@@ -189,7 +229,11 @@ export function UploadSection({
                 aria-selected={active}
                 onClick={() => setSegment(s.key)}
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-all duration-200",
+                  "inline-flex items-center gap-1.5 rounded-full py-1.5 text-sm font-medium transition-all duration-200",
+                  // "Live" carries no count badge, so give it a touch more
+                  // horizontal padding to keep the pill visually even with the
+                  // wider Materials/Playlists segments.
+                  s.key === "live" ? "px-5" : "px-3.5",
                   active
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground",
@@ -244,37 +288,8 @@ export function UploadSection({
                 Upload Material
               </button>
             </div>
-            {/* Mobile: a single + opens a context menu */}
-            <div className="sm:hidden">
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  aria-label="Add"
-                  className="inline-flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground transition-all hover:brightness-110 active:scale-95"
-                >
-                  <Plus className="size-5" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setEditingMaterial(null)
-                      setUploadOpen(true)
-                    }}
-                  >
-                    <Upload className="size-4" />
-                    Upload Material
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setImportOpen(true)}>
-                    <Link2 className="size-4" />
-                    Import Links
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setCreateOpen(true)}>
-                    <ListPlus className="size-4" />
-                    Create Playlist
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            {/* Mobile: the single + lives here only when no search row hosts it */}
+            {headerMobileAdd && <div className="sm:hidden">{mobileAddMenu}</div>}
           </div>
         )}
       </div>
@@ -284,6 +299,7 @@ export function UploadSection({
         <MaterialsView
           materials={materials}
           isOwner={isOwner}
+          leadingAction={isOwner ? mobileAddMenu : undefined}
           onOpen={(m) => setDetail(m)}
           onEdit={(m) => {
             setEditingMaterial(m)

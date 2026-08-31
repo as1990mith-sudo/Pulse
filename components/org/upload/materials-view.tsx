@@ -29,6 +29,7 @@ const SORT_LABELS: Record<SortKey, string> = {
 export function MaterialsView({
   materials,
   isOwner,
+  leadingAction,
   onOpen,
   onEdit,
   onAddToPlaylist,
@@ -36,6 +37,9 @@ export function MaterialsView({
 }: {
   materials: MaterialView[]
   isOwner: boolean
+  /** Optional control (the owner "+" menu) rendered inline before the search
+   *  field on mobile, so add + search + sort share one line. */
+  leadingAction?: React.ReactNode
   onOpen: (m: MaterialView) => void
   onEdit: (m: MaterialView) => void
   onAddToPlaylist: (m: MaterialView) => void
@@ -91,8 +95,9 @@ export function MaterialsView({
 
   return (
     <div className="space-y-4">
-      {/* Search + sort */}
+      {/* Search + sort (+ owner add on mobile) */}
       <div className="flex items-center gap-2">
+        {leadingAction && <div className="sm:hidden">{leadingAction}</div>}
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <input
