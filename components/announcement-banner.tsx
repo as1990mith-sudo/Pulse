@@ -469,23 +469,33 @@ function EventFilterTabs({
   onRange: (key: "all" | "today" | "week" | "later") => void
 }) {
   return (
-    <div className="flex gap-2 overflow-x-auto px-4 pb-1 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div
+      role="tablist"
+      aria-label="Filter events"
+      className="flex items-center gap-6 overflow-x-auto border-b border-border px-4 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
       {RANGE_TABS.map((tab) => {
         const active = view.type === "range" && view.key === tab.key
         return (
           <button
             key={tab.key}
             type="button"
+            role="tab"
+            aria-selected={active}
             onClick={() => onRange(tab.key)}
-            aria-pressed={active}
             className={cn(
-              "shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors",
-              active
-                ? "bg-primary text-primary-foreground shadow-[0_0_20px_-8px] shadow-primary/70"
-                : "border border-border bg-card text-muted-foreground hover:text-foreground",
+              "relative shrink-0 pb-3 text-sm font-medium transition-colors",
+              active ? "text-primary" : "text-muted-foreground hover:text-foreground",
             )}
           >
             {tab.label}
+            {active && (
+              <motion.span
+                layoutId="events-tab-underline"
+                className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-primary"
+                transition={{ type: "spring", stiffness: 500, damping: 40 }}
+              />
+            )}
           </button>
         )
       })}
@@ -497,30 +507,52 @@ function EventFilterTabs({
 function DateRail({ selected, onPick }: { selected: string | null; onPick: (date: string) => void }) {
   const days = useMemo(() => railDays(14), [])
   return (
-    <div className="flex gap-2 overflow-x-auto px-4 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {days.map((d) => {
-        const active = d.date === selected
-        return (
-          <button
-            key={d.date}
-            type="button"
-            onClick={() => onPick(d.date)}
-            aria-pressed={active}
-            className={cn(
-              "flex w-14 shrink-0 flex-col items-center gap-0.5 rounded-2xl border py-2.5 transition-colors",
-              active
-                ? "border-primary bg-primary/10 text-primary"
-                : "border-border bg-card text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <span className="text-[10px] font-bold uppercase tracking-wider">{d.dow}</span>
-            <span className={cn("text-lg font-bold leading-none", active ? "text-primary" : "text-foreground")}>
-              {d.day}
-            </span>
-            <span className="text-[10px] font-medium">{d.mon}</span>
-          </button>
-        )
-      })}
+    <div className="-mx-4 sm:mx-0">
+      <div className="flex gap-2.5 overflow-x-auto px-4 pb-1 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {days.map((d) => {
+          const active = d.date === selected
+          return (
+            <motion.button
+              key={d.date}
+              type="button"
+              whileTap={{ scale: 0.94 }}
+              onClick={() => onPick(d.date)}
+              aria-pressed={active}
+              aria-label={`${d.dow} ${d.day} ${d.mon}`}
+              className={cn(
+                "relative flex h-[78px] w-[62px] shrink-0 flex-col items-center justify-center rounded-2xl border transition-colors",
+                active
+                  ? "border-primary bg-primary/10 shadow-[0_0_24px_-6px] shadow-primary/70"
+                  : "border-border bg-card hover:border-border/80",
+              )}
+            >
+              <span className={cn("text-[11px] font-semibold", active ? "text-primary" : "text-muted-foreground")}>
+                {d.dow}
+              </span>
+              <span className="mt-0.5 text-xl font-bold leading-none">{d.day}</span>
+              <span className="mt-0.5 text-[11px] font-medium text-muted-foreground">{d.mon}</span>
+              {active && (
+                <motion.span
+                  layoutId="events-rail-dot"
+                  className="absolute -bottom-1 size-1.5 rounded-full bg-primary"
+                  transition={{ type: "spring", stiffness: 500, damping: 40 }}
+                />
+              )}
+            </motion.button>
+          )
+        })}
+        {/* Jump to any date via the native picker. */}
+        <label className="relative flex h-[78px] w-[62px] shrink-0 cursor-pointer flex-col items-center justify-center rounded-2xl border border-border bg-secondary/40 text-muted-foreground transition-colors hover:text-foreground">
+          <Calendar className="size-5" />
+          <span className="sr-only">Pick a date</span>
+          <input
+            type="date"
+            min={todayStr()}
+            onChange={(e) => e.target.value && onPick(e.target.value)}
+            className="absolute inset-0 cursor-pointer opacity-0"
+          />
+        </label>
+      </div>
     </div>
   )
 }
