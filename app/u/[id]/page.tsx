@@ -55,8 +55,10 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
     <div className="min-h-screen">
       <SiteHeader />
       {/* Full-bleed, immersive header — a centered profile composition on top of
-          a soft gradient glow derived from the user's avatar colors. */}
-      <header className="relative overflow-hidden border-b border-border/60">
+          a soft gradient glow derived from the user's avatar colors. `dark` pins
+          this cover band to the dark palette so its gradient/tint (and the
+          content over it) always render dark, even when the app is in light mode. */}
+      <header className="dark relative overflow-hidden border-b border-border/60 bg-background text-foreground">
         {/* Ambient gradient glow that fades into the page background. */}
         <div
           className="pointer-events-none absolute inset-x-0 top-0 h-64"

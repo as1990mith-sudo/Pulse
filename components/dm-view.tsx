@@ -349,7 +349,10 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
 
   return (
     <div
-      className={cn("relative flex h-full flex-1 flex-col overflow-hidden font-display", !hasWallpaper && "bg-background")}
+      // `dark` pins the entire chat surface to the dark palette regardless of the
+      // app theme: chat wallpapers are dark imagery, so the scrim, header, bubbles
+      // and composer must stay dark even in light mode (they'd otherwise wash out).
+      className={cn("dark relative flex h-full flex-1 flex-col overflow-hidden font-display", !hasWallpaper && "bg-background")}
       style={chatBackgroundStyle(bgId)}
     >
       {/* Wallpaper legibility scrim spanning the full chat height so the dark
@@ -1073,7 +1076,7 @@ function DmBubble({
   if (appt) {
     return (
       <div id={`dm-msg-${m.id}`} className="flex scroll-mt-24 justify-center px-2 py-1">
-        <div className="w-full max-w-sm overflow-hidden rounded-3xl border border-primary/25 bg-gradient-to-b from-primary/[0.12] to-primary/[0.02] p-5 text-center shadow-[0_8px_30px_-12px_rgba(0,0,0,0.6)] backdrop-blur-sm">
+        <div className="w-full max-w-sm overflow-hidden rounded-3xl border border-primary/30 bg-card p-5 text-center shadow-[0_8px_30px_-12px_rgba(0,0,0,0.6)]">
           <div className="mx-auto flex size-11 items-center justify-center rounded-2xl bg-primary/15 text-primary ring-1 ring-inset ring-primary/25">
             <CalendarClock className="size-5" />
           </div>
