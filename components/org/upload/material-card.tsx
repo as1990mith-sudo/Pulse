@@ -65,7 +65,7 @@ export function MaterialCard({
       <button
         type="button"
         onClick={() => onOpen(material)}
-        className="relative block aspect-video w-full text-left"
+        className="relative block aspect-video w-full overflow-hidden text-left"
         aria-label={`Open ${material.title}`}
       >
         <Thumbnail
@@ -73,7 +73,7 @@ export function MaterialCard({
           title={material.title}
           contentType={material.contentType}
           rounded="rounded-none"
-          className="size-full"
+          className="absolute inset-0 size-full"
         />
         {/* Play affordance on hover */}
         <span className="absolute inset-0 flex items-center justify-center bg-background/0 transition-colors group-hover:bg-background/30">
