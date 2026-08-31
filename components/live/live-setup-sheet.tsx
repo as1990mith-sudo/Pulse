@@ -1,7 +1,7 @@
 "use client"
 
 import type { LucideIcon } from "lucide-react"
-import { ChevronDown, Globe, LayoutGrid, Loader2, Lock, Pencil, Radio, X } from "lucide-react"
+import { ArrowLeft, ChevronDown, Globe, LayoutGrid, Loader2, Lock, Pencil, Radio } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CoverUpload, SQUARE_RATIO } from "@/components/admin/cover-upload"
 
@@ -100,25 +100,37 @@ export function LiveSetupSheet({
   const disabled = submitting || !category || (coverRequired && !cover)
 
   return (
-    <div className={cn("fixed inset-0 z-50 overflow-y-auto", backdropClassName)}>
-      <div className="flex min-h-full items-center justify-center px-5 py-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
-        <div className="w-full max-w-md space-y-5 rounded-3xl bg-black/50 p-5 ring-1 ring-inset ring-white/10 backdrop-blur-2xl">
-          {/* Header: compact title + subtitle on the left, dismiss on the right. */}
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h2 className="text-xl font-bold leading-tight tracking-tight text-white">Go live</h2>
-              <p className="mt-0.5 text-[13px] text-white/50">Set up your broadcast</p>
-            </div>
-            <button
-              type="button"
-              onClick={onCancel}
-              aria-label="Close"
-              className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/80 ring-1 ring-inset ring-white/15 transition-colors hover:bg-white/20 active:scale-90"
-            >
-              <X className="size-4" />
-            </button>
-          </div>
+    <div className={cn("fixed inset-0 z-50 flex flex-col", backdropClassName)}>
+      {/* Full-viewport scrim so the immersive page stays legible whether it sits
+          over the live camera (video) or an opaque backdrop (audio). */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/45 via-black/15 to-black/55"
+      />
 
+      {/* Immersive header: a back arrow returns to the Live tab where setup was
+          opened (onCancel), replacing the old pop-up's dismiss X. */}
+      <header
+        className="relative z-10 flex items-center gap-3 px-4 pb-3"
+        style={{ paddingTop: "max(env(safe-area-inset-top), 0.75rem)" }}
+      >
+        <button
+          type="button"
+          onClick={onCancel}
+          aria-label="Back"
+          className="flex size-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-inset ring-white/15 transition-colors hover:bg-white/20 active:scale-90"
+        >
+          <ArrowLeft className="size-5" />
+        </button>
+        <div className="min-w-0">
+          <h1 className="text-lg font-bold leading-tight tracking-tight text-white">Go live</h1>
+          <p className="text-[12px] text-white/50">Set up your broadcast</p>
+        </div>
+      </header>
+
+      {/* Scrollable body, held to a comfortable reading column on wide screens. */}
+      <div className="relative z-10 flex-1 overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom)+2rem)]">
+        <div className="mx-auto w-full max-w-lg space-y-5">
           {/* Stream title */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">

@@ -71,6 +71,9 @@ export function CinematicEventDetail({
   const [favorited, setFavorited] = useState(false)
   const [shareNote, setShareNote] = useState<string | null>(null)
   const [showBar, setShowBar] = useState(true)
+  // Tapping the flyer fades the gradients + overlaid text out so the whole
+  // flyer can be seen cleanly; tapping again brings the details back.
+  const [flyerClean, setFlyerClean] = useState(false)
   const registerRef = useRef<HTMLDivElement | null>(null)
 
   // Hide the sticky bar while the registration section itself is on screen — it
@@ -111,26 +114,92 @@ export function CinematicEventDetail({
     >
       {/* ---- HERO ---- */}
       <header className="relative">
-        <div className="relative h-[clamp(440px,72vh,620px)] w-full overflow-hidden">
+        <div className="relative h-[clamp(460px,78vh,680px)] w-full overflow-hidden">
           {flyer ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={flyer || "/placeholder.svg"}
-              alt=""
-              className="absolute inset-0 size-full object-cover object-[center_25%]"
-            />
+            <>
+              {/* Blurred fill of the same flyer so the uncropped flyer never sits
+                  on empty letterbox bars — the frame stays full-bleed while no
+                  part of the artwork itself is cropped away. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={flyer || "/placeholder.svg"}
+                alt=""
+                aria-hidden
+                className="absolute inset-0 size-full scale-125 object-cover blur-2xl saturate-[1.2]"
+              />
+              <div aria-hidden className="absolute inset-0 bg-[#050505]/35" />
+              {/* The real flyer, shown WHOLE (object-contain) so viewers keep
+                  every detail — dates, venue, names — with nothing cropped. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={flyer || "/placeholder.svg"} alt={title} className="absolute inset-0 size-full object-contain" />
+            </>
           ) : (
             <div className="absolute inset-0 bg-[#0B0B0B]" />
           )}
 
-          {/* Neutral gradients only — no accent glow, so the flyer reads clearly.
-              These stay near-black (not tinted) purely to keep the overlaid back
-              button and the title/host text legible over the image. */}
-          <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-[#050505]/85 via-[#050505]/25 to-transparent" />
-          <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/35 to-transparent" />
-          <div aria-hidden className="absolute inset-0 shadow-[inset_0_0_140px_40px_rgba(5,5,5,0.7)]" />
+          {/* Tap target: toggles the details overlay so the flyer can be viewed
+              cleanly. Sits beneath the nav (z-20) and the overlay text is
+              pointer-events-none, so a tap anywhere on the artwork toggles. */}
+          <button
+            type="button"
+            onClick={() => setFlyerClean((v) => !v)}
+            aria-label={flyerClean ? "Show event details" : "View the full flyer"}
+            className="absolute inset-0 z-10 cursor-default"
+          />
 
-          {/* overlay nav */}
+          {/* Fading overlays — gradients + hero text. Hidden on tap. */}
+          <div
+            className={`pointer-events-none absolute inset-0 z-10 transition-opacity duration-500 ${
+              flyerClean ? "opacity-0" : "opacity-100"
+            }`}
+          >
+            <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/45 to-transparent" />
+            <div aria-hidden className="absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-[#050505]/85 to-transparent" />
+
+            {/* hero content, lower-left */}
+            <div className="absolute inset-x-0 bottom-0 px-5 pb-7">
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]"
+                style={{ borderColor: "color-mix(in srgb, var(--home-accent) 45%, transparent)", color: "var(--home-accent)" }}
+              >
+                <Ticket className="size-3.5" />
+                Free event
+              </span>
+              <h1
+                className="mt-3 max-w-[15ch] text-balance text-[clamp(38px,11vw,56px)] font-semibold leading-[0.98] tracking-[-0.01em] [text-shadow:0_2px_24px_rgba(0,0,0,0.55)]"
+                style={{ fontFamily: "var(--font-playfair)" }}
+              >
+                {title}
+              </h1>
+              {description ? (
+                <p className="mt-3 max-w-[46ch] text-pretty text-[15px] leading-relaxed text-white/75 line-clamp-2 [text-shadow:0_1px_12px_rgba(0,0,0,0.6)]">
+                  {description}
+                </p>
+              ) : null}
+              <div className="mt-4 inline-flex items-center gap-2.5 rounded-2xl border border-white/10 bg-black/40 px-3 py-2 backdrop-blur-md">
+                {orgLogo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={orgLogo || "/placeholder.svg"} alt="" className="size-8 rounded-full object-cover" />
+                ) : (
+                  <span
+                    className="grid size-8 place-items-center rounded-full text-xs font-bold text-black"
+                    style={{ backgroundColor: "var(--home-accent)" }}
+                  >
+                    {homeName.slice(0, 1)}
+                  </span>
+                )}
+                <span className="flex flex-col leading-tight">
+                  <span className="text-[11px] uppercase tracking-[0.14em] text-white/50">Hosted by</span>
+                  <span className="flex items-center gap-1 text-sm font-semibold">
+                    {homeName}
+                    <Check className="size-3.5" style={accentText} />
+                  </span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* overlay nav — always interactive, above the tap target */}
           <nav
             className="absolute inset-x-0 top-0 z-20 flex items-center justify-between px-4"
             style={{ paddingTop: "max(env(safe-area-inset-top), 14px)" }}
@@ -170,48 +239,6 @@ export function CinematicEventDetail({
               </span>
             </div>
           ) : null}
-
-          {/* hero content, lower-left */}
-          <div className="absolute inset-x-0 bottom-0 z-10 px-5 pb-7">
-            <span
-              className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]"
-              style={{ borderColor: "color-mix(in srgb, var(--home-accent) 45%, transparent)", color: "var(--home-accent)" }}
-            >
-              <Ticket className="size-3.5" />
-              Free event
-            </span>
-            <h1
-              className="mt-3 max-w-[15ch] text-balance text-[clamp(38px,11vw,56px)] font-semibold leading-[0.98] tracking-[-0.01em]"
-              style={{ fontFamily: "var(--font-playfair)" }}
-            >
-              {title}
-            </h1>
-            {description ? (
-              <p className="mt-3 max-w-[46ch] text-pretty text-[15px] leading-relaxed text-white/70 line-clamp-2">
-                {description}
-              </p>
-            ) : null}
-            <div className="mt-4 inline-flex items-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 backdrop-blur-md">
-              {orgLogo ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={orgLogo || "/placeholder.svg"} alt="" className="size-8 rounded-full object-cover" />
-              ) : (
-                <span
-                  className="grid size-8 place-items-center rounded-full text-xs font-bold text-black"
-                  style={{ backgroundColor: "var(--home-accent)" }}
-                >
-                  {homeName.slice(0, 1)}
-                </span>
-              )}
-              <span className="flex flex-col leading-tight">
-                <span className="text-[11px] uppercase tracking-[0.14em] text-white/50">Hosted by</span>
-                <span className="flex items-center gap-1 text-sm font-semibold">
-                  {homeName}
-                  <Check className="size-3.5" style={accentText} />
-                </span>
-              </span>
-            </div>
-          </div>
         </div>
       </header>
 

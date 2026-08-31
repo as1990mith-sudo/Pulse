@@ -1,7 +1,6 @@
 "use client"
 
 import { useMemo, useState, useTransition } from "react"
-import Image from "next/image"
 import Link from "next/link"
 import {
   CalendarClock,
@@ -168,14 +167,26 @@ function OverviewBand({ bookings, typeCount }: { bookings: AdminAppointmentDetai
   ]
 
   return (
-    <div className="relative overflow-hidden rounded-3xl border border-border bg-card p-5 shadow-soft">
+    <div
+      className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-b from-card to-card/50 p-5 shadow-[0_28px_70px_-30px_rgba(0,0,0,0.85)] ring-1 ring-inset"
+      style={{ ["--tw-ring-color" as string]: "color-mix(in oklch, var(--home-accent) 16%, transparent)" }}
+    >
+      {/* Layered accent wash so the console clearly lifts off a near-black page. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -right-6 -top-10 size-40 rounded-full opacity-20 blur-3xl"
+        className="pointer-events-none absolute -right-8 -top-12 size-48 rounded-full opacity-30 blur-3xl"
         style={{ backgroundColor: "var(--home-accent)" }}
       />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(120% 85% at 100% 0%, color-mix(in oklch, var(--home-accent) 12%, transparent), transparent 58%)",
+        }}
+      />
       <div className="relative flex items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             Appointments console
           </p>
@@ -186,25 +197,37 @@ function OverviewBand({ bookings, typeCount }: { bookings: AdminAppointmentDetai
             Every booking opens its own private conversation and, when live, a scheduled meeting room.
           </p>
         </div>
-        <div className="relative -mr-1 -mt-2 hidden size-24 shrink-0 sm:block">
-          <Image
-            src="/images/appointments-hero.png"
-            alt=""
-            fill
-            sizes="96px"
-            className="object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.4)]"
-          />
-        </div>
+        <span
+          aria-hidden
+          className="grid size-12 shrink-0 place-items-center rounded-2xl text-white"
+          style={{
+            backgroundColor: "var(--home-accent)",
+            boxShadow: "0 14px 32px -12px color-mix(in oklch, var(--home-accent) 75%, transparent)",
+          }}
+        >
+          <CalendarClock className="size-6" />
+        </span>
       </div>
 
       <div className="relative mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {tiles.map((t) => (
-          <div key={t.label} className="rounded-2xl border border-border/70 bg-background/60 p-3">
-            <div className="flex items-center gap-1.5 text-muted-foreground">
-              <t.icon className="size-3.5" />
-              <span className="text-[11px] font-medium">{t.label}</span>
+          <div
+            key={t.label}
+            className="rounded-2xl border border-border bg-foreground/[0.04] p-3 ring-1 ring-inset ring-white/5 shadow-[0_10px_26px_-20px_rgba(0,0,0,0.9)]"
+          >
+            <div className="flex items-center gap-1.5">
+              <span
+                className="grid size-6 place-items-center rounded-lg"
+                style={{
+                  backgroundColor: "color-mix(in oklch, var(--home-accent) 16%, transparent)",
+                  color: "var(--home-accent)",
+                }}
+              >
+                <t.icon className="size-3.5" />
+              </span>
+              <span className="text-[11px] font-medium text-muted-foreground">{t.label}</span>
             </div>
-            <p className="mt-1.5 text-xl font-semibold tabular-nums tracking-tight">{t.value}</p>
+            <p className="mt-2 text-xl font-semibold tabular-nums tracking-tight">{t.value}</p>
           </div>
         ))}
       </div>
