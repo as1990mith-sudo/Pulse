@@ -335,6 +335,30 @@ export async function updateAppointmentType(input: {
   revalidatePath(`/org/${input.handle}/admin/appointments`)
 }
 
+// Permanently remove a session type and its weekly availability windows. Past
+// and upcoming bookings are untouched: home_appointment stores its own snapshot
+// (typeId is a nullable soft reference with no FK), so removing the type never
+// breaks an existing appointment's conversation or meeting room — members just
+// can no longer book NEW slots of this type.
+export async function deleteAppointmentType(input: { handle: string; id: string }) {
+  const { homeId } = await requireApptManager(input.handle)
+  // Confirm the type belongs to this Home before deleting anything.
+  const [type] = await db
+    .select({ id: homeAppointmentType.id })
+    .from(homeAppointmentType)
+    .where(and(eq(homeAppointmentType.id, input.id), eq(homeAppointmentType.homeId, homeId)))
+    .limit(1)
+  if (!type) throw new Error("Appointment type not found.")
+
+  await db.transaction(async (tx) => {
+    await tx.delete(homeAppointmentAvailability).where(eq(homeAppointmentAvailability.typeId, input.id))
+    await tx
+      .delete(homeAppointmentType)
+      .where(and(eq(homeAppointmentType.id, input.id), eq(homeAppointmentType.homeId, homeId)))
+  })
+  revalidatePath(`/org/${input.handle}/admin/appointments`)
+}
+
 export async function setAvailability(input: { handle: string; typeId: string; windows: AvailabilityWindow[] }) {
   const { homeId } = await requireApptManager(input.handle)
   // Confirm the type belongs to this Home before touching its windows.

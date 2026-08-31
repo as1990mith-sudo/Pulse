@@ -1,14 +1,20 @@
 import type { CSSProperties } from "react"
+import { LIVE_THEMES } from "@/lib/live-themes"
 
 /**
  * Chat wallpapers for 1-on-1 conversations (and reusable by group chatrooms).
  * A selection is a single app-wide preference — persisted once in localStorage
  * and applied to every direct-message thread in the inbox.
  *
+ * The wallpaper set is the SAME collection used to theme live meeting rooms
+ * (see `lib/live-themes.ts`), so the two surfaces share one visual language.
+ * We derive the options directly from `LIVE_THEMES` rather than duplicating the
+ * assets/gradients, which keeps them in sync automatically.
+ *
  * Three flavors:
  *  - `default` — the app's normal dark message surface (no wallpaper).
  *  - `gradient` — a CSS gradient laid behind the bubbles.
- *  - `photo` — a softly blurred photographic wallpaper (generated asset).
+ *  - `photo` — a full-bleed photographic wallpaper.
  */
 export type ChatBackgroundKind = "default" | "gradient" | "photo"
 
@@ -23,37 +29,19 @@ export type ChatBackground = {
 }
 
 export const CHAT_BACKGROUNDS: ChatBackground[] = [
+  // The plain dark message surface stays as the neutral first choice.
   { id: "default", label: "Default", kind: "default" },
 
-  // 3 gradient options
-  {
-    id: "grad-dusk",
-    label: "Dusk",
-    kind: "gradient",
-    gradient: "linear-gradient(160deg, oklch(0.17 0.03 285), oklch(0.22 0.06 300) 55%, oklch(0.16 0.04 255))",
-  },
-  {
-    id: "grad-tide",
-    label: "Tide",
-    kind: "gradient",
-    gradient: "linear-gradient(160deg, oklch(0.15 0.02 205), oklch(0.2 0.05 195) 55%, oklch(0.16 0.03 235))",
-  },
-  {
-    id: "grad-ember",
-    label: "Ember",
-    kind: "gradient",
-    gradient: "linear-gradient(160deg, oklch(0.16 0.03 30), oklch(0.21 0.06 45) 55%, oklch(0.15 0.03 15))",
-  },
-
-  // 7 blurred photo options
-  { id: "photo-aurora", label: "Aurora", kind: "photo", image: "/chat-bg/aurora.png" },
-  { id: "photo-mountains", label: "Mountains", kind: "photo", image: "/chat-bg/mountains.png" },
-  { id: "photo-ocean", label: "Ocean", kind: "photo", image: "/chat-bg/ocean.png" },
-  { id: "photo-forest", label: "Forest", kind: "photo", image: "/chat-bg/forest.png" },
-  { id: "photo-sunset", label: "Sunset", kind: "photo", image: "/chat-bg/sunset.png" },
-  { id: "photo-blossom", label: "Blossom", kind: "photo", image: "/chat-bg/blossom.png" },
-  { id: "photo-city", label: "City", kind: "photo", image: "/chat-bg/city.png" },
-  { id: "photo-nebula", label: "Nebula", kind: "photo", image: "/chat-bg/nebula.png" },
+  // Everything else mirrors the live-meeting themes. Photo themes become photo
+  // wallpapers; the flat-gradient themes become gradient wallpapers. Ids are
+  // prefixed so they never collide with a live theme id or an old chat id.
+  ...LIVE_THEMES.map<ChatBackground>((t) => ({
+    id: `live-${t.id}`,
+    label: t.name,
+    kind: t.backgroundImage ? "photo" : "gradient",
+    gradient: t.background,
+    image: t.backgroundImage,
+  })),
 ]
 
 export const DEFAULT_CHAT_BACKGROUND = CHAT_BACKGROUNDS[0]

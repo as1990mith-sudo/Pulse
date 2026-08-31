@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Check, Link2, Loader2, Sparkles, Wand2 } from "lucide-react"
+import { Check, FileText, Link2, Loader2, Sparkles, Wand2 } from "lucide-react"
 import {
   type MaterialContentType,
   type MaterialSource,
@@ -11,6 +11,7 @@ import {
   normalizeTags,
 } from "@/lib/materials"
 import { createMaterial, recognizeResource, updateMaterial } from "@/app/actions/materials"
+import { uploadMedia } from "@/lib/upload-media"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
@@ -84,7 +85,10 @@ export function UploadMaterialSheet({
   const [recognized, setRecognized] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [uploadingFile, setUploadingFile] = useState(false)
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null)
   const lastRecognizedUrl = useRef<string>("")
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Seed / reset whenever the sheet opens.
   useEffect(() => {
@@ -113,6 +117,7 @@ export function UploadMaterialSheet({
       lastRecognizedUrl.current = ""
     }
     setError(null)
+    setUploadedFileName(null)
   }, [open, editing])
 
   function set<K extends keyof Draft>(key: K, value: Draft[K]) {
@@ -144,6 +149,42 @@ export function UploadMaterialSheet({
       setRecognized(true)
     } finally {
       setRecognizing(false)
+    }
+  }
+
+  // Upload a PDF straight from the uploader's device. Frequency stores no media
+  // itself, but a locally-hosted PDF has no external home to link to, so it's
+  // the one resource we push to Blob (under the `catalogue/` prefix) and then
+  // treat exactly like any other material — its Blob URL becomes the link.
+  async function onPickFile(file: File) {
+    setError(null)
+    if (file.type !== "application/pdf") {
+      setError("Please choose a PDF file.")
+      return
+    }
+    // 25 MB ceiling keeps documents reasonable for in-app viewing.
+    if (file.size > 25 * 1024 * 1024) {
+      setError("That PDF is over 25MB. Please upload a smaller file.")
+      return
+    }
+    setUploadingFile(true)
+    try {
+      const { url } = await uploadMedia(file, "catalogue")
+      const niceName = file.name.replace(/\.pdf$/i, "").replace(/[_-]+/g, " ").trim()
+      lastRecognizedUrl.current = url // suppress link-recognition for this url
+      setDraft((d) => ({
+        ...d,
+        url,
+        source: "other",
+        contentType: "article",
+        title: d.title || niceName,
+      }))
+      setUploadedFileName(file.name)
+      setRecognized(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't upload that PDF.")
+    } finally {
+      setUploadingFile(false)
     }
   }
 
@@ -192,12 +233,12 @@ export function UploadMaterialSheet({
   return (
     <UploadSheet
       open={open}
-      onOpenChange={saving ? () => {} : onOpenChange}
+      onOpenChange={saving || uploadingFile ? () => {} : onOpenChange}
       title={editing ? "Edit material" : "Upload material"}
       description={
         editing
           ? "Update the details for this resource."
-          : "Paste a link and we'll pull in the title, cover and details automatically."
+          : "Paste a link and we'll pull in the details automatically — or upload a PDF from your device."
       }
       footer={
         <>
@@ -248,6 +289,43 @@ export function UploadMaterialSheet({
             </Button>
           </div>
         </Field>
+
+        {/* Or upload a PDF straight from the device (creation only) */}
+        {!editing && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <span className="h-px flex-1 bg-border" />
+              <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">or</span>
+              <span className="h-px flex-1 bg-border" />
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) onPickFile(file)
+                e.target.value = "" // allow re-picking the same file
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-center gap-2 rounded-xl border-dashed"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingFile}
+            >
+              {uploadingFile ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}
+              {uploadingFile ? "Uploading…" : uploadedFileName ? "Replace PDF" : "Upload a PDF from your device"}
+            </Button>
+            {uploadedFileName && !uploadingFile && (
+              <p className="flex items-center gap-1.5 text-xs text-primary">
+                <Check className="size-3.5" /> {uploadedFileName}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Preview */}
         {(draft.cover || recognized) && (

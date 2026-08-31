@@ -26,6 +26,7 @@ import { JoinMeetingButton } from "@/components/appointments/join-meeting-button
 import {
   createAppointmentType,
   updateAppointmentType,
+  deleteAppointmentType,
   setAvailability,
   completeAppointment,
   type AdminAppointmentDetail,
@@ -243,6 +244,8 @@ function TypesTab({ handle, initialTypes }: { handle: string; initialTypes: Appo
   const [types, setTypes] = useState(initialTypes)
   const [showForm, setShowForm] = useState(initialTypes.length === 0)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
@@ -319,12 +322,27 @@ function TypesTab({ handle, initialTypes }: { handle: string; initialTypes: Appo
     }
   }
 
+  async function remove(t: AppointmentTypeRow) {
+    setDeletingId(t.id)
+    // Optimistically drop it; restore on failure.
+    const snapshot = types
+    setTypes((prev) => prev.filter((x) => x.id !== t.id))
+    setConfirmDeleteId(null)
+    if (expandedId === t.id) setExpandedId(null)
+    try {
+      await deleteAppointmentType({ handle, id: t.id })
+      toast.success("Session type deleted.")
+    } catch (err) {
+      setTypes(snapshot)
+      toast.error(err instanceof Error ? err.message : "Could not delete.")
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Define the sessions members can book, then set weekly availability for each.
-        </p>
+      <div className="flex items-center justify-end">
         <button
           type="button"
           onClick={() => setShowForm((s) => !s)}
@@ -495,8 +513,42 @@ function TypesTab({ handle, initialTypes }: { handle: string; initialTypes: Appo
                       className={cn("size-3.5 transition-transform", expandedId === t.id && "rotate-180")}
                     />
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteId((id) => (id === t.id ? null : t.id))}
+                    aria-label={`Delete ${t.title}`}
+                    className="inline-flex items-center justify-center rounded-lg border border-border p-1.5 text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
                 </div>
               </div>
+              {confirmDeleteId === t.id && (
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-destructive/5 px-4 py-3 animate-in fade-in-0 slide-in-from-top-1 duration-150">
+                  <p className="text-xs text-muted-foreground text-pretty">
+                    Delete <span className="font-semibold text-foreground">{t.title}</span> and its availability?
+                    Existing bookings stay intact — members just can&apos;t book new ones.
+                  </p>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteId(null)}
+                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-muted"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => remove(t)}
+                      disabled={deletingId === t.id}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-destructive px-3 py-1.5 text-xs font-semibold text-destructive-foreground hover:bg-destructive/90 disabled:opacity-60"
+                    >
+                      {deletingId === t.id ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              )}
               {expandedId === t.id && (
                 <AvailabilityEditor
                   handle={handle}

@@ -57,7 +57,9 @@ export function MaterialCard({
   return (
     <div
       className={cn(
-        "group relative flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-card/40 transition-colors hover:border-border",
+        // A solid raised surface so cards read clearly against the near-black
+        // page background instead of dissolving into it.
+        "group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-secondary/50 shadow-sm ring-1 ring-white/[0.03] transition-all hover:border-primary/40 hover:bg-secondary/70 hover:shadow-md",
         material.archived && "opacity-60",
         className,
       )}
