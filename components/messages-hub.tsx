@@ -118,30 +118,37 @@ export function MessagesHub({
         </div>
       </div>
 
-      {tab === "chats" ? (
-        <div className="mx-auto w-full max-w-3xl px-4 pb-8 pt-4 [&>*]:scroll-mt-40 sm:px-6">
-          <DmInbox conversations={conversations} currentUser={currentUser} />
-        </div>
-      ) : tab === "rooms" ? (
-        <div className="mx-auto w-full max-w-3xl px-4 pb-8 pt-4 [&>*]:scroll-mt-40 sm:px-6">
-          {/* Reuse the exact Chatrooms browser: keep its My rooms / Discover /
-              Create switcher and every interaction, but hide the featured
-              community cards and let this hub own the outer sticky bar. */}
-          <ChatroomBrowser rooms={rooms} discoverRooms={discoverRooms} showFeatured={false} stickyTabs={false} />
-        </div>
-      ) : (
-        // Schedule: the appointment timeline, reused as-is (its own container),
-        // with the hero/description dropped since the tab already labels it.
-        <AppointmentsHub
-          appointments={appointments}
-          bookableTypes={bookableTypes}
-          activeHandle={activeHandle}
-          activeHomeName={activeHomeName}
-          hostMode={hostMode}
-          publishableKey={publishableKey}
-          hideHeader
-        />
-      )}
+      {/* `key={tab}` remounts the panel on every switch so the shared
+          `fade-slide-in` entrance re-fires — each surface (and the first paint)
+          glides up and settles rather than hard-cutting in. The utility is
+          compositor-only (opacity + transform) and disabled under
+          prefers-reduced-motion. */}
+      <div key={tab} className="fade-slide-in">
+        {tab === "chats" ? (
+          <div className="mx-auto w-full max-w-3xl px-4 pb-8 pt-4 [&>*]:scroll-mt-40 sm:px-6">
+            <DmInbox conversations={conversations} currentUser={currentUser} />
+          </div>
+        ) : tab === "rooms" ? (
+          <div className="mx-auto w-full max-w-3xl px-4 pb-8 pt-4 [&>*]:scroll-mt-40 sm:px-6">
+            {/* Reuse the exact Chatrooms browser: keep its My rooms / Discover /
+                Create switcher and every interaction, but hide the featured
+                community cards and let this hub own the outer sticky bar. */}
+            <ChatroomBrowser rooms={rooms} discoverRooms={discoverRooms} showFeatured={false} stickyTabs={false} />
+          </div>
+        ) : (
+          // Schedule: the appointment timeline, reused as-is (its own container),
+          // with the hero/description dropped since the tab already labels it.
+          <AppointmentsHub
+            appointments={appointments}
+            bookableTypes={bookableTypes}
+            activeHandle={activeHandle}
+            activeHomeName={activeHomeName}
+            hostMode={hostMode}
+            publishableKey={publishableKey}
+            hideHeader
+          />
+        )}
+      </div>
     </div>
   )
 }
