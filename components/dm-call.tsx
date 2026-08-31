@@ -6,11 +6,12 @@ import {
   Room,
   RoomEvent,
   Track,
+  VideoPresets,
   type RemoteTrack,
   type RemoteTrackPublication,
   type RemoteParticipant,
 } from "livekit-client"
-import { Mic, MicOff, Phone, PhoneOff, Video, VideoOff, SwitchCamera } from "lucide-react"
+import { Mic, MicOff, Phone, PhoneOff, PictureInPicture2, Video, VideoOff, SwitchCamera } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { CallButton } from "@/components/call-controls"
 import { cn } from "@/lib/utils"
@@ -29,6 +30,13 @@ type Peer = {
 // Floating self-view dimensions (WhatsApp-style picture-in-picture).
 const PIP_W = 116
 const PIP_H = 168
+
+// HD capture for calls. Phones (Android Chrome especially) otherwise default to
+// a low ~480p capture that looks soft, washed-out, and near-monochrome in low
+// light; requesting 720p explicitly yields a crisp, full-colour frame on both
+// Android and iOS. The camera flip requests this SAME format so quality never
+// drops when switching cameras.
+const CALL_VIDEO_RESOLUTION = VideoPresets.h720.resolution
 
 /**
  * Full-screen 1:1 call surface for DMs, modeled on WhatsApp calls:
@@ -102,6 +110,9 @@ export function DmCall({
         // the three DSP flags, which silently omitted `channelCount: 1` and let
         // a stereo-capsule phone mic land a voice in one ear only.
         audioCaptureDefaults: LIVE_MIC_CONSTRAINTS,
+        // Explicit HD capture (see CALL_VIDEO_RESOLUTION) so the camera never
+        // opens at a low, washed-out default on mobile.
+        videoCaptureDefaults: { resolution: CALL_VIDEO_RESOLUTION },
         publishDefaults: {
           // Without this, DM calls fell back to LiveKit's ~24-32 kbps speech
           // default and sounded thinner than the same voice in a Live.
@@ -110,6 +121,11 @@ export function DmCall({
           // RED adds packet-loss resilience for flaky mobile connections.
           dtx: false,
           red: true,
+          // Simulcast so a weak network still receives a lower layer while good
+          // connections get the crisp 720p feed. vp8 is the most broadly
+          // hardware-compatible codec across Android and iOS Safari.
+          videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360],
+          videoCodec: "vp8",
         },
       })
       roomRef.current = room
@@ -137,7 +153,10 @@ export function DmCall({
       await room.localParticipant.setMicrophoneEnabled(true)
       applyAudioRouting()
       if (call.mode === "video") {
-        await room.localParticipant.setCameraEnabled(true, { facingMode: "user" })
+        await room.localParticipant.setCameraEnabled(true, {
+          facingMode: "user",
+          resolution: CALL_VIDEO_RESOLUTION,
+        })
         // Self-view attachment is handled by the effect that watches `camOn`
         // and `connected`, ensuring the <video> element is mounted first.
       }
@@ -247,7 +266,10 @@ export function DmCall({
     const room = roomRef.current
     if (!room) return
     const next = !camOn
-    await room.localParticipant.setCameraEnabled(next)
+    await room.localParticipant.setCameraEnabled(
+      next,
+      next ? { facingMode, resolution: CALL_VIDEO_RESOLUTION } : undefined,
+    )
     // Don't attach here: the local <video> element is only mounted once
     // `camOn` flips to true and React re-renders. Attaching is handled by the
     // effect below, which runs after the element exists in the DOM.
@@ -261,12 +283,53 @@ export function DmCall({
     if (!room) return
     const next = facingMode === "user" ? "environment" : "user"
     try {
-      await room.localParticipant.setCameraEnabled(true, { facingMode: next })
+      const pub = room.localParticipant.getTrackPublication(Track.Source.Camera)
+      const track = pub?.track
+      if (track instanceof LocalVideoTrack) {
+        // `restartTrack` re-acquires the camera with the new facing mode in
+        // place. Plain `setCameraEnabled(true, { facingMode })` frequently
+        // no-ops when a camera track is already live — which is exactly why the
+        // flip button appeared to "do nothing". restartTrack forces the switch
+        // and keeps the HD capture format so quality doesn't drop.
+        await track.restartTrack({ facingMode: next, resolution: CALL_VIDEO_RESOLUTION })
+      } else {
+        await room.localParticipant.setCameraEnabled(true, {
+          facingMode: next,
+          resolution: CALL_VIDEO_RESOLUTION,
+        })
+      }
       setFacingMode(next)
       setCamOn(true)
       attachLocalVideo(room)
     } catch {
       /* device may not have a second camera — ignore */
+    }
+  }
+
+  // Minimize the call into an OS-level Picture-in-Picture window (the remote
+  // feed floats above other apps/tabs so the user can keep talking while doing
+  // something else). Uses the standard API on Android Chrome / desktop and the
+  // webkit fallback on iOS Safari. Must be called from a user gesture.
+  async function togglePiP() {
+    const v = remoteVideoRef.current as
+      | (HTMLVideoElement & {
+          webkitSetPresentationMode?: (mode: string) => void
+          webkitPresentationMode?: string
+        })
+      | null
+    if (!v) return
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture()
+      } else if (typeof v.requestPictureInPicture === "function") {
+        await v.requestPictureInPicture()
+      } else if (typeof v.webkitSetPresentationMode === "function") {
+        v.webkitSetPresentationMode(
+          v.webkitPresentationMode === "picture-in-picture" ? "inline" : "picture-in-picture",
+        )
+      }
+    } catch {
+      /* PiP unsupported or blocked by the browser — leave the call as-is */
     }
   }
 
@@ -456,6 +519,19 @@ export function DmCall({
           controlsVisible ? "opacity-100" : "pointer-events-none -translate-y-2 opacity-0",
         )}
       >
+        {/* Minimize to Picture-in-Picture — floats top-left, appears once the
+            remote video is live (there must be a playing feed to pop out). */}
+        {showVideo && remoteFilling && (
+          <button
+            type="button"
+            onClick={togglePiP}
+            aria-label="Minimize to picture-in-picture"
+            className="absolute left-5 top-[calc(env(safe-area-inset-top)+1.05rem)] flex size-11 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-inset ring-white/15 backdrop-blur-md transition-all duration-200 hover:bg-white/20 active:scale-95"
+          >
+            <PictureInPicture2 className="size-5" />
+          </button>
+        )}
+
         <div className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-xs font-medium text-white/80 ring-1 ring-inset ring-white/15 backdrop-blur-md">
           <span className="relative flex size-2">
             <span
