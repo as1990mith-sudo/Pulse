@@ -54,7 +54,7 @@ export function AppointmentThreadBanner({ conversationId }: { conversationId: nu
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <CalendarClock className="size-4 shrink-0 text-primary" />
-            <h2 className="truncate text-sm font-semibold">{data.title}</h2>
+            <h2 className="truncate text-sm font-semibold text-foreground">{data.title}</h2>
             {data.priceCents != null && (
               <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-semibold text-primary">
                 {formatMoney(data.priceCents, data.currency)}
