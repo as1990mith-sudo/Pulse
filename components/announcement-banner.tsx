@@ -3,13 +3,18 @@
 import { useMemo, useRef, useState, useTransition } from "react"
 import { createPortal } from "react-dom"
 import Image from "next/image"
+import { AnimatePresence, motion } from "motion/react"
 import {
   Bookmark,
+  Building2,
+  Calendar,
   CalendarDays,
   CalendarPlus,
   Check,
+  ChevronRight,
   ClipboardList,
   Clock,
+  Globe,
   ImageIcon,
   Loader2,
   MapPin,
@@ -21,6 +26,7 @@ import {
   Share2,
   Tag,
   Trash2,
+  Video,
   X,
 } from "lucide-react"
 import Link from "next/link"
@@ -98,6 +104,81 @@ function feedDateParts(dateStr: string | null): { mon: string; day: string; dow:
   return { mon: FEED_MONTHS[d.getMonth()], day: String(d.getDate()), dow: FEED_DOW[d.getDay()] }
 }
 
+/** Today's date as a local YYYY-MM-DD string (matches the stored event dates). */
+function todayStr(): string {
+  const t = new Date()
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`
+}
+
+/** The next `count` days from today, for the horizontal date rail. */
+function railDays(count = 10): { date: string; dow: string; day: string; mon: string; isToday: boolean }[] {
+  const base = new Date()
+  base.setHours(0, 0, 0, 0)
+  return Array.from({ length: count }, (_, i) => {
+    const d = new Date(base)
+    d.setDate(base.getDate() + i)
+    const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+    return {
+      date,
+      dow: FEED_DOW[d.getDay()].toUpperCase(),
+      day: String(d.getDate()).padStart(2, "0"),
+      mon: FEED_MONTHS[d.getMonth()],
+      isToday: i === 0,
+    }
+  })
+}
+
+/** Whether a venue string reads as an online/virtual gathering. */
+function isOnlineLocation(loc: string | null): boolean {
+  if (!loc) return true
+  return /\b(online|virtual|zoom|stream|livestream|webinar|meet|teams|youtube|facebook|instagram)\b/i.test(loc)
+}
+
+/** A short, human relative label for the featured card's status pill. */
+function relativeDayLabel(dateStr: string | null): string {
+  if (!dateStr) return "EVENT"
+  const d = feedDaysFromToday(dateStr)
+  if (d <= 0) return "TODAY"
+  if (d === 1) return "TOMORROW"
+  const { dow, day, mon } = feedDateParts(dateStr)
+  return `${dow.toUpperCase()} ${day} ${mon}`
+}
+
+/** "7:00 PM (BST)" — the event time with the viewer's timezone abbreviation. */
+function formatTimeWithZone(dateStr: string | null, time: string | null): string {
+  if (!time) return "Time to be confirmed"
+  const [y, m, d] = (dateStr ?? todayStr()).split("-").map(Number)
+  const [hh, mm] = time.split(":").map(Number)
+  const dt = new Date(y, (m ?? 1) - 1, d ?? 1, hh ?? 0, mm ?? 0)
+  const t = dt.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+  const zone = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" })
+    .formatToParts(dt)
+    .find((p) => p.type === "timeZoneName")?.value
+  return zone ? `${t} (${zone})` : t
+}
+
+/** The tabs facet: a broad range, or a single day picked from the rail. */
+type EventView =
+  | { type: "range"; key: "all" | "today" | "week" | "later" }
+  | { type: "day"; date: string }
+
+const RANGE_TABS: { key: "all" | "today" | "week" | "later"; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "today", label: "Today" },
+  { key: "week", label: "This week" },
+  { key: "later", label: "Later" },
+]
+
+/** Does an event's date satisfy a range key? Mirrors the feed buckets. */
+function inRange(dateStr: string | null, key: "all" | "today" | "week" | "later"): boolean {
+  if (key === "all") return true
+  if (!dateStr) return key === "later"
+  const d = feedDaysFromToday(dateStr)
+  if (key === "today") return d <= 0
+  if (key === "week") return d >= 1 && d <= 7
+  return d > 7
+}
+
 export function AnnouncementBanner({
   announcements,
   myRequests,
@@ -124,19 +205,26 @@ export function AnnouncementBanner({
     categoryLabel: string
   } | null
 }) {
+  // The create bottom sheet (choose event / online / in-person), then the form.
+  const [createOpen, setCreateOpen] = useState(false)
   const [showForm, setShowForm] = useState(false)
+  // A venue hint prefilled into the form when opened via a create-sheet option.
+  const [formPreset, setFormPreset] = useState<string | undefined>(undefined)
   // The id of the event whose detail sheet is open (opened by tapping a card).
   const [openId, setOpenId] = useState<number | null>(null)
   // The id of the event being edited (opened from a card's "…" manage menu).
   const [editId, setEditId] = useState<number | null>(null)
-  // Cosmetic saved/bookmark state per card (matches the public browser). Purely
-  // client-side for now — bookmarking has no server model yet.
+  // Cosmetic saved/bookmark state per card. Purely client-side for now.
   const [saved, setSaved] = useState<Record<number, boolean>>({})
+  // The active filter: a range tab (default Today) or a specific rail day.
+  const [view, setView] = useState<EventView>({ type: "range", key: "today" })
+
+  const today = todayStr()
 
   // Pending/declined requests still worth surfacing to their owner.
   const trackable = myRequests.filter((r) => r.status !== "approved")
 
-  // Every approved, unexpired event the viewer hasn't dismissed fills the grid.
+  // Every approved, unexpired event the viewer hasn't dismissed.
   const events = announcements.filter((a) => !a.hiddenByMe)
 
   // Resolve the open card against the freshest server data so interactions
@@ -144,56 +232,106 @@ export function AnnouncementBanner({
   const openEvent = openId != null ? announcements.find((e) => e.id === openId) ?? null : null
   const editEvent = editId != null ? announcements.find((e) => e.id === editId) ?? null : null
 
-  // Bucket every visible event into its date section, preserving the server's
-  // ascending-by-date order within each section.
-  const grouped = useMemo(() => {
-    const groups: Record<FeedGroupKey, AnnouncementView[]> = { today: [], tomorrow: [], week: [], later: [] }
-    for (const a of events) groups[feedBucket(a.eventDate)].push(a)
-    return groups
-  }, [events])
-  const visibleGroups = FEED_GROUP_ORDER.filter((g) => grouped[g].length > 0)
+  // Events matching the active filter, in the server's ascending-by-date order.
+  const filtered = useMemo(() => {
+    if (view.type === "day") return events.filter((e) => e.eventDate === view.date)
+    return events.filter((e) => inRange(e.eventDate, view.key))
+  }, [events, view])
+
+  // The first match becomes the hero card; the rest form the compact list.
+  const featured = filtered[0] ?? null
+  const upcoming = filtered.slice(1)
+
+  // Which rail day reads as selected — an explicit day pick, or today while the
+  // Today tab is active (so the rail and tabs stay visually in sync).
+  const selectedRailDate =
+    view.type === "day" ? view.date : view.type === "range" && view.key === "today" ? today : null
+
+  // The section heading label for the current filter.
+  const sectionLabel =
+    view.type === "day"
+      ? (() => {
+          const { dow, day, mon } = feedDateParts(view.date)
+          return `${dow.toUpperCase()} ${day} ${mon}`
+        })()
+      : view.key === "all"
+        ? "All events"
+        : view.key === "today"
+          ? "Today"
+          : view.key === "week"
+            ? "This week"
+            : "Later"
+
+  function openCreate(preset?: string) {
+    setCreateOpen(false)
+    setFormPreset(preset)
+    setShowForm(true)
+  }
 
   return (
     <section aria-label="Events" className="space-y-4 pb-4">
-      {/* Header: the active Home's identity, then the section title on one line */}
-      <div className="px-4 sm:px-0">
-        <div className="flex items-center justify-between gap-3">
-          {home ? (
-            <div className="flex min-w-0 items-center gap-3">
-              <span
-                aria-hidden="true"
-                className="relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-bold uppercase text-white shadow-[0_0_20px_-6px] shadow-primary/60 ring-2 ring-primary/30"
-                style={{ backgroundColor: home.color }}
-              >
-                {home.logo ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={home.logo || "/placeholder.svg"} alt="" className="size-full object-cover" />
-                ) : (
-                  home.initials
-                )}
-              </span>
-              <div className="min-w-0 leading-tight">
-                <p className="truncate text-[15px] font-semibold tracking-tight">{home.name}</p>
-                <p className="truncate text-xs text-muted-foreground">{home.categoryLabel}</p>
-              </div>
+      {/* Organisation header */}
+      <motion.header
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="flex items-center justify-between gap-3 px-4 sm:px-0"
+      >
+        {home ? (
+          <div className="flex min-w-0 items-center gap-3">
+            <span
+              aria-hidden="true"
+              className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-bold uppercase text-white ring-1 ring-white/10"
+              style={{ backgroundColor: home.color }}
+            >
+              {home.logo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={home.logo || "/placeholder.svg"} alt="" className="size-full object-cover" />
+              ) : (
+                home.initials
+              )}
+            </span>
+            <div className="min-w-0 leading-tight">
+              <p className="truncate text-base font-semibold tracking-tight">{home.name}</p>
+              <p className="truncate text-xs text-muted-foreground">{home.categoryLabel}</p>
             </div>
-          ) : (
-            <span className="text-sm font-medium text-muted-foreground">Your events</span>
-          )}
-          {canPublish && (
-            <Button size="sm" className="shrink-0 gap-1.5" onClick={() => setShowForm(true)}>
-              <Plus className="size-4" /> Publish
-            </Button>
-          )}
-        </div>
+          </div>
+        ) : (
+          <span className="text-sm font-medium text-muted-foreground">Your events</span>
+        )}
+        {canPublish && (
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.96 }}
+            onClick={() => setCreateOpen(true)}
+            className="flex shrink-0 items-center gap-1.5 rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_0_24px_-8px] shadow-primary/70 transition-[filter] hover:brightness-110"
+          >
+            <Plus className="size-4" /> Create
+          </motion.button>
+        )}
+      </motion.header>
 
-        <div className="mt-4 flex items-center gap-2.5">
-          <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-[0_0_22px_-4px] shadow-primary/60">
-            <CalendarDays className="size-6" />
-          </span>
-          <h2 className="whitespace-nowrap text-2xl font-bold tracking-tight">Upcoming events</h2>
-        </div>
-      </div>
+      {/* Page title */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.04 }}
+        className="px-4 sm:px-0"
+      >
+        <h1 className="text-3xl font-bold tracking-tight">Events</h1>
+        <p className="mt-0.5 text-sm text-muted-foreground">Discover and manage upcoming events</p>
+      </motion.div>
+
+      {/* Filters + date rail */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.08 }}
+        className="space-y-4"
+      >
+        <EventFilterTabs view={view} onRange={(key) => setView({ type: "range", key })} />
+        <DateRail selected={selectedRailDate} onPick={(date) => setView({ type: "day", date })} />
+      </motion.div>
 
       {/* Owner's request tracker: pending / declined */}
       {trackable.length > 0 && (
@@ -205,56 +343,503 @@ export function AnnouncementBanner({
         </div>
       )}
 
-      {/* Premium grouped sections: Today / Tomorrow / This Week / Later. */}
-      {events.length > 0 ? (
-        <div className="space-y-7 px-4 sm:px-0">
-          {visibleGroups.map((g) => (
-            <section key={g} aria-label={FEED_GROUP_LABELS[g]}>
-              <div className="mb-3 flex items-center gap-2">
-                <CalendarDays className="size-4 text-primary" />
-                <h3 className="text-base font-semibold tracking-tight">{FEED_GROUP_LABELS[g]}</h3>
-                <span className="grid h-5 min-w-5 place-items-center rounded-full bg-secondary px-1.5 text-xs font-semibold tabular-nums text-muted-foreground">
-                  {grouped[g].length}
+      {/* Section header + featured card + compact upcoming list */}
+      {featured ? (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.12 }}
+          className="space-y-4 px-4 sm:px-0"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <Calendar className="size-4 shrink-0 text-primary" />
+              <h2 className="truncate text-xs font-bold uppercase tracking-[0.14em]">
+                {sectionLabel}
+                <span className="ml-1.5 font-semibold text-muted-foreground">
+                  · {filtered.length} {filtered.length === 1 ? "event" : "events"}
                 </span>
+              </h2>
+            </div>
+            {!(view.type === "range" && view.key === "all") && (
+              <button
+                type="button"
+                onClick={() => setView({ type: "range", key: "all" })}
+                className="flex shrink-0 items-center gap-0.5 text-xs font-semibold text-primary transition-opacity hover:opacity-80"
+              >
+                See all <ChevronRight className="size-3.5" />
+              </button>
+            )}
+          </div>
+
+          <FeaturedEventCard
+            event={featured}
+            isAdmin={isAdmin}
+            saved={Boolean(saved[featured.id])}
+            onToggleSave={() => setSaved((s) => ({ ...s, [featured.id]: !s[featured.id] }))}
+            onOpen={() => setOpenId(featured.id)}
+            onEdit={() => setEditId(featured.id)}
+          />
+
+          {upcoming.length > 0 && (
+            <div className="space-y-3 pt-1">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">Upcoming events</h3>
+                {!(view.type === "range" && view.key === "all") && (
+                  <button
+                    type="button"
+                    onClick={() => setView({ type: "range", key: "all" })}
+                    className="flex shrink-0 items-center gap-0.5 text-xs font-semibold text-primary transition-opacity hover:opacity-80"
+                  >
+                    See all <ChevronRight className="size-3.5" />
+                  </button>
+                )}
               </div>
-              <ul className="grid grid-cols-1 gap-3">
-                {grouped[g].map((a, i) => (
-                  <li key={a.id}>
-                    <EventGridCard
-                      event={a}
-                      index={i}
-                      isAdmin={isAdmin}
-                      saved={Boolean(saved[a.id])}
-                      onToggleSave={() => setSaved((s) => ({ ...s, [a.id]: !s[a.id] }))}
-                      onOpen={() => setOpenId(a.id)}
-                      onEdit={() => setEditId(a.id)}
-                    />
-                  </li>
+              <ul className="space-y-2.5">
+                {upcoming.map((a, i) => (
+                  <UpcomingEventRow
+                    key={a.id}
+                    event={a}
+                    index={i}
+                    onOpen={() => setOpenId(a.id)}
+                  />
                 ))}
               </ul>
-            </section>
-          ))}
-        </div>
+            </div>
+          )}
+        </motion.div>
       ) : (
-        <Card className="mx-4 flex flex-col items-center gap-3 border-dashed bg-card/50 p-8 text-center sm:mx-0">
-          <span className="flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
-            <CalendarPlus className="size-6" />
-          </span>
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-balance">No events yet</p>
-            <p className="text-xs text-muted-foreground text-pretty">
-              {canPublish
-                ? "Publish your first event and your members will be able to say if they're coming."
-                : "When your organisation publishes an event, you'll see it here."}
-            </p>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.12 }}
+          className="px-4 sm:px-0"
+        >
+          <div className="flex flex-col items-center gap-4 rounded-3xl border border-dashed border-border bg-card/50 px-6 py-12 text-center">
+            <span className="flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20">
+              <CalendarPlus className="size-6" />
+            </span>
+            <div className="space-y-1">
+              <p className="text-base font-semibold">{events.length === 0 ? "No upcoming events" : "Nothing here yet"}</p>
+              <p className="mx-auto max-w-[34ch] text-sm text-muted-foreground text-pretty">
+                {events.length === 0
+                  ? canPublish
+                    ? "Create your first event and share it with your community."
+                    : "When your organisation creates an event, you'll see it here."
+                  : `No events for ${sectionLabel.toLowerCase()}. Try another filter.`}
+              </p>
+            </div>
+            {events.length === 0 && canPublish ? (
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.96 }}
+                onClick={() => setCreateOpen(true)}
+                className="flex items-center gap-1.5 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_0_24px_-8px] shadow-primary/70 transition-[filter] hover:brightness-110"
+              >
+                <Plus className="size-4" /> Create event
+              </motion.button>
+            ) : events.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setView({ type: "range", key: "all" })}
+                className="rounded-full border border-primary/30 bg-primary/10 px-5 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/15"
+              >
+                View all events
+              </button>
+            ) : null}
           </div>
-        </Card>
+        </motion.div>
       )}
 
-      {showForm && currentUser && <AdvertiseForm onClose={() => setShowForm(false)} />}
+      {canPublish && (
+        <CreateEventSheet open={createOpen} onClose={() => setCreateOpen(false)} onChoose={openCreate} />
+      )}
+      {showForm && currentUser && (
+        <AdvertiseForm
+          presetLocation={formPreset}
+          onClose={() => {
+            setShowForm(false)
+            setFormPreset(undefined)
+          }}
+        />
+      )}
       {editEvent && <AdvertiseForm event={editEvent} onClose={() => setEditId(null)} />}
       {openEvent && <EventDetailSheet event={openEvent} isAdmin={isAdmin} onClose={() => setOpenId(null)} />}
     </section>
+  )
+}
+
+/* ---------------------------------------------------------------------------
+ * Events browser building blocks
+ *
+ * These render the redesigned Events surface: a range/pill filter, a horizontal
+ * date rail, a poster-forward featured hero, compact upcoming rows, and the
+ * create bottom sheet. They lean on the same helpers and design tokens as the
+ * rest of the file so the feed tab and the public /events browser feel unified.
+ * ------------------------------------------------------------------------- */
+
+/** Build the public detail href (or null for handle-less/universal events). */
+function eventHref(a: AnnouncementView): string | null {
+  return a.homeHandle ? `/events/${a.homeHandle}/${a.id}?from=events` : null
+}
+
+/** Range pill tabs (All / Today / This week / Later). */
+function EventFilterTabs({
+  view,
+  onRange,
+}: {
+  view: EventView
+  onRange: (key: "all" | "today" | "week" | "later") => void
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label="Filter events"
+      className="flex items-center gap-6 overflow-x-auto border-b border-border px-4 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
+      {RANGE_TABS.map((tab) => {
+        const active = view.type === "range" && view.key === tab.key
+        return (
+          <button
+            key={tab.key}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onRange(tab.key)}
+            className={cn(
+              "relative shrink-0 pb-3 text-sm font-medium transition-colors",
+              active ? "text-primary" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {tab.label}
+            {active && (
+              <motion.span
+                layoutId="events-tab-underline"
+                className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-primary"
+                transition={{ type: "spring", stiffness: 500, damping: 40 }}
+              />
+            )}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Horizontal rail of the next several days; tapping one filters to that day. */
+function DateRail({ selected, onPick }: { selected: string | null; onPick: (date: string) => void }) {
+  const days = useMemo(() => railDays(14), [])
+  return (
+    <div className="-mx-4 sm:mx-0">
+      <div className="flex gap-2.5 overflow-x-auto px-4 pb-1 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {days.map((d) => {
+          const active = d.date === selected
+          return (
+            <motion.button
+              key={d.date}
+              type="button"
+              whileTap={{ scale: 0.94 }}
+              onClick={() => onPick(d.date)}
+              aria-pressed={active}
+              aria-label={`${d.dow} ${d.day} ${d.mon}`}
+              className={cn(
+                "relative flex h-[78px] w-[62px] shrink-0 flex-col items-center justify-center rounded-2xl border transition-colors",
+                active
+                  ? "border-primary bg-primary/10 shadow-[0_0_24px_-6px] shadow-primary/70"
+                  : "border-border bg-card hover:border-border/80",
+              )}
+            >
+              <span className={cn("text-[11px] font-semibold", active ? "text-primary" : "text-muted-foreground")}>
+                {d.dow}
+              </span>
+              <span className="mt-0.5 text-xl font-bold leading-none">{d.day}</span>
+              <span className="mt-0.5 text-[11px] font-medium text-muted-foreground">{d.mon}</span>
+              {active && (
+                <motion.span
+                  layoutId="events-rail-dot"
+                  className="absolute -bottom-1 size-1.5 rounded-full bg-primary"
+                  transition={{ type: "spring", stiffness: 500, damping: 40 }}
+                />
+              )}
+            </motion.button>
+          )
+        })}
+        {/* Jump to any date via the native picker. */}
+        <label className="relative flex h-[78px] w-[62px] shrink-0 cursor-pointer flex-col items-center justify-center rounded-2xl border border-border bg-secondary/40 text-muted-foreground transition-colors hover:text-foreground">
+          <Calendar className="size-5" />
+          <span className="sr-only">Pick a date</span>
+          <input
+            type="date"
+            min={todayStr()}
+            onChange={(e) => e.target.value && onPick(e.target.value)}
+            className="absolute inset-0 cursor-pointer opacity-0"
+          />
+        </label>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Poster-forward hero for the first event in the active filter: a large flyer
+ * with an overlaid date badge, title and meta, plus a bookmark, manage menu and
+ * a primary CTA. Tapping the poster opens the cinematic detail page (or the
+ * lightweight sheet for handle-less events).
+ */
+function FeaturedEventCard({
+  event: a,
+  isAdmin = false,
+  saved,
+  onToggleSave,
+  onOpen,
+  onEdit,
+}: {
+  event: AnnouncementView
+  isAdmin?: boolean
+  saved: boolean
+  onToggleSave: () => void
+  onOpen: () => void
+  onEdit: () => void
+}) {
+  const href = eventHref(a)
+  const online = isOnlineLocation(a.location)
+  const bodyLabel = `View details for ${a.title}`
+
+  const body = (
+    <div className="flex min-h-[220px] items-stretch text-left">
+      {/* Poster hero — roughly 42% of the card width, full-bleed. */}
+      <div className="relative w-[42%] shrink-0 self-stretch overflow-hidden bg-secondary">
+        {a.flyer ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={a.flyer || "/placeholder.svg"} alt={`${a.title} flyer`} className="size-full object-cover" />
+        ) : (
+          <div className="flex size-full items-center justify-center text-muted-foreground">
+            <CalendarPlus className="size-8" />
+          </div>
+        )}
+      </div>
+
+      {/* Event info */}
+      <div className="flex min-w-0 flex-1 flex-col gap-2.5 p-4">
+        <span className="w-fit rounded-full border border-primary/40 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-primary">
+          {relativeDayLabel(a.eventDate)}
+        </span>
+        <h3 className="text-xl font-bold leading-tight tracking-tight text-balance">{a.title}</h3>
+
+        <div className="mt-0.5 space-y-2">
+          <p className="flex items-center gap-2 text-sm">
+            <Clock className="size-4 shrink-0 text-primary" />
+            <span className="truncate font-medium">{formatTimeWithZone(a.eventDate, a.eventTime)}</span>
+          </p>
+          <p className="flex items-start gap-2 text-sm text-muted-foreground">
+            {online ? (
+              <Globe className="mt-0.5 size-4 shrink-0 text-live" />
+            ) : (
+              <MapPin className="mt-0.5 size-4 shrink-0" />
+            )}
+            <span className="line-clamp-2">{online ? "Online event" : a.location}</span>
+          </p>
+        </div>
+
+        <div className="mt-auto flex items-center gap-2 border-t border-border/60 pt-2.5">
+          <span
+            aria-hidden="true"
+            className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold uppercase text-primary"
+          >
+            {a.creatorName.slice(0, 2)}
+          </span>
+          <span className="min-w-0 leading-tight">
+            <span className="block truncate text-[13px] font-semibold">{a.creatorName}</span>
+            <span className="block truncate text-[11px] text-muted-foreground">Ministry</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+
+  return (
+    <motion.div
+      whileTap={{ scale: 0.995 }}
+      className="overflow-hidden rounded-3xl border border-border bg-card transition-colors hover:border-primary/30"
+    >
+      {href ? (
+        <Link href={href} aria-label={bodyLabel} className="block">
+          {body}
+        </Link>
+      ) : (
+        <button type="button" onClick={onOpen} aria-label={bodyLabel} className="block w-full">
+          {body}
+        </button>
+      )}
+
+      {/* Full-width action row: primary CTA, bookmark, overflow menu. */}
+      <div className="flex items-center gap-2 border-t border-border/70 p-3">
+        {href ? (
+          <Link
+            href={href}
+            className="flex h-11 flex-1 items-center justify-center rounded-2xl bg-primary text-sm font-semibold text-primary-foreground shadow-[0_0_24px_-8px] shadow-primary/70 transition-[filter] hover:brightness-110 active:scale-[0.99]"
+          >
+            View details
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={onOpen}
+            className="flex h-11 flex-1 items-center justify-center rounded-2xl bg-primary text-sm font-semibold text-primary-foreground shadow-[0_0_24px_-8px] shadow-primary/70 transition-[filter] hover:brightness-110 active:scale-[0.99]"
+          >
+            View details
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={onToggleSave}
+          aria-label={saved ? `Remove ${a.title} from saved` : `Save ${a.title}`}
+          aria-pressed={saved}
+          className="grid size-11 shrink-0 place-items-center rounded-2xl border border-border text-muted-foreground transition-colors hover:text-primary"
+        >
+          <Bookmark className={cn("size-[18px]", saved && "fill-primary text-primary")} />
+        </button>
+
+        <EventCardMenu event={a} isAdmin={isAdmin} onEdit={onEdit} onOpen={onOpen} />
+      </div>
+    </motion.div>
+  )
+}
+
+/** Compact one-line event row for the "Upcoming events" list. */
+function UpcomingEventRow({ event: a, index = 0, onOpen }: { event: AnnouncementView; index?: number; onOpen: () => void }) {
+  const href = eventHref(a)
+  const { mon, day, dow } = feedDateParts(a.eventDate)
+
+  const body = (
+    <>
+      {/* Poster thumbnail */}
+      <div className="relative aspect-square w-14 shrink-0 overflow-hidden rounded-xl border border-border/60 bg-muted">
+        {a.flyer ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={a.flyer || "/placeholder.svg"} alt="" loading="lazy" className="size-full object-cover" />
+        ) : (
+          <div className="flex size-full items-center justify-center text-muted-foreground">
+            <CalendarPlus className="size-5" />
+          </div>
+        )}
+      </div>
+
+      {/* Date block */}
+      <div className="flex w-12 shrink-0 flex-col items-center justify-center rounded-xl border border-border bg-secondary/40 py-1.5">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-primary">{mon}</span>
+        <span className="text-lg font-bold leading-none">{day}</span>
+        <span className="mt-0.5 text-[10px] font-medium text-muted-foreground">{dow}</span>
+      </div>
+
+      {/* Title + meta */}
+      <div className="flex min-w-0 flex-1 flex-col justify-center">
+        <h3 className="truncate text-sm font-semibold leading-snug">{a.title}</h3>
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+          {formatEventDate(a.eventDate ?? "", a.eventTime)}
+        </p>
+        {a.location && <p className="mt-0.5 truncate text-xs text-muted-foreground">{a.location}</p>}
+      </div>
+      <ChevronRight className="size-4 shrink-0 self-center text-muted-foreground" />
+    </>
+  )
+
+  const className =
+    "group flex items-stretch gap-3 rounded-2xl border border-border bg-card p-2.5 text-left transition-all duration-200 hover:border-primary/40 animate-in fade-in slide-in-from-bottom-2 fill-mode-both"
+  const style = { animationDelay: `${Math.min(index, 6) * 40}ms` }
+
+  return (
+    <li>
+      {href ? (
+        <Link href={href} aria-label={`View details for ${a.title}`} className={className} style={style}>
+          {body}
+        </Link>
+      ) : (
+        <button type="button" onClick={onOpen} aria-label={`View details for ${a.title}`} className={cn(className, "w-full")} style={style}>
+          {body}
+        </button>
+      )}
+    </li>
+  )
+}
+
+/** Bottom sheet offering the kind of event to create; each choice prefills a
+ *  venue hint into the publish form via `onChoose`. */
+function CreateEventSheet({
+  open,
+  onClose,
+  onChoose,
+}: {
+  open: boolean
+  onClose: () => void
+  onChoose: (presetLocation?: string) => void
+}) {
+  if (typeof document === "undefined") return null
+
+  const options: { icon: typeof Calendar; label: string; hint: string; preset?: string }[] = [
+    { icon: CalendarPlus, label: "Create event", hint: "A standard gathering", preset: undefined },
+    { icon: Video, label: "Create online event", hint: "Streamed or hosted on a link", preset: "Online" },
+    { icon: Building2, label: "Create in-person event", hint: "At a physical venue", preset: "" },
+  ]
+
+  return createPortal(
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Create an event"
+          className="fixed inset-0 z-[60] flex items-end justify-center bg-background/80 p-3 backdrop-blur-sm sm:items-center"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) onClose()
+          }}
+        >
+          <motion.div
+            initial={{ y: 24, opacity: 0.6 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 24, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 320, damping: 30 }}
+            className="w-full max-w-md rounded-3xl border border-border bg-card p-4 shadow-soft"
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-lg font-bold tracking-tight">Create an event</h2>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close"
+                className="grid size-8 place-items-center rounded-full bg-secondary text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+            <div className="space-y-2">
+              {options.map((o) => (
+                <button
+                  key={o.label}
+                  type="button"
+                  onClick={() => onChoose(o.preset)}
+                  className="flex w-full items-center gap-3 rounded-2xl border border-border bg-background/40 p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
+                >
+                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/20">
+                    <o.icon className="size-5" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold">{o.label}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{o.hint}</span>
+                  </span>
+                  <ChevronRight className="ml-auto size-4 shrink-0 text-muted-foreground" />
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body,
   )
 }
 
@@ -898,7 +1483,17 @@ function AdminMenu({ announcement: a }: { announcement: AnnouncementView }) {
   )
 }
 
-function AdvertiseForm({ event, onClose }: { event?: AnnouncementView; onClose: () => void }) {
+function AdvertiseForm({
+  event,
+  presetLocation,
+  onClose,
+}: {
+  event?: AnnouncementView
+  // A venue hint prefilled when the form is opened for a new event via a
+  // create-sheet option (e.g. "Online"). Ignored when editing an existing event.
+  presetLocation?: string
+  onClose: () => void
+}) {
   // When `event` is present we're editing an existing event; otherwise publishing
   // a new one. Editing reuses the identical form, prefilled from the event.
   const isEditing = Boolean(event)
@@ -906,7 +1501,7 @@ function AdvertiseForm({ event, onClose }: { event?: AnnouncementView; onClose: 
   const adType: AdType = "event"
   const [title, setTitle] = useState(event?.title ?? "")
   const [description, setDescription] = useState(event?.description ?? "")
-  const [location, setLocation] = useState(event?.location ?? "")
+  const [location, setLocation] = useState(event?.location ?? presetLocation ?? "")
   const [eventDate, setEventDate] = useState(event?.eventDate ?? "")
   const [eventTime, setEventTime] = useState(event?.eventTime ?? "")
   // Whether an event is free to attend or ticketed. `price` holds the ticket
