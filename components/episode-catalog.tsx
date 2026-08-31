@@ -206,14 +206,15 @@ export function EpisodeCatalog({
         </div>
       </div>
 
-      {/* Live subtoggle: Video / Audio. Deliberately a DIFFERENT active style
-          from the top-level underline tabs — a segmented pill group, so the two
-          levels of navigation read as distinct. */}
+      {/* Live subtoggle: Video / Audio. Matches the page's segmented pill nav
+          (Materials / Playlists / Live) — same container, solid primary active
+          pill, and count treatment — so the whole Catalogue reads as one design
+          language. Full-width so the two segments split the row evenly. */}
       {tab === "live" && (
         <div
           role="tablist"
           aria-label="Filter live recordings by media type"
-          className="mx-auto flex w-fit items-center gap-1 rounded-full border border-border/40 bg-card/30 p-1"
+          className="flex w-full items-center gap-1 rounded-full border border-border bg-secondary/40 p-1"
         >
           {(
             [
@@ -230,22 +231,24 @@ export function EpisodeCatalog({
                 aria-selected={active}
                 onClick={() => selectLiveKind(key)}
                 className={cn(
-                  "flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[13px] font-medium transition-[background-color,color,box-shadow] duration-200",
+                  "inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-all duration-200",
                   active
-                    ? "bg-card text-foreground shadow-sm ring-1 ring-border/60"
+                    ? "bg-primary text-primary-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                <Icon className={cn("size-3.5 transition-colors", active ? "text-primary" : "")} />
+                <Icon className="size-4" />
                 {label}
-                <span
-                  className={cn(
-                    "min-w-4 rounded-full px-1 text-center text-[10px] tabular-nums transition-colors",
-                    active ? "bg-primary/15 text-primary" : "text-muted-foreground/50",
-                  )}
-                >
-                  {count}
-                </span>
+                {count > 0 && (
+                  <span
+                    className={cn(
+                      "text-xs tabular-nums",
+                      active ? "text-primary-foreground/80" : "text-muted-foreground/60",
+                    )}
+                  >
+                    {count}
+                  </span>
+                )}
               </button>
             )
           })}
