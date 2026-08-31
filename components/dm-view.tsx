@@ -405,7 +405,7 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
             type="button"
             variant="ghost"
             size="icon"
-            className="size-9 rounded-full bg-primary/15 text-primary shadow-sm ring-1 ring-inset ring-primary/25 transition-colors hover:bg-primary/25"
+            className="size-9 rounded-full bg-secondary/70 text-foreground shadow-sm ring-1 ring-inset ring-border/40 transition-colors hover:bg-secondary"
             onClick={() => beginCall("video")}
             disabled={starting || Boolean(liveCall)}
             aria-label="Start video call"
