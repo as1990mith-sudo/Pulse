@@ -1904,6 +1904,12 @@ export const homeAppointment = pgTable(
     // the session resolves to "Finished"; neither/one set => "No show".
     memberAttendedAt: timestamp("memberAttendedAt"),
     hostAttendedAt: timestamp("hostAttendedAt"),
+    // Per-viewer dismissal of a PAST appointment from one's own timeline. Set
+    // when that party removes it from their Appointments page — non-destructive
+    // and one-sided, so the counterpart still sees the row and the shared
+    // conversation survives. Reads filter these out for the matching viewer.
+    memberHiddenAt: timestamp("memberHiddenAt"),
+    hostHiddenAt: timestamp("hostHiddenAt"),
     // The bookable type this appointment was created from (null for legacy /
     // admin-created ad-hoc appointments).
     typeId: text("typeId"),

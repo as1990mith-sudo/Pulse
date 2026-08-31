@@ -1,6 +1,6 @@
 "use server"
 
-import { and, desc, eq, inArray } from "drizzle-orm"
+import { and, desc, eq, inArray, isNull } from "drizzle-orm"
 import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
@@ -740,7 +740,7 @@ export async function getMyAppointments(): Promise<MyAppointmentRow[]> {
     .from(homeAppointment)
     .innerJoin(home, eq(home.id, homeAppointment.homeId))
     .innerJoin(organization, eq(organization.id, home.organizationId))
-    .where(eq(homeAppointment.memberUserId, user.id))
+    .where(and(eq(homeAppointment.memberUserId, user.id), isNull(homeAppointment.memberHiddenAt)))
     .orderBy(desc(homeAppointment.startsAt))
 
   return rows.map(({ a, org }) => ({
@@ -776,7 +776,13 @@ export async function getHostAppointments(handle: string): Promise<MyAppointment
   const rows = await db
     .select()
     .from(homeAppointment)
-    .where(and(eq(homeAppointment.homeId, home.id), eq(homeAppointment.hostUserId, user.id)))
+    .where(
+      and(
+        eq(homeAppointment.homeId, home.id),
+        eq(homeAppointment.hostUserId, user.id),
+        isNull(homeAppointment.hostHiddenAt),
+      ),
+    )
     .orderBy(desc(homeAppointment.startsAt))
 
   return rows.map((a) => ({
@@ -949,4 +955,37 @@ export async function completeAppointment(handle: string, appointmentId: string)
     .set({ status: "completed", updatedAt: new Date() })
     .where(and(eq(homeAppointment.id, appointmentId), eq(homeAppointment.homeId, homeId)))
   revalidatePath(`/org/${handle}/admin/appointments`)
+}
+
+/**
+ * Remove a PAST appointment from the caller's OWN timeline. Non-destructive and
+ * one-sided: the member dismisses via `memberHiddenAt`, the host via
+ * `hostHiddenAt`, so the counterpart keeps seeing the row and the shared
+ * conversation is untouched. Guarded to finished/ended sessions only — you can
+ * never make an upcoming appointment silently vanish for one party.
+ */
+export async function hideAppointment(appointmentId: string) {
+  const user = await requireUser()
+  const [a] = await db.select().from(homeAppointment).where(eq(homeAppointment.id, appointmentId)).limit(1)
+  if (!a) throw new Error("Appointment not found.")
+
+  // Identify the caller's relationship to the appointment. Never derive it from
+  // anything client-sent — match the session user against the stored parties.
+  const isMember = a.memberUserId === user.id
+  const isHost = !!a.hostUserId && a.hostUserId === user.id
+  if (!isMember && !isHost) throw new Error("You can't remove this appointment.")
+
+  // Only past/finished sessions may be dismissed from a timeline.
+  const display = deriveDisplayStatus(a)
+  const finished = display === "completed" || display === "no_show" || display === "cancelled"
+  const ended = (a.endsAt ?? a.startsAt).getTime() < Date.now()
+  if (!finished && !ended) throw new Error("Only past appointments can be removed.")
+
+  await db
+    .update(homeAppointment)
+    .set(isMember ? { memberHiddenAt: new Date() } : { hostHiddenAt: new Date() })
+    .where(eq(homeAppointment.id, appointmentId))
+
+  revalidatePath("/appointments")
+  revalidatePath("/messages")
 }

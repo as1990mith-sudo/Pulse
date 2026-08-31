@@ -2,15 +2,16 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import Image from "next/image"
 import Link from "next/link"
 import {
   ArrowRight,
   BookOpen,
   CalendarClock,
   Check,
+  ChevronDown,
   ChevronLeft,
   Clock,
+  Trash2,
   Compass,
   CreditCard,
   HeartHandshake,
@@ -31,6 +32,7 @@ import {
   bookAppointment,
   confirmAppointmentPaid,
   getOpenSlots,
+  hideAppointment,
   type AppointmentTypeRow,
   type MyAppointmentRow,
   type OpenSlot,
@@ -102,6 +104,113 @@ function StatusPill({ status, paymentStatus }: { status: string; paymentStatus: 
 }
 
 /* -------------------------------------------------------------------------- */
+/* Immersive calendar header                                                  */
+/* -------------------------------------------------------------------------- */
+
+const WEEKDAY_INITIALS = ["S", "M", "T", "W", "T", "F", "S"]
+
+/**
+ * A full-width, immersive calendar banner that owns the top of the page: a rich
+ * gradient panel carrying the month, the current week as a live day strip (today
+ * lit, days with sessions dotted), and an at-a-glance count. Replaces the old
+ * floating 3D icon that rendered on a broken transparent checkerboard.
+ */
+function CalendarHeader({ hostMode, appointments }: { hostMode: boolean; appointments: MyAppointmentRow[] }) {
+  const { monthLabel, week, upcomingCount } = useMemo(() => {
+    const now = new Date()
+    const today = startOfDay(now)
+
+    // Days (this calendar week, Sun→Sat) that carry at least one live session.
+    const bookedKeys = new Set(
+      appointments.filter((a) => a.status !== "cancelled").map((a) => startOfDay(new Date(a.startsAt)).getTime()),
+    )
+
+    const weekStart = new Date(today)
+    weekStart.setDate(today.getDate() - today.getDay())
+    const week = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(weekStart)
+      d.setDate(weekStart.getDate() + i)
+      const key = startOfDay(d).getTime()
+      return { date: d, isToday: key === today.getTime(), hasAppt: bookedKeys.has(key) }
+    })
+
+    const upcomingCount = appointments.filter((a) => {
+      if (a.status === "cancelled" || a.status === "completed" || a.status === "no_show") return false
+      const ended = a.endsAt ? new Date(a.endsAt).getTime() < now.getTime() : new Date(a.startsAt).getTime() < now.getTime()
+      return !ended
+    }).length
+
+    return {
+      monthLabel: now.toLocaleDateString(undefined, { month: "long", year: "numeric" }),
+      week,
+      upcomingCount,
+    }
+  }, [appointments])
+
+  return (
+    <header className="relative overflow-hidden rounded-[28px] border border-white/10 p-5 shadow-[0_24px_60px_-24px_rgba(0,0,0,0.9)]">
+      {/* Layered gradient wash — warm brand glow bleeding from the top corners. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(120% 90% at 85% -10%, color-mix(in oklch, var(--primary) 42%, transparent), transparent 55%), radial-gradient(90% 80% at 0% 0%, color-mix(in oklch, var(--primary) 16%, transparent), transparent 60%), linear-gradient(180deg, color-mix(in oklch, var(--card) 92%, transparent), color-mix(in oklch, var(--background) 96%, transparent))",
+        }}
+      />
+      <div aria-hidden className="pointer-events-none absolute inset-0 rounded-[28px] ring-1 ring-inset ring-white/10" />
+
+      <div className="relative">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary/90">{monthLabel}</p>
+            <h1 className="mt-1 font-display text-[2rem] font-semibold leading-none tracking-tight">Appointments</h1>
+            <p className="mt-2 max-w-xs text-[13px] leading-relaxed text-muted-foreground text-pretty">
+              {hostMode ? "Sessions booked with you — each with its own room." : "Your booked sessions and their rooms."}
+            </p>
+          </div>
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary/15 px-3 py-1.5 text-xs font-semibold text-primary ring-1 ring-inset ring-primary/25 backdrop-blur">
+            <CalendarClock className="size-3.5" />
+            {upcomingCount} upcoming
+          </span>
+        </div>
+
+        {/* Live week strip */}
+        <div className="mt-5 grid grid-cols-7 gap-1.5">
+          {week.map(({ date, isToday, hasAppt }, i) => (
+            <div
+              key={i}
+              className={cn(
+                "relative flex flex-col items-center gap-1 rounded-2xl py-2.5 transition-colors",
+                isToday
+                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/30"
+                  : "bg-white/[0.04] text-foreground ring-1 ring-inset ring-white/5",
+              )}
+            >
+              <span
+                className={cn(
+                  "text-[10px] font-semibold uppercase",
+                  isToday ? "text-primary-foreground/80" : "text-muted-foreground",
+                )}
+              >
+                {WEEKDAY_INITIALS[i]}
+              </span>
+              <span className="text-sm font-semibold tabular-nums leading-none">{date.getDate()}</span>
+              <span
+                className={cn(
+                  "h-1 w-1 rounded-full transition-colors",
+                  hasAppt ? (isToday ? "bg-primary-foreground" : "bg-primary") : "bg-transparent",
+                )}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    </header>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
 /* Shell                                                                      */
 /* -------------------------------------------------------------------------- */
 
@@ -135,28 +244,7 @@ export function AppointmentsHub({
 
   return (
     <div className={cn("mx-auto w-full max-w-2xl px-4 pb-28 sm:px-6", hideHeader ? "pt-1" : "pt-6")}>
-      {!hideHeader && (
-        <header className="flex items-start justify-between gap-4">
-          <div className="min-w-0 pt-1">
-            <h1 className="font-display text-3xl font-semibold tracking-tight text-balance">Appointments</h1>
-            <p className="mt-1.5 max-w-xs text-sm leading-relaxed text-muted-foreground text-pretty">
-              {hostMode
-                ? "Sessions booked with you — each has its own conversation and meeting."
-                : "Book time with the ministry team — each opens its own private conversation."}
-            </p>
-          </div>
-          <div className="relative -mt-1 size-20 shrink-0 sm:size-28">
-            <Image
-              src="/images/appointments-hero.png"
-              alt=""
-              fill
-              sizes="112px"
-              priority
-              className="object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.45)]"
-            />
-          </div>
-        </header>
-      )}
+      {!hideHeader && <CalendarHeader hostMode={hostMode} appointments={appointments} />}
 
       <div className={cn(!hideHeader && "mt-5")}>
         {view === "book" ? (
@@ -206,11 +294,19 @@ function MyAppointments({
   activeHomeName: string | null
   onBook: () => void
 }) {
+  const router = useRouter()
+  // Optimistically removed ids (per-viewer dismissal of past sessions).
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set())
+  const [pastOpen, setPastOpen] = useState(true)
+  const [confirm, setConfirm] = useState<MyAppointmentRow | null>(null)
+  const [deleting, startDelete] = useTransition()
+
   const { upcoming, past } = useMemo(() => {
     const now = Date.now()
     const up: MyAppointmentRow[] = []
     const pa: MyAppointmentRow[] = []
     for (const a of appointments) {
+      if (hiddenIds.has(a.id)) continue
       const done = a.status === "completed" || a.status === "no_show" || a.status === "cancelled"
       const ended = a.endsAt ? new Date(a.endsAt).getTime() < now : new Date(a.startsAt).getTime() < now
       if (done || ended) pa.push(a)
@@ -219,7 +315,27 @@ function MyAppointments({
     up.sort((a, b) => +new Date(a.startsAt) - +new Date(b.startsAt))
     pa.sort((a, b) => +new Date(b.startsAt) - +new Date(a.startsAt))
     return { upcoming: up, past: pa }
-  }, [appointments])
+  }, [appointments, hiddenIds])
+
+  const removeAppointment = (a: MyAppointmentRow) => {
+    setConfirm(null)
+    setHiddenIds((prev) => new Set(prev).add(a.id)) // optimistic
+    startDelete(async () => {
+      try {
+        await hideAppointment(a.id)
+        toast.success("Removed from your appointments.")
+        router.refresh()
+      } catch (err) {
+        // Roll back on failure.
+        setHiddenIds((prev) => {
+          const next = new Set(prev)
+          next.delete(a.id)
+          return next
+        })
+        toast.error(err instanceof Error ? err.message : "Could not remove that appointment.")
+      }
+    })
+  }
 
   if (appointments.length === 0) {
     return (
@@ -259,14 +375,64 @@ function MyAppointments({
 
       {past.length > 0 && (
         <section>
-          <SectionLabel>Past</SectionLabel>
-          <ul className="mt-2.5 flex flex-col gap-2.5">
-            {past.map((a) => (
-              <AppointmentRow key={a.id} a={a} past />
-            ))}
-          </ul>
+          <button
+            type="button"
+            onClick={() => setPastOpen((v) => !v)}
+            aria-expanded={pastOpen}
+            className="group flex w-full items-center justify-between rounded-xl py-1 text-left"
+          >
+            <span className="flex items-center gap-2">
+              <SectionLabel>Past</SectionLabel>
+              <span className="rounded-full bg-muted/70 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
+                {past.length}
+              </span>
+            </span>
+            <ChevronDown
+              className={cn(
+                "size-4 text-muted-foreground transition-transform duration-200",
+                pastOpen ? "rotate-180" : "rotate-0",
+              )}
+            />
+          </button>
+          {pastOpen && (
+            <ul className="mt-2.5 flex flex-col gap-2.5 animate-in fade-in-0 slide-in-from-top-1 duration-200">
+              {past.map((a) => (
+                <AppointmentRow key={a.id} a={a} past onDelete={() => setConfirm(a)} />
+              ))}
+            </ul>
+          )}
         </section>
       )}
+
+      <Dialog open={!!confirm} onOpenChange={(o) => !o && setConfirm(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Remove appointment?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            This removes <span className="font-medium text-foreground">{confirm?.title}</span> from your list only. The
+            other person keeps their copy and the conversation stays intact.
+          </p>
+          <div className="mt-2 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirm(null)}
+              className="rounded-full border border-border bg-background px-4 py-2 text-sm font-semibold transition-colors hover:bg-muted"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={() => confirm && removeAppointment(confirm)}
+              className="inline-flex items-center gap-1.5 rounded-full bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
+            >
+              {deleting ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+              Remove
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -294,17 +460,28 @@ function BookCta({ onBook }: { onBook: () => void }) {
   )
 }
 
-function AppointmentRow({ a, emphasize, past }: { a: MyAppointmentRow; emphasize?: boolean; past?: boolean }) {
+function AppointmentRow({
+  a,
+  emphasize,
+  past,
+  onDelete,
+}: {
+  a: MyAppointmentRow
+  emphasize?: boolean
+  past?: boolean
+  onDelete?: () => void
+}) {
   const canJoin =
     a.useFrequencyLive && a.status !== "completed" && a.status !== "no_show" && a.status !== "cancelled" && a.paymentStatus !== "pending"
   return (
     <li
       className={cn(
-        "rounded-2xl border p-3.5 transition-colors",
+        "group relative rounded-2xl p-3.5 transition-all",
         emphasize
-          ? "border-primary/40 bg-primary/[0.06] ring-1 ring-inset ring-primary/20"
-          : "border-border/60 bg-card/40 hover:border-border",
-        past && "opacity-80",
+          ? "border border-primary/40 bg-gradient-to-br from-primary/[0.14] to-primary/[0.03] ring-1 ring-inset ring-primary/25 shadow-[0_18px_44px_-22px] shadow-primary/40"
+          : past
+            ? "border border-white/[0.07] bg-white/[0.02] ring-1 ring-inset ring-white/[0.03]"
+            : "border border-white/10 bg-gradient-to-b from-card to-card/50 ring-1 ring-inset ring-white/[0.04] shadow-[0_14px_34px_-20px_rgba(0,0,0,0.9)] hover:border-white/20",
       )}
     >
       <div className="flex items-stretch gap-3.5">
@@ -312,7 +489,9 @@ function AppointmentRow({ a, emphasize, past }: { a: MyAppointmentRow; emphasize
         <div
           className={cn(
             "flex w-16 shrink-0 flex-col items-center justify-center rounded-xl px-1 py-2 text-center",
-            emphasize ? "bg-primary text-primary-foreground" : "bg-muted/60 text-foreground",
+            emphasize
+              ? "bg-primary text-primary-foreground shadow-md shadow-primary/25"
+              : "bg-white/[0.05] text-foreground ring-1 ring-inset ring-white/5",
           )}
         >
           <span className="text-sm font-semibold tabular-nums leading-tight">{formatTime(a.startsAt)}</span>
@@ -330,7 +509,7 @@ function AppointmentRow({ a, emphasize, past }: { a: MyAppointmentRow; emphasize
 
         {/* Details */}
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-sm font-semibold">{a.title}</h3>
+          <h3 className={cn("truncate text-sm font-semibold", onDelete && "pr-8")}>{a.title}</h3>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
             {a.hostName ? `with ${a.hostName}` : a.homeName}
           </p>
@@ -343,6 +522,17 @@ function AppointmentRow({ a, emphasize, past }: { a: MyAppointmentRow; emphasize
           </div>
         </div>
       </div>
+
+      {onDelete && (
+        <button
+          type="button"
+          onClick={onDelete}
+          aria-label="Remove appointment"
+          className="absolute right-2.5 top-2.5 flex size-8 items-center justify-center rounded-full text-muted-foreground/70 transition-colors hover:bg-destructive/15 hover:text-destructive"
+        >
+          <Trash2 className="size-4" />
+        </button>
+      )}
 
       {a.status !== "cancelled" && (a.conversationId || canJoin) && (
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/50 pt-3">
