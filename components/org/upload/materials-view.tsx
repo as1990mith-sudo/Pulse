@@ -140,7 +140,7 @@ export function MaterialsView({
           {query ? `No materials match “${query}”.` : "No materials in this filter yet."}
         </p>
       ) : (
-        <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
           {filtered.map((m, i) => (
             <div
               key={m.id}
