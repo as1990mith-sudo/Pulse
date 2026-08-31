@@ -344,7 +344,7 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
   }
 
   return (
-    <div className="flex h-full flex-1 flex-col overflow-hidden font-display">
+    <div className="dark flex h-full flex-1 flex-col overflow-hidden bg-background font-display">
       {/* Header — tap the title block to open group info / members. The Admin
           badge lives on the subtitle line so it never crowds the room name. */}
       <div className="flex items-center gap-1.5 border-b border-border/60 bg-background/80 px-2 py-2.5 backdrop-blur sm:px-4">

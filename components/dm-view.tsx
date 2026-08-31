@@ -349,7 +349,10 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
 
   return (
     <div
-      className={cn("relative flex h-full flex-1 flex-col overflow-hidden font-display", !hasWallpaper && "bg-background")}
+      // `dark` pins the entire chat surface to the dark palette regardless of the
+      // app theme: chat wallpapers are dark imagery, so the scrim, header, bubbles
+      // and composer must stay dark even in light mode (they'd otherwise wash out).
+      className={cn("dark relative flex h-full flex-1 flex-col overflow-hidden font-display", !hasWallpaper && "bg-background")}
       style={chatBackgroundStyle(bgId)}
     >
       {/* Wallpaper legibility scrim spanning the full chat height so the dark
