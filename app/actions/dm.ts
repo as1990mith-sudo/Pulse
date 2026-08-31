@@ -214,10 +214,18 @@ export async function getConversations(): Promise<DmConversationSummary[]> {
   if (memberIds.length === 0) return []
   const memberSet = new Set(memberIds)
 
+  // Only ordinary 1:1 DMs belong in the Chats inbox. Appointment-kind
+  // conversations are surfaced under the Messages hub's "Schedule" tab (via the
+  // appointment rows), not mixed in with personal chats here.
   const allRows = await db
     .select()
     .from(dmConversation)
-    .where(or(eq(dmConversation.userAId, user.id), eq(dmConversation.userBId, user.id)))
+    .where(
+      and(
+        eq(dmConversation.kind, "direct"),
+        or(eq(dmConversation.userAId, user.id), eq(dmConversation.userBId, user.id)),
+      ),
+    )
     .orderBy(desc(dmConversation.lastMessageAt))
 
   const rows = allRows.filter((conv) => {

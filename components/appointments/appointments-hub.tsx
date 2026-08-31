@@ -112,6 +112,7 @@ export function AppointmentsHub({
   activeHomeName,
   hostMode = false,
   publishableKey,
+  hideHeader = false,
 }: {
   appointments: MyAppointmentRow[]
   bookableTypes: AppointmentTypeRow[]
@@ -119,6 +120,12 @@ export function AppointmentsHub({
   activeHomeName: string | null
   hostMode?: boolean
   publishableKey: string
+  /**
+   * Drop the hero title + description. Used when the hub is embedded under a tab
+   * (e.g. the Messages "Schedule" tab) that already provides its own heading, so
+   * the schedule renders straight into the tab with no duplicate description.
+   */
+  hideHeader?: boolean
 }) {
   const router = useRouter()
   const [view, setView] = useState<"list" | "book">("list")
@@ -127,29 +134,31 @@ export function AppointmentsHub({
   const canBook = !hostMode && bookableTypes.length > 0
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 pb-28 pt-6 sm:px-6">
-      <header className="flex items-start justify-between gap-4">
-        <div className="min-w-0 pt-1">
-          <h1 className="font-display text-3xl font-semibold tracking-tight text-balance">Appointments</h1>
-          <p className="mt-1.5 max-w-xs text-sm leading-relaxed text-muted-foreground text-pretty">
-            {hostMode
-              ? "Sessions booked with you — each has its own conversation and meeting."
-              : "Book time with the ministry team — each opens its own private conversation."}
-          </p>
-        </div>
-        <div className="relative -mt-1 size-20 shrink-0 sm:size-28">
-          <Image
-            src="/images/appointments-hero.png"
-            alt=""
-            fill
-            sizes="112px"
-            priority
-            className="object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.45)]"
-          />
-        </div>
-      </header>
+    <div className={cn("mx-auto w-full max-w-2xl px-4 pb-28 sm:px-6", hideHeader ? "pt-1" : "pt-6")}>
+      {!hideHeader && (
+        <header className="flex items-start justify-between gap-4">
+          <div className="min-w-0 pt-1">
+            <h1 className="font-display text-3xl font-semibold tracking-tight text-balance">Appointments</h1>
+            <p className="mt-1.5 max-w-xs text-sm leading-relaxed text-muted-foreground text-pretty">
+              {hostMode
+                ? "Sessions booked with you — each has its own conversation and meeting."
+                : "Book time with the ministry team — each opens its own private conversation."}
+            </p>
+          </div>
+          <div className="relative -mt-1 size-20 shrink-0 sm:size-28">
+            <Image
+              src="/images/appointments-hero.png"
+              alt=""
+              fill
+              sizes="112px"
+              priority
+              className="object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.45)]"
+            />
+          </div>
+        </header>
+      )}
 
-      <div className="mt-5">
+      <div className={cn(!hideHeader && "mt-5")}>
         {view === "book" ? (
           <BookFlow
             bookableTypes={bookableTypes}
