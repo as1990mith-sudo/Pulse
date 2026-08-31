@@ -27,8 +27,9 @@ const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
   subsets: ['latin'],
 })
-// Distinctive display face used for episode titles.
-const sora = Sora({ variable: '--font-sora', subsets: ['latin'], weight: ['600', '700'] })
+// Distinctive display face used for episode titles and, at its lighter weights,
+// as the full type family across chats and rooms.
+const sora = Sora({ variable: '--font-sora', subsets: ['latin'], weight: ['400', '500', '600', '700'] })
 
 export const metadata: Metadata = {
   title: 'Frequency',

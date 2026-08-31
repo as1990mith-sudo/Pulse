@@ -74,7 +74,7 @@ export function LinkPreview({
     if (isLoading) {
       return (
         <div className={cn("w-full max-w-[17rem]", className)}>
-          <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/60">
+          <div className="overflow-hidden rounded-2xl border border-border/60 bg-card">
             <div className="aspect-[1.91/1] w-full animate-pulse bg-muted" />
             <div className="space-y-1.5 px-2.5 py-2">
               <div className="h-2 w-1/3 animate-pulse rounded bg-muted" />
@@ -94,7 +94,7 @@ export function LinkPreview({
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="flex items-center gap-2.5 rounded-2xl border border-border/60 border-l-2 border-l-primary bg-card/60 px-2.5 py-2 transition-colors hover:bg-card"
+            className="flex items-center gap-2.5 rounded-2xl border border-border/60 border-l-2 border-l-primary bg-card px-2.5 py-2 transition-colors hover:bg-secondary"
           >
             <ExternalLink className="size-4 shrink-0 text-primary" />
             <span className="min-w-0">
@@ -118,7 +118,7 @@ export function LinkPreview({
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
-          className="block overflow-hidden rounded-2xl border border-border/60 bg-card/60 transition-colors hover:bg-card"
+          className="block overflow-hidden rounded-2xl border border-border/60 bg-card transition-colors hover:bg-secondary"
         >
           {data.image && (
             <div className="aspect-[1.91/1] w-full overflow-hidden bg-muted">
