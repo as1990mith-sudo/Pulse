@@ -42,11 +42,14 @@ function isImmersive(p: string): boolean {
   if (/^\/home\/(?!join$|create$)[^/]+/.test(p)) return true
   // A specific chat room (but keep the bar on the browse lists).
   if (/^\/chatrooms\/(?!community$|dreams$)[^/]+/.test(p)) return true
-  // Public event pages. These are the one surface designed for people with no
-  // Frequency account, so the member tab bar is actively unhelpful: every tab
-  // would lead a non-member straight into a sign-in wall. The pages carry their
-  // own lightweight public chrome instead.
-  if (/^\/events(\/|$)/.test(p)) return true
+  // Public event *detail* pages (e.g. /events/[handle]/[id]). These are the one
+  // surface designed for people with no Frequency account, so the member tab
+  // bar is actively unhelpful: every tab would lead a non-member straight into a
+  // sign-in wall. They carry their own lightweight public chrome instead.
+  // The bare /events index, by contrast, is a members-only browser (it shows a
+  // sign-in wall to logged-out users and the full app header), so it keeps the
+  // global tab bar.
+  if (/^\/events\/[^/]+/.test(p)) return true
   // Cinematic event experience — full-screen takeover with its own overlay nav
   // and sticky registration bar, so the member tab bar would only get in the way.
   if (/^\/event-showcase(\/|$)/.test(p)) return true
