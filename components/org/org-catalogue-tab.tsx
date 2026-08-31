@@ -195,6 +195,7 @@ export function OrgEpisodeCatalog({
   orgHandle,
   tab,
   onTabChange,
+  liveOnly = false,
 }: {
   items: CatalogueItemView[]
   isOwner: boolean
@@ -203,9 +204,13 @@ export function OrgEpisodeCatalog({
   orgLogo: string | null
   orgHandle: string
   // Active kind is owned by the parent (OrgTabs) so the header's upload dialog
-  // can tailor itself to �� and be hidden on — the current tab.
+  // can tailor itself to — and be hidden on — the current tab.
   tab: CatalogueKind
   onTabChange: (kind: CatalogueKind) => void
+  // When mounted inside the redesigned Upload section as the "Live" segment,
+  // hide the internal Uploads/Live/Documents pills — the parent's segmented nav
+  // owns that switch, and only the Live listing should show here.
+  liveOnly?: boolean
 }) {
   const [query, setQuery] = useState("")
   // Video / Audio subtab within the Live tab (mirrors the profile Catalogue).
@@ -295,7 +300,9 @@ export function OrgEpisodeCatalog({
       {/* Uploads / Live / Documents section nav — rounded segmented pills. The
           active pill carries an orange outline + glow, a filled-orange count
           badge, and a short underline bar beneath; inactive pills sit quietly
-          on a dark card fill with a muted count chip. */}
+          on a dark card fill with a muted count chip. Hidden in liveOnly mode,
+          where the parent Upload section's segmented nav owns the switch. */}
+      {!liveOnly && (
       <div role="tablist" aria-label="Filter resources by type" className="flex items-stretch gap-1.5">
         {KIND_ORDER.map((k) => {
           const active = tab === k
@@ -336,6 +343,7 @@ export function OrgEpisodeCatalog({
           )
         })}
       </div>
+      )}
 
       {/* Live subtoggle: Video / Audio — quieter secondary underline row. */}
       {tab === "video" && (

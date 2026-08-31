@@ -1,0 +1,398 @@
+"use client"
+
+import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
+import { ListPlus, Plus, Radio, Upload, Link2, LibraryBig, ListMusic } from "lucide-react"
+import { toast } from "sonner"
+import type { MaterialView } from "@/lib/materials"
+import {
+  type PlaylistView,
+  type PlaylistDetail,
+  getPlaylist,
+  duplicatePlaylist,
+  deletePlaylist,
+} from "@/app/actions/materials"
+import { OrgEpisodeCatalog } from "@/components/org/org-catalogue-tab"
+import type { CatalogueItemView } from "@/app/actions/org-content"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { MaterialsView } from "./materials-view"
+import { PlaylistsView } from "./playlists-view"
+import { PlaylistEditor } from "./playlist-editor"
+import { MaterialDetailSheet } from "./material-detail-sheet"
+import { UploadMaterialSheet } from "./upload-material-sheet"
+import { ImportLinksSheet } from "./import-links-sheet"
+import { CreatePlaylistSheet } from "./create-playlist-sheet"
+import { AddToPlaylistSheet } from "./add-to-playlist-sheet"
+import { cn } from "@/lib/utils"
+
+type Segment = "materials" | "playlists" | "live"
+
+/**
+ * The redesigned Catalogue overlay body. Owns the Materials · Playlists · Live
+ * segmented nav, the owner action cluster, and every material/playlist sheet.
+ * Live delegates to the untouched `OrgEpisodeCatalog` (in `liveOnly` mode) so
+ * episode replays render exactly as before.
+ */
+export function UploadSection({
+  organizationId,
+  isOwner,
+  materials,
+  playlists,
+  liveItems,
+  orgName,
+  orgLogo,
+  orgHandle,
+}: {
+  organizationId: string
+  isOwner: boolean
+  materials: MaterialView[]
+  playlists: PlaylistView[]
+  liveItems: CatalogueItemView[]
+  orgName: string
+  orgLogo: string | null
+  orgHandle: string
+}) {
+  const router = useRouter()
+  const [segment, setSegment] = useState<Segment>("materials")
+  const [, startTransition] = useTransition()
+
+  // Sheet / overlay state.
+  const [detail, setDetail] = useState<MaterialView | null>(null)
+  const [uploadOpen, setUploadOpen] = useState(false)
+  const [editingMaterial, setEditingMaterial] = useState<MaterialView | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [editingPlaylist, setEditingPlaylist] = useState<PlaylistView | null>(null)
+  const [addToPlaylistFor, setAddToPlaylistFor] = useState<MaterialView | null>(null)
+  const [openPlaylist, setOpenPlaylist] = useState<PlaylistDetail | null>(null)
+
+  function refresh() {
+    startTransition(() => router.refresh())
+  }
+
+  async function openPlaylistDetail(p: PlaylistView) {
+    try {
+      const d = await getPlaylist(organizationId, p.id)
+      if (d) setOpenPlaylist(d)
+    } catch {
+      toast.error("Could not open playlist")
+    }
+  }
+
+  async function reopenPlaylist(id: number) {
+    const d = await getPlaylist(organizationId, id)
+    if (d) setOpenPlaylist(d)
+    refresh()
+  }
+
+  function share(path: string, label: string) {
+    const url = `${window.location.origin}${path}`
+    if (navigator.share) {
+      void navigator.share({ title: label, url }).catch(() => {})
+    } else {
+      void navigator.clipboard.writeText(url)
+      toast.success("Link copied")
+    }
+  }
+
+  const SEGMENTS: { key: Segment; label: string; icon: typeof LibraryBig; count?: number }[] = [
+    { key: "materials", label: "Materials", icon: LibraryBig, count: materials.length },
+    { key: "playlists", label: "Playlists", icon: ListMusic, count: playlists.length },
+    { key: "live", label: "Live", icon: Radio },
+  ]
+
+  // A playlist is open → show the editor full-bleed within the section.
+  if (openPlaylist) {
+    return (
+      <>
+        <PlaylistEditor
+          detail={openPlaylist}
+          isAdmin={isOwner}
+          organizationId={organizationId}
+          allMaterials={materials}
+          onBack={() => {
+            setOpenPlaylist(null)
+            refresh()
+          }}
+          onOpenMaterial={(m) => setDetail(m)}
+          onEdit={() => setEditingPlaylist(openPlaylist.playlist)}
+          onShare={() => share(`/org/${orgHandle}?playlist=${openPlaylist.playlist.id}`, openPlaylist.playlist.name)}
+          onChanged={() => reopenPlaylist(openPlaylist.playlist.id)}
+        />
+
+        <MaterialDetailSheet
+          material={detail}
+          isOwner={isOwner}
+          onOpenChange={(o) => !o && setDetail(null)}
+          onAddToPlaylist={(m) => {
+            setDetail(null)
+            setAddToPlaylistFor(m)
+          }}
+        />
+        {isOwner && (
+          <>
+            <CreatePlaylistSheet
+              open={Boolean(editingPlaylist)}
+              onOpenChange={(o) => !o && setEditingPlaylist(null)}
+              organizationId={organizationId}
+              materials={materials}
+              editing={editingPlaylist}
+              onCreated={() => {
+                setEditingPlaylist(null)
+                reopenPlaylist(openPlaylist.playlist.id)
+              }}
+            />
+            <AddToPlaylistSheet
+              material={addToPlaylistFor}
+              organizationId={organizationId}
+              playlists={playlists}
+              onOpenChange={(o) => !o && setAddToPlaylistFor(null)}
+              onDone={() => {
+                setAddToPlaylistFor(null)
+                reopenPlaylist(openPlaylist.playlist.id)
+              }}
+            />
+          </>
+        )}
+      </>
+    )
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Strapline */}
+      <p className="text-sm text-muted-foreground text-pretty">
+        Explore and organise our teachings, media and resources.
+      </p>
+
+      {/* Segmented nav + owner actions */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div
+          role="tablist"
+          aria-label="Catalogue sections"
+          className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary/40 p-1"
+        >
+          {SEGMENTS.map((s) => {
+            const active = segment === s.key
+            const Icon = s.icon
+            return (
+              <button
+                key={s.key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setSegment(s.key)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-all duration-200",
+                  active
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Icon className="size-4" />
+                {s.label}
+                {typeof s.count === "number" && s.count > 0 && (
+                  <span
+                    className={cn(
+                      "text-xs tabular-nums",
+                      active ? "text-primary-foreground/80" : "text-muted-foreground/60",
+                    )}
+                  >
+                    {s.count}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+
+        {isOwner && segment !== "live" && (
+          <div className="flex items-center gap-2">
+            {/* Desktop: explicit buttons */}
+            <div className="hidden items-center gap-2 sm:flex">
+              <button
+                type="button"
+                onClick={() => setImportOpen(true)}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border px-3.5 text-sm font-medium transition-colors hover:bg-secondary"
+              >
+                <Link2 className="size-4" />
+                Import Links
+              </button>
+              <button
+                type="button"
+                onClick={() => setCreateOpen(true)}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border px-3.5 text-sm font-medium transition-colors hover:bg-secondary"
+              >
+                <ListPlus className="size-4" />
+                Create Playlist
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingMaterial(null)
+                  setUploadOpen(true)
+                }}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-3.5 text-sm font-semibold text-primary-foreground transition-all hover:brightness-110 active:scale-[0.98]"
+              >
+                <Upload className="size-4" />
+                Upload Material
+              </button>
+            </div>
+            {/* Mobile: a single + opens a context menu */}
+            <div className="sm:hidden">
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  aria-label="Add"
+                  className="inline-flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground transition-all hover:brightness-110 active:scale-95"
+                >
+                  <Plus className="size-5" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setEditingMaterial(null)
+                      setUploadOpen(true)
+                    }}
+                  >
+                    <Upload className="size-4" />
+                    Upload Material
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setImportOpen(true)}>
+                    <Link2 className="size-4" />
+                    Import Links
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setCreateOpen(true)}>
+                    <ListPlus className="size-4" />
+                    Create Playlist
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Active segment */}
+      {segment === "materials" && (
+        <MaterialsView
+          materials={materials}
+          isOwner={isOwner}
+          onOpen={(m) => setDetail(m)}
+          onEdit={(m) => {
+            setEditingMaterial(m)
+            setUploadOpen(true)
+          }}
+          onAddToPlaylist={(m) => setAddToPlaylistFor(m)}
+          onUpload={() => {
+            setEditingMaterial(null)
+            setUploadOpen(true)
+          }}
+        />
+      )}
+
+      {segment === "playlists" && (
+        <PlaylistsView
+          playlists={playlists}
+          isAdmin={isOwner}
+          onOpen={openPlaylistDetail}
+          onCreate={() => setCreateOpen(true)}
+          onEdit={(p) => setEditingPlaylist(p)}
+          onShare={(p) => share(`/org/${orgHandle}?playlist=${p.id}`, p.name)}
+          onDuplicate={async (p) => {
+            try {
+              await duplicatePlaylist({ id: p.id, organizationId })
+              toast.success("Playlist duplicated")
+              refresh()
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : "Could not duplicate")
+            }
+          }}
+          onDelete={async (p) => {
+            try {
+              await deletePlaylist({ id: p.id, organizationId })
+              toast.success("Playlist deleted")
+              refresh()
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : "Could not delete")
+            }
+          }}
+        />
+      )}
+
+      {segment === "live" && (
+        <OrgEpisodeCatalog
+          items={liveItems}
+          isOwner={isOwner}
+          orgId={organizationId}
+          orgName={orgName}
+          orgLogo={orgLogo}
+          orgHandle={orgHandle}
+          tab="video"
+          onTabChange={() => {}}
+          liveOnly
+        />
+      )}
+
+      {/* Material detail viewer */}
+      <MaterialDetailSheet
+        material={detail}
+        isOwner={isOwner}
+        onOpenChange={(o) => !o && setDetail(null)}
+        onAddToPlaylist={(m) => {
+          setDetail(null)
+          setAddToPlaylistFor(m)
+        }}
+      />
+
+      {/* Owner-only sheets */}
+      {isOwner && (
+        <>
+          <UploadMaterialSheet
+            organizationId={organizationId}
+            open={uploadOpen}
+            onOpenChange={(o) => {
+              setUploadOpen(o)
+              if (!o) setEditingMaterial(null)
+            }}
+            editing={editingMaterial}
+          />
+          <ImportLinksSheet organizationId={organizationId} open={importOpen} onOpenChange={setImportOpen} />
+          <CreatePlaylistSheet
+            open={createOpen || Boolean(editingPlaylist)}
+            onOpenChange={(o) => {
+              if (!o) {
+                setCreateOpen(false)
+                setEditingPlaylist(null)
+              }
+            }}
+            organizationId={organizationId}
+            materials={materials}
+            editing={editingPlaylist}
+            onCreated={() => {
+              setCreateOpen(false)
+              setEditingPlaylist(null)
+              refresh()
+            }}
+          />
+          <AddToPlaylistSheet
+            material={addToPlaylistFor}
+            organizationId={organizationId}
+            playlists={playlists}
+            onOpenChange={(o) => !o && setAddToPlaylistFor(null)}
+            onDone={() => {
+              setAddToPlaylistFor(null)
+              refresh()
+            }}
+          />
+        </>
+      )}
+    </div>
+  )
+}
