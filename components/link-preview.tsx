@@ -43,10 +43,14 @@ export function LinkPreview({
   url,
   className,
   compact = false,
+  mine = false,
 }: {
   url: string
   className?: string
   compact?: boolean
+  /** Outgoing (own) message: paint the compact card with the orange bubble
+   *  fill and white text so it matches a sent bubble instead of staying dark. */
+  mine?: boolean
 }) {
   const { data, isLoading } = useSWR(`/api/link-preview?url=${encodeURIComponent(url)}`, fetcher, {
     revalidateOnFocus: false,
@@ -94,12 +98,31 @@ export function LinkPreview({
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="flex items-center gap-2.5 rounded-2xl border border-border/60 border-l-2 border-l-primary bg-card px-2.5 py-2 transition-colors hover:bg-secondary"
+            className={cn(
+              "flex items-center gap-2.5 rounded-2xl border border-l-2 px-2.5 py-2 transition-colors",
+              mine
+                ? "border-primary-foreground/25 border-l-primary-foreground/50 bg-primary hover:brightness-110"
+                : "border-border/60 border-l-primary bg-card hover:bg-secondary",
+            )}
           >
-            <ExternalLink className="size-4 shrink-0 text-primary" />
+            <ExternalLink className={cn("size-4 shrink-0", mine ? "text-primary-foreground" : "text-primary")} />
             <span className="min-w-0">
-              <span className="block truncate text-[13px] font-semibold text-foreground">{host}</span>
-              <span className="block truncate text-[11px] text-muted-foreground">{url}</span>
+              <span
+                className={cn(
+                  "block truncate text-[13px] font-semibold",
+                  mine ? "text-primary-foreground" : "text-foreground",
+                )}
+              >
+                {host}
+              </span>
+              <span
+                className={cn(
+                  "block truncate text-[11px]",
+                  mine ? "text-primary-foreground/70" : "text-muted-foreground",
+                )}
+              >
+                {url}
+              </span>
             </span>
           </a>
         </div>
@@ -118,7 +141,10 @@ export function LinkPreview({
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
-          className="block overflow-hidden rounded-2xl border border-border/60 bg-card transition-colors hover:bg-secondary"
+          className={cn(
+            "block overflow-hidden rounded-2xl border transition-colors",
+            mine ? "border-transparent bg-primary hover:brightness-110" : "border-border/60 bg-card hover:bg-secondary",
+          )}
         >
           {data.image && (
             <div className="aspect-[1.91/1] w-full overflow-hidden bg-muted">
@@ -126,8 +152,13 @@ export function LinkPreview({
               <img src={data.image || "/placeholder.svg"} alt="" className="size-full object-cover" loading="lazy" />
             </div>
           )}
-          <div className="border-l-2 border-primary px-2.5 py-2">
-            <p className="flex items-center gap-1.5 truncate text-[10px] font-semibold uppercase tracking-wider text-primary">
+          <div className={cn("border-l-2 px-2.5 py-2", mine ? "border-primary-foreground/40" : "border-primary")}>
+            <p
+              className={cn(
+                "flex items-center gap-1.5 truncate text-[10px] font-semibold uppercase tracking-wider",
+                mine ? "text-primary-foreground" : "text-primary",
+              )}
+            >
               {/* With no banner image, the site's own logo sits inline beside the
                   domain — a 32px icon stretched across the card reads as broken. */}
               {!data.image && data.icon && (
@@ -142,14 +173,31 @@ export function LinkPreview({
               <span className="truncate">{data.siteName || host}</span>
             </p>
             {data.title && (
-              <p className="mt-0.5 line-clamp-2 text-[13px] font-semibold leading-snug text-foreground">{data.title}</p>
+              <p
+                className={cn(
+                  "mt-0.5 line-clamp-2 text-[13px] font-semibold leading-snug",
+                  mine ? "text-primary-foreground" : "text-foreground",
+                )}
+              >
+                {data.title}
+              </p>
             )}
             {data.description && (
-              <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
+              <p
+                className={cn(
+                  "mt-0.5 line-clamp-2 text-[11px] leading-relaxed",
+                  mine ? "text-primary-foreground/80" : "text-muted-foreground",
+                )}
+              >
                 {data.description}
               </p>
             )}
-            <span className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+            <span
+              className={cn(
+                "mt-1 flex items-center gap-1 text-[10px]",
+                mine ? "text-primary-foreground/70" : "text-muted-foreground",
+              )}
+            >
               <LinkIcon className="size-2.5 shrink-0" />
               <span className="truncate">{host}</span>
             </span>

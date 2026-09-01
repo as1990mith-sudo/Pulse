@@ -1267,7 +1267,7 @@ function DmBubble({
           )}
           {previewUrl && (
             <div className={cn("w-full", !bodyIsOnlyLink && "pt-1")}>
-              <LinkPreview url={previewUrl} compact />
+              <LinkPreview url={previewUrl} compact mine={m.isSelf} />
             </div>
           )}
           {m.body && editing && (
