@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { ArrowRight, Building2, Radio, UserRound } from "lucide-react"
+import { SuppressBottomNav } from "@/components/suppress-bottom-nav"
 
 // The global signup entry. Presents the two Frequency experiences as distinct
 // paths — Home (organisations) and Universal (individuals) — so an org never
@@ -18,6 +19,7 @@ const BLUE = {
 export function SignupChooser() {
   return (
     <main className="flex min-h-svh flex-col">
+      <SuppressBottomNav />
       <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-6 sm:px-6">
         <Link href="/" className="flex items-center gap-2">
           <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">

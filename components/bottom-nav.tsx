@@ -74,7 +74,20 @@ export function BottomNav() {
     return () => window.removeEventListener("reels:active", onReels as EventListener)
   }, [])
 
-  const hidden = isImmersive(pathname) || reelsActive
+  // Some server-rendered surfaces (e.g. the signed-out signup chooser shown at
+  // `/`, a route that is otherwise the members-only Home feed) need the bar
+  // hidden but can't be matched by pathname. They mount a small client beacon
+  // that toggles this flag while they're on screen.
+  const [suppressed, setSuppressed] = useState(false)
+  useEffect(() => {
+    function onSuppress(e: Event) {
+      setSuppressed(Boolean((e as CustomEvent).detail))
+    }
+    window.addEventListener("nav:suppress", onSuppress as EventListener)
+    return () => window.removeEventListener("nav:suppress", onSuppress as EventListener)
+  }, [])
+
+  const hidden = isImmersive(pathname) || reelsActive || suppressed
   const activeIndex = activeIndexFor(pathname)
 
   // Hide-on-scroll-down / reveal-on-scroll-up, like Instagram & Safari.
