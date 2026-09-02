@@ -242,11 +242,13 @@ export function OrgEpisodeCatalog({
     let audio = 0
     for (const it of items) {
       if (it.kind !== "video") continue
+      // Match the `filtered` rule: in liveOnly mode only real replays count.
+      if (liveOnly && !it.slug) continue
       if (liveMediaKind(it) === "video") video++
       else audio++
     }
     return { video, audio }
-  }, [items])
+  }, [items, liveOnly])
 
   // Until the viewer picks a subtab, show the kind that actually has recordings
   // (audio-only replays would otherwise look missing behind an empty "Video").
@@ -258,12 +260,17 @@ export function OrgEpisodeCatalog({
     const q = query.trim().toLowerCase()
     return items.filter((it) => {
       if (it.kind !== tab) return false
+      // liveOnly (the Upload section's "Live" segment) shows ONLY genuine saved
+      // live replays. Those are episode rows and always carry a `slug`; manually
+      // imported / external video links (uploaded Materials) have no slug and
+      // belong in the Materials segment, so exclude them here.
+      if (liveOnly && !it.slug) return false
       if (q && !it.title.toLowerCase().includes(q)) return false
       // In the Live tab, only show recordings matching the chosen subtab kind.
       if (tab === "video" && liveMediaKind(it) !== liveKind) return false
       return true
     })
-  }, [items, tab, query, liveKind])
+  }, [items, tab, query, liveKind, liveOnly])
 
   // Convert the visible resources into playable Shows (null for non-audio /
   // external / live-video rows). The queue is every playable audio Show in the

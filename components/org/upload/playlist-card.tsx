@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import { ListMusic, MoreVertical } from "lucide-react"
+import { ListMusic, MoreVertical, Play } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,9 +46,11 @@ export function PlaylistCollage({ covers, className }: { covers: string[]; class
 }
 
 /**
- * Playlist card for the discovery grid. Members tap anywhere to open; admins
- * additionally get the ••• management menu (open / edit / share / duplicate /
- * delete). Compact by design — the collage does the visual work.
+ * Playlist row for the discovery list. A horizontal media-row — square thumbnail
+ * on the left, name + "N materials · duration · updated" in the middle, a round
+ * Play affordance and (for admins) the ••• management menu on the right — so
+ * playlists read like the rest of the Catalogue's stacked listings rather than a
+ * separate grid of tiles. The whole left region is tappable to open.
  */
 export function PlaylistCard({
   playlist: p,
@@ -67,51 +69,66 @@ export function PlaylistCard({
   onDuplicate?: () => void
   onDelete?: () => void
 }) {
+  const meta = `${p.count} ${p.count === 1 ? "material" : "materials"}${p.count > 0 ? ` · ${p.totalDurationLabel}` : ""}`
   return (
-    <div className="group relative flex flex-col gap-3 rounded-2xl border border-border bg-card p-3 transition-all duration-200 hover:border-primary/40">
-      <button type="button" onClick={onOpen} aria-label={`Open ${p.name}`} className="block text-left">
+    <div className="group relative flex items-center gap-3 py-3">
+      {/* Thumbnail + primary text: one large tap target that opens the playlist. */}
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`Open ${p.name}`}
+        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+      >
         {p.cover ? (
-          <div className="relative aspect-square w-full overflow-hidden rounded-xl border border-border bg-secondary">
-            <Image src={p.cover || "/placeholder.svg"} alt="" fill sizes="240px" className="object-cover" />
+          <div className="relative size-16 shrink-0 overflow-hidden rounded-xl border border-border bg-secondary">
+            <Image src={p.cover || "/placeholder.svg"} alt="" fill sizes="64px" className="object-cover" />
           </div>
         ) : (
-          <PlaylistCollage covers={p.collage} className="aspect-square w-full" />
+          <PlaylistCollage covers={p.collage} className="size-16 shrink-0" />
         )}
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-[15px] font-semibold leading-snug">{p.name}</h3>
+          <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+            <ListMusic className="size-3.5 shrink-0" />
+            <span className="truncate">{meta}</span>
+          </p>
+          <p className="mt-0.5 truncate text-[11px] text-muted-foreground/70">
+            Updated {formatMaterialDate(p.updatedAtMs)}
+          </p>
+        </div>
       </button>
 
-      <div className="min-w-0">
-        <div className="flex items-start justify-between gap-2">
-          <button type="button" onClick={onOpen} className="min-w-0 text-left">
-            <h3 className="truncate text-sm font-semibold leading-snug">{p.name}</h3>
-          </button>
-          {isAdmin && (
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                aria-label={`Manage ${p.name}`}
-                className="-mr-1 -mt-0.5 grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-              >
-                <MoreVertical className="size-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44">
-                <DropdownMenuItem onClick={onOpen}>Open</DropdownMenuItem>
-                <DropdownMenuItem onClick={onEdit}>Edit</DropdownMenuItem>
-                <DropdownMenuItem onClick={onShare}>Share</DropdownMenuItem>
-                <DropdownMenuItem onClick={onDuplicate}>Duplicate</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem variant="destructive" onClick={onDelete}>
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
-        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-          {p.count} {p.count === 1 ? "material" : "materials"}
-          {p.count > 0 && ` · ${p.totalDurationLabel}`}
-        </p>
-        {p.description && <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{p.description}</p>}
-        <p className="mt-1.5 text-[11px] text-muted-foreground/70">Updated {formatMaterialDate(p.updatedAtMs)}</p>
-      </div>
+      {/* Round Play — opens the playlist to start playback, mirroring the live
+          list rows. */}
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`Play ${p.name}`}
+        className="grid size-11 shrink-0 place-items-center rounded-full bg-secondary text-foreground transition-all hover:bg-primary hover:text-primary-foreground active:scale-95"
+      >
+        <Play className="size-5 translate-x-px fill-current" />
+      </button>
+
+      {isAdmin && (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label={`Manage ${p.name}`}
+            className="grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          >
+            <MoreVertical className="size-5" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem onClick={onOpen}>Open</DropdownMenuItem>
+            <DropdownMenuItem onClick={onEdit}>Edit</DropdownMenuItem>
+            <DropdownMenuItem onClick={onShare}>Share</DropdownMenuItem>
+            <DropdownMenuItem onClick={onDuplicate}>Duplicate</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onClick={onDelete}>
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </div>
   )
 }

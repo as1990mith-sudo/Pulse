@@ -43,14 +43,15 @@ export function PlaylistsView({
 
   if (loading) {
     return (
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="space-y-3 rounded-2xl border border-border bg-card p-3">
-            <div className="aspect-square w-full animate-pulse rounded-xl bg-secondary" />
-            <div className="space-y-2">
+      <div className="divide-y divide-border/60">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-3 py-3">
+            <div className="size-16 shrink-0 animate-pulse rounded-xl bg-secondary" />
+            <div className="flex-1 space-y-2">
               <div className="h-3.5 w-3/4 animate-pulse rounded bg-secondary" />
               <div className="h-3 w-1/2 animate-pulse rounded bg-secondary" />
             </div>
+            <div className="size-11 shrink-0 animate-pulse rounded-full bg-secondary" />
           </div>
         ))}
       </div>
@@ -98,7 +99,7 @@ export function PlaylistsView({
       {filtered.length === 0 ? (
         <p className="py-10 text-center text-sm text-muted-foreground">No playlists match &ldquo;{query}&rdquo;.</p>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="divide-y divide-border/60">
           {filtered.map((p) => (
             <PlaylistCard
               key={p.id}
