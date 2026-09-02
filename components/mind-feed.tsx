@@ -1477,6 +1477,37 @@ export function PostCard({
     })
   }
 
+  // Press-and-hold the like heart to reveal who liked the post. The likers list
+  // is private to the post's author (enforced in getPostLikers), so the gesture
+  // is only wired up for the author's own posts; everyone else just toggles.
+  const likeHoldTimer = useRef<number | null>(null)
+  const likeHeldRef = useRef(false)
+
+  function startLikeHold() {
+    if (!post.isSelf) return
+    likeHeldRef.current = false
+    likeHoldTimer.current = window.setTimeout(() => {
+      likeHeldRef.current = true
+      haptic("light")
+      setEngagementKind("likes")
+    }, 450)
+  }
+  function cancelLikeHold() {
+    if (likeHoldTimer.current != null) {
+      window.clearTimeout(likeHoldTimer.current)
+      likeHoldTimer.current = null
+    }
+  }
+  function handleLikePress() {
+    // A completed hold already opened the likers list — swallow the click that
+    // fires on release so it doesn't also toggle the like.
+    if (likeHeldRef.current) {
+      likeHeldRef.current = false
+      return
+    }
+    toggleLike()
+  }
+
   function toggleSave() {
     if (!currentUser) return
     // Authors can save their own posts too; the "who saved this" list moved to
@@ -1966,15 +1997,27 @@ export function PostCard({
         )}
       >
         <button
-          onClick={toggleLike}
+          onClick={handleLikePress}
+          onPointerDown={startLikeHold}
+          onPointerUp={cancelLikeHold}
+          onPointerLeave={cancelLikeHold}
+          onPointerCancel={cancelLikeHold}
+          onContextMenu={(e) => {
+            // On the author's own post the long-press is a deliberate gesture;
+            // stop the mobile context menu from hijacking it.
+            if (post.isSelf) e.preventDefault()
+          }}
           className={cn(
             "flex items-center gap-1.5 tabular-nums transition-colors hover:text-primary",
             feed ? "text-[15px]" : "text-sm",
             liked && "text-like",
+            // Only the author gets the hold gesture, so only their heart opts out
+            // of touch scrolling/selection to keep the long-press reliable.
+            post.isSelf && "select-none touch-none",
             !currentUser && "cursor-not-allowed opacity-60",
           )}
           aria-pressed={liked}
-          aria-label={liked ? "Unlike" : "Like"}
+          aria-label={post.isSelf ? (liked ? "Unlike. Press and hold to see who liked this." : "Like. Press and hold to see who liked this.") : liked ? "Unlike" : "Like"}
         >
           <LikeHeart liked={liked} className={feed ? "size-7" : "size-6"} />
         </button>

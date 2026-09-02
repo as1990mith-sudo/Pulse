@@ -620,7 +620,8 @@ function CommentItem({
                 autoFocus
                 value={replyDraft}
                 onChange={(e) => setReplyDraft(e.target.value)}
-                placeholder={`Reply to ${comment.name}…`}
+                placeholder="Reply…"
+                rows={1}
                 className="min-h-9 resize-none text-sm"
                 aria-label="Write a reply"
               />
