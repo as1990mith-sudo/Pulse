@@ -58,8 +58,10 @@ export function MaterialCard({
     <div
       className={cn(
         // A solid raised surface so cards read clearly against the near-black
-        // page background instead of dissolving into it.
-        "group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-secondary/50 shadow-sm ring-1 ring-white/[0.03] transition-all hover:border-primary/40 hover:bg-secondary/70 hover:shadow-md",
+        // page background instead of dissolving into it. Tighter corners and a
+        // deeper (more visible) edge than the faint theme hairline so the card
+        // outline reads crisply on the near-black background.
+        "group relative flex flex-col overflow-hidden rounded-xl border border-white/15 bg-secondary/50 shadow-sm transition-all hover:border-primary/40 hover:bg-secondary/70 hover:shadow-md",
         material.archived && "opacity-60",
         className,
       )}

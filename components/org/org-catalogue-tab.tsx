@@ -352,9 +352,16 @@ export function OrgEpisodeCatalog({
       </div>
       )}
 
-      {/* Live subtoggle: Video / Audio — quieter secondary underline row. */}
+      {/* Live subtoggle: Video / Audio — same segmented pill as the Catalogue's
+          top-level nav (rounded track, solid primary active pill, muted count),
+          so the whole surface reads as one design language. Full-width so the
+          two segments split the row evenly. */}
       {tab === "video" && (
-        <div role="tablist" aria-label="Filter live recordings by media type" className="flex items-center">
+        <div
+          role="tablist"
+          aria-label="Filter live recordings by media type"
+          className="flex w-full items-center gap-1 rounded-full border border-border bg-secondary/40 p-1"
+        >
           {(
             [
               { key: "video", label: "Video", icon: Radio, count: liveCounts.video },
@@ -370,15 +377,24 @@ export function OrgEpisodeCatalog({
                 aria-selected={active}
                 onClick={() => setLiveKind(key)}
                 className={cn(
-                  "flex flex-1 items-center justify-center gap-1.5 text-[13px] font-medium transition-colors",
-                  active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                  "inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-all duration-200",
+                  active
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                <Icon className={cn("size-3.5", active && "text-primary")} />
+                <Icon className="size-4" />
                 {label}
-                <span className={cn("text-xs tabular-nums", active ? "text-primary" : "text-muted-foreground/60")}>
-                  {count}
-                </span>
+                {count > 0 && (
+                  <span
+                    className={cn(
+                      "text-xs tabular-nums",
+                      active ? "text-primary-foreground/80" : "text-muted-foreground/60",
+                    )}
+                  >
+                    {count}
+                  </span>
+                )}
               </button>
             )
           })}

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Check, FileText, Link2, Loader2, Sparkles, Wand2 } from "lucide-react"
+import { Check, FileText, ImagePlus, Link2, Loader2, Sparkles, Wand2 } from "lucide-react"
 import {
   type MaterialContentType,
   type MaterialSource,
@@ -11,7 +11,7 @@ import {
   normalizeTags,
 } from "@/lib/materials"
 import { createMaterial, recognizeResource, updateMaterial } from "@/app/actions/materials"
-import { uploadMedia } from "@/lib/upload-media"
+import { compressImage, uploadMedia } from "@/lib/upload-media"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
@@ -87,8 +87,12 @@ export function UploadMaterialSheet({
   const [error, setError] = useState<string | null>(null)
   const [uploadingFile, setUploadingFile] = useState(false)
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null)
+  // Separate flag + input for the optional cover-image upload, so it can't be
+  // confused with the PDF uploader above.
+  const [uploadingThumb, setUploadingThumb] = useState(false)
   const lastRecognizedUrl = useRef<string>("")
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const thumbInputRef = useRef<HTMLInputElement>(null)
 
   // Seed / reset whenever the sheet opens.
   useEffect(() => {
@@ -185,6 +189,33 @@ export function UploadMaterialSheet({
       setError(err instanceof Error ? err.message : "Couldn't upload that PDF.")
     } finally {
       setUploadingFile(false)
+    }
+  }
+
+  // Optional manual cover. Auto-recognition fills `draft.cover` for most links,
+  // but plain articles / Drive files / bare PDFs often have no thumbnail — this
+  // lets the uploader supply one from their device. The image is compressed and
+  // pushed to Blob (same `catalogue/` prefix as PDFs), and its URL becomes the
+  // material's cover, flowing through the existing save payload unchanged.
+  async function onPickThumbnail(file: File) {
+    setError(null)
+    if (!file.type.startsWith("image/")) {
+      setError("Please choose an image file for the thumbnail.")
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError("That image is over 10MB. Please choose a smaller one.")
+      return
+    }
+    setUploadingThumb(true)
+    try {
+      const compressed = await compressImage(file)
+      const { url } = await uploadMedia(compressed, "catalogue")
+      setDraft((d) => ({ ...d, cover: url }))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't upload that thumbnail.")
+    } finally {
+      setUploadingThumb(false)
     }
   }
 
@@ -341,11 +372,37 @@ export function UploadMaterialSheet({
               <p className="mt-1.5 line-clamp-2 text-sm font-medium text-foreground">
                 {draft.title || "Untitled resource"}
               </p>
-              {recognized && !recognizing && (
+              {recognized && !recognizing && draft.cover && (
                 <p className="mt-0.5 flex items-center gap-1 text-[11px] text-primary">
                   <Sparkles className="size-3" /> Details detected
                 </p>
               )}
+              {/* Manual cover: offered when recognition found no thumbnail, and
+                  as a "Change" affordance when one exists. */}
+              <input
+                ref={thumbInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) onPickThumbnail(file)
+                  e.target.value = ""
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => thumbInputRef.current?.click()}
+                disabled={uploadingThumb}
+                className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-60"
+              >
+                {uploadingThumb ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  <ImagePlus className="size-3" />
+                )}
+                {uploadingThumb ? "Uploading…" : draft.cover ? "Change thumbnail" : "Upload a thumbnail"}
+              </button>
             </div>
           </div>
         )}
