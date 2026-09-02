@@ -180,13 +180,19 @@ export function CommentThread({
   )
 }
 
-/** Max reply depth, Instagram-style: comment (0) → reply (1) → reply-to-reply (2). */
-const MAX_DEPTH = 2
+/**
+ * Reply depth is unbounded — every comment can be replied to, at any level, so
+ * conversations nest as deeply as people take them. To keep deep chains legible
+ * on narrow screens we stop *adding* left indentation past MAX_VISUAL_INDENT:
+ * further levels still thread (and collapse/expand) correctly, they just render
+ * flush with that level instead of marching off the right edge.
+ */
+const MAX_VISUAL_INDENT = 4
 
 /**
- * Renders a comment plus its nested replies recursively (up to MAX_DEPTH).
- * Replies are collapsed behind a "View N replies" toggle by default, matching
- * Instagram, and each level indents a little further to the right.
+ * Renders a comment plus its nested replies recursively, to any depth. Replies
+ * are collapsed behind a "View N replies" toggle by default, matching Instagram,
+ * and each level indents a little further to the right until MAX_VISUAL_INDENT.
  */
 function CommentNode({
   comment,
@@ -236,7 +242,7 @@ function CommentNode({
       <CommentItem
         comment={comment}
         canInteract={canInteract}
-        canReply={allowReply && canInteract && depth < MAX_DEPTH}
+        canReply={allowReply && canInteract}
         isReply={depth > 0}
         onLike={onLike}
         onReply={onReply}
@@ -254,7 +260,7 @@ function CommentNode({
       />
 
       {replies.length > 0 && (
-        <div className="mt-2 border-l border-border/50 pl-3.5">
+        <div className={cn("mt-2", depth < MAX_VISUAL_INDENT && "border-l border-border/50 pl-3.5")}>
           <button
             type="button"
             onClick={() => setCollapsed((v) => !v)}
@@ -420,9 +426,8 @@ function CommentItem({
     e.preventDefault()
     const value = replyDraft.trim()
     if (!value) return
-    // Replies attach to the comment being replied to, so threads can nest
-    // (capped at MAX_DEPTH by hiding the reply button deeper down). The chosen
-    // identity is only meaningful when a switcher was actually offered.
+    // Replies attach to the comment being replied to, so threads can nest to any
+    // depth. The chosen identity is only meaningful when a switcher was offered.
     await onReply(comment.id, value, homeVoice ? replyAsHome : undefined)
     setReplyDraft("")
     setReplying(false)
