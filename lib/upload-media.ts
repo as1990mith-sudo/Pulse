@@ -150,7 +150,8 @@ export async function uploadMedia(
     | "store"
     | "pinned"
     | "community"
-    | "catalogue",
+    | "catalogue"
+    | "live-video",
   fileName?: string,
   onProgress?: (percentage: number) => void,
 ): Promise<UploadedMedia> {
