@@ -190,7 +190,7 @@ export function PlaylistEditor({
       ) : (
         <div>
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Materials</h2>
-          <ul className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border">
+          <ul className="divide-y divide-border/60">
             {items.map((m, i) => (
               <li
                 key={m.id}
@@ -202,7 +202,7 @@ export function PlaylistEditor({
                 onDrop={() => handleDrop(m.id)}
                 onDragEnd={() => setDragId(null)}
                 className={cn(
-                  "group flex items-center gap-3 bg-card p-2.5 transition-colors",
+                  "group flex items-center gap-3 py-3 pr-1 transition-colors",
                   dragId === m.id && "opacity-50",
                   isAdmin && "cursor-grab active:cursor-grabbing",
                 )}
