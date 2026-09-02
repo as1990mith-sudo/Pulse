@@ -214,15 +214,15 @@ export function OrgTabs({
           engagement.length === 0 ? (
             <EmptyState
               icon={<Heart className="size-6" />}
-              title={org.isOwner ? "No engagement yet" : `${org.name} hasn't engaged yet`}
-              message={
-                org.isOwner
-                  ? "Posts this Home comments on will gather here."
-                  : `Comments ${org.name} leaves on posts will appear here.`
-              }
+              title={`${org.name} hasn't engaged yet`}
+              message={`Comments ${org.name} leaves on posts will appear here.`}
             />
           ) : (
-            <EngagementFeed items={engagement} isSelf={org.isOwner} currentUser={currentUser} />
+            // Always the visitor experience on a Home profile: comments-only,
+            // read + reply + add-your-own, never management controls — even for
+            // the Home's own admins. Managing a Home's own comments doesn't live
+            // on the public profile, so isSelf is hard-coded false here.
+            <EngagementFeed items={engagement} isSelf={false} currentUser={currentUser} />
           )
         ) : null}
       </div>
