@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import Image from "next/image"
+import { Reorder, useDragControls } from "motion/react"
 import { ArrowLeft, GripVertical, ListPlus, MoreVertical, Play, Share2, SquarePen } from "lucide-react"
 import { toast } from "sonner"
 import type { MaterialView } from "@/lib/materials"
@@ -19,7 +20,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { SourceBadge, PlayGlyph, Collage } from "./upload-primitives"
 import { AddMaterialsSheet } from "./add-materials-sheet"
-import { cn } from "@/lib/utils"
 
 /**
  * Playlist editor / viewer. Members see an ordered, read-only tracklist they
@@ -50,12 +50,26 @@ export function PlaylistEditor({
 }) {
   const { playlist: p } = detail
   const [items, setItems] = useState<MaterialView[]>(detail.materials)
-  const [dragId, setDragId] = useState<number | null>(null)
   const [addOpen, setAddOpen] = useState(false)
 
-  async function persistOrder(next: MaterialView[]) {
-    const prev = items
-    setItems(next)
+  // Reordering is driven by Framer Motion's <Reorder>, which works with touch
+  // (the old HTML5 `draggable` never fired on mobile). `onReorder` updates the
+  // list live as the user drags; we only hit the server once, when the drag
+  // ends. A live ref holds the latest order for that commit, and a snapshot
+  // taken at drag-start lets us both skip no-op saves and revert on failure.
+  const itemsRef = useRef(items)
+  itemsRef.current = items
+  const orderAtDragStart = useRef<MaterialView[]>(items)
+
+  function handleDragStart() {
+    orderAtDragStart.current = itemsRef.current
+  }
+
+  async function commitOrder() {
+    const next = itemsRef.current
+    const prev = orderAtDragStart.current
+    const unchanged = next.map((m) => m.id).join() === prev.map((m) => m.id).join()
+    if (unchanged) return
     try {
       await reorderPlaylist({
         organizationId,
@@ -67,18 +81,6 @@ export function PlaylistEditor({
       setItems(prev)
       toast.error("Could not save the new order")
     }
-  }
-
-  function handleDrop(targetId: number) {
-    if (dragId === null || dragId === targetId) return
-    const from = items.findIndex((m) => m.id === dragId)
-    const to = items.findIndex((m) => m.id === targetId)
-    if (from === -1 || to === -1) return
-    const next = [...items]
-    const [moved] = next.splice(from, 1)
-    next.splice(to, 0, moved)
-    setDragId(null)
-    void persistOrder(next)
   }
 
   async function remove(materialId: number) {
@@ -190,85 +192,31 @@ export function PlaylistEditor({
       ) : (
         <div>
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Materials</h2>
-          <ul className="divide-y divide-border/60">
-            {items.map((m, i) => (
-              <li
-                key={m.id}
-                draggable={isAdmin}
-                onDragStart={() => setDragId(m.id)}
-                onDragOver={(e) => {
-                  if (isAdmin) e.preventDefault()
-                }}
-                onDrop={() => handleDrop(m.id)}
-                onDragEnd={() => setDragId(null)}
-                className={cn(
-                  "group flex items-center gap-3 py-3 pr-1 transition-colors",
-                  dragId === m.id && "opacity-50",
-                  isAdmin && "cursor-grab active:cursor-grabbing",
-                )}
-              >
-                {isAdmin && (
-                  <GripVertical className="size-4 shrink-0 text-muted-foreground/50 transition-colors group-hover:text-muted-foreground" />
-                )}
-                <span className="w-6 shrink-0 text-center text-xs font-semibold tabular-nums text-muted-foreground">
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-
-                <button
-                  type="button"
-                  onClick={() => onOpenMaterial(m)}
-                  className="relative aspect-video w-20 shrink-0 overflow-hidden rounded-lg border border-border/60 bg-secondary"
-                  aria-label={`Open ${m.title}`}
-                >
-                  {m.cover && <Image src={m.cover || "/placeholder.svg"} alt="" fill sizes="80px" className="object-cover" />}
-                  <span className="absolute inset-0 grid place-items-center bg-black/25 opacity-0 transition-opacity group-hover:opacity-100">
-                    <PlayGlyph className="size-7" />
-                  </span>
-                </button>
-
-                <button type="button" onClick={() => onOpenMaterial(m)} className="min-w-0 flex-1 text-left">
-                  <p className="truncate text-sm font-medium">{m.title}</p>
-                  <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                    {m.creator && <span className="truncate">{m.creator}</span>}
-                    {m.creator && <span aria-hidden>·</span>}
-                    <SourceBadge source={m.source} contentType={m.contentType} />
-                    {m.duration && (
-                      <>
-                        <span aria-hidden>·</span>
-                        <span className="tabular-nums">{m.duration}</span>
-                      </>
-                    )}
-                  </div>
-                </button>
-
-                {isAdmin ? (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      aria-label={`Manage ${m.title}`}
-                      className="grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                    >
-                      <MoreVertical className="size-4" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-44">
-                      <DropdownMenuItem onClick={() => onOpenMaterial(m)}>Open</DropdownMenuItem>
-                      <DropdownMenuItem variant="destructive" onClick={() => remove(m.id)}>
-                        Remove from playlist
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => onOpenMaterial(m)}
-                    aria-label={`Open ${m.title}`}
-                    className="grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                  >
-                    <Play className="size-4" />
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
+          {isAdmin ? (
+            // Admins get a touch-friendly reorderable list. Each row carries its
+            // own hairline divider (rather than the group's divide-y) and an
+            // opaque background so it doesn't turn transparent while lifted.
+            <Reorder.Group axis="y" values={items} onReorder={setItems} as="ul">
+              {items.map((m) => (
+                <ReorderRow
+                  key={m.id}
+                  m={m}
+                  onOpenMaterial={onOpenMaterial}
+                  onRemove={remove}
+                  onDragStart={handleDragStart}
+                  onCommit={commitOrder}
+                />
+              ))}
+            </Reorder.Group>
+          ) : (
+            <ul className="divide-y divide-border/60">
+              {items.map((m) => (
+                <li key={m.id} className="group flex items-center gap-3 py-3 pr-1">
+                  <RowBody m={m} isAdmin={false} onOpenMaterial={onOpenMaterial} onRemove={remove} />
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
@@ -281,5 +229,125 @@ export function PlaylistEditor({
         />
       )}
     </div>
+  )
+}
+
+/**
+ * The shared visual body of a material row (thumbnail, title/meta, and the
+ * trailing kebab-or-play control) — everything except the wrapper element and
+ * the admin-only drag handle. Reused by both the reorderable admin list and the
+ * read-only member list so the two never drift.
+ */
+function RowBody({
+  m,
+  isAdmin,
+  onOpenMaterial,
+  onRemove,
+}: {
+  m: MaterialView
+  isAdmin: boolean
+  onOpenMaterial: (m: MaterialView) => void
+  onRemove: (id: number) => void
+}) {
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => onOpenMaterial(m)}
+        className="relative aspect-video w-20 shrink-0 overflow-hidden rounded-lg border border-border/60 bg-secondary"
+        aria-label={`Open ${m.title}`}
+      >
+        {m.cover && <Image src={m.cover || "/placeholder.svg"} alt="" fill sizes="80px" className="object-cover" />}
+        <span className="absolute inset-0 grid place-items-center bg-black/25 opacity-0 transition-opacity group-hover:opacity-100">
+          <PlayGlyph className="size-7" />
+        </span>
+      </button>
+
+      <button type="button" onClick={() => onOpenMaterial(m)} className="min-w-0 flex-1 text-left">
+        <p className="truncate text-sm font-medium">{m.title}</p>
+        <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+          {m.creator && <span className="truncate">{m.creator}</span>}
+          {m.creator && <span aria-hidden>·</span>}
+          <SourceBadge source={m.source} contentType={m.contentType} />
+          {m.duration && (
+            <>
+              <span aria-hidden>·</span>
+              <span className="tabular-nums">{m.duration}</span>
+            </>
+          )}
+        </div>
+      </button>
+
+      {isAdmin ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label={`Manage ${m.title}`}
+            className="grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          >
+            <MoreVertical className="size-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem onClick={() => onOpenMaterial(m)}>Open</DropdownMenuItem>
+            <DropdownMenuItem variant="destructive" onClick={() => onRemove(m.id)}>
+              Remove from playlist
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : (
+        <button
+          type="button"
+          onClick={() => onOpenMaterial(m)}
+          aria-label={`Open ${m.title}`}
+          className="grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+        >
+          <Play className="size-4" />
+        </button>
+      )}
+    </>
+  )
+}
+
+/**
+ * A single reorderable material row. The grip is the ONLY drag trigger
+ * (`dragListener={false}` + `controls.start`), so the thumbnail and title stay
+ * tappable, and `touch-none` on the grip stops the page from scrolling mid-drag
+ * on mobile. The order is persisted once, on drag end, by the parent.
+ */
+function ReorderRow({
+  m,
+  onOpenMaterial,
+  onRemove,
+  onDragStart,
+  onCommit,
+}: {
+  m: MaterialView
+  onOpenMaterial: (m: MaterialView) => void
+  onRemove: (id: number) => void
+  onDragStart: () => void
+  onCommit: () => void
+}) {
+  const controls = useDragControls()
+  return (
+    <Reorder.Item
+      value={m}
+      dragListener={false}
+      dragControls={controls}
+      onDragStart={onDragStart}
+      onDragEnd={onCommit}
+      className="group flex items-center gap-3 border-b border-border/60 bg-background py-3 pr-1 last:border-b-0"
+    >
+      <button
+        type="button"
+        aria-label={`Drag to reorder ${m.title}`}
+        onPointerDown={(e) => {
+          e.preventDefault()
+          controls.start(e)
+        }}
+        className="shrink-0 cursor-grab touch-none text-muted-foreground/50 transition-colors hover:text-muted-foreground active:cursor-grabbing"
+      >
+        <GripVertical className="size-4" />
+      </button>
+      <RowBody m={m} isAdmin onOpenMaterial={onOpenMaterial} onRemove={onRemove} />
+    </Reorder.Item>
   )
 }
