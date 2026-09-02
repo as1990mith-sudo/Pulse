@@ -12,6 +12,7 @@ import {
   ConversationParticipantLauncher,
 } from "@/components/live-session"
 import { EpisodePage } from "@/components/episode-page"
+import { LiveFinishedScreen } from "@/components/live/live-finished-screen"
 
 export default async function LiveStreamPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -20,7 +21,10 @@ export default async function LiveStreamPage({ params }: { params: Promise<{ id:
   // Not live? It may be a published, on-demand episode (looked up by slug).
   if (!stream) {
     const show = await resolveShow(id)
-    if (!show) notFound()
+    // No live and no on-demand episode: the session has almost certainly ended
+    // (this route only ever serves live/episode content). Show a warm, on-brand
+    // "live has finished" screen instead of a bare 404 error page.
+    if (!show) return <LiveFinishedScreen />
     // Private episodes are visible only to their host (the owner).
     if (show.isPrivate) {
       const viewer = await getCurrentUser()

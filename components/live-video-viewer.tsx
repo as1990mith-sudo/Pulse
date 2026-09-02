@@ -923,10 +923,19 @@ export function LiveVideoViewer({
       </div>
 
       {/* ── Live chatroom. Call-in guests overlay the video above, so the chat
-          keeps a constant share of the screen. ─────────────────────────────── */}
+          keeps a constant share of the screen.
+
+          The chat panel below the (always-dark) video stage is THEME-SENSITIVE:
+          it uses `bg-background text-foreground` and drops the `immersive`
+          treatment so it follows the app's light/dark theme like it did before,
+          instead of being hard-pinned to a dark surface. Dropping `flatText`
+          also restores proper chat bubbles — the viewer's own messages ("You")
+          sit on the right, everyone else (incl. the HOST) on the left. The
+          [isolation] + explicit text color keep it from inheriting the stage's
+          forced white text. ─────────────────────────────────────────────────── */}
       <div
         className={cn(
-          "min-h-0 flex-[1.5] border-t border-white/10 bg-neutral-950 transition-[flex-grow] duration-500 ease-out",
+          "min-h-0 flex-[1.5] border-t border-border bg-background text-foreground transition-[flex-grow] duration-500 ease-out",
         )}
       >
         {canWatch ? (
@@ -934,15 +943,13 @@ export function LiveVideoViewer({
               currentUser={currentUser}
               guestName={guestName}
               roomName={stream.roomName}
-              immersive
-              flatText
               showResourceButton
               placeholder=""
             />
         ) : (
-          <div className="flex h-full items-center justify-center p-4 text-center text-sm text-white/70">
+          <div className="flex h-full items-center justify-center p-4 text-center text-sm text-muted-foreground">
             <p>
-              <Link href="/sign-in" className="font-semibold text-white underline">
+              <Link href="/sign-in" className="font-semibold text-foreground underline">
                 Sign in
               </Link>{" "}
               to comment, react, and join the call-in.
