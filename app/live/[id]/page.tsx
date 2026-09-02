@@ -1,5 +1,7 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { getLiveStream } from "@/app/actions/live"
+import { shareMetadataToNext } from "@/lib/share/route-metadata"
 import { getFollowingIds } from "@/app/actions/follow"
 import { resolveShow } from "@/lib/content"
 import { getCurrentUser } from "@/lib/session"
@@ -13,6 +15,19 @@ import {
 } from "@/components/live-session"
 import { EpisodePage } from "@/components/episode-page"
 import { LiveFinishedScreen } from "@/components/live/live-finished-screen"
+
+// Rich link preview: dynamic Open Graph / Twitter / canonical metadata for a
+// live broadcast or an on-demand audio/video replay (spec §3). The resolver
+// looks up the live stream (by roomName) or the episode (by slug) and picks the
+// precise content type — live / audio / video — automatically.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}): Promise<Metadata> {
+  const { id } = await params
+  return shareMetadataToNext({ type: "live", id })
+}
 
 export default async function LiveStreamPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

@@ -88,7 +88,9 @@ export function EpisodeInteractions({
     key: String(episodeId),
     title: `${show.title} on Frequency`,
     subtitle: show.tagline,
-    url: typeof window !== "undefined" ? window.location.pathname + window.location.search : "/catalog",
+    // Canonical per-content URL (spec §9): the replay's own page keyed by slug
+    // (Show.id IS the slug), not the current pathname.
+    url: `/live/${show.id}`,
     image: show.cover,
     downloadUrl: show.audioUrl ?? null,
     downloadKind: show.audioUrl ? "audio" : null,

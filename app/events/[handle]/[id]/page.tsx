@@ -15,6 +15,19 @@ import {
   resolveIdentity,
   type EventQuestion,
 } from "@/lib/events/registration"
+import { shareMetadataToNext } from "@/lib/share/route-metadata"
+
+// Rich link preview: dynamic Open Graph / Twitter / canonical metadata for the
+// public event page, resolved from the event itself (spec §3). Restricted or
+// unpublished events return a private/unavailable shell that leaks nothing.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ handle: string; id: string }>
+}): Promise<Metadata> {
+  const { handle, id } = await params
+  return shareMetadataToNext({ type: "event", id, handle })
+}
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -37,21 +50,6 @@ type Params = {
  * stricter than on the listing (which is merely time-revalidated).
  */
 export const dynamic = "force-dynamic"
-
-export async function generateMetadata({ params }: Params): Promise<Metadata> {
-  const { handle, id } = await params
-  const loaded = await loadEventByHandle(handle, Number(id))
-  if (!loaded) return { title: "Event — Frequency" }
-  return {
-    title: `${loaded.event.title} · ${loaded.homeName}`,
-    description: loaded.event.description ?? `An event hosted by ${loaded.homeName}.`,
-    openGraph: {
-      title: loaded.event.title,
-      description: loaded.event.description ?? `An event hosted by ${loaded.homeName}.`,
-      images: loaded.event.flyer ? [loaded.event.flyer] : undefined,
-    },
-  }
-}
 
 /**
  * A single event's public page and registration surface — cinematic shell.

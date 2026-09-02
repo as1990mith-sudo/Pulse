@@ -31,11 +31,39 @@ const geistMono = Geist_Mono({
 // as the full type family across chats and rooms.
 const sora = Sora({ variable: '--font-sora', subsets: ['latin'], weight: ['400', '500', '600', '700'] })
 
+// Base URL for resolving relative Open Graph/Twitter image paths into absolute
+// URLs (required by external crawlers). Prefer the deployment URL when present;
+// per-content routes still emit their own fully-absolute URLs via the share
+// metadata helper, so this only backstops the site-wide defaults below.
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL
+  ? process.env.NEXT_PUBLIC_SITE_URL
+  : process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : "https://frequency.app"
+
+const SITE_DESCRIPTION =
+  'Go live, build your audience, and stream audio + video podcasts in real time. Listen in, chat, and call in to the conversation.'
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: 'Frequency',
-  description:
-    'Go live, build your audience, and stream audio + video podcasts in real time. Listen in, chat, and call in to the conversation.',
+  description: SITE_DESCRIPTION,
   generator: 'v0.app',
+  // Site-wide default rich preview. Individual content routes override this with
+  // their own dynamic Open Graph / Twitter metadata (see lib/share).
+  openGraph: {
+    type: 'website',
+    siteName: 'Frequency',
+    title: 'Frequency',
+    description: SITE_DESCRIPTION,
+    images: ['/share/fallback-default.png'],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Frequency',
+    description: SITE_DESCRIPTION,
+    images: ['/share/fallback-default.png'],
+  },
   icons: {
     icon: [
       {

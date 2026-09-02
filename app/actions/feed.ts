@@ -576,6 +576,187 @@ export async function getFeedPostsByUser(userId: string): Promise<FeedPostView[]
 }
 
 /**
+ * Hydrates a set of already-loaded feed_post rows into full FeedPostView objects
+ * — every comment (with live author identity), the viewer's like/repost/save
+ * state, the aggregate save/share counts and any poll — exactly as the feed and
+ * profile timelines do. Extracted so a surface that selects posts by an
+ * arbitrary id set (a person's engagement history) renders them identically to
+ * getFeedPostsByUser instead of a look-alike. Preserves the order of `posts`.
+ */
+async function hydratePostViews(
+  posts: (typeof feedPost.$inferSelect)[],
+  currentUserId: string | null,
+): Promise<FeedPostView[]> {
+  if (posts.length === 0) return []
+  const postIds = posts.map((p) => p.id)
+
+  const [followingIds, comments, repostedSet, savedSet, saveCounts, shareCounts, likedPostSet] = await Promise.all([
+    getFollowingSet(currentUserId),
+    db.select().from(feedComment).where(inArray(feedComment.postId, postIds)).orderBy(asc(feedComment.createdAt)),
+    getRepostedSet(currentUserId),
+    getSavedPostSet(currentUserId),
+    getPostSaveCounts(postIds),
+    getPostShareCounts(postIds),
+    getLikedSet(currentUserId, "post", postIds),
+  ])
+
+  // Engagement posts can be personal OR published in an organisation's voice, so
+  // both post and comment identities need org resolution (getFeedPostsByUser can
+  // skip post org identity because its posts are personal by construction).
+  const [infoMap, postOrgMap, commentOrgMap, likedCommentSet] = await Promise.all([
+    getUserInfoMap([...posts.map((p) => p.userId), ...comments.map((c) => c.userId)]),
+    getOrgInfoMap(posts.map((p) => p.organizationId)),
+    getOrgInfoMap(comments.map((c) => c.organizationId)),
+    getLikedSet(currentUserId, "feed_comment", comments.map((c) => c.id)),
+  ])
+
+  const commentsByPost = new Map<number, FeedCommentView[]>()
+  for (const c of comments) {
+    const view = toCommentView(c, infoMap, currentUserId, likedCommentSet, commentOrgMap)
+    const arr = commentsByPost.get(c.postId)
+    if (arr) arr.push(view)
+    else commentsByPost.set(c.postId, [view])
+  }
+
+  const views = posts.map((p) => ({
+    id: p.id,
+    authorId: p.userId,
+    ...resolveAuthor(p, infoMap, postOrgMap),
+    postedAt: timeAgo(p.createdAt),
+    createdAtMs: p.createdAt.getTime(),
+    text: p.text,
+    image: p.image,
+    video: p.video,
+    media: toMedia(p),
+    likes: p.likes,
+    liked: likedPostSet.has(p.id),
+    reposts: p.reposts,
+    reposted: repostedSet.has(p.id),
+    saved: savedSet.has(String(p.id)),
+    saves: saveCounts.get(p.id) ?? 0,
+    shares: shareCounts.get(p.id) ?? 0,
+    edited: !!p.editedAt,
+    isFollowing: followingIds.has(p.userId),
+    isSelf: currentUserId === p.userId,
+    mentionedMe: currentUserId ? (p.mentions ?? []).some((m) => m.userId === currentUserId) : false,
+    comments: commentsByPost.get(p.id) ?? [],
+  }))
+  return attachPolls(views, currentUserId)
+}
+
+/**
+ * A single item in a profile's Engagement timeline: one feed post the profile
+ * actor has engaged with, carrying THAT actor's own comments on it and whether
+ * they liked it, so the profile can highlight the engagement above the post.
+ */
+export type EngagementItem = {
+  post: FeedPostView
+  // The actor's own comments on this post, newest-first. Empty for a like-only
+  // item. These are what the owner can delete and visitors can reply to.
+  comments: FeedCommentView[]
+  // Did the actor like this post? Likes belong to a person and are private to
+  // them, so this is only ever true for the owner viewing their own profile;
+  // it is always false for visitors and for organisations (which can't like).
+  liked: boolean
+  // Most recent of (latest own comment, own like) — orders the timeline.
+  lastEngagedMs: number
+}
+
+/**
+ * The Engagement timeline for a profile: the feed posts a person (or an
+ * organisation) has commented on or liked, newest engagement first.
+ *
+ * `actor` selects whose engagement is read:
+ *  - { kind: "user", userId } → the person's PERSONAL comments (never their
+ *    org-voice ones) plus, for the owner only, their post likes.
+ *  - { kind: "org", orgId } → comments authored in that organisation's voice.
+ *    Organisations can't like, so like items never appear.
+ *
+ * Visitors receive comment items only — a person's likes stay private — while
+ * the owner also sees like-only items. Deleted posts and posts outside the
+ * active Home are dropped, so no stale or cross-Home engagement leaks.
+ */
+export async function getEngagementForProfile(
+  actor: { kind: "user"; userId: string } | { kind: "org"; orgId: string },
+): Promise<EngagementItem[]> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  const currentUserId = session?.user?.id ?? null
+  const scope = await getProfileScope()
+
+  const isUser = actor.kind === "user"
+  const ownerViewingLikes = isUser && currentUserId === actor.userId
+
+  // The actor's own comments. A person contributes only their personal comments;
+  // comments they made in an organisation's voice belong to that organisation's
+  // engagement, never the person's.
+  const myComments = await db
+    .select()
+    .from(feedComment)
+    .where(
+      isUser
+        ? and(eq(feedComment.userId, actor.userId), isNull(feedComment.organizationId))
+        : eq(feedComment.organizationId, actor.orgId),
+    )
+    .orderBy(desc(feedComment.createdAt))
+
+  const myLikes = ownerViewingLikes
+    ? await db
+        .select({ postId: like.targetId, createdAt: like.createdAt })
+        .from(like)
+        .where(and(eq(like.userId, actor.userId), eq(like.targetType, "post")))
+        .orderBy(desc(like.createdAt))
+    : []
+
+  const engagedPostIds = [...new Set([...myComments.map((c) => c.postId), ...myLikes.map((l) => l.postId)])]
+  if (engagedPostIds.length === 0) return []
+
+  const postRows = await db
+    .select()
+    .from(feedPost)
+    .where(and(inArray(feedPost.id, engagedPostIds), eq(feedPost.deleted, false), scopeToHome(feedPost.homeId, scope)))
+  if (postRows.length === 0) return []
+
+  const views = await hydratePostViews(postRows, currentUserId)
+  const viewById = new Map(views.map((v) => [v.id, v]))
+
+  // Convert the actor's own comments with the same live-identity resolver the
+  // post views use, so a rename updates the highlighted comment too.
+  const [infoMap, orgMap, likedCommentSet] = await Promise.all([
+    getUserInfoMap(myComments.map((c) => c.userId)),
+    getOrgInfoMap(myComments.map((c) => c.organizationId)),
+    getLikedSet(
+      currentUserId,
+      "feed_comment",
+      myComments.map((c) => c.id),
+    ),
+  ])
+  const myCommentsByPost = new Map<number, FeedCommentView[]>()
+  for (const c of myComments) {
+    if (!viewById.has(c.postId)) continue
+    const view = toCommentView(c, infoMap, currentUserId, likedCommentSet, orgMap)
+    const arr = myCommentsByPost.get(c.postId)
+    if (arr) arr.push(view)
+    else myCommentsByPost.set(c.postId, [view])
+  }
+  const likeMsByPost = new Map<number, number>()
+  for (const l of myLikes) likeMsByPost.set(l.postId, l.createdAt.getTime())
+
+  const items: EngagementItem[] = []
+  for (const post of postRows) {
+    const view = viewById.get(post.id)
+    if (!view) continue
+    const comments = myCommentsByPost.get(post.id) ?? []
+    const liked = likeMsByPost.has(post.id)
+    if (comments.length === 0 && !liked) continue
+    const latestCommentMs = comments.length ? Math.max(...comments.map((c) => c.createdAtMs)) : 0
+    const likeMs = likeMsByPost.get(post.id) ?? 0
+    items.push({ post: view, comments, liked, lastEngagedMs: Math.max(latestCommentMs, likeMs) })
+  }
+  items.sort((a, b) => b.lastEngagedMs - a.lastEngagedMs)
+  return items
+}
+
+/**
  * Newest-first MAIN-FEED posts published in an ORGANISATION's voice, powering
  * the org profile "Posts" tab. The mirror image of getFeedPostsByUser: that one
  * takes organizationId IS NULL (personal posts), this one takes a specific

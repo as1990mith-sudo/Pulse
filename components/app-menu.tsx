@@ -18,6 +18,7 @@ import {
   Library as LibraryIcon,
   LifeBuoy,
   LogOut,
+  Mic,
   Moon,
   MoonStar,
   Newspaper,
@@ -410,6 +411,8 @@ export function AppMenu() {
                 <Divider />
 
                 <Section label="Activity">
+                  {/* Shortcut to the active Home's Catalogue tab (see /catalogue). */}
+                  <DrawerItem href="/catalogue" icon={Mic} label="Catalogue" onNavigate={navigate} />
                   <DrawerItem href="/events" icon={CalendarDays} label="Events" onNavigate={navigate} />
                   <DrawerItem href="/appointments" icon={CalendarClock} label="Appointments" onNavigate={navigate} />
                 </Section>

@@ -214,8 +214,6 @@ export function AnnouncementBanner({
   const [openId, setOpenId] = useState<number | null>(null)
   // The id of the event being edited (opened from a card's "…" manage menu).
   const [editId, setEditId] = useState<number | null>(null)
-  // Cosmetic saved/bookmark state per card. Purely client-side for now.
-  const [saved, setSaved] = useState<Record<number, boolean>>({})
   // The active filter: a range tab (default Today) or a specific rail day.
   const [view, setView] = useState<EventView>({ type: "range", key: "today" })
 
@@ -374,8 +372,7 @@ export function AnnouncementBanner({
           <FeaturedEventCard
             event={featured}
             isAdmin={isAdmin}
-            saved={Boolean(saved[featured.id])}
-            onToggleSave={() => setSaved((s) => ({ ...s, [featured.id]: !s[featured.id] }))}
+            home={home}
             onOpen={() => setOpenId(featured.id)}
             onEdit={() => setEditId(featured.id)}
           />
@@ -588,15 +585,20 @@ function DateRail({ selected, onPick }: { selected: string | null; onPick: (date
 function FeaturedEventCard({
   event: a,
   isAdmin = false,
-  saved,
-  onToggleSave,
+  home = null,
   onOpen,
   onEdit,
 }: {
   event: AnnouncementView
   isAdmin?: boolean
-  saved: boolean
-  onToggleSave: () => void
+  // Active-Home branding, used for the real ministry avatar on the card footer.
+  home?: {
+    name: string
+    logo: string | null
+    initials: string
+    color: string
+    categoryLabel: string
+  } | null
   onOpen: () => void
   onEdit: () => void
 }) {
@@ -605,7 +607,7 @@ function FeaturedEventCard({
   const bodyLabel = `View details for ${a.title}`
 
   const body = (
-    <div className="flex min-h-[248px] items-stretch text-left">
+    <div className="flex min-h-[150px] items-stretch text-left">
       {/* Poster hero — roughly 38% of the card width, full-bleed. Kept lean so
           the info column beside it has room to breathe on narrow screens. */}
       <div className="relative w-[38%] shrink-0 self-stretch overflow-hidden rounded-tl-3xl bg-secondary">
@@ -620,33 +622,39 @@ function FeaturedEventCard({
       </div>
 
       {/* Event info */}
-      <div className="flex min-w-0 flex-1 flex-col gap-2.5 p-5">
+      <div className="flex min-w-0 flex-1 flex-col gap-2 p-4">
         <span className="w-fit rounded-full border border-primary/40 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-primary">
           {relativeDayLabel(a.eventDate)}
         </span>
-        <h3 className="text-xl font-bold leading-tight tracking-tight text-balance">{a.title}</h3>
+        <h3 className="line-clamp-2 text-lg font-bold leading-tight tracking-tight text-balance">{a.title}</h3>
 
-        <div className="mt-0.5 space-y-2">
+        <div className="mt-0.5 space-y-1.5">
           <p className="flex items-center gap-2 text-sm">
             <Clock className="size-4 shrink-0 text-primary" />
             <span className="truncate font-medium">{formatTimeWithZone(a.eventDate, a.eventTime)}</span>
           </p>
-          <p className="flex items-start gap-2 text-sm text-muted-foreground">
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
             {online ? (
-              <Globe className="mt-0.5 size-4 shrink-0 text-live" />
+              <Globe className="size-4 shrink-0 text-live" />
             ) : (
-              <MapPin className="mt-0.5 size-4 shrink-0" />
+              <MapPin className="size-4 shrink-0" />
             )}
-            <span className="line-clamp-2">{online ? "Online event" : a.location}</span>
+            <span className="truncate">{online ? "Online event" : a.location}</span>
           </p>
         </div>
 
         <div className="mt-auto flex items-center gap-2 border-t border-border/60 pt-2.5">
           <span
             aria-hidden="true"
-            className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold uppercase text-primary"
+            className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full text-[10px] font-bold uppercase text-white ring-1 ring-white/10"
+            style={{ backgroundColor: home?.color ?? "var(--primary)" }}
           >
-            {a.creatorName.slice(0, 2)}
+            {home?.logo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={home.logo || "/placeholder.svg"} alt="" className="size-full object-cover" />
+            ) : (
+              home?.initials || a.creatorName.slice(0, 2)
+            )}
           </span>
           <span className="min-w-0 leading-tight">
             <span className="block truncate text-[13px] font-semibold">{a.creatorName}</span>
@@ -690,16 +698,6 @@ function FeaturedEventCard({
             View details
           </button>
         )}
-
-        <button
-          type="button"
-          onClick={onToggleSave}
-          aria-label={saved ? `Remove ${a.title} from saved` : `Save ${a.title}`}
-          aria-pressed={saved}
-          className="grid size-11 shrink-0 place-items-center rounded-2xl border border-border text-muted-foreground transition-colors hover:text-primary"
-        >
-          <Bookmark className={cn("size-[18px]", saved && "fill-primary text-primary")} />
-        </button>
 
         <EventCardMenu event={a} isAdmin={isAdmin} onEdit={onEdit} onOpen={onOpen} />
       </div>

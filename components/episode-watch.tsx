@@ -172,7 +172,10 @@ export function EpisodeWatch({
     key: String(episodeId),
     title: `${show.title} on Frequency`,
     subtitle: show.tagline,
-    url: typeof window !== "undefined" ? window.location.pathname + window.location.search : "/catalog",
+    // Canonical per-content URL (spec §9): the replay's own page, keyed by slug
+    // (Show.id IS the slug). Never the current pathname, which may be a
+    // mini-player or catalog surface rather than the item's canonical page.
+    url: `/live/${show.id}`,
     image: show.cover,
     downloadUrl: show.audioUrl ?? null,
     downloadKind: show.audioUrl ? "audio" : null,
