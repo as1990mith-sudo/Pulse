@@ -222,16 +222,15 @@ function MyRooms({ rooms }: { rooms: ChatroomSummary[] }) {
   }
 
   return (
-    // Rooms are rendered as the same rounded "pill" cards as the featured
-    // Community Help / QOTD / iTestify entries above — matching layout, shadow
-    // and white "Open" pill — while keeping each room's own neutral colour
-    // scheme rather than adopting the vivid featured gradients.
-    <div className="space-y-2">
+    // Immersive list: rooms read as flush rows separated by hairline dividers
+    // rather than bordered cards, so the list sits directly on the page. Keeps
+    // the avatar, name/meta, and white "Open" pill; hover just warms the row.
+    <div className="-mx-4 divide-y divide-border/60 sm:-mx-6">
       {rooms.map((room) => (
         <Link
           key={room.id}
           href={`/chatrooms/${room.id}`}
-          className="group flex items-center gap-3 rounded-xl border-2 border-border bg-card px-4 py-3 shadow-lg shadow-black/20 transition-all hover:border-foreground/30 hover:bg-secondary/40 hover:shadow-black/30 sm:px-5"
+          className="group flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-secondary/30 sm:px-6"
         >
           <Avatar className="size-12 shrink-0 ring-2 ring-border/60 transition-transform duration-200 group-hover:scale-105">
             {room.image && <AvatarImage src={room.image || "/placeholder.svg"} alt={room.name} />}
