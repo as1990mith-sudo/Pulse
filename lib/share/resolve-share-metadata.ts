@@ -1,12 +1,13 @@
 import "server-only"
 
-import { and, eq } from "drizzle-orm"
+import { and, eq, sql } from "drizzle-orm"
 import { db } from "@/lib/db"
 import {
   announcement,
   article,
   episode,
   feedPost,
+  home,
   liveStream,
   organization,
   statusUpdate,
@@ -136,25 +137,43 @@ async function resolveArticle(id: number): Promise<ShareMetadata | null> {
 
 async function resolveEvent(id: number, handle: string): Promise<ShareMetadata | null> {
   if (Number.isNaN(id)) return null
-  const [row] = await db.select().from(announcement).where(eq(announcement.id, id)).limit(1)
-  if (!row || row.adType !== "event") return null
+  // Mirror the public page's own lookup (loadEventByHandle): the event must
+  // belong to THIS handle's org and to a Home that isn't soft-deleted. This
+  // keeps metadata and page 404s in lockstep — we never describe a URL the page
+  // itself would reject.
+  const [row] = await db
+    .select({ ad: announcement, orgName: organization.name, orgLogo: organization.logo })
+    .from(announcement)
+    .innerJoin(home, eq(home.id, announcement.homeId))
+    .innerJoin(organization, eq(organization.id, home.organizationId))
+    .where(
+      and(
+        eq(announcement.id, id),
+        eq(organization.handle, handle),
+        eq(announcement.adType, "event"),
+        sql`${home.deletedAt} is null`,
+      ),
+    )
+    .limit(1)
+  if (!row) return null
   const canonicalUrl = canonicalPath({ type: "event", id, handle })
   // The public event page only exists when the admin enabled it AND the event
   // was approved. Otherwise expose nothing beyond a generic private card.
-  if (!row.publicPageEnabled || row.status !== "approved") return restrictedMetadata("event", canonicalUrl)
-  const org = await orgBranding(row.organizationId)
-  const online = !row.location || /online|virtual|zoom|meet|stream/i.test(row.location)
+  if (!row.ad.publicPageEnabled || row.ad.status !== "approved") {
+    return restrictedMetadata("event", canonicalUrl)
+  }
+  const online = !row.ad.location || /online|virtual|zoom|meet|stream/i.test(row.ad.location)
   return {
     ...base("event", canonicalUrl),
-    title: row.title,
-    description: row.description || null,
-    thumbnailUrl: row.flyer || fallbackImageFor("event"),
-    authorName: row.creatorName,
+    title: row.ad.title,
+    description: row.ad.description || null,
+    thumbnailUrl: row.ad.flyer || fallbackImageFor("event"),
+    authorName: row.ad.creatorName,
     authorAvatar: null,
-    organisationName: org.name ?? row.creatorName,
-    organisationLogo: org.logo,
-    publishedAt: (row.publishedAt ?? row.createdAt)?.toISOString() ?? null,
-    extra: { eventDate: row.eventDate, location: row.location, online },
+    organisationName: row.orgName ?? row.ad.creatorName,
+    organisationLogo: row.orgLogo,
+    publishedAt: (row.ad.publishedAt ?? row.ad.createdAt)?.toISOString() ?? null,
+    extra: { eventDate: row.ad.eventDate, location: row.ad.location, online },
   }
 }
 
