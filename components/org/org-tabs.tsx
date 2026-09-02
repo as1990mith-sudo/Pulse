@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 
 import { useUrlState } from "@/lib/navigation/use-url-state"
 import { useOverlayHistory } from "@/lib/navigation/use-overlay-history"
+import { useAutoHideChatChrome } from "@/lib/chat-chrome"
 import Link from "next/link"
 import {
   ArrowLeft,
@@ -99,9 +100,18 @@ export function OrgTabs({
   // to Posts. Switching tabs replaces the history entry, so Back leaves the
   // profile rather than stepping through every tab that was opened.
   const [tab, setTab] = useUrlState<TabKey>("tab", "posts", { valid: TAB_KEYS })
-  // The tab to return to when Catalogue closes. Also in the URL, so a reload
-  // while Catalogue is open still knows where to go back to.
-  const [returnTab, setReturnTab] = useUrlState<TabKey>("from", "posts", { valid: TAB_KEYS })
+  // Catalogue opens as a full-screen overlay ON TOP of whatever tab is showing,
+  // so it is NOT one of the inline tabs — it's a dedicated boolean. Keeping it
+  // out of `tab` is what makes Back a single tap: useOverlayHistory pushes an
+  // entry for the overlay, while the tab entry beneath keeps its own `?tab=…`.
+  // Previously "catalogue" was a `tab` value, so opening rewrote the underlying
+  // entry to `?tab=catalogue`; closing popped back to it and the URL-follow
+  // effect instantly re-opened the overlay — hence the double tap.
+  //
+  // Seeded from a legacy `?tab=catalogue` deep link (the `/catalogue` shortcut
+  // still redirects there) so those links keep working; the effect below then
+  // normalises that URL back to the underlying tab.
+  const [catalogueOpen, setCatalogueOpen] = useState(false)
   // Active Catalogue kind (Audio / Live / Documents), lifted here so the header's
   // upload dialog can tailor itself to the current tab — and hide on Live, which
   // can't be manually uploaded. Defaults to the first kind that has items.
@@ -110,7 +120,6 @@ export function OrgTabs({
     for (const it of catalogue) counts[it.kind]++
     return (["audio", "video", "document"] as CatalogueKind[]).find((k) => counts[k] > 0) ?? "audio"
   })
-  const catalogueOpen = tab === "catalogue"
 
   // Position of the sliding top indicator.
   const activeIndex = Math.max(
@@ -127,6 +136,17 @@ export function OrgTabs({
   const indicatorLeft = (activeIndex / totalFr) * 100
   const indicatorWidth = (ACTIVE_FR / totalFr) * 100
 
+  // Legacy deep link: `?tab=catalogue` (and the `/catalogue` shortcut that
+  // redirects to it) used to select a "catalogue" tab. It now opens the overlay
+  // and the tab underneath falls back to Posts, so normalise the URL once.
+  useEffect(() => {
+    if (tab === "catalogue") {
+      setCatalogueOpen(true)
+      setTab("posts")
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab])
+
   // Catalogue opens as an immersive full-screen view, so lock background scroll
   // while it's open and restore it on close.
   useEffect(() => {
@@ -139,18 +159,34 @@ export function OrgTabs({
   }, [catalogueOpen])
 
   function selectTab(key: TabKey) {
-    if (key === "catalogue" && tab !== "catalogue") setReturnTab(tab)
+    // Catalogue isn't an inline tab — it opens the full-screen overlay and
+    // leaves the underlying tab (and its URL) exactly where it was.
+    if (key === "catalogue") {
+      setCatalogueOpen(true)
+      return
+    }
     setTab(key)
   }
 
+  // Closing simply clears the dedicated `catalogue` flag; the overlay-history
+  // entry retires itself with a single synthetic pop, and because the flag lives
+  // in its OWN pushed entry (not smeared across the tab entry beneath), one tap
+  // now closes it. See the `catalogueOpen` state note for the full history.
   function closeCatalogue() {
-    setTab(returnTab)
+    setCatalogueOpen(false)
   }
 
   // Catalogue is a full-screen overlay, so it gets its own history entry: the
   // device Back button and iOS swipe-back close it and reveal the tab underneath,
   // instead of navigating away from the profile entirely.
   useOverlayHistory(catalogueOpen, closeCatalogue, "org-catalogue")
+
+  // The Catalogue overlay scrolls its own inner container, not the window, so
+  // the global BottomNav's window-scroll listener never fires here and the bar
+  // stayed pinned. Feeding the same shared chat-chrome store that the chat
+  // surfaces use lets the footer tuck away on scroll-down and return on
+  // scroll-up, matching every other page.
+  const onCatalogueScroll = useAutoHideChatChrome()
 
   return (
     <section className="mt-2">
@@ -255,7 +291,11 @@ export function OrgTabs({
                 (per active segment), so the header stays clean. */}
           </header>
 
-          <div data-scroll className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
+          <div
+            data-scroll
+            onScroll={onCatalogueScroll}
+            className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6"
+          >
             <div className="mx-auto w-full max-w-4xl">
               {/* Redesigned Upload: Materials + Playlists (externally-hosted
                   resources) with the existing Live listing preserved as a third
