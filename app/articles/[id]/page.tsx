@@ -9,22 +9,20 @@ import {
   getMoreFromAuthor,
   getRelatedArticles,
 } from "@/app/actions/articles"
+import { shareMetadataToNext } from "@/lib/share/route-metadata"
 
 export const dynamic = "force-dynamic"
 
+// Rich link preview: dynamic Open Graph / Twitter / canonical metadata resolved
+// from the article itself (spec §3). Delegates to the shared resolver so every
+// content type is described consistently.
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ id: string }>
 }): Promise<Metadata> {
   const { id } = await params
-  const article = await getArticle(id)
-  if (!article) return { title: "Article · Frequency" }
-  return {
-    title: `${article.title} · Frequency`,
-    description: article.excerpt || undefined,
-    openGraph: article.coverUrl ? { images: [article.coverUrl] } : undefined,
-  }
+  return shareMetadataToNext({ type: "article", id })
 }
 
 export default async function ArticlePage({ params }: { params: Promise<{ id: string }> }) {

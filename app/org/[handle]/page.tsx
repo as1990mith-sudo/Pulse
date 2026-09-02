@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { getOrganizationByHandle } from "@/app/actions/organizations"
 import { getOrganizationCatalogue } from "@/app/actions/org-content"
@@ -10,6 +11,18 @@ import { getHomeRosterByOrg } from "@/lib/home/access"
 import { SiteHeader } from "@/components/site-header"
 import { OrgTabs } from "@/components/org/org-tabs"
 import { OrgHero } from "@/components/org/org-hero"
+import { shareMetadataToNext } from "@/lib/share/route-metadata"
+
+// Rich link preview: dynamic Open Graph / Twitter / canonical metadata for the
+// organisation profile, resolved from the organisation itself (spec §3).
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ handle: string }>
+}): Promise<Metadata> {
+  const { handle } = await params
+  return shareMetadataToNext({ type: "organisation", handle })
+}
 
 // Load a secondary section without letting one failing query take down the
 // whole profile. A failure degrades that section to empty (still logged) rather

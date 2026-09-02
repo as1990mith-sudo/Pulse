@@ -1,5 +1,7 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { getProfile } from "@/lib/profile"
+import { shareMetadataToNext } from "@/lib/share/route-metadata"
 import { getPublicCommunityPostsByUser, getAnonymousCommunityPostsByUser } from "@/app/actions/community"
 import { getFeedPostsByUser } from "@/app/actions/feed"
 import { getActiveStatusForUser } from "@/app/actions/status"
@@ -15,6 +17,17 @@ import { ProfileTabs } from "@/components/profile/profile-tabs"
 import { ProfileAvatar } from "@/components/profile/profile-avatar"
 import { ProfileName } from "@/components/profile/profile-name"
 import { ProfileBio } from "@/components/profile/profile-bio"
+
+// Rich link preview: dynamic Open Graph / Twitter / canonical metadata for the
+// person's profile, resolved from the user record itself (spec §3).
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}): Promise<Metadata> {
+  const { id } = await params
+  return shareMetadataToNext({ type: "user", id })
+}
 
 export default async function ProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
