@@ -90,8 +90,8 @@ export function OrgTabs({
     { key: "thread", label: "Thread", icon: <MessageCircle className="size-4" />, count: threads.length },
     { key: "about", label: "About", icon: <Building2 className="size-4" /> },
     { key: "articles", label: "Articles", icon: <Newspaper className="size-4" />, count: articles.length },
-    { key: "catalogue", label: "Catalogue", icon: <Mic className="size-4" />, count: catalogue.length },
     { key: "engagement", label: "Engagement", icon: <Heart className="size-4" />, count: engagement.length },
+    { key: "catalogue", label: "Catalogue", icon: <Mic className="size-4" />, count: catalogue.length },
   ]
 
   // Held in the URL rather than useState so a reload — or coming Back to this
@@ -117,6 +117,15 @@ export function OrgTabs({
     0,
     tabs.findIndex((t) => t.key === tab),
   )
+  // The active tab's column expands so a long label ("Engagement", "Catalogue")
+  // gets room, while the icon-only inactive tabs shrink and glide aside. Every
+  // track stays `fr`, so grid-template-columns interpolates and the shift is
+  // smooth rather than snapping.
+  const ACTIVE_FR = 2.4
+  const totalFr = tabs.length - 1 + ACTIVE_FR
+  const columns = tabs.map((_, i) => (i === activeIndex ? `${ACTIVE_FR}fr` : "1fr")).join(" ")
+  const indicatorLeft = (activeIndex / totalFr) * 100
+  const indicatorWidth = (ACTIVE_FR / totalFr) * 100
 
   // Catalogue opens as an immersive full-screen view, so lock background scroll
   // while it's open and restore it on close.
@@ -145,14 +154,14 @@ export function OrgTabs({
 
   return (
     <section className="mt-2">
-      {/* Same tab language as the personal profile: a full-width grid where every
-          tab gets an equal share, only the active tab reveals its label, and a
-          single indicator slides along the top border. No horizontal scrolling —
-          the icon-only inactive tabs mean all five always fit. */}
+      {/* Same tab language as the personal profile: a full-width grid, only the
+          active tab reveals its label, and a single indicator slides along the
+          top border. The active column is weighted wider (and the icon-only
+          inactive tabs shrink aside) so a long label never crowds the edge. */}
       <div
         role="tablist"
-        className="relative -mx-4 grid border-t border-border/60 sm:-mx-6"
-        style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+        className="relative -mx-4 grid border-t border-border/60 transition-[grid-template-columns] duration-300 ease-out sm:-mx-6"
+        style={{ gridTemplateColumns: columns }}
       >
         {tabs.map((t) => (
           <button
@@ -192,10 +201,10 @@ export function OrgTabs({
             )}
           </button>
         ))}
-        {/* Sliding active indicator */}
+        {/* Sliding active indicator — tracks the weighted column's position/size. */}
         <span
-          className="absolute -top-px left-0 h-0.5 bg-foreground transition-transform duration-300 ease-out"
-          style={{ width: `${100 / tabs.length}%`, transform: `translateX(${activeIndex * 100}%)` }}
+          className="absolute -top-px h-0.5 bg-foreground transition-all duration-300 ease-out"
+          style={{ left: `${indicatorLeft}%`, width: `${indicatorWidth}%` }}
           aria-hidden
         />
       </div>
@@ -214,15 +223,15 @@ export function OrgTabs({
           engagement.length === 0 ? (
             <EmptyState
               icon={<Heart className="size-6" />}
-              title={org.isOwner ? "No engagement yet" : `${org.name} hasn't engaged yet`}
-              message={
-                org.isOwner
-                  ? "Posts this Home comments on will gather here."
-                  : `Comments ${org.name} leaves on posts will appear here.`
-              }
+              title={`${org.name} hasn't engaged yet`}
+              message={`Comments ${org.name} leaves on posts will appear here.`}
             />
           ) : (
-            <EngagementFeed items={engagement} isSelf={org.isOwner} currentUser={currentUser} />
+            // Always the visitor experience on a Home profile: comments-only,
+            // read + reply + add-your-own, never management controls — even for
+            // the Home's own admins. Managing a Home's own comments doesn't live
+            // on the public profile, so isSelf is hard-coded false here.
+            <EngagementFeed items={engagement} isSelf={false} currentUser={currentUser} />
           )
         ) : null}
       </div>

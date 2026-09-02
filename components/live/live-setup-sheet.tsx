@@ -32,7 +32,11 @@ export interface LiveSetupSheetProps {
   onCoverChange: (url: string | null) => void
   coverRequired?: boolean
 
-  /** Optional free-text topic/discussion field. Omit to hide the section. */
+  /**
+   * @deprecated The topic/discussion field was removed from the setup sheet to
+   * keep the whole form on one screen without scrolling. Still accepted so
+   * existing callers compile, but it is no longer rendered.
+   */
   topic?: {
     value: string
     onChange: (value: string) => void
@@ -84,7 +88,6 @@ export function LiveSetupSheet({
   cover,
   onCoverChange,
   coverRequired = false,
-  topic,
   category,
   onCategoryChange,
   categoryOptions,
@@ -198,26 +201,6 @@ export function LiveSetupSheet({
             />
           </div>
 
-          {/* Topic / discussion — optional, only rendered when provided. */}
-          {topic && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label htmlFor="live-topic" className="text-[11px] font-semibold uppercase tracking-wider text-white/50">
-                  {topic.label ?? "Discussion"}
-                </label>
-                <span className="text-[11px] text-white/35">Optional</span>
-              </div>
-              <input
-                id="live-topic"
-                value={topic.value}
-                onChange={(e) => topic.onChange(e.target.value)}
-                maxLength={topic.maxLength ?? 120}
-                placeholder={topic.placeholder ?? "What are we gathering around?"}
-                className="w-full rounded-2xl bg-white/[0.06] px-4 py-3.5 text-[15px] font-medium text-white ring-1 ring-inset ring-white/10 placeholder:text-white/35 focus:outline-none focus:ring-primary"
-              />
-            </div>
-          )}
-
           {/* Category — required. */}
           <div className="space-y-2">
             <label htmlFor="live-category" className="text-[11px] font-semibold uppercase tracking-wider text-white/50">
@@ -295,7 +278,8 @@ export function LiveSetupSheet({
 
           {error && <p className="text-sm font-medium text-destructive">{error}</p>}
 
-          {/* Go live — an actual circular button, with its label + Cancel below. */}
+          {/* Go live — an actual circular button, with its label below. Dismiss
+              lives in the header back button, so there's no bottom Cancel. */}
           <div className="flex flex-col items-center gap-3 pt-1">
             <button
               type="button"
@@ -316,13 +300,6 @@ export function LiveSetupSheet({
               )}
             </button>
             <span className="text-sm font-semibold text-white/90">{submitting ? submittingLabel : "Go live"}</span>
-            <button
-              type="button"
-              onClick={onCancel}
-              className="text-sm font-medium text-white/50 transition-colors hover:text-white/80"
-            >
-              Cancel
-            </button>
           </div>
         </div>
       </div>
