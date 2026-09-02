@@ -9,7 +9,7 @@
 import { useRef } from "react"
 import dynamic from "next/dynamic"
 import { AnimatePresence } from "motion/react"
-import { BookOpen, BookMarked, FileText, Loader2, NotebookPen, Pin, X } from "lucide-react"
+import { BookOpen, BookMarked, FileText, Loader2, NotebookPen, Pin, Video, X } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useLiveResources, type ResourcePanelId } from "./resource-context"
@@ -18,6 +18,7 @@ import { MiniPanelShell } from "./mini-panel-shell"
 import { MiniBiblePanel } from "./panels/mini-bible-panel"
 import { MiniNotesPanel } from "./panels/mini-notes-panel"
 import { MiniPinnedPanel } from "./panels/mini-pinned-panel"
+import { VideoAutoShow } from "./video-autoshow"
 
 // The PDF and Books panels pull in pdf.js, which touches browser-only globals
 // (DOMMatrix) at module load. Import them client-side only so they never enter
@@ -35,12 +36,20 @@ const MiniBooksPanel = dynamic(() => import("./panels/mini-books-panel").then((m
   ssr: false,
   loading: PanelLoader,
 })
+// The video panel loads the YouTube IFrame API and drives an HTML5/YouTube
+// player — all browser-only. Keep it client-side so it never enters the
+// app-wide LiveSessionProvider's server bundle.
+const MiniVideoPanel = dynamic(() => import("./panels/mini-video-panel").then((m) => m.MiniVideoPanel), {
+  ssr: false,
+  loading: PanelLoader,
+})
 
 const PANEL_META: Record<ResourcePanelId, { title: string; icon: LucideIcon }> = {
   bible: { title: "Bible", icon: BookOpen },
   notes: { title: "Live Notes", icon: NotebookPen },
   pdf: { title: "Documents", icon: FileText },
   books: { title: "Books", icon: BookMarked },
+  video: { title: "Video", icon: Video },
   pinned: { title: "Pinned", icon: Pin },
 }
 
@@ -54,6 +63,8 @@ function PanelBody({ id }: { id: ResourcePanelId }) {
       return <MiniPdfPanel />
     case "books":
       return <MiniBooksPanel />
+    case "video":
+      return <MiniVideoPanel />
     case "pinned":
       return <MiniPinnedPanel />
   }
@@ -71,6 +82,10 @@ export function LiveResourceLayer() {
 
   return (
     <div ref={constraintsRef} className="pointer-events-none fixed inset-0 z-[60]">
+      {/* Invisible watcher: auto-opens the Video panel for every participant the
+          moment the host starts a shared video ("let's watch this together"). */}
+      <VideoAutoShow />
+
       {/* The resource trigger now lives inline in each live interface (in the
           control dock, just before the chat button — or, on the audio podcast,
           in the chat composer beside Send). This layer only hosts the drawer
@@ -116,6 +131,7 @@ const DOCK_SWITCHER: { id: ResourcePanelId; icon: LucideIcon; label: string }[] 
   { id: "bible", icon: BookOpen, label: "Bible" },
   { id: "notes", icon: NotebookPen, label: "Notes" },
   { id: "pdf", icon: FileText, label: "PDFs" },
+  { id: "video", icon: Video, label: "Video" },
   { id: "pinned", icon: Pin, label: "Pinned" },
 ]
 

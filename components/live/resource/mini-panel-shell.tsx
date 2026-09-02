@@ -17,6 +17,7 @@ import {
   Minus,
   NotebookPen,
   Pin,
+  Video,
   X,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
@@ -27,6 +28,7 @@ const SWITCHER: { id: ResourcePanelId; icon: LucideIcon; label: string }[] = [
   { id: "bible", icon: BookOpen, label: "Bible" },
   { id: "notes", icon: NotebookPen, label: "Notes" },
   { id: "pdf", icon: FileText, label: "PDFs" },
+  { id: "video", icon: Video, label: "Video" },
   { id: "pinned", icon: Pin, label: "Pinned" },
 ]
 
