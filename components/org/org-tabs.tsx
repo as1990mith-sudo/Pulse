@@ -37,7 +37,7 @@ import type { PlaylistView } from "@/app/actions/materials"
 import { ArticleRow } from "@/components/articles/article-card"
 import { cn } from "@/lib/utils"
 
-const TAB_KEYS = ["posts", "thread", "about", "articles", "catalogue"] as const
+const TAB_KEYS = ["posts", "thread", "about", "articles", "catalogue", "engagement"] as const
 type TabKey = (typeof TAB_KEYS)[number]
 
 const SOCIAL_LABELS: Record<string, string> = {
@@ -66,6 +66,7 @@ export function OrgTabs({
   catalogue,
   materials,
   playlists,
+  engagement,
 }: {
   org: OrganizationView
   // Main-feed posts published in the org's voice, in the same FeedPostView shape
@@ -80,6 +81,9 @@ export function OrgTabs({
   // Externally-hosted resources (Upload redesign) + their curated playlists.
   materials: MaterialView[]
   playlists: PlaylistView[]
+  // Posts this organisation has commented on (in its own voice). Comments-only —
+  // organisations can't like — so every item carries at least one comment.
+  engagement: EngagementItem[]
 }) {
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; count?: number }[] = [
     { key: "posts", label: "Posts", icon: <MessageSquareText className="size-4" />, count: posts.length },
@@ -87,6 +91,7 @@ export function OrgTabs({
     { key: "about", label: "About", icon: <Building2 className="size-4" /> },
     { key: "articles", label: "Articles", icon: <Newspaper className="size-4" />, count: articles.length },
     { key: "catalogue", label: "Catalogue", icon: <Mic className="size-4" />, count: catalogue.length },
+    { key: "engagement", label: "Engagement", icon: <Heart className="size-4" />, count: engagement.length },
   ]
 
   // Held in the URL rather than useState so a reload — or coming Back to this
@@ -205,6 +210,20 @@ export function OrgTabs({
           <AboutTab org={org} />
         ) : tab === "articles" ? (
           <ArticlesTab org={org} articles={articles} />
+        ) : tab === "engagement" ? (
+          engagement.length === 0 ? (
+            <EmptyState
+              icon={<Heart className="size-6" />}
+              title={org.isOwner ? "No engagement yet" : `${org.name} hasn't engaged yet`}
+              message={
+                org.isOwner
+                  ? "Posts this Home comments on will gather here."
+                  : `Comments ${org.name} leaves on posts will appear here.`
+              }
+            />
+          ) : (
+            <EngagementFeed items={engagement} isSelf={org.isOwner} currentUser={currentUser} />
+          )
         ) : null}
       </div>
 
