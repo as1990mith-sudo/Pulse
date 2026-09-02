@@ -297,14 +297,35 @@ export function LiveVideoViewer({
   // call-in slots and the space is split between the host video and chat.
   const guestsEnabled = callState?.guestsEnabled ?? true
 
+  // Honor a server "ended", but corroborate it against the live room first.
+  // The stale-heartbeat sweep (endStaleStreams, 60s) can transiently flip the
+  // stream to "ended" when the host's heartbeat merely lags — host minimised on
+  // mobile, a brief network blip — even though the host is still broadcasting.
+  // The host console deliberately ignores a transient "ended"; previously the
+  // viewer did NOT, so a guest/viewer was kicked off "first, while the host was
+  // still on". If the host is still present in the LiveKit room we treat
+  // "ended" as transient and stay connected, with a bounded fallback so a guest
+  // can never get stuck if peer detection is wrong.
   useEffect(() => {
-    if (callState?.ended) {
+    if (!callState?.ended) return
+    const finishEnded = () => {
       setHostEnded(true)
       disconnect()
       setTimeout(() => onExit?.(), 2600)
     }
+    const hostStillPresent = connected && peers.some((p) => p.isHost)
+    // Host has genuinely left the room → the session really ended: stop now.
+    if (!hostStillPresent) {
+      finishEnded()
+      return
+    }
+    // Host still visibly broadcasting → transient sweep. Wait a bounded window;
+    // if the host peer leaves in the meantime this effect re-runs and ends
+    // immediately, otherwise the fallback fires so we never hang forever.
+    const t = setTimeout(finishEnded, 15000)
+    return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [callState?.ended])
+  }, [callState?.ended, connected, peers])
 
   // Host blocked this viewer: disconnect and show the removed splash.
   useEffect(() => {
@@ -902,10 +923,19 @@ export function LiveVideoViewer({
       </div>
 
       {/* ── Live chatroom. Call-in guests overlay the video above, so the chat
-          keeps a constant share of the screen. ─────────────────────────────── */}
+          keeps a constant share of the screen.
+
+          The chat panel below the (always-dark) video stage is THEME-SENSITIVE:
+          it uses `bg-background text-foreground` and drops the `immersive`
+          treatment so it follows the app's light/dark theme like it did before,
+          instead of being hard-pinned to a dark surface. Dropping `flatText`
+          also restores proper chat bubbles — the viewer's own messages ("You")
+          sit on the right, everyone else (incl. the HOST) on the left. The
+          [isolation] + explicit text color keep it from inheriting the stage's
+          forced white text. ─────────────────────────────────────────────────── */}
       <div
         className={cn(
-          "min-h-0 flex-[1.5] border-t border-white/10 bg-neutral-950 transition-[flex-grow] duration-500 ease-out",
+          "min-h-0 flex-[1.5] border-t border-border bg-background text-foreground transition-[flex-grow] duration-500 ease-out",
         )}
       >
         {canWatch ? (
@@ -913,15 +943,13 @@ export function LiveVideoViewer({
               currentUser={currentUser}
               guestName={guestName}
               roomName={stream.roomName}
-              immersive
-              flatText
               showResourceButton
               placeholder=""
             />
         ) : (
-          <div className="flex h-full items-center justify-center p-4 text-center text-sm text-white/70">
+          <div className="flex h-full items-center justify-center p-4 text-center text-sm text-muted-foreground">
             <p>
-              <Link href="/sign-in" className="font-semibold text-white underline">
+              <Link href="/sign-in" className="font-semibold text-foreground underline">
                 Sign in
               </Link>{" "}
               to comment, react, and join the call-in.

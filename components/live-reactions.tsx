@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import useSWR from "swr"
 import { Gift, Smile, X } from "lucide-react"
 import { getLiveReactions, sendLiveReaction, type LiveReactionView } from "@/app/actions/live"
@@ -109,6 +110,13 @@ export function ReactionPicker({
 }) {
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<"reactions" | "gifts">("reactions")
+  // Portal target. The picker is often rendered inside a control rail that uses
+  // a CSS transform (e.g. translate-y for show/hide), which makes that rail the
+  // containing block for `position: fixed` — collapsing this modal to the rail's
+  // narrow width and pushing it off-screen. Portaling to <body> anchors it to
+  // the viewport so it always centers correctly. Guarded for SSR.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   async function send(emoji: string, kind: "reaction" | "gift", label?: string) {
     if (!roomName) return
@@ -130,7 +138,7 @@ export function ReactionPicker({
         <Smile className="size-5" />
       </button>
 
-      {open && (
+      {open && mounted && createPortal(
         <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
           <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
           <div className="relative z-10 w-full rounded-t-2xl border border-border/60 bg-card p-4 sm:max-w-sm sm:rounded-2xl">
@@ -203,7 +211,8 @@ export function ReactionPicker({
             )}
             <p className="mt-3 text-center text-[11px] text-muted-foreground">Everyone in the room sees your reaction.</p>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   )

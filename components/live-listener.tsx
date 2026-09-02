@@ -249,12 +249,16 @@ export function LiveListener({
   // they explicitly choose "Save" on the post-end prompt; declining discards it.
   // Intentionally not stopped on step-off — a co-host who steps off and calls
   // back in keeps one continuous take instead of losing the earlier portion.
-  // Gated on the host's explicit "Save Recording" grant, so a session yields ONE
-  // canonical episode (the host's) by default. Enforced here at the capture
-  // source rather than by hiding the save prompt: without permission nothing is
-  // recorded at all, so there's no local copy of the room sitting in memory.
+  //
+  // Recorded when the host grants EITHER "Save Recording" OR "End Session": a
+  // guest who can end the whole broadcast must be able to save it "as though the
+  // host ended it himself" (matching the server grant in publishShow). Without
+  // either permission nothing is recorded at all, so there's no local copy of
+  // the room sitting in memory, and a session still yields one canonical episode
+  // (the host's) by default.
+  const canRecordSession = myPermissions.saveRecording || myPermissions.endSession
   useEffect(() => {
-    if (myRole !== "cohost" || !myPermissions.saveRecording) return
+    if (myRole !== "cohost" || !canRecordSession) return
     if (!state.canPublish || coHostRecordingRef.current) return
     coHostRecordingRef.current = true
     coHostRecordedRef.current = true
@@ -269,18 +273,19 @@ export function LiveListener({
     }
     // `elapsed` is read as a one-shot start offset, so it must not re-run this.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [myRole, myPermissions.saveRecording, state.canPublish, startRecording])
+  }, [myRole, canRecordSession, state.canPublish, startRecording])
 
-  // If the host revokes "Save Recording" (or demotes them) mid-session, stop and
-  // discard the take immediately. Otherwise a co-host who was recording would
-  // keep a copy they're no longer permitted to publish.
+  // If the host revokes both "Save Recording" and "End Session" (or demotes
+  // them) mid-session, stop and discard the take immediately. Otherwise a
+  // co-host who was recording would keep a copy they're no longer permitted to
+  // publish.
   useEffect(() => {
     if (!coHostRecordingRef.current) return
-    if (myRole === "cohost" && myPermissions.saveRecording) return
+    if (myRole === "cohost" && canRecordSession) return
     coHostRecordingRef.current = false
     coHostRecordedRef.current = false
     void stopRecording().catch(() => null)
-  }, [myRole, myPermissions.saveRecording, stopRecording])
+  }, [myRole, canRecordSession, stopRecording])
 
   async function join() {
     setError(null)
