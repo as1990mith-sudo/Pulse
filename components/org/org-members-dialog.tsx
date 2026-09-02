@@ -61,7 +61,7 @@ export function OrgMembersDialog({ members }: { members: HomeRosterMember[] }) {
       >
         {/* The icon carries the meaning, so the word "members" is dropped — the
             accessible name above still spells it out for screen readers. */}
-        <Users aria-hidden className="size-3.5" />
+        <Users aria-hidden className="size-3.5 text-foreground" />
         <span className="font-semibold text-foreground underline-offset-2 group-hover:underline">
           {formatCount(count)}
         </span>
