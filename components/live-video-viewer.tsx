@@ -297,14 +297,35 @@ export function LiveVideoViewer({
   // call-in slots and the space is split between the host video and chat.
   const guestsEnabled = callState?.guestsEnabled ?? true
 
+  // Honor a server "ended", but corroborate it against the live room first.
+  // The stale-heartbeat sweep (endStaleStreams, 60s) can transiently flip the
+  // stream to "ended" when the host's heartbeat merely lags — host minimised on
+  // mobile, a brief network blip — even though the host is still broadcasting.
+  // The host console deliberately ignores a transient "ended"; previously the
+  // viewer did NOT, so a guest/viewer was kicked off "first, while the host was
+  // still on". If the host is still present in the LiveKit room we treat
+  // "ended" as transient and stay connected, with a bounded fallback so a guest
+  // can never get stuck if peer detection is wrong.
   useEffect(() => {
-    if (callState?.ended) {
+    if (!callState?.ended) return
+    const finishEnded = () => {
       setHostEnded(true)
       disconnect()
       setTimeout(() => onExit?.(), 2600)
     }
+    const hostStillPresent = connected && peers.some((p) => p.isHost)
+    // Host has genuinely left the room → the session really ended: stop now.
+    if (!hostStillPresent) {
+      finishEnded()
+      return
+    }
+    // Host still visibly broadcasting → transient sweep. Wait a bounded window;
+    // if the host peer leaves in the meantime this effect re-runs and ends
+    // immediately, otherwise the fallback fires so we never hang forever.
+    const t = setTimeout(finishEnded, 15000)
+    return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [callState?.ended])
+  }, [callState?.ended, connected, peers])
 
   // Host blocked this viewer: disconnect and show the removed splash.
   useEffect(() => {

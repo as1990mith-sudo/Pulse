@@ -698,10 +698,15 @@ export function useLiveVideo({
           try {
             await room.localParticipant.setMicrophoneEnabled(true)
             setMicOn(true)
-            await room.localParticipant.setCameraEnabled(true, {
-              facingMode: "user",
-              resolution: CAPTURE_RESOLUTION,
-            })
+            // A promoted guest must get the EXACT same camera as the host, not a
+            // one-shot fixed request. enableCameraResilient runs the full
+            // full-sensor 1440x1080 → 720 → bare fallback chain, so the guest's
+            // feed is wide-angle and HD on the same Android/iOS devices where a
+            // single fixed request silently failed or fell back to a low ~480p
+            // default. The room's videoCaptureDefaults + simulcast/encoding
+            // (8 Mbps top layer) already apply to the guest's publish, so once
+            // the capture is HD the published quality matches the host's.
+            await enableCameraResilient(room)
             setCamOn(true)
             attachLocalVideo(room)
           } catch {
