@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server"
+import { getShareMetadata } from "@/lib/share/resolve-share-metadata"
+import { parseFrequencyPath, CONTENT_TYPE_LABEL } from "@/lib/share/share-metadata"
 
 export const runtime = "nodejs"
 
@@ -174,12 +176,53 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Invalid url" }, { status: 400 })
   }
 
-  if (!isSafePublicUrl(target)) {
-    return NextResponse.json({ error: "Unsupported url" }, { status: 400 })
-  }
-
   const cacheHeaders = {
     "cache-control": "public, s-maxage=86400, stale-while-revalidate=604800",
+  }
+
+  // 0) Frequency's OWN URLs are resolved from the trusted internal metadata
+  //    resolver (the database) rather than scraped (spec §5, §22). This is both
+  //    accurate and privacy-safe: the resolver already returns a generic
+  //    "private content" card for members-only items and null for deleted ones,
+  //    so we never leak restricted titles/artwork through an in-app preview.
+  //    We only trust the path when the host matches this deployment's own host.
+  const reqUrl = new URL(request.url)
+  const selfHost = reqUrl.host
+  const selfOrigin = `${reqUrl.protocol}//${reqUrl.host}`
+  // Resolve an app-relative path (or already-absolute URL) against our origin.
+  const absolute = (pathOrUrl: string) =>
+    /^https?:\/\//i.test(pathOrUrl) ? pathOrUrl : `${selfOrigin}${pathOrUrl.startsWith("/") ? "" : "/"}${pathOrUrl}`
+  if (target.host === selfHost) {
+    const ref = parseFrequencyPath(target.toString())
+    if (ref) {
+      const meta = await getShareMetadata(ref)
+      if (!meta) {
+        // Deleted / unavailable Frequency content — do not fall through to a
+        // scrape of our own page; report not-previewable so the raw link shows.
+        return NextResponse.json({ error: "Not previewable" }, { status: 200 })
+      }
+      const label = meta.contentTypeLabel || CONTENT_TYPE_LABEL[meta.contentType]
+      // e.g. "Audio · Kingdom Academy" or just "Audio" when unattributed.
+      const siteName = meta.organisationName ? `${label} · ${meta.organisationName}` : label
+      return NextResponse.json(
+        {
+          url: absolute(meta.canonicalUrl),
+          title: meta.title,
+          description: meta.description,
+          image: meta.thumbnailUrl ? absolute(meta.thumbnailUrl) : null,
+          siteName,
+          icon: null,
+        },
+        { headers: cacheHeaders },
+      )
+    }
+    // A same-host URL that isn't a recognised content path (e.g. /settings):
+    // fall through so it's treated like any other page rather than scraped for
+    // private surfaces. isSafePublicUrl below will reject localhost anyway.
+  }
+
+  if (!isSafePublicUrl(target)) {
+    return NextResponse.json({ error: "Unsupported url" }, { status: 400 })
   }
 
   // 1) Try to scrape Open Graph / Twitter card metadata from the page itself.
