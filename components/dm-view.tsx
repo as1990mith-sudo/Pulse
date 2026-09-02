@@ -611,7 +611,7 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
               <div key={run.type === "single" ? run.item.id : run.key} className={cn(continues ? "mt-0.5" : "mt-3")}>
                 {newDay && (
                   <div className="flex justify-center py-2">
-                    <span className="rounded-full border border-border/50 bg-background/70 px-3 py-1 text-[11px] font-medium text-muted-foreground backdrop-blur-sm">
+                    <span className="rounded-full border border-white/15 bg-black/60 px-3 py-1 text-[11px] font-semibold text-white backdrop-blur-sm">
                       {formatChatDay(lead.createdAtMs)}
                     </span>
                   </div>
@@ -1147,7 +1147,7 @@ function DmBubble({
         {(!grouped || m.pinned || m.edited || copied) && (
           <span
             className={cn(
-              "flex items-center gap-1 px-1 text-[10px] font-medium text-muted-foreground/70",
+              "flex items-center gap-1 px-1 text-[10px] font-semibold text-white/85 [text-shadow:0_1px_2px_rgb(0_0_0/0.5)]",
               m.isSelf && "justify-end",
             )}
           >
@@ -1182,7 +1182,10 @@ function DmBubble({
                     ? // Outgoing: a solid, fully opaque accent fill so bubbles never
                       // let a chat wallpaper bleed through.
                       "rounded-br-md bg-primary text-primary-foreground"
-                    : "rounded-bl-md bg-secondary text-foreground ring-1 ring-inset ring-border/50",
+                    : // Incoming: a solid white bubble with dark text. The chat
+                      // surface is pinned to the dark palette, so a literal white
+                      // fill is used to keep it white regardless of theme.
+                      "rounded-bl-md bg-white text-neutral-900 ring-1 ring-inset ring-black/5",
                 ),
           )}
         >
