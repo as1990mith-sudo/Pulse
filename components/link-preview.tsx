@@ -99,18 +99,20 @@ export function LinkPreview({
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
             className={cn(
-              "flex items-center gap-2.5 rounded-2xl border border-l-2 px-2.5 py-2 transition-colors",
+              "flex items-center gap-2.5 rounded-2xl border border-l-2 px-2.5 py-2 transition-[filter]",
               mine
                 ? "border-primary-foreground/25 border-l-primary-foreground/50 bg-primary hover:brightness-110"
-                : "border-border/60 border-l-primary bg-card hover:bg-secondary",
+                : // Incoming: a solid white bubble matching an incoming chat bubble,
+                  // with the orange left rule as the only accent.
+                  "border-black/10 border-l-primary bg-white hover:brightness-95",
             )}
           >
-            <ExternalLink className={cn("size-4 shrink-0", mine ? "text-primary-foreground" : "text-primary")} />
+            <ExternalLink className="size-4 shrink-0 text-primary" />
             <span className="min-w-0">
               <span
                 className={cn(
                   "block truncate text-[13px] font-semibold",
-                  mine ? "text-primary-foreground" : "text-foreground",
+                  mine ? "text-primary-foreground" : "text-neutral-900",
                 )}
               >
                 {host}
@@ -118,7 +120,7 @@ export function LinkPreview({
               <span
                 className={cn(
                   "block truncate text-[11px]",
-                  mine ? "text-primary-foreground/70" : "text-muted-foreground",
+                  mine ? "text-primary-foreground/70" : "text-neutral-500",
                 )}
               >
                 {url}
@@ -142,8 +144,11 @@ export function LinkPreview({
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
           className={cn(
-            "block overflow-hidden rounded-2xl border transition-colors",
-            mine ? "border-transparent bg-primary hover:brightness-110" : "border-border/60 bg-card hover:bg-secondary",
+            "block overflow-hidden rounded-2xl border transition-[filter]",
+            mine
+              ? "border-transparent bg-primary hover:brightness-110"
+              : // Incoming: a solid white bubble matching an incoming chat bubble.
+                "border-black/10 bg-white hover:brightness-95",
           )}
         >
           {data.image && (
@@ -176,7 +181,7 @@ export function LinkPreview({
               <p
                 className={cn(
                   "mt-0.5 line-clamp-2 text-[13px] font-semibold leading-snug",
-                  mine ? "text-primary-foreground" : "text-foreground",
+                  mine ? "text-primary-foreground" : "text-neutral-900",
                 )}
               >
                 {data.title}
@@ -186,7 +191,7 @@ export function LinkPreview({
               <p
                 className={cn(
                   "mt-0.5 line-clamp-2 text-[11px] leading-relaxed",
-                  mine ? "text-primary-foreground/80" : "text-muted-foreground",
+                  mine ? "text-primary-foreground/80" : "text-neutral-500",
                 )}
               >
                 {data.description}
@@ -195,7 +200,7 @@ export function LinkPreview({
             <span
               className={cn(
                 "mt-1 flex items-center gap-1 text-[10px]",
-                mine ? "text-primary-foreground/70" : "text-muted-foreground",
+                mine ? "text-primary-foreground/70" : "text-neutral-500",
               )}
             >
               <LinkIcon className="size-2.5 shrink-0" />

@@ -90,13 +90,24 @@ export function ProfileTabs({
     tabs.findIndex((t) => t.key === tab),
   )
 
+  // The active tab's column expands so a long label ("Engagement") gets room,
+  // while the icon-only inactive tabs shrink and glide aside to make space.
+  // All tracks stay `fr`, so the browser interpolates grid-template-columns and
+  // the shift animates smoothly rather than snapping.
+  const ACTIVE_FR = 2.2
+  const totalFr = tabs.length - 1 + ACTIVE_FR
+  const columns = tabs.map((_, i) => (i === activeIndex ? `${ACTIVE_FR}fr` : "1fr")).join(" ")
+  const indicatorLeft = (activeIndex / totalFr) * 100
+  const indicatorWidth = (ACTIVE_FR / totalFr) * 100
+
   return (
     <section className="mt-2">
       {/* Instagram-style tab bar: full-width, uppercase labels, sliding top
-          indicator on the active tab. Sits on a top border like IG. */}
+          indicator on the active tab. Sits on a top border like IG. The active
+          column is weighted wider so its label never crowds the screen edge. */}
       <div
-        className="relative -mx-4 grid border-t border-border/60 sm:-mx-6"
-        style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+        className="relative -mx-4 grid border-t border-border/60 transition-[grid-template-columns] duration-300 ease-out sm:-mx-6"
+        style={{ gridTemplateColumns: columns }}
       >
         {tabs.map((t) => (
           <TabButton
@@ -108,10 +119,10 @@ export function ProfileTabs({
             count={t.count}
           />
         ))}
-        {/* Sliding active indicator */}
+        {/* Sliding active indicator — tracks the weighted column's position/size. */}
         <span
-          className="absolute -top-px left-0 h-0.5 bg-foreground transition-transform duration-300 ease-out"
-          style={{ width: `${100 / tabs.length}%`, transform: `translateX(${activeIndex * 100}%)` }}
+          className="absolute -top-px h-0.5 bg-foreground transition-all duration-300 ease-out"
+          style={{ left: `${indicatorLeft}%`, width: `${indicatorWidth}%` }}
           aria-hidden
         />
       </div>
