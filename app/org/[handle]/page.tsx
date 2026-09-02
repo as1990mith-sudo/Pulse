@@ -3,7 +3,7 @@ import { notFound } from "next/navigation"
 import { getOrganizationByHandle } from "@/app/actions/organizations"
 import { getOrganizationCatalogue } from "@/app/actions/org-content"
 import { getOrganizationMaterials, getOrganizationPlaylists } from "@/app/actions/materials"
-import { getFeedPostsByOrganization } from "@/app/actions/feed"
+import { getFeedPostsByOrganization, getEngagementForProfile } from "@/app/actions/feed"
 import { getOrgCommunityPosts } from "@/app/actions/community"
 import { getWriterArticles } from "@/app/actions/articles"
 import { getCurrentUser } from "@/lib/session"
@@ -44,16 +44,20 @@ export default async function OrganizationPage({ params }: { params: Promise<{ h
   // Posts are the org's main-feed posts in the same shape the feed uses, so the
   // tab renders with <PostCard>. Threads are the org's Community Help threads;
   // the action itself withholds anonymous rows from non-admins.
-  const [posts, threads, catalogue, materials, playlists, articles, members, currentUser] = await Promise.all([
-    safeSection("posts", () => getFeedPostsByOrganization(org.id), []),
-    safeSection("threads", () => getOrgCommunityPosts(org.id), []),
-    safeSection("catalogue", () => getOrganizationCatalogue(org.id), []),
-    safeSection("materials", () => getOrganizationMaterials(org.id), []),
-    safeSection("playlists", () => getOrganizationPlaylists(org.id), []),
-    safeSection("articles", () => getWriterArticles(org.ownerId), []),
-    safeSection("members", () => getHomeRosterByOrg(org.id), []),
-    safeSection("currentUser", () => getCurrentUser(), null),
-  ])
+  const [posts, threads, catalogue, materials, playlists, articles, members, engagement, currentUser] =
+    await Promise.all([
+      safeSection("posts", () => getFeedPostsByOrganization(org.id), []),
+      safeSection("threads", () => getOrgCommunityPosts(org.id), []),
+      safeSection("catalogue", () => getOrganizationCatalogue(org.id), []),
+      safeSection("materials", () => getOrganizationMaterials(org.id), []),
+      safeSection("playlists", () => getOrganizationPlaylists(org.id), []),
+      safeSection("articles", () => getWriterArticles(org.ownerId), []),
+      safeSection("members", () => getHomeRosterByOrg(org.id), []),
+      // Posts this organisation has commented on (in its own voice). Organisations
+      // can't like, so this timeline is comments-only.
+      safeSection("engagement", () => getEngagementForProfile({ kind: "org", orgId: org.id }), []),
+      safeSection("currentUser", () => getCurrentUser(), null),
+    ])
 
   return (
     <div className="min-h-screen">
@@ -71,6 +75,7 @@ export default async function OrganizationPage({ params }: { params: Promise<{ h
           catalogue={catalogue}
           materials={materials}
           playlists={playlists}
+          engagement={engagement}
         />
       </main>
     </div>

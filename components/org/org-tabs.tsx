@@ -10,6 +10,7 @@ import {
   ArrowUpRight,
   Building2,
   Globe,
+  Heart,
   Info,
   Mail,
   MessageCircle,
@@ -23,10 +24,11 @@ import type { ArticleCard as ArticleCardType } from "@/lib/article-types"
 import type { OrganizationView } from "@/lib/org-types"
 import { AvatarWithBadge } from "@/components/org/verified-badge"
 import type { CatalogueItemView, CatalogueKind } from "@/app/actions/org-content"
-import type { FeedPostView } from "@/app/actions/feed"
+import type { FeedPostView, EngagementItem } from "@/app/actions/feed"
 import type { CommunityPostView } from "@/app/actions/community"
 import type { CurrentUser } from "@/lib/session"
 import { PostCard } from "@/components/mind-feed"
+import { EngagementFeed } from "@/components/profile/engagement-feed"
 import { CommunityThreadFeed } from "@/components/community-help"
 import { OrgEpisodeCatalog, NewCatalogueDialog } from "@/components/org/org-catalogue-tab"
 import { UploadSection } from "@/components/org/upload/upload-section"

@@ -1,19 +1,20 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { Plus, Newspaper, PenLine, LayoutGrid, MessagesSquare } from "lucide-react"
+import { useMemo } from "react"
+import { Plus, Newspaper, PenLine, LayoutGrid, MessagesSquare, Heart } from "lucide-react"
 import { useUrlState } from "@/lib/navigation/use-url-state"
 import Link from "next/link"
 import type { CommunityPostView } from "@/app/actions/community"
-import type { FeedPostView } from "@/app/actions/feed"
+import type { FeedPostView, EngagementItem } from "@/app/actions/feed"
 import type { CurrentUser } from "@/lib/session"
 import type { ArticleCard as ArticleCardType } from "@/lib/article-types"
 import { CommunityThreadFeed } from "@/components/community-help"
 import { PostCard } from "@/components/mind-feed"
+import { EngagementFeed } from "@/components/profile/engagement-feed"
 import { ArticleRow } from "@/components/articles/article-card"
 import { cn } from "@/lib/utils"
 
-const TAB_KEYS = ["posts", "thread", "articles"] as const
+const TAB_KEYS = ["posts", "thread", "articles", "engagement"] as const
 type TabKey = (typeof TAB_KEYS)[number]
 
 export function ProfileTabs({
@@ -25,6 +26,7 @@ export function ProfileTabs({
   communityPosts,
   anonymousPosts,
   articles,
+  engagement,
 }: {
   name: string
   isSelf: boolean
@@ -45,6 +47,9 @@ export function ProfileTabs({
   // The owner's own anonymous Community Help posts — only ever passed for isSelf.
   anonymousPosts: CommunityPostView[]
   articles: ArticleCardType[]
+  // Posts this person has commented on or liked — the "Engagement" timeline.
+  // Likes are only present for the owner's own profile (see getEngagementForProfile).
+  engagement: EngagementItem[]
 }) {
   // The "Thread" tab merges the user's Community Help posts (identifiable +, for
   // the owner only, anonymous) into a single newest-first timeline. Anonymous
@@ -64,6 +69,7 @@ export function ProfileTabs({
     { key: "posts", label: "Posts", icon: <LayoutGrid className="size-4" />, count: feedPosts.length },
     { key: "thread", label: "Thread", icon: <MessagesSquare className="size-4" />, count: threadPosts.length },
     { key: "articles", label: "Articles", icon: <Newspaper className="size-4" />, count: articles.length },
+    { key: "engagement", label: "Engagement", icon: <Heart className="size-4" />, count: engagement.length },
   ]
 
   // The active tab lives in the URL (?tab=…) so opening an item and coming back
@@ -169,6 +175,24 @@ export function ProfileTabs({
                Community post but navigated away to /chatrooms/community?q=<id>,
                losing the reader's place on the profile. */
             <CommunityThreadFeed posts={threadPosts} />
+          )
+        ) : tab === "engagement" ? (
+          engagement.length === 0 ? (
+            <EmptyState
+              icon={<Heart className="size-6" />}
+              title={
+                isSelf
+                  ? "No engagement yet"
+                  : `${name} hasn't engaged yet`
+              }
+              message={
+                isSelf
+                  ? "Posts you like and comment on will gather here."
+                  : `Comments ${name} leaves on posts will appear here.`
+              }
+            />
+          ) : (
+            <EngagementFeed items={engagement} isSelf={isSelf} currentUser={currentUser} />
           )
         ) : tab === "posts" ? (
           feedPosts.length === 0 ? (

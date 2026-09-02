@@ -1329,6 +1329,7 @@ export function PostCard({
   highlighted = false,
   videoFeedPosts,
   clampSurface = "post",
+  openCommentsSignal,
 }: {
   post: FeedPostView
   currentUser: CurrentUser | null
@@ -1346,6 +1347,10 @@ export function PostCard({
   // Sibling posts to browse in the immersive video viewer (vertical swipe).
   // When omitted, tapping a video opens the viewer with just this post.
   videoFeedPosts?: FeedPostView[]
+  // Increment to open this post's comment sheet from an outside affordance (e.g.
+  // the Engagement tab's "Reply" on a highlighted comment). The initial value is
+  // ignored — only a change opens the sheet, so mounting never pops it open.
+  openCommentsSignal?: number
 }) {
   const feed = variant === "feed"
   const router = useRouter()
@@ -1368,6 +1373,16 @@ export function PostCard({
   // that liked / saved it instead of toggling engagement.
   const [engagementKind, setEngagementKind] = useState<"likes" | "saves" | null>(null)
   const [showComments, setShowComments] = useState(false)
+  // Open the comment sheet when an outside caller bumps `openCommentsSignal`.
+  // Skips the first render so a mounted card never auto-opens.
+  const signalMounted = useRef(false)
+  useEffect(() => {
+    if (!signalMounted.current) {
+      signalMounted.current = true
+      return
+    }
+    if (openCommentsSignal !== undefined) setShowComments(true)
+  }, [openCommentsSignal])
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
   const [mentionReportOpen, setMentionReportOpen] = useState(false)

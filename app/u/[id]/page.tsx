@@ -3,7 +3,7 @@ import { notFound } from "next/navigation"
 import { getProfile } from "@/lib/profile"
 import { shareMetadataToNext } from "@/lib/share/route-metadata"
 import { getPublicCommunityPostsByUser, getAnonymousCommunityPostsByUser } from "@/app/actions/community"
-import { getFeedPostsByUser } from "@/app/actions/feed"
+import { getFeedPostsByUser, getEngagementForProfile } from "@/app/actions/feed"
 import { getActiveStatusForUser } from "@/app/actions/status"
 import { getWriterArticles } from "@/app/actions/articles"
 import { getCurrentUser } from "@/lib/session"
@@ -52,17 +52,21 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
   // page to display one Home's label over another Home's content.
   const scope = await getProfileScope()
 
-  const [feedPosts, communityPosts, anonymousPosts, currentUser, statusGroup, articles] = await Promise.all([
-    // Main-feed posts power the "Posts" tab. Public (identifiable) Community Help
-    // posts feed the "Thread" tab for every viewer; anonymous posts are fetched
-    // only for the owner's own profile — the action returns nothing otherwise.
-    getFeedPostsByUser(id),
-    getPublicCommunityPostsByUser(id),
-    profile.isSelf ? getAnonymousCommunityPostsByUser(id) : Promise.resolve([]),
-    getCurrentUser(),
-    getActiveStatusForUser(id),
-    getWriterArticles(id),
-  ])
+  const [feedPosts, communityPosts, anonymousPosts, currentUser, statusGroup, articles, engagement] =
+    await Promise.all([
+      // Main-feed posts power the "Posts" tab. Public (identifiable) Community Help
+      // posts feed the "Thread" tab for every viewer; anonymous posts are fetched
+      // only for the owner's own profile — the action returns nothing otherwise.
+      getFeedPostsByUser(id),
+      getPublicCommunityPostsByUser(id),
+      profile.isSelf ? getAnonymousCommunityPostsByUser(id) : Promise.resolve([]),
+      getCurrentUser(),
+      getActiveStatusForUser(id),
+      getWriterArticles(id),
+      // Posts this person has commented on or liked. The action itself keeps a
+      // person's likes private to them, so visitors receive comment items only.
+      getEngagementForProfile({ kind: "user", userId: id }),
+    ])
 
   return (
     <div className="min-h-screen">
@@ -170,6 +174,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
           communityPosts={communityPosts}
           anonymousPosts={anonymousPosts}
           articles={articles}
+          engagement={engagement}
         />
       </main>
     </div>
