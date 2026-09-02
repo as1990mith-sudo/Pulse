@@ -1463,6 +1463,33 @@ export const pinnedResource = pgTable("pinned_resource", {
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 
+// The synchronised "Video" resource for a live room. Exactly one row per room
+// (roomName unique, upserted). The host loads a video — either an uploaded file
+// (Blob URL) or a YouTube link — and drives play/pause/seek/stop; every
+// participant polls this row and reconciles their local player to it. While
+// `playing`, clients extrapolate the current position from `positionMs` +
+// elapsed time since `updatedAt`, so a late joiner picks up mid-playback and
+// everyone stays in sync. `active=false` means nothing is playing (host stopped
+// it, or never loaded one).
+export const liveVideoState = pgTable("live_video_state", {
+  id: serial("id").primaryKey(),
+  roomName: text("roomName").notNull().unique(),
+  active: boolean("active").notNull().default(false),
+  source: text("source"), // "upload" | "youtube"
+  url: text("url"), // Blob URL for uploads (also the original link for YouTube)
+  youtubeId: text("youtubeId"),
+  title: text("title"),
+  thumbnail: text("thumbnail"),
+  durationSec: integer("durationSec").notNull().default(0),
+  // Anchor position in ms at the moment of the last host action; combined with
+  // `updatedAt` this lets clients compute the live position while playing.
+  positionMs: integer("positionMs").notNull().default(0),
+  playing: boolean("playing").notNull().default(false),
+  updatedBy: text("updatedBy"),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
 // Prayer requests submitted by participants inside a live. userId is nullable so
 // signed-out viewers can still post (as authorName / anonymous). prayedCount is
 // a simple "I prayed" tally.

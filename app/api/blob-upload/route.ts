@@ -13,7 +13,7 @@ import { auth } from "@/lib/auth"
 // client requests is used as the blob key prefix, so we validate it against an
 // allow-list and only let signed-in users upload.
 
-const ALLOWED_PREFIXES = ["chat/", "status/", "covers/", "avatars/", "live-music/", "episodes/", "dm/", "store/", "pinned/", "community/", "catalogue/"] as const
+const ALLOWED_PREFIXES = ["chat/", "status/", "covers/", "avatars/", "live-music/", "episodes/", "dm/", "store/", "pinned/", "community/", "catalogue/", "live-video/"] as const
 
 // Document buckets (store product files, host-pinned live documents, org
 // catalogue uploads) accept PDFs/EPUBs in addition to media; everything else is
