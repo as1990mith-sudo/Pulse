@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { ensureCtxRunning } from "@/lib/audio-context"
+import { prepareAudioRouting, applyAudioRouting, releaseAudioRouting } from "@/lib/audio-routing"
 import {
   AudioPresets,
   LocalAudioTrack,
@@ -585,6 +586,9 @@ export function useLiveVideo({
     if (musicElRef.current) musicElRef.current.pause()
     audioElsRef.current.forEach((el) => el.remove())
     audioElsRef.current.clear()
+    // Restore the neutral, high-fidelity output profile so ordinary media played
+    // after leaving the live isn't stuck muffled in the mic-oriented session.
+    releaseAudioRouting()
     releaseWakeLock()
   }, [releaseWakeLock])
 
@@ -720,6 +724,9 @@ export function useLiveVideo({
         if (canPub && !isHost) {
           try {
             await room.localParticipant.setMicrophoneEnabled(true)
+            // Promoted guest just opened their mic → force loudspeaker off the
+            // earpiece, same as the host path.
+            applyAudioRouting()
             setMicOn(true)
             // A promoted guest must get the EXACT same camera as the host, not a
             // one-shot fixed request. enableCameraResilient runs the full
@@ -752,6 +759,11 @@ export function useLiveVideo({
         refreshPeers(room)
       })
       .on(RoomEvent.Disconnected, () => setConnected(false))
+
+    // Neutralise the iOS audio session BEFORE any mic opens, so the later
+    // applyAudioRouting reads as a real transition and iOS hands back the
+    // loudspeaker instead of the earpiece. See lib/audio-routing.ts.
+    prepareAudioRouting()
 
     try {
       await withTimeout(
@@ -816,6 +828,10 @@ export function useLiveVideo({
           setError(describeMediaError(e))
         }
       }
+      // Once a mic is publishing, force the loudspeaker: opening the mic makes
+      // iOS default the output to the earpiece, which is wrong for a broadcast
+      // or meeting. No-op off iOS. (Bluetooth/wired headsets still take over.)
+      if (wantMic) applyAudioRouting()
     }
   }, [token, serverUrl, isHost, autoPublish, attachPeerVideo, refreshPeers])
 
@@ -851,6 +867,9 @@ export function useLiveVideo({
     if (!room) return
     const next = !micOn
     await room.localParticipant.setMicrophoneEnabled(next)
+    // Reopening the mic can bounce iOS back to the earpiece, so re-assert the
+    // loudspeaker each time it goes on.
+    if (next) applyAudioRouting()
     setMicOn(next)
   }, [micOn])
 

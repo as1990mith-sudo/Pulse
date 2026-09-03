@@ -590,6 +590,9 @@ export function useLiveAudio() {
     if (!room) return
     const next = !room.localParticipant.isMicrophoneEnabled
     await room.localParticipant.setMicrophoneEnabled(next)
+    // Reopening the mic can bounce iOS back to the earpiece; re-assert the
+    // loudspeaker each time it goes on. (Bluetooth/wired headsets still win.)
+    if (next) applyAudioRouting()
     update({ micEnabled: next })
   }, [update])
 
