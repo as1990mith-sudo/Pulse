@@ -11,8 +11,10 @@ import {
 import {
   AudioPresets,
   LocalAudioTrack,
+  LocalVideoTrack,
   Room,
   RoomEvent,
+  ScreenSharePresets,
   Track,
   VideoPresets43,
   type LocalTrackPublication,
@@ -55,6 +57,26 @@ const CAPTURE_RESOLUTION = VideoPresets43.h1080.resolution
 // recording captures it; every OTHER participant skips playing it (they already
 // hear their own in-sync local copy), so it never causes doubled audio live.
 export const VIDEO_AUDIO_TRACK = "live-video-audio"
+
+// LiveKit track name for the host's shared-video PIXELS (a captureStream of the
+// projected <video>). Published purely so the server egress records the
+// projected video into the replay. Followers never render this track — they
+// already paint their own in-sync local copy from live_video_state — so, like
+// VIDEO_AUDIO_TRACK, it is name-guarded out of every live rendering path.
+export const VIDEO_PROJECTION_TRACK = "live-video-projection"
+
+/**
+ * Whether this device can share its screen. Requires the getDisplayMedia API and
+ * a real browser surface — it does NOT exist inside the Median/GoNative app shell
+ * or most in-app WebViews, so Share Screen is hidden there (Project Video is the
+ * mobile-friendly path). Also needs a secure context, which the app always is.
+ */
+export function canScreenShareHere(): boolean {
+  if (typeof navigator === "undefined") return false
+  if (!navigator.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== "function") return false
+  if (isMedianApp() || isInAppWebView()) return false
+  return true
+}
 
 /**
  * Turn the camera on, degrading the capture format if the device can't satisfy
@@ -333,6 +355,14 @@ export function useLiveVideo({
   // TrackSubscribed guard that skips VIDEO_AUDIO_TRACK for everyone else.
   const videoAudioTrackRef = useRef<LocalAudioTrack | null>(null)
 
+  // The host's shared-video PIXELS, published as a dedicated LiveKit track so the
+  // egress records the projection into the replay. Egress-only; name-guarded out
+  // of every live render path (followers paint their own synced copy).
+  const videoProjectionTrackRef = useRef<LocalVideoTrack | null>(null)
+  // The registered <video> element that renders a REMOTE screen share to
+  // followers (and to the host's own confidence monitor is handled separately).
+  const projectionVideoElRef = useRef<HTMLVideoElement | null>(null)
+
   // Host-side session recording. We record a COMPOSITE of every participant —
   // a canvas grid of all camera tiles plus a mix of everyone's audio — exactly
   // like viewers saw it live, via LiveCompositor. The finished blob is handed to
@@ -382,6 +412,16 @@ export function useLiveVideo({
   const [canPublish, setCanPublish] = useState(isHost)
   const [musicPosition, setMusicPosition] = useState(0)
   const [musicDuration, setMusicDuration] = useState(0)
+  // True while THIS participant is sharing their screen.
+  const [screenShareOn, setScreenShareOn] = useState(false)
+  // A remote screen share currently being presented to the room, if any. The UI
+  // renders it full-stage via registerProjectionVideoEl. Identity+sid let us
+  // re-attach across tile remounts and clear it when the share ends.
+  const [remoteProjection, setRemoteProjection] = useState<{ identity: string; sid: string } | null>(null)
+  // Mirror of remoteProjection.sid so the once-registered TrackUnsubscribed
+  // handler can identify the ending projection without stale closure state.
+  const remoteProjectionSidRef = useRef<string | null>(null)
+  remoteProjectionSidRef.current = remoteProjection?.sid ?? null
 
   const hostIdRef = useRef(hostId)
   hostIdRef.current = hostId
@@ -407,7 +447,11 @@ export function useLiveVideo({
     room.remoteParticipants.forEach((p) => {
       const pubs = Array.from(p.trackPublications.values())
       const hasVideo = pubs.some(
-        (pub) => pub.kind === Track.Kind.Video && pub.isSubscribed && Boolean(pub.track),
+        (pub) =>
+          pub.kind === Track.Kind.Video &&
+          pub.source !== Track.Source.ScreenShare &&
+          pub.isSubscribed &&
+          Boolean(pub.track),
       )
       const audioPub = pubs.find((pub) => pub.kind === Track.Kind.Audio)
       // Mic is "muted" if there's no audio publication or the publication is muted.
@@ -476,7 +520,10 @@ export function useLiveVideo({
     if (!p || !el) return false
     let attached = false
     p.trackPublications.forEach((pub) => {
-      if (pub.kind === Track.Kind.Video && pub.track) {
+      // Only the CAMERA feeds a participant tile. A screen-share video pub is
+      // rendered full-stage elsewhere (registerProjectionVideoEl); attaching it
+      // here would overwrite the camera in the same <video> element.
+      if (pub.kind === Track.Kind.Video && pub.source !== Track.Source.ScreenShare && pub.track) {
         pub.track.attach(el)
         el.muted = true
         el.setAttribute("playsinline", "true")
@@ -503,6 +550,54 @@ export function useLiveVideo({
     },
     [attachPeerVideo],
   )
+
+  // Paints the currently-shared screen — the LOCAL share first (so the sharer
+  // sees their own confidence preview), else any REMOTE share — into the
+  // registered full-stage projection element. Safe to call repeatedly (attach is
+  // idempotent per element).
+  const attachProjection = useCallback(() => {
+    const room = roomRef.current
+    const el = projectionVideoElRef.current
+    if (!room || !el) return
+    // Local screen share (the host/presenter's own preview).
+    for (const pub of room.localParticipant.trackPublications.values()) {
+      if (pub.source === Track.Source.ScreenShare && pub.track) {
+        pub.track.attach(el)
+        el.muted = true
+        el.setAttribute("playsinline", "true")
+        void el.play().catch(() => {})
+        return
+      }
+    }
+    // Otherwise a remote participant's screen share.
+    for (const p of room.remoteParticipants.values()) {
+      for (const pub of p.trackPublications.values()) {
+        if (pub.source === Track.Source.ScreenShare && pub.track) {
+          pub.track.attach(el)
+          el.muted = true
+          el.setAttribute("playsinline", "true")
+          void el.play().catch(() => {})
+          return
+        }
+      }
+    }
+  }, [])
+
+  // The UI registers the full-stage <video> that renders the screen share
+  // (local or remote).
+  const registerProjectionVideoEl = useCallback(
+    (el: HTMLVideoElement | null) => {
+      if (el && projectionVideoElRef.current === el) return
+      projectionVideoElRef.current = el
+      if (el) attachProjection()
+    },
+    [attachProjection],
+  )
+
+  // When the LOCAL screen share flips on, (re)paint the sharer's own preview.
+  useEffect(() => {
+    if (screenShareOn) attachProjection()
+  }, [screenShareOn, attachProjection])
 
   // Attaches a REMOTE participant's audio to a single <audio> element. Only ever
   // called for remote tracks (RoomEvent.TrackSubscribed and the post-connect
@@ -592,6 +687,14 @@ export function useLiveVideo({
         /* already stopped */
       }
       videoAudioTrackRef.current = null
+    }
+    if (videoProjectionTrackRef.current) {
+      try {
+        videoProjectionTrackRef.current.stop()
+      } catch {
+        /* already stopped */
+      }
+      videoProjectionTrackRef.current = null
     }
     if (musicElRef.current) musicElRef.current.pause()
     audioElsRef.current.forEach((el) => {
@@ -686,6 +789,15 @@ export function useLiveVideo({
     room
       .on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub: RemoteTrackPublication, p: RemoteParticipant) => {
         if (track.kind === Track.Kind.Video) {
+          // Egress-only projection pixels: never render (each follower already
+          // paints its own in-sync copy from live_video_state).
+          if (_pub.trackName === VIDEO_PROJECTION_TRACK) return
+          // A remote screen share is presented full-stage, not as a camera tile.
+          if (_pub.source === Track.Source.ScreenShare) {
+            setRemoteProjection({ identity: p.identity, sid: track.sid ?? _pub.trackSid })
+            attachProjection()
+            return
+          }
           attachPeerVideo(p.identity)
           refreshPeers(room)
         }
@@ -697,6 +809,13 @@ export function useLiveVideo({
         }
       })
       .on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack, _pub, p: RemoteParticipant) => {
+        // A remote screen share ending clears the full-stage projection.
+        if (_pub?.source === Track.Source.ScreenShare || track.sid === remoteProjectionSidRef.current) {
+          track.detach().forEach((el) => el.remove())
+          setRemoteProjection(null)
+          if (track.kind === Track.Kind.Video) refreshPeers(room)
+          return
+        }
         const routed = audioElsRef.current.get(p.identity + ":" + track.sid)
         if (routed) releaseRemoteAudioRoute(routed)
         track.detach().forEach((el) => el.remove())
@@ -709,6 +828,12 @@ export function useLiveVideo({
           setCamOn(true)
           attachLocalVideo(room)
         }
+        if (pub.source === Track.Source.ScreenShare) setScreenShareOn(true)
+      })
+      // The browser's own "Stop sharing" bar ends the screen share outside our
+      // controls — reflect that in state so the UI resets.
+      .on(RoomEvent.LocalTrackUnpublished, (pub: LocalTrackPublication) => {
+        if (pub.source === Track.Source.ScreenShare) setScreenShareOn(false)
       })
       .on(RoomEvent.ParticipantConnected, () => {
         syncParticipants(room)
@@ -1208,6 +1333,87 @@ export function useLiveVideo({
   }, [])
 
   /**
+   * Start sharing this device's screen. Publishes a LiveKit ScreenShare video
+   * track (+ its system audio when the OS/browser allows), which every follower
+   * renders full-stage and the egress records into the replay. No-op where
+   * getDisplayMedia is unavailable (mobile / Median). The browser's own "Stop
+   * sharing" affordance ends it too — handled via LocalTrackUnpublished.
+   */
+  const startScreenShare = useCallback(async () => {
+    const room = roomRef.current
+    if (!room || !canScreenShareHere()) return false
+    try {
+      await room.localParticipant.setScreenShareEnabled(
+        true,
+        { audio: true, resolution: ScreenSharePresets.h1080fps15.resolution },
+        { name: "screen" },
+      )
+      setScreenShareOn(true)
+      return true
+    } catch {
+      // User dismissed the picker or the OS denied capture — stay off silently.
+      setScreenShareOn(false)
+      return false
+    }
+  }, [])
+
+  /** Stop sharing this device's screen. */
+  const stopScreenShare = useCallback(async () => {
+    const room = roomRef.current
+    if (room) {
+      try {
+        await room.localParticipant.setScreenShareEnabled(false)
+      } catch {
+        /* already off */
+      }
+    }
+    setScreenShareOn(false)
+  }, [])
+
+  /**
+   * Publish the projected video's PIXELS (a captureStream track off the host's
+   * synced <video>) purely so the egress records the projection into the replay.
+   * Followers never render it — they paint their own in-sync copy — so it is
+   * name-guarded (VIDEO_PROJECTION_TRACK) out of every live path. Mirrors
+   * publishVideoAudioTrack; idempotent (re-publishing swaps the track).
+   */
+  const publishVideoProjectionTrack = useCallback(async (mediaTrack: MediaStreamTrack) => {
+    const room = roomRef.current
+    if (!room) return
+    if (videoProjectionTrackRef.current) {
+      try {
+        await room.localParticipant.unpublishTrack(videoProjectionTrackRef.current)
+      } catch {
+        /* already gone */
+      }
+      videoProjectionTrackRef.current.stop()
+      videoProjectionTrackRef.current = null
+    }
+    const localTrack = new LocalVideoTrack(mediaTrack)
+    await room.localParticipant.publishTrack(localTrack, {
+      name: VIDEO_PROJECTION_TRACK,
+      source: Track.Source.Unknown,
+      simulcast: false,
+      degradationPreference: "maintain-resolution",
+    })
+    videoProjectionTrackRef.current = localTrack
+  }, [])
+
+  /** Unpublish the egress-only projection pixels track. */
+  const unpublishVideoProjectionTrack = useCallback(async () => {
+    const room = roomRef.current
+    if (videoProjectionTrackRef.current && room) {
+      try {
+        await room.localParticipant.unpublishTrack(videoProjectionTrackRef.current)
+      } catch {
+        /* already gone */
+      }
+      videoProjectionTrackRef.current.stop()
+      videoProjectionTrackRef.current = null
+    }
+  }, [])
+
+  /**
    * Begin recording the host's session (idempotent). Records a COMPOSITE of the
    * whole call — every participant's camera tile in a grid, plus a mix of
    * everyone's audio — so the saved replay matches what viewers saw live rather
@@ -1430,6 +1636,17 @@ export function useLiveVideo({
     musicDuration,
     registerPeerVideoEl,
     registerLocalVideoEl,
+    registerProjectionVideoEl,
+    // Screen share
+    canScreenShare: canScreenShareHere(),
+    screenShareOn,
+    startScreenShare,
+    stopScreenShare,
+    // A remote screen share currently presented full-stage (null when none).
+    remoteProjection,
+    // Egress-only projection pixels (synced Project Video → replay capture).
+    publishVideoProjectionTrack,
+    unpublishVideoProjectionTrack,
     toggleMic,
     askUnmute,
     toggleCam,

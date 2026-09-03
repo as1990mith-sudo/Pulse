@@ -35,10 +35,13 @@ export type LiveDescriptor = {
 
 type ChatSender = (text: string) => void | Promise<void>
 
-// How the host console publishes/unpublishes the shared-video audio track.
+// How the host console publishes/unpublishes the shared-video tracks (audio, and
+// the projected PIXELS) so the egress records the Project Video into the replay.
 export type VideoAudioSink = {
   publish: (track: MediaStreamTrack) => Promise<void>
   unpublish: () => Promise<void>
+  publishVideo: (track: MediaStreamTrack) => Promise<void>
+  unpublishVideo: () => Promise<void>
 }
 
 type ResourceCtx = {
@@ -64,6 +67,9 @@ type ResourceCtx = {
   registerVideoAudioSink: (sink: VideoAudioSink) => () => void
   publishVideoAudio: (track: MediaStreamTrack) => Promise<void>
   unpublishVideoAudio: () => Promise<void>
+  // Same, for the projected video PIXELS (egress-only replay capture).
+  publishVideoPixels: (track: MediaStreamTrack) => Promise<void>
+  unpublishVideoPixels: () => Promise<void>
   // While a host is actively PLAYING a shared video, the panel is locked for
   // participants: they can't close it, minimise it to the drawer, or switch to
   // another resource — the room watches together. Dragging the card and
@@ -156,6 +162,12 @@ export function ResourceProvider({
   const unpublishVideoAudio = useCallback(async () => {
     await videoAudioSinkRef.current?.unpublish()
   }, [])
+  const publishVideoPixels = useCallback(async (track: MediaStreamTrack) => {
+    await videoAudioSinkRef.current?.publishVideo(track)
+  }, [])
+  const unpublishVideoPixels = useCallback(async () => {
+    await videoAudioSinkRef.current?.unpublishVideo()
+  }, [])
 
   const value = useMemo<ResourceCtx>(
     () => ({
@@ -173,6 +185,8 @@ export function ResourceProvider({
       registerVideoAudioSink,
       publishVideoAudio,
       unpublishVideoAudio,
+      publishVideoPixels,
+      unpublishVideoPixels,
       videoLocked,
       setVideoLocked,
     }),
@@ -191,6 +205,8 @@ export function ResourceProvider({
       registerVideoAudioSink,
       publishVideoAudio,
       unpublishVideoAudio,
+      publishVideoPixels,
+      unpublishVideoPixels,
       videoLocked,
     ],
   )

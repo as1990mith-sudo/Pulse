@@ -9,6 +9,8 @@ import {
   Mic,
   MicOff,
   MonitorPlay,
+  MonitorUp,
+  MonitorX,
   MoreVertical,
   Music,
   Pin,
@@ -55,6 +57,7 @@ import { useLivePresence } from "@/lib/use-live-presence"
 import { ShareSheet } from "@/components/share-sheet"
 import { ConversationVideo } from "@/components/conversation/conversation-video"
 import { LiveSetupSheet } from "@/components/live/live-setup-sheet"
+import { ProjectionStage } from "@/components/live/projection-stage"
 import { CoverArt } from "@/components/cover-art"
 import { MarqueeTitle } from "@/components/marquee-title"
 import type { ShareTarget } from "@/lib/share-types"
@@ -365,6 +368,14 @@ export function VideoStudioConsole({
     stopMusic,
     publishVideoAudioTrack,
     unpublishVideoAudioTrack,
+    publishVideoProjectionTrack,
+    unpublishVideoProjectionTrack,
+    registerProjectionVideoEl,
+    canScreenShare,
+    screenShareOn,
+    startScreenShare,
+    stopScreenShare,
+    remoteProjection,
     stopRecording,
     disconnect,
   } = useLiveVideo({
@@ -388,8 +399,16 @@ export function VideoStudioConsole({
       registerVideoAudioSink({
         publish: publishVideoAudioTrack,
         unpublish: unpublishVideoAudioTrack,
+        publishVideo: publishVideoProjectionTrack,
+        unpublishVideo: unpublishVideoProjectionTrack,
       }),
-    [registerVideoAudioSink, publishVideoAudioTrack, unpublishVideoAudioTrack],
+    [
+      registerVideoAudioSink,
+      publishVideoAudioTrack,
+      unpublishVideoAudioTrack,
+      publishVideoProjectionTrack,
+      unpublishVideoProjectionTrack,
+    ],
   )
 
   // A live "Grid" stream renders the Meet/Zoom-style meeting grid instead of the
@@ -836,9 +855,14 @@ export function VideoStudioConsole({
             gridPinnedIds={callState?.gridPinnedIds ?? []}
             gridPinRequest={callState?.gridPinRequest ?? null}
             onRefreshState={() => void refreshCalls()}
-            registerLocalVideoEl={registerLocalVideoEl}
-            registerPeerVideoEl={registerPeerVideoEl}
-            micOn={micOn}
+          registerLocalVideoEl={registerLocalVideoEl}
+          registerPeerVideoEl={registerPeerVideoEl}
+          canScreenShare={canScreenShare}
+          screenShareOn={screenShareOn}
+          projectionActive={screenShareOn || !!remoteProjection}
+          onToggleScreenShare={() => void (screenShareOn ? stopScreenShare() : startScreenShare())}
+          registerProjectionVideoEl={registerProjectionVideoEl}
+          micOn={micOn}
             camOn={camOn}
             localVideoReady={localVideoReady}
             localSpeaking={localSpeaking}
@@ -1030,6 +1054,19 @@ export function VideoStudioConsole({
                 <p className="text-sm font-medium">Starting camera…</p>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Full-stage Video Project — a screen share (local or remote). Fills the
+            broadcast stage above the camera/guests; the host camera continues in
+            its own frame beneath and also appears as the floating thumbnail. */}
+        {live && orientation !== "landscape" && (screenShareOn || remoteProjection) && (
+          <div className="absolute inset-0 z-20">
+            <ProjectionStage
+              kind="screen"
+              rounded={false}
+              registerSurfaceEl={registerProjectionVideoEl}
+            />
           </div>
         )}
 
@@ -1266,6 +1303,20 @@ export function VideoStudioConsole({
             >
               <Music className="size-5" />
             </GlassButton>
+            {/* Share screen — desktop / supported browsers only (getDisplayMedia
+                is unavailable in the mobile app shell; Project Video covers that
+                case). Full-stage projection is rendered above. */}
+            {canScreenShare && (
+              <GlassButton
+                label={screenShareOn ? "Stop sharing screen" : "Share screen"}
+                onClick={() => void (screenShareOn ? stopScreenShare() : startScreenShare())}
+                active={screenShareOn}
+                tone={screenShareOn ? "muted" : "glass"}
+                disabled={!connected}
+              >
+                {screenShareOn ? <MonitorX className="size-5" /> : <MonitorUp className="size-5" />}
+              </GlassButton>
+            )}
             {roomName && (
               <GlassButton label="Share this live" onClick={() => setShareOpen(true)}>
                 <Send className="size-5" />

@@ -230,7 +230,8 @@ function UploadStage({ state, isHost, roomName }: { state: ActiveState; isHost: 
   // so it never doubles the audio live. captureStream taps without rerouting the
   // element's own output, so the host keeps hearing it normally. Uploaded files
   // only: a YouTube iframe's audio is cross-origin and cannot be captured.
-  const { publishVideoAudio, unpublishVideoAudio } = useLiveResources()
+  const { publishVideoAudio, unpublishVideoAudio, publishVideoPixels, unpublishVideoPixels } =
+    useLiveResources()
   useEffect(() => {
     if (!isHost) return
     const el = videoRef.current as
@@ -238,21 +239,37 @@ function UploadStage({ state, isHost, roomName }: { state: ActiveState; isHost: 
       | null
     if (!el) return
     const capture = el.captureStream?.bind(el) ?? el.mozCaptureStream?.bind(el)
-    if (!capture) return // Browser can't tap element audio; recording just omits it.
+    if (!capture) return // Browser can't tap the element; recording just omits it.
 
-    let published = false
+    let audioPublished = false
+    let videoPublished = false
+    // Tap this <video>'s audio AND pixels and publish both as LiveKit tracks so
+    // the egress records the projection into the replay. Followers render their
+    // own synced local copy of both, so neither track is ever played remotely —
+    // no doubled audio, no duplicate video. captureStream taps without rerouting
+    // the element, so the host keeps seeing/hearing it. Uploaded files only: a
+    // YouTube iframe is cross-origin and cannot be captured.
     const tryPublish = () => {
-      if (published) return
       let stream: MediaStream
       try {
         stream = capture()
       } catch {
         return
       }
-      const [audio] = stream.getAudioTracks()
-      if (!audio) return // Audio not decoded yet; a later event will retry.
-      published = true
-      void publishVideoAudio(audio)
+      if (!audioPublished) {
+        const [audio] = stream.getAudioTracks()
+        if (audio) {
+          audioPublished = true
+          void publishVideoAudio(audio)
+        }
+      }
+      if (!videoPublished) {
+        const [video] = stream.getVideoTracks()
+        if (video) {
+          videoPublished = true
+          void publishVideoPixels(video)
+        }
+      }
     }
 
     if (el.readyState >= 2) tryPublish()
@@ -261,9 +278,10 @@ function UploadStage({ state, isHost, roomName }: { state: ActiveState; isHost: 
     return () => {
       el.removeEventListener("loadeddata", tryPublish)
       el.removeEventListener("playing", tryPublish)
-      if (published) void unpublishVideoAudio()
+      if (audioPublished) void unpublishVideoAudio()
+      if (videoPublished) void unpublishVideoPixels()
     }
-  }, [isHost, publishVideoAudio, unpublishVideoAudio])
+  }, [isHost, publishVideoAudio, unpublishVideoAudio, publishVideoPixels, unpublishVideoPixels])
 
   // Local UI tracking (drives the scrubber + play button for everyone).
   useEffect(() => {
