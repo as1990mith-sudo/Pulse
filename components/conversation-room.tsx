@@ -153,6 +153,7 @@ export function ConversationRoom({
     connect,
     disconnect,
     toggleMic,
+    setHeadphoneMode,
     startAudioPlayback,
     publishMusic,
     setMusicVolume,
@@ -607,7 +608,7 @@ export function ConversationRoom({
     ]
   }, [actionTarget, roomName, pinnedId])
 
-  // ── Host room controls ─────────────────────────────────────────────���─────
+  // ��─ Host room controls ─────────────────────────────────────────────���─────
   // Consolidated host-only controls, shown in a single clean menu.
   const hostControlActions: SheetAction[] = useMemo(() => {
     if (!isHost) return []
@@ -1073,6 +1074,8 @@ export function ConversationRoom({
           onRemoveTrack={removeMusicTrack}
           onError={setMusicError}
           onToggleDuck={setDuckEnabled}
+          headphoneMode={state.headphoneMode}
+          onToggleHeadphones={(next) => void setHeadphoneMode(next)}
           onClose={() => setMusicOpen(false)}
         />
       )}

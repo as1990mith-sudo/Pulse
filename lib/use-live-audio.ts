@@ -83,6 +83,11 @@ export type LiveAudioState = {
   musicDuration: number
   // Local participant's real-time connection quality.
   connectionQuality: ConnQuality
+  // Host "I'm on headphones" mode. When true, the live mic is re-captured with
+  // the voice-comms DSP disabled so Bluetooth output stays on high-quality A2DP
+  // instead of the narrowband call profile — restoring the host's own monitor
+  // fidelity (esp. the background-music track). Off by default.
+  headphoneMode: boolean
 }
 
 /** Pick the best MediaRecorder audio container the browser supports. */
@@ -198,6 +203,9 @@ function synthesizeEffect(ctx: AudioContext, out: GainNode, name: SoundEffectNam
  */
 export function useLiveAudio() {
   const roomRef = useRef<Room | null>(null)
+  // Sticky "on headphones" preference. Read whenever the mic (re)opens so the
+  // chosen DSP mode survives self-mute/unmute, not just the initial capture.
+  const headphoneModeRef = useRef(false)
   const audioElsRef = useRef<Map<string, HTMLAudioElement>>(new Map())
   // Listener's mute preference. Kept in a ref so it survives re-subscriptions:
   // any audio element attached *after* the listener mutes must start muted too,
@@ -281,6 +289,7 @@ export function useLiveAudio() {
     musicPosition: 0,
     musicDuration: 0,
     connectionQuality: "unknown",
+    headphoneMode: false,
   })
 
   // Roster of participants who can publish (host + guests), surfaced to the UI
@@ -609,6 +618,34 @@ export function useLiveAudio() {
     [refreshCounts, refreshSpeakers, update],
   )
 
+  // Re-captures the currently published mic track with DSP flags matching the
+  // sticky headphone preference. On headphones there is no speaker bleed for the
+  // echo canceller to remove, so disabling echo/noise/gain requests a raw MEDIA
+  // capture — which lets Bluetooth stay on high-quality A2DP instead of dropping
+  // to the narrowband call profile (the cause of the muffled host monitor). A
+  // no-op when the mic isn't open (the preference is re-applied on next enable).
+  const applyMicDsp = useCallback(async () => {
+    const room = roomRef.current
+    if (!room) return
+    const pub = room.localParticipant.getTrackPublication(Track.Source.Microphone)
+    const track = pub?.track
+    if (!(track instanceof LocalAudioTrack)) return
+    const constraints = headphoneModeRef.current
+      ? {
+          ...LIVE_MIC_CONSTRAINTS,
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+          voiceIsolation: false,
+        }
+      : LIVE_MIC_CONSTRAINTS
+    try {
+      await track.restartTrack(constraints)
+    } catch {
+      // Re-capture failed (device busy / unsupported) — keep the existing track.
+    }
+  }, [])
+
   const toggleMic = useCallback(async () => {
     const room = roomRef.current
     if (!room) return
@@ -616,9 +653,30 @@ export function useLiveAudio() {
     await room.localParticipant.setMicrophoneEnabled(next)
     // Reopening the mic can bounce iOS back to the earpiece; re-assert the
     // loudspeaker each time it goes on. (Bluetooth/wired headsets still win.)
-    if (next) applyAudioRouting()
+    if (next) {
+      // Freshly opened mic uses the room's echo-on defaults; re-apply the
+      // headphone preference so it stays sticky across self-mute/unmute.
+      await applyMicDsp()
+      applyAudioRouting()
+    }
     update({ micEnabled: next })
-  }, [update])
+  }, [update, applyMicDsp])
+
+  /**
+   * Host "I'm on headphones" toggle. While the mic is open with echo cancellation,
+   * iOS/Android force Bluetooth headphones from high-quality A2DP down to the
+   * narrowband bidirectional call profile (HFP/SCO) — which is why the host's own
+   * background-music monitor sounds like call quality even though listeners still
+   * receive the full 48 kHz stereo track. Turning this on re-captures the mic with
+   * the voice-comms DSP disabled, so the OS keeps output on A2DP and the host hears
+   * full quality. Off by default so loudspeaker hosts keep echo/feedback protection.
+   */
+  const setHeadphoneMode = useCallback(async (on: boolean) => {
+    headphoneModeRef.current = on
+    update({ headphoneMode: on })
+    await applyMicDsp()
+    applyAudioRouting()
+  }, [update, applyMicDsp])
 
   const setListenerMuted = useCallback((muted: boolean) => {
     listenerMutedRef.current = muted
@@ -1137,6 +1195,7 @@ export function useLiveAudio() {
     connect,
     disconnect,
     toggleMic,
+    setHeadphoneMode,
     setListenerMuted,
     startAudioPlayback,
     publishMusic,
