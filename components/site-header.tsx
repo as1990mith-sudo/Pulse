@@ -2,9 +2,8 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import Image from "next/image"
 import { usePathname } from "next/navigation"
-import { Search } from "lucide-react"
+import { Radio, Search } from "lucide-react"
 import { AppMenu } from "@/components/app-menu"
 import { MessagesBell } from "@/components/messages-bell"
 import { NotificationBell } from "@/components/notification-bell"
@@ -82,14 +81,9 @@ export function SiteHeader({ collapsible = false }: { collapsible?: boolean } = 
               returning, so we never swap in an in-app back arrow here. */}
           <AppMenu />
           <Link href="/" className="flex min-w-0 items-center gap-2">
-            <Image
-              src="/images/frequency-logo.png"
-              alt="Frequency"
-              width={40}
-              height={40}
-              priority
-              className="size-10 shrink-0 object-contain"
-            />
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <Radio className="size-4" />
+            </span>
             <span className="shrink-0 whitespace-nowrap text-lg font-semibold tracking-tight">Frequency</span>
           </Link>
         </div>
