@@ -71,21 +71,15 @@ export async function publishShow(input: {
     homeId = row?.homeId ?? null
 
     // One canonical episode per session: anyone other than the session's host
-    // needs an explicit grant. Enforced server-side because the client gate
-    // alone could be bypassed by calling this action directly, which would let a
-    // co-host publish a duplicate (often shorter) copy of the show.
-    //
-    // A co-host who can END the whole session is, by that grant, also trusted to
-    // save its canonical recording: when such a guest ends the live it should
-    // behave "as though the host ended it" and offer the same save-to-catalogue
-    // choice. So either `canSaveRecording` OR `canEndSession` authorizes the
-    // save. Either way `homeId` is resolved from the room above, so the replay
-    // always lands in the SESSION'S (host's) Home catalogue, never the co-host's.
+    // needs an explicit `canSaveRecording` grant. Enforced server-side because
+    // the client gate alone could be bypassed by calling this action directly,
+    // which would let a co-host publish a duplicate (often shorter) copy of the
+    // show. `homeId` is resolved from the room above, so the replay always lands
+    // in the SESSION'S (host's) Home catalogue, never the co-host's.
     if (row && row.hostId !== user.id) {
       const [grant] = await db
         .select({
           canSaveRecording: liveCallRequest.canSaveRecording,
-          canEndSession: liveCallRequest.canEndSession,
         })
         .from(liveCallRequest)
         .where(
@@ -96,7 +90,7 @@ export async function publishShow(input: {
           ),
         )
         .limit(1)
-      if (!grant?.canSaveRecording && !grant?.canEndSession) {
+      if (!grant?.canSaveRecording) {
         return { ok: false, error: "The host hasn't allowed you to save a recording of this session." }
       }
     }

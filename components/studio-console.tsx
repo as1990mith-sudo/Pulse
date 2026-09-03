@@ -50,12 +50,11 @@ import {
   setCoHostPermission,
   removeCoHost,
   resolveMusicControl,
-  resolveEndSession,
   type CallRequestView,
   type CoHostPermissions,
   type LiveStreamView,
 } from "@/app/actions/live"
-  import { ManageCoHostMenu, MusicApprovalPrompt, EndSessionPrompt, CoHostsPanel } from "@/components/live/cohost-menu"
+  import { ManageCoHostMenu, MusicApprovalPrompt, CoHostsPanel } from "@/components/live/cohost-menu"
   import { SaveEpisodePrompt } from "@/components/live/save-episode-prompt"
 import { useLiveAudio } from "@/lib/use-live-audio"
 import { useLiveResources } from "@/components/live/resource/resource-context"
@@ -387,8 +386,6 @@ export function StudioConsole({
   const musicControllerId = callState?.musicControllerId ?? null
   const musicHandedOff = Boolean(musicControllerId)
   const musicApprovalRequest = callState?.musicApprovalRequest ?? null
-  // A co-host's pending "end live session" request (host sees a 30s prompt).
-  const endRequest = callState?.endRequest ?? null
 
   // When a co-host takes over track control, the host's own music yields: stop
   // any track the host had mixed in so the two never fight over the bus. When
@@ -435,11 +432,6 @@ export function StudioConsole({
   async function handleResolveMusic(userId: string, approve: boolean) {
     if (!roomName) return
     await resolveMusicControl({ roomName, userId, approve })
-    refreshCalls()
-  }
-  async function handleResolveEnd(approve: boolean) {
-    if (!roomName) return
-    await resolveEndSession({ roomName, approve })
     refreshCalls()
   }
 
@@ -1052,16 +1044,6 @@ export function StudioConsole({
           request={musicApprovalRequest}
           onApprove={() => void handleResolveMusic(musicApprovalRequest.userId, true)}
           onDecline={() => void handleResolveMusic(musicApprovalRequest.userId, false)}
-        />
-      )}
-
-      {/* A co-host asked to end the live: 30s countdown to End now / Keep live. */}
-      {endRequest && (
-        <EndSessionPrompt
-          byName={endRequest.byName}
-          remainingMs={endRequest.remainingMs}
-          onApprove={() => void handleResolveEnd(true)}
-          onDecline={() => void handleResolveEnd(false)}
         />
       )}
 

@@ -1789,10 +1789,9 @@ export async function getCallState(input: { roomName: string }): Promise<{
       ? {
           acceptRequests: myCoHost?.canAcceptRequests ?? false,
           controlTracks: myCoHost?.canControlTracks ?? false,
-          endSession: myCoHost?.canEndSession ?? false,
           saveRecording: myCoHost?.canSaveRecording ?? false,
         }
-      : { acceptRequests: false, controlTracks: false, endSession: false, saveRecording: false }
+      : { acceptRequests: false, controlTracks: false, saveRecording: false }
 
   // A co-host controls music once they have the Control Tracks permission AND
   // their first upload has been approved by the host.
@@ -1827,7 +1826,6 @@ export async function getCallState(input: { roomName: string }): Promise<{
     coHosts,
     musicControllerId: controller?.userId ?? null,
     musicApprovalRequest: pendingMusic ? mapRequest(pendingMusic) : null,
-    endRequest,
     hostId,
     gridCohostId: stream?.gridCohostId ?? null,
     gridPinnedIds: parseGridPins(stream?.gridPinnedId),
@@ -1872,7 +1870,6 @@ export async function makeCoHost(input: { roomName: string; userId: string }): P
       role: "cohost",
       canAcceptRequests: true,
       canControlTracks: false,
-      canEndSession: false,
       // Deliberately off on promotion: the host's take is the canonical episode.
       canSaveRecording: false,
       musicApproved: false,
@@ -1891,7 +1888,7 @@ export async function makeCoHost(input: { roomName: string; userId: string }): P
 export async function setCoHostPermission(input: {
   roomName: string
   userId: string
-  permission: "acceptRequests" | "controlTracks" | "endSession" | "saveRecording"
+  permission: "acceptRequests" | "controlTracks" | "saveRecording"
   enabled: boolean
 }): Promise<{ ok: boolean; error?: string }> {
   const user = await requireUser()
@@ -1904,7 +1901,6 @@ export async function setCoHostPermission(input: {
 
   const patch: Partial<typeof liveCallRequest.$inferInsert> = { updatedAt: new Date() }
   if (input.permission === "acceptRequests") patch.canAcceptRequests = input.enabled
-  if (input.permission === "endSession") patch.canEndSession = input.enabled
   if (input.permission === "saveRecording") patch.canSaveRecording = input.enabled
   if (input.permission === "controlTracks") {
     patch.canControlTracks = input.enabled
@@ -1935,7 +1931,6 @@ export async function removeCoHost(input: { roomName: string; userId: string }):
       role: "guest",
       canAcceptRequests: false,
       canControlTracks: false,
-      canEndSession: false,
       musicApproved: false,
       musicRequestPending: false,
       updatedAt: new Date(),
@@ -1975,65 +1970,6 @@ export async function resolveMusicControl(input: {
     .update(liveCallRequest)
     .set({ musicApproved: input.approve, musicRequestPending: false, updatedAt: new Date() })
     .where(eq(liveCallRequest.id, row.id))
-  return { ok: true }
-}
-
-// How long the host has to answer a co-host's "end live session" request
-// before the live ends automatically. Not exported ��� a "use server" module may
-// only export async functions; the client derives its countdown from the
-// server-reported remainingMs instead.
-const END_REQUEST_WINDOW_MS = 30_000
-
-/**
- * A co-host who holds the End Session permission asks the host to end the live.
- * Instead of ending immediately, this records a pending request on the stream.
- * The host then has 30s to approve/decline; if unanswered, `getCallState`
- * auto-ends the stream once the window elapses.
- */
-export async function requestEndSession(input: { roomName: string }): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireUser()
-  const row = await getAcceptedRow(input.roomName, user.id)
-  if (!row || row.role !== "cohost" || !row.canEndSession)
-    return { ok: false, error: "You can't end this session." }
-  await db
-    .update(liveStream)
-    .set({ endRequestAt: new Date(), endRequestById: user.id, endRequestByName: user.name ?? row.userName })
-    .where(and(eq(liveStream.roomName, input.roomName), eq(liveStream.status, "live")))
-  return { ok: true }
-}
-
-/**
- * The host answers a co-host's pending "end live session" request. `approve`
- * true ends the broadcast immediately; false clears the request and the session
- * continues. Only the main host may resolve it.
- */
-export async function resolveEndSession(input: {
-  roomName: string
-  approve: boolean
-}): Promise<{ ok: boolean; error?: string }> {
-  const user = await requireUser()
-  if ((await getHostId(input.roomName)) !== user.id)
-    return { ok: false, error: "Only the host can answer this request." }
-  if (input.approve) {
-    await stopEgressForRoom(input.roomName)
-    await db
-      .update(liveStream)
-      .set({
-        status: "ended",
-        endedAt: new Date(),
-        endRequestAt: null,
-        endRequestById: null,
-        endRequestByName: null,
-        egressId: null,
-      })
-      .where(and(eq(liveStream.roomName, input.roomName), eq(liveStream.status, "live")))
-    revalidatePath("/live")
-  } else {
-    await db
-      .update(liveStream)
-      .set({ endRequestAt: null, endRequestById: null, endRequestByName: null })
-      .where(eq(liveStream.roomName, input.roomName))
-  }
   return { ok: true }
 }
 
