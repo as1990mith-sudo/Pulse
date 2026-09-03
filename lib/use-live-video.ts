@@ -1422,6 +1422,25 @@ export function useLiveVideo({
   }, [])
 
   /**
+   * Switch to sharing a DIFFERENT screen/window/tab without a manual stop→start.
+   * LiveKit won't reopen the OS picker while a screen-share track is already
+   * live, so we drop the current one first and immediately re-invoke the picker.
+   * If the host cancels the picker, `startScreenShare` leaves sharing off — the
+   * expected outcome of "never mind".
+   */
+  const switchScreenShare = useCallback(async () => {
+    const room = roomRef.current
+    if (!room || !canScreenShareHere()) return false
+    try {
+      await room.localParticipant.setScreenShareEnabled(false)
+    } catch {
+      /* already off */
+    }
+    setScreenShareOn(false)
+    return startScreenShare()
+  }, [startScreenShare])
+
+  /**
    * Publish the projected video's PIXELS (a captureStream track off the host's
    * synced <video>) purely so the egress records the projection into the replay.
    * Followers never render it — they paint their own in-sync copy — so it is
@@ -1694,6 +1713,7 @@ export function useLiveVideo({
     screenShareOn,
     startScreenShare,
     stopScreenShare,
+    switchScreenShare,
     // A remote screen share currently presented full-stage (null when none).
     remoteProjection,
     // Egress-only projection pixels (synced Project Video → replay capture).

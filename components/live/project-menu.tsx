@@ -23,12 +23,17 @@ export function ProjectMenu({
   canScreenShare,
   screenShareOn,
   onToggleScreenShare,
+  onSwitchScreenShare,
   onProjectVideo,
   renderTrigger,
 }: {
   canScreenShare: boolean
   screenShareOn: boolean
   onToggleScreenShare: () => void
+  // Switch to a different screen/window while already sharing (reopens the OS
+  // picker). When provided and a share is live, the menu splits into an explicit
+  // "Share another screen" + "Stop sharing screen" pair for easy management.
+  onSwitchScreenShare?: () => void
   onProjectVideo: () => void
   renderTrigger: (args: { toggle: () => void; open: boolean; active: boolean }) => React.ReactNode
 }) {
