@@ -65,7 +65,7 @@ export default async function OrganizationPage({ params }: { params: Promise<{ h
 
       <OrgHero org={org} members={members} />
 
-      <main className="mx-auto w-full max-w-4xl px-4 pb-8 sm:px-6">
+      <main className="mx-auto w-full max-w-2xl px-4 pb-8 sm:px-6">
         <OrgTabs
           org={org}
           posts={posts}

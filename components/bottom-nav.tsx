@@ -150,7 +150,11 @@ export function BottomNav() {
           lift it off the page for a premium feel. */}
       <nav
         aria-label="Primary"
-        className="pointer-events-auto flex w-full items-stretch justify-around gap-1 rounded-full border border-border/50 bg-background/65 p-1.5 shadow-[0_6px_24px_rgba(0,0,0,0.18)] ring-1 ring-white/5 backdrop-blur-xl supports-[backdrop-filter]:bg-background/50"
+        // Centred and capped to the main feed's reading width (max-w-2xl) so on
+        // desktop the footer bar lines up with the feed column instead of
+        // stretching edge to edge. On mobile the viewport is narrower than
+        // max-w-2xl, so the bar stays full-width as before.
+        className="pointer-events-auto mx-auto flex w-full max-w-2xl items-stretch justify-around gap-1 rounded-full border border-border/50 bg-background/65 p-1.5 shadow-[0_6px_24px_rgba(0,0,0,0.18)] ring-1 ring-white/5 backdrop-blur-xl supports-[backdrop-filter]:bg-background/50"
       >
         {TABS.map((tab, i) => {
           const active = i === activeIndex

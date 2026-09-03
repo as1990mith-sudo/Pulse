@@ -152,7 +152,12 @@ export function DesktopResourceDock() {
   return (
     <aside
       aria-label={`${meta.title} panel`}
-      className="hidden h-dvh w-[380px] shrink-0 flex-col border-l border-white/10 bg-zinc-950 lg:flex"
+      // Give the resource panel far more room on desktop — roughly the same
+      // horizontal space as the live interface itself (the docked room column is
+      // 600px). It steps up with the viewport so it never forces the centred
+      // room + panel group to overflow a narrower desktop: ~480px at lg, full
+      // parity (600px) at xl and up.
+      className="hidden h-dvh w-[480px] shrink-0 flex-col border-l border-white/10 bg-zinc-950 lg:flex xl:w-[600px]"
     >
       <div className="flex flex-col gap-2 border-b border-white/8 bg-white/[0.03] px-4 py-3">
         <div className="flex items-center gap-2.5">

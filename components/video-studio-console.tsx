@@ -1087,7 +1087,9 @@ export function VideoStudioConsole({
         {live && orientation !== "landscape" && (screenShareOn || remoteProjection) && (
           // z-30 so it fills the stage above the guest tiles (also z-20) that are
           // rendered later in the DOM; the presenter chip identifies the source.
-          <div className="absolute inset-0 z-30">
+          // Top padding reserves the header band (z-40) so a SHARED SCREEN's
+          // content letterboxes below it instead of hiding behind the host chrome.
+          <div className="absolute inset-0 z-30 pt-[calc(env(safe-area-inset-top)+4rem)]">
             <ProjectionStage
               kind="screen"
               rounded={false}
@@ -1394,13 +1396,16 @@ export function VideoStudioConsole({
           "flex-[1.5]",
         )}
       >
+        {/* Dropping `flatText` restores proper chat bubbles: the host's own
+            messages ("You") sit on the RIGHT, everyone else's on the LEFT —
+            matching the viewer's chat. `immersive` stays because this panel sits
+            on the always-dark broadcast surface (white/glass bubbles read best). */}
         <LiveChat
           asHost
           showResourceButton
           currentUser={currentUser}
           roomName={live ? roomName! : undefined}
           immersive
-          flatText
           placeholder=""
         />
       </div>

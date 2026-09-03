@@ -164,7 +164,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-4xl px-4 py-4 sm:px-6">
+      <main className="mx-auto w-full max-w-2xl px-4 py-4 sm:px-6">
         <ProfileTabs
           name={profile.name}
           isSelf={profile.isSelf}

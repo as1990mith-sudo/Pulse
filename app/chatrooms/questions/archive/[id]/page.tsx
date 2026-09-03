@@ -28,7 +28,7 @@ export default async function QotdArchiveDetailPage({
 
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden">
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-hidden">
+      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col overflow-hidden">
         <QotdArchiveDetail question={question} responses={responses} currentUser={currentUser} />
       </main>
     </div>
