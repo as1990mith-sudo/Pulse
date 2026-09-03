@@ -30,6 +30,8 @@ export type LiveVideoState = {
   durationSec: number
   positionSec: number
   playing: boolean
+  // Shared room-wide listening level 0–100; every client applies it locally.
+  volume: number
 } | null
 
 async function getUserId(): Promise<string | null> {
@@ -53,15 +55,12 @@ function clampInt(n: unknown, min: number, max: number): number {
   return Math.min(max, Math.max(min, v))
 }
 
-/** Read the room's current shared video, position advanced to server-now. */
-export async function getVideoState(roomName: string): Promise<LiveVideoState> {
-  if (!roomName) return null
-  const [row] = await db.select().from(liveVideoState).where(eq(liveVideoState.roomName, roomName)).limit(1)
-  if (!row || !row.active) return null
-
+// Shape a DB row into the client state, advancing position to server-now while
+// playing so clients only extrapolate from receipt time.
+function toState(row: typeof liveVideoState.$inferSelect, active: boolean): LiveVideoState {
   const durationSec = row.durationSec ?? 0
   let positionSec = (row.positionMs ?? 0) / 1000
-  if (row.playing) {
+  if (active && row.playing) {
     const elapsedSec = (Date.now() - (row.updatedAt ?? new Date()).getTime()) / 1000
     positionSec += Math.max(0, elapsedSec)
   }
@@ -69,7 +68,7 @@ export async function getVideoState(roomName: string): Promise<LiveVideoState> {
   positionSec = Math.max(0, positionSec)
 
   return {
-    active: true,
+    active,
     source: (row.source as LiveVideoSource | null) ?? null,
     url: row.url,
     youtubeId: row.youtubeId,
@@ -77,8 +76,39 @@ export async function getVideoState(roomName: string): Promise<LiveVideoState> {
     thumbnail: row.thumbnail,
     durationSec,
     positionSec,
-    playing: row.playing,
+    playing: active ? row.playing : false,
+    volume: row.volume ?? 100,
   }
+}
+
+/**
+ * PARTICIPANT read: the shared video only while it is active (being shown to the
+ * room). Returns null the moment the host stops it, so participants' panels
+ * close. Position is advanced to server-now while playing.
+ */
+export async function getVideoState(roomName: string): Promise<LiveVideoState> {
+  if (!roomName) return null
+  const [row] = await db.select().from(liveVideoState).where(eq(liveVideoState.roomName, roomName)).limit(1)
+  if (!row || !row.active) return null
+  return toState(row, true)
+}
+
+/**
+ * HOST read: like getVideoState, but a video the host has STOPPED (active=false)
+ * is still returned as long as a source is loaded, so the host keeps seeing it
+ * and can play it again for everyone or replace it. Only cleared when the host
+ * loads a different video. Host-gated; falls back to the participant view for
+ * anyone else.
+ */
+export async function getHostVideoState(roomName: string): Promise<LiveVideoState> {
+  if (!roomName) return null
+  const userId = await getUserId()
+  if (!userId || !(await isRoomHost(roomName, userId))) return getVideoState(roomName)
+
+  const [row] = await db.select().from(liveVideoState).where(eq(liveVideoState.roomName, roomName)).limit(1)
+  // No row, or a row that was never given a source, is "nothing loaded".
+  if (!row || !row.source) return null
+  return toState(row, row.active)
 }
 
 // Upsert the room's single state row. `roomName` is unique, so onConflict keeps
@@ -136,8 +166,13 @@ export async function setVideoSource(input: {
 
 /**
  * Host transport control. `play`/`pause`/`seek` all carry the authoritative
- * position (seconds) at the moment of the action; `stop` clears the video for
- * everyone (active=false). Position is stored in ms as the extrapolation anchor.
+ * position (seconds) at the moment of the action.
+ *
+ * `play` (re)activates the video for everyone — this is also how the host plays
+ * a previously-stopped video again. `stop` hides it from everyone (active=false)
+ * but DELIBERATELY keeps the loaded source so the host can resume or replace it;
+ * only loading a new video via setVideoSource clears it. On stop we snapshot the
+ * *current* advanced position so a later play resumes where it left off.
  */
 export async function controlVideo(input: {
   roomName: string
@@ -149,17 +184,46 @@ export async function controlVideo(input: {
   if (!(await isRoomHost(input.roomName, userId))) return { ok: false }
 
   if (input.action === "stop") {
-    await upsert(input.roomName, userId, { active: false, playing: false })
+    // Freeze the position where it actually is right now (advance if it was
+    // playing) so resuming continues from there rather than the last anchor.
+    const [row] = await db
+      .select()
+      .from(liveVideoState)
+      .where(eq(liveVideoState.roomName, input.roomName))
+      .limit(1)
+    let positionMs = row?.positionMs ?? 0
+    if (row?.playing) {
+      const elapsedMs = Date.now() - (row.updatedAt ?? new Date()).getTime()
+      positionMs = Math.max(0, positionMs + Math.max(0, elapsedMs))
+      if ((row.durationSec ?? 0) > 0) positionMs = Math.min(positionMs, row.durationSec * 1000)
+    }
+    await upsert(input.roomName, userId, { active: false, playing: false, positionMs })
     return { ok: true }
   }
 
   const positionMs = clampInt((input.positionSec ?? 0) * 1000, 0, 60 * 60 * 12 * 1000)
+  // `play` also re-activates a stopped video; pause/seek leave active untouched.
+  const activePatch = input.action === "play" ? { active: true } : {}
   const playing = input.action === "play" ? true : input.action === "pause" ? false : undefined
 
   await upsert(input.roomName, userId, {
     positionMs,
+    ...activePatch,
     ...(playing === undefined ? {} : { playing }),
   })
+  return { ok: true }
+}
+
+/**
+ * Host sets the shared room-wide listening volume (0–100). Every client applies
+ * it to its local player, so it controls what the host and every participant
+ * hear. Position/transport are untouched.
+ */
+export async function setVideoVolume(input: { roomName: string; volume: number }): Promise<{ ok: boolean }> {
+  const userId = await getUserId()
+  if (!userId) return { ok: false }
+  if (!(await isRoomHost(input.roomName, userId))) return { ok: false }
+  await upsert(input.roomName, userId, { volume: clampInt(input.volume, 0, 100) })
   return { ok: true }
 }
 

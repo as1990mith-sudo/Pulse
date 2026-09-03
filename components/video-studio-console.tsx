@@ -43,6 +43,7 @@ import {
 } from "@/app/actions/live"
 import { LIVE_CATEGORIES } from "@/lib/live-categories"
 import { useLiveVideo, isMedianApp, openNativeAppSettings, type RemotePeer } from "@/lib/use-live-video"
+import { useLiveResources } from "@/components/live/resource/resource-context"
 import { useLiveProcessing } from "@/components/live-processing-provider"
 import { ReactionLayer } from "@/components/live-reactions"
 import { LiveChat } from "@/components/live-chat"
@@ -362,6 +363,8 @@ export function VideoStudioConsole({
     musicDuration,
     setMusicEndedHandler,
     stopMusic,
+    publishVideoAudioTrack,
+    unpublishVideoAudioTrack,
     stopRecording,
     disconnect,
   } = useLiveVideo({
@@ -376,6 +379,18 @@ export function VideoStudioConsole({
     // When egress is recording server-side, skip the client-side capture.
     recordOnServer,
   })
+
+  // Expose the room's video-audio publishing to the resource system, so the
+  // shared-video panel can route its <video> audio into the egress recording.
+  const { registerVideoAudioSink } = useLiveResources()
+  useEffect(
+    () =>
+      registerVideoAudioSink({
+        publish: publishVideoAudioTrack,
+        unpublish: unpublishVideoAudioTrack,
+      }),
+    [registerVideoAudioSink, publishVideoAudioTrack, unpublishVideoAudioTrack],
+  )
 
   // A live "Grid" stream renders the Meet/Zoom-style meeting grid instead of the
   // broadcast layout below.

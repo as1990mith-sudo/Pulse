@@ -45,6 +45,11 @@ import { fixRecordedVideoDuration } from "@/lib/webm-duration"
  */
 const CAPTURE_RESOLUTION = VideoPresets43.h1080.resolution
 
+// LiveKit track name for the host's shared-video audio. Published so the egress
+// recording captures it; every OTHER participant skips playing it (they already
+// hear their own in-sync local copy), so it never causes doubled audio live.
+export const VIDEO_AUDIO_TRACK = "live-video-audio"
+
 /**
  * Turn the camera on, degrading the capture format if the device can't satisfy
  * the preferred full-sensor 1440x1080. Some Android front cameras reject a
@@ -315,6 +320,13 @@ export function useLiveVideo({
   const musicLoopRef = useRef(false)
   const musicEndedRef = useRef<(() => void) | null>(null)
 
+  // The host's shared-video audio, published as its own LiveKit track so the
+  // server-side egress records it into the replay (exactly like background
+  // music). Followers do NOT play this track — they already hear their own
+  // synced local copy — so it exists purely for the recording. See the
+  // TrackSubscribed guard that skips VIDEO_AUDIO_TRACK for everyone else.
+  const videoAudioTrackRef = useRef<LocalAudioTrack | null>(null)
+
   // Host-side session recording. We record a COMPOSITE of every participant —
   // a canvas grid of all camera tiles plus a mix of everyone's audio — exactly
   // like viewers saw it live, via LiveCompositor. The finished blob is handed to
@@ -562,6 +574,14 @@ export function useLiveVideo({
       }
       musicTrackRef.current = null
     }
+    if (videoAudioTrackRef.current) {
+      try {
+        videoAudioTrackRef.current.stop()
+      } catch {
+        /* already stopped */
+      }
+      videoAudioTrackRef.current = null
+    }
     if (musicElRef.current) musicElRef.current.pause()
     audioElsRef.current.forEach((el) => el.remove())
     audioElsRef.current.clear()
@@ -653,6 +673,9 @@ export function useLiveVideo({
           refreshPeers(room)
         }
         if (track.kind === Track.Kind.Audio) {
+          // The host's shared-video audio is recorded server-side; nobody plays
+          // it locally (they hear their own synced copy), so don't attach it.
+          if (_pub.trackName === VIDEO_AUDIO_TRACK) return
           attachRemoteAudio(track, p)
         }
       })
@@ -751,7 +774,8 @@ export function useLiveVideo({
     room.remoteParticipants.forEach((p) => {
       attachPeerVideo(p.identity)
       p.trackPublications.forEach((pub) => {
-        if (pub.kind === Track.Kind.Audio && pub.track) attachRemoteAudio(pub.track, p)
+        if (pub.kind === Track.Kind.Audio && pub.track && pub.trackName !== VIDEO_AUDIO_TRACK)
+          attachRemoteAudio(pub.track, p)
       })
     })
     refreshPeers(room)
@@ -1103,6 +1127,51 @@ export function useLiveVideo({
   }, [])
 
   /**
+   * Publish the host's shared-video audio (from a Web Audio MediaStreamTrack the
+   * panel taps off its <video>) as a dedicated LiveKit track, so the egress
+   * recording captures it into the replay — the same mechanism as background
+   * music. Idempotent per source: re-publishing swaps the track. Followers never
+   * play it (see VIDEO_AUDIO_TRACK guard); it exists purely for the recording.
+   */
+  const publishVideoAudioTrack = useCallback(async (mediaTrack: MediaStreamTrack) => {
+    const room = roomRef.current
+    if (!room) return
+    // Replace any previous video-audio track first.
+    if (videoAudioTrackRef.current) {
+      try {
+        await room.localParticipant.unpublishTrack(videoAudioTrackRef.current)
+      } catch {
+        /* already gone */
+      }
+      videoAudioTrackRef.current.stop()
+      videoAudioTrackRef.current = null
+    }
+    const localTrack = new LocalAudioTrack(mediaTrack)
+    await room.localParticipant.publishTrack(localTrack, {
+      name: VIDEO_AUDIO_TRACK,
+      audioPreset: AudioPresets.musicHighQualityStereo,
+      forceStereo: true,
+      dtx: false,
+      red: false,
+    })
+    videoAudioTrackRef.current = localTrack
+  }, [])
+
+  /** Unpublish the shared-video audio track (host stopped/replaced the video). */
+  const unpublishVideoAudioTrack = useCallback(async () => {
+    const room = roomRef.current
+    if (videoAudioTrackRef.current && room) {
+      try {
+        await room.localParticipant.unpublishTrack(videoAudioTrackRef.current)
+      } catch {
+        /* already gone */
+      }
+      videoAudioTrackRef.current.stop()
+      videoAudioTrackRef.current = null
+    }
+  }, [])
+
+  /**
    * Begin recording the host's session (idempotent). Records a COMPOSITE of the
    * whole call — every participant's camera tile in a grid, plus a mix of
    * everyone's audio — so the saved replay matches what viewers saw live rather
@@ -1337,6 +1406,8 @@ export function useLiveVideo({
     setMusicLoop,
     setMusicEndedHandler,
     stopMusic,
+    publishVideoAudioTrack,
+    unpublishVideoAudioTrack,
     stopRecording,
     disconnect: cleanup,
   }

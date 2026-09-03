@@ -25,9 +25,11 @@ import {
 import { useLiveResources } from "@/components/live/resource/resource-context"
 import {
   controlVideo,
+  getHostVideoState,
   getVideoState,
   recognizeYouTube,
   setVideoSource,
+  setVideoVolume,
   type LiveVideoState,
 } from "@/app/actions/live-video-resource"
 import { uploadMedia } from "@/lib/upload-media"
@@ -61,9 +63,12 @@ export function MiniVideoPanel() {
   const roomName = descriptor?.roomName ?? null
   const isHost = descriptor?.isHost ?? false
 
+  // Host reads a wider view: a video they've stopped is still returned (with
+  // active=false) so they can play it again or replace it. Participants only
+  // ever see an active video.
   const { data, mutate } = useSWR<LiveVideoState>(
-    roomName ? ["live-video", roomName] : null,
-    () => getVideoState(roomName as string),
+    roomName ? ["live-video", roomName, isHost] : null,
+    () => (isHost ? getHostVideoState(roomName as string) : getVideoState(roomName as string)),
     { refreshInterval: 1200, revalidateOnFocus: false },
   )
 
@@ -78,12 +83,25 @@ export function MiniVideoPanel() {
 
   if (!roomName) return null
 
-  // No active video: host sees the loader, everyone else an empty state.
+  // Nothing loaded at all: host sees the loader, everyone else an empty state.
   if (!data) {
     return isHost ? (
       <HostLoader roomName={roomName} onLoaded={() => mutate()} />
     ) : (
       <EmptyState />
+    )
+  }
+
+  // Host has stopped the video (source retained): show the resume/replace view
+  // rather than the live player, so the host can play it again for everyone.
+  if (isHost && !data.active) {
+    return (
+      <HostStoppedView
+        state={data}
+        roomName={roomName}
+        onResumed={() => mutate()}
+        onReplace={() => mutate(null)}
+      />
     )
   }
 
@@ -94,7 +112,15 @@ export function MiniVideoPanel() {
       ) : (
         <UploadStage key={data.url ?? "up"} state={data} isHost={isHost} roomName={roomName} />
       )}
-      {isHost && <HostFooter roomName={roomName} onStopped={() => mutate()} onReplace={() => mutate(null)} />}
+      {isHost && (
+        <HostFooter
+          roomName={roomName}
+          volume={data.volume}
+          onStopped={() => mutate()}
+          onReplace={() => mutate(null)}
+          onVolume={(v) => mutate((prev) => (prev ? { ...prev, volume: v } : prev), { revalidate: false })}
+        />
+      )}
     </div>
   )
 }
@@ -190,6 +216,54 @@ function UploadStage({ state, isHost, roomName }: { state: ActiveState; isHost: 
     }
     setReady(true)
   }, [])
+
+  // Apply the host's shared room volume to this local <video> for everyone.
+  // Mute (follower autoplay / one-tap unmute) is independent and still wins.
+  useEffect(() => {
+    const el = videoRef.current
+    if (el) el.volume = Math.min(1, Math.max(0, state.volume / 100))
+  }, [state.volume])
+
+  // HOST only: tap this <video>'s audio and publish it as a LiveKit track so the
+  // egress recording captures it into the replay (just like background music).
+  // Followers never play this track — they hear their own synced local copy —
+  // so it never doubles the audio live. captureStream taps without rerouting the
+  // element's own output, so the host keeps hearing it normally. Uploaded files
+  // only: a YouTube iframe's audio is cross-origin and cannot be captured.
+  const { publishVideoAudio, unpublishVideoAudio } = useLiveResources()
+  useEffect(() => {
+    if (!isHost) return
+    const el = videoRef.current as
+      | (HTMLVideoElement & { captureStream?: () => MediaStream; mozCaptureStream?: () => MediaStream })
+      | null
+    if (!el) return
+    const capture = el.captureStream?.bind(el) ?? el.mozCaptureStream?.bind(el)
+    if (!capture) return // Browser can't tap element audio; recording just omits it.
+
+    let published = false
+    const tryPublish = () => {
+      if (published) return
+      let stream: MediaStream
+      try {
+        stream = capture()
+      } catch {
+        return
+      }
+      const [audio] = stream.getAudioTracks()
+      if (!audio) return // Audio not decoded yet; a later event will retry.
+      published = true
+      void publishVideoAudio(audio)
+    }
+
+    if (el.readyState >= 2) tryPublish()
+    el.addEventListener("loadeddata", tryPublish)
+    el.addEventListener("playing", tryPublish)
+    return () => {
+      el.removeEventListener("loadeddata", tryPublish)
+      el.removeEventListener("playing", tryPublish)
+      if (published) void unpublishVideoAudio()
+    }
+  }, [isHost, publishVideoAudio, unpublishVideoAudio])
 
   // Local UI tracking (drives the scrubber + play button for everyone).
   useEffect(() => {
@@ -381,6 +455,16 @@ function YouTubeStage({ state, isHost, roomName }: { state: ActiveState; isHost:
     handleRef.current?.setMuted(muted)
   }, [muted])
 
+  // Apply the host's shared room volume to the YouTube player for everyone
+  // (0–100 maps directly to the YT API). Mute still wins independently.
+  useEffect(() => {
+    try {
+      playerRef.current?.setVolume?.(Math.min(100, Math.max(0, state.volume)))
+    } catch {
+      /* player not ready yet; onReady + this effect will re-run */
+    }
+  }, [state.volume, ready])
+
   // Host re-attach without rebroadcasting the starting position.
   useEffect(() => {
     if (!isHost || !ready || initedRef.current) return
@@ -543,35 +627,161 @@ function StageChrome({
 
 function HostFooter({
   roomName,
+  volume,
   onStopped,
   onReplace,
+  onVolume,
 }: {
   roomName: string
+  volume: number
   onStopped: () => void
   onReplace: () => void
+  onVolume: (v: number) => void
 }) {
   const [stopping, setStopping] = useState(false)
   return (
-    <div className="mt-auto flex items-center gap-2 border-t border-white/8 px-3 py-2.5">
+    <div className="mt-auto flex flex-col gap-2 border-t border-white/8 px-3 py-2.5">
+      <VolumeSlider roomName={roomName} volume={volume} onVolume={onVolume} />
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onReplace}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-white/8 py-2 text-xs font-semibold text-white/80 transition-colors hover:bg-white/15 hover:text-white"
+        >
+          <RefreshCw className="size-3.5" /> Replace
+        </button>
+        <button
+          type="button"
+          disabled={stopping}
+          onClick={async () => {
+            setStopping(true)
+            await controlVideo({ roomName, action: "stop" })
+            onStopped()
+          }}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-red-500/15 py-2 text-xs font-semibold text-red-300 transition-colors hover:bg-red-500/25 disabled:opacity-50"
+        >
+          {stopping ? <Loader2 className="size-3.5 animate-spin" /> : <Square className="size-3.5" />} Stop for everyone
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Host's room-wide volume control. Applies optimistically to the local player
+ * via `onVolume` on every input, and persists the shared value (debounced) so
+ * every participant's player follows. Controls what the host and everyone hear.
+ */
+function VolumeSlider({
+  roomName,
+  volume,
+  onVolume,
+}: {
+  roomName: string
+  volume: number
+  onVolume: (v: number) => void
+}) {
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const muted = volume === 0
+  return (
+    <div className="flex items-center gap-2">
       <button
         type="button"
-        onClick={onReplace}
-        className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-white/8 py-2 text-xs font-semibold text-white/80 transition-colors hover:bg-white/15 hover:text-white"
-      >
-        <RefreshCw className="size-3.5" /> Replace
-      </button>
-      <button
-        type="button"
-        disabled={stopping}
-        onClick={async () => {
-          setStopping(true)
-          await controlVideo({ roomName, action: "stop" })
-          onStopped()
+        aria-label={muted ? "Unmute for everyone" : "Mute for everyone"}
+        onClick={() => {
+          const next = muted ? 100 : 0
+          onVolume(next)
+          void setVideoVolume({ roomName, volume: next })
         }}
-        className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-red-500/15 py-2 text-xs font-semibold text-red-300 transition-colors hover:bg-red-500/25 disabled:opacity-50"
+        className="flex size-8 shrink-0 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white"
       >
-        {stopping ? <Loader2 className="size-3.5 animate-spin" /> : <Square className="size-3.5" />} Stop for everyone
+        {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
       </button>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        value={volume}
+        aria-label="Volume for everyone"
+        onChange={(e) => {
+          const v = Number(e.target.value)
+          onVolume(v) // optimistic: host hears it immediately
+          if (saveTimer.current) clearTimeout(saveTimer.current)
+          saveTimer.current = setTimeout(() => void setVideoVolume({ roomName, volume: v }), 180)
+        }}
+        className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-white/15 accent-primary"
+      />
+      <span className="w-8 shrink-0 text-right text-xs tabular-nums text-white/55">{volume}</span>
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Host stopped view: resume for everyone, or replace                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Shown to the host after they Stop a video. The source stays loaded, so the
+ * host can play it again for the whole room or replace it with a different one.
+ * Participants see nothing during this state (their panel closes on stop).
+ */
+function HostStoppedView({
+  state,
+  roomName,
+  onResumed,
+  onReplace,
+}: {
+  state: ActiveState
+  roomName: string
+  onResumed: () => void
+  onReplace: () => void
+}) {
+  const [resuming, setResuming] = useState(false)
+  return (
+    <div className="flex h-full flex-col">
+      <div className="relative aspect-video w-full shrink-0 overflow-hidden bg-black">
+        {state.thumbnail ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={state.thumbnail || "/placeholder.svg"} alt="" className="size-full object-cover opacity-70" />
+        ) : (
+          <div className="grid size-full place-items-center text-white/30">
+            <Film className="size-10" />
+          </div>
+        )}
+        <div className="absolute inset-0 grid place-items-center bg-black/50">
+          <span className="rounded-full bg-black/60 px-3 py-1 text-xs font-semibold text-white/80 ring-1 ring-white/15">
+            Stopped
+          </span>
+        </div>
+      </div>
+
+      <div className="flex flex-1 flex-col gap-3 px-4 py-4">
+        {state.title && <p className="truncate text-sm font-semibold text-white">{state.title}</p>}
+        <p className="text-xs text-white/45">
+          This video is stopped for everyone. Play it again to resume watching together, or replace it.
+        </p>
+        <div className="mt-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onReplace}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-white/8 py-2.5 text-xs font-semibold text-white/80 transition-colors hover:bg-white/15 hover:text-white"
+          >
+            <RefreshCw className="size-3.5" /> Replace
+          </button>
+          <button
+            type="button"
+            disabled={resuming}
+            onClick={async () => {
+              setResuming(true)
+              await controlVideo({ roomName, action: "play", positionSec: state.positionSec })
+              onResumed()
+            }}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-primary py-2.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+          >
+            {resuming ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />} Play for everyone
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

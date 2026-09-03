@@ -35,6 +35,12 @@ export type LiveDescriptor = {
 
 type ChatSender = (text: string) => void | Promise<void>
 
+// How the host console publishes/unpublishes the shared-video audio track.
+export type VideoAudioSink = {
+  publish: (track: MediaStreamTrack) => Promise<void>
+  unpublish: () => Promise<void>
+}
+
 type ResourceCtx = {
   descriptor: LiveDescriptor
   activePanel: ResourcePanelId | null
@@ -50,6 +56,14 @@ type ResourceCtx = {
   registerChatSender: (fn: ChatSender) => () => void
   shareToChat: (text: string) => Promise<boolean>
   canShareToChat: boolean
+  // The host console (which owns the LiveKit room) registers how to publish the
+  // shared-video audio so the egress recording captures it. The video panel
+  // calls publishVideoAudio with a Web Audio track tapped off its <video>, and
+  // unpublishVideoAudio when the video stops/replaces. No-ops when unregistered
+  // (e.g. the viewer side, which never publishes).
+  registerVideoAudioSink: (sink: VideoAudioSink) => () => void
+  publishVideoAudio: (track: MediaStreamTrack) => Promise<void>
+  unpublishVideoAudio: () => Promise<void>
   // While a host is actively PLAYING a shared video, the panel is locked for
   // participants: they can't close it, minimise it to the drawer, or switch to
   // another resource — the room watches together. Dragging the card and
@@ -129,6 +143,20 @@ export function ResourceProvider({
     return true
   }, [])
 
+  const videoAudioSinkRef = useRef<VideoAudioSink | null>(null)
+  const registerVideoAudioSink = useCallback((sink: VideoAudioSink) => {
+    videoAudioSinkRef.current = sink
+    return () => {
+      if (videoAudioSinkRef.current === sink) videoAudioSinkRef.current = null
+    }
+  }, [])
+  const publishVideoAudio = useCallback(async (track: MediaStreamTrack) => {
+    await videoAudioSinkRef.current?.publish(track)
+  }, [])
+  const unpublishVideoAudio = useCallback(async () => {
+    await videoAudioSinkRef.current?.unpublish()
+  }, [])
+
   const value = useMemo<ResourceCtx>(
     () => ({
       descriptor,
@@ -142,6 +170,9 @@ export function ResourceProvider({
       registerChatSender,
       shareToChat,
       canShareToChat: senderCount > 0,
+      registerVideoAudioSink,
+      publishVideoAudio,
+      unpublishVideoAudio,
       videoLocked,
       setVideoLocked,
     }),
@@ -157,6 +188,9 @@ export function ResourceProvider({
       registerChatSender,
       shareToChat,
       senderCount,
+      registerVideoAudioSink,
+      publishVideoAudio,
+      unpublishVideoAudio,
       videoLocked,
     ],
   )
