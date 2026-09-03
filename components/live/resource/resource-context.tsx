@@ -50,6 +50,14 @@ type ResourceCtx = {
   registerChatSender: (fn: ChatSender) => () => void
   shareToChat: (text: string) => Promise<boolean>
   canShareToChat: boolean
+  // While a host is actively PLAYING a shared video, the panel is locked for
+  // participants: they can't close it, minimise it to the drawer, or switch to
+  // another resource — the room watches together. Dragging the card and
+  // minimising the live session itself stay allowed. The video panel is the
+  // single source of truth and toggles this; the context enforces it centrally
+  // so every entry point (buttons, switcher, drawer) obeys the same rule.
+  videoLocked: boolean
+  setVideoLocked: (v: boolean) => void
 }
 
 const Ctx = createContext<ResourceCtx | null>(null)
@@ -76,18 +84,32 @@ export function ResourceProvider({
   const [payload, setPayload] = useState<PanelPayload>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [senderCount, setSenderCount] = useState(0)
+  const [videoLocked, setVideoLocked] = useState(false)
   const senderRef = useRef<ChatSender | null>(null)
+  // Read in the stable callbacks below so they always see the current lock
+  // without being torn down and recreated when it flips.
+  const lockedRef = useRef(false)
+  lockedRef.current = videoLocked
 
-  const openDrawer = useCallback(() => setDrawerOpen(true), [])
+  // Opening the drawer is a form of minimising the panel, so it's blocked while
+  // the video is locked.
+  const openDrawer = useCallback(() => {
+    if (lockedRef.current) return
+    setDrawerOpen(true)
+  }, [])
   const closeDrawer = useCallback(() => setDrawerOpen(false), [])
 
   const openPanel = useCallback((id: ResourcePanelId, p: PanelPayload = null) => {
+    // While locked, the only permissible target is the video panel itself;
+    // switching to any other resource is blocked.
+    if (lockedRef.current && id !== "video") return
     setPayload(p)
     setActivePanel(id)
     setDrawerOpen(false)
   }, [])
 
   const closePanel = useCallback(() => {
+    if (lockedRef.current) return
     setActivePanel(null)
     setPayload(null)
   }, [])
@@ -120,6 +142,8 @@ export function ResourceProvider({
       registerChatSender,
       shareToChat,
       canShareToChat: senderCount > 0,
+      videoLocked,
+      setVideoLocked,
     }),
     [
       descriptor,
@@ -133,6 +157,7 @@ export function ResourceProvider({
       registerChatSender,
       shareToChat,
       senderCount,
+      videoLocked,
     ],
   )
 

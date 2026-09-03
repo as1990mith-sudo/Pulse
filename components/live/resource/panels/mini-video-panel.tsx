@@ -57,7 +57,7 @@ type PlayerHandle = {
 }
 
 export function MiniVideoPanel() {
-  const { descriptor } = useLiveResources()
+  const { descriptor, setVideoLocked } = useLiveResources()
   const roomName = descriptor?.roomName ?? null
   const isHost = descriptor?.isHost ?? false
 
@@ -66,6 +66,15 @@ export function MiniVideoPanel() {
     () => getVideoState(roomName as string),
     { refreshInterval: 1200, revalidateOnFocus: false },
   )
+
+  // Lock the panel for participants while the host is actively playing: no
+  // closing, minimising, or switching tabs (enforced centrally in the context).
+  // The lock clears the moment playback stops/pauses or the panel unmounts.
+  const locked = !isHost && !!data?.active && !!data?.playing
+  useEffect(() => {
+    setVideoLocked(locked)
+    return () => setVideoLocked(false)
+  }, [locked, setVideoLocked])
 
   if (!roomName) return null
 

@@ -50,7 +50,7 @@ export function MiniPanelShell({
   // Ref to the layer element, so the panel can't be dragged off-screen.
   constraintsRef: React.RefObject<HTMLDivElement | null>
 }) {
-  const { activePanel, openPanel, closePanel, openDrawer } = useLiveResources()
+  const { activePanel, openPanel, closePanel, openDrawer, videoLocked } = useLiveResources()
   const dragControls = useDragControls()
   const panelRef = useRef<HTMLDivElement>(null)
   // "Expand" grows the floating card ~20% larger (both height and width) so more
@@ -117,25 +117,34 @@ export function MiniPanelShell({
           >
             {expanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
           </button>
-          <button
-            type="button"
-            onClick={openDrawer}
-            aria-label="Minimize to resources"
-            className="flex size-8 items-center justify-center rounded-full bg-white/8 text-white/70 transition-colors hover:bg-white/15 hover:text-white"
-          >
-            <Minus className="size-4" />
-          </button>
-          <button
-            type="button"
-            onClick={closePanel}
-            aria-label="Close panel"
-            className="flex size-8 items-center justify-center rounded-full bg-white/8 text-white/70 transition-colors hover:bg-white/15 hover:text-white"
-          >
-            <X className="size-4" />
-          </button>
+          {/* Minimise + close are hidden while a host-driven video is playing —
+              participants must stay on the shared video. Expand and drag remain,
+              and the live session itself can still be minimised elsewhere. */}
+          {!videoLocked && (
+            <>
+              <button
+                type="button"
+                onClick={openDrawer}
+                aria-label="Minimize to resources"
+                className="flex size-8 items-center justify-center rounded-full bg-white/8 text-white/70 transition-colors hover:bg-white/15 hover:text-white"
+              >
+                <Minus className="size-4" />
+              </button>
+              <button
+                type="button"
+                onClick={closePanel}
+                aria-label="Close panel"
+                className="flex size-8 items-center justify-center rounded-full bg-white/8 text-white/70 transition-colors hover:bg-white/15 hover:text-white"
+              >
+                <X className="size-4" />
+              </button>
+            </>
+          )}
         </div>
 
-        {/* Quick switcher — jump to another resource without leaving the live */}
+        {/* Quick switcher — jump to another resource without leaving the live.
+            Hidden while locked: no switching tabs during a shared video. */}
+        {!videoLocked && (
         <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
           {SWITCHER.map((s) => {
             const SwIcon = s.icon
@@ -160,6 +169,7 @@ export function MiniPanelShell({
             )
           })}
         </div>
+        )}
       </div>
 
       {/* Body */}

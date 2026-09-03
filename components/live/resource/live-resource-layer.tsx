@@ -142,7 +142,7 @@ const DOCK_SWITCHER: { id: ResourcePanelId; icon: LucideIcon; label: string }[] 
  * Returns nothing until a panel is open, so it takes no space when idle.
  */
 export function DesktopResourceDock() {
-  const { activePanel, openPanel, closePanel } = useLiveResources()
+  const { activePanel, openPanel, closePanel, videoLocked } = useLiveResources()
   if (!activePanel) return null
   const meta = PANEL_META[activePanel]
   const Icon = meta.icon
@@ -158,15 +158,21 @@ export function DesktopResourceDock() {
             <Icon className="size-[18px]" strokeWidth={2.1} />
           </span>
           <h2 className="min-w-0 flex-1 truncate text-[15px] font-bold leading-tight text-white">{meta.title}</h2>
-          <button
-            type="button"
-            onClick={closePanel}
-            aria-label="Close panel"
-            className="flex size-8 items-center justify-center rounded-full bg-white/8 text-white/70 transition-colors hover:bg-white/15 hover:text-white"
-          >
-            <X className="size-4" />
-          </button>
+          {/* Close is hidden while a host-driven video is playing — participants
+              stay on the shared video. */}
+          {!videoLocked && (
+            <button
+              type="button"
+              onClick={closePanel}
+              aria-label="Close panel"
+              className="flex size-8 items-center justify-center rounded-full bg-white/8 text-white/70 transition-colors hover:bg-white/15 hover:text-white"
+            >
+              <X className="size-4" />
+            </button>
+          )}
         </div>
+        {/* Switcher hidden while locked: no switching tabs during a shared video. */}
+        {!videoLocked && (
         <div className="flex items-center gap-1">
           {DOCK_SWITCHER.map((s) => {
             const SwIcon = s.icon
@@ -190,6 +196,7 @@ export function DesktopResourceDock() {
             )
           })}
         </div>
+        )}
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
         <PanelBody id={activePanel} />
