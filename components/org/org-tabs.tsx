@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { createPortal } from "react-dom"
 
 import { useUrlState } from "@/lib/navigation/use-url-state"
 import { useOverlayHistory } from "@/lib/navigation/use-overlay-history"
@@ -182,6 +183,17 @@ export function OrgTabs({
   // made this overlay feel stuck and scrolled the screen behind instead.
   useBodyScrollLock(catalogueOpen)
 
+  // Portals need the DOM, so only render into document.body after mount
+  // (SSR-safe). The Catalogue overlay MUST be portaled to <body>: rendered
+  // inline here it sits deep in the org-page subtree, where a transformed /
+  // `contain` ancestor becomes the containing block for its `position: fixed`
+  // box. That trap is why its inner list wedged and wouldn't touch-scroll on
+  // iOS while the identical scroller pattern works in body-portaled overlays
+  // (episode player, community help, home switch). Portaling frees the fixed
+  // box to the viewport and the scroll works.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+
   function selectTab(key: TabKey) {
     // Catalogue isn't an inline tab — it opens the full-screen overlay and
     // leaves the underlying tab (and its URL) exactly where it was.
@@ -302,7 +314,9 @@ export function OrgTabs({
       {/* Immersive Catalogue overlay — same layout as the individual-profile
           Catalogue: a back arrow + title header (owner add tool top-right) and
           a scrollable body with the toggle/search/rows. */}
-      {catalogueOpen && (
+      {catalogueOpen &&
+        mounted &&
+        createPortal(
         <div className="fixed left-0 top-0 z-50 flex h-[100dvh] w-screen flex-col bg-background animate-in fade-in slide-in-from-bottom-2 duration-300">
           <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border/60 bg-background/80 px-4 py-3 backdrop-blur-xl">
             <button
@@ -327,14 +341,12 @@ export function OrgTabs({
             // instead of scrolling inside it, and the touch gesture falls through
             // to the page behind (the "stuck / scrolls the screen behind" bug on
             // both iOS and Android). Bounding it here makes overflow-y-auto scroll
-            // internally, matching the other working overlays.
-            //
-            // iOS fix: without an explicit momentum + compositing hint this
-            // fixed-overlay scroller would wedge on iOS (Safari drops the
-            // scrollable layer and the list becomes stuck/unscrollable).
-            // `transform-gpu [contain:paint] [-webkit-overflow-scrolling:touch]`
-            // is the same toolkit that unstuck the community feed.
-            className="min-h-0 flex-1 transform-gpu overflow-y-auto overscroll-contain px-4 py-4 [contain:paint] [-webkit-overflow-scrolling:touch] sm:px-6"
+            // internally, matching the other working overlays. Momentum +
+            // overscroll-contain come from the global `[data-scroll]` rule in
+            // globals.css, so this stays the exact plain pattern every working
+            // body-portaled overlay uses — no `transform`/`contain` hacks, which
+            // themselves break touch-scroll on iOS.
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6"
           >
             <div className="mx-auto w-full max-w-4xl">
               {/* Redesigned Upload: Materials + Playlists (externally-hosted
@@ -358,8 +370,9 @@ export function OrgTabs({
               />
             </div>
           </div>
-        </div>
-      )}
+        </div>,
+          document.body,
+        )}
     </section>
   )
 }
