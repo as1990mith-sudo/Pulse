@@ -2,6 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { ensureCtxRunning } from "@/lib/audio-context"
+import {
+  routeRemoteAudioToSpeaker,
+  applyRemoteAudioMuted,
+  releaseRemoteAudioRoute,
+  resumeSpeakerPlayout,
+} from "@/lib/android-speaker-route"
 import { applyAudioRouting, prepareAudioRouting, releaseAudioRouting } from "@/lib/audio-routing"
 import {
   AudioPresets,
@@ -343,7 +349,10 @@ export function useLiveAudio() {
     fxGainRef.current = null
     void fxCtxRef.current?.close().catch(() => {})
     fxCtxRef.current = null
-    audioElsRef.current.forEach((el) => el.remove())
+    audioElsRef.current.forEach((el) => {
+      releaseRemoteAudioRoute(el)
+      el.remove()
+    })
     audioElsRef.current.clear()
   }, [])
 
@@ -407,13 +416,19 @@ export function useLiveAudio() {
               // element first, so one speaker == one live playback element.
               track.detach().forEach((prev) => prev.remove())
               const stale = audioElsRef.current.get(participant.identity)
-              if (stale) stale.remove()
+              if (stale) {
+                releaseRemoteAudioRoute(stale)
+                stale.remove()
+              }
               const el = track.attach()
               el.autoplay = true
-              // Honour the listener's current mute preference for late joiners.
-              el.muted = listenerMutedRef.current
               audioElsRef.current.set(participant.identity, el)
               document.body.appendChild(el)
+              // On Android, reroute playback through the loudspeaker (no-op
+              // elsewhere). Then honour the listener's current mute preference —
+              // via the graph when routed, or the element otherwise.
+              routeRemoteAudioToSpeaker(el)
+              applyRemoteAudioMuted(el, listenerMutedRef.current)
 
               // If a recording is in progress, fold this speaker in so late
               // joiners are captured too.
@@ -432,6 +447,8 @@ export function useLiveAudio() {
             }
           })
           .on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack, _pub, participant: RemoteParticipant) => {
+            const routed = audioElsRef.current.get(participant.identity)
+            if (routed) releaseRemoteAudioRoute(routed)
             track.detach().forEach((el) => el.remove())
             audioElsRef.current.delete(participant.identity)
             // Drop this speaker from the recording bus when they leave/unpublish.
@@ -599,7 +616,7 @@ export function useLiveAudio() {
   const setListenerMuted = useCallback((muted: boolean) => {
     listenerMutedRef.current = muted
     audioElsRef.current.forEach((el) => {
-      el.muted = muted
+      applyRemoteAudioMuted(el, muted)
     })
   }, [])
 
@@ -616,9 +633,11 @@ export function useLiveAudio() {
     } catch {
       // ignore
     }
+    // A user gesture is exactly what a suspended Android playout context needs.
+    resumeSpeakerPlayout()
     audioElsRef.current.forEach((el) => {
       // Unblocking playback must not override an explicit listener mute.
-      el.muted = listenerMutedRef.current
+      applyRemoteAudioMuted(el, listenerMutedRef.current)
       void el.play().catch(() => {})
     })
     // This tap is a user gesture, which is exactly what a suspended or
@@ -998,8 +1017,9 @@ export function useLiveAudio() {
       const room = roomRef.current
       if (!room) return
       void room.startAudio().catch(() => {})
+      resumeSpeakerPlayout()
       audioElsRef.current.forEach((el) => {
-        el.muted = listenerMutedRef.current
+        applyRemoteAudioMuted(el, listenerMutedRef.current)
         if (el.paused) void el.play().catch(() => {})
       })
       if (musicCtxRef.current) void ensureCtxRunning(musicCtxRef.current)
@@ -1018,10 +1038,13 @@ export function useLiveAudio() {
       intentionalDisconnectRef.current = true
       onDisconnectedRef.current = null
       const room = roomRef.current
-      if (room) void room.disconnect()
-      audioElsRef.current.forEach((el) => el.remove())
-      audioElsRef.current.clear()
-      roomRef.current = null
+    if (room) void room.disconnect()
+    audioElsRef.current.forEach((el) => {
+      releaseRemoteAudioRoute(el)
+      el.remove()
+    })
+    audioElsRef.current.clear()
+    roomRef.current = null
       // Navigating away is the common way to leave a live, and it bypasses
       // disconnect() entirely — so the session has to be released here too or
       // the muffled-playback aftermath survives the exit.

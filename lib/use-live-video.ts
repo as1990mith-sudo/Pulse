@@ -4,6 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { ensureCtxRunning } from "@/lib/audio-context"
 import { prepareAudioRouting, applyAudioRouting, releaseAudioRouting } from "@/lib/audio-routing"
 import {
+  routeRemoteAudioToSpeaker,
+  releaseRemoteAudioRoute,
+  resumeSpeakerPlayout,
+} from "@/lib/android-speaker-route"
+import {
   AudioPresets,
   LocalAudioTrack,
   Room,
@@ -514,11 +519,16 @@ export function useLiveVideo({
     const key = participant.identity + ":" + track.sid
     track.detach().forEach((prev) => prev.remove())
     const stale = audioElsRef.current.get(key)
-    if (stale) stale.remove()
+    if (stale) {
+      releaseRemoteAudioRoute(stale)
+      stale.remove()
+    }
     const el = track.attach()
     el.autoplay = true
     audioElsRef.current.set(key, el)
     document.body.appendChild(el)
+    // On Android, force this remote voice to the loudspeaker (no-op elsewhere).
+    routeRemoteAudioToSpeaker(el)
   }
 
   // Acquire a screen wake lock (idempotent). No-op where unsupported; recording
@@ -584,7 +594,10 @@ export function useLiveVideo({
       videoAudioTrackRef.current = null
     }
     if (musicElRef.current) musicElRef.current.pause()
-    audioElsRef.current.forEach((el) => el.remove())
+    audioElsRef.current.forEach((el) => {
+      releaseRemoteAudioRoute(el)
+      el.remove()
+    })
     audioElsRef.current.clear()
     // Restore the neutral, high-fidelity output profile so ordinary media played
     // after leaving the live isn't stuck muffled in the mic-oriented session.
@@ -684,6 +697,8 @@ export function useLiveVideo({
         }
       })
       .on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack, _pub, p: RemoteParticipant) => {
+        const routed = audioElsRef.current.get(p.identity + ":" + track.sid)
+        if (routed) releaseRemoteAudioRoute(routed)
         track.detach().forEach((el) => el.remove())
         audioElsRef.current.delete(p.identity + ":" + track.sid)
         if (track.kind === Track.Kind.Video) refreshPeers(room)
@@ -996,6 +1011,8 @@ export function useLiveVideo({
     } catch {
       /* ignore */
     }
+    // A user gesture is what a suspended Android playout context needs.
+    resumeSpeakerPlayout()
     audioElsRef.current.forEach((el) => void el.play().catch(() => {}))
     // This tap is a user gesture, exactly what a suspended or OS-interrupted
     // AudioContext needs to restart, so recover local music monitoring here too
@@ -1382,6 +1399,7 @@ export function useLiveVideo({
       const room = roomRef.current
       if (!room) return
       void room.startAudio().catch(() => {})
+      resumeSpeakerPlayout()
       audioElsRef.current.forEach((el) => {
         if (el.paused) void el.play().catch(() => {})
       })
