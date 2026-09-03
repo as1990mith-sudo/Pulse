@@ -680,7 +680,11 @@ export function LiveVideoViewer({
               Fills the stage above the tiles; the self-view thumbnail continues
               below so a called-in viewer still sees their own camera. */}
           {remoteProjection && (
-            <div className="absolute inset-0 z-20">
+            // Pad the top by the (always-visible) header height so a SHARED
+            // SCREEN's content letterboxes BELOW the header instead of being
+            // hidden behind it. ProjectionStage centers with object-contain, so
+            // reserving the header band keeps the whole shared surface visible.
+            <div className="absolute inset-0 z-20 pt-[calc(env(safe-area-inset-top)+4rem)]">
               <ProjectionStage
                 kind="screen"
                 rounded={false}

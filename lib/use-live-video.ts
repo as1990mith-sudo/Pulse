@@ -1347,8 +1347,32 @@ export function useLiveVideo({
     try {
       await room.localParticipant.setScreenShareEnabled(
         true,
-        { audio: true, resolution: ScreenSharePresets.h1080fps15.resolution },
-        { name: "screen" },
+        {
+          // Capture the system/tab audio as clean, full-bandwidth MEDIA — not
+          // voice. Passing `audio: true` lets the browser apply mic-oriented DSP
+          // (echo cancellation, noise suppression, auto-gain) to the captured
+          // audio, which pumps, thins and muffles music/media. This audio never
+          // comes from a mic, so there's no echo to cancel; disabling DSP and
+          // asking for stereo at 48 kHz preserves the source quality.
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+            channelCount: 2,
+            sampleRate: 48000,
+          },
+          resolution: ScreenSharePresets.h1080fps15.resolution,
+        },
+        {
+          name: "screen",
+          // Publish the shared audio at music-grade stereo bitrate (128 kbps)
+          // instead of the default low speech bitrate, and keep it continuous
+          // (no DTX gaps) so media/music comes through clean.
+          audioPreset: AudioPresets.musicHighQualityStereo,
+          dtx: false,
+          red: false,
+          forceStereo: true,
+        },
       )
       setScreenShareOn(true)
       return true
