@@ -661,7 +661,14 @@ export function useLiveAudio() {
     const room = roomRef.current
     if (!room) return
 
-    const ctx = musicCtxRef.current ?? new AudioContext()
+    // Pin to 48 kHz. On Android, capturing the mic with echoCancellation/
+    // voiceIsolation switches the OS into voice-communication mode, where a bare
+    // `new AudioContext()` adopts the hardware's degraded ~16 kHz voice rate — so
+    // the whole music graph (decode → studio chain → the published
+    // MediaStreamDestination) would run at 16 kHz and reach listeners thin and
+    // muffled. Forcing 48 kHz keeps the published music full-bandwidth
+    // regardless of the mic's audio-session mode (matches the video Live path).
+    const ctx = musicCtxRef.current ?? new AudioContext({ sampleRate: 48000 })
     musicCtxRef.current = ctx
     await ensureCtxRunning(ctx)
 
@@ -857,7 +864,9 @@ export function useLiveAudio() {
     const room = roomRef.current
     if (!room) return
 
-    const ctx = fxCtxRef.current ?? new AudioContext()
+    // 48 kHz for the same reason as the music context: a bare AudioContext can
+    // lock to Android's ~16 kHz voice rate while the mic holds the audio session.
+    const ctx = fxCtxRef.current ?? new AudioContext({ sampleRate: 48000 })
     fxCtxRef.current = ctx
     await ensureCtxRunning(ctx)
 
@@ -905,7 +914,9 @@ export function useLiveAudio() {
     if (typeof MediaRecorder === "undefined") return
 
     try {
-      const ctx = new AudioContext()
+      // 48 kHz so the recorded mix (mic + music) isn't captured at Android's
+      // degraded ~16 kHz voice rate when the mic holds the audio session.
+      const ctx = new AudioContext({ sampleRate: 48000 })
       const dest = ctx.createMediaStreamDestination()
       recordCtxRef.current = ctx
       recordDestRef.current = dest

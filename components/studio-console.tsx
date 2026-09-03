@@ -874,6 +874,7 @@ export function StudioConsole({
             activeSpeakers={state.activeSpeakers}
             hostQuality={state.connectionQuality}
             isHost
+            hostMuted={!micOn}
             coHostIds={coHostIds}
             onRemoveGuest={dropGuest}
             onTapSpeaker={openSpeakerMenu}
