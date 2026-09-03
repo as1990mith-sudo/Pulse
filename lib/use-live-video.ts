@@ -66,15 +66,17 @@ export const VIDEO_AUDIO_TRACK = "live-video-audio"
 export const VIDEO_PROJECTION_TRACK = "live-video-projection"
 
 /**
- * Whether this device can share its screen. Requires the getDisplayMedia API and
- * a real browser surface — it does NOT exist inside the Median/GoNative app shell
- * or most in-app WebViews, so Share Screen is hidden there (Project Video is the
- * mobile-friendly path). Also needs a secure context, which the app always is.
+ * Whether this device can share its screen. This is PURE CAPABILITY DETECTION:
+ * we surface Share Screen wherever the getDisplayMedia API is present, and hide
+ * it only where the API genuinely doesn't exist. We deliberately do NOT special-
+ * case any particular app housing (Median/GoNative/other WebViews) — whichever
+ * shell exposes a working capture API gets the button, and any shell that
+ * exposes the API but fails at call time is handled gracefully by
+ * startScreenShare's try/catch (Project Video remains the universal fallback).
  */
 export function canScreenShareHere(): boolean {
   if (typeof navigator === "undefined") return false
   if (!navigator.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== "function") return false
-  if (isMedianApp() || isInAppWebView()) return false
   return true
 }
 
