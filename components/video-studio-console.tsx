@@ -114,7 +114,14 @@ function GlassButton({
   )
 }
 
-type PeerLike = { identity: string; name: string; image: string | null; hasVideo: boolean }
+type PeerLike = {
+  identity: string
+  name: string
+  image: string | null
+  hasVideo: boolean
+  micMuted: boolean
+  isSpeaking: boolean
+}
 
 /**
  * A guest's camera tile on the dynamic Broadcast stage, absolutely positioned
@@ -153,8 +160,12 @@ function StageGuestTile({
       style={stageRectStyle(rect)}
       // Container passes taps through to the tap-capture layer (so tapping a
       // guest video toggles the controls); only the control buttons re-enable
-      // pointer events.
-      className="pointer-events-none z-20 overflow-hidden rounded-2xl bg-neutral-900 ring-1 ring-inset ring-white/10 transition-[top,left,width,height] duration-500 ease-out"
+      // pointer events. A live speaking ring matches the Conversation tiles.
+      className={cn(
+        "pointer-events-none z-20 overflow-hidden rounded-2xl bg-neutral-900 ring-1 ring-inset ring-white/10 transition-[top,left,width,height] duration-500 ease-out",
+        peer.isSpeaking &&
+          "ring-2 ring-primary shadow-[0_0_22px_2px_color-mix(in_oklch,var(--primary)_45%,transparent)]",
+      )}
     >
       <video
         ref={videoRef}
@@ -186,9 +197,14 @@ function StageGuestTile({
           <Pin className="size-3" /> Spotlight
         </span>
       )}
-      {/* Bottom bar: guest name on the left, host overflow menu on the right. */}
+      {/* Bottom bar: guest name (+ mic state) on the left, host menu on right. */}
       <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
-        <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-white">{peer.name}</span>
+        <span className="flex min-w-0 flex-1 items-center gap-1 text-[11px] font-semibold text-white">
+          {peer.micMuted && (
+            <MicOff className="size-3 shrink-0 text-white/70" aria-label="Muted" />
+          )}
+          <span className="min-w-0 truncate">{peer.name}</span>
+        </span>
         <div className="pointer-events-auto relative shrink-0">
           <button
             type="button"
@@ -831,6 +847,13 @@ export function VideoStudioConsole({
   const guestTiles = stageTiles
     .map((t, i) => ({ tile: t, rect: stageRects[i] }))
     .filter((x): x is { tile: { kind: "guest"; peer: RemotePeer }; rect: StageRect } => x.tile.kind === "guest")
+  // Who is presenting the full-stage Video Project: this host when they're
+  // sharing, otherwise the guest whose screen share we're subscribed to.
+  const projectionPresenter = screenShareOn
+    ? { name: currentUser.name, role: "You" }
+    : remoteProjection
+      ? { name: guests.find((g) => g.identity === remoteProjection.identity)?.name ?? "Guest", role: "Presenter" }
+      : null
   // With 3+ people on a portrait Broadcast the stage grows slightly. These flex
   // ratios are kept identical to the viewer (LiveVideoViewer) so the host's
   // video reads at exactly the same height as the audience sees it.
@@ -862,6 +885,8 @@ export function VideoStudioConsole({
           projectionActive={screenShareOn || !!remoteProjection}
           onToggleScreenShare={() => void (screenShareOn ? stopScreenShare() : startScreenShare())}
           registerProjectionVideoEl={registerProjectionVideoEl}
+          projectionPresenterName={projectionPresenter?.name}
+          projectionPresenterRole={projectionPresenter?.role}
           micOn={micOn}
             camOn={camOn}
             localVideoReady={localVideoReady}
@@ -1061,11 +1086,15 @@ export function VideoStudioConsole({
             broadcast stage above the camera/guests; the host camera continues in
             its own frame beneath and also appears as the floating thumbnail. */}
         {live && orientation !== "landscape" && (screenShareOn || remoteProjection) && (
-          <div className="absolute inset-0 z-20">
+          // z-30 so it fills the stage above the guest tiles (also z-20) that are
+          // rendered later in the DOM; the presenter chip identifies the source.
+          <div className="absolute inset-0 z-30">
             <ProjectionStage
               kind="screen"
               rounded={false}
               registerSurfaceEl={registerProjectionVideoEl}
+              presenterName={projectionPresenter?.name}
+              presenterRole={projectionPresenter?.role}
             />
           </div>
         )}
@@ -1102,7 +1131,7 @@ export function VideoStudioConsole({
             bottom control dock, never this header, so the host always sees their
             identity + LIVE status. One compact host pill (cover • name / title)
             on the left, then LIVE • viewers • timer • share on the right. */}
-        <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-2 p-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
+        <div className="absolute inset-x-0 top-0 z-40 flex items-center justify-between gap-2 p-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <BackExitMenu
               showMenu={live}

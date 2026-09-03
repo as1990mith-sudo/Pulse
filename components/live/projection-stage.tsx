@@ -26,6 +26,8 @@ export function ProjectionStage({
   registerSurfaceEl,
   kind,
   label,
+  presenterName,
+  presenterRole = "Presenter",
   thumbnail,
   className,
   rounded = true,
@@ -38,6 +40,10 @@ export function ProjectionStage({
   kind: "screen" | "video"
   /** Optional override for the corner badge text. */
   label?: string
+  /** Who is presenting — shown in a chip so the room knows the source. */
+  presenterName?: string
+  /** Role word for the presenter chip (e.g. "Host", "Presenter", "You"). */
+  presenterRole?: string
   /** The floating thumbnail (presenter camera). Omitted → no thumbnail. */
   thumbnail?: ReactNode
   className?: string
@@ -51,6 +57,8 @@ export function ProjectionStage({
     <div
       className={cn(
         "relative flex h-full w-full items-center justify-center overflow-hidden bg-neutral-950",
+        // Smooth entrance so the stage reflow into projection never snaps.
+        "duration-300 animate-in fade-in zoom-in-95",
         rounded && "rounded-2xl",
         className,
       )}
@@ -69,10 +77,18 @@ export function ProjectionStage({
         </div>
       )}
 
-      {/* Corner badge — what's being presented. */}
-      <div className="pointer-events-none absolute left-3 top-3 z-10 flex items-center gap-1.5 rounded-full bg-black/50 px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-inset ring-white/15 backdrop-blur-md">
-        <Icon className="size-3.5" aria-hidden="true" />
-        {badge}
+      {/* Corner badges — what's being presented, and (when known) by whom. */}
+      <div className="pointer-events-none absolute left-3 top-3 z-10 flex flex-wrap items-center gap-1.5">
+        <span className="flex items-center gap-1.5 rounded-full bg-black/50 px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-inset ring-white/15 backdrop-blur-md">
+          <Icon className="size-3.5" aria-hidden="true" />
+          {badge}
+        </span>
+        {presenterName && (
+          <span className="flex items-center gap-1 rounded-full bg-primary/90 px-2.5 py-1 text-[11px] font-semibold text-primary-foreground ring-1 ring-inset ring-white/15 backdrop-blur-md">
+            <span className="uppercase tracking-wide opacity-80">{presenterRole}</span>
+            <span className="max-w-[10rem] truncate">{presenterName}</span>
+          </span>
+        )}
       </div>
 
       {/* Floating presenter thumbnail — bottom-right, out of the way of captions
