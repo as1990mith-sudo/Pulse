@@ -15,7 +15,7 @@
 // only owns the menu, its open/close state, and outside-click dismissal.
 
 import { useEffect, useRef, useState } from "react"
-import { Film, MonitorUp, MonitorX } from "lucide-react"
+import { Film, MonitorUp, MonitorX, MonitorSmartphone } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -23,12 +23,17 @@ export function ProjectMenu({
   canScreenShare,
   screenShareOn,
   onToggleScreenShare,
+  onSwitchScreenShare,
   onProjectVideo,
   renderTrigger,
 }: {
   canScreenShare: boolean
   screenShareOn: boolean
   onToggleScreenShare: () => void
+  // Switch to a different screen/window while already sharing (reopens the OS
+  // picker). When provided and a share is live, the menu splits into an explicit
+  // "Share another screen" + "Stop sharing screen" pair for easy management.
+  onSwitchScreenShare?: () => void
   onProjectVideo: () => void
   renderTrigger: (args: { toggle: () => void; open: boolean; active: boolean }) => React.ReactNode
 }) {
@@ -64,13 +69,34 @@ export function ProjectMenu({
           // width is capped to the viewport for very narrow devices.
           className="absolute bottom-full left-0 z-50 mb-2 w-64 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl border border-white/10 bg-neutral-900/95 p-1.5 shadow-2xl ring-1 ring-black/40 backdrop-blur-xl"
         >
-          <MenuItem
-            icon={screenShareOn ? MonitorX : MonitorUp}
-            title={screenShareOn ? "Stop sharing screen" : "Share screen"}
-            subtitle={canScreenShare ? "Present your screen to the room" : "Not available on this device"}
-            disabled={!canScreenShare && !screenShareOn}
-            onClick={() => choose(onToggleScreenShare)}
-          />
+          {screenShareOn ? (
+            <>
+              {/* Already sharing: split into explicit switch + stop so the host
+                  can swap screens without a manual stop→start dance. */}
+              {onSwitchScreenShare && canScreenShare ? (
+                <MenuItem
+                  icon={MonitorSmartphone}
+                  title="Share another screen"
+                  subtitle="Switch to a different screen, window or tab"
+                  onClick={() => choose(onSwitchScreenShare)}
+                />
+              ) : null}
+              <MenuItem
+                icon={MonitorX}
+                title="Stop sharing screen"
+                subtitle="Take your screen off the stage"
+                onClick={() => choose(onToggleScreenShare)}
+              />
+            </>
+          ) : (
+            <MenuItem
+              icon={MonitorUp}
+              title="Share screen"
+              subtitle={canScreenShare ? "Present your screen to the room" : "Not available on this device"}
+              disabled={!canScreenShare}
+              onClick={() => choose(onToggleScreenShare)}
+            />
+          )}
           <MenuItem
             icon={Film}
             title="Project a video"

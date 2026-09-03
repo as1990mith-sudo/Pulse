@@ -479,9 +479,23 @@ export function useLiveVideo({
     setPeers(out)
   }, [])
 
+  // Secondary self-view element: the draggable picture-in-picture shown while
+  // the host is screen-sharing. LiveKit tracks attach to multiple <video>
+  // elements, so the same camera track paints here AND in the main self-view
+  // without stealing it from either.
+  const selfPipVideoRef = useRef<HTMLVideoElement | null>(null)
+
   function attachLocalVideo(room: Room): boolean {
     const pub = room.localParticipant.getTrackPublication(Track.Source.Camera)
     const track = pub?.track
+    // Keep the PiP self-view painting too (multi-attach is safe/no-op if same).
+    const pip = selfPipVideoRef.current
+    if (track && pip) {
+      track.attach(pip)
+      pip.muted = true
+      pip.setAttribute("playsinline", "true")
+      void pip.play().catch(() => {})
+    }
     const el = localVideoRef.current
     if (track && el) {
       track.attach(el)
@@ -493,6 +507,17 @@ export function useLiveVideo({
     }
     return false
   }
+
+  // Callback ref for the screen-share PiP self-view. Re-attaches on every mount
+  // (the PiP only exists while sharing, so it mounts/unmounts) exactly like the
+  // main self-view, so the camera keeps painting across shows and reconnects.
+  const registerSelfPipVideoEl = useCallback((el: HTMLVideoElement | null) => {
+    if (el && selfPipVideoRef.current === el) return
+    selfPipVideoRef.current = el
+    if (!el) return
+    const room = roomRef.current
+    if (room) attachLocalVideo(room)
+  }, [])
 
   // Callback ref for the self-view <video>. Because tile components can remount
   // (e.g. when their parent re-renders), the underlying <video> node is replaced
@@ -1397,6 +1422,25 @@ export function useLiveVideo({
   }, [])
 
   /**
+   * Switch to sharing a DIFFERENT screen/window/tab without a manual stop→start.
+   * LiveKit won't reopen the OS picker while a screen-share track is already
+   * live, so we drop the current one first and immediately re-invoke the picker.
+   * If the host cancels the picker, `startScreenShare` leaves sharing off — the
+   * expected outcome of "never mind".
+   */
+  const switchScreenShare = useCallback(async () => {
+    const room = roomRef.current
+    if (!room || !canScreenShareHere()) return false
+    try {
+      await room.localParticipant.setScreenShareEnabled(false)
+    } catch {
+      /* already off */
+    }
+    setScreenShareOn(false)
+    return startScreenShare()
+  }, [startScreenShare])
+
+  /**
    * Publish the projected video's PIXELS (a captureStream track off the host's
    * synced <video>) purely so the egress records the projection into the replay.
    * Followers never render it — they paint their own in-sync copy — so it is
@@ -1662,12 +1706,14 @@ export function useLiveVideo({
     musicDuration,
     registerPeerVideoEl,
     registerLocalVideoEl,
+    registerSelfPipVideoEl,
     registerProjectionVideoEl,
     // Screen share
     canScreenShare: canScreenShareHere(),
     screenShareOn,
     startScreenShare,
     stopScreenShare,
+    switchScreenShare,
     // A remote screen share currently presented full-stage (null when none).
     remoteProjection,
     // Egress-only projection pixels (synced Project Video → replay capture).

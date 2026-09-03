@@ -140,13 +140,27 @@ export function LiveReplayWatch({
   }, [])
 
   function close() {
+    // A live replay opened from the Catalogue overlay carries a `?from=` return
+    // URL so we can land back on the EXACT catalogue spot (org profile with the
+    // Catalogue overlay reopened on Live › <sub-tab>) instead of the generic
+    // /live catalog. Read it from the live URL to avoid a Suspense boundary.
+    let from: string | null = null
+    if (typeof window !== "undefined") {
+      from = new URLSearchParams(window.location.search).get("from")
+    }
     // If the replay is floating in the OS Picture-in-Picture window, the viewer
     // wants to keep watching that mini window while they browse. Dismissing the
     // full-screen reel should therefore drop them into the live video catalogue
     // (episodes) rather than unwinding history back to wherever they came from —
     // and we deliberately do NOT exit PiP, so the floating player keeps playing.
     if (typeof document !== "undefined" && document.pictureInPictureElement) {
-      router.push("/live")
+      router.push(from && from.startsWith("/") ? from : "/live")
+      return
+    }
+    // Explicit return URL wins — replace so this throwaway watch entry doesn't
+    // linger in history (a later Back skips straight past it).
+    if (from && from.startsWith("/")) {
+      router.replace(from)
       return
     }
     if (typeof window !== "undefined" && window.history.length > 1) router.back()

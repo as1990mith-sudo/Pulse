@@ -56,6 +56,7 @@ import { ShareSheet } from "@/components/share-sheet"
 import { ConversationVideo } from "@/components/conversation/conversation-video"
 import { LiveSetupSheet } from "@/components/live/live-setup-sheet"
 import { ProjectionStage } from "@/components/live/projection-stage"
+import { SelfViewPip } from "@/components/live/self-view-pip"
 import { ProjectMenu } from "@/components/live/project-menu"
 import { CoverArt } from "@/components/cover-art"
 import { MarqueeTitle } from "@/components/marquee-title"
@@ -386,10 +387,12 @@ export function VideoStudioConsole({
     publishVideoProjectionTrack,
     unpublishVideoProjectionTrack,
     registerProjectionVideoEl,
+    registerSelfPipVideoEl,
     canScreenShare,
     screenShareOn,
     startScreenShare,
     stopScreenShare,
+    switchScreenShare,
     remoteProjection,
     stopRecording,
     disconnect,
@@ -883,7 +886,9 @@ export function VideoStudioConsole({
           screenShareOn={screenShareOn}
           projectionActive={screenShareOn || !!remoteProjection}
           onToggleScreenShare={() => void (screenShareOn ? stopScreenShare() : startScreenShare())}
+          onSwitchScreenShare={() => void switchScreenShare()}
           registerProjectionVideoEl={registerProjectionVideoEl}
+          registerSelfPipVideoEl={registerSelfPipVideoEl}
           projectionPresenterName={projectionPresenter?.name}
           projectionPresenterRole={projectionPresenter?.role}
           micOn={micOn}
@@ -1096,6 +1101,21 @@ export function VideoStudioConsole({
               registerSurfaceEl={registerProjectionVideoEl}
               presenterName={projectionPresenter?.name}
               presenterRole={projectionPresenter?.role}
+              // Only the host sharing their OWN screen gets the draggable
+              // self-view PiP; for a remote guest's share the host camera stays
+              // in the normal stage/grid.
+              thumbnail={
+                screenShareOn ? (
+                  <SelfViewPip
+                    registerVideoEl={registerSelfPipVideoEl}
+                    camOn={camOn}
+                    mirror={facingMode === "user"}
+                    name={currentUser.name}
+                    image={currentUser.image ?? null}
+                    onToggleCam={() => void toggleCam()}
+                  />
+                ) : undefined
+              }
             />
           </div>
         )}
@@ -1302,6 +1322,7 @@ export function VideoStudioConsole({
               canScreenShare={canScreenShare}
               screenShareOn={screenShareOn}
               onToggleScreenShare={() => void (screenShareOn ? stopScreenShare() : startScreenShare())}
+              onSwitchScreenShare={() => void switchScreenShare()}
               onProjectVideo={() => openPanel("video")}
               renderTrigger={({ toggle, active }) => (
                 <GlassButton

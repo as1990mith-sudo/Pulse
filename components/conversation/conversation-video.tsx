@@ -38,6 +38,7 @@ import { LiveChat } from "@/components/live-chat"
 import { useLiveResourcesOptional } from "@/components/live/resource/resource-context"
 import { FloatingMessages } from "@/components/conversation/floating-messages"
 import { ProjectionStage } from "@/components/live/projection-stage"
+import { SelfViewPip } from "@/components/live/self-view-pip"
 import { ProjectMenu } from "@/components/live/project-menu"
 import {
   blockParticipant,
@@ -135,7 +136,12 @@ export type ConversationVideoProps = {
   screenShareOn?: boolean
   projectionActive?: boolean
   onToggleScreenShare?: () => void
+  // Switch to a different screen while already sharing (reopens the OS picker).
+  onSwitchScreenShare?: () => void
   registerProjectionVideoEl?: (el: HTMLVideoElement | null) => void
+  // Attaches the host's camera into the draggable self-view PiP shown over the
+  // shared screen (so the presenter still sees/manages their own video).
+  registerSelfPipVideoEl?: (el: HTMLVideoElement | null) => void
   projectionPresenterName?: string
   projectionPresenterRole?: string
 }
@@ -183,7 +189,9 @@ export function ConversationVideo(props: ConversationVideoProps) {
     screenShareOn = false,
     projectionActive = false,
     onToggleScreenShare,
+    onSwitchScreenShare,
     registerProjectionVideoEl,
+    registerSelfPipVideoEl,
     projectionPresenterName,
     projectionPresenterRole,
   } = props
@@ -588,7 +596,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
         )}
       </AnimatePresence>
 
-      {/* ─��� Exclusive Conversation header ──────────────────────────────────── */}
+      {/* ─����� Exclusive Conversation header ──────────────────────────────────── */}
       <motion.header layout className={cn("z-30 shrink-0 border-b border-white/5 bg-neutral-950/80 backdrop-blur-xl")}>
         <div className="flex items-center justify-between px-3 pt-3">
           <div className="flex items-center gap-2">
@@ -716,6 +724,20 @@ export function ConversationVideo(props: ConversationVideoProps) {
                 registerSurfaceEl={registerProjectionVideoEl}
                 presenterName={projectionPresenterName}
                 presenterRole={projectionPresenterRole}
+                // Draggable self-view PiP only when I'm the one sharing my
+                // screen; a remote share keeps my camera in the grid below.
+                thumbnail={
+                  screenShareOn && registerSelfPipVideoEl ? (
+                    <SelfViewPip
+                      registerVideoEl={registerSelfPipVideoEl}
+                      camOn={camOn}
+                      mirror={facingMode === "user"}
+                      name={self.name}
+                      image={self.image ?? null}
+                      onToggleCam={onToggleCam}
+                    />
+                  ) : undefined
+                }
               />
             </div>
           </div>
@@ -955,6 +977,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
             canScreenShare={canScreenShare}
             screenShareOn={screenShareOn}
             onToggleScreenShare={() => onToggleScreenShare?.()}
+            onSwitchScreenShare={onSwitchScreenShare ? () => onSwitchScreenShare() : undefined}
             onProjectVideo={() => resources?.openPanel("video")}
             renderTrigger={({ toggle, active }) => (
               <DockButton label="Project or share screen" active={active} onClick={toggle}>

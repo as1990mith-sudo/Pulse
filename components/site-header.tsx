@@ -140,7 +140,11 @@ export function SiteHeader({ collapsible = false }: { collapsible?: boolean } = 
       className={cn(
         // Longer, softer ease-in-out so the header gently fades/glides out of
         // view on scroll-down and eases back in on scroll-up.
-        "sticky top-0 z-40 border-b border-border/60 bg-background/80 pt-safe backdrop-blur-xl transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] will-change-[transform,opacity] motion-reduce:transition-none",
+        // `transform-gpu` (translateZ(0)) pins this sticky, backdrop-blurred bar
+        // to its own compositing layer so Android caches the blur instead of
+        // re-rasterizing it against the feed every scroll frame — that repaint
+        // was the main-feed scroll jank on Android. iOS was already smooth.
+        "sticky top-0 z-40 transform-gpu border-b border-border/60 bg-background/80 pt-safe backdrop-blur-xl transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] will-change-[transform,opacity] motion-reduce:transition-none",
         hidden ? "-translate-y-full opacity-0" : "translate-y-0 opacity-100",
       )}
     >

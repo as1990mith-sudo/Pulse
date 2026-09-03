@@ -196,6 +196,8 @@ export function OrgEpisodeCatalog({
   tab,
   onTabChange,
   liveOnly = false,
+  liveKind: liveKindProp,
+  onLiveKindChange,
 }: {
   items: CatalogueItemView[]
   isOwner: boolean
@@ -211,6 +213,10 @@ export function OrgEpisodeCatalog({
   // hide the internal Uploads/Live/Documents pills — the parent's segmented nav
   // owns that switch, and only the Live listing should show here.
   liveOnly?: boolean
+  // Optional controlled Live Video/Audio sub-tab. When provided, the parent owns
+  // it (so it can be URL-backed for replay return); otherwise it stays internal.
+  liveKind?: LiveKind
+  onLiveKindChange?: (k: LiveKind) => void
 }) {
   const [query, setQuery] = useState("")
   // Video / Audio subtab within the Live tab (mirrors the profile Catalogue).
@@ -252,9 +258,14 @@ export function OrgEpisodeCatalog({
 
   // Until the viewer picks a subtab, show the kind that actually has recordings
   // (audio-only replays would otherwise look missing behind an empty "Video").
+  // A controlled `liveKindProp` (from the URL-backed parent) wins so replay
+  // return lands on the exact sub-tab; else fall back to the internal pick.
   const liveKind: LiveKind =
-    pickedLiveKind ?? (liveCounts.video === 0 && liveCounts.audio > 0 ? "audio" : "video")
-  const setLiveKind = setPickedLiveKind
+    liveKindProp ?? pickedLiveKind ?? (liveCounts.video === 0 && liveCounts.audio > 0 ? "audio" : "video")
+  const setLiveKind = (k: LiveKind) => {
+    setPickedLiveKind(k)
+    onLiveKindChange?.(k)
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -288,6 +299,16 @@ export function OrgEpisodeCatalog({
   // any manual/external video link that VideoCard can't route keeps the compact
   // row below the grid so it stays reachable.
   const showsVideoGrid = tab === "video" && liveKind === "video"
+
+  // When this catalogue is the Upload overlay's Live segment (`liveOnly`), a
+  // video replay opens the full-page /live/[id] watch experience. Give it an
+  // explicit return URL so Back/close lands back on THIS exact spot — the org
+  // profile with the Catalogue overlay reopened on Live › <current sub-tab> —
+  // rather than a bare profile with the overlay shut. Outside liveOnly (the
+  // profile Catalogue tab) we leave it undefined for the default back behavior.
+  const replayBackHref = liveOnly
+    ? `/org/${orgHandle}?catalogue=open&csec=live&clive=${liveKind}`
+    : undefined
   const { videoCards, videoRows } = useMemo(() => {
     if (!showsVideoGrid) return { videoCards: [], videoRows: [] as CatalogueItemView[] }
     const cards: { item: CatalogueItemView; show: Show }[] = []
@@ -431,7 +452,7 @@ export function OrgEpisodeCatalog({
                   className="animate-in fade-in slide-in-from-bottom-1 duration-500"
                   style={{ animationDelay: `${Math.min(i, 8) * 45}ms`, animationFillMode: "both" }}
                 >
-                  <VideoCard show={show} owned={isOwner} queue={videoQueue} flush />
+                  <VideoCard show={show} owned={isOwner} queue={videoQueue} flush backHref={replayBackHref} />
                 </div>
               ))}
             </div>
@@ -446,6 +467,7 @@ export function OrgEpisodeCatalog({
                   isOwner={isOwner}
                   show={shows.get(it.id) ?? null}
                   queue={queue}
+                  backHref={replayBackHref}
                 />
               ))}
             </div>
@@ -465,6 +487,7 @@ export function OrgEpisodeCatalog({
               isOwner={isOwner}
               show={shows.get(it.id) ?? null}
               queue={queue}
+              backHref={replayBackHref}
             />
           ))}
         </div>
@@ -485,6 +508,7 @@ function OrgCatalogueRow({
   isOwner,
   show,
   queue,
+  backHref,
 }: {
   item: CatalogueItemView
   orgId: string
@@ -494,6 +518,9 @@ function OrgCatalogueRow({
   // set of playable audio Shows in the current view for the player's up-next.
   show: Show | null
   queue: Show[]
+  // Return URL for live *video* replay rows (see VideoCard.backHref). Applied to
+  // the /live/[slug] link so Back/close returns to the catalogue spot.
+  backHref?: string
 }) {
   const router = useRouter()
   const { play, activeId } = useEpisodePlayer()
@@ -509,7 +536,11 @@ function OrgCatalogueRow({
   // Documents are read, not played — the trailing action shows a read icon and a
   // "Read" label instead of the play triangle used by media/live-video rows.
   const isDocument = item.kind === "document"
-  const href = isLive ? `/live/${item.slug}` : externalHref(item.url)
+  const href = isLive
+    ? backHref
+      ? `/live/${item.slug}?from=${encodeURIComponent(backHref)}`
+      : `/live/${item.slug}`
+    : externalHref(item.url)
   const linkProps = isLive ? {} : { target: "_blank", rel: "noopener noreferrer" }
 
   // Rename dialog state. Seeded from the current title each time it opens so a

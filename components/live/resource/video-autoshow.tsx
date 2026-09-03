@@ -20,10 +20,13 @@ import { useLiveResources } from "./resource-context"
 
 export function VideoAutoShow() {
   const { descriptor, activePanel, openPanel, closePanel } = useLiveResources()
-  // The shared-video resource exists only on the audio surfaces (podcast &
-  // audio conversation). On video broadcast/conversation there is no video
-  // resource, so this watcher must never poll or auto-open anything.
-  const roomName = descriptor?.mode === "audio" ? (descriptor?.roomName ?? null) : null
+  // The shared "Project a video" resource (synced `live_video_state`) now exists
+  // on BOTH the audio surfaces (podcast & audio conversation) AND the video
+  // surfaces (video broadcast & conversation). So this watcher polls on every
+  // live: whichever surface the host is on, the moment they press play the video
+  // must auto-open and play for every participant — the same "watch together"
+  // behaviour audio lives already had.
+  const roomName = descriptor?.roomName ?? null
 
   // Light poll: enough to feel instant ("immediately appearing for everyone")
   // without hammering. The panel's own engine polls faster once it is open.

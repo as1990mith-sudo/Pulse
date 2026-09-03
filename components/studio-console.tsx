@@ -7,6 +7,7 @@ import {
   AudioLines,
   CheckCircle2,
   Crown,
+  Headphones,
   Loader2,
   Lock,
   MessageSquare,
@@ -127,6 +128,7 @@ export function StudioConsole({
     connect,
     disconnect,
     toggleMic,
+    setHeadphoneMode,
     publishMusic,
     setMusicVolume,
     duckMusic,
@@ -1015,6 +1017,8 @@ export function StudioConsole({
           loop={musicLoop}
           duck={duckEnabled}
           onToggleDuck={setDuckEnabled}
+          headphoneMode={state.headphoneMode}
+          onToggleHeadphones={(next) => void setHeadphoneMode(next)}
           onAddTracks={(added) => setMusicTracks((t) => [...t, ...added])}
           onPlayTrack={playMusicTrack}
           onTogglePlay={toggleMusicPlay}
@@ -1467,6 +1471,8 @@ export function MusicPanel({
   onRemoveTrack,
   onError,
   onToggleDuck,
+  headphoneMode,
+  onToggleHeadphones,
   onClose,
 }: {
   live: boolean
@@ -1496,6 +1502,12 @@ export function MusicPanel({
   onRemoveTrack: (index: number) => void
   onError: (message: string | null) => void
   onToggleDuck?: (next: boolean) => void
+  // Optional "I'm on headphones" control. When on, the host's live mic is
+  // re-captured without echo cancellation so Bluetooth output stays on
+  // high-quality A2DP — restoring the host's own music-monitor fidelity.
+  // Optional so panels with no live mic (e.g. co-host track panel) hide it.
+  headphoneMode?: boolean
+  onToggleHeadphones?: (next: boolean) => void
   onClose: () => void
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -1706,6 +1718,31 @@ export function MusicPanel({
               </span>
             </label>
             <Switch id="music-duck" checked={duck ?? false} onCheckedChange={(next) => onToggleDuck(next)} />
+          </div>
+        )}
+
+        {/* ── Headphones mode (host choice) ──
+            While the mic is open with echo cancellation, phones force Bluetooth
+            headphones into the low-quality call profile, muffling the host's own
+            music monitor. When the host confirms they're on headphones there's no
+            speaker bleed to cancel, so we drop the voice DSP and Bluetooth stays
+            on high-quality output. Listeners are unaffected either way. */}
+        {onToggleHeadphones && (
+          <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-secondary/40 p-3.5">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-background text-primary ring-1 ring-inset ring-border/60">
+              <Headphones className="size-4" strokeWidth={2.5} />
+            </span>
+            <label htmlFor="music-headphones" className="min-w-0 flex-1 cursor-pointer">
+              <span className="block text-sm font-semibold text-foreground">I&apos;m on headphones</span>
+              <span className="block text-[11px] leading-tight text-muted-foreground">
+                Improves music quality in your ears. Turn off if you hear an echo.
+              </span>
+            </label>
+            <Switch
+              id="music-headphones"
+              checked={headphoneMode ?? false}
+              onCheckedChange={(next) => onToggleHeadphones(next)}
+            />
           </div>
         )}
 
