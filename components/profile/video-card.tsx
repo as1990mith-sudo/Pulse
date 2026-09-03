@@ -40,6 +40,7 @@ export function VideoCard({
   owned = false,
   queue,
   flush = false,
+  backHref,
 }: {
   show: Show
   owned?: boolean
@@ -50,6 +51,13 @@ export function VideoCard({
    * mobile catalogue list). Defaults to the padded, rounded card look.
    */
   flush?: boolean
+  /**
+   * Where the replay watch page should return on Back/close. Passed through as a
+   * `?from=` param so a live replay opened from the Catalogue overlay comes back
+   * to the EXACT catalogue location (segment + Live sub-tab) instead of a bare
+   * profile with the overlay shut. Omit for the default `router.back()` behavior.
+   */
+  backHref?: string
 }) {
   const router = useRouter()
   const { play } = useEpisodePlayer()
@@ -67,7 +75,7 @@ export function VideoCard({
   // (same as audio) instead of navigating to a page that still shows the app
   // header. Live replays are excluded so they route to their own player.
   const playable = isPlayable(show) && Boolean(queue && queue.length > 0) && !isLiveReplay
-  const href = `/live/${show.id}`
+  const href = backHref ? `/live/${show.id}?from=${encodeURIComponent(backHref)}` : `/live/${show.id}`
   // A play trigger when playable, otherwise a link to the watch page.
   const openProps = playable
     ? ({ type: "button" as const, onClick: () => play(show, queue!) } as const)

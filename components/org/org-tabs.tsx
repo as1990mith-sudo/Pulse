@@ -42,6 +42,13 @@ import { cn } from "@/lib/utils"
 const TAB_KEYS = ["posts", "thread", "about", "articles", "catalogue", "engagement"] as const
 type TabKey = (typeof TAB_KEYS)[number]
 
+// Catalogue overlay inner location, mirrored to the URL so a live-replay page
+// (which fully navigates away) can restore the exact spot on Back/close.
+const UPLOAD_SEGMENTS = ["materials", "playlists", "live"] as const
+type UploadSegment = (typeof UPLOAD_SEGMENTS)[number]
+const LIVE_TABS = ["video", "audio"] as const
+type LiveTab = (typeof LIVE_TABS)[number]
+
 const SOCIAL_LABELS: Record<string, string> = {
   instagram: "Instagram",
   youtube: "YouTube",
@@ -122,6 +129,27 @@ export function OrgTabs({
     return (["audio", "video", "document"] as CatalogueKind[]).find((k) => counts[k] > 0) ?? "audio"
   })
 
+  // The Catalogue overlay's inner location (which segment, and the Live
+  // Video/Audio sub-tab) is mirrored into the URL so that opening a full-page
+  // live replay (`/live/[id]`) and then pressing Back/close returns to the EXACT
+  // spot the user was browsing — the overlay reopens on Live › <sub-tab> instead
+  // of snapping shut. These are `replace`-style params (no extra history entry)
+  // that ride on the org-profile entry sitting beneath the replay page.
+  const [catSegment, setCatSegment] = useUrlState<UploadSegment>("csec", "materials", {
+    valid: UPLOAD_SEGMENTS,
+  })
+  const [liveTab, setLiveTab] = useUrlState<LiveTab>("clive", "video", { valid: LIVE_TABS })
+  // Deep-link / return support: `?catalogue=open` reopens the overlay on mount
+  // (the replay page appends it when navigating away, so Back lands here with it
+  // set). Read once, then the overlay owns its open state and clears the flag.
+  const [catalogueFlag, setCatalogueFlag] = useUrlState<"open" | "">("catalogue", "", {
+    valid: ["open", ""],
+  })
+  useEffect(() => {
+    if (catalogueFlag === "open") setCatalogueOpen(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalogueFlag])
+
   // Position of the sliding top indicator.
   const activeIndex = Math.max(
     0,
@@ -170,6 +198,9 @@ export function OrgTabs({
   // now closes it. See the `catalogueOpen` state note for the full history.
   function closeCatalogue() {
     setCatalogueOpen(false)
+    // Drop the return params so the closed profile URL stays clean and a later
+    // reload doesn't silently reopen the overlay.
+    if (catalogueFlag) setCatalogueFlag("")
   }
 
   // Catalogue is a full-screen overlay, so it gets its own history entry: the
@@ -312,6 +343,12 @@ export function OrgTabs({
                 materials={materials}
                 playlists={playlists}
                 liveItems={catalogue}
+                // Controlled + URL-backed so a live replay can return here on
+                // the exact segment and Live sub-tab.
+                segment={catSegment}
+                onSegmentChange={setCatSegment}
+                liveTab={liveTab}
+                onLiveTabChange={setLiveTab}
               />
             </div>
           </div>

@@ -1519,7 +1519,12 @@ export function CommunityHelp({
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
-          className="relative flex-1 overflow-y-auto scroll-smooth overscroll-contain"
+          // iOS smoothness: this inner scroller needs momentum + its own
+          // compositing layer to match the buttery window-scroll of the main
+          // feed. `transform-gpu` promotes it to a GPU layer, `[contain:paint]`
+          // isolates its repaint region, and `[-webkit-overflow-scrolling:touch]`
+          // restores native momentum on iOS. (Android was already smooth.)
+          className="relative flex-1 transform-gpu overflow-y-auto scroll-smooth overscroll-contain [contain:paint] [-webkit-overflow-scrolling:touch]"
         >
           {/* Pull-to-refresh indicator tray — expanding its height gently pushes
               the feed down as you pull, so the list itself is never transformed

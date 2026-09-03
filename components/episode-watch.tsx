@@ -86,6 +86,25 @@ export function EpisodeWatch({
   const episodeId = show.episodeId
   const router = useRouter()
 
+  // Exit the watch page. If the opener passed an explicit `?from=` return URL
+  // (a live replay launched from the Catalogue overlay does this so it can
+  // reopen on the exact segment + sub-tab), navigate there; otherwise fall back
+  // to Back, then the catalog. Read from the live URL so no Suspense boundary is
+  // needed just for a search param.
+  function exitWatch() {
+    let from: string | null = null
+    if (typeof window !== "undefined") {
+      from = new URLSearchParams(window.location.search).get("from")
+    }
+    if (from && from.startsWith("/")) {
+      // Replace so the throwaway watch entry doesn't linger in history.
+      router.replace(from)
+      return
+    }
+    if (typeof window !== "undefined" && window.history.length > 1) router.back()
+    else router.push("/catalog")
+  }
+
   const [minimized, setMinimized] = useState(false)
   const [commentsOpen, setCommentsOpen] = useState(false)
 
@@ -245,12 +264,7 @@ export function EpisodeWatch({
           minimized={minimized}
           onMinimize={() => setMinimized(true)}
           onRestore={() => setMinimized(false)}
-          onClose={() => {
-            // Exit the watch page — return to wherever the viewer came from,
-            // falling back to the catalog if there's no history entry.
-            if (window.history.length > 1) router.back()
-            else router.push("/catalog")
-          }}
+          onClose={exitWatch}
         />
 
         {/* Action bar — hidden while the player is collapsed to a mini-player. */}

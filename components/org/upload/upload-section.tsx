@@ -48,6 +48,10 @@ export function UploadSection({
   orgName,
   orgLogo,
   orgHandle,
+  segment: segmentProp,
+  onSegmentChange,
+  liveTab = "video",
+  onLiveTabChange,
 }: {
   organizationId: string
   isOwner: boolean
@@ -57,9 +61,22 @@ export function UploadSection({
   orgName: string
   orgLogo: string | null
   orgHandle: string
+  // Optional controlled segment + Live sub-tab. When provided (by the org
+  // profile, which URL-backs them), a live replay can return to the exact spot.
+  // Omitting them keeps the old fully-internal behaviour.
+  segment?: Segment
+  onSegmentChange?: (s: Segment) => void
+  liveTab?: "video" | "audio"
+  onLiveTabChange?: (t: "video" | "audio") => void
 }) {
   const router = useRouter()
-  const [segment, setSegment] = useState<Segment>("materials")
+  const [segmentState, setSegmentState] = useState<Segment>("materials")
+  // Controlled when the parent supplies `segment`, else internal state.
+  const segment = segmentProp ?? segmentState
+  const setSegment = (s: Segment) => {
+    setSegmentState(s)
+    onSegmentChange?.(s)
+  }
   const [, startTransition] = useTransition()
 
   // Sheet / overlay state.
@@ -353,6 +370,10 @@ export function UploadSection({
           tab="video"
           onTabChange={() => {}}
           liveOnly
+          // Controlled Live Video/Audio sub-tab so returning from a replay
+          // reopens on the same sub-tab the user was browsing.
+          liveKind={liveTab}
+          onLiveKindChange={onLiveTabChange}
         />
       )}
 
