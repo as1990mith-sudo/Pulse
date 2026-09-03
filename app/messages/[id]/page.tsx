@@ -20,7 +20,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
 
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden">
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col overflow-hidden">
+      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col overflow-hidden">
         <DmView detail={detail} />
       </main>
     </div>

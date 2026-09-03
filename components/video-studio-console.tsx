@@ -1396,13 +1396,16 @@ export function VideoStudioConsole({
           "flex-[1.5]",
         )}
       >
+        {/* Dropping `flatText` restores proper chat bubbles: the host's own
+            messages ("You") sit on the RIGHT, everyone else's on the LEFT —
+            matching the viewer's chat. `immersive` stays because this panel sits
+            on the always-dark broadcast surface (white/glass bubbles read best). */}
         <LiveChat
           asHost
           showResourceButton
           currentUser={currentUser}
           roomName={live ? roomName! : undefined}
           immersive
-          flatText
           placeholder=""
         />
       </div>

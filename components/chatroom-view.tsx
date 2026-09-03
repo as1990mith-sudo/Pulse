@@ -508,11 +508,21 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
       <div className="relative flex-1 overflow-hidden">
         <div
           aria-hidden
-          className={cn("absolute inset-0", !hasWallpaper && "bg-card/30")}
+          className={cn("absolute inset-0 transform-gpu", !hasWallpaper && "bg-card/30")}
           style={hasWallpaper ? chatBackgroundStyle(detail.background) : undefined}
         />
-        {hasWallpaper && <div aria-hidden className="absolute inset-0 bg-background/55" />}
-        <div onScroll={onMessagesScroll} className="relative h-full overflow-y-auto">
+        {hasWallpaper && <div aria-hidden className="absolute inset-0 transform-gpu bg-background/55" />}
+        {/* iOS smoothness: the feed scrolls the window (native momentum), but this
+            thread scrolls an inner container layered over the fixed wallpaper.
+            Promoting the scroller to its own compositing layer (translateZ(0)) and
+            isolating its paint (contain:paint) turns each momentum frame into a
+            cheap GPU layer-translate instead of repainting the background beneath
+            it — which is what caused the stutter. The background layers above are
+            promoted too so they stay cached and are never re-rastered on scroll. */}
+        <div
+          onScroll={onMessagesScroll}
+          className="relative h-full transform-gpu overflow-y-auto overscroll-contain [contain:paint] [-webkit-overflow-scrolling:touch]"
+        >
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 py-5 sm:px-6">
           {messages.length === 0 && (
             <p className="py-10 text-center text-sm text-muted-foreground">
