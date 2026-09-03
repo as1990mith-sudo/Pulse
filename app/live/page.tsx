@@ -6,6 +6,7 @@ import { BroadcastRow, CompactBroadcast, FeaturedBroadcast } from "@/components/
 import { LiveHero } from "@/components/live/live-hero"
 import { QuietAir } from "@/components/live/quiet-air"
 import { StartLiveDock } from "@/components/live/start-live-dock"
+import { SetUpHomeCta } from "@/components/live/set-up-home-cta"
 import { getLiveAudienceCounts, getLiveStreams } from "@/app/actions/live"
 import { canViewerGoLive } from "@/lib/home/active-home"
 
@@ -100,6 +101,11 @@ export default async function LivePage() {
           <div className="px-5 pb-4 pt-9">
             <StartLiveDock canGoLive={canGoLive} />
           </div>
+
+          {/* Members (who can't yet host) get an inviting nudge to create their
+              own Home at the very bottom of the tab. Hosts already have the dock
+              above, so this is member-only. */}
+          {!canGoLive && <SetUpHomeCta />}
         </main>
       </AudienceCountsProvider>
     </div>

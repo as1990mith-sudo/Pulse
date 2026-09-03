@@ -392,6 +392,7 @@ export function VideoStudioConsole({
     screenShareOn,
     startScreenShare,
     stopScreenShare,
+    switchScreenShare,
     remoteProjection,
     stopRecording,
     disconnect,
@@ -885,6 +886,7 @@ export function VideoStudioConsole({
           screenShareOn={screenShareOn}
           projectionActive={screenShareOn || !!remoteProjection}
           onToggleScreenShare={() => void (screenShareOn ? stopScreenShare() : startScreenShare())}
+          onSwitchScreenShare={() => void switchScreenShare()}
           registerProjectionVideoEl={registerProjectionVideoEl}
           registerSelfPipVideoEl={registerSelfPipVideoEl}
           projectionPresenterName={projectionPresenter?.name}
@@ -1320,6 +1322,7 @@ export function VideoStudioConsole({
               canScreenShare={canScreenShare}
               screenShareOn={screenShareOn}
               onToggleScreenShare={() => void (screenShareOn ? stopScreenShare() : startScreenShare())}
+              onSwitchScreenShare={() => void switchScreenShare()}
               onProjectVideo={() => openPanel("video")}
               renderTrigger={({ toggle, active }) => (
                 <GlassButton

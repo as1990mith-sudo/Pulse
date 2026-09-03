@@ -86,8 +86,15 @@ export function HomeOnboarding() {
   const [coverPreview, setCoverPreview] = useState<string | null>(null)
   const [accent, setAccent] = useState("#E8833A")
 
-  // Step 3 — plan
-  const [plan, setPlan] = useState<HomePlanId>("premium")
+  // Step 3 — plan. Seeded from a `?plan=` query param when the member arrives
+  // from the "Set up a Home" CTA (which lets them pick Premium / Premium Pro up
+  // front); falls back to Premium. Read once from the live URL to avoid a
+  // Suspense boundary just for a search param.
+  const [plan, setPlan] = useState<HomePlanId>(() => {
+    if (typeof window === "undefined") return "premium"
+    const p = new URLSearchParams(window.location.search).get("plan")
+    return p && p in HOME_PLANS ? (p as HomePlanId) : "premium"
+  })
 
   // Step 4 — administrator account
   const [adminName, setAdminName] = useState("")

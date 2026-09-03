@@ -136,6 +136,8 @@ export type ConversationVideoProps = {
   screenShareOn?: boolean
   projectionActive?: boolean
   onToggleScreenShare?: () => void
+  // Switch to a different screen while already sharing (reopens the OS picker).
+  onSwitchScreenShare?: () => void
   registerProjectionVideoEl?: (el: HTMLVideoElement | null) => void
   // Attaches the host's camera into the draggable self-view PiP shown over the
   // shared screen (so the presenter still sees/manages their own video).
@@ -187,6 +189,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
     screenShareOn = false,
     projectionActive = false,
     onToggleScreenShare,
+    onSwitchScreenShare,
     registerProjectionVideoEl,
     registerSelfPipVideoEl,
     projectionPresenterName,
@@ -974,6 +977,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
             canScreenShare={canScreenShare}
             screenShareOn={screenShareOn}
             onToggleScreenShare={() => onToggleScreenShare?.()}
+            onSwitchScreenShare={onSwitchScreenShare ? () => onSwitchScreenShare() : undefined}
             onProjectVideo={() => resources?.openPanel("video")}
             renderTrigger={({ toggle, active }) => (
               <DockButton label="Project or share screen" active={active} onClick={toggle}>

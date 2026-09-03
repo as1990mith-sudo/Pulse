@@ -328,7 +328,13 @@ export function OrgTabs({
             // to the page behind (the "stuck / scrolls the screen behind" bug on
             // both iOS and Android). Bounding it here makes overflow-y-auto scroll
             // internally, matching the other working overlays.
-            className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6"
+            //
+            // iOS fix: without an explicit momentum + compositing hint this
+            // fixed-overlay scroller would wedge on iOS (Safari drops the
+            // scrollable layer and the list becomes stuck/unscrollable).
+            // `transform-gpu [contain:paint] [-webkit-overflow-scrolling:touch]`
+            // is the same toolkit that unstuck the community feed.
+            className="min-h-0 flex-1 transform-gpu overflow-y-auto overscroll-contain px-4 py-4 [contain:paint] [-webkit-overflow-scrolling:touch] sm:px-6"
           >
             <div className="mx-auto w-full max-w-4xl">
               {/* Redesigned Upload: Materials + Playlists (externally-hosted
