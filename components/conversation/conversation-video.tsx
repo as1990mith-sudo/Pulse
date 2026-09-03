@@ -16,8 +16,7 @@ import {
   MessageSquare,
   Mic,
   MicOff,
-  MonitorUp,
-  MonitorX,
+  MonitorPlay,
   MoreVertical,
   Music,
   Pin,
@@ -39,6 +38,7 @@ import { LiveChat } from "@/components/live-chat"
 import { useLiveResourcesOptional } from "@/components/live/resource/resource-context"
 import { FloatingMessages } from "@/components/conversation/floating-messages"
 import { ProjectionStage } from "@/components/live/projection-stage"
+import { ProjectMenu } from "@/components/live/project-menu"
 import {
   blockParticipant,
   getConversationState,
@@ -948,16 +948,23 @@ export function ConversationVideo(props: ConversationVideoProps) {
         <DockButton label={camOn ? "Turn camera off" : "Turn camera on"} active={camOn} onClick={onToggleCam}>
           {camOn ? <Video /> : <VideoOff />}
         </DockButton>
-        <DockButton label="Flip camera" onClick={onFlipCamera}>
-          <SwitchCamera />
-        </DockButton>
-        {canScreenShare && onToggleScreenShare && (
-          <DockButton
-            label={screenShareOn ? "Stop sharing screen" : "Share screen"}
-            active={screenShareOn}
-            onClick={onToggleScreenShare}
-          >
-            {screenShareOn ? <MonitorX /> : <MonitorUp />}
+        {/* Host/co-host: the Project chooser (screen share OR a synced video)
+            takes the flip-camera slot. Everyone else keeps flip-camera. */}
+        {isController ? (
+          <ProjectMenu
+            canScreenShare={canScreenShare}
+            screenShareOn={screenShareOn}
+            onToggleScreenShare={() => onToggleScreenShare?.()}
+            onProjectVideo={() => resources?.openPanel("video")}
+            renderTrigger={({ toggle, active }) => (
+              <DockButton label="Project or share screen" active={active} onClick={toggle}>
+                <MonitorPlay />
+              </DockButton>
+            )}
+          />
+        ) : (
+          <DockButton label="Flip camera" onClick={onFlipCamera}>
+            <SwitchCamera />
           </DockButton>
         )}
         {resources && (

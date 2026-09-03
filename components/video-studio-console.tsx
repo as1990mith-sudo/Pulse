@@ -9,8 +9,6 @@ import {
   Mic,
   MicOff,
   MonitorPlay,
-  MonitorUp,
-  MonitorX,
   MoreVertical,
   Music,
   Pin,
@@ -58,6 +56,7 @@ import { ShareSheet } from "@/components/share-sheet"
 import { ConversationVideo } from "@/components/conversation/conversation-video"
 import { LiveSetupSheet } from "@/components/live/live-setup-sheet"
 import { ProjectionStage } from "@/components/live/projection-stage"
+import { ProjectMenu } from "@/components/live/project-menu"
 import { CoverArt } from "@/components/cover-art"
 import { MarqueeTitle } from "@/components/marquee-title"
 import type { ShareTarget } from "@/lib/share-types"
@@ -409,7 +408,7 @@ export function VideoStudioConsole({
 
   // Expose the room's video-audio publishing to the resource system, so the
   // shared-video panel can route its <video> audio into the egress recording.
-  const { registerVideoAudioSink } = useLiveResources()
+  const { registerVideoAudioSink, openPanel } = useLiveResources()
   useEffect(
     () =>
       registerVideoAudioSink({
@@ -1295,9 +1294,25 @@ export function VideoStudioConsole({
               controlsVisible ? "opacity-100" : "pointer-events-none opacity-0",
             )}
           >
-            <GlassButton label="Flip camera" onClick={() => void flipCamera()} disabled={!connected || !camOn}>
-              <RefreshCw className="size-5" />
-            </GlassButton>
+            {/* Project chooser (screen share OR a synced video) takes the
+                flip-camera slot for the broadcasting host. */}
+            <ProjectMenu
+              canScreenShare={canScreenShare}
+              screenShareOn={screenShareOn}
+              onToggleScreenShare={() => void (screenShareOn ? stopScreenShare() : startScreenShare())}
+              onProjectVideo={() => openPanel("video")}
+              renderTrigger={({ toggle, active }) => (
+                <GlassButton
+                  label="Project or share screen"
+                  onClick={toggle}
+                  active={active}
+                  tone={active ? "muted" : "glass"}
+                  disabled={!connected}
+                >
+                  <MonitorPlay className="size-5" />
+                </GlassButton>
+              )}
+            />
             <GlassButton
               label={micOn ? "Mute microphone" : "Unmute microphone"}
               onClick={() => void toggleMic()}
@@ -1332,20 +1347,6 @@ export function VideoStudioConsole({
             >
               <Music className="size-5" />
             </GlassButton>
-            {/* Share screen — desktop / supported browsers only (getDisplayMedia
-                is unavailable in the mobile app shell; Project Video covers that
-                case). Full-stage projection is rendered above. */}
-            {canScreenShare && (
-              <GlassButton
-                label={screenShareOn ? "Stop sharing screen" : "Share screen"}
-                onClick={() => void (screenShareOn ? stopScreenShare() : startScreenShare())}
-                active={screenShareOn}
-                tone={screenShareOn ? "muted" : "glass"}
-                disabled={!connected}
-              >
-                {screenShareOn ? <MonitorX className="size-5" /> : <MonitorUp className="size-5" />}
-              </GlassButton>
-            )}
             {roomName && (
               <GlassButton label="Share this live" onClick={() => setShareOpen(true)}>
                 <Send className="size-5" />

@@ -244,6 +244,13 @@ export function useLiveAudio() {
   // conversation recordings capture every speaker (not just the host mic). Kept
   // in sync as people join/leave while recording.
   const recordRemoteSourcesRef = useRef<Map<string, MediaStreamAudioSourceNode>>(new Map())
+  // The shared-video panel's <video> audio (uploaded file), folded into the
+  // recording so the replay captures what the room watched together. Held as a
+  // pending track so it works regardless of whether the video is loaded before
+  // or after recording starts; the live source node is created once the record
+  // bus exists.
+  const recordVideoTrackRef = useRef<MediaStreamTrack | null>(null)
+  const recordVideoSrcRef = useRef<MediaStreamAudioSourceNode | null>(null)
   // Sound-effects bus (host side): a single published track through which
   // synthesized chimes are mixed into the broadcast (and recording).
   const fxCtxRef = useRef<AudioContext | null>(null)
@@ -661,7 +668,14 @@ export function useLiveAudio() {
     const room = roomRef.current
     if (!room) return
 
-    const ctx = musicCtxRef.current ?? new AudioContext()
+    // Pin to 48 kHz. On Android, capturing the mic with echoCancellation/
+    // voiceIsolation switches the OS into voice-communication mode, where a bare
+    // `new AudioContext()` adopts the hardware's degraded ~16 kHz voice rate — so
+    // the whole music graph (decode → studio chain → the published
+    // MediaStreamDestination) would run at 16 kHz and reach listeners thin and
+    // muffled. Forcing 48 kHz keeps the published music full-bandwidth
+    // regardless of the mic's audio-session mode (matches the video Live path).
+    const ctx = musicCtxRef.current ?? new AudioContext({ sampleRate: 48000 })
     musicCtxRef.current = ctx
     await ensureCtxRunning(ctx)
 
@@ -857,7 +871,9 @@ export function useLiveAudio() {
     const room = roomRef.current
     if (!room) return
 
-    const ctx = fxCtxRef.current ?? new AudioContext()
+    // 48 kHz for the same reason as the music context: a bare AudioContext can
+    // lock to Android's ~16 kHz voice rate while the mic holds the audio session.
+    const ctx = fxCtxRef.current ?? new AudioContext({ sampleRate: 48000 })
     fxCtxRef.current = ctx
     await ensureCtxRunning(ctx)
 
@@ -905,7 +921,9 @@ export function useLiveAudio() {
     if (typeof MediaRecorder === "undefined") return
 
     try {
-      const ctx = new AudioContext()
+      // 48 kHz so the recorded mix (mic + music) isn't captured at Android's
+      // degraded ~16 kHz voice rate when the mic holds the audio session.
+      const ctx = new AudioContext({ sampleRate: 48000 })
       const dest = ctx.createMediaStreamDestination()
       recordCtxRef.current = ctx
       recordDestRef.current = dest
@@ -920,6 +938,18 @@ export function useLiveAudio() {
       // Any music already mixing gets folded in too.
       if (musicStreamRef.current) {
         ctx.createMediaStreamSource(musicStreamRef.current).connect(dest)
+      }
+
+      // A shared video already playing (its <video> audio) gets folded in so the
+      // recording captures it, mirroring the music path.
+      if (recordVideoTrackRef.current) {
+        try {
+          const src = ctx.createMediaStreamSource(new MediaStream([recordVideoTrackRef.current]))
+          src.connect(dest)
+          recordVideoSrcRef.current = src
+        } catch {
+          /* best-effort */
+        }
       }
 
       // Fold in every remote speaker already in the room so conversation
@@ -982,10 +1012,59 @@ export function useLiveAudio() {
       }
     })
     recordRemoteSourcesRef.current.clear()
+    if (recordVideoSrcRef.current) {
+      try {
+        recordVideoSrcRef.current.disconnect()
+      } catch {
+        /* already torn down */
+      }
+      recordVideoSrcRef.current = null
+    }
     await recordCtxRef.current?.close().catch(() => {})
     recordCtxRef.current = null
     recordDestRef.current = null
     return blob.size > 0 ? blob : null
+  }, [])
+
+  /**
+   * Fold the shared-video panel's <video> audio (uploaded file) into the session
+   * recording so the replay captures what the room watched. Idempotent; if the
+   * record bus is already running the track is wired in immediately, otherwise
+   * it's remembered and folded in when startRecording runs. Mirrors music.
+   */
+  const routeVideoAudioToRecording = useCallback((track: MediaStreamTrack) => {
+    recordVideoTrackRef.current = track
+    const ctx = recordCtxRef.current
+    const dest = recordDestRef.current
+    if (!ctx || !dest) return // Not recording yet; startRecording folds it in.
+    if (recordVideoSrcRef.current) {
+      try {
+        recordVideoSrcRef.current.disconnect()
+      } catch {
+        /* replacing */
+      }
+      recordVideoSrcRef.current = null
+    }
+    try {
+      const src = ctx.createMediaStreamSource(new MediaStream([track]))
+      src.connect(dest)
+      recordVideoSrcRef.current = src
+    } catch {
+      /* best-effort */
+    }
+  }, [])
+
+  /** Stop folding the shared-video audio into the recording (video stopped). */
+  const stopVideoAudioRecording = useCallback(() => {
+    recordVideoTrackRef.current = null
+    if (recordVideoSrcRef.current) {
+      try {
+        recordVideoSrcRef.current.disconnect()
+      } catch {
+        /* already torn down */
+      }
+      recordVideoSrcRef.current = null
+    }
   }, [])
 
   const disconnect = useCallback(async () => {
@@ -1074,5 +1153,7 @@ export function useLiveAudio() {
     playEffect,
     startRecording,
     stopRecording,
+    routeVideoAudioToRecording,
+    stopVideoAudioRecording,
   }
 }

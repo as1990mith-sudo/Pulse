@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import useSWR from "swr"
 import {
+  ArrowLeft,
   Film,
   Link2,
   Loader2,
@@ -63,6 +64,13 @@ export function MiniVideoPanel() {
   const roomName = descriptor?.roomName ?? null
   const isHost = descriptor?.isHost ?? false
 
+  // "Replace" is a persistent local intent: while true the host stays on the
+  // loader regardless of the 1.2s SWR poll (which still returns the retained
+  // source and would otherwise immediately flip the loader back to the player /
+  // stopped view — the reported bug). Cleared when a new video is chosen or the
+  // host backs out.
+  const [replacing, setReplacing] = useState(false)
+
   // Host reads a wider view: a video they've stopped is still returned (with
   // active=false) so they can play it again or replace it. Participants only
   // ever see an active video.
@@ -83,6 +91,24 @@ export function MiniVideoPanel() {
 
   if (!roomName) return null
 
+  // Host is replacing the current video: stay on the loader until they pick a
+  // new one or back out. Takes priority over the poll-driven views below.
+  if (isHost && replacing) {
+    return (
+      <HostLoader
+        roomName={roomName}
+        onLoaded={() => {
+          setReplacing(false)
+          void mutate()
+        }}
+        onCancel={() => {
+          setReplacing(false)
+          void mutate()
+        }}
+      />
+    )
+  }
+
   // Nothing loaded at all: host sees the loader, everyone else an empty state.
   if (!data) {
     return isHost ? (
@@ -100,7 +126,7 @@ export function MiniVideoPanel() {
         state={data}
         roomName={roomName}
         onResumed={() => mutate()}
-        onReplace={() => mutate(null)}
+        onReplace={() => setReplacing(true)}
       />
     )
   }
@@ -117,7 +143,7 @@ export function MiniVideoPanel() {
           roomName={roomName}
           volume={data.volume}
           onStopped={() => mutate()}
-          onReplace={() => mutate(null)}
+          onReplace={() => setReplacing(true)}
           onVolume={(v) => mutate((prev) => (prev ? { ...prev, volume: v } : prev), { revalidate: false })}
         />
       )}
@@ -808,7 +834,17 @@ function HostStoppedView({
 /*  Host loader: paste YouTube link or upload a file                          */
 /* -------------------------------------------------------------------------- */
 
-function HostLoader({ roomName, onLoaded }: { roomName: string; onLoaded: () => void }) {
+function HostLoader({
+  roomName,
+  onLoaded,
+  onCancel,
+}: {
+  roomName: string
+  onLoaded: () => void
+  // When present (the Replace flow) a Back control returns to the current video
+  // instead of loading a new one.
+  onCancel?: () => void
+}) {
   const [tab, setTab] = useState<"youtube" | "upload">("youtube")
   const [url, setUrl] = useState("")
   const [busy, setBusy] = useState(false)
@@ -880,12 +916,23 @@ function HostLoader({ roomName, onLoaded }: { roomName: string; onLoaded: () => 
 
   return (
     <div className="flex h-full flex-col overflow-y-auto px-4 py-4">
+      {onCancel && (
+        <button
+          type="button"
+          onClick={onCancel}
+          className="mb-3 -ml-1 flex w-fit items-center gap-1.5 rounded-full px-2 py-1 text-xs font-semibold text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+        >
+          <ArrowLeft className="size-4" /> Back
+        </button>
+      )}
       <div className="mb-3 flex items-center gap-2.5">
         <span className="flex size-9 items-center justify-center rounded-xl bg-primary/20 text-primary">
           <Film className="size-5" />
         </span>
         <div>
-          <h3 className="text-[15px] font-bold text-white">Watch together</h3>
+          <h3 className="text-[15px] font-bold text-white">
+            {onCancel ? "Replace video" : "Watch together"}
+          </h3>
           <p className="text-xs text-white/45">Load a video and everyone follows your playback in sync.</p>
         </div>
       </div>

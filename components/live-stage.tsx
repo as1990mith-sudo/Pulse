@@ -64,7 +64,7 @@ export function LiveStage({
   isHost = false,
   canRequestCall = false,
   callPending = false,
-  mutedIds = new Set<string>(),
+  hostMuted,
   coHostIds = new Set<string>(),
   hostFollow = null,
   onRequestCall,
@@ -79,7 +79,9 @@ export function LiveStage({
   isHost?: boolean
   canRequestCall?: boolean
   callPending?: boolean
-  mutedIds?: Set<string>
+  // The host's own mic state (host console only); listeners derive it from the
+  // host's published track instead.
+  hostMuted?: boolean
   // Identities currently promoted to co-host (distinct stage tag for everyone).
   coHostIds?: Set<string>
   hostFollow?: HostFollow | null
@@ -109,7 +111,10 @@ export function LiveStage({
           image: hostLive?.image ?? host.image ?? null,
           isSpeaking: active.has(host.id),
           isLocal: isHost,
-          muted: false,
+          // Reflect the host's real mic state: prefer the host's own local
+          // signal (hostMuted) on their console, otherwise the state published
+          // to the room (so listeners see the host muted too).
+          muted: hostMuted ?? (hostLive ? !hostLive.micOn : false),
           quality: hostLive?.quality ?? hostQuality,
         }}
         role="Host"
@@ -126,7 +131,9 @@ export function LiveStage({
             image: g.image,
             isSpeaking: active.has(g.identity),
             isLocal: g.isLocal,
-            muted: mutedIds.has(g.identity),
+            // Use the guest's real published mic state so a muted speaker always
+            // shows the muted badge (not a green active mic).
+            muted: !g.micOn,
             quality: g.quality,
           }}
           role={coHostIds.has(g.identity) ? "Co-Host" : "Guest"}
