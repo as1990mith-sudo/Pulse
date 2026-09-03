@@ -5,6 +5,7 @@ import { useEffect, useState } from "react"
 import { useUrlState } from "@/lib/navigation/use-url-state"
 import { useOverlayHistory } from "@/lib/navigation/use-overlay-history"
 import { useAutoHideChatChrome } from "@/lib/chat-chrome"
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock"
 import Link from "next/link"
 import {
   ArrowLeft,
@@ -148,15 +149,10 @@ export function OrgTabs({
   }, [tab])
 
   // Catalogue opens as an immersive full-screen view, so lock background scroll
-  // while it's open and restore it on close.
-  useEffect(() => {
-    if (!catalogueOpen) return
-    const previous = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-    return () => {
-      document.body.style.overflow = previous
-    }
-  }, [catalogueOpen])
+  // while it's open. Uses the iOS-safe position:fixed lock — plain
+  // `overflow:hidden` on <body> lets iOS keep scrolling the page behind, which
+  // made this overlay feel stuck and scrolled the screen behind instead.
+  useBodyScrollLock(catalogueOpen)
 
   function selectTab(key: TabKey) {
     // Catalogue isn't an inline tab — it opens the full-screen overlay and
