@@ -34,7 +34,6 @@ import {
   X,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { CoverArt } from "@/components/cover-art"
 import { MarqueeTitle } from "@/components/marquee-title"
 import { LiveChat } from "@/components/live-chat"
 import { useLiveResourcesOptional } from "@/components/live/resource/resource-context"
@@ -589,7 +588,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
         )}
       </AnimatePresence>
 
-      {/* ── Exclusive Conversation header ──────────────────────────────────── */}
+      {/* ─��� Exclusive Conversation header ──────────────────────────────────── */}
       <motion.header layout className={cn("z-30 shrink-0 border-b border-white/5 bg-neutral-950/80 backdrop-blur-xl")}>
         <div className="flex items-center justify-between px-3 pt-3">
           <div className="flex items-center gap-2">
@@ -658,22 +657,28 @@ export function ConversationVideo(props: ConversationVideoProps) {
               exit={{ opacity: 0, height: 0 }}
               className="flex flex-col items-center gap-2 px-4 pb-4 pt-3 text-center"
             >
-              {cover ? (
-                <CoverArt src={cover} alt={`${title} cover art`} className="size-20" />
-              ) : (
-                <div className="flex size-20 items-center justify-center rounded-full bg-primary/20 text-2xl font-bold text-primary shadow-xl ring-2 ring-black">
-                  {getInitials(title)}
-                </div>
-              )}
-              {/* Tapping the title/details collapses the header back to the
-                  compact bar (the compact bar re-expands it), giving a clear
-                  two-way toggle. The cover art keeps its own lightbox action. */}
+              {/* The WHOLE expanded header (cover + title + details) is a single
+                  collapse control, so tapping anywhere in the opened top area
+                  hides it back — a clear two-way toggle with the compact bar
+                  (which re-expands). No lightbox here; collapse is the expected
+                  gesture in the live header. */}
               <button
                 type="button"
                 onClick={() => setCollapsed(true)}
                 aria-label="Collapse room details"
-                className="max-w-full"
+                className="flex max-w-full flex-col items-center gap-2"
               >
+                {cover ? (
+                  <img
+                    src={cover || "/placeholder.svg"}
+                    alt={`${title} cover art`}
+                    className="size-20 rounded-full object-cover shadow-xl ring-2 ring-black"
+                  />
+                ) : (
+                  <div className="flex size-20 items-center justify-center rounded-full bg-primary/20 text-2xl font-bold text-primary shadow-xl ring-2 ring-black">
+                    {getInitials(title)}
+                  </div>
+                )}
                 <h1 className="text-balance text-base font-semibold leading-tight">{title}</h1>
                 {topic && (
                   <p className="mt-1 text-pretty text-sm text-white/75">
