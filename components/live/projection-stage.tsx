@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/utils"
 import { MonitorUp, Film } from "lucide-react"
-import type { ReactNode } from "react"
+import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react"
 
 /**
  * Full-stage presentation of a "Video Project" (a shared screen or a projected
@@ -53,8 +53,55 @@ export function ProjectionStage({
   const badge = label ?? (kind === "screen" ? "Sharing screen" : "Playing video")
   const Icon = kind === "screen" ? MonitorUp : Film
 
+  // Draggable self-view thumbnail. `pos` is null until the first drag, so it
+  // rests at its default bottom-right anchor; once moved it becomes an absolute
+  // left/top (px) clamped inside the stage. Pointer capture keeps the drag
+  // smooth even if the pointer briefly outruns the small tile.
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+  const dragRef = useRef<{ dx: number; dy: number; startX: number; startY: number } | null>(null)
+
+  function onThumbPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
+    const cont = containerRef.current
+    const thumb = e.currentTarget
+    if (!cont) return
+    const cr = cont.getBoundingClientRect()
+    const tr = thumb.getBoundingClientRect()
+    dragRef.current = {
+      dx: e.clientX - tr.left,
+      dy: e.clientY - tr.top,
+      startX: cr.left,
+      startY: cr.top,
+    }
+    thumb.setPointerCapture(e.pointerId)
+  }
+
+  function onThumbPointerMove(e: ReactPointerEvent<HTMLDivElement>) {
+    const d = dragRef.current
+    const cont = containerRef.current
+    if (!d || !cont) return
+    const cr = cont.getBoundingClientRect()
+    const thumb = e.currentTarget
+    const w = thumb.offsetWidth
+    const h = thumb.offsetHeight
+    // Position relative to the container, clamped so it can't leave the stage.
+    const left = Math.max(8, Math.min(e.clientX - d.dx - cr.left, cr.width - w - 8))
+    const top = Math.max(8, Math.min(e.clientY - d.dy - cr.top, cr.height - h - 8))
+    setPos({ left, top })
+  }
+
+  function onThumbPointerUp(e: ReactPointerEvent<HTMLDivElement>) {
+    dragRef.current = null
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    } catch {
+      /* pointer already released */
+    }
+  }
+
   return (
     <div
+      ref={containerRef}
       className={cn(
         "relative flex h-full w-full items-center justify-center overflow-hidden bg-neutral-950",
         // Smooth entrance so the stage reflow into projection never snaps.
@@ -91,10 +138,21 @@ export function ProjectionStage({
         )}
       </div>
 
-      {/* Floating presenter thumbnail — bottom-right, out of the way of captions
-          and the control dock. */}
+      {/* Floating presenter thumbnail — a draggable portrait PiP. Rests at the
+          bottom-right by default (out of the way of captions and the control
+          dock); the presenter can drag it anywhere inside the stage. */}
       {thumbnail ? (
-        <div className="absolute bottom-3 right-3 z-10 aspect-[3/4] w-24 overflow-hidden rounded-xl ring-2 ring-white/20 shadow-lg sm:w-28">
+        <div
+          onPointerDown={onThumbPointerDown}
+          onPointerMove={onThumbPointerMove}
+          onPointerUp={onThumbPointerUp}
+          onPointerCancel={onThumbPointerUp}
+          style={pos ? { left: pos.left, top: pos.top, right: "auto", bottom: "auto" } : undefined}
+          className={cn(
+            "absolute z-20 aspect-[3/4] w-24 touch-none cursor-grab overflow-hidden rounded-xl ring-2 ring-white/20 shadow-lg active:cursor-grabbing sm:w-28",
+            !pos && "bottom-3 right-3",
+          )}
+        >
           {thumbnail}
         </div>
       ) : null}
