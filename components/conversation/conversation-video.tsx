@@ -16,6 +16,8 @@ import {
   MessageSquare,
   Mic,
   MicOff,
+  MonitorUp,
+  MonitorX,
   MoreVertical,
   Music,
   Pin,
@@ -37,6 +39,7 @@ import { MarqueeTitle } from "@/components/marquee-title"
 import { LiveChat } from "@/components/live-chat"
 import { useLiveResourcesOptional } from "@/components/live/resource/resource-context"
 import { FloatingMessages } from "@/components/conversation/floating-messages"
+import { ProjectionStage } from "@/components/live/projection-stage"
 import {
   blockParticipant,
   getConversationState,
@@ -125,6 +128,15 @@ export type ConversationVideoProps = {
   // Small pinned-resource indicator in the header.
   pinnedCount?: number
   connected?: boolean
+  // ── Video Project (screen share) ──────────────────────────────────────────
+  // When a screen share is active (local or remote), it becomes the focused
+  // tile above the grid. Plumbing is owned by the parent hook; all optional so
+  // viewers that don't wire it simply never show the control or band.
+  canScreenShare?: boolean
+  screenShareOn?: boolean
+  projectionActive?: boolean
+  onToggleScreenShare?: () => void
+  registerProjectionVideoEl?: (el: HTMLVideoElement | null) => void
 }
 
 export function ConversationVideo(props: ConversationVideoProps) {
@@ -166,6 +178,11 @@ export function ConversationVideo(props: ConversationVideoProps) {
     onInvite,
     pinnedCount = 0,
     connected = true,
+    canScreenShare = false,
+    screenShareOn = false,
+    projectionActive = false,
+    onToggleScreenShare,
+    registerProjectionVideoEl,
   } = props
 
   const amHost = self.identity === hostId
@@ -416,7 +433,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
     )
   }
 
-  // ── One participant tile (video or camera-off avatar card) ────────────────
+  // ── One participant tile (video or camera-off avatar card) ─────────────���──
   function VideoTile({ tile, big = false }: { tile: Tile; big?: boolean }) {
     const peer = tile.kind === "remote" ? tile.peer : null
     const speaking = tile.kind === "local" ? localSpeaking : !!peer?.isSpeaking
@@ -680,8 +697,18 @@ export function ConversationVideo(props: ConversationVideoProps) {
 
       {/* ── Participant area ─────────────────────────────────────────────────── */}
       <motion.div layout className="relative min-h-0 flex-1">
+        {/* Video Project band — a screen share becomes the focused surface at the
+            top of the gathering; the participant grid reflows beneath it. */}
+        {projectionActive && registerProjectionVideoEl && (
+          <div className="p-2 pb-0">
+            <div className="aspect-video">
+              <ProjectionStage kind="screen" registerSurfaceEl={registerProjectionVideoEl} />
+            </div>
+          </div>
+        )}
+
         {/* Spotlight band */}
-        {hasSpotlight && (
+        {!projectionActive && hasSpotlight && (
           <div className="flex flex-col gap-2 p-2 pb-0">
             <div className={cn("grid gap-2", spotlight.length > 1 ? "grid-cols-2" : "grid-cols-1")}>
               {spotlight.map((tile) => (
@@ -693,8 +720,12 @@ export function ConversationVideo(props: ConversationVideoProps) {
           </div>
         )}
 
-        {/* Paged grid of the remaining participants */}
-        <div className="absolute inset-0 flex flex-col" style={hasSpotlight ? { top: "38%" } : undefined}>
+        {/* Paged grid of the remaining participants. Sits below whichever focused
+            band is active (projection takes priority over spotlight). */}
+        <div
+          className="absolute inset-0 flex flex-col"
+          style={projectionActive || hasSpotlight ? { top: "38%" } : undefined}
+        >
           <div className="relative min-h-0 flex-1 overflow-hidden">
             <AnimatePresence initial={false} custom={dir} mode="popLayout">
               <motion.div
@@ -906,6 +937,15 @@ export function ConversationVideo(props: ConversationVideoProps) {
         <DockButton label="Flip camera" onClick={onFlipCamera}>
           <SwitchCamera />
         </DockButton>
+        {canScreenShare && onToggleScreenShare && (
+          <DockButton
+            label={screenShareOn ? "Stop sharing screen" : "Share screen"}
+            active={screenShareOn}
+            onClick={onToggleScreenShare}
+          >
+            {screenShareOn ? <MonitorX /> : <MonitorUp />}
+          </DockButton>
+        )}
         {resources && (
           <DockButton label="Study resources" onClick={() => resources.openDrawer()}>
             <BookOpen />

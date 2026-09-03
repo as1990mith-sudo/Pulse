@@ -40,6 +40,7 @@ import { BackExitMenu } from "@/components/live-back-menu"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { ShareSheet } from "@/components/share-sheet"
 import { ConversationVideo } from "@/components/conversation/conversation-video"
+import { ProjectionStage } from "@/components/live/projection-stage"
 import { GridPrejoin } from "@/components/grid-prejoin"
 import { LiveJoinGate } from "@/components/live-join-gate"
 import type { ShareTarget } from "@/lib/share-types"
@@ -232,6 +233,8 @@ export function LiveVideoViewer({
     clearError: clearRtcError,
     audioBlocked,
     registerPeerVideoEl,
+    registerProjectionVideoEl,
+    remoteProjection,
     toggleMic,
     toggleCam,
     flipCamera,
@@ -520,6 +523,8 @@ export function LiveVideoViewer({
           onRefreshState={() => void refreshCalls()}
           registerLocalVideoEl={registerLocalVideoEl}
           registerPeerVideoEl={registerPeerVideoEl}
+          projectionActive={!!remoteProjection}
+          registerProjectionVideoEl={registerProjectionVideoEl}
           micOn={micOn}
           camOn={camOn}
           localVideoReady={localVideoReady}
@@ -659,6 +664,15 @@ export function LiveVideoViewer({
             }
             return null // self-view is the persistent element below
           })}
+
+          {/* Full-stage Video Project — a screen share presented by the host.
+              Fills the stage above the tiles; the self-view thumbnail continues
+              below so a called-in viewer still sees their own camera. */}
+          {remoteProjection && (
+            <div className="absolute inset-0 z-20">
+              <ProjectionStage kind="screen" rounded={false} registerSurfaceEl={registerProjectionVideoEl} />
+            </div>
+          )}
 
           {/* My own self-view — a persistent element (never remounted) so my
               camera track never detaches as the stage reflows. */}
@@ -932,7 +946,7 @@ export function LiveVideoViewer({
           also restores proper chat bubbles — the viewer's own messages ("You")
           sit on the right, everyone else (incl. the HOST) on the left. The
           [isolation] + explicit text color keep it from inheriting the stage's
-          forced white text. ─────────────────────────────────────────────────── */}
+          forced white text. ────────────────���────────────────────────────────── */}
       <div
         className={cn(
           "min-h-0 flex-[1.5] border-t border-border bg-background text-foreground transition-[flex-grow] duration-500 ease-out",

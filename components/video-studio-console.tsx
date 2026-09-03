@@ -9,6 +9,8 @@ import {
   Mic,
   MicOff,
   MonitorPlay,
+  MonitorUp,
+  MonitorX,
   MoreVertical,
   Music,
   Pin,
@@ -43,6 +45,7 @@ import {
 } from "@/app/actions/live"
 import { LIVE_CATEGORIES } from "@/lib/live-categories"
 import { useLiveVideo, isMedianApp, openNativeAppSettings, type RemotePeer } from "@/lib/use-live-video"
+import { useLiveResources } from "@/components/live/resource/resource-context"
 import { useLiveProcessing } from "@/components/live-processing-provider"
 import { ReactionLayer } from "@/components/live-reactions"
 import { LiveChat } from "@/components/live-chat"
@@ -54,6 +57,7 @@ import { useLivePresence } from "@/lib/use-live-presence"
 import { ShareSheet } from "@/components/share-sheet"
 import { ConversationVideo } from "@/components/conversation/conversation-video"
 import { LiveSetupSheet } from "@/components/live/live-setup-sheet"
+import { ProjectionStage } from "@/components/live/projection-stage"
 import { CoverArt } from "@/components/cover-art"
 import { MarqueeTitle } from "@/components/marquee-title"
 import type { ShareTarget } from "@/lib/share-types"
@@ -362,6 +366,16 @@ export function VideoStudioConsole({
     musicDuration,
     setMusicEndedHandler,
     stopMusic,
+    publishVideoAudioTrack,
+    unpublishVideoAudioTrack,
+    publishVideoProjectionTrack,
+    unpublishVideoProjectionTrack,
+    registerProjectionVideoEl,
+    canScreenShare,
+    screenShareOn,
+    startScreenShare,
+    stopScreenShare,
+    remoteProjection,
     stopRecording,
     disconnect,
   } = useLiveVideo({
@@ -376,6 +390,26 @@ export function VideoStudioConsole({
     // When egress is recording server-side, skip the client-side capture.
     recordOnServer,
   })
+
+  // Expose the room's video-audio publishing to the resource system, so the
+  // shared-video panel can route its <video> audio into the egress recording.
+  const { registerVideoAudioSink } = useLiveResources()
+  useEffect(
+    () =>
+      registerVideoAudioSink({
+        publish: publishVideoAudioTrack,
+        unpublish: unpublishVideoAudioTrack,
+        publishVideo: publishVideoProjectionTrack,
+        unpublishVideo: unpublishVideoProjectionTrack,
+      }),
+    [
+      registerVideoAudioSink,
+      publishVideoAudioTrack,
+      unpublishVideoAudioTrack,
+      publishVideoProjectionTrack,
+      unpublishVideoProjectionTrack,
+    ],
+  )
 
   // A live "Grid" stream renders the Meet/Zoom-style meeting grid instead of the
   // broadcast layout below.
@@ -821,9 +855,14 @@ export function VideoStudioConsole({
             gridPinnedIds={callState?.gridPinnedIds ?? []}
             gridPinRequest={callState?.gridPinRequest ?? null}
             onRefreshState={() => void refreshCalls()}
-            registerLocalVideoEl={registerLocalVideoEl}
-            registerPeerVideoEl={registerPeerVideoEl}
-            micOn={micOn}
+          registerLocalVideoEl={registerLocalVideoEl}
+          registerPeerVideoEl={registerPeerVideoEl}
+          canScreenShare={canScreenShare}
+          screenShareOn={screenShareOn}
+          projectionActive={screenShareOn || !!remoteProjection}
+          onToggleScreenShare={() => void (screenShareOn ? stopScreenShare() : startScreenShare())}
+          registerProjectionVideoEl={registerProjectionVideoEl}
+          micOn={micOn}
             camOn={camOn}
             localVideoReady={localVideoReady}
             localSpeaking={localSpeaking}
@@ -1015,6 +1054,19 @@ export function VideoStudioConsole({
                 <p className="text-sm font-medium">Starting camera…</p>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Full-stage Video Project — a screen share (local or remote). Fills the
+            broadcast stage above the camera/guests; the host camera continues in
+            its own frame beneath and also appears as the floating thumbnail. */}
+        {live && orientation !== "landscape" && (screenShareOn || remoteProjection) && (
+          <div className="absolute inset-0 z-20">
+            <ProjectionStage
+              kind="screen"
+              rounded={false}
+              registerSurfaceEl={registerProjectionVideoEl}
+            />
           </div>
         )}
 
@@ -1251,6 +1303,20 @@ export function VideoStudioConsole({
             >
               <Music className="size-5" />
             </GlassButton>
+            {/* Share screen — desktop / supported browsers only (getDisplayMedia
+                is unavailable in the mobile app shell; Project Video covers that
+                case). Full-stage projection is rendered above. */}
+            {canScreenShare && (
+              <GlassButton
+                label={screenShareOn ? "Stop sharing screen" : "Share screen"}
+                onClick={() => void (screenShareOn ? stopScreenShare() : startScreenShare())}
+                active={screenShareOn}
+                tone={screenShareOn ? "muted" : "glass"}
+                disabled={!connected}
+              >
+                {screenShareOn ? <MonitorX className="size-5" /> : <MonitorUp className="size-5" />}
+              </GlassButton>
+            )}
             {roomName && (
               <GlassButton label="Share this live" onClick={() => setShareOpen(true)}>
                 <Send className="size-5" />

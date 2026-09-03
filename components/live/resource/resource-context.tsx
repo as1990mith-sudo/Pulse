@@ -35,6 +35,15 @@ export type LiveDescriptor = {
 
 type ChatSender = (text: string) => void | Promise<void>
 
+// How the host console publishes/unpublishes the shared-video tracks (audio, and
+// the projected PIXELS) so the egress records the Project Video into the replay.
+export type VideoAudioSink = {
+  publish: (track: MediaStreamTrack) => Promise<void>
+  unpublish: () => Promise<void>
+  publishVideo: (track: MediaStreamTrack) => Promise<void>
+  unpublishVideo: () => Promise<void>
+}
+
 type ResourceCtx = {
   descriptor: LiveDescriptor
   activePanel: ResourcePanelId | null
@@ -50,6 +59,25 @@ type ResourceCtx = {
   registerChatSender: (fn: ChatSender) => () => void
   shareToChat: (text: string) => Promise<boolean>
   canShareToChat: boolean
+  // The host console (which owns the LiveKit room) registers how to publish the
+  // shared-video audio so the egress recording captures it. The video panel
+  // calls publishVideoAudio with a Web Audio track tapped off its <video>, and
+  // unpublishVideoAudio when the video stops/replaces. No-ops when unregistered
+  // (e.g. the viewer side, which never publishes).
+  registerVideoAudioSink: (sink: VideoAudioSink) => () => void
+  publishVideoAudio: (track: MediaStreamTrack) => Promise<void>
+  unpublishVideoAudio: () => Promise<void>
+  // Same, for the projected video PIXELS (egress-only replay capture).
+  publishVideoPixels: (track: MediaStreamTrack) => Promise<void>
+  unpublishVideoPixels: () => Promise<void>
+  // While a host is actively PLAYING a shared video, the panel is locked for
+  // participants: they can't close it, minimise it to the drawer, or switch to
+  // another resource — the room watches together. Dragging the card and
+  // minimising the live session itself stay allowed. The video panel is the
+  // single source of truth and toggles this; the context enforces it centrally
+  // so every entry point (buttons, switcher, drawer) obeys the same rule.
+  videoLocked: boolean
+  setVideoLocked: (v: boolean) => void
 }
 
 const Ctx = createContext<ResourceCtx | null>(null)
@@ -76,18 +104,32 @@ export function ResourceProvider({
   const [payload, setPayload] = useState<PanelPayload>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [senderCount, setSenderCount] = useState(0)
+  const [videoLocked, setVideoLocked] = useState(false)
   const senderRef = useRef<ChatSender | null>(null)
+  // Read in the stable callbacks below so they always see the current lock
+  // without being torn down and recreated when it flips.
+  const lockedRef = useRef(false)
+  lockedRef.current = videoLocked
 
-  const openDrawer = useCallback(() => setDrawerOpen(true), [])
+  // Opening the drawer is a form of minimising the panel, so it's blocked while
+  // the video is locked.
+  const openDrawer = useCallback(() => {
+    if (lockedRef.current) return
+    setDrawerOpen(true)
+  }, [])
   const closeDrawer = useCallback(() => setDrawerOpen(false), [])
 
   const openPanel = useCallback((id: ResourcePanelId, p: PanelPayload = null) => {
+    // While locked, the only permissible target is the video panel itself;
+    // switching to any other resource is blocked.
+    if (lockedRef.current && id !== "video") return
     setPayload(p)
     setActivePanel(id)
     setDrawerOpen(false)
   }, [])
 
   const closePanel = useCallback(() => {
+    if (lockedRef.current) return
     setActivePanel(null)
     setPayload(null)
   }, [])
@@ -107,6 +149,26 @@ export function ResourceProvider({
     return true
   }, [])
 
+  const videoAudioSinkRef = useRef<VideoAudioSink | null>(null)
+  const registerVideoAudioSink = useCallback((sink: VideoAudioSink) => {
+    videoAudioSinkRef.current = sink
+    return () => {
+      if (videoAudioSinkRef.current === sink) videoAudioSinkRef.current = null
+    }
+  }, [])
+  const publishVideoAudio = useCallback(async (track: MediaStreamTrack) => {
+    await videoAudioSinkRef.current?.publish(track)
+  }, [])
+  const unpublishVideoAudio = useCallback(async () => {
+    await videoAudioSinkRef.current?.unpublish()
+  }, [])
+  const publishVideoPixels = useCallback(async (track: MediaStreamTrack) => {
+    await videoAudioSinkRef.current?.publishVideo(track)
+  }, [])
+  const unpublishVideoPixels = useCallback(async () => {
+    await videoAudioSinkRef.current?.unpublishVideo()
+  }, [])
+
   const value = useMemo<ResourceCtx>(
     () => ({
       descriptor,
@@ -120,6 +182,13 @@ export function ResourceProvider({
       registerChatSender,
       shareToChat,
       canShareToChat: senderCount > 0,
+      registerVideoAudioSink,
+      publishVideoAudio,
+      unpublishVideoAudio,
+      publishVideoPixels,
+      unpublishVideoPixels,
+      videoLocked,
+      setVideoLocked,
     }),
     [
       descriptor,
@@ -133,6 +202,12 @@ export function ResourceProvider({
       registerChatSender,
       shareToChat,
       senderCount,
+      registerVideoAudioSink,
+      publishVideoAudio,
+      unpublishVideoAudio,
+      publishVideoPixels,
+      unpublishVideoPixels,
+      videoLocked,
     ],
   )
 

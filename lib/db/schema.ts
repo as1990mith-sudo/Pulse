@@ -1485,6 +1485,10 @@ export const liveVideoState = pgTable("live_video_state", {
   // `updatedAt` this lets clients compute the live position while playing.
   positionMs: integer("positionMs").notNull().default(0),
   playing: boolean("playing").notNull().default(false),
+  // Shared listening volume 0–100 the host sets for the whole room. Every
+  // client applies it to its local player, so "turn it down" affects everyone
+  // (and the host's own monitor). Defaults to full.
+  volume: integer("volume").notNull().default(100),
   updatedBy: text("updatedBy"),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
