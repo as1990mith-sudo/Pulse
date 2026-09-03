@@ -142,10 +142,12 @@ const DOCK_SWITCHER: { id: ResourcePanelId; icon: LucideIcon; label: string }[] 
  * Returns nothing until a panel is open, so it takes no space when idle.
  */
 export function DesktopResourceDock() {
-  const { activePanel, openPanel, closePanel, videoLocked } = useLiveResources()
+  const { activePanel, openPanel, closePanel, videoLocked, descriptor } = useLiveResources()
   if (!activePanel) return null
   const meta = PANEL_META[activePanel]
   const Icon = meta.icon
+  // Video resource is audio-surfaces-only (podcast & audio conversation).
+  const dockSwitcher = DOCK_SWITCHER.filter((s) => s.id !== "video" || descriptor?.mode === "audio")
 
   return (
     <aside
@@ -174,7 +176,7 @@ export function DesktopResourceDock() {
         {/* Switcher hidden while locked: no switching tabs during a shared video. */}
         {!videoLocked && (
         <div className="flex items-center gap-1">
-          {DOCK_SWITCHER.map((s) => {
+          {dockSwitcher.map((s) => {
             const SwIcon = s.icon
             const active = activePanel === s.id
             return (

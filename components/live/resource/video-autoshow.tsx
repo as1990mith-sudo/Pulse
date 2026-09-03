@@ -20,7 +20,10 @@ import { useLiveResources } from "./resource-context"
 
 export function VideoAutoShow() {
   const { descriptor, activePanel, openPanel, closePanel } = useLiveResources()
-  const roomName = descriptor?.roomName ?? null
+  // The shared-video resource exists only on the audio surfaces (podcast &
+  // audio conversation). On video broadcast/conversation there is no video
+  // resource, so this watcher must never poll or auto-open anything.
+  const roomName = descriptor?.mode === "audio" ? (descriptor?.roomName ?? null) : null
 
   // Light poll: enough to feel instant ("immediately appearing for everyone")
   // without hammering. The panel's own engine polls faster once it is open.

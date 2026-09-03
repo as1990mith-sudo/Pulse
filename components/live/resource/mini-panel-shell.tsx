@@ -50,7 +50,10 @@ export function MiniPanelShell({
   // Ref to the layer element, so the panel can't be dragged off-screen.
   constraintsRef: React.RefObject<HTMLDivElement | null>
 }) {
-  const { activePanel, openPanel, closePanel, openDrawer, videoLocked } = useLiveResources()
+  const { activePanel, openPanel, closePanel, openDrawer, videoLocked, descriptor } = useLiveResources()
+  // The shared-video resource only exists on the audio surfaces (podcast &
+  // audio conversation); video broadcast/conversation already show video.
+  const switcher = SWITCHER.filter((s) => s.id !== "video" || descriptor?.mode === "audio")
   const dragControls = useDragControls()
   const panelRef = useRef<HTMLDivElement>(null)
   // "Expand" grows the floating card ~20% larger (both height and width) so more
@@ -146,7 +149,7 @@ export function MiniPanelShell({
             Hidden while locked: no switching tabs during a shared video. */}
         {!videoLocked && (
         <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
-          {SWITCHER.map((s) => {
+          {switcher.map((s) => {
             const SwIcon = s.icon
             const active = activePanel === s.id
             return (

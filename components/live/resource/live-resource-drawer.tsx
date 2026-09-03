@@ -26,7 +26,10 @@ const ENTRIES: Entry[] = [
 ]
 
 export function LiveResourceDrawer() {
-  const { drawerOpen, closeDrawer, openPanel } = useLiveResources()
+  const { drawerOpen, closeDrawer, openPanel, descriptor } = useLiveResources()
+  // The shared-video resource is offered only on the audio surfaces (podcast &
+  // audio conversation); the video surfaces already are video.
+  const entries = ENTRIES.filter((e) => e.id !== "video" || descriptor?.mode === "audio")
 
   return (
     <AnimatePresence>
@@ -67,7 +70,7 @@ export function LiveResourceDrawer() {
             </div>
 
             <ul className="grid grid-cols-1 gap-2">
-              {ENTRIES.map((entry) => {
+              {entries.map((entry) => {
                 const Icon = entry.icon
                 return (
                   <li key={entry.id}>
