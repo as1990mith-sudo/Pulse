@@ -290,7 +290,14 @@ export function OrgTabs({
           <div
             data-scroll
             onScroll={onCatalogueScroll}
-            className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6"
+            // `min-h-0` is essential: a `flex-1` child in this `flex-col` fixed
+            // overlay defaults to `min-height:auto`, so it refuses to shrink below
+            // its content height — the list then overflows the fixed container
+            // instead of scrolling inside it, and the touch gesture falls through
+            // to the page behind (the "stuck / scrolls the screen behind" bug on
+            // both iOS and Android). Bounding it here makes overflow-y-auto scroll
+            // internally, matching the other working overlays.
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6"
           >
             <div className="mx-auto w-full max-w-4xl">
               {/* Redesigned Upload: Materials + Playlists (externally-hosted
