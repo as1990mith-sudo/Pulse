@@ -18,13 +18,7 @@ import type { useLiveAudio } from "@/lib/use-live-audio"
 import type { CurrentUser } from "@/lib/session"
 import type { ShareTarget } from "@/lib/share-types"
 import type { CallRequestView, CoHostPermissions, LiveStreamView } from "@/app/actions/live"
-import {
-  respondToCallRequest,
-  requestMusicControl,
-  stepOffStage,
-  callIn,
-  requestEndSession,
-} from "@/app/actions/live"
+import { respondToCallRequest, requestMusicControl, stepOffStage, callIn } from "@/app/actions/live"
 import { cn } from "@/lib/utils"
 
 /** Formats elapsed seconds as H:MM:SS / M:SS for the live duration clock. */
@@ -83,7 +77,7 @@ function DockButton({
  * Controls are gated by `permissions` (granted by the main host):
  *  - acceptRequests → People panel can accept/decline call requests
  *  - controlTracks  → Music panel (with the host approval flow)
- *  - endSession     → "End Session" in the back menu
+ *  - saveRecording  → may publish their own recording of the session
  */
 export function CoHostConsole({
   stream,
@@ -101,7 +95,6 @@ export function CoHostConsole({
   viewers,
   locked,
   theme,
-  endRequestPending,
   onMinimize,
   onExit,
   refreshCalls,
@@ -121,8 +114,6 @@ export function CoHostConsole({
   viewers: number
   locked: boolean
   theme: string
-  // True while this co-host's "end live session" request awaits the host.
-  endRequestPending: boolean
   onMinimize?: (to?: string) => void
   onExit?: () => void
   refreshCalls: () => void
@@ -340,12 +331,6 @@ export function CoHostConsole({
     if (!res.ok && res.error) setMusicError(res.error)
     refreshCalls()
   }
-  async function handleEndSession() {
-    const res = await requestEndSession({ roomName: stream.roomName })
-    if (!res.ok && res.error) setMusicError(res.error)
-    refreshCalls()
-  }
-
   const shareTarget: ShareTarget = {
     type: "live",
     key: stream.roomName,
@@ -404,7 +389,6 @@ export function CoHostConsole({
             if (onExit) onExit()
           }}
           onMinimize={onMinimize ?? (() => {})}
-          onEndSession={permissions.endSession ? () => void handleEndSession() : undefined}
         />
         <CoverArt src={stream.cover ?? null} alt={`${stream.title} cover art`} />
         <div className="relative min-w-0 flex-1">
@@ -457,12 +441,6 @@ export function CoHostConsole({
         {musicRequestPending && !musicApproved && onCall && (
           <p className="relative mx-auto rounded-full bg-amber-400/15 px-3 py-1.5 text-xs font-medium text-amber-200 ring-1 ring-inset ring-amber-400/20 backdrop-blur-md">
             Waiting for the host to approve your music control…
-          </p>
-        )}
-
-        {endRequestPending && (
-          <p className="relative mx-auto rounded-full bg-live/15 px-3 py-1.5 text-xs font-medium text-live ring-1 ring-inset ring-live/20 backdrop-blur-md">
-            Waiting for the host to end the live session…
           </p>
         )}
 

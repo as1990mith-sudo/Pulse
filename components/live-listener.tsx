@@ -231,7 +231,6 @@ export function LiveListener({
   const [myPermissions, setMyPermissions] = useState<CoHostPermissions>({
     acceptRequests: false,
     controlTracks: false,
-    endSession: false,
     saveRecording: false,
   })
   const [myMusicApproved, setMyMusicApproved] = useState(false)
@@ -240,23 +239,17 @@ export function LiveListener({
   const [pendingRequests, setPendingRequests] = useState<CallRequestView[]>([])
   const [guests, setGuests] = useState<CallRequestView[]>([])
   const [coHostIds, setCoHostIds] = useState<Set<string>>(new Set())
-  // True while this co-host's "end live session" request awaits the host's
-  // answer (drives the "Waiting for host…" banner in the co-host console).
-  const [endRequestPending, setEndRequestPending] = useState(false)
-
   // Begin capturing as soon as this co-host is publishing, so a save is possible
   // later without asking them to opt in mid-show. Recording stays local until
   // they explicitly choose "Save" on the post-end prompt; declining discards it.
   // Intentionally not stopped on step-off — a co-host who steps off and calls
   // back in keeps one continuous take instead of losing the earlier portion.
   //
-  // Recorded when the host grants EITHER "Save Recording" OR "End Session": a
-  // guest who can end the whole broadcast must be able to save it "as though the
-  // host ended it himself" (matching the server grant in publishShow). Without
-  // either permission nothing is recorded at all, so there's no local copy of
-  // the room sitting in memory, and a session still yields one canonical episode
-  // (the host's) by default.
-  const canRecordSession = myPermissions.saveRecording || myPermissions.endSession
+  // Recorded only when the host grants "Save Recording" (matching the server
+  // grant in publishShow). Without it nothing is recorded at all, so there's no
+  // local copy of the room sitting in memory, and a session still yields one
+  // canonical episode (the host's) by default.
+  const canRecordSession = myPermissions.saveRecording
   useEffect(() => {
     if (myRole !== "cohost" || !canRecordSession) return
     if (!state.canPublish || coHostRecordingRef.current) return
@@ -395,7 +388,6 @@ export function LiveListener({
       setPendingRequests(s.pendingRequests)
       setGuests(s.guests)
       setCoHostIds(new Set(s.coHosts.map((c) => c.userId)))
-      setEndRequestPending(s.endRequest?.byId === currentUserId)
       // Flash a "declined" toast when status transitions to declined.
       if (s.myStatus === "declined" && prevStatus.current && prevStatus.current !== "declined") {
         setDeclinedFlash(true)
@@ -488,7 +480,6 @@ export function LiveListener({
       setPendingRequests(s.pendingRequests)
       setGuests(s.guests)
       setCoHostIds(new Set(s.coHosts.map((c) => c.userId)))
-      setEndRequestPending(s.endRequest?.byId === currentUserId)
     } catch {
       // poll will catch up on its next tick
     }
@@ -514,7 +505,6 @@ export function LiveListener({
         viewers={audience}
         locked={locked}
         theme={theme}
-        endRequestPending={endRequestPending}
         onMinimize={onMinimize}
         onExit={() => {
           // Leaving the room entirely: step off first so the stage tile clears
