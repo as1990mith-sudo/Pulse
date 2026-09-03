@@ -137,6 +137,8 @@ export type ConversationVideoProps = {
   projectionActive?: boolean
   onToggleScreenShare?: () => void
   registerProjectionVideoEl?: (el: HTMLVideoElement | null) => void
+  projectionPresenterName?: string
+  projectionPresenterRole?: string
 }
 
 export function ConversationVideo(props: ConversationVideoProps) {
@@ -183,6 +185,8 @@ export function ConversationVideo(props: ConversationVideoProps) {
     projectionActive = false,
     onToggleScreenShare,
     registerProjectionVideoEl,
+    projectionPresenterName,
+    projectionPresenterRole,
   } = props
 
   const amHost = self.identity === hostId
@@ -702,7 +706,12 @@ export function ConversationVideo(props: ConversationVideoProps) {
         {projectionActive && registerProjectionVideoEl && (
           <div className="p-2 pb-0">
             <div className="aspect-video">
-              <ProjectionStage kind="screen" registerSurfaceEl={registerProjectionVideoEl} />
+              <ProjectionStage
+                kind="screen"
+                registerSurfaceEl={registerProjectionVideoEl}
+                presenterName={projectionPresenterName}
+                presenterRole={projectionPresenterRole}
+              />
             </div>
           </div>
         )}
@@ -926,7 +935,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
         )}
       </AnimatePresence>
 
-      {/* ── Bottom dock ──────────────────────────────────────────────────────── */}
+      {/* ── Bottom dock ───────────────────────────────────────��──────────────── */}
       <div className="z-30 flex shrink-0 items-center justify-center gap-3 border-t border-white/5 bg-neutral-950/80 px-4 py-3 backdrop-blur-xl">
         <DockButton label={micOn ? "Mute" : "Unmute"} active={micOn} onClick={onToggleMic}>
           {micOn ? <Mic /> : <MicOff />}

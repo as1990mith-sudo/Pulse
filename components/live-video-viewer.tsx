@@ -398,6 +398,15 @@ export function LiveVideoViewer({
   const hostPeer = peers.find((p) => p.isHost)
   const guestPeers = peers.filter((p) => !p.isHost)
   const viewers = Math.max(0, participants - 1 - peers.length)
+  // Who is presenting the full-stage Video Project (screen share), if anyone.
+  const projectionPresenter = remoteProjection
+    ? hostPeer && remoteProjection.identity === hostPeer.identity
+      ? { name: stream.hostName, role: "Host" }
+      : {
+          name: peers.find((p) => p.identity === remoteProjection.identity)?.name ?? stream.hostName,
+          role: "Presenter",
+        }
+    : null
   // Presence-backed audience (real names + avatars) for the "who's here" sheet.
   const { count: presenceCount, members: presenceMembers } = useLivePresence(stream.roomName, canWatch)
   const isSelf = currentUserId === stream.hostId
@@ -525,6 +534,8 @@ export function LiveVideoViewer({
           registerPeerVideoEl={registerPeerVideoEl}
           projectionActive={!!remoteProjection}
           registerProjectionVideoEl={registerProjectionVideoEl}
+          projectionPresenterName={projectionPresenter?.name}
+          projectionPresenterRole={projectionPresenter?.role}
           micOn={micOn}
           camOn={camOn}
           localVideoReady={localVideoReady}
@@ -670,7 +681,13 @@ export function LiveVideoViewer({
               below so a called-in viewer still sees their own camera. */}
           {remoteProjection && (
             <div className="absolute inset-0 z-20">
-              <ProjectionStage kind="screen" rounded={false} registerSurfaceEl={registerProjectionVideoEl} />
+              <ProjectionStage
+                kind="screen"
+                rounded={false}
+                registerSurfaceEl={registerProjectionVideoEl}
+                presenterName={projectionPresenter?.name}
+                presenterRole={projectionPresenter?.role}
+              />
             </div>
           )}
 
