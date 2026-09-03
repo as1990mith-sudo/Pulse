@@ -216,7 +216,13 @@ export function AppointmentMeeting({
             autoPlay
             playsInline
             muted
-            className="absolute right-4 top-4 h-[168px] w-[116px] rounded-2xl object-cover shadow-lg ring-1 ring-white/20"
+            className={cn(
+              "absolute right-4 top-4 h-[168px] w-[116px] rounded-2xl object-cover shadow-lg ring-1 ring-white/20",
+              // Mirror the front (selfie) camera so the self-view reads like a
+              // mirror; the back camera stays un-mirrored so scenes/text aren't
+              // reversed.
+              facingMode === "user" && "-scale-x-100",
+            )}
           />
         )}
 

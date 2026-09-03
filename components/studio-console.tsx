@@ -57,6 +57,7 @@ import {
   import { ManageCoHostMenu, MusicApprovalPrompt, EndSessionPrompt, CoHostsPanel } from "@/components/live/cohost-menu"
   import { SaveEpisodePrompt } from "@/components/live/save-episode-prompt"
 import { useLiveAudio } from "@/lib/use-live-audio"
+import { useLiveResources } from "@/components/live/resource/resource-context"
 import { uploadMedia, compressImage } from "@/lib/upload-media"
 import { LiveChat } from "@/components/live-chat"
 import { CoverArt } from "@/components/cover-art"
@@ -137,7 +138,22 @@ export function StudioConsole({
     startRecording,
     stopRecording,
     startAudioPlayback,
+    routeVideoAudioToRecording,
+    stopVideoAudioRecording,
   } = useLiveAudio()
+  // Route the shared-video panel's audio into the session recording. Audio Live
+  // records via a client-side MediaRecorder mix bus (mic + music), so — unlike
+  // video Live's server egress — we fold the <video> audio into that bus here.
+  // publishVideo/unpublishVideo are no-ops: an audio session has no pixel egress.
+  const { registerVideoAudioSink } = useLiveResources()
+  useEffect(() => {
+    return registerVideoAudioSink({
+      publish: async (track) => routeVideoAudioToRecording(track),
+      unpublish: async () => stopVideoAudioRecording(),
+      publishVideo: async () => {},
+      unpublishVideo: async () => {},
+    })
+  }, [registerVideoAudioSink, routeVideoAudioToRecording, stopVideoAudioRecording])
   // "On air" is an intent that persists across a dropped/recovering connection,
   // so a transient network blip never flips the host back to the offline setup
   // screen (which is what made it feel like the app "signed you out" of a live).

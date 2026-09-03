@@ -244,6 +244,13 @@ export function useLiveAudio() {
   // conversation recordings capture every speaker (not just the host mic). Kept
   // in sync as people join/leave while recording.
   const recordRemoteSourcesRef = useRef<Map<string, MediaStreamAudioSourceNode>>(new Map())
+  // The shared-video panel's <video> audio (uploaded file), folded into the
+  // recording so the replay captures what the room watched together. Held as a
+  // pending track so it works regardless of whether the video is loaded before
+  // or after recording starts; the live source node is created once the record
+  // bus exists.
+  const recordVideoTrackRef = useRef<MediaStreamTrack | null>(null)
+  const recordVideoSrcRef = useRef<MediaStreamAudioSourceNode | null>(null)
   // Sound-effects bus (host side): a single published track through which
   // synthesized chimes are mixed into the broadcast (and recording).
   const fxCtxRef = useRef<AudioContext | null>(null)
@@ -933,6 +940,18 @@ export function useLiveAudio() {
         ctx.createMediaStreamSource(musicStreamRef.current).connect(dest)
       }
 
+      // A shared video already playing (its <video> audio) gets folded in so the
+      // recording captures it, mirroring the music path.
+      if (recordVideoTrackRef.current) {
+        try {
+          const src = ctx.createMediaStreamSource(new MediaStream([recordVideoTrackRef.current]))
+          src.connect(dest)
+          recordVideoSrcRef.current = src
+        } catch {
+          /* best-effort */
+        }
+      }
+
       // Fold in every remote speaker already in the room so conversation
       // recordings capture all voices, not just the host's mic. Late joiners
       // are added by the TrackSubscribed handler while recording continues.
@@ -993,10 +1012,59 @@ export function useLiveAudio() {
       }
     })
     recordRemoteSourcesRef.current.clear()
+    if (recordVideoSrcRef.current) {
+      try {
+        recordVideoSrcRef.current.disconnect()
+      } catch {
+        /* already torn down */
+      }
+      recordVideoSrcRef.current = null
+    }
     await recordCtxRef.current?.close().catch(() => {})
     recordCtxRef.current = null
     recordDestRef.current = null
     return blob.size > 0 ? blob : null
+  }, [])
+
+  /**
+   * Fold the shared-video panel's <video> audio (uploaded file) into the session
+   * recording so the replay captures what the room watched. Idempotent; if the
+   * record bus is already running the track is wired in immediately, otherwise
+   * it's remembered and folded in when startRecording runs. Mirrors music.
+   */
+  const routeVideoAudioToRecording = useCallback((track: MediaStreamTrack) => {
+    recordVideoTrackRef.current = track
+    const ctx = recordCtxRef.current
+    const dest = recordDestRef.current
+    if (!ctx || !dest) return // Not recording yet; startRecording folds it in.
+    if (recordVideoSrcRef.current) {
+      try {
+        recordVideoSrcRef.current.disconnect()
+      } catch {
+        /* replacing */
+      }
+      recordVideoSrcRef.current = null
+    }
+    try {
+      const src = ctx.createMediaStreamSource(new MediaStream([track]))
+      src.connect(dest)
+      recordVideoSrcRef.current = src
+    } catch {
+      /* best-effort */
+    }
+  }, [])
+
+  /** Stop folding the shared-video audio into the recording (video stopped). */
+  const stopVideoAudioRecording = useCallback(() => {
+    recordVideoTrackRef.current = null
+    if (recordVideoSrcRef.current) {
+      try {
+        recordVideoSrcRef.current.disconnect()
+      } catch {
+        /* already torn down */
+      }
+      recordVideoSrcRef.current = null
+    }
   }, [])
 
   const disconnect = useCallback(async () => {
@@ -1085,5 +1153,7 @@ export function useLiveAudio() {
     playEffect,
     startRecording,
     stopRecording,
+    routeVideoAudioToRecording,
+    stopVideoAudioRecording,
   }
 }
