@@ -1,7 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Crown, Music, PhoneIncoming, PowerOff, Radio, Save, UserMinus, X } from "lucide-react"
+import { Crown, Music, PhoneIncoming, Save, UserMinus, X } from "lucide-react"
 import type { CallRequestView, CoHostPermissions } from "@/app/actions/live"
 import { cn } from "@/lib/utils"
 
@@ -138,13 +137,6 @@ export function ManageCoHostMenu({
             enabled={speaker.permissions.controlTracks}
             onToggle={(next) => onTogglePermission("controlTracks", next)}
           />
-          <PermissionToggle
-            icon={<PowerOff />}
-            label="End Session"
-            description="Allow this co-host to end the whole live session."
-            enabled={speaker.permissions.endSession}
-            onToggle={(next) => onTogglePermission("endSession", next)}
-          />
           <button
             type="button"
             onClick={onRemoveCoHost}
@@ -244,13 +236,6 @@ export function CoHostsPanel({
                   enabled={c.permissions.saveRecording}
                   onToggle={(next) => onTogglePermission(c.userId, "saveRecording", next)}
                 />
-                <PermissionToggle
-                  icon={<PowerOff />}
-                  label="End Session"
-                  description="Allow this co-host to end the whole live session."
-                  enabled={c.permissions.endSession}
-                  onToggle={(next) => onTogglePermission(c.userId, "endSession", next)}
-                />
                 <button
                   type="button"
                   onClick={() => onRemoveCoHost(c.userId)}
@@ -314,65 +299,3 @@ export function MusicApprovalPrompt({
   )
 }
 
-/**
- * Prompt shown to the MAIN HOST when a co-host (with End Session permission)
- * asks to end the live. The host has a 30s countdown to End now or Keep live;
- * if they don't answer, the server auto-ends the live once the window elapses
- * (this prompt just counts down to that). `remainingMs` is the server-reported
- * time left, refreshed each poll, so the countdown stays roughly in sync.
- */
-export function EndSessionPrompt({
-  byName,
-  remainingMs,
-  onApprove,
-  onDecline,
-}: {
-  byName: string
-  remainingMs: number
-  onApprove: () => void
-  onDecline: () => void
-}) {
-  // Local 1s ticker so the countdown moves smoothly between server polls. We
-  // re-sync to the server's remainingMs whenever it changes.
-  const [secondsLeft, setSecondsLeft] = useState(Math.max(0, Math.ceil(remainingMs / 1000)))
-  useEffect(() => {
-    setSecondsLeft(Math.max(0, Math.ceil(remainingMs / 1000)))
-  }, [remainingMs])
-  useEffect(() => {
-    const iv = setInterval(() => setSecondsLeft((s) => Math.max(0, s - 1)), 1000)
-    return () => clearInterval(iv)
-  }, [])
-
-  return (
-    <MenuSheet title="End live session?" onClose={onDecline}>
-      <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-live/15 text-live">
-            <Radio className="size-5" strokeWidth={2.5} />
-          </span>
-          <p className="text-sm text-pretty">
-            <span className="font-semibold">{byName}</span> is asking to end the live session. If you don&apos;t respond,
-            it will end automatically in{" "}
-            <span className="font-semibold tabular-nums text-live">{secondsLeft}s</span>.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onApprove}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-live px-3 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-          >
-            <PowerOff className="size-4" /> End now
-          </button>
-          <button
-            type="button"
-            onClick={onDecline}
-            className="flex flex-1 items-center justify-center rounded-xl bg-secondary px-3 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-secondary/70"
-          >
-            Keep live
-          </button>
-        </div>
-      </div>
-    </MenuSheet>
-  )
-}
