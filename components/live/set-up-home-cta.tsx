@@ -30,8 +30,10 @@ export function SetUpHomeCta() {
             className="object-cover"
             priority={false}
           />
-          {/* Bottom scrim so the copy stays legible over any illustration edge. */}
-          <div className="absolute inset-0 bg-gradient-to-t from-card via-card/60 to-transparent" />
+          {/* Scrim that fills the card colour well up over the illustration, so
+              the image melts into the card instead of ending in a hard edge and
+              the copy below stays fully legible. */}
+          <div className="absolute inset-0 bg-gradient-to-t from-card from-40% via-card/80 via-75% to-card/20" />
         </div>
 
         {/* Copy + action, pulled up slightly over the scrim. */}
