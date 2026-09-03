@@ -83,12 +83,12 @@ export function SiteHeader({ collapsible = false }: { collapsible?: boolean } = 
           <AppMenu />
           <Link href="/" className="flex min-w-0 items-center gap-2">
             <Image
-              src="/images/frequency-logo.jpg"
+              src="/images/frequency-logo.png"
               alt="Frequency"
-              width={32}
-              height={32}
+              width={40}
+              height={40}
               priority
-              className="size-8 shrink-0 rounded-lg object-cover"
+              className="size-10 shrink-0 object-contain"
             />
             <span className="shrink-0 whitespace-nowrap text-lg font-semibold tracking-tight">Frequency</span>
           </Link>
