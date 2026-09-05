@@ -150,10 +150,17 @@ export function CommentThread({
 
   if (comments.length === 0) return null
 
+  // The reading-focused conversation screen (comfortable density) asks for a
+  // clear, high-contrast rule between top-level threads. `foreground` is bright
+  // white in dark mode and bright near-black in light mode, so a single divider
+  // token satisfies both. Other surfaces (feed, reels, comment sheet) keep the
+  // quieter spaced layout.
+  const comfortable = density === "comfortable"
+
   return (
-    <ul className="space-y-4">
+    <ul className={cn(comfortable ? "divide-y divide-foreground/70" : "space-y-4")}>
       {roots.map((comment) => (
-        <li key={comment.id}>
+        <li key={comment.id} className={cn(comfortable && "py-5 first:pt-0 last:pb-0")}>
           <CommentNode
             comment={comment}
             depth={0}
