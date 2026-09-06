@@ -880,8 +880,11 @@ export function StudioConsole({
           </div>
         )}
 
-        {/* Speaker stage — unified 4-col grid (host first, then guests) */}
-        <div className="relative shrink-0 border-b border-white/10 bg-zinc-950/30 px-4 py-2 backdrop-blur-xl sm:px-6">
+                {/* Speaker stage — unified 4-col grid (host first, then guests).
+                    Background is fully transparent (no fill / no backdrop-blur)
+                    to match the guest/listener stage; the frosted "mirror" look
+                    was removed per design. */}
+                <div className="relative shrink-0 border-b border-white/10 px-4 py-2 sm:px-6">
           {/* Status row only appears when there's something to flag, so an idle
               room gives all its vertical space to the call-in slots & chat. */}
           {(locked || pending.length > 0) && (
