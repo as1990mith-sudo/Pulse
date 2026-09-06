@@ -69,7 +69,11 @@ export function PlaylistCard({
   onDuplicate?: () => void
   onDelete?: () => void
 }) {
-  const meta = `${p.count} ${p.count === 1 ? "material" : "materials"}${p.count > 0 ? ` · ${p.totalDurationLabel}` : ""}`
+  const materialsLabel = `${p.count} ${p.count === 1 ? "material" : "materials"}${p.count > 0 ? ` · ${p.totalDurationLabel}` : ""}`
+  const meta =
+    p.childCount > 0
+      ? `${p.childCount} ${p.childCount === 1 ? "playlist" : "playlists"} · ${materialsLabel}`
+      : materialsLabel
   return (
     <div className="group relative flex items-center gap-3 py-3">
       {/* Thumbnail + primary text: one large tap target that opens the playlist. */}
@@ -119,13 +123,17 @@ export function PlaylistCard({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44">
             <DropdownMenuItem onClick={onOpen}>Open</DropdownMenuItem>
-            <DropdownMenuItem onClick={onEdit}>Edit</DropdownMenuItem>
-            <DropdownMenuItem onClick={onShare}>Share</DropdownMenuItem>
-            <DropdownMenuItem onClick={onDuplicate}>Duplicate</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onClick={onDelete}>
-              Delete
-            </DropdownMenuItem>
+            {onEdit && <DropdownMenuItem onClick={onEdit}>Edit</DropdownMenuItem>}
+            {onShare && <DropdownMenuItem onClick={onShare}>Share</DropdownMenuItem>}
+            {onDuplicate && <DropdownMenuItem onClick={onDuplicate}>Duplicate</DropdownMenuItem>}
+            {onDelete && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" onClick={onDelete}>
+                  Delete
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       )}

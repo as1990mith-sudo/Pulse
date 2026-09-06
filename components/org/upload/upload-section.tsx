@@ -88,17 +88,49 @@ export function UploadSection({
   const [editingPlaylist, setEditingPlaylist] = useState<PlaylistView | null>(null)
   const [addToPlaylistFor, setAddToPlaylistFor] = useState<MaterialView | null>(null)
   const [openPlaylist, setOpenPlaylist] = useState<PlaylistDetail | null>(null)
+  // The chain of open playlist ids (ancestors → current). Lets sub-playlists
+  // drill in and step back one level at a time instead of closing outright.
+  const [playlistPath, setPlaylistPath] = useState<number[]>([])
+  // Create-sub-playlist sheet, parented to the currently open playlist.
+  const [subCreateOpen, setSubCreateOpen] = useState(false)
 
   function refresh() {
     startTransition(() => router.refresh())
   }
 
+  async function loadPlaylistInto(id: number, path: number[]) {
+    const d = await getPlaylist(organizationId, id)
+    if (d) {
+      setOpenPlaylist(d)
+      setPlaylistPath(path)
+    }
+    return d
+  }
+
   async function openPlaylistDetail(p: PlaylistView) {
     try {
-      const d = await getPlaylist(organizationId, p.id)
-      if (d) setOpenPlaylist(d)
+      await loadPlaylistInto(p.id, [p.id])
     } catch {
       toast.error("Could not open playlist")
+    }
+  }
+
+  async function drillIntoPlaylist(p: PlaylistView) {
+    try {
+      await loadPlaylistInto(p.id, [...playlistPath, p.id])
+    } catch {
+      toast.error("Could not open playlist")
+    }
+  }
+
+  function backFromPlaylist() {
+    if (playlistPath.length > 1) {
+      const parentId = playlistPath[playlistPath.length - 2]
+      void loadPlaylistInto(parentId, playlistPath.slice(0, -1))
+    } else {
+      setOpenPlaylist(null)
+      setPlaylistPath([])
+      refresh()
     }
   }
 
@@ -160,9 +192,10 @@ export function UploadSection({
     </DropdownMenu>
   )
 
-  // The header hosts the mobile + only when the Materials list (and its search
-  // row) isn't the thing rendering it inline.
-  const headerMobileAdd = segment === "playlists" || (segment === "materials" && materials.length === 0)
+  // The header hosts the mobile + only for the empty Materials state, where
+  // there's no search row to render it inline. Materials (with a list) and
+  // Playlists both render the + inside their own search row.
+  const headerMobileAdd = segment === "materials" && materials.length === 0
 
   // A playlist is open → show the editor full-bleed within the section.
   if (openPlaylist) {
@@ -173,14 +206,34 @@ export function UploadSection({
           isAdmin={isOwner}
           organizationId={organizationId}
           allMaterials={materials}
-          onBack={() => {
-            setOpenPlaylist(null)
-            refresh()
-          }}
+          backLabel={playlistPath.length > 1 ? "Back" : "Upload"}
+          onBack={backFromPlaylist}
           onOpenMaterial={(m) => setDetail(m)}
           onEdit={() => setEditingPlaylist(openPlaylist.playlist)}
           onShare={() => share(`/org/${orgHandle}?playlist=${openPlaylist.playlist.id}`, openPlaylist.playlist.name)}
           onChanged={() => reopenPlaylist(openPlaylist.playlist.id)}
+          onOpenPlaylist={drillIntoPlaylist}
+          onCreateSubPlaylist={() => setSubCreateOpen(true)}
+          onEditPlaylist={(p) => setEditingPlaylist(p)}
+          onSharePlaylist={(p) => share(`/org/${orgHandle}?playlist=${p.id}`, p.name)}
+          onDuplicatePlaylist={async (p) => {
+            try {
+              await duplicatePlaylist({ id: p.id, organizationId })
+              toast.success("Playlist duplicated")
+              reopenPlaylist(openPlaylist.playlist.id)
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : "Could not duplicate")
+            }
+          }}
+          onDeletePlaylist={async (p) => {
+            try {
+              await deletePlaylist({ id: p.id, organizationId })
+              toast.success("Playlist deleted")
+              reopenPlaylist(openPlaylist.playlist.id)
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : "Could not delete")
+            }
+          }}
         />
 
         <MaterialDetailSheet
@@ -202,6 +255,18 @@ export function UploadSection({
               editing={editingPlaylist}
               onCreated={() => {
                 setEditingPlaylist(null)
+                reopenPlaylist(openPlaylist.playlist.id)
+              }}
+            />
+            <CreatePlaylistSheet
+              open={subCreateOpen}
+              onOpenChange={setSubCreateOpen}
+              organizationId={organizationId}
+              materials={materials}
+              parentId={openPlaylist.playlist.id}
+              parentName={openPlaylist.playlist.name}
+              onCreated={() => {
+                setSubCreateOpen(false)
                 reopenPlaylist(openPlaylist.playlist.id)
               }}
             />
@@ -334,6 +399,7 @@ export function UploadSection({
         <PlaylistsView
           playlists={playlists}
           isAdmin={isOwner}
+          leadingAction={isOwner ? mobileAddMenu : undefined}
           onOpen={openPlaylistDetail}
           onCreate={() => setCreateOpen(true)}
           onEdit={(p) => setEditingPlaylist(p)}

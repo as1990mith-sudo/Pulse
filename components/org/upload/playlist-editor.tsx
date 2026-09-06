@@ -3,10 +3,10 @@
 import { useRef, useState } from "react"
 import Image from "next/image"
 import { Reorder, useDragControls } from "motion/react"
-import { ArrowLeft, GripVertical, ListPlus, MoreVertical, Play, Share2, SquarePen } from "lucide-react"
+import { ArrowLeft, GripVertical, ListPlus, ListMusic, MoreVertical, Play, Share2, SquarePen } from "lucide-react"
 import { toast } from "sonner"
 import type { MaterialView } from "@/lib/materials"
-import type { PlaylistDetail } from "@/app/actions/materials"
+import type { PlaylistDetail, PlaylistView } from "@/app/actions/materials"
 import {
   removeMaterialFromPlaylist,
   reorderPlaylist,
@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { SourceBadge, PlayGlyph, Collage } from "./upload-primitives"
 import { AddMaterialsSheet } from "./add-materials-sheet"
+import { PlaylistCard } from "./playlist-card"
 
 /**
  * Playlist editor / viewer. Members see an ordered, read-only tracklist they
@@ -32,23 +33,41 @@ export function PlaylistEditor({
   isAdmin,
   organizationId,
   allMaterials,
+  backLabel = "Upload",
   onBack,
   onOpenMaterial,
   onEdit,
   onShare,
   onChanged,
+  onOpenPlaylist,
+  onCreateSubPlaylist,
+  onEditPlaylist,
+  onSharePlaylist,
+  onDuplicatePlaylist,
+  onDeletePlaylist,
 }: {
   detail: PlaylistDetail
   isAdmin: boolean
   organizationId: string
   allMaterials: MaterialView[]
+  /** Label for the back link — the parent name when viewing a sub-playlist. */
+  backLabel?: string
   onBack: () => void
   onOpenMaterial: (m: MaterialView) => void
   onEdit: () => void
   onShare: () => void
   onChanged: () => void
+  /** Drill into a sub-playlist. */
+  onOpenPlaylist: (p: PlaylistView) => void
+  /** Create a new sub-playlist under the current playlist. */
+  onCreateSubPlaylist: () => void
+  onEditPlaylist: (p: PlaylistView) => void
+  onSharePlaylist: (p: PlaylistView) => void
+  onDuplicatePlaylist: (p: PlaylistView) => void
+  onDeletePlaylist: (p: PlaylistView) => void
 }) {
   const { playlist: p } = detail
+  const children = detail.children
   const [items, setItems] = useState<MaterialView[]>(detail.materials)
   const [addOpen, setAddOpen] = useState(false)
 
@@ -117,7 +136,7 @@ export function PlaylistEditor({
         className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="size-4" />
-        Upload
+        {backLabel}
       </button>
 
       {/* Playlist header */}
@@ -162,6 +181,14 @@ export function PlaylistEditor({
                 </button>
                 <button
                   type="button"
+                  onClick={onCreateSubPlaylist}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border px-3.5 text-sm font-medium transition-colors hover:bg-secondary"
+                >
+                  <ListMusic className="size-4" />
+                  New Playlist
+                </button>
+                <button
+                  type="button"
                   onClick={() => setAddOpen(true)}
                   className="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-3.5 text-sm font-semibold text-primary-foreground transition-all hover:brightness-110 active:scale-[0.98]"
                 >
@@ -174,10 +201,33 @@ export function PlaylistEditor({
         </div>
       </div>
 
+      {/* Sub-playlists */}
+      {children.length > 0 && (
+        <div>
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Playlists</h2>
+          <div className="divide-y divide-border/60">
+            {children.map((c) => (
+              <PlaylistCard
+                key={c.id}
+                playlist={c}
+                isAdmin={isAdmin}
+                onOpen={() => onOpenPlaylist(c)}
+                onEdit={() => onEditPlaylist(c)}
+                onShare={() => onSharePlaylist(c)}
+                onDuplicate={() => onDuplicatePlaylist(c)}
+                onDelete={() => onDeletePlaylist(c)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Track list */}
       {items.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border px-6 py-12 text-center">
-          <p className="text-sm text-muted-foreground">This playlist is empty.</p>
+          <p className="text-sm text-muted-foreground">
+            {children.length > 0 ? "No materials in this playlist yet." : "This playlist is empty."}
+          </p>
           {isAdmin && (
             <button
               type="button"
