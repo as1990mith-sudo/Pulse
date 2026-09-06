@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import useSWR from "swr"
-import { AlertCircle, BookOpen, ChevronDown, Loader2, Pin, PinOff, RotateCw, Send, Smile } from "lucide-react"
+import { AlertCircle, BookOpen, ChevronDown, Loader2, Pin, PinOff, RotateCw, Send } from "lucide-react"
+import { EmojiPicker } from "@/components/emoji-picker"
 import type { CurrentUser } from "@/lib/session"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import {
@@ -357,23 +358,17 @@ export function LiveChat({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [outbox.length])
 
-  // Emoji button — focuses the message input so the device's native keyboard
-  // opens; emojis come from the keyboard's own emoji key. No custom in-app
-  // emoji panel is rendered (it would cover the chat).
+  // Emoji picker — a portalled popover that inserts emoji into the draft. The
+  // OS keyboard has no web API to open its emoji panel on demand, so an in-app
+  // picker is the only reliable way to give people emoji from this button.
   const emojiButton = (
-    <button
-      type="button"
-      onClick={() => textareaRef.current?.focus()}
-      aria-label="Emoji"
-      className={cn(
-        "flex size-10 shrink-0 items-center justify-center rounded-full transition-colors",
-        immersive
-          ? "bg-white/10 text-white/70 hover:bg-white/20 hover:text-white"
-          : "bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
-      )}
-    >
-      <Smile className="size-5" />
-    </button>
+    <EmojiPicker
+      immersive={immersive}
+      onSelect={(emoji) => {
+        setDraft((d) => d + emoji)
+        textareaRef.current?.focus()
+      }}
+    />
   )
 
   function send(e: React.FormEvent) {

@@ -202,6 +202,11 @@ export function UploadSection({
     return (
       <>
         <PlaylistEditor
+          // Key by playlist id so drilling into a sub-playlist remounts the
+          // editor with fresh state. Without this, the internal `items` (track
+          // list) state kept its first value and a drilled-in child showed the
+          // parent's materials — so an opened sub-playlist looked empty/"vanished".
+          key={openPlaylist.playlist.id}
           detail={openPlaylist}
           isAdmin={isOwner}
           organizationId={organizationId}

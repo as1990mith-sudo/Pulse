@@ -963,7 +963,7 @@ export function ConversationRoom({
               className="mt-2 flex items-center gap-2.5"
             >
               {cover && <CoverArt src={cover} alt={`${title} cover`} className="size-9" />}
-              <MarqueeTitle text={title} className="min-w-0 flex-1 text-sm font-bold leading-tight tracking-tight" />
+              <MarqueeTitle text={title} className="min-w-0 flex-1 text-sm font-bold uppercase leading-tight tracking-tight" />
               <span className="shrink-0 text-xs font-medium text-white/50">
                 {gridParticipants.length} here
               </span>
@@ -978,7 +978,7 @@ export function ConversationRoom({
               className="mt-3 flex flex-col items-center text-center"
             >
               {cover && <CoverArt src={cover} alt={`${title} cover`} className="mb-3 size-24" />}
-              <h1 className="max-w-full truncate text-lg font-bold leading-tight tracking-tight text-balance">{title}</h1>
+              <h1 className="max-w-full truncate text-lg font-bold uppercase leading-tight tracking-tight text-balance">{title}</h1>
               <p className="mt-0.5 text-xs font-medium text-white/60">Hosted by {hostName}</p>
               {topic && (
                 <div className="mt-2 rounded-full bg-white/[0.06] px-3 py-1 ring-1 ring-inset ring-white/10">
