@@ -56,7 +56,6 @@ import { haptic } from "@/lib/haptics"
 import { cn } from "@/lib/utils"
 import { formatChatTimestamp } from "@/lib/format-timestamp"
 
-const EMOJIS = ["🙏", "❤️", "🕊️", "✨", "🙌", "📖", "🔥", "😊", "😂", "🥰", "👍", "🎉", "🌿", "☀️", "💯", "🍞"]
 const MAX_MINI_CHATS = 3
 
 export type MiniChatUser = { userId: string; name: string; image: string | null }
@@ -421,7 +420,6 @@ function ChatWindow({ chat }: { chat: ActiveChat }) {
   const { closeChat, minimizeChat } = useMiniChat()
 
   const [draft, setDraft] = useState("")
-  const [showEmoji, setShowEmoji] = useState(false)
   const [sending, setSending] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [recording, setRecording] = useState(false)
@@ -432,6 +430,7 @@ function ChatWindow({ chat }: { chat: ActiveChat }) {
   const [maximized, setMaximized] = useState(false)
   const endRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const messageInputRef = useRef<HTMLTextAreaElement>(null)
 
   const { data: messages, mutate } = useSWR(
     ["mini-chat", chat.conversationId],
@@ -468,7 +467,6 @@ function ChatWindow({ chat }: { chat: ActiveChat }) {
     if (!body || sending) return
     setSending(true)
     setDraft("")
-    setShowEmoji(false)
     haptic("light")
     try {
       await doSend({ body })
@@ -597,24 +595,10 @@ function ChatWindow({ chat }: { chat: ActiveChat }) {
           </div>
         ) : (
           <div className="border-t border-border/60 bg-background/40 p-2">
-            {showEmoji && (
-              <div className="mb-2 grid grid-cols-8 gap-1 rounded-2xl border border-border/60 bg-card p-2">
-                {EMOJIS.map((e) => (
-                  <button
-                    key={e}
-                    type="button"
-                    onClick={() => setDraft((d) => d + e)}
-                    className="rounded-lg p-1 text-lg transition-colors hover:bg-secondary"
-                  >
-                    {e}
-                  </button>
-                ))}
-              </div>
-            )}
             <div className="flex items-end gap-1">
               <button
                 type="button"
-                onClick={() => setShowEmoji((v) => !v)}
+                onClick={() => messageInputRef.current?.focus()}
                 aria-label="Emoji"
                 className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
               >
@@ -631,6 +615,7 @@ function ChatWindow({ chat }: { chat: ActiveChat }) {
               </button>
               <input ref={fileRef} type="file" accept="image/*" hidden onChange={handleFile} />
               <textarea
+                ref={messageInputRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {

@@ -70,13 +70,6 @@ import {
   type ChatroomDetail,
 } from "@/app/actions/chatroom"
 
-const EMOJIS = [
-  "😀", "😂", "🥰", "😎", "🤔", "😴", "😭", "😡",
-  "👍", "👎", "🙏", "👏", "🙌", "💪", "🔥", "✨",
-  "❤️", "💔", "🎉", "🎶", "☀️", "🌙", "⭐", "✅",
-  "🙋", "🕊️", "📖", "🍞", "☕", "🌿", "💯", "👀",
-]
-
 type PendingAttachment = {
   url: string
   type: ChatAttachmentType
@@ -90,7 +83,6 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [showMembers, setShowMembers] = useState(false)
-  const [showEmoji, setShowEmoji] = useState(false)
   // Header overflow menu + the modals it can open.
   const [menuOpen, setMenuOpen] = useState(false)
   const [editProfileOpen, setEditProfileOpen] = useState(false)
@@ -107,6 +99,7 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
   const [pending, setPending] = useState<ChatMessageView[]>([])
   const scrollEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const messageInputRef = useRef<HTMLInputElement>(null)
   // Auto-hide the global app header while scrolling the conversation.
   const onMessagesScroll = useAutoHideChatChrome()
 
@@ -214,7 +207,6 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
     const body = draft.trim()
     if (!body && !attachment) return
     setDraft("")
-    setShowEmoji(false)
     const sentAttachment = attachment
     setAttachment(null)
 
@@ -600,23 +592,6 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
       )}
       {uploadError && <p className="text-sm text-destructive">{uploadError}</p>}
 
-      {/* Emoji picker */}
-      {showEmoji && (
-        <div className="grid grid-cols-8 gap-1 rounded-xl border border-border/60 bg-card p-3">
-          {EMOJIS.map((emoji) => (
-            <button
-              key={emoji}
-              type="button"
-              onClick={() => setDraft((d) => d + emoji)}
-              className="flex size-9 items-center justify-center rounded-md text-xl transition-colors hover:bg-secondary"
-              aria-label={`Add ${emoji}`}
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
-      )}
-
       {/* Composer */}
       {recording ? (
         <VoiceRecorder onSend={handleSendVoice} onCancel={() => setRecording(false)} sending={sendingVoice} />
@@ -634,8 +609,8 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
             variant="ghost"
             size="icon"
             className="shrink-0 text-muted-foreground"
-            onClick={() => setShowEmoji((s) => !s)}
-            aria-label="Toggle emoji picker"
+            onClick={() => messageInputRef.current?.focus()}
+            aria-label="Emoji"
           >
             <Smile className="size-5" />
           </Button>
@@ -651,6 +626,7 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
             <Paperclip className={cn("size-5", uploading && "animate-pulse")} />
           </Button>
           <Input
+            ref={messageInputRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder={uploading ? "Uploading attachment…" : "Type a message"}
@@ -672,7 +648,6 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
               size="icon"
               className="shrink-0"
               onClick={() => {
-                setShowEmoji(false)
                 setRecording(true)
               }}
               disabled={uploading}

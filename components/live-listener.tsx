@@ -883,6 +883,7 @@ export function LiveListener({
         <div className="min-h-0 flex-1">
           <LiveChat
             immersive
+            feed
             showResourceButton
             currentUser={currentUser}
             guestName={guestName}

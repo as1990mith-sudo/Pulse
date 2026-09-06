@@ -40,13 +40,6 @@ import { CHAT_BACKGROUND_STORAGE_KEY, chatBackgroundStyle, getChatBackground } f
 
 const REPORT_REASONS = ["Spam", "Harassment", "Impersonation", "Inappropriate content", "Other"] as const
 
-const EMOJIS = [
-  "😀", "😂", "🥰", "😎", "🤔", "😴", "😭", "😡",
-  "👍", "👎", "🙏", "👏", "🙌", "💪", "🔥", "✨",
-  "❤️", "💔", "🎉", "🎶", "☀️", "🌙", "⭐", "✅",
-  "🙋", "🕊️", "📖", "🍞", "☕", "🌿", "💯", "👀",
-]
-
 type PendingAttachment = { url: string; type: DmAttachmentType; name: string }
 
 export function DmView({ detail }: { detail: DmConversationDetail }) {
@@ -54,12 +47,12 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
   const [attachment, setAttachment] = useState<PendingAttachment | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
-  const [showEmoji, setShowEmoji] = useState(false)
   const [pending, setPending] = useState<DmMessageView[]>([])
   const [recording, setRecording] = useState(false)
   const [sendingVoice, setSendingVoice] = useState(false)
   const scrollEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const messageInputRef = useRef<HTMLInputElement>(null)
 
   // Header overflow menu + its features.
   const [menuOpen, setMenuOpen] = useState(false)
@@ -274,7 +267,6 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
     if (!body && !attachment) return
     haptic("light")
     setDraft("")
-    setShowEmoji(false)
     const sent = attachment
     setAttachment(null)
 
@@ -702,22 +694,6 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
           )}
           {uploadError && <p className="text-sm text-destructive">{uploadError}</p>}
 
-          {showEmoji && (
-            <div className="grid grid-cols-8 gap-1 rounded-xl border border-border/60 bg-card p-3">
-              {EMOJIS.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onClick={() => setDraft((d) => d + emoji)}
-                  className="flex size-9 items-center justify-center rounded-md text-xl transition-colors hover:bg-secondary"
-                  aria-label={`Add ${emoji}`}
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-          )}
-
           {recording ? (
             <VoiceRecorder
               onSend={handleSendVoice}
@@ -747,6 +723,7 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
                   <Paperclip className={cn("size-[18px]", uploading && "animate-pulse")} />
                 </button>
                 <Input
+                  ref={messageInputRef}
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   placeholder={uploading ? "Uploading attachment…" : "Message"}
@@ -755,13 +732,9 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
                 />
                 <button
                   type="button"
-                  className={cn(
-                    "flex size-9 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-foreground/5",
-                    showEmoji ? "text-primary" : "text-muted-foreground hover:text-foreground",
-                  )}
-                  onClick={() => setShowEmoji((s) => !s)}
-                  aria-label="Toggle emoji picker"
-                  aria-expanded={showEmoji}
+                  className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
+                  onClick={() => messageInputRef.current?.focus()}
+                  aria-label="Emoji"
                 >
                   <Smile className="size-[18px]" />
                 </button>
@@ -782,7 +755,6 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
                   size="icon"
                   className="size-11 shrink-0 rounded-full shadow-lg shadow-primary/20"
                   onClick={() => {
-                    setShowEmoji(false)
                     setRecording(true)
                   }}
                   disabled={uploading}

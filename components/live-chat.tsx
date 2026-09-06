@@ -21,12 +21,11 @@ import { cn } from "@/lib/utils"
 import { renderMessageBody } from "@/lib/rich-text"
 import { useLiveResourcesOptional } from "@/components/live/resource/resource-context"
 
-// A compact, curated set of emojis for the inline chat picker.
-const CHAT_EMOJIS = [
-  "😀", "😂", "🥰", "😍", "😎", "🤔", "😮", "😢",
-  "👍", "👏", "🙌", "🙏", "🔥", "💯", "❤️", "✨",
-  "🎉", "🕊️", "✝️", "📖", "🎶", "💪", "😇", "🤝",
-] as const
+/** Formats an epoch-millis timestamp as a short local clock time (e.g. 2:32 PM). */
+function formatClockTime(ms?: number): string {
+  if (!ms) return ""
+  return new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+}
 
 /** Renders message text with @mentions highlighted in the accent color. */
 function MentionText({ body, accent = false }: { body: string; accent?: boolean }) {
@@ -58,6 +57,7 @@ export function LiveChat({
   placeholder,
   showResourceButton = false,
   flatText = false,
+  feed = false,
 }: {
   asHost?: boolean
   currentUser?: CurrentUser | null
@@ -91,18 +91,17 @@ export function LiveChat({
   // chat cards. Only affects the message rows — the chatroom shell, composer, and
   // pinned/system rows are unchanged.
   flatText?: boolean
+  // Dense, bubble-free "message feed" presentation for the immersive audio-live
+  // interfaces: small round avatar, a semibold name with a subtle send time,
+  // clean text underneath, and tight vertical rhythm — so the chat reads as one
+  // continuous conversation rather than a stack of chat cards. Left-aligned for
+  // everyone (the viewer's own messages are not pushed to the right).
+  feed?: boolean
 }) {
   const [draft, setDraft] = useState("")
-  const [emojiOpen, setEmojiOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const scrollRef = useRef<HTMLUListElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-
-  // Insert an emoji into the message at the end and keep the composer focused.
-  function insertEmoji(emoji: string) {
-    setDraft((d) => d + emoji)
-    requestAnimationFrame(() => textareaRef.current?.focus())
-  }
 
   const { data: messages = [], mutate } = useSWR<LiveChatMessageView[]>(
     roomName ? ["live-chat", roomName] : null,
@@ -176,6 +175,10 @@ export function LiveChat({
   // returns the server's authoritative copy.
   const myName = asHost ? (currentUser?.name ?? "Host") : (currentUser?.name ?? guestName ?? "You")
 
+  // Bubble-free presentation covers both the video "flatText" style and the new
+  // audio "feed" style — both drop the message background/ring/padding.
+  const bare = flatText || feed
+
   // Expose a "post to chat" function to the Live Resource system so mini panels
   // (e.g. the mini-Bible) can share a verse straight into this live's chat
   // without leaving the live. Only registered while the viewer can actually send.
@@ -194,6 +197,7 @@ export function LiveChat({
         isHost: asHost,
         kind: "message",
         body,
+        createdAtMs: Date.now(),
       }
       atBottomRef.current = true
       mutate([...messages, optimistic], { revalidate: false })
@@ -203,19 +207,19 @@ export function LiveChat({
     return unregister
   }, [registerChatSender, canSend, roomName, asHost, currentUser, myName, messages, mutate])
 
-  // Emoji toggle button — rendered on the left or right of the composer.
+  // Emoji button — focuses the message input so the device's native keyboard
+  // opens; emojis come from the keyboard's own emoji key. No custom in-app
+  // emoji panel is rendered (it would cover the chat).
   const emojiButton = (
     <button
       type="button"
-      onClick={() => setEmojiOpen((o) => !o)}
-      aria-label="Insert emoji"
-      aria-pressed={emojiOpen}
+      onClick={() => textareaRef.current?.focus()}
+      aria-label="Emoji"
       className={cn(
         "flex size-10 shrink-0 items-center justify-center rounded-full transition-colors",
         immersive
           ? "bg-white/10 text-white/70 hover:bg-white/20 hover:text-white"
           : "bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
-        emojiOpen && (immersive ? "bg-primary/25 text-primary" : "bg-primary/15 text-primary"),
       )}
     >
       <Smile className="size-5" />
@@ -236,6 +240,7 @@ export function LiveChat({
       isHost: asHost,
       kind: "message",
       body: text,
+      createdAtMs: Date.now(),
     }
     mutate([...messages, optimistic], { revalidate: false })
     // Sending always sticks the viewer to the bottom.
@@ -304,10 +309,21 @@ export function LiveChat({
           Older messages stay above and are reachable by scrolling up, newest at
           the bottom — matching the messages inbox behaviour. */}
       <div className="relative min-h-0 flex-1">
+        {/* Subtle bottom scrim so the newest lines of a bubble-free feed stay
+            legible over a bright chat background image. */}
+        {feed && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-28 bg-gradient-to-t from-black/45 to-transparent"
+          />
+        )}
         <ul
           ref={scrollRef}
           onScroll={handleScroll}
-          className="flex h-full flex-col gap-2 overflow-y-auto overscroll-contain p-4"
+          className={cn(
+            "relative z-[1] flex h-full flex-col overflow-y-auto overscroll-contain p-4",
+            feed ? "gap-1.5" : "gap-2",
+          )}
         >
           {messages.length === 0 && (
             <li className={cn("py-8 text-center text-sm", immersive ? "text-white/50" : "text-muted-foreground")}>
@@ -334,25 +350,25 @@ export function LiveChat({
             const isMine = currentUser ? m.userId === currentUser.id : false
             const canPreview = !isMine && m.id > 0
             return (
-              <li key={m.id} className={cn("flex gap-2.5", isMine && !flatText && "flex-row-reverse")}>
+              <li key={m.id} className={cn(feed ? "flex gap-2" : "flex gap-2.5", isMine && !bare && "flex-row-reverse")}>
                 <ProfilePreview userId={m.userId} disabled={!canPreview} className="shrink-0">
-                  <Avatar className={cn("shrink-0", flatText ? "size-5" : "size-8")}>
+                  <Avatar className={cn("shrink-0", flatText ? "size-5" : feed ? "size-6" : "size-8")}>
                     {m.userImage ? <AvatarImage src={m.userImage} alt={m.userName} /> : null}
-                    <AvatarFallback className={cn(getAvatarColor(m.userId), flatText && "text-[9px]")}>
+                    <AvatarFallback className={cn(getAvatarColor(m.userId), flatText && "text-[9px]", feed && "text-[10px]")}>
                       {getInitials(m.userName)}
                     </AvatarFallback>
                   </Avatar>
                 </ProfilePreview>
-                <div className={cn("group flex max-w-[80%] flex-col gap-0.5", isMine && !flatText && "items-end")}>
-                  <div className={cn("flex items-center gap-2", isMine && !flatText && "flex-row-reverse")}>
+                <div className={cn("group flex flex-col gap-0.5", feed ? "max-w-[92%]" : "max-w-[80%]", isMine && !bare && "items-end")}>
+                  <div className={cn("flex items-center gap-2", isMine && !bare && "flex-row-reverse")}>
                     <ProfilePreview
                       userId={m.userId}
                       disabled={!canPreview}
                       className={cn(
                         "font-medium",
-                        flatText ? "text-xs" : "text-sm",
+                        flatText ? "text-xs" : feed ? "text-[13px] font-semibold" : "text-sm",
                         m.isHost ? "text-primary" : immersive ? "text-white" : undefined,
-                        flatText && !m.isHost && "text-white/80 [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]",
+                        bare && !m.isHost && immersive && "text-white/90 [text-shadow:0_1px_2px_rgba(0,0,0,0.55)]",
                         canPreview && "hover:underline",
                       )}
                     >
@@ -362,13 +378,19 @@ export function LiveChat({
                           longer needed on any interface. */}
                       {isMine ? "You" : m.isHost ? "HOST" : m.userName}
                     </ProfilePreview>
+                    {/* Subtle send time, feed presentation only. */}
+                    {feed && m.createdAtMs > 0 && (
+                      <span className="shrink-0 text-[10px] font-medium tabular-nums text-white/40">
+                        {formatClockTime(m.createdAtMs)}
+                      </span>
+                    )}
                   </div>
                   <p
                     className={cn(
                       "text-sm leading-snug [overflow-wrap:anywhere]",
-                      flatText
-                        ? // TikTok style: bare text, no bubble. Subtle shadow keeps it
-                          // legible over bright video frames.
+                      bare
+                        ? // Bubble-free: bare text, no background. A subtle shadow keeps
+                          // it legible over bright video frames or a chat background.
                           "text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]"
                         : cn(
                             "rounded-2xl px-3 py-1.5 shadow-sm",
@@ -419,30 +441,6 @@ export function LiveChat({
             immersive ? "bg-white/5 backdrop-blur-xl" : "border-t border-border/60 bg-card/80 backdrop-blur",
           )}
         >
-          {/* Inline emoji picker — taps insert the emoji into the message. */}
-          {emojiOpen && (
-            <div
-              className={cn(
-                "mb-2 grid grid-cols-8 gap-1 rounded-xl border p-2 shadow-lg",
-                immersive ? "border-white/10 bg-zinc-900/95 backdrop-blur-xl" : "border-border/60 bg-popover",
-              )}
-            >
-              {CHAT_EMOJIS.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onClick={() => insertEmoji(emoji)}
-                  className={cn(
-                    "flex size-8 items-center justify-center rounded-lg text-lg transition-transform hover:scale-110 active:scale-95",
-                    immersive ? "hover:bg-white/10" : "hover:bg-secondary",
-                  )}
-                  aria-label={`Insert ${emoji}`}
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-          )}
           <div className="flex items-end gap-2">
             {leadingSlot}
             {emojiSide === "left" && emojiButton}

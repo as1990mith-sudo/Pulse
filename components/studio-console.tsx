@@ -748,7 +748,7 @@ export function StudioConsole({
         {/* Frosted glass, matching the listener/guest header: the cover artwork
             behind it is blurred rather than showing through cleanly, so the
             title and live badge stay legible over any artwork. */}
-        <header className="relative z-30 flex items-center gap-3 border-b border-white/10 bg-zinc-950/30 px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)] backdrop-blur-xl sm:px-6">
+        <header className="relative z-30 flex items-center gap-3 border-b border-white/10 bg-zinc-950/30 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.85rem)] backdrop-blur-xl sm:px-6">
           <BackExitMenu
             showMenu={live}
             exitLabel="End"
@@ -800,7 +800,13 @@ export function StudioConsole({
                 className="mt-0.5 w-full truncate rounded-md border border-transparent bg-transparent text-base font-bold leading-tight tracking-tight text-white outline-none transition-colors placeholder:text-white/40 hover:border-white/20 focus:border-primary focus:bg-white/10 focus:px-2 focus:py-1"
               />
             )}
-            <p className="truncate text-xs font-medium text-white/70">{currentUser.name}</p>
+            {/* The live header identifies the hosting Home/organisation, never
+                the admin's personal name. When broadcasting as an individual
+                there's no second identity to show, so the line is omitted and
+                that vertical space returns to the stage + chat. */}
+            {currentUser.organization?.name && (
+              <p className="truncate text-xs font-medium text-white/70">{currentUser.organization.name}</p>
+            )}
           </div>
 
           {/* While live: a compact listener pill + timer (mirrors the listener
@@ -861,7 +867,7 @@ export function StudioConsole({
         )}
 
         {/* Speaker stage — unified 4-col grid (host first, then guests) */}
-        <div className="relative shrink-0 border-b border-white/10 bg-zinc-950/30 px-4 py-2.5 backdrop-blur-xl sm:px-6">
+        <div className="relative shrink-0 border-b border-white/10 bg-zinc-950/30 px-4 py-2 backdrop-blur-xl sm:px-6">
           {/* Status row only appears when there's something to flag, so an idle
               room gives all its vertical space to the call-in slots & chat. */}
           {(locked || pending.length > 0) && (
@@ -895,7 +901,7 @@ export function StudioConsole({
         {/* Host control dock — compact essentials, sits right under the stage row.
             Frosted like the header so the icon row reads as a solid control
             surface rather than floating transparently over the artwork. */}
-        <div className="shrink-0 border-b border-white/10 bg-zinc-950/30 px-4 py-2.5 backdrop-blur-xl sm:px-6">
+        <div className="shrink-0 border-b border-white/10 bg-zinc-950/30 px-4 py-2 backdrop-blur-xl sm:px-6">
           <div className="flex items-center justify-center gap-3 sm:gap-4">
             <DockButton
               icon={micOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
@@ -948,7 +954,7 @@ export function StudioConsole({
 
         {/* Live chat — flows as one with the room, filling all remaining space */}
         <section className="flex min-h-0 flex-1 flex-col overflow-hidden pb-safe">
-          <div className="flex shrink-0 items-center justify-between px-4 pb-2 pt-4 sm:px-6">
+          <div className="flex shrink-0 items-center justify-between px-4 pb-1.5 pt-2.5 sm:px-6">
             <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-white/60">
               <MessageSquare className="size-3.5 text-primary" /> Live chat
             </h2>
@@ -960,6 +966,7 @@ export function StudioConsole({
             <LiveChat
               asHost
               immersive
+              feed
               showResourceButton
               placeholder=""
               currentUser={currentUser}
