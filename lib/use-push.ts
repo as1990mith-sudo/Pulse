@@ -48,6 +48,42 @@ export function usePush() {
     "Notification" in window &&
     Boolean(PUBLIC_KEY)
 
+  // Registers the service worker and subscribes THIS device, then persists the
+  // subscription. Assumes permission is already granted — callers gate on that.
+  // Shared by the silent auto-subscribe path and the explicit permission prompt
+  // so there is only one place that talks to the push manager.
+  const subscribeCurrentDevice = useCallback(async (): Promise<{ ok: boolean; error?: string }> => {
+    await navigator.serviceWorker.register("/sw.js")
+    // Subscribe against the ACTIVE registration: a worker that is still
+    // installing has no usable pushManager, and `ready` is what guarantees an
+    // activated one.
+    const reg = await navigator.serviceWorker.ready
+
+    // Reuse the existing subscription when there is one: re-subscribing rotates
+    // the endpoint and would orphan the previous database row.
+    const sub =
+      (await reg.pushManager.getSubscription()) ??
+      (await reg.pushManager.subscribe({
+        // Required by every browser: silent pushes are not permitted.
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(PUBLIC_KEY as string),
+      }))
+
+    const json = sub.toJSON()
+    if (!json.keys?.p256dh || !json.keys?.auth) {
+      return { ok: false, error: "Couldn't read the subscription keys." }
+    }
+
+    const res = await savePushSubscription({
+      endpoint: sub.endpoint,
+      p256dh: json.keys.p256dh,
+      auth: json.keys.auth,
+      userAgent: navigator.userAgent,
+    })
+    if (!res.ok) return { ok: false, error: res.error }
+    return { ok: true }
+  }, [])
+
   // Read the true current state from the browser rather than trusting the DB:
   // the user can revoke permission in browser settings at any time, and only
   // the browser knows.
@@ -66,17 +102,35 @@ export function usePush() {
       // off. The worker registers at the root scope, so look that up.
       const reg = await navigator.serviceWorker.getRegistration("/")
       const existing = await reg?.pushManager.getSubscription()
-      setStatus(existing ? "on" : "off")
+      if (existing) {
+        setStatus("on")
+        return
+      }
+      // Auto-subscribe: the OS permission is the single source of truth. If it
+      // is already granted we register this device silently rather than asking
+      // again behind an in-app toggle — there is no separate Frequency-level
+      // on/off switch to reconcile with the OS setting.
+      if (Notification.permission === "granted") {
+        const res = await subscribeCurrentDevice()
+        setStatus(res.ok ? "on" : "off")
+        return
+      }
+      setStatus("off")
     } catch {
       setStatus("off")
     }
-  }, [supported])
+  }, [supported, subscribeCurrentDevice])
 
   useEffect(() => {
     void refresh()
   }, [refresh])
 
-  /** Requests permission (must be called from a user gesture) and subscribes. */
+  /**
+   * Triggers the native OS permission prompt (must be called from a user
+   * gesture) and, once granted, subscribes this device. This is the one-time
+   * permission handoff — not a persistent app-level switch — so there is
+   * nothing to "turn off" here; revoking happens in the OS/browser settings.
+   */
   const enable = useCallback(async (): Promise<{ ok: boolean; error?: string }> => {
     if (!supported) return { ok: false, error: "This device can't receive notifications." }
     setBusy(true)
@@ -87,35 +141,8 @@ export function usePush() {
         return { ok: false, error: "Notifications weren't allowed." }
       }
 
-      await navigator.serviceWorker.register("/sw.js")
-      // Subscribe against the ACTIVE registration: a worker that is still
-      // installing has no usable pushManager, and `ready` is what guarantees an
-      // activated one. Using the resolved value (rather than the register()
-      // result) avoids subscribing on a registration that is not yet live.
-      const reg = await navigator.serviceWorker.ready
-
-      // Reuse the existing subscription when there is one: re-subscribing
-      // rotates the endpoint and would orphan the previous database row.
-      const sub =
-        (await reg.pushManager.getSubscription()) ??
-        (await reg.pushManager.subscribe({
-          // Required by every browser: silent pushes are not permitted.
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(PUBLIC_KEY as string),
-        }))
-
-      const json = sub.toJSON()
-      if (!json.keys?.p256dh || !json.keys?.auth) {
-        return { ok: false, error: "Couldn't read the subscription keys." }
-      }
-
-      const res = await savePushSubscription({
-        endpoint: sub.endpoint,
-        p256dh: json.keys.p256dh,
-        auth: json.keys.auth,
-        userAgent: navigator.userAgent,
-      })
-      if (!res.ok) return { ok: false, error: res.error }
+      const res = await subscribeCurrentDevice()
+      if (!res.ok) return res
 
       setStatus("on")
       return { ok: true }
@@ -125,7 +152,7 @@ export function usePush() {
     } finally {
       setBusy(false)
     }
-  }, [supported])
+  }, [supported, subscribeCurrentDevice])
 
   /** Unsubscribes this device only; other devices keep receiving. */
   const disable = useCallback(async () => {
