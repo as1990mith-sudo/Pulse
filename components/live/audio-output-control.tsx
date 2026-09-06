@@ -36,7 +36,11 @@ export function AudioOutputSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
-        className="mx-auto max-w-md rounded-t-3xl border-white/10 bg-zinc-950/95 text-white backdrop-blur-2xl"
+        // z-[80] clears the live-meeting surfaces (z-60) this sheet is opened
+        // from; without it the sheet renders behind the meeting and looks like
+        // it never opened. Overlay raised in lockstep so tap-outside dismiss works.
+        className="z-[80] mx-auto max-w-md rounded-t-3xl border-white/10 bg-zinc-950/95 text-white backdrop-blur-2xl"
+        overlayClassName="z-[80]"
       >
         <SheetHeader className="text-left">
           <SheetTitle className="text-base font-semibold text-white">Audio output</SheetTitle>
