@@ -18,8 +18,19 @@ import {
 } from "@/lib/db/schema"
 import { getHomeByHandle, getViewerMembership } from "@/lib/home/access"
 import { homeRoleHasPermission } from "@/lib/home/roles"
-import { createAccessToken, isLiveKitConfigured, LIVEKIT_URL } from "@/lib/livekit"
+import { isLiveKitConfigured } from "@/lib/livekit"
 import { stripe, isStripeConfigured } from "@/lib/stripe"
+import {
+  assertSlotBookable,
+  computeOpenSlots,
+  deriveDisplayStatus,
+  meetingWindowFor,
+  mintAppointmentToken,
+  newManageToken,
+  type MeetingWindow,
+  type OpenSlot,
+} from "@/lib/appointments/core"
+import { notifyAppointment } from "@/lib/appointments/notify"
 
 /* -------------------------------------------------------------------------- */
 /* Auth / scoping helpers                                                     */
@@ -94,11 +105,6 @@ export type AppointmentTypeRow = {
   windows: AvailabilityWindow[]
 }
 
-export type OpenSlot = {
-  startISO: string
-  endISO: string
-}
-
 export type PaymentStatus = "not_required" | "pending" | "paid" | "refunded"
 
 export type MyAppointmentRow = {
@@ -124,52 +130,8 @@ export type AdminAppointmentDetail = MyAppointmentRow & {
   notes: string | null
 }
 
-/** The status shown to users — derived, never a raw column read. */
-export type DisplayStatus =
-  | "upcoming"
-  | "in_progress"
-  | "completed"
-  | "no_show"
-  | "cancelled"
-  | "pending_payment"
-
-/**
- * Resolve the lifecycle state a user should see. The stored `status` column only
- * captures manual/explicit states (cancelled, pending payment, host-completed);
- * everything time-based is computed here so an appointment never gets stuck on
- * "Upcoming". Once the meeting window closes, a Frequency Live session resolves
- * to "completed" when BOTH parties joined and "no_show" otherwise. In-person
- * sessions (no join signal) are treated as completed once their time has passed.
- */
-function deriveDisplayStatus(
-  a: {
-    status: string
-    paymentStatus: string
-    startsAt: Date
-    endsAt: Date | null
-    durationMinutes: number
-    useFrequencyLive: boolean
-    memberAttendedAt: Date | null
-    hostAttendedAt: Date | null
-  },
-  now: number = Date.now(),
-): DisplayStatus {
-  if (a.status === "cancelled") return "cancelled"
-  if (a.status === "pending_payment" || a.paymentStatus === "pending") return "pending_payment"
-  if (a.status === "completed") return "completed" // host marked it done explicitly
-
-  const { closesAt } = meetingBounds(a.startsAt, a.endsAt, a.durationMinutes)
-  const start = a.startsAt.getTime()
-
-  if (now < start) return "upcoming"
-  if (now <= closesAt) return "in_progress" // live window (10 min early → 15 min grace)
-
-  // Window has closed with no explicit completion.
-  if (a.useFrequencyLive) {
-    return a.memberAttendedAt && a.hostAttendedAt ? "completed" : "no_show"
-  }
-  return "completed"
-}
+// `deriveDisplayStatus` and `DisplayStatus` now live in @/lib/appointments/core
+// (imported above) so the member and guest flows share one definition.
 
 /* -------------------------------------------------------------------------- */
 /* Admin: appointment types + availability                                    */
@@ -467,13 +429,9 @@ export async function listBookableTypes(handle: string): Promise<AppointmentType
   return rows.filter((t) => t.windows.length > 0)
 }
 
-const SLOT_HORIZON_DAYS = 21
-
 /**
- * Computes open slots for a type over the next few weeks. Availability weekdays
- * and minutes are interpreted in UTC for determinism; each window is chunked
- * into the type's duration, past slots are dropped, and slots already taken by
- * a live appointment of the same host are excluded.
+ * Open slots for a type (member view). Delegates to the shared slot engine so it
+ * always matches what the booking guard enforces.
  */
 export async function getOpenSlots(handle: string, typeId: string): Promise<OpenSlot[]> {
   const { home } = await requireActiveMember(handle)
@@ -483,51 +441,7 @@ export async function getOpenSlots(handle: string, typeId: string): Promise<Open
     .where(and(eq(homeAppointmentType.id, typeId), eq(homeAppointmentType.homeId, home.id), eq(homeAppointmentType.active, true)))
     .limit(1)
   if (!type) throw new Error("Appointment type not found.")
-
-  const windows = await db
-    .select()
-    .from(homeAppointmentAvailability)
-    .where(eq(homeAppointmentAvailability.typeId, typeId))
-  if (windows.length === 0) return []
-
-  const duration = type.durationMinutes
-  const now = Date.now()
-
-  // Slots already taken by this host (any live appointment) block the time.
-  const taken = await db
-    .select({ startsAt: homeAppointment.startsAt })
-    .from(homeAppointment)
-    .where(
-      and(
-        eq(homeAppointment.homeId, home.id),
-        type.hostUserId ? eq(homeAppointment.hostUserId, type.hostUserId) : eq(homeAppointment.typeId, typeId),
-        inArray(homeAppointment.status, ["upcoming", "pending_payment"]),
-      ),
-    )
-  const takenSet = new Set(taken.map((t) => t.startsAt.getTime()))
-
-  const slots: OpenSlot[] = []
-  const today = new Date()
-  const baseUTC = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
-
-  for (let dayOffset = 0; dayOffset < SLOT_HORIZON_DAYS; dayOffset++) {
-    const dayStart = baseUTC + dayOffset * 86_400_000
-    const weekday = new Date(dayStart).getUTCDay()
-    for (const w of windows) {
-      if (w.weekday !== weekday) continue
-      for (let m = w.startMinute; m + duration <= w.endMinute; m += duration) {
-        const start = dayStart + m * 60_000
-        if (start <= now) continue
-        if (takenSet.has(start)) continue
-        slots.push({
-          startISO: new Date(start).toISOString(),
-          endISO: new Date(start + duration * 60_000).toISOString(),
-        })
-      }
-    }
-  }
-  slots.sort((a, b) => a.startISO.localeCompare(b.startISO))
-  return slots
+  return computeOpenSlots(home.id, type)
 }
 
 export type BookResult =
@@ -562,47 +476,14 @@ export async function bookAppointment(input: { handle: string; typeId: string; s
   if (hostUserId === user.id) throw new Error("You can't book an appointment with yourself.")
 
   const start = new Date(input.slotStartISO)
-  if (Number.isNaN(start.getTime()) || start.getTime() <= Date.now()) {
-    throw new Error("That time is no longer available.")
-  }
-
-  // Validate the slot falls on a real availability boundary for this type.
-  const windows = await db
-    .select()
-    .from(homeAppointmentAvailability)
-    .where(eq(homeAppointmentAvailability.typeId, type.id))
-  const dayStart = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate())
-  const minuteOfDay = Math.round((start.getTime() - dayStart) / 60_000)
-  const weekday = start.getUTCDay()
-  const fits = windows.some(
-    (w) =>
-      w.weekday === weekday &&
-      minuteOfDay >= w.startMinute &&
-      minuteOfDay + type.durationMinutes <= w.endMinute &&
-      (minuteOfDay - w.startMinute) % type.durationMinutes === 0,
-  )
-  if (!fits) throw new Error("That time is not a valid slot.")
+  // Single shared guard: valid availability boundary + no double-booking.
+  await assertSlotBookable({ homeId: home.id, type, hostUserId, start })
 
   const endsAt = new Date(start.getTime() + type.durationMinutes * 60_000)
   const [hostUser] = await db.select().from(userTable).where(eq(userTable.id, hostUserId)).limit(1)
 
   const appointmentId = crypto.randomUUID()
   const isPaid = type.priceCents != null && type.priceCents > 0
-
-  // Guard against a double-booking of the same host slot, then insert.
-  const conflict = await db
-    .select({ id: homeAppointment.id })
-    .from(homeAppointment)
-    .where(
-      and(
-        eq(homeAppointment.homeId, home.id),
-        eq(homeAppointment.hostUserId, hostUserId),
-        eq(homeAppointment.startsAt, start),
-        inArray(homeAppointment.status, ["upcoming", "pending_payment"]),
-      ),
-    )
-    .limit(1)
-  if (conflict.length > 0) throw new Error("That time was just taken. Please pick another.")
 
   await db.insert(homeAppointment).values({
     id: appointmentId,
@@ -623,10 +504,15 @@ export async function bookAppointment(input: { handle: string; typeId: string; s
     paymentStatus: isPaid ? "pending" : "not_required",
     priceCents: type.priceCents ?? null,
     currency: type.currency,
+    // A manage token even for members, so the tokenised manage page + emailed
+    // reschedule/cancel links work uniformly for everyone.
+    manageToken: newManageToken(),
   })
 
   if (!isPaid) {
     const conversationId = await createAppointmentConversation(appointmentId)
+    // Confirmation email is sent only AFTER the booking is committed.
+    await notifyAppointment(appointmentId, "confirmed")
     revalidatePath("/appointments")
     return { kind: "confirmed", appointmentId, conversationId }
   }
@@ -686,7 +572,13 @@ export async function confirmAppointmentPaid(appointmentId: string): Promise<{ c
     .set({ paymentStatus: "paid", status: "upcoming", updatedAt: new Date() })
     .where(eq(homeAppointment.id, appointmentId))
 
-  const conversationId = a.conversationId ?? (await createAppointmentConversation(appointmentId))
+  // A guest paid booking has no member account, so it gets no DM conversation —
+  // only member appointments do. The tokenised manage page is the guest's thread.
+  const conversationId =
+    a.conversationId ?? (a.memberUserId ? await createAppointmentConversation(appointmentId) : null)
+
+  // Confirmation email only after the payment is verified and committed.
+  await notifyAppointment(appointmentId, "confirmed")
   revalidatePath("/appointments")
   return { conversationId }
 }
@@ -707,8 +599,13 @@ async function createAppointmentConversation(appointmentId: string): Promise<num
   if (!a) throw new Error("Appointment not found.")
   if (a.conversationId) return a.conversationId
   if (!a.hostUserId) throw new Error("Appointment has no host.")
+  // Only member appointments get a DM thread; guest bookings have no account to
+  // message, so callers must not invoke this for them.
+  if (!a.memberUserId) throw new Error("Guest appointments have no conversation.")
+  const memberUserId = a.memberUserId
 
-  const [userAId, userBId] = a.memberUserId < a.hostUserId ? [a.memberUserId, a.hostUserId] : [a.hostUserId, a.memberUserId]
+  const [userAId, userBId] =
+    memberUserId < a.hostUserId ? [memberUserId, a.hostUserId] : [a.hostUserId, memberUserId]
 
   const conversationId = await db.transaction(async (tx) => {
     const [created] = await tx
@@ -881,23 +778,10 @@ export async function getConversationAppointment(conversationId: number): Promis
 /* The meeting: a ring-less private LiveKit room keyed to the appointment     */
 /* -------------------------------------------------------------------------- */
 
-export type MeetingWindow = "early" | "open" | "closed"
-
 export type AppointmentMeetingState = {
   window: MeetingWindow
   opensAtISO: string
   closesAtISO: string
-}
-
-const MEETING_EARLY_MS = 10 * 60_000 // join opens 10 min before start
-const MEETING_GRACE_MS = 15 * 60_000 // room stays joinable 15 min past end
-
-function meetingBounds(startsAt: Date, endsAt: Date | null, duration: number) {
-  const end = endsAt ?? new Date(startsAt.getTime() + duration * 60_000)
-  return {
-    opensAt: startsAt.getTime() - MEETING_EARLY_MS,
-    closesAt: end.getTime() + MEETING_GRACE_MS,
-  }
 }
 
 /**
@@ -921,10 +805,9 @@ export async function getAppointmentMeetingToken(
   if (a.paymentStatus === "pending") throw new Error("This appointment is awaiting payment.")
   if (!isLiveKitConfigured()) throw new Error("Live meetings are not configured.")
 
-  const { opensAt, closesAt } = meetingBounds(a.startsAt, a.endsAt, a.durationMinutes)
-  const now = Date.now()
-  if (now < opensAt) throw new Error("The meeting hasn't opened yet.")
-  if (now > closesAt) throw new Error("The meeting has ended.")
+  const { window } = meetingWindowFor(a)
+  if (window === "early") throw new Error("The meeting hasn't opened yet.")
+  if (window === "closed") throw new Error("The meeting has ended.")
 
   // Record attendance the first time each party joins — this is what later
   // resolves the appointment to "Finished" (both joined) vs "No show".
@@ -942,15 +825,14 @@ export async function getAppointmentMeetingToken(
   }
 
   const [profile] = await db.select().from(userTable).where(eq(userTable.id, user.id)).limit(1)
-  const roomName = `appt-${a.id}`
-  const token = await createAccessToken({
-    roomName,
+  const minted = await mintAppointmentToken({
+    appointmentId: a.id,
     identity: user.id,
     name: profile?.name ?? "Participant",
-    canPublish: true, // both participants are equals in a 1:1 meeting
-    metadata: JSON.stringify({ image: profile?.image ?? null, isHost }),
+    image: profile?.image ?? null,
+    isHost,
   })
-  return { url: LIVEKIT_URL, token, roomName, isHost }
+  return { ...minted, isHost }
 }
 
 /** The live join window for an appointment, so the UI can gate the button. */
@@ -961,9 +843,7 @@ export async function getMeetingState(appointmentId: string): Promise<Appointmen
   if (a.hostUserId !== user.id && a.memberUserId !== user.id) {
     throw new Error("You are not a participant in this appointment.")
   }
-  const { opensAt, closesAt } = meetingBounds(a.startsAt, a.endsAt, a.durationMinutes)
-  const now = Date.now()
-  const window: MeetingWindow = now < opensAt ? "early" : now > closesAt ? "closed" : "open"
+  const { window, opensAt, closesAt } = meetingWindowFor(a)
   return {
     window,
     opensAtISO: new Date(opensAt).toISOString(),
@@ -1010,6 +890,107 @@ export async function hideAppointment(appointmentId: string) {
     .set(isMember ? { memberHiddenAt: new Date() } : { hostHiddenAt: new Date() })
     .where(eq(homeAppointment.id, appointmentId))
 
+  revalidatePath("/appointments")
+  revalidatePath("/messages")
+}
+
+/* -------------------------------------------------------------------------- */
+/* Cancel + reschedule (member OR host)                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Cancels an appointment. Either participant (member or host) may cancel while
+ * it is still upcoming/in the future. Flipping status to "cancelled" IMMEDIATELY
+ * frees the slot — the slot engine only counts "upcoming"/"pending_payment"
+ * rows as taken, so the time becomes bookable again the instant this commits.
+ * The counterpart is emailed after the commit.
+ */
+export async function cancelMyAppointment(appointmentId: string): Promise<void> {
+  const user = await requireUser()
+  const [a] = await db.select().from(homeAppointment).where(eq(homeAppointment.id, appointmentId)).limit(1)
+  if (!a) throw new Error("Appointment not found.")
+
+  const isMember = a.memberUserId === user.id
+  const isHost = !!a.hostUserId && a.hostUserId === user.id
+  if (!isMember && !isHost) throw new Error("You can't cancel this appointment.")
+  if (a.status === "cancelled") return
+  if ((a.endsAt ?? a.startsAt).getTime() < Date.now()) {
+    throw new Error("This appointment has already passed.")
+  }
+
+  await db
+    .update(homeAppointment)
+    .set({ status: "cancelled", updatedAt: new Date() })
+    .where(eq(homeAppointment.id, appointmentId))
+
+  await notifyAppointment(appointmentId, "cancelled")
+  revalidatePath("/appointments")
+  revalidatePath("/messages")
+}
+
+/**
+ * Open slots the caller (member or host) can move this appointment to. Excludes
+ * the appointment's own current time via the shared slot engine's live-row rule.
+ */
+export async function getMyRescheduleSlots(appointmentId: string): Promise<OpenSlot[]> {
+  const user = await requireUser()
+  const [a] = await db.select().from(homeAppointment).where(eq(homeAppointment.id, appointmentId)).limit(1)
+  if (!a) throw new Error("Appointment not found.")
+  const isMember = a.memberUserId === user.id
+  const isHost = !!a.hostUserId && a.hostUserId === user.id
+  if (!isMember && !isHost) throw new Error("You can't reschedule this appointment.")
+  if (!a.typeId) return []
+  const [type] = await db
+    .select()
+    .from(homeAppointmentType)
+    .where(and(eq(homeAppointmentType.id, a.typeId), eq(homeAppointmentType.homeId, a.homeId)))
+    .limit(1)
+  if (!type) return []
+  return computeOpenSlots(a.homeId, type)
+}
+
+/**
+ * Reschedules an appointment to a new slot IN PLACE. The move is a single atomic
+ * UPDATE guarded by `assertSlotBookable` (excluding this row), so the new slot
+ * is validated + reserved and the old time is freed in one step — two people can
+ * never end up on the same slot, and the original is never released before the
+ * new one is confirmed. The booker is emailed the updated details afterward.
+ */
+export async function rescheduleMyAppointment(appointmentId: string, slotStartISO: string): Promise<void> {
+  const user = await requireUser()
+  const [a] = await db.select().from(homeAppointment).where(eq(homeAppointment.id, appointmentId)).limit(1)
+  if (!a) throw new Error("Appointment not found.")
+
+  const isMember = a.memberUserId === user.id
+  const isHost = !!a.hostUserId && a.hostUserId === user.id
+  if (!isMember && !isHost) throw new Error("You can't reschedule this appointment.")
+  if (a.status === "cancelled") throw new Error("This appointment was cancelled.")
+  if (!a.typeId) throw new Error("This appointment can't be rescheduled.")
+  if (!a.hostUserId) throw new Error("This appointment has no host.")
+
+  const [type] = await db
+    .select()
+    .from(homeAppointmentType)
+    .where(and(eq(homeAppointmentType.id, a.typeId), eq(homeAppointmentType.homeId, a.homeId)))
+    .limit(1)
+  if (!type) throw new Error("Appointment type not found.")
+
+  const start = new Date(slotStartISO)
+  await assertSlotBookable({
+    homeId: a.homeId,
+    type,
+    hostUserId: a.hostUserId,
+    start,
+    excludeAppointmentId: a.id,
+  })
+  const endsAt = new Date(start.getTime() + a.durationMinutes * 60_000)
+
+  await db
+    .update(homeAppointment)
+    .set({ startsAt: start, endsAt, updatedAt: new Date() })
+    .where(eq(homeAppointment.id, appointmentId))
+
+  await notifyAppointment(appointmentId, "rescheduled")
   revalidatePath("/appointments")
   revalidatePath("/messages")
 }

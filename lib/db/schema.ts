@@ -2003,9 +2003,23 @@ export const homeAppointment = pgTable(
   {
     id: text("id").primaryKey(),
     homeId: text("homeId").notNull(),
-    // The member the appointment is with.
-    memberUserId: text("memberUserId").notNull(),
+    // The member the appointment is with. NULL for a guest booking (someone
+    // without a Frequency account) — in that case the guest* fields below carry
+    // their identity and the manageToken is how they access it.
+    memberUserId: text("memberUserId"),
     memberName: text("memberName").notNull(),
+    // Guest (non-account) booking details. Collected on the public booking page
+    // and used for the confirmation email + tokenised manage link. Personal
+    // data — purged with the Home (delete-by-homeId below covers it).
+    guestName: text("guestName"),
+    guestEmail: text("guestEmail"),
+    guestPhone: text("guestPhone"),
+    // Opaque token that lets a guest (or any booker) open their appointment
+    // manage page without signing in. Random, unguessable, unique.
+    manageToken: text("manageToken"),
+    // When this appointment was created by rescheduling another one, the id of
+    // the original (now cancelled) appointment. Purely informational.
+    rescheduledFromId: text("rescheduledFromId"),
     // The host running the appointment (typically an admin/leader membership).
     hostUserId: text("hostUserId"),
     hostName: text("hostName"),
@@ -2055,6 +2069,7 @@ export const homeAppointment = pgTable(
     homeStartIdx: index("home_appointment_home_start_idx").on(t.homeId, t.startsAt),
     conversationIdx: index("home_appointment_conversation_idx").on(t.conversationId),
     typeIdx: index("home_appointment_type_ref_idx").on(t.typeId),
+    manageTokenIdx: uniqueIndex("home_appointment_manage_token_idx").on(t.manageToken),
   }),
 )
 

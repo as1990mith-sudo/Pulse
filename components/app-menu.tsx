@@ -13,10 +13,9 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronRight,
+  CircleUser,
   Home as HomeIcon,
-  Info,
   Library as LibraryIcon,
-  LifeBuoy,
   LogOut,
   Mic,
   Moon,
@@ -24,9 +23,7 @@ import {
   Newspaper,
   NotebookPen,
   Palette,
-  ShieldCheck,
   Sun,
-  Trash2,
   UserPlus,
   Check,
   X,
@@ -34,7 +31,6 @@ import {
 } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
 import { AvatarUploadButton } from "@/components/profile/avatar-upload-button"
-import { DeleteAccountDialog } from "@/components/profile/delete-account-dialog"
 import { SKINS, useSkin } from "@/components/skin-provider"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { startMenuFlow } from "@/lib/menu-flow"
@@ -81,7 +77,6 @@ export function AppMenu() {
   const [mounted, setMounted] = useState(false)
   const [open, setOpen] = useState(false) // portal present (enter + exit)
   const [active, setActive] = useState(false) // slid fully into view
-  const [deleteOpen, setDeleteOpen] = useState(false) // account-deletion dialog
 
   // Set once a menu tap has committed to leaving, so the drawer's exit animation
   // can play to completion without a second tap queueing another navigation.
@@ -420,24 +415,16 @@ export function AppMenu() {
                 <Divider />
 
                 <Section label="Preferences">
-                  <AppearanceItem />
                   {signedIn && (
-                    <DrawerItem href="/settings/privacy" icon={ShieldCheck} label="Privacy" onNavigate={navigate} />
+                    <DrawerItem href="/account" icon={CircleUser} label="Account" onNavigate={navigate} />
                   )}
+                  <AppearanceItem />
                 </Section>
 
                 <Divider />
 
-                <Section label="Support">
+                <Section>
                   <DrawerButton icon={UserPlus} label="Invite Friends" onClick={handleInvite} />
-                  <DrawerItem
-                    href="mailto:support@frequency.app"
-                    icon={LifeBuoy}
-                    label="Help & Support"
-                    onNavigate={navigate}
-                    external
-                  />
-                  <AboutItem />
                 </Section>
 
                 <Divider />
@@ -445,15 +432,6 @@ export function AppMenu() {
                 {session?.user && (
                   <div className="pt-1">
                     <DrawerButton icon={LogOut} label="Sign Out" onClick={handleSignOut} destructive />
-                    <DrawerButton
-                      icon={Trash2}
-                      label="Delete Account"
-                      onClick={() => {
-                        close()
-                        setDeleteOpen(true)
-                      }}
-                      destructive
-                    />
                   </div>
                 )}
               </div>
@@ -461,8 +439,6 @@ export function AppMenu() {
           </div>,
           document.body,
         )}
-
-      {session?.user && <DeleteAccountDialog open={deleteOpen} onOpenChange={setDeleteOpen} />}
     </>
   )
 }
@@ -656,24 +632,3 @@ function AppearanceItem() {
   )
 }
 
-/** About row expands to show a short blurb + version. */
-function AboutItem() {
-  const [expanded, setExpanded] = useState(false)
-  return (
-    <div>
-      <button type="button" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded} className={itemClasses}>
-        <IconBubble icon={Info} />
-        <span className="flex-1 text-[15px] font-medium text-foreground">About Frequency</span>
-        <ChevronDown
-          className={cn("size-5 shrink-0 text-muted-foreground/60 transition-transform duration-300", expanded && "rotate-180")}
-        />
-      </button>
-      {expanded && (
-        <div className="animate-in fade-in slide-in-from-top-2 px-4 py-3 text-sm leading-relaxed text-muted-foreground duration-300">
-          <p>Frequency is a flagship Christian platform for live worship, teaching, community, and resources.</p>
-          <p className="mt-2 text-xs text-muted-foreground/70">Version 1.0.0</p>
-        </div>
-      )}
-    </div>
-  )
-}

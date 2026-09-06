@@ -30,13 +30,16 @@ import { JoinMeetingButton } from "@/components/appointments/join-meeting-button
 import { AppointmentCheckout } from "@/components/appointments/appointment-checkout"
 import {
   bookAppointment,
+  cancelMyAppointment,
   confirmAppointmentPaid,
+  getMyRescheduleSlots,
   getOpenSlots,
   hideAppointment,
+  rescheduleMyAppointment,
   type AppointmentTypeRow,
   type MyAppointmentRow,
-  type OpenSlot,
 } from "@/app/actions/home-appointments"
+import type { OpenSlot } from "@/lib/appointments/core"
 
 /* -------------------------------------------------------------------------- */
 /* Formatting helpers                                                         */
@@ -95,8 +98,8 @@ const STATUS_DOT: Record<string, string> = {
 
 function StatusPill({ status, paymentStatus }: { status: string; paymentStatus: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-      <span className={cn("size-1.5 rounded-full", STATUS_DOT[status] ?? "bg-muted-foreground")} />
+    <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[11px] font-medium text-muted-foreground">
+      <span className={cn("size-1.5 shrink-0 rounded-full", STATUS_DOT[status] ?? "bg-muted-foreground")} />
       {STATUS_LABEL[status] ?? status}
       {paymentStatus === "paid" ? " · Paid" : ""}
     </span>
@@ -300,6 +303,23 @@ function MyAppointments({
   const [pastOpen, setPastOpen] = useState(true)
   const [confirm, setConfirm] = useState<MyAppointmentRow | null>(null)
   const [deleting, startDelete] = useTransition()
+  // Member-only management of upcoming sessions (hosts manage from admin).
+  const [cancelTarget, setCancelTarget] = useState<MyAppointmentRow | null>(null)
+  const [rescheduleTarget, setRescheduleTarget] = useState<MyAppointmentRow | null>(null)
+  const [cancelling, startCancel] = useTransition()
+
+  const runCancel = (a: MyAppointmentRow) => {
+    startCancel(async () => {
+      try {
+        await cancelMyAppointment(a.id)
+        setCancelTarget(null)
+        toast.success("Appointment cancelled.")
+        router.refresh()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Could not cancel that appointment.")
+      }
+    })
+  }
 
   const { upcoming, past } = useMemo(() => {
     const now = Date.now()
@@ -367,7 +387,13 @@ function MyAppointments({
           <SectionLabel>Upcoming</SectionLabel>
           <ul className="mt-2.5 flex flex-col gap-2.5">
             {upcoming.map((a) => (
-              <AppointmentRow key={a.id} a={a} emphasize={isToday(a.startsAt)} />
+              <AppointmentRow
+                key={a.id}
+                a={a}
+                emphasize={isToday(a.startsAt)}
+                onReschedule={!hostMode ? () => setRescheduleTarget(a) : undefined}
+                onCancel={!hostMode ? () => setCancelTarget(a) : undefined}
+              />
             ))}
           </ul>
         </section>
@@ -433,7 +459,218 @@ function MyAppointments({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Member cancel confirm */}
+      <Dialog open={!!cancelTarget} onOpenChange={(o) => !o && !cancelling && setCancelTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Cancel this appointment?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            This cancels <span className="font-medium text-foreground">{cancelTarget?.title}</span>, frees the time slot,
+            and lets the host know. This can&apos;t be undone.
+          </p>
+          <div className="mt-2 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setCancelTarget(null)}
+              className="rounded-full border border-border bg-background px-4 py-2 text-sm font-semibold transition-colors hover:bg-muted"
+            >
+              Keep it
+            </button>
+            <button
+              type="button"
+              disabled={cancelling}
+              onClick={() => cancelTarget && runCancel(cancelTarget)}
+              className="inline-flex items-center gap-1.5 rounded-full bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
+            >
+              {cancelling ? <Loader2 className="size-3.5 animate-spin" /> : null}
+              Cancel appointment
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Member reschedule */}
+      <RescheduleDialog
+        target={rescheduleTarget}
+        onClose={() => setRescheduleTarget(null)}
+        onDone={() => {
+          setRescheduleTarget(null)
+          toast.success("Appointment rescheduled.")
+          router.refresh()
+        }}
+      />
     </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/* Reschedule dialog (member)                                                 */
+/* -------------------------------------------------------------------------- */
+
+function RescheduleDialog({
+  target,
+  onClose,
+  onDone,
+}: {
+  target: MyAppointmentRow | null
+  onClose: () => void
+  onDone: () => void
+}) {
+  const [slots, setSlots] = useState<OpenSlot[] | null>(null)
+  const [dayKey, setDayKey] = useState<string | null>(null)
+  const [selected, setSelected] = useState<string | null>(null)
+  const [isPending, start] = useTransition()
+
+  useEffect(() => {
+    if (!target) {
+      setSlots(null)
+      setDayKey(null)
+      setSelected(null)
+      return
+    }
+    let alive = true
+    setSlots(null)
+    getMyRescheduleSlots(target.id)
+      .then((s) => alive && setSlots(s))
+      .catch((e) => {
+        if (alive) {
+          setSlots([])
+          toast.error(e instanceof Error ? e.message : "Could not load times.")
+        }
+      })
+    return () => {
+      alive = false
+    }
+  }, [target])
+
+  const days = useMemo(() => {
+    const map = new Map<string, { date: Date; slots: OpenSlot[] }>()
+    for (const s of slots ?? []) {
+      const d = new Date(s.startISO)
+      const key = startOfDay(d).toISOString()
+      const entry = map.get(key) ?? { date: d, slots: [] }
+      entry.slots.push(s)
+      map.set(key, entry)
+    }
+    return [...map.entries()].map(([key, v]) => ({ key, ...v }))
+  }, [slots])
+
+  useEffect(() => {
+    if (days.length > 0 && (!dayKey || !days.some((d) => d.key === dayKey))) setDayKey(days[0].key)
+  }, [days, dayKey])
+
+  const activeDay = days.find((d) => d.key === dayKey) ?? null
+
+  const submit = () => {
+    if (!target || !selected) return
+    start(async () => {
+      try {
+        await rescheduleMyAppointment(target.id, selected)
+        onDone()
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Could not reschedule.")
+      }
+    })
+  }
+
+  return (
+    <Dialog open={!!target} onOpenChange={(o) => !o && !isPending && onClose()}>
+      <DialogContent className="max-h-[85vh] max-w-md overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Reschedule {target?.title}</DialogTitle>
+        </DialogHeader>
+
+        {slots === null ? (
+          <p className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" />
+            Loading times…
+          </p>
+        ) : days.length === 0 ? (
+          <p className="rounded-2xl border border-border/60 bg-card/40 px-4 py-10 text-center text-sm text-muted-foreground">
+            No other open times right now.
+          </p>
+        ) : (
+          <>
+            <div className="mb-2 text-sm font-semibold">Date</div>
+            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {days.map((d) => {
+                const active = d.key === dayKey
+                return (
+                  <button
+                    key={d.key}
+                    type="button"
+                    onClick={() => {
+                      setDayKey(d.key)
+                      setSelected(null)
+                    }}
+                    className={cn(
+                      "flex min-w-[4.25rem] flex-col items-center gap-0.5 rounded-2xl border px-3 py-2.5 transition-all active:scale-95",
+                      active
+                        ? "border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/25"
+                        : "border-border/60 bg-card/40 hover:border-primary/40",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "text-[11px] font-medium uppercase",
+                        active ? "text-primary-foreground/80" : "text-muted-foreground",
+                      )}
+                    >
+                      {d.date.toLocaleDateString(undefined, { weekday: "short" })}
+                    </span>
+                    <span className="text-xl font-semibold tabular-nums leading-none">{d.date.getDate()}</span>
+                    <span
+                      className={cn("text-[11px]", active ? "text-primary-foreground/80" : "text-muted-foreground")}
+                    >
+                      {d.date.toLocaleDateString(undefined, { month: "short" })}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="mb-2 mt-4 text-sm font-semibold">Time</div>
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+              {activeDay?.slots.map((s) => {
+                const active = selected === s.startISO
+                return (
+                  <button
+                    key={s.startISO}
+                    type="button"
+                    onClick={() => setSelected(s.startISO)}
+                    className={cn(
+                      "relative rounded-xl border py-2.5 text-sm font-medium tabular-nums transition-all active:scale-95",
+                      active
+                        ? "border-primary bg-primary text-primary-foreground shadow-md shadow-primary/25"
+                        : "border-border/60 bg-card/40 hover:border-primary/50",
+                    )}
+                  >
+                    {active && (
+                      <Check className="absolute right-1.5 top-1.5 size-3 text-primary-foreground" strokeWidth={3} />
+                    )}
+                    {formatTime(s.startISO)}
+                  </button>
+                )
+              })}
+            </div>
+
+            {selected && (
+              <button
+                type="button"
+                onClick={submit}
+                disabled={isPending}
+                className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-70"
+              >
+                {isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                {isPending ? "Rescheduling…" : `Move to ${formatFullDate(selected)}, ${formatTime(selected)}`}
+              </button>
+            )}
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -465,14 +702,20 @@ function AppointmentRow({
   emphasize,
   past,
   onDelete,
+  onReschedule,
+  onCancel,
 }: {
   a: MyAppointmentRow
   emphasize?: boolean
   past?: boolean
   onDelete?: () => void
+  onReschedule?: () => void
+  onCancel?: () => void
 }) {
   const canJoin =
     a.useFrequencyLive && a.status !== "completed" && a.status !== "no_show" && a.status !== "cancelled" && a.paymentStatus !== "pending"
+  // Members may reschedule/cancel a live (not cancelled, not in-progress) session.
+  const canManage = (onReschedule || onCancel) && a.status === "upcoming"
   return (
     <li
       className={cn(
@@ -513,9 +756,9 @@ function AppointmentRow({
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
             {a.hostName ? `with ${a.hostName}` : a.homeName}
           </p>
-          <div className="mt-1.5 flex items-center gap-3">
+          <div className="mt-1.5 flex flex-nowrap items-center gap-3">
             <StatusPill status={a.status} paymentStatus={a.paymentStatus} />
-            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+            <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px] text-muted-foreground">
               {a.useFrequencyLive ? <Video className="size-3" /> : <MapPin className="size-3" />}
               {a.durationMinutes} min
             </span>
@@ -548,9 +791,35 @@ function AppointmentRow({
           {canJoin && (
             <JoinMeetingButton
               appointmentId={a.id}
+              title={a.title}
+              counterpartName={a.hostName ?? a.homeName}
               size="sm"
               className="min-w-[10rem] flex-1 rounded-2xl px-4 py-3 text-sm"
             />
+          )}
+        </div>
+      )}
+
+      {canManage && (
+        <div className="mt-2.5 flex items-center gap-2.5">
+          {onReschedule && (
+            <button
+              type="button"
+              onClick={onReschedule}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3.5 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <CalendarClock className="size-3.5" />
+              Reschedule
+            </button>
+          )}
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="inline-flex items-center gap-1.5 rounded-full border border-destructive/40 bg-destructive/5 px-3.5 py-1.5 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/10"
+            >
+              Cancel
+            </button>
           )}
         </div>
       )}

@@ -5,6 +5,7 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { SkinProvider, SKIN_INIT_SCRIPT } from '@/components/skin-provider'
 import { LiveSessionProvider } from '@/components/live-session'
 import { EpisodePlayerProvider } from '@/components/episode-player-provider'
+import { AppointmentCallProvider } from '@/components/appointments/appointment-call-provider'
 import { LiveProcessingProvider } from '@/components/live-processing-provider'
 import { AutoRefresh } from '@/components/auto-refresh'
 import { PresenceHeartbeat } from '@/components/presence-heartbeat'
@@ -152,10 +153,14 @@ export default async function RootLayout({
                 running as the host navigates anywhere. */}
             <LiveProcessingProvider>
               <LiveSessionProvider>
-                <EpisodePlayerProvider>
-                  {/* Keeps server-rendered data (feed, adverts, live status, …)
-                      continuously fresh so users never have to manually reload. */}
-                  <AutoRefresh />
+              <EpisodePlayerProvider>
+                {/* Owns the single appointment-call LiveKit room above the router
+                    so a video/audio call survives navigation, minimizes to an
+                    in-app PiP window, and rejoins after a refresh. */}
+                <AppointmentCallProvider>
+                {/* Keeps server-rendered data (feed, adverts, live status, …)
+                    continuously fresh so users never have to manually reload. */}
+                <AutoRefresh />
                   {/* Tracks in-app navigation depth for the whole session so every
                       Back control can unwind real history, and only falls back to
                       a parent route when the user genuinely arrived from outside. */}
@@ -175,12 +180,13 @@ export default async function RootLayout({
                     <div id="app-shell" className="app-shell">
                       {children}
                       {/* Persistent, flagship-quality tab bar. Lives in the layout so
-                          it never remounts on navigation — the active capsule morphs
+                          it never remounts on navigation ��� the active capsule morphs
                           between tabs and per-tab state/scroll are preserved. */}
                       <BottomNav />
                     </div>
                   </HomeContextProvider>
                   {process.env.NODE_ENV === 'production' && <Analytics />}
+                </AppointmentCallProvider>
                 </EpisodePlayerProvider>
               </LiveSessionProvider>
             </LiveProcessingProvider>

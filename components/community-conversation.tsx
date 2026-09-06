@@ -269,7 +269,7 @@ export function CommunityConversation({
             <PostIdentity post={post} edited={post.edited} size="lg" onAuthorClick={openProfile} />
           </div>
           {post.body && (
-            <p className="mt-2 whitespace-pre-wrap break-words text-[13.9px] leading-relaxed text-foreground text-pretty">
+            <p className="mt-2 whitespace-pre-wrap break-words text-base leading-tight text-foreground text-pretty">
               {linkify(post.body)}
             </p>
           )}
