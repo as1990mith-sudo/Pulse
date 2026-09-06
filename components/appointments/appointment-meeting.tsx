@@ -28,10 +28,18 @@ import { getAppointmentMeetingToken } from "@/app/actions/home-appointments"
 export function AppointmentMeeting({
   appointmentId,
   startWithVideo = false,
+  getCreds,
   onClose,
 }: {
   appointmentId: string
   startWithVideo?: boolean
+  /**
+   * How to obtain the LiveKit credentials. Defaults to the authenticated member
+   * path (keyed by appointmentId); the public guest manage page passes a
+   * manage-token fetcher instead. Either way the server gates access, so the
+   * room can't leak to an unauthorised joiner.
+   */
+  getCreds?: () => Promise<{ url: string; token: string; roomName: string }>
   onClose: () => void
 }) {
   const roomRef = useRef<Room | null>(null)
@@ -60,7 +68,7 @@ export function AppointmentMeeting({
   const connect = useCallback(async () => {
     if (roomRef.current) return
     try {
-      const creds = await getAppointmentMeetingToken(appointmentId)
+      const creds = await (getCreds ? getCreds() : getAppointmentMeetingToken(appointmentId))
       const room = new Room({
         adaptiveStream: true,
         dynacast: true,
@@ -109,7 +117,7 @@ export function AppointmentMeeting({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not join the meeting.")
     }
-  }, [appointmentId, startWithVideo])
+  }, [appointmentId, startWithVideo, getCreds])
 
   useEffect(() => {
     connect()

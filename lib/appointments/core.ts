@@ -2,7 +2,13 @@ import "server-only"
 
 import { and, eq, inArray, ne } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { homeAppointment, homeAppointmentAvailability, homeAppointmentType } from "@/lib/db/schema"
+import {
+  homeAppointment,
+  homeAppointmentAvailability,
+  homeAppointmentType,
+  homeMembership,
+  user as userTable,
+} from "@/lib/db/schema"
 import { createAccessToken, LIVEKIT_URL } from "@/lib/livekit"
 
 /**
@@ -29,6 +35,31 @@ export type AppointmentTypeRecord = typeof homeAppointmentType.$inferSelect
  */
 export function newManageToken(): string {
   return `${crypto.randomUUID()}${crypto.randomUUID()}`.replace(/-/g, "")
+}
+
+/**
+ * Resolves who an appointment of `type` is with: the type's explicit host, else
+ * the Home owner. Returns the host id + a display name (their account name, the
+ * type's stored host name, or "Host"). Shared by member and guest booking so
+ * both attribute the same host.
+ */
+export async function resolveHostForType(
+  homeId: string,
+  type: AppointmentTypeRecord,
+): Promise<{ hostUserId: string; hostName: string } | null> {
+  let hostUserId = type.hostUserId
+  if (!hostUserId) {
+    const [owner] = await db
+      .select({ userId: homeMembership.userId })
+      .from(homeMembership)
+      .where(and(eq(homeMembership.homeId, homeId), eq(homeMembership.role, "owner")))
+      .limit(1)
+    hostUserId = owner?.userId ?? null
+  }
+  if (!hostUserId) return null
+
+  const [hostUser] = await db.select().from(userTable).where(eq(userTable.id, hostUserId)).limit(1)
+  return { hostUserId, hostName: hostUser?.name ?? type.hostName ?? "Host" }
 }
 
 /* -------------------------------------------------------------------------- */

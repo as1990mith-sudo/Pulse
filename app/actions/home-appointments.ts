@@ -32,6 +32,9 @@ import {
 } from "@/lib/appointments/core"
 import { notifyAppointment } from "@/lib/appointments/notify"
 
+// Re-export so existing importers (e.g. the hub) keep getting OpenSlot from here.
+export type { OpenSlot }
+
 /* -------------------------------------------------------------------------- */
 /* Auth / scoping helpers                                                     */
 /* -------------------------------------------------------------------------- */
@@ -599,8 +602,13 @@ async function createAppointmentConversation(appointmentId: string): Promise<num
   if (!a) throw new Error("Appointment not found.")
   if (a.conversationId) return a.conversationId
   if (!a.hostUserId) throw new Error("Appointment has no host.")
+  // Only member appointments get a DM thread; guest bookings have no account to
+  // message, so callers must not invoke this for them.
+  if (!a.memberUserId) throw new Error("Guest appointments have no conversation.")
+  const memberUserId = a.memberUserId
 
-  const [userAId, userBId] = a.memberUserId < a.hostUserId ? [a.memberUserId, a.hostUserId] : [a.hostUserId, a.memberUserId]
+  const [userAId, userBId] =
+    memberUserId < a.hostUserId ? [memberUserId, a.hostUserId] : [a.hostUserId, memberUserId]
 
   const conversationId = await db.transaction(async (tx) => {
     const [created] = await tx
