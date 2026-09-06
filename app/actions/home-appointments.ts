@@ -932,6 +932,27 @@ export async function cancelMyAppointment(appointmentId: string): Promise<void> 
 }
 
 /**
+ * Open slots the caller (member or host) can move this appointment to. Excludes
+ * the appointment's own current time via the shared slot engine's live-row rule.
+ */
+export async function getMyRescheduleSlots(appointmentId: string): Promise<OpenSlot[]> {
+  const user = await requireUser()
+  const [a] = await db.select().from(homeAppointment).where(eq(homeAppointment.id, appointmentId)).limit(1)
+  if (!a) throw new Error("Appointment not found.")
+  const isMember = a.memberUserId === user.id
+  const isHost = !!a.hostUserId && a.hostUserId === user.id
+  if (!isMember && !isHost) throw new Error("You can't reschedule this appointment.")
+  if (!a.typeId) return []
+  const [type] = await db
+    .select()
+    .from(homeAppointmentType)
+    .where(and(eq(homeAppointmentType.id, a.typeId), eq(homeAppointmentType.homeId, a.homeId)))
+    .limit(1)
+  if (!type) return []
+  return computeOpenSlots(a.homeId, type)
+}
+
+/**
  * Reschedules an appointment to a new slot IN PLACE. The move is a single atomic
  * UPDATE guarded by `assertSlotBookable` (excluding this row), so the new slot
  * is validated + reserved and the old time is freed in one step — two people can
