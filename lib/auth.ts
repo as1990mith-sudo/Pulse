@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth"
 import { pool } from "@/lib/db"
-import { sendPasswordResetEmail } from "@/lib/email"
+import { sendPasswordResetEmail, sendVerificationEmail, sendChangeEmailVerification } from "@/lib/email"
 
 export const auth = betterAuth({
   database: pool,
@@ -34,6 +34,33 @@ export const auth = betterAuth({
       await sendPasswordResetEmail({ to: user.email, name: user.name, url })
     },
     resetPasswordTokenExpiresIn: 60 * 60, // 1 hour
+  },
+  // Lets a member confirm their address from Account → Security. NOT required to
+  // sign in (requireEmailVerification is left off), so this changes nothing for
+  // existing users — it only enables the optional "verify email" action.
+  emailVerification: {
+    sendVerificationEmail: async ({ user, url }) => {
+      await sendVerificationEmail({ to: user.email, name: user.name, url })
+    },
+  },
+  user: {
+    // Enables Account → Security → change email. When the current address is
+    // already verified, Better Auth emails it an approval link (below) before
+    // applying; when it isn't, the change applies immediately.
+    changeEmail: {
+      enabled: true,
+      sendChangeEmailVerification: async ({
+        user,
+        newEmail,
+        url,
+      }: {
+        user: { email: string; name?: string | null }
+        newEmail: string
+        url: string
+      }) => {
+        await sendChangeEmailVerification({ to: user.email, name: user.name, newEmail, url })
+      },
+    },
   },
   trustedOrigins: [
     ...(process.env.V0_RUNTIME_URL ? [process.env.V0_RUNTIME_URL] : []),

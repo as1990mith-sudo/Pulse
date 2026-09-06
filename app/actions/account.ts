@@ -2,9 +2,19 @@
 
 import "server-only"
 
+import { desc, eq } from "drizzle-orm"
 import { headers } from "next/headers"
+import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
-import { pool } from "@/lib/db"
+import { db, pool } from "@/lib/db"
+import {
+  feedComment,
+  feedPost,
+  organization,
+  statusUpdate,
+  user as userTable,
+} from "@/lib/db/schema"
+import { getHandle } from "@/lib/identity"
 
 // Column names across the schema that identify a row as "belonging to" a user.
 // Any public table carrying one of these is cleaned up when that user deletes
@@ -115,3 +125,123 @@ export async function deleteMyAccount(): Promise<{ ok: true }> {
 
   return { ok: true }
 }
+
+export type MyAccountInfo = {
+  id: string
+  name: string
+  handle: string
+  email: string
+  emailVerified: boolean
+  phone: string | null
+  bio: string | null
+  image: string | null
+  accountType: string
+  createdAt: string
+}
+
+/** Loads the signed-in member's own account fields for the Account section. */
+export async function getMyAccountInfo(): Promise<MyAccountInfo | null> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) return null
+
+  const [row] = await db.select().from(userTable).where(eq(userTable.id, session.user.id)).limit(1)
+  if (!row) return null
+
+  return {
+    id: row.id,
+    name: row.name,
+    handle: getHandle(row.name),
+    email: row.email,
+    emailVerified: row.emailVerified,
+    phone: row.phone ?? null,
+    bio: row.bio ?? null,
+    image: row.image,
+    accountType: row.accountType,
+    createdAt: row.createdAt.toISOString(),
+  }
+}
+
+/**
+ * Saves the member's optional phone number. Passing an empty string clears it.
+ * Light-touch validation only — Frequency treats this as a contact hint, not a
+ * verified identifier.
+ */
+export async function updatePhone(
+  phone: string,
+): Promise<{ ok: true; phone: string | null } | { ok: false; error: string }> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) return { ok: false, error: "You must be signed in to do that." }
+
+  const trimmed = phone.trim()
+  if (trimmed.length > 32) return { ok: false, error: "That phone number looks too long." }
+  if (trimmed && !/^[+()\-\s0-9]+$/.test(trimmed)) {
+    return { ok: false, error: "Enter a valid phone number." }
+  }
+
+  await db
+    .update(userTable)
+    .set({ phone: trimmed.length > 0 ? trimmed : null })
+    .where(eq(userTable.id, session.user.id))
+
+  revalidatePath("/account/profile")
+  return { ok: true, phone: trimmed.length > 0 ? trimmed : null }
+}
+
+/**
+ * Names of the Homes (organisations) this member OWNS. Deleting the account
+ * permanently deletes these for their members too, so the delete screen shows
+ * them explicitly before the member confirms.
+ */
+export async function getMyOwnedHomes(): Promise<{ id: string; name: string }[]> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) return []
+  return db
+    .select({ id: organization.id, name: organization.name })
+    .from(organization)
+    .where(eq(organization.ownerId, session.user.id))
+    .orderBy(organization.name)
+}
+
+/**
+ * Assembles a JSON export of the member's personal data (profile plus the
+ * content they authored) for Account → Data & Privacy → Download my data.
+ * Scoped strictly to the signed-in user's own rows.
+ */
+export async function exportMyData(): Promise<{ ok: true; json: string } | { ok: false; error: string }> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) return { ok: false, error: "You must be signed in to do that." }
+  const userId = session.user.id
+
+  const [profileRow] = await db.select().from(userTable).where(eq(userTable.id, userId)).limit(1)
+  if (!profileRow) return { ok: false, error: "Account not found." }
+
+  const [posts, comments, statuses] = await Promise.all([
+    db.select().from(feedPost).where(eq(feedPost.userId, userId)).orderBy(desc(feedPost.createdAt)),
+    db.select().from(feedComment).where(eq(feedComment.userId, userId)).orderBy(desc(feedComment.createdAt)),
+    db.select().from(statusUpdate).where(eq(statusUpdate.userId, userId)).orderBy(desc(statusUpdate.createdAt)),
+  ])
+
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    account: {
+      id: profileRow.id,
+      name: profileRow.name,
+      handle: getHandle(profileRow.name),
+      email: profileRow.email,
+      emailVerified: profileRow.emailVerified,
+      phone: profileRow.phone ?? null,
+      bio: profileRow.bio ?? null,
+      accountType: profileRow.accountType,
+      country: profileRow.country ?? null,
+      city: profileRow.city ?? null,
+      region: profileRow.region ?? null,
+      createdAt: profileRow.createdAt.toISOString(),
+    },
+    posts,
+    comments,
+    statuses,
+  }
+
+  return { ok: true, json: JSON.stringify(payload, null, 2) }
+}
+

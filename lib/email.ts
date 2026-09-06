@@ -79,3 +79,114 @@ export async function sendPasswordResetEmail({
 
   console.log("[v0] Password reset email sent:", data?.id)
 }
+
+/**
+ * Sends a single call-to-action email (heading, one paragraph, a button, and a
+ * plain-text fallback link) in the same visual style as the reset email. Shared
+ * by the email-verification and change-email flows so we keep one template.
+ */
+async function sendActionEmail({
+  to,
+  subject,
+  heading,
+  greeting,
+  intro,
+  buttonLabel,
+  url,
+  footer,
+}: {
+  to: string
+  subject: string
+  heading: string
+  greeting: string
+  intro: string
+  buttonLabel: string
+  url: string
+  footer: string
+}): Promise<void> {
+  if (!resend) {
+    throw new Error("RESEND_API_KEY is not set — cannot send email.")
+  }
+
+  const { data, error } = await resend.emails.send({
+    from: FROM,
+    to,
+    subject,
+    text: [greeting, "", intro, "", url, "", footer].join("\n"),
+    html: `
+      <div style="font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;color:#111827">
+        <h1 style="font-size:20px;font-weight:600;margin:0 0 16px">${heading}</h1>
+        <p style="font-size:14px;line-height:1.6;margin:0 0 12px">${greeting}</p>
+        <p style="font-size:14px;line-height:1.6;margin:0 0 20px">${intro}</p>
+        <a href="${url}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 20px;border-radius:9999px">
+          ${buttonLabel}
+        </a>
+        <p style="font-size:12px;line-height:1.6;color:#6b7280;margin:24px 0 0">${footer}</p>
+        <p style="font-size:12px;line-height:1.6;color:#6b7280;margin:12px 0 0;word-break:break-all">
+          Or paste this link into your browser:<br />${url}
+        </p>
+      </div>
+    `,
+  })
+
+  if (error) {
+    console.log("[v0] Resend failed to send action email:", error)
+    throw new Error(
+      typeof error === "object" && error && "message" in error
+        ? String((error as { message: unknown }).message)
+        : "Failed to send email.",
+    )
+  }
+
+  console.log("[v0] Action email sent:", subject, data?.id)
+}
+
+/** Confirms a member's email address (Account → Security → verify email). */
+export async function sendVerificationEmail({
+  to,
+  name,
+  url,
+}: {
+  to: string
+  name?: string | null
+  url: string
+}): Promise<void> {
+  await sendActionEmail({
+    to,
+    subject: "Verify your Frequency email",
+    heading: "Verify your email",
+    greeting: name ? `Hi ${name},` : "Hi,",
+    intro: "Confirm this is your email address so we can keep your Frequency account secure.",
+    buttonLabel: "Verify email",
+    url,
+    footer: "If you didn't request this, you can safely ignore this email.",
+  })
+}
+
+/**
+ * Sent to a member's CURRENT address to approve changing it to a new one. Better
+ * Auth only calls this when the current email is already verified; the link
+ * confirms the change before it takes effect.
+ */
+export async function sendChangeEmailVerification({
+  to,
+  name,
+  newEmail,
+  url,
+}: {
+  to: string
+  name?: string | null
+  newEmail: string
+  url: string
+}): Promise<void> {
+  await sendActionEmail({
+    to,
+    subject: "Confirm your new Frequency email",
+    heading: "Approve your email change",
+    greeting: name ? `Hi ${name},` : "Hi,",
+    intro: `We received a request to change your Frequency email to ${newEmail}. Approve it below to make the change.`,
+    buttonLabel: "Approve change",
+    url,
+    footer: "If you didn't request this, ignore this email and your address won't change.",
+  })
+}
