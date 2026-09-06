@@ -4,25 +4,31 @@ import { useEffect, useState } from "react"
 import { Video } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getMeetingState, type AppointmentMeetingState } from "@/app/actions/home-appointments"
-import { AppointmentMeeting } from "@/components/appointments/appointment-meeting"
+import { useAppointmentCall } from "@/components/appointments/appointment-call-provider"
 
 /**
  * "Join Meeting" for an appointment. Polls the server-computed meeting window so
  * it enables exactly when the room opens (10 min before start) and disables once
  * it closes — the member never types a room id or hunts for a link. Launches the
- * private LiveKit room in place. Only rendered for Frequency Live appointments.
+ * private LiveKit room via the persistent call provider (so it survives
+ * navigation and can minimize to PiP). Only rendered for Frequency Live
+ * appointments.
  */
 export function JoinMeetingButton({
   appointmentId,
+  title = "Appointment",
+  counterpartName = "Guest",
   className,
   size = "default",
 }: {
   appointmentId: string
+  title?: string
+  counterpartName?: string
   className?: string
   size?: "default" | "sm"
 }) {
+  const { startCall } = useAppointmentCall()
   const [state, setState] = useState<AppointmentMeetingState | null>(null)
-  const [inMeeting, setInMeeting] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -58,7 +64,7 @@ export function JoinMeetingButton({
       <button
         type="button"
         disabled={!isOpen}
-        onClick={() => setInMeeting(true)}
+        onClick={() => startCall({ appointmentId, title, counterpartName, startWithVideo: true })}
         className={cn(
           "inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-all",
           size === "sm" ? "px-3.5 py-1.5 text-xs" : "px-5 py-2.5 text-sm",
@@ -71,7 +77,6 @@ export function JoinMeetingButton({
         <Video className="size-4" />
         {label}
       </button>
-      {inMeeting && <AppointmentMeeting appointmentId={appointmentId} onClose={() => setInMeeting(false)} />}
     </>
   )
 }

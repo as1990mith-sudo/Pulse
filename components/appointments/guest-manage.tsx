@@ -14,10 +14,9 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { AppointmentMeeting } from "@/components/appointments/appointment-meeting"
+import { useAppointmentCall } from "@/components/appointments/appointment-call-provider"
 import {
   cancelAppointmentByToken,
-  getGuestMeetingToken,
   getRescheduleSlotsByToken,
   rescheduleAppointmentByToken,
   type ManageView,
@@ -54,9 +53,9 @@ const STATUS_DOT: Record<string, string> = {
 }
 
 export function GuestManage({ initial }: { initial: ManageView }) {
+  const { startCall } = useAppointmentCall()
   const [view, setView] = useState<ManageView>(initial)
   const [mode, setMode] = useState<"overview" | "reschedule">("overview")
-  const [inMeeting, setInMeeting] = useState(false)
 
   const isCancelled = view.status === "cancelled"
   const isOver = view.status === "completed" || view.status === "no_show"
@@ -111,7 +110,18 @@ export function GuestManage({ initial }: { initial: ManageView }) {
           ) : (
             <div className="mt-5 flex flex-col gap-2.5">
               {view.useFrequencyLive && (
-                <JoinRow view={view} onJoin={() => setInMeeting(true)} />
+                <JoinRow
+                  view={view}
+                  onJoin={() =>
+                    startCall({
+                      manageToken: view.manageToken,
+                      title: view.title,
+                      counterpartName: view.hostName ?? view.homeName,
+                      selfName: view.bookerName,
+                      startWithVideo: true,
+                    })
+                  }
+                />
               )}
               {canManage && (
                 <div className="flex gap-2.5">
@@ -131,15 +141,6 @@ export function GuestManage({ initial }: { initial: ManageView }) {
             </div>
           )}
         </div>
-      )}
-
-      {inMeeting && (
-        <AppointmentMeeting
-          appointmentId=""
-          startWithVideo={view.useFrequencyLive}
-          getCreds={() => getGuestMeetingToken(view.manageToken)}
-          onClose={() => setInMeeting(false)}
-        />
       )}
     </div>
   )

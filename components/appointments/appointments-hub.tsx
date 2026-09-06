@@ -791,6 +791,8 @@ function AppointmentRow({
           {canJoin && (
             <JoinMeetingButton
               appointmentId={a.id}
+              title={a.title}
+              counterpartName={a.hostName ?? a.homeName}
               size="sm"
               className="min-w-[10rem] flex-1 rounded-2xl px-4 py-3 text-sm"
             />
