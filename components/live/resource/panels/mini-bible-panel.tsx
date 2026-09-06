@@ -146,7 +146,19 @@ export function MiniBiblePanel() {
     const verse = verses.find((x) => x.verse === v)
     if (!verse) return
     const text = `"${verse.text}" — ${reference(v)} (KJV)`
-    const posted = await shareToChat(text)
+    // Share as a structured verse card so chat can render a distinct, tappable
+    // Bible message that reopens this exact passage; `text` is the graceful
+    // fallback used when there's no live chat sender (native share / clipboard).
+    const posted = await shareToChat(text, {
+      kind: "bible",
+      book,
+      chapter,
+      verse: v,
+      reference: reference(v),
+      text: verse.text,
+      translation: "KJV",
+      verseId: verseId(v),
+    })
     if (!posted) {
       if (navigator.share) {
         try {

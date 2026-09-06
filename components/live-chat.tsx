@@ -1,9 +1,9 @@
 "use client"
 
-import { useEffect, useRef, useState, useTransition } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import useSWR from "swr"
-import { BookOpen, ChevronDown, Pin, PinOff, Send, Smile } from "lucide-react"
+import { AlertCircle, BookOpen, ChevronDown, Loader2, Pin, PinOff, RotateCw, Send, Smile } from "lucide-react"
 import type { CurrentUser } from "@/lib/session"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import {
@@ -12,6 +12,7 @@ import {
   pinLiveChat,
   sendLiveChat,
   type LiveChatMessageView,
+  type LiveChatMessageMeta,
 } from "@/app/actions/live"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -37,6 +38,61 @@ function MentionText({ body, accent = false }: { body: string; accent?: boolean 
         mentionClassName: cn("font-semibold", accent ? "text-primary-foreground underline" : "text-primary"),
       })}
     </>
+  )
+}
+
+// A message the viewer has sent that hasn't been confirmed by the server yet.
+// Kept in its own state (never the SWR cache) so a routine poll can't drop it.
+type Pending = {
+  tempId: number
+  body: string
+  meta: LiveChatMessageMeta | null
+  kind: "message" | "bible"
+  status: "sending" | "failed"
+  createdAtMs: number
+}
+
+type RenderMessage = LiveChatMessageView & { pending?: boolean; failed?: boolean }
+
+/** Appends a server message to the cache in id order, ignoring any duplicate. */
+function mergeById(list: LiveChatMessageView[], incoming: LiveChatMessageView): LiveChatMessageView[] {
+  if (list.some((m) => m.id === incoming.id)) return list
+  return [...list, incoming].sort((a, b) => a.id - b.id)
+}
+
+/** A shared Bible verse, rendered as a distinct, tappable card within the chat. */
+function BibleVerseCard({
+  meta,
+  onOpen,
+  immersive,
+}: {
+  meta: LiveChatMessageMeta
+  onOpen?: () => void
+  immersive?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={cn(
+        "group flex w-full flex-col gap-1 rounded-2xl border border-primary/30 px-3 py-2.5 text-left transition-colors",
+        immersive ? "bg-primary/10 backdrop-blur-md hover:bg-primary/20" : "bg-primary/5 hover:bg-primary/10",
+      )}
+    >
+      <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-primary">
+        <BookOpen className="size-3.5" />
+        {meta.reference}
+        {meta.translation ? <span className="font-semibold text-primary/60">· {meta.translation}</span> : null}
+      </span>
+      <span className={cn("font-serif text-[15px] leading-relaxed", immersive ? "text-white/90" : "text-foreground/90")}>
+        {"\u201C"}
+        {meta.text}
+        {"\u201D"}
+      </span>
+      <span className={cn("text-[10px] font-medium", immersive ? "text-white/40 group-hover:text-white/60" : "text-muted-foreground")}>
+        Tap to open in the Bible
+      </span>
+    </button>
   )
 }
 
@@ -99,7 +155,6 @@ export function LiveChat({
   feed?: boolean
 }) {
   const [draft, setDraft] = useState("")
-  const [isPending, startTransition] = useTransition()
   const scrollRef = useRef<HTMLUListElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -176,36 +231,131 @@ export function LiveChat({
   const myName = asHost ? (currentUser?.name ?? "Host") : (currentUser?.name ?? guestName ?? "You")
 
   // Bubble-free presentation covers both the video "flatText" style and the new
-  // audio "feed" style — both drop the message background/ring/padding.
+  // audio "feed" style �� both drop the message background/ring/padding.
   const bare = flatText || feed
 
+  // ── Reliable send (outbox) ────────────────────────────────────────────────
+  // Pending messages live in their OWN state, separate from the SWR cache, so a
+  // routine 2s poll can never wipe an in-flight message (the old bug where a
+  // send appeared to be swallowed once a room got busy). Each send retries
+  // automatically with a steady backoff and again the moment connectivity
+  // returns; a failure stays visible and tappable to retry. The chat transport
+  // is plain server actions + polling, wholly independent of the realtime audio
+  // connection — so reconnecting audio, using the Bible/resource panels, or a
+  // long-running room never disconnects chat.
+  const [outbox, setOutbox] = useState<Pending[]>([])
+  const outboxRef = useRef<Pending[]>([])
+  useEffect(() => {
+    outboxRef.current = outbox
+  }, [outbox])
+
+  const attemptSend = useCallback(
+    async (item: Pending) => {
+      if (!roomName) return
+      setOutbox((o) => o.map((x) => (x.tempId === item.tempId ? { ...x, status: "sending" } : x)))
+      try {
+        const saved = await sendLiveChat({ roomName, body: item.body, kind: item.kind, meta: item.meta })
+        // Delivered — drop the pending copy and fold the stored message straight
+        // into the cache so it doesn't flicker out before the next poll.
+        setOutbox((o) => o.filter((x) => x.tempId !== item.tempId))
+        if (saved) void mutate((cur) => mergeById(cur ?? [], saved), { revalidate: false })
+        else void mutate()
+      } catch {
+        // Keep the message and surface a retryable failed state — never discard.
+        setOutbox((o) => o.map((x) => (x.tempId === item.tempId ? { ...x, status: "failed" } : x)))
+      }
+    },
+    [roomName, mutate],
+  )
+
+  const enqueue = useCallback(
+    (body: string, meta: LiveChatMessageMeta | null = null) => {
+      const text = body.trim()
+      if (!text || !roomName) return
+      const item: Pending = {
+        tempId: -Date.now() - Math.floor(Math.random() * 1000),
+        body: text,
+        meta,
+        kind: meta?.kind === "bible" ? "bible" : "message",
+        status: "sending",
+        createdAtMs: Date.now(),
+      }
+      setOutbox((o) => [...o, item])
+      atBottomRef.current = true
+      void attemptSend(item)
+    },
+    [roomName, attemptSend],
+  )
+
+  const retryOne = useCallback(
+    (tempId: number) => {
+      const item = outboxRef.current.find((x) => x.tempId === tempId)
+      if (item) void attemptSend(item)
+    },
+    [attemptSend],
+  )
+
+  // Auto-retry failed sends when connectivity returns and on a slow interval, so
+  // a temporary network drop recovers on its own without the user doing anything.
+  useEffect(() => {
+    const retry = () => {
+      for (const item of outboxRef.current) if (item.status === "failed") void attemptSend(item)
+    }
+    window.addEventListener("online", retry)
+    const iv = setInterval(retry, 6000)
+    return () => {
+      window.removeEventListener("online", retry)
+      clearInterval(iv)
+    }
+  }, [attemptSend])
+
   // Expose a "post to chat" function to the Live Resource system so mini panels
-  // (e.g. the mini-Bible) can share a verse straight into this live's chat
-  // without leaving the live. Only registered while the viewer can actually send.
+  // (e.g. the mini-Bible) can share a verse — as plain text OR a rich, tappable
+  // verse card — straight into this live's chat without leaving the live.
   const resources = useLiveResourcesOptional()
   const registerChatSender = resources?.registerChatSender
   useEffect(() => {
     if (!registerChatSender || !canSend || !roomName) return
-    const unregister = registerChatSender(async (text: string) => {
-      const body = text.trim()
-      if (!body) return
-      const optimistic: LiveChatMessageView = {
-        id: -Date.now(),
-        userId: currentUser?.id ?? "me",
-        userName: myName,
-        userImage: currentUser?.image ?? null,
-        isHost: asHost,
-        kind: "message",
-        body,
-        createdAtMs: Date.now(),
-      }
-      atBottomRef.current = true
-      mutate([...messages, optimistic], { revalidate: false })
-      await sendLiveChat({ roomName, body })
-      mutate()
+    const unregister = registerChatSender((text: string, meta?: LiveChatMessageMeta | null) => {
+      enqueue(text, meta ?? null)
     })
     return unregister
-  }, [registerChatSender, canSend, roomName, asHost, currentUser, myName, messages, mutate])
+  }, [registerChatSender, canSend, roomName, enqueue])
+
+  // Server messages + still-pending local messages, in one ordered list. Pending
+  // ones are kept out of the SWR cache so polls can't drop them; they're appended
+  // here for rendering and removed the instant the server confirms them.
+  const rendered = useMemo<RenderMessage[]>(() => {
+    const pending: RenderMessage[] = outbox.map((p) => ({
+      id: p.tempId,
+      userId: currentUser?.id ?? "me",
+      userName: myName,
+      userImage: currentUser?.image ?? null,
+      isHost: asHost,
+      kind: p.kind,
+      body: p.body,
+      meta: p.meta,
+      createdAtMs: p.createdAtMs,
+      pending: p.status === "sending",
+      failed: p.status === "failed",
+    }))
+    return [...messages, ...pending]
+  }, [messages, outbox, currentUser, myName, asHost])
+
+  // Open the shared verse back in the Bible resource at its exact passage.
+  const openBibleVerse = useCallback(
+    (meta: LiveChatMessageMeta) => {
+      resources?.openPanel?.("bible", { kind: "bible", book: meta.book, chapter: meta.chapter, verseId: meta.verseId })
+    },
+    [resources],
+  )
+
+  // Keep the viewer stuck to the newest line when they send / a message is
+  // queued, mirroring the server-message auto-scroll.
+  useEffect(() => {
+    if (atBottomRef.current) scrollToBottom()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outbox.length])
 
   // Emoji button — focuses the message input so the device's native keyboard
   // opens; emojis come from the keyboard's own emoji key. No custom in-app
@@ -231,24 +381,7 @@ export function LiveChat({
     const text = draft.trim()
     if (!text || !roomName) return
     setDraft("")
-    // Optimistically append, then revalidate from the server.
-    const optimistic: LiveChatMessageView = {
-      id: -Date.now(),
-      userId: currentUser?.id ?? "me",
-      userName: myName,
-      userImage: currentUser?.image ?? null,
-      isHost: asHost,
-      kind: "message",
-      body: text,
-      createdAtMs: Date.now(),
-    }
-    mutate([...messages, optimistic], { revalidate: false })
-    // Sending always sticks the viewer to the bottom.
-    atBottomRef.current = true
-    startTransition(async () => {
-      await sendLiveChat({ roomName, body: text })
-      mutate()
-    })
+    enqueue(text)
   }
 
   return (
@@ -325,12 +458,12 @@ export function LiveChat({
             feed ? "gap-1.5" : "gap-2",
           )}
         >
-          {messages.length === 0 && (
+          {rendered.length === 0 && (
             <li className={cn("py-8 text-center text-sm", immersive ? "text-white/50" : "text-muted-foreground")}>
               No messages yet. Say hello to the room.
             </li>
           )}
-          {messages.map((m) => {
+          {rendered.map((m) => {
             // System notices (e.g. "<name> entered the room") render centered.
             if (m.kind === "system") {
               return (
@@ -350,7 +483,7 @@ export function LiveChat({
             const isMine = currentUser ? m.userId === currentUser.id : false
             const canPreview = !isMine && m.id > 0
             return (
-              <li key={m.id} className={cn(feed ? "flex gap-2" : "flex gap-2.5", isMine && !bare && "flex-row-reverse")}>
+              <li key={m.id} className={cn(feed ? "flex gap-2" : "flex gap-2.5", isMine && !bare && "flex-row-reverse", m.pending && "opacity-60")}>
                 <ProfilePreview userId={m.userId} disabled={!canPreview} className="shrink-0">
                   <Avatar className={cn("shrink-0", flatText ? "size-5" : feed ? "size-6" : "size-8")}>
                     {m.userImage ? <AvatarImage src={m.userImage} alt={m.userName} /> : null}
@@ -385,28 +518,56 @@ export function LiveChat({
                       </span>
                     )}
                   </div>
-                  <p
-                    className={cn(
-                      "text-sm leading-snug [overflow-wrap:anywhere]",
-                      bare
-                        ? // Bubble-free: bare text, no background. A subtle shadow keeps
-                          // it legible over bright video frames or a chat background.
-                          "text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]"
-                        : cn(
-                            "rounded-2xl px-3 py-1.5 shadow-sm",
-                            isMine
-                              ? // Neutral white bubble keeps the viewer's own messages readable on
-                                // any studio theme (a themed fill blended into coloured backgrounds).
-                                "rounded-br-md bg-white text-zinc-900"
-                              : immersive
-                                ? "rounded-bl-md bg-white/10 text-white/90 ring-1 ring-inset ring-white/10 backdrop-blur-md"
-                                : "rounded-bl-md bg-secondary text-foreground/90 ring-1 ring-inset ring-border/50",
-                            pinnedChatId === m.id && "ring-1 ring-primary/40",
-                          ),
-                    )}
-                  >
-                    <MentionText body={m.body} />
-                  </p>
+                  {m.kind === "bible" && m.meta ? (
+                    <BibleVerseCard meta={m.meta} immersive={immersive} onOpen={() => openBibleVerse(m.meta!)} />
+                  ) : (
+                    <p
+                      className={cn(
+                        "text-sm leading-snug [overflow-wrap:anywhere]",
+                        bare
+                          ? // Bubble-free: bare text, no background. A subtle shadow keeps
+                            // it legible over bright video frames or a chat background.
+                            "text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]"
+                          : cn(
+                              "rounded-2xl px-3 py-1.5 shadow-sm",
+                              isMine
+                                ? // Neutral white bubble keeps the viewer's own messages readable on
+                                  // any studio theme (a themed fill blended into coloured backgrounds).
+                                  "rounded-br-md bg-white text-zinc-900"
+                                : immersive
+                                  ? "rounded-bl-md bg-white/10 text-white/90 ring-1 ring-inset ring-white/10 backdrop-blur-md"
+                                  : "rounded-bl-md bg-secondary text-foreground/90 ring-1 ring-inset ring-border/50",
+                              pinnedChatId === m.id && "ring-1 ring-primary/40",
+                            ),
+                      )}
+                    >
+                      <MentionText body={m.body} />
+                    </p>
+                  )}
+                  {/* Own message delivery state: a quiet spinner while sending, a
+                      tappable retry if it failed. Nothing is ever dropped silently. */}
+                  {isMine && (m.pending || m.failed) && (
+                    <span
+                      className={cn(
+                        "flex items-center gap-1 text-[10px] font-medium",
+                        m.failed ? "text-destructive" : immersive ? "text-white/45" : "text-muted-foreground",
+                      )}
+                    >
+                      {m.failed ? (
+                        <button
+                          type="button"
+                          onClick={() => retryOne(m.id)}
+                          className="flex items-center gap-1 hover:underline"
+                        >
+                          <AlertCircle className="size-3" /> Not sent — tap to retry <RotateCw className="size-3" />
+                        </button>
+                      ) : (
+                        <>
+                          <Loader2 className="size-3 animate-spin" /> Sending…
+                        </>
+                      )}
+                    </span>
+                  )}
                 </div>
               </li>
             )
@@ -485,7 +646,7 @@ export function LiveChat({
               type="submit"
               size="icon"
               className="size-10 shrink-0 rounded-full"
-              disabled={!draft.trim() || isPending}
+              disabled={!draft.trim()}
               aria-label="Send message"
             >
               <Send className="size-4" />

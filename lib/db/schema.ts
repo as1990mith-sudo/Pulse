@@ -968,6 +968,9 @@ export const liveChatMessage = pgTable("live_chat_message", {
   // "<name> entered the room" (rendered as a centered notice, no bubble).
   kind: text("kind").notNull().default("message"),
   body: text("body").notNull(),
+  // JSON payload for rich messages (e.g. a shared Bible verse: book, chapter,
+  // verse, reference, text). Null for plain text and system notices.
+  meta: text("meta"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 

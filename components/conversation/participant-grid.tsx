@@ -17,6 +17,9 @@ export type GridParticipant = {
   isLocal: boolean
   isHost: boolean
   pinned: boolean
+  // Server-assigned join time (epoch millis), used to sort the roster into one
+  // canonical order that is the same on every participant's screen.
+  joinedAtMs: number
 }
 
 // 4 columns x 4 rows. The row count is load-bearing: all four rows must land

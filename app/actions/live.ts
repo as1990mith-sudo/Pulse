@@ -726,65 +726,128 @@ export async function getLiveStreams(): Promise<LiveStreamView[]> {
   }))
 }
 
+// Structured payload for a shared Bible verse, so the chat can render a
+// tappable verse card and re-open the exact passage in the Bible resource.
+export type LiveChatMessageMeta = {
+  kind: "bible"
+  book: string
+  chapter: number
+  verse: number
+  reference: string
+  text: string
+  translation?: string
+  // bookIndex:chapter:verse — the id the mini-Bible panel uses to reopen it.
+  verseId: string
+}
+
 export type LiveChatMessageView = {
   id: number
   userId: string
   userName: string
   userImage: string | null
   isHost: boolean
-  kind: "message" | "system"
+  kind: "message" | "system" | "bible"
   body: string
+  // Structured payload for rich messages (Bible verse cards); null otherwise.
+  meta: LiveChatMessageMeta | null
   // Epoch millis the message was created, so the chat feed can show a subtle
   // send time next to the author's name.
   createdAtMs: number
 }
 
-/** Posts a chat message to a live room. */
-export async function sendLiveChat(input: { roomName: string; body: string }): Promise<void> {
+function toChatView(r: typeof liveChatMessage.$inferSelect): LiveChatMessageView {
+  return {
+    id: r.id,
+    userId: r.userId,
+    userName: r.userName,
+    userImage: r.userImage ?? null,
+    isHost: r.isHost,
+    kind: (r.kind as LiveChatMessageView["kind"]) ?? "message",
+    body: r.body,
+    // Structured payload for rich messages (e.g. a shared Bible verse). Stored
+    // as JSON text in `meta`; plain messages leave it null.
+    meta: parseChatMeta(r.meta),
+    createdAtMs: r.createdAt.getTime(),
+  }
+}
+
+/** Safely parses the JSON `meta` column into a typed payload (null on anything unexpected). */
+function parseChatMeta(raw: string | null): LiveChatMessageMeta | null {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as LiveChatMessageMeta
+    if (parsed && parsed.kind === "bible" && parsed.book && parsed.reference) return parsed
+    return null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Posts a chat message to a live room and returns the stored message so the
+ * client can reconcile its optimistic copy (matching by id) instead of guessing.
+ * `kind`/`meta` carry rich messages such as a shared Bible verse.
+ */
+export async function sendLiveChat(input: {
+  roomName: string
+  body: string
+  kind?: "message" | "bible"
+  meta?: LiveChatMessageMeta | null
+}): Promise<LiveChatMessageView | null> {
   const actor = await getRoomActor(input.roomName)
-  if (!actor) return
+  if (!actor) return null
   const body = input.body.trim()
-  if (!body) return
+  if (!body) return null
 
   const [stream] = await db
     .select({ hostId: liveStream.hostId })
     .from(liveStream)
     .where(eq(liveStream.roomName, input.roomName))
 
-  await db.insert(liveChatMessage).values({
-    roomName: input.roomName,
-    userId: actor.id,
-    userName: actor.name,
-    userImage: actor.image ?? null,
-    isHost: !actor.isGuest && stream?.hostId === actor.id,
-    kind: "message",
-    body,
-  })
+  const [row] = await db
+    .insert(liveChatMessage)
+    .values({
+      roomName: input.roomName,
+      userId: actor.id,
+      userName: actor.name,
+      userImage: actor.image ?? null,
+      isHost: !actor.isGuest && stream?.hostId === actor.id,
+      kind: input.kind ?? "message",
+      body,
+      meta: input.meta ? JSON.stringify(input.meta) : null,
+    })
+    .returning()
+
+  return row ? toChatView(row) : null
 }
 
-/** Fetches chat messages for a room, optionally only those after `afterId` (for polling). */
+/**
+ * Fetches chat messages for a room. Without `afterId` this returns the LATEST
+ * 100 messages (ascending), so a long-running room never stops surfacing new
+ * messages — the previous `asc + limit(100)` returned the OLDEST 100, which is
+ * why chat appeared to stop delivering once a room passed 100 messages. With
+ * `afterId` it returns everything newer than that id (incremental polling).
+ */
 export async function getLiveChat(input: { roomName: string; afterId?: number }): Promise<LiveChatMessageView[]> {
+  if (input.afterId) {
+    const rows = await db
+      .select()
+      .from(liveChatMessage)
+      .where(and(eq(liveChatMessage.roomName, input.roomName), gt(liveChatMessage.id, input.afterId)))
+      .orderBy(asc(liveChatMessage.id))
+      .limit(200)
+    return rows.map(toChatView)
+  }
+
+  // Latest 100, newest-first from the DB, then reversed to chronological order.
   const rows = await db
     .select()
     .from(liveChatMessage)
-    .where(
-      input.afterId
-        ? and(eq(liveChatMessage.roomName, input.roomName), gt(liveChatMessage.id, input.afterId))
-        : eq(liveChatMessage.roomName, input.roomName),
-    )
-    .orderBy(asc(liveChatMessage.id))
+    .where(eq(liveChatMessage.roomName, input.roomName))
+    .orderBy(desc(liveChatMessage.id))
     .limit(100)
 
-  return rows.map((r) => ({
-    id: r.id,
-    userId: r.userId,
-    userName: r.userName,
-    userImage: r.userImage ?? null,
-    isHost: r.isHost,
-    kind: (r.kind as "message" | "system") ?? "message",
-    body: r.body,
-    createdAtMs: r.createdAt.getTime(),
-  }))
+  return rows.reverse().map(toChatView)
 }
 
 // --- Live presence (audience count + names, "entered the room" notices) -----

@@ -9,6 +9,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react"
 import type { CurrentUser } from "@/lib/session"
+import type { LiveChatMessageMeta } from "@/app/actions/live"
 
 export type ResourcePanelId = "bible" | "notes" | "pdf" | "books" | "pinned" | "video"
 
@@ -17,7 +18,7 @@ export type ResourcePanelId = "bible" | "notes" | "pdf" | "books" | "pinned" | "
 export type PanelPayload =
   | { kind: "pdf"; url: string; title: string; downloadName?: string }
   | { kind: "book"; productId: number; title: string }
-  | { kind: "bible"; verseId?: string; book?: string; chapter?: number }
+  | { kind: "bible"; verseId?: string; book?: string; chapter?: number; verse?: number }
   | null
 
 // Everything a panel needs to know about the live it is overlaying.
@@ -33,7 +34,9 @@ export type LiveDescriptor = {
   currentUser: CurrentUser | null
 }
 
-type ChatSender = (text: string) => void | Promise<void>
+// A room's chat sender. `meta` carries a rich payload (e.g. a shared Bible
+// verse) so panels can post a structured card instead of only plain text.
+type ChatSender = (text: string, meta?: LiveChatMessageMeta | null) => void | Promise<void>
 
 // How the host console publishes/unpublishes the shared-video tracks (audio, and
 // the projected PIXELS) so the egress records the Project Video into the replay.
@@ -57,7 +60,7 @@ type ResourceCtx = {
   // unregister cleanup. When no sender is registered, shareToChat resolves false
   // and callers fall back to the native share sheet.
   registerChatSender: (fn: ChatSender) => () => void
-  shareToChat: (text: string) => Promise<boolean>
+  shareToChat: (text: string, meta?: LiveChatMessageMeta | null) => Promise<boolean>
   canShareToChat: boolean
   // The host console (which owns the LiveKit room) registers how to publish the
   // shared-video audio so the egress recording captures it. The video panel
@@ -143,9 +146,9 @@ export function ResourceProvider({
     }
   }, [])
 
-  const shareToChat = useCallback(async (text: string) => {
+  const shareToChat = useCallback(async (text: string, meta: LiveChatMessageMeta | null = null) => {
     if (!senderRef.current) return false
-    await senderRef.current(text)
+    await senderRef.current(text, meta)
     return true
   }, [])
 

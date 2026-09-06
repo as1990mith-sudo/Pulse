@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import { AnimatePresence, motion } from "motion/react"
 import {
+  AudioLines,
   BookOpen,
   HandHeart,
   Loader2,
@@ -45,6 +46,9 @@ import { useLiveResourcesOptional } from "@/components/live/resource/resource-co
 import { ConversationThemeSheet } from "@/components/conversation/conversation-theme-sheet"
 import { useLiveAudio } from "@/lib/use-live-audio"
 import { useLivePresence } from "@/lib/use-live-presence"
+import { AudioOutputSheet, audioRouteIcon } from "@/components/live/audio-output-control"
+import { MicSourceSheet } from "@/components/live/mic-source-control"
+import { useAudioOutput } from "@/lib/audio-output"
 import { getAvatarColor } from "@/lib/identity"
 import { liveThemeStyle } from "@/lib/live-themes"
 import { LIVE_CATEGORIES } from "@/lib/live-categories"
@@ -153,6 +157,8 @@ export function ConversationRoom({
     connect,
     disconnect,
     toggleMic,
+    micDeviceId,
+    switchMicDevice,
     setHeadphoneMode,
     startAudioPlayback,
     publishMusic,
@@ -182,6 +188,76 @@ export function ConversationRoom({
   const hostId = isHostMode ? currentUser!.id : stream!.hostId
   const hostName = isHostMode ? currentUser!.name : stream!.hostName
   const isHost = viewerId != null && viewerId === hostId
+
+  // ── Reconnection resilience ────────────────────────────────────────────────
+  // A transient network drop must NOT eject anyone. LiveKit first retries its
+  // own fast reconnect; only if that gives up does the hook fire onDisconnected.
+  // We then rejoin the SAME room with a fresh token — which the server issues
+  // for the same user, so identity and stage position are preserved — rather
+  // than forcing the person to leave and re-enter. We never rejoin once the room
+  // has genuinely ended or the viewer left on purpose.
+  const endedRef = useRef(false)
+  const roomNameRef = useRef<string | null>(streamData?.roomName ?? null)
+  const reconnectingRef = useRef(false)
+  const reconnectRef = useRef<() => void>(() => {})
+  const reconnect = useCallback(async () => {
+    const rn = roomNameRef.current
+    if (!rn || endedRef.current || reconnectingRef.current) return
+    reconnectingRef.current = true
+    try {
+      // Keep trying to rejoin the SAME room until it succeeds or the room truly
+      // ends — a single failed attempt must never strand the participant on a
+      // dead screen. Each pass re-requests a token for the same user (identity
+      // and stage position preserved) with a capped backoff between tries, so a
+      // longer outage (server blip, offline stretch) still self-heals once the
+      // network returns rather than forcing a manual leave-and-re-enter.
+      let attempt = 0
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        if (endedRef.current) return
+        // First pass waits briefly for LiveKit's own teardown to settle; later
+        // passes back off up to ~5s.
+        await new Promise((r) => setTimeout(r, attempt === 0 ? 1200 : Math.min(1500 + attempt * 1000, 5000)))
+        if (endedRef.current) return
+        // Skip work while offline; the 'online' path will resume promptly.
+        if (typeof navigator !== "undefined" && navigator.onLine === false) {
+          attempt++
+          continue
+        }
+        const s = await getConversationState({ roomName: rn }).catch(() => null)
+        if (s?.ended) {
+          setEnded(true)
+          return
+        }
+        const res = await joinBroadcast({ roomName: rn }).catch(() => null)
+        if (res?.ok) {
+          await connect({
+            serverUrl: res.serverUrl,
+            token: res.token,
+            publish: res.canPublish,
+            muted: !isHost,
+            onDisconnected: () => reconnectRef.current(),
+          })
+          return
+        }
+        attempt++
+      }
+    } finally {
+      reconnectingRef.current = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connect, isHost])
+  // The moment connectivity returns, kick the rejoin loop if we're mid-drop.
+  useEffect(() => {
+    const onOnline = () => {
+      if (!endedRef.current && !reconnectingRef.current) reconnectRef.current()
+    }
+    window.addEventListener("online", onOnline)
+    return () => window.removeEventListener("online", onOnline)
+  }, [])
+  useEffect(() => {
+    reconnectRef.current = reconnect
+  }, [reconnect])
 
   // Room display data (falls back to setup fields for a fresh host room).
   const title = streamData?.title ?? (setupTitle.trim() || `${hostName} — gathering`)
@@ -230,6 +306,7 @@ export function ConversationRoom({
     setNeedIdentity(false)
     setGuestName(res.guestName ?? null)
     setRoomName(rn)
+    roomNameRef.current = rn
     setLive(true)
     await connect({
       serverUrl: res.serverUrl,
@@ -237,6 +314,7 @@ export function ConversationRoom({
       publish: res.canPublish,
       // Participants arrive muted; the host resumes with their mic ready.
       muted: !isHost,
+      onDisconnected: () => reconnectRef.current(),
     })
     // Only the host records the room (to save it as an episode later).
     if (isHost) {
@@ -284,9 +362,15 @@ export function ConversationRoom({
       return
     }
     setRoomName(res.roomName)
+    roomNameRef.current = res.roomName
     setLive(true)
     startedRef.current = true
-    await connect({ serverUrl: res.serverUrl, token: res.token, publish: true })
+    await connect({
+      serverUrl: res.serverUrl,
+      token: res.token,
+      publish: true,
+      onDisconnected: () => reconnectRef.current(),
+    })
     // Record the gathering (host side) so it can be saved as an episode on end.
     startRecording()
     setRecording(true)
@@ -299,6 +383,11 @@ export function ConversationRoom({
   const [theme, setThemeState] = useState<string>(streamData?.theme ?? "default")
   const [ended, setEnded] = useState(false)
   const [hostEnded, setHostEnded] = useState(false)
+  // Mirror the terminal state into a ref so the reconnect loop (which runs
+  // outside React's render) can cheaply check "should I stop trying?".
+  useEffect(() => {
+    endedRef.current = ended || hostEnded
+  }, [ended, hostEnded])
 
   // ── Recording + post-end "save as episode?" decision (host only) ──────────
   const [recording, setRecording] = useState(false)
@@ -551,14 +640,18 @@ export function ConversationRoom({
       isLocal: s.isLocal,
       isHost: s.identity === hostId,
       pinned: s.identity === pinnedId,
+      joinedAtMs: s.joinedAtMs,
     }))
-    // The host always takes the first slot, for everyone. LiveKit orders
-    // participants by join time, which put the host wherever they happened to
-    // connect — and on the host's own screen they'd drift as people came and
-    // went. Sorting here (rather than in each consumer) keeps the host's
-    // position identical on the host and participant interfaces. Everyone else
-    // keeps their existing relative order, so tiles don't shuffle unnecessarily.
-    return mapped.sort((a, b) => Number(b.isHost) - Number(a.isHost))
+    // A single CANONICAL order that is identical on every participant's screen,
+    // so the same person occupies the same grid slot for everyone. The order is
+    // derived only from server-authoritative facts — host flag, the server's
+    // join time, and the stable identity string as a final tiebreak — never from
+    // per-device render order or local join sequence. The host always leads.
+    return mapped.sort((a, b) => {
+      if (a.isHost !== b.isHost) return a.isHost ? -1 : 1
+      if (a.joinedAtMs !== b.joinedAtMs) return a.joinedAtMs - b.joinedAtMs
+      return a.identity < b.identity ? -1 : a.identity > b.identity ? 1 : 0
+    })
   }, [speakers, hostId, pinnedId])
 
   const pinned = gridParticipants.find((p) => p.pinned) ?? null
@@ -571,6 +664,12 @@ export function ConversationRoom({
   // Share sheet — opened from the host "Invite people" control and from the
   // participant dock share button. Lets anyone share the meeting link.
   const [shareOpen, setShareOpen] = useState(false)
+  // Audio output (Speaker/Earpiece/Bluetooth) + microphone input source — both
+  // available to every role (host, guest, participant).
+  const [audioOutOpen, setAudioOutOpen] = useState(false)
+  const [micSrcOpen, setMicSrcOpen] = useState(false)
+  const audioOut = useAudioOutput()
+  const AudioOutIcon = audioRouteIcon(audioOut.route)
   // Study-resources drawer opener (present on every live). Sits in the dock
   // just before the chat button.
   const resources = useLiveResourcesOptional()
@@ -651,11 +750,13 @@ export function ConversationRoom({
   }
 
   function leaveRoom() {
+    endedRef.current = true
     void disconnect()
     if (onExit) onExit()
     else router.push("/live")
   }
   async function endRoom() {
+    endedRef.current = true
     // Tear the room down immediately for everyone. The recorder is stopped
     // synchronously (so no audio is lost) but we deliberately do NOT await it —
     // we hold the promise and only resolve it if the host chooses to save.
@@ -711,7 +812,7 @@ export function ConversationRoom({
     leaveRoom()
   }
 
-  // ── Splash states ────────────────────────────────────────────────────────
+  // ── Splash states ───────────────────────────────────────────────���────────
   if (!isHostMode && !canJoin) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 bg-zinc-950 px-6 text-center text-white">
@@ -1004,14 +1105,25 @@ export function ConversationRoom({
         )}
       </AnimatePresence>
 
-      {/* Bottom control dock */}
-      <div className="relative z-30 flex items-center justify-center gap-3 border-t border-white/10 px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 backdrop-blur-xl">
+      {/* Bottom control dock. Wraps to a second row on very narrow screens so
+          the extra audio controls never overflow off-screen. */}
+      <div className="relative z-30 flex flex-wrap items-center justify-center gap-2.5 border-t border-white/10 px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 backdrop-blur-xl">
         <DockButton
           label={micOn ? "Mute yourself" : "Unmute yourself"}
           onClick={() => void toggleMic()}
           active={micOn}
         >
           {micOn ? <Mic /> : <MicOff />}
+        </DockButton>
+
+        {/* Choose which microphone input to use (built-in, Bluetooth, headset…). */}
+        <DockButton label="Microphone source" onClick={() => setMicSrcOpen(true)} active={micSrcOpen}>
+          <AudioLines />
+        </DockButton>
+
+        {/* Choose the audio output (Speaker / Earpiece / Bluetooth). */}
+        <DockButton label="Audio output" onClick={() => setAudioOutOpen(true)} active={audioOutOpen}>
+          <AudioOutIcon />
         </DockButton>
 
         {isHost && (
@@ -1047,6 +1159,15 @@ export function ConversationRoom({
       {/* Share the meeting link — opened by the host "Invite people" control
           and by the participant dock share button. */}
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
+
+      {/* Audio output + microphone input source — available to every role. */}
+      <AudioOutputSheet open={audioOutOpen} onOpenChange={setAudioOutOpen} />
+      <MicSourceSheet
+        open={micSrcOpen}
+        onOpenChange={setMicSrcOpen}
+        activeDeviceId={micDeviceId}
+        onSelect={(id) => void switchMicDevice(id)}
+      />
 
 
       {/* Host music panel — the same playlist panel used in podcast studio mode */}
