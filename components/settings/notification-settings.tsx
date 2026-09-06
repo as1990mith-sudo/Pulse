@@ -4,7 +4,7 @@ import { useState, useTransition } from "react"
 import { AtSign, Bell, BellOff, Heart, Radio, Share2, ShieldAlert, Smartphone } from "lucide-react"
 import { toast } from "sonner"
 import { NOTIFICATION_CATEGORIES, type NotificationCategory } from "@/lib/notification-categories"
-import { updateNotificationPreference, clearPushSubscriptions } from "@/app/actions/push"
+import { updateNotificationPreference } from "@/app/actions/push"
 import { isIosNeedingInstall, usePush } from "@/lib/use-push"
 import { haptic } from "@/lib/haptics"
 import { Card } from "@/components/ui/card"
@@ -26,13 +26,13 @@ export function NotificationSettings({
   initialPreferences: Record<NotificationCategory, boolean>
   initialDeviceCount: number
 }) {
-  const { status, busy, enable, disable } = usePush()
+  const { status, busy, enable } = usePush()
   const [prefs, setPrefs] = useState(initialPreferences)
   const [deviceCount, setDeviceCount] = useState(initialDeviceCount)
   const [isPending, startTransition] = useTransition()
 
   // Categories are only meaningful once the OS is actually allowed to interrupt,
-  // so they read as disabled until push is on for this device.
+  // so they read as disabled until this device is subscribed.
   const categoriesActive = status === "on"
 
   function toggle(category: NotificationCategory, next: boolean) {
@@ -59,29 +59,9 @@ export function NotificationSettings({
     toast.success("Notifications are on for this device")
   }
 
-  async function handleDisable() {
-    await disable()
-    setDeviceCount((c) => Math.max(0, c - 1))
-    toast.success("Notifications off for this device")
-  }
-
   return (
     <div className="flex flex-col gap-4">
-      <DeviceCard
-        status={status}
-        busy={busy}
-        deviceCount={deviceCount}
-        onEnable={handleEnable}
-        onDisable={handleDisable}
-        onClearAll={() =>
-          startTransition(async () => {
-            await clearPushSubscriptions()
-            await disable()
-            setDeviceCount(0)
-            toast.success("Signed out of notifications everywhere")
-          })
-        }
-      />
+      <PermissionCard status={status} busy={busy} deviceCount={deviceCount} onEnable={handleEnable} />
 
       <Card className="p-5">
         <div className="mb-1 flex items-center justify-between gap-3">
@@ -89,8 +69,8 @@ export function NotificationSettings({
         </div>
         <p className="mb-4 text-pretty text-sm leading-relaxed text-muted-foreground">
           {categoriesActive
-            ? "These apply to every device you've turned notifications on for."
-            : "Turn on notifications above to start receiving these."}
+            ? "These apply to every device where you've allowed notifications."
+            : "Allow notifications above to start receiving these."}
         </p>
 
         <ul className={cn("flex flex-col divide-y divide-border/60", !categoriesActive && "opacity-50")}>
@@ -128,21 +108,23 @@ export function NotificationSettings({
   )
 }
 
-/** The device-level permission card — the one control that must come first. */
-function DeviceCard({
+/**
+ * The device permission card. Frequency has NO in-app on/off toggle: the
+ * operating system owns whether notifications are allowed. This card only
+ * reflects that OS state and, when permission has never been asked for, offers
+ * the one-time prompt (which browsers require to fire from a tap). Turning
+ * notifications off is done in the device's own settings.
+ */
+function PermissionCard({
   status,
   busy,
   deviceCount,
   onEnable,
-  onDisable,
-  onClearAll,
 }: {
   status: ReturnType<typeof usePush>["status"]
   busy: boolean
   deviceCount: number
   onEnable: () => void
-  onDisable: () => void
-  onClearAll: () => void
 }) {
   // Computed on render rather than in state: it depends on `display-mode`, which
   // changes when the user installs the app, and we want the fresh answer.
@@ -215,8 +197,9 @@ function DeviceCard({
         <div>
           <h2 className="font-semibold leading-tight">Notifications are blocked</h2>
           <p className="mt-0.5 text-pretty text-sm leading-relaxed text-muted-foreground">
-            You previously declined, and browsers only let you undo that from their own settings. Open the
-            padlock or site settings next to the address bar and set Notifications to Allow.
+            Frequency uses your device&apos;s notification settings, and this device is currently set to
+            block them. Open the padlock or site settings next to the address bar and set Notifications to
+            Allow.
           </p>
         </div>
       </Card>
@@ -242,30 +225,21 @@ function DeviceCard({
           </h2>
           <p className="mt-0.5 text-pretty text-sm leading-relaxed text-muted-foreground">
             {on
-              ? "You'll hear about lives and replies even when Frequency is closed."
-              : "Get told when a Home goes live or someone replies to you — even when the app is closed."}
+              ? "You'll hear about lives, replies and messages even when Frequency is closed. To stop them, turn notifications off for Frequency in your device settings."
+              : "Get told when a Home goes live, someone replies to you, or you get a message — even when the app is closed. Frequency uses your device's notification permission."}
           </p>
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        {on ? (
-          <Button variant="secondary" disabled={busy} onClick={onDisable}>
-            Turn off here
-          </Button>
-        ) : (
+      {!on && (
+        <div className="mt-4">
           <Button disabled={busy} onClick={onEnable}>
             {busy ? "Turning on…" : "Turn on notifications"}
           </Button>
-        )}
-        {deviceCount > 1 && (
-          <Button variant="ghost" disabled={busy} onClick={onClearAll}>
-            Turn off on all {deviceCount} devices
-          </Button>
-        )}
-      </div>
+        </div>
+      )}
 
-      {deviceCount > 0 && (
+      {on && deviceCount > 0 && (
         <p className="mt-3 text-xs text-muted-foreground">
           {deviceCount === 1 ? "1 device registered" : `${deviceCount} devices registered`}
         </p>

@@ -314,15 +314,17 @@ export async function reactToStatus(statusId: number, emoji: string) {
   // inbox as a status-linked message (skip when reacting to your own status).
   const [row] = await db.select().from(statusUpdate).where(eq(statusUpdate.id, statusId)).limit(1)
   if (row && row.userId !== user.id) {
+    const conversationId = await getOrCreateConversation(row.userId)
     await notifyUser({
       userId: row.userId,
       actorId: user.id,
       actorName: user.name,
       type: "like",
       message: `${user.name} reacted ${emoji} to your status`,
-      link: "/feed",
+      // A status reaction is delivered into the author's DM inbox (below), so
+      // the notification should open that exact conversation, not the feed top.
+      link: `/messages/${conversationId}`,
     })
-    const conversationId = await getOrCreateConversation(row.userId)
     await sendDirectMessage({ conversationId, body: emoji, statusId })
   }
 }

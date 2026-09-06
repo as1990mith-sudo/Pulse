@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { type SheetAction } from "@/components/action-sheet"
 import { HomeVoiceSwitch, type HomeVoice } from "@/components/home-voice-switch"
+import { ProfilePreviewCard } from "@/components/profile-preview"
 import { canEdit, canDelete } from "@/lib/interactions"
 import { renderMessageBody } from "@/lib/rich-text"
 import { cn } from "@/lib/utils"
@@ -148,6 +149,13 @@ export function CommentThread({
     return { roots, repliesByParent }
   }, [comments])
 
+  // When a surface doesn't pass its own author-tap handler, fall back to the
+  // shared Frequency profile popup (Follow · Message · View profile) so tapping
+  // a commenter's name/photo opens their card — the same behaviour on every
+  // comment surface — instead of navigating away to the full profile page.
+  const [previewUserId, setPreviewUserId] = useState<string | null>(null)
+  const resolvedAuthorClick = onAuthorClick ?? setPreviewUserId
+
   if (comments.length === 0) return null
 
   // The reading-focused conversation screen (comfortable density) asks for a
@@ -158,32 +166,37 @@ export function CommentThread({
   const comfortable = density === "comfortable"
 
   return (
-    <ul className={cn(comfortable ? "divide-y divide-foreground/70" : "space-y-4")}>
-      {roots.map((comment) => (
-        <li key={comment.id} className={cn(comfortable && "py-5 first:pt-0 last:pb-0")}>
-          <CommentNode
-            comment={comment}
-            depth={0}
-            repliesByParent={repliesByParent}
-            canInteract={canInteract}
-            allowReply={allowReply}
-            onLike={onLike}
-            onReply={onReply}
-            onEdit={onEdit}
-            onDelete={onDelete}
-            showCopy={showCopy}
-            enforceTimeWindows={enforceTimeWindows}
-            enforceDeleteWindow={deleteWindow}
-            onAuthorClick={onAuthorClick}
-            density={density}
-            homeVoice={homeVoice}
-            personalName={personalName}
-            personalImage={personalImage}
-            personalInitials={personalInitials}
-          />
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className={cn(comfortable ? "divide-y divide-foreground/70" : "space-y-4")}>
+        {roots.map((comment) => (
+          <li key={comment.id} className={cn(comfortable && "py-5 first:pt-0 last:pb-0")}>
+            <CommentNode
+              comment={comment}
+              depth={0}
+              repliesByParent={repliesByParent}
+              canInteract={canInteract}
+              allowReply={allowReply}
+              onLike={onLike}
+              onReply={onReply}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              showCopy={showCopy}
+              enforceTimeWindows={enforceTimeWindows}
+              enforceDeleteWindow={deleteWindow}
+              onAuthorClick={resolvedAuthorClick}
+              density={density}
+              homeVoice={homeVoice}
+              personalName={personalName}
+              personalImage={personalImage}
+              personalInitials={personalInitials}
+            />
+          </li>
+        ))}
+      </ul>
+      {previewUserId && (
+        <ProfilePreviewCard userId={previewUserId} onClose={() => setPreviewUserId(null)} />
+      )}
+    </>
   )
 }
 
@@ -511,7 +524,8 @@ function CommentItem({
             {comment.orgVerified && (
               <BadgeCheck className="size-4 shrink-0 text-sky-400" aria-label="Verified organisation" />
             )}
-            {comment.handle && <span className="text-xs text-muted-foreground">{comment.handle}</span>}
+            {/* Comment sections show the Display Name only — never the @handle —
+                so the byline stays clean and consistent across every surface. */}
             <span className="text-xs text-muted-foreground">· {comment.postedAt}</span>
             {edited && <span className="text-xs text-muted-foreground">· edited</span>}
             {copied && <span className="text-xs text-primary">Copied</span>}

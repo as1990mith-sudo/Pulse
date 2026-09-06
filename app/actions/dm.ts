@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { dmConversation, dmMessage, statusUpdate, statusView, user as userTable } from "@/lib/db/schema"
 import { getActiveHomeMemberIds } from "@/lib/home/active-home"
+import { sendPushToUsers } from "@/lib/push"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { DM_DELETE_WINDOW_MS, DM_EDIT_WINDOW_MS } from "@/lib/dm-constants"
 
@@ -453,7 +454,7 @@ export async function sendDirectMessage(input: {
   statusId?: number | null
 }) {
   const user = await requireUser()
-  await loadConversationForUser(input.conversationId, user.id)
+  const conv = await loadConversationForUser(input.conversationId, user.id)
 
   const body = (input.body ?? "").trim()
   const hasAttachment = Boolean(input.attachmentUrl)
@@ -477,6 +478,37 @@ export async function sendDirectMessage(input: {
 
   revalidatePath(`/messages/${input.conversationId}`)
   revalidatePath("/messages")
+
+  // Notify the other participant on their device, deep-linking straight to this
+  // exact conversation. Fire-and-forget: a slow/unreachable push service must
+  // never fail the send. Type "message" is intentionally not in the category
+  // registry, so it always delivers (a DM is never a category the user opts out
+  // of) and, being outside the service worker's QUIET_TYPES, alerts normally.
+  const recipientId = conv.userAId === user.id ? conv.userBId : conv.userAId
+  if (recipientId && recipientId !== user.id) {
+    await sendPushToUsers([recipientId], {
+      title: user.name,
+      body: body || attachmentPushLabel(input.attachmentType),
+      link: `/messages/${input.conversationId}`,
+      // Collapse repeated messages in the same thread into one live notification.
+      tag: `message:${input.conversationId}`,
+      type: "message",
+    })
+  }
+}
+
+/** Short device-notification body for an attachment-only message. */
+function attachmentPushLabel(type: DmAttachmentType | null | undefined): string {
+  switch (type) {
+    case "image":
+      return "Sent a photo"
+    case "video":
+      return "Sent a video"
+    case "audio":
+      return "Sent a voice message"
+    default:
+      return "Sent an attachment"
+  }
 }
 
 /**

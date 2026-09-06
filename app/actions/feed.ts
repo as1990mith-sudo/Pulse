@@ -1224,7 +1224,7 @@ export async function toggleRepost(postId: number): Promise<{ reposted: boolean;
         actorName: user.name,
         type: "repost",
         message: `${user.name} reposted your post`,
-        link: "/feed",
+        link: `/feed?post=${postId}`,
       })
     }
   }
@@ -1528,7 +1528,7 @@ export async function addPostComment(input: {
       actorName: user.name,
       type: "comment",
       message: `${user.name} commented on your post`,
-      link: "/feed",
+      link: `/feed?post=${input.postId}`,
     })
   }
 
@@ -1557,7 +1557,7 @@ export async function setPostLike(input: { postId: number; liked: boolean }) {
       actorName: user.name,
       type: "like",
       message: `${user.name} liked your post`,
-      link: "/feed",
+      link: `/feed?post=${input.postId}`,
     })
   }
 

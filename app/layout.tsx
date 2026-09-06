@@ -8,6 +8,7 @@ import { EpisodePlayerProvider } from '@/components/episode-player-provider'
 import { LiveProcessingProvider } from '@/components/live-processing-provider'
 import { AutoRefresh } from '@/components/auto-refresh'
 import { PresenceHeartbeat } from '@/components/presence-heartbeat'
+import { PushAutoSubscribe } from '@/components/push-auto-subscribe'
 import { NavHistoryTracker } from '@/components/nav-history-tracker'
 import { BottomNav } from '@/components/bottom-nav'
 import { HomeContextProvider, type ActiveHomeSummary } from '@/components/home/home-context'
@@ -162,6 +163,10 @@ export default async function RootLayout({
                   {/* Reports the signed-in user as online (no-op when signed out)
                       so the admin dashboard shows a true real-time presence count. */}
                   <PresenceHeartbeat />
+                  {/* Silently subscribes this device for push whenever the OS
+                      permission is already granted — the OS setting is the only
+                      switch; there is no in-app notification toggle. */}
+                  <PushAutoSubscribe />
                   {/* The whole app shell gently slides right (micro-parallax) when
                       the left navigation drawer opens. The Home context provider
                       wraps it so the header, menu and switcher all read the same

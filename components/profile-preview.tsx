@@ -44,7 +44,7 @@ export function ProfilePreview({
   )
 }
 
-function ProfilePreviewCard({ userId, onClose }: { userId: string; onClose: () => void }) {
+export function ProfilePreviewCard({ userId, onClose }: { userId: string; onClose: () => void }) {
   const router = useRouter()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
@@ -97,7 +97,10 @@ function ProfilePreviewCard({ userId, onClose }: { userId: string; onClose: () =
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-6"
+      // z-[80] keeps the card above the comment sheet (z-70) and mini-chat popup
+      // (z-75) when opened from inside a comment thread, while still sitting above
+      // the live chat that also uses it.
+      className="fixed inset-0 z-[80] flex items-center justify-center p-6"
       role="dialog"
       aria-modal="true"
       aria-label="Profile preview"
