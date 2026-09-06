@@ -741,6 +741,18 @@ export function useLiveVideo({
     const room = new Room({
       adaptiveStream: true,
       dynacast: true,
+      // Ride out transient network changes (Wi-Fi↔cellular handoff, brief signal
+      // loss, app backgrounding) WITHOUT ejecting the participant. LiveKit's
+      // default policy gives up quickly; this keeps its OWN fast reconnect —
+      // which preserves the same session, identity and published tracks —
+      // trying for ~1 minute with a capped, jittered backoff before it ever
+      // surfaces a hard Disconnected. So a blip never ends the meeting.
+      reconnectPolicy: {
+        nextRetryDelayInMs: (context) => {
+          if (context.retryCount > 20) return null
+          return Math.min(300 + context.retryCount * 300, 2000) + Math.random() * 250
+        },
+      },
       // Force a proper HD capture at the shared full-sensor 4:3 format (see
       // CAPTURE_RESOLUTION). Android Chrome otherwise defaults to a low ~480p
       // capture; requesting 1440x1080 explicitly gives a crisp, wide "far out"
@@ -926,6 +938,21 @@ export function useLiveVideo({
         setLocalSpeaking(room.localParticipant.isSpeaking)
         refreshPeers(room)
       })
+      // Transient recovery: LiveKit's own reconnect (governed by the patient
+      // reconnectPolicy above) keeps the SAME session and identity alive across
+      // a network blip WITHOUT firing Disconnected, so the participant is never
+      // kicked. When it succeeds we resync our view of the room and re-attach
+      // the local camera element + audio route, which don't survive the churn.
+      .on(RoomEvent.Reconnected, () => {
+        setConnected(true)
+        syncParticipants(room)
+        refreshPeers(room)
+        attachLocalVideo(room)
+        applyAudioRouting()
+      })
+      // Disconnected now only fires on a GENUINE terminal end (intentional
+      // leave, host removal/close, or an unrecoverable failure after the full
+      // reconnect budget is exhausted) — not on ordinary network instability.
       .on(RoomEvent.Disconnected, () => setConnected(false))
 
     // Neutralise the iOS audio session BEFORE any mic opens, so the later

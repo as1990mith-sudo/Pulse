@@ -165,8 +165,12 @@ function StageGuestTile({
       // pointer events. A live speaking ring matches the Conversation tiles.
       className={cn(
         "pointer-events-none z-20 overflow-hidden rounded-2xl bg-neutral-900 ring-1 ring-inset ring-white/10 transition-[top,left,width,height] duration-500 ease-out",
+        // Contained speaking emphasis: an INSET ring + inset glow so the accent
+        // stays strictly inside the tile frame. The previous outward ring +
+        // box-shadow bled past the tile (box-shadow isn't clipped by the tile's
+        // own overflow-hidden) onto neighbouring tiles.
         peer.isSpeaking &&
-          "ring-2 ring-primary shadow-[0_0_22px_2px_color-mix(in_oklch,var(--primary)_45%,transparent)]",
+          "ring-2 ring-inset ring-primary shadow-[inset_0_0_20px_1px_color-mix(in_oklch,var(--primary)_40%,transparent)]",
       )}
     >
       <video

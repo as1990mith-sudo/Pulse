@@ -462,14 +462,31 @@ export function ConversationVideo(props: ConversationVideoProps) {
         layout
         layoutId={tile.identity}
         initial={{ opacity: 0, scale: 0.7 }}
-        animate={{ opacity: 1, scale: speaking ? 1.03 : 1 }}
+        animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.7 }}
         transition={{ type: "spring", stiffness: 420, damping: 32, mass: 0.7 }}
+        // Speaking emphasis is drawn by a CONTAINED inner overlay below — never
+        // by scaling the tile up or an outward glow — so the active tile can't
+        // grow past its assigned cell or bleed onto neighbouring tiles.
         className={cn(
           "relative size-full overflow-hidden rounded-3xl bg-neutral-800/80 shadow-lg ring-1 ring-white/5",
-          speaking && "ring-2 ring-primary shadow-[0_0_22px_2px_color-mix(in_oklch,var(--primary)_45%,transparent)]",
         )}
       >
+        {/* Speaking "breathing" emphasis. Because it is `absolute inset-0`
+            inside the tile's `overflow-hidden` box and uses `ring-inset` + an
+            INSET box-shadow, the pulse is strictly clipped to the frame: it can
+            never spill outside the tile or nudge neighbouring tiles, and it
+            doesn't shift the tile's position or size. */}
+        {speaking && (
+          <motion.span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 z-10 rounded-3xl ring-2 ring-inset ring-primary"
+            initial={{ opacity: 0.4 }}
+            animate={{ opacity: [0.4, 1, 0.4] }}
+            transition={{ duration: 1.8, repeat: Number.POSITIVE_INFINITY, ease: "easeInOut" }}
+            style={{ boxShadow: "inset 0 0 20px 1px color-mix(in oklch, var(--primary) 40%, transparent)" }}
+          />
+        )}
         {/* The <video> element is ALWAYS mounted (only hidden when the camera is
             off). This avoids a chicken-and-egg deadlock: the hook needs the
             element to exist before it can attach the track and flip
@@ -791,7 +808,14 @@ export function ConversationVideo(props: ConversationVideoProps) {
                   className="grid h-full gap-2"
                   style={{
                     gridTemplateColumns: `repeat(${layout.cols}, minmax(0, 1fr))`,
-                    gridAutoRows: "1fr",
+                    // FIXED row count for the layout (perPage ÷ cols), NOT
+                    // gridAutoRows. With auto rows the grid only created as many
+                    // rows as there were participants, so a single participant's
+                    // lone `1fr` row filled the whole stage and the tile
+                    // ballooned vertically. Reserving the layout's full grid
+                    // keeps every tile locked to its assigned cell regardless of
+                    // how many have joined; unfilled cells simply stay empty.
+                    gridTemplateRows: `repeat(${Math.ceil(layout.perPage / layout.cols)}, minmax(0, 1fr))`,
                   }}
                 >
                   <AnimatePresence mode="popLayout">
