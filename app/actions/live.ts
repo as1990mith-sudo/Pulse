@@ -732,6 +732,9 @@ export type LiveChatMessageView = {
   isHost: boolean
   kind: "message" | "system"
   body: string
+  // Epoch millis the message was created, so the chat feed can show a subtle
+  // send time next to the author's name.
+  createdAtMs: number
 }
 
 /** Posts a chat message to a live room. */
@@ -778,6 +781,7 @@ export async function getLiveChat(input: { roomName: string; afterId?: number })
     isHost: r.isHost,
     kind: (r.kind as "message" | "system") ?? "message",
     body: r.body,
+    createdAtMs: r.createdAt.getTime(),
   }))
 }
 

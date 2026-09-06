@@ -177,7 +177,7 @@ function StageTile({
       onKeyDown={onTap ? (e) => (e.key === "Enter" || e.key === " ") && onTap() : undefined}
       aria-label={onTap ? `Manage ${slot.name}` : undefined}
       className={cn(
-        "flex flex-col items-center gap-1.5 rounded-2xl border border-white/15 bg-white/10 px-1 py-3 shadow-lg shadow-black/30 backdrop-blur-xl transition-colors supports-[backdrop-filter]:bg-white/[0.07]",
+        "flex flex-col items-center gap-1 rounded-2xl border border-white/15 bg-white/10 px-1 py-2.5 shadow-lg shadow-black/30 backdrop-blur-xl transition-colors supports-[backdrop-filter]:bg-white/[0.07]",
         slot.isSpeaking && "border-call-accept/60 bg-call-accept/10 supports-[backdrop-filter]:bg-call-accept/10",
         isCoHost && "border-amber-400/40",
         onTap && "cursor-pointer hover:border-white/40",
@@ -206,7 +206,7 @@ function StageTile({
 
         <span
           className={cn(
-            "relative z-10 flex size-12 items-center justify-center overflow-hidden rounded-full text-sm font-semibold transition-all duration-300 sm:size-14 sm:text-base",
+            "relative z-10 flex size-11 items-center justify-center overflow-hidden rounded-full text-sm font-semibold transition-all duration-300 sm:size-[52px] sm:text-base",
             slot.color,
             slot.isSpeaking
               ? "ring-[3px] ring-call-accept ring-offset-2 ring-offset-zinc-950 shadow-lg shadow-call-accept/20"
@@ -268,7 +268,7 @@ function StageTile({
 
       {/* Name sits between the avatar and the role pill for both host & guests. */}
       <div className="flex max-w-full items-center gap-0.5">
-        <span className="max-w-[4.5rem] truncate text-center text-xs font-semibold text-white">
+        <span className="max-w-[4.5rem] truncate text-center text-[11px] font-semibold text-white">
           {slot.isLocal && !isHost ? "You" : slot.name}
         </span>
         {slot.isSpeaking && <SpeakingEq />}
@@ -302,21 +302,21 @@ function EmptySlot({
   // compact with just the solid slot + dashed call-in circle.
   const label = callPending ? "Requested" : canRequestCall ? "Call in" : null
   return (
-    <div className="flex flex-col items-center justify-center gap-1.5 rounded-2xl border border-white/10 bg-white/[0.07] px-1 py-3 shadow-lg shadow-black/30 backdrop-blur-xl">
+    <div className="flex flex-col items-center justify-center gap-1 rounded-2xl border border-white/10 bg-white/[0.07] px-1 py-2.5 shadow-lg shadow-black/30 backdrop-blur-xl">
       <button
         type="button"
         disabled={!canRequestCall || callPending}
         onClick={onRequestCall}
         aria-label={canRequestCall ? "Request to join as a guest" : "Empty guest seat"}
         className={cn(
-          "flex size-12 items-center justify-center rounded-full border-2 border-dashed border-white/30 text-white/50 transition-colors sm:size-14",
+          "flex size-11 items-center justify-center rounded-full border-2 border-dashed border-white/30 text-white/50 transition-colors sm:size-[52px]",
           canRequestCall && !callPending && "border-call-accept/70 text-call-accept hover:border-call-accept hover:bg-call-accept/10",
         )}
       >
         {canRequestCall ? <Phone className="size-5" strokeWidth={2.5} /> : <Plus className="size-5" strokeWidth={2.5} />}
       </button>
       {label && (
-        <span className="max-w-[4.5rem] truncate text-center text-xs font-semibold text-white/60">{label}</span>
+        <span className="max-w-[4.5rem] truncate text-center text-[11px] font-semibold text-white/60">{label}</span>
       )}
     </div>
   )
