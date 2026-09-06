@@ -48,7 +48,6 @@ import { LiveJoinGate } from "@/components/live-join-gate"
 import { getOrCreateConversation } from "@/app/actions/dm"
 import { useLiveAudio } from "@/lib/use-live-audio"
 import { useLivePresence } from "@/lib/use-live-presence"
-import { LiveBadge } from "@/components/live-badge"
 import { LiveStage, QualityIcon } from "@/components/live-stage"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { liveThemeStyle, isLiveImageTheme } from "@/lib/live-themes"
@@ -669,11 +668,10 @@ export function LiveListener({
 
         <div className="relative min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            {/* Podcast Audio: a listener follows the host straight from the header,
-                so the LIVE pill is replaced by a compact follow toggle. The host
-                previewing their own session can't follow themselves, so they keep
-                the LIVE badge. */}
-            {currentUser && !isSelfHost ? (
+            {/* Podcast Audio: a listener follows the host straight from the
+                header. The "LIVE" label has been removed — the signal-strength
+                indicator now occupies that leading space instead. */}
+            {currentUser && !isSelfHost && (
               <button
                 type="button"
                 onClick={() => void handleToggleFollow()}
@@ -688,8 +686,6 @@ export function LiveListener({
               >
                 {following ? <UserCheck className="size-3" /> : <UserPlus className="size-3" />}
               </button>
-            ) : (
-              <LiveBadge />
             )}
             {state.connected && (
               <span className="flex items-center gap-1 text-[11px] font-medium text-white/60">
@@ -700,12 +696,12 @@ export function LiveListener({
           </div>
           <MarqueeTitle
             text={stream.title}
-            className="mt-0.5 text-base font-bold leading-tight tracking-tight text-white"
+            className="mt-0.5 text-base font-bold uppercase leading-tight tracking-tight text-white"
           />
           <p className="truncate text-xs font-medium text-white/70">with {stream.hostName}</p>
         </div>
 
-        <div className="relative flex shrink-0 flex-col items-end gap-1">
+        <div className="relative flex shrink-0 flex-col items-center gap-1">
           <LiveAudienceSheet count={presenceCount || audience} members={presenceMembers} immersive />
           {state.connected && (
             <span className="font-mono text-[11px] tabular-nums text-white/50">{formatElapsed(elapsed)}</span>

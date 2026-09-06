@@ -477,6 +477,80 @@ export function LiveChat({
             // The viewer's own messages sit on the right; everyone else's on the left.
             const isMine = currentUser ? m.userId === currentUser.id : false
             const canPreview = !isMine && m.id > 0
+
+            // Bubble-free "feed"/"flatText" presentation. The avatar sits INLINE
+            // with the name on a single header line, so the picture always lines
+            // up with the name (never floating between name and text). The
+            // message text sits beneath, indented to align under the name. The
+            // viewer's OWN messages are aligned to the right, everyone else's to
+            // the left.
+            if (bare) {
+              const avSize = flatText ? "size-5" : "size-6"
+              const bodyIndent = flatText ? (isMine ? "pr-7" : "pl-7") : isMine ? "pr-8" : "pl-8"
+              return (
+                <li key={m.id} className={cn("flex flex-col gap-0.5", isMine && "items-end", m.pending && "opacity-60")}>
+                  <div className={cn("flex items-center gap-2", isMine && "flex-row-reverse")}>
+                    <ProfilePreview userId={m.userId} disabled={!canPreview} className="shrink-0">
+                      <Avatar className={cn("shrink-0", avSize)}>
+                        {m.userImage ? <AvatarImage src={m.userImage} alt={m.userName} /> : null}
+                        <AvatarFallback className={cn(getAvatarColor(m.userId), flatText ? "text-[9px]" : "text-[10px]")}>
+                          {getInitials(m.userName)}
+                        </AvatarFallback>
+                      </Avatar>
+                    </ProfilePreview>
+                    <ProfilePreview
+                      userId={m.userId}
+                      disabled={!canPreview}
+                      className={cn(
+                        "font-medium",
+                        flatText ? "text-xs" : "text-[13px] font-semibold",
+                        m.isHost ? "text-primary" : immersive ? "text-white" : undefined,
+                        !m.isHost && immersive && "text-white/90 [text-shadow:0_1px_2px_rgba(0,0,0,0.55)]",
+                        canPreview && "hover:underline",
+                      )}
+                    >
+                      {isMine ? "You" : m.isHost ? "HOST" : m.userName}
+                    </ProfilePreview>
+                    {feed && m.createdAtMs > 0 && (
+                      <span className="shrink-0 text-[10px] font-medium tabular-nums text-white/40">
+                        {formatClockTime(m.createdAtMs)}
+                      </span>
+                    )}
+                  </div>
+                  <div className={cn("flex flex-col gap-0.5", bodyIndent, isMine && "items-end")}>
+                    {m.kind === "bible" && m.meta ? (
+                      <BibleVerseCard meta={m.meta} immersive={immersive} onOpen={() => openBibleVerse(m.meta!)} />
+                    ) : (
+                      <p className="text-sm leading-snug [overflow-wrap:anywhere] text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]">
+                        <MentionText body={m.body} />
+                      </p>
+                    )}
+                    {isMine && (m.pending || m.failed) && (
+                      <span
+                        className={cn(
+                          "flex items-center gap-1 text-[10px] font-medium",
+                          m.failed ? "text-destructive" : immersive ? "text-white/45" : "text-muted-foreground",
+                        )}
+                      >
+                        {m.failed ? (
+                          <button
+                            type="button"
+                            onClick={() => retryOne(m.id)}
+                            className="flex items-center gap-1 hover:underline"
+                          >
+                            <AlertCircle className="size-3" /> Not sent — tap to retry <RotateCw className="size-3" />
+                          </button>
+                        ) : (
+                          <>
+                            <Loader2 className="size-3 animate-spin" /> Sending…
+                          </>
+                        )}
+                      </span>
+                    )}
+                  </div>
+                </li>
+              )
+            }
             return (
               <li key={m.id} className={cn(feed ? "flex gap-2" : "flex gap-2.5", isMine && !bare && "flex-row-reverse", m.pending && "opacity-60")}>
                 <ProfilePreview userId={m.userId} disabled={!canPreview} className="shrink-0">
