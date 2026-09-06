@@ -29,13 +29,13 @@ import {
   Minimize2,
   Minus,
   Send,
-  Smile,
   User,
   UserCheck,
   UserPlus,
   X,
 } from "lucide-react"
 import useSWR from "swr"
+import { EmojiPicker } from "@/components/emoji-picker"
 import {
   getDmMessages,
   getDmReadState,
@@ -596,14 +596,13 @@ function ChatWindow({ chat }: { chat: ActiveChat }) {
         ) : (
           <div className="border-t border-border/60 bg-background/40 p-2">
             <div className="flex items-end gap-1">
-              <button
-                type="button"
-                onClick={() => messageInputRef.current?.focus()}
-                aria-label="Emoji"
-                className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-              >
-                <Smile className="size-5" />
-              </button>
+              <EmojiPicker
+                className="size-9 bg-transparent text-muted-foreground hover:bg-secondary hover:text-foreground"
+                onSelect={(emoji) => {
+                  setDraft((d) => d + emoji)
+                  messageInputRef.current?.focus()
+                }}
+              />
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}

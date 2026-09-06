@@ -58,7 +58,10 @@ export type LiveParticipant = {
   image: string | null
   // Real-time connection quality from LiveKit (drives the signal indicator).
   quality: ConnQuality
-  }
+  // Server-assigned join time (epoch millis), identical on every client, so all
+  // participants can sort the roster into the SAME order (uniform grid layout).
+  joinedAtMs: number
+}
 
 export type LiveAudioState = {
   connected: boolean
@@ -297,6 +300,45 @@ export function useLiveAudio() {
   // for the stage avatars. Listeners are not included here (only their count).
   const [speakers, setSpeakers] = useState<LiveParticipant[]>([])
 
+  // Microphone input source. `micPrefRef` is the user's EXPLICIT choice
+  // (persisted) — it's re-applied on every (re)connect so their selection is
+  // stable and is never silently changed by the app. `micDeviceId` is the
+  // currently-ACTIVE input, updated for UI display including when the OS forces
+  // a graceful fallback because the chosen device disconnected.
+  const micPrefRef = useRef<string | null>(null)
+  const [micDeviceId, setMicDeviceId] = useState<string | null>(null)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("frequency.micDevice")
+      if (saved) {
+        micPrefRef.current = saved
+        setMicDeviceId(saved)
+      }
+    } catch {
+      // storage unavailable — fall back to the system default input
+    }
+  }, [])
+
+  const switchMicDevice = useCallback(async (deviceId: string) => {
+    // Record + persist the explicit preference first, so a (re)connect re-applies
+    // it even if the immediate switch fails (device busy for a moment, etc.).
+    micPrefRef.current = deviceId
+    setMicDeviceId(deviceId)
+    try {
+      localStorage.setItem("frequency.micDevice", deviceId)
+    } catch {
+      // ignore storage failure — the in-memory preference still applies
+    }
+    const room = roomRef.current
+    if (!room) return
+    try {
+      await room.switchActiveDevice("audioinput", deviceId, true)
+    } catch {
+      // The device is unavailable right now; keep the current input running and
+      // leave the preference recorded so it re-applies when it returns.
+    }
+  }, [])
+
   const update = useCallback((patch: Partial<LiveAudioState>) => {
     setState((s) => ({ ...s, ...patch }))
   }, [])
@@ -332,6 +374,9 @@ export function useLiveAudio() {
           micOn,
           image,
           quality: normalizeQuality(p.connectionQuality),
+          // Server-assigned; identical across clients. Fallback keeps a
+          // not-yet-populated local participant from jumping the queue.
+          joinedAtMs: p.joinedAt ? p.joinedAt.getTime() : Number.MAX_SAFE_INTEGER,
         })
       }
     }
@@ -390,6 +435,19 @@ export function useLiveAudio() {
         const room = new Room({
       adaptiveStream: true,
       dynacast: true,
+      // Ride out transient network changes (Wi-Fi↔cellular handoff, brief signal
+      // loss, backgrounding) WITHOUT ejecting the participant. LiveKit's default
+      // policy gives up fairly quickly; this keeps its own fast reconnect trying
+      // for ~1 minute with a capped backoff before it ever surfaces a hard
+      // Disconnected (which then triggers our app-level rejoin loop). The same
+      // signalling session is reused, so identity and stage position are kept.
+      reconnectPolicy: {
+        nextRetryDelayInMs: (context) => {
+          if (context.retryCount > 20) return null
+          // 300ms → ~2s, capped; jittered so a whole room doesn't retry in lockstep.
+          return Math.min(300 + context.retryCount * 300, 2000) + Math.random() * 250
+        },
+      },
       // Studio-grade microphone capture. The browser's voice-call DSP
       // (auto-gain, noise gate, echo canceller) is what makes phone mics sound
       // thin and "pumpy" — it's tuned for compressing speech on a call, not for
@@ -536,6 +594,14 @@ export function useLiveAudio() {
             }
             refreshSpeakers(room)
           })
+          // Mirror the ACTIVE input device for display. This fires both on the
+          // user's own switch and when the OS forces a graceful fallback (the
+          // chosen device disconnected). We deliberately do NOT persist it here —
+          // only an explicit user choice updates the saved preference — so a
+          // temporary fallback never overwrites what they picked.
+          .on(RoomEvent.ActiveDeviceChanged, (kind, deviceId) => {
+            if (kind === "audioinput") setMicDeviceId(deviceId)
+          })
           // Transient network drops: LiveKit re-establishes automatically.
           .on(RoomEvent.Reconnecting, () => update({ reconnecting: true }))
           .on(RoomEvent.Reconnected, () => {
@@ -574,6 +640,11 @@ export function useLiveAudio() {
         if (opts.publish) {
           await room.localParticipant.setMicrophoneEnabled(true)
           update({ micEnabled: true })
+          // Re-apply the user's chosen input device so their selection is stable
+          // across (re)connects rather than reverting to the system default.
+          if (micPrefRef.current) {
+            await room.switchActiveDevice("audioinput", micPrefRef.current).catch(() => {})
+          }
         }
 
         // Now that a mic may have forced iOS into a recording session (which
@@ -1222,6 +1293,8 @@ export function useLiveAudio() {
     connect,
     disconnect,
     toggleMic,
+    micDeviceId,
+    switchMicDevice,
     setHeadphoneMode,
     setListenerMuted,
     startAudioPlayback,

@@ -22,13 +22,13 @@ import {
   PinOff,
   Send,
   ShieldMinus,
-  Smile,
   Trash2,
   UserMinus,
   UserRound,
   Users,
   X,
 } from "lucide-react"
+import { EmojiPicker } from "@/components/emoji-picker"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -604,16 +604,13 @@ export function ChatroomView({ detail }: { detail: ChatroomDetail }) {
             className="hidden"
             onChange={handleFilePick}
           />
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="shrink-0 text-muted-foreground"
-            onClick={() => messageInputRef.current?.focus()}
-            aria-label="Emoji"
-          >
-            <Smile className="size-5" />
-          </Button>
+          <EmojiPicker
+            className="size-9 bg-transparent text-muted-foreground hover:bg-secondary hover:text-foreground"
+            onSelect={(emoji) => {
+              setDraft((d) => d + emoji)
+              messageInputRef.current?.focus()
+            }}
+          />
           <Button
             type="button"
             variant="ghost"

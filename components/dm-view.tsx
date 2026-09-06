@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import useSWR from "swr"
 import Link from "next/link"
-  import { ArrowLeft, Ban, CalendarClock, ChevronDown, ChevronUp, Clock, Copy, CornerUpLeft, FileText, Flag, ImageIcon, Mic, MoreVertical, Music, Paperclip, Pencil, PhoneCall, Pin, PinOff, Search, Send, Shield, Smile, Trash2, Video, X } from "lucide-react"
+  import { ArrowLeft, Ban, CalendarClock, ChevronDown, ChevronUp, Clock, Copy, CornerUpLeft, FileText, Flag, ImageIcon, Mic, MoreVertical, Music, Paperclip, Pencil, PhoneCall, Pin, PinOff, Search, Send, Shield, Trash2, Video, X } from "lucide-react"
+import { EmojiPicker } from "@/components/emoji-picker"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -730,14 +731,14 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
                   aria-label="Message"
                   className="h-10 min-w-0 flex-1 border-0 bg-transparent px-0 text-[15px] shadow-none focus-visible:ring-0"
                 />
-                <button
-                  type="button"
-                  className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
-                  onClick={() => messageInputRef.current?.focus()}
-                  aria-label="Emoji"
-                >
-                  <Smile className="size-[18px]" />
-                </button>
+                <EmojiPicker
+                  className="size-9 bg-transparent text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                  iconClassName="size-[18px]"
+                  onSelect={(emoji) => {
+                    setDraft((d) => d + emoji)
+                    messageInputRef.current?.focus()
+                  }}
+                />
               </div>
               {draft.trim() || attachment ? (
                 <Button
