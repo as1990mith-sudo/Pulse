@@ -67,6 +67,7 @@ import { MarqueeTitle } from "@/components/marquee-title"
 import { ShareSheet } from "@/components/share-sheet"
 import type { ShareTarget } from "@/lib/share-types"
 import { LiveStage, MAX_GUESTS, QualityIcon } from "@/components/live-stage"
+import { useMeetingDurationWarnings } from "@/lib/use-meeting-duration-warnings"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { useLivePresence } from "@/lib/use-live-presence"
 import { LIVE_THEMES, liveThemeStyle, isLiveImageTheme } from "@/lib/live-themes"
@@ -390,6 +391,9 @@ export function StudioConsole({
   const pending = callState?.pendingRequests ?? []
   const guests = callState?.guests ?? []
   const locked = callState?.locked ?? false
+
+  // Host-only wrap-up warnings before the 4h max-duration cap (server-clocked).
+  useMeetingDurationWarnings({ isHost: callState?.myRole === "host", remainingMs: callState?.remainingMs })
 
   // Co-host state from the poll. `coHosts` includes everyone granted co-host
   // status (on the call or off it) so the host can manage them all.
@@ -909,6 +913,7 @@ export function StudioConsole({
             isHost
             hostMuted={!micOn}
             coHostIds={coHostIds}
+            actingHostId={callState?.actingHostId ?? null}
             onRemoveGuest={dropGuest}
             onTapSpeaker={openSpeakerMenu}
           />

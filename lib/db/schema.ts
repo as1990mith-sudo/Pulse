@@ -921,6 +921,18 @@ export const liveStream = pgTable("live_stream", {
   // session. (Pass B replaces the earlier host-membership heuristic with this
   // explicit column so scoping is exact and never leaks across organisations.)
   homeId: text("homeId"),
+  // ── Host-disconnection continuity ─────────────────────────────────────────
+  // Set the first moment the host's heartbeat breaches the 90s grace WHILE
+  // participants remain; the basis for the 10-min recovery deadline (non-podcast
+  // types). Null whenever the host is present — cleared as soon as the host's
+  // heartbeat resumes. A brief blip that recovers within grace never sets it, so
+  // it never triggers a handoff or premature end.
+  hostDisconnectedAt: timestamp("hostDisconnectedAt"),
+  // Audio Podcast only: the called-in guest TEMPORARILY promoted to co-host when
+  // the host genuinely drops, retained so the promotion can be reverted the
+  // moment the host returns. This is never the meeting owner — hostId is left
+  // untouched — and doubles as the "ACTING HOST" UI flag. Null = no temp host.
+  actingHostId: text("actingHostId"),
 })
 
 // Call-in requests (listener -> host) and invites (host -> listener) for a live

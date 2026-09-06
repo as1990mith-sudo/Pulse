@@ -66,6 +66,7 @@ export function LiveStage({
   callPending = false,
   hostMuted,
   coHostIds = new Set<string>(),
+  actingHostId = null,
   hostFollow = null,
   onRequestCall,
   onRemoveGuest,
@@ -84,6 +85,9 @@ export function LiveStage({
   hostMuted?: boolean
   // Identities currently promoted to co-host (distinct stage tag for everyone).
   coHostIds?: Set<string>
+  // The guest temporarily acting as host after a host disconnection (Audio
+  // Podcast). Rendered with a distinct "Acting Host" badge; null when none.
+  actingHostId?: string | null
   hostFollow?: HostFollow | null
   onRequestCall?: () => void
   onRemoveGuest?: (identity: string) => void
@@ -136,7 +140,13 @@ export function LiveStage({
             muted: !g.micOn,
             quality: g.quality,
           }}
-          role={coHostIds.has(g.identity) ? "Co-Host" : "Guest"}
+          role={
+            actingHostId && g.identity === actingHostId
+              ? "Acting Host"
+              : coHostIds.has(g.identity)
+                ? "Co-Host"
+                : "Guest"
+          }
           onRemove={isHost && onRemoveGuest ? () => onRemoveGuest(g.identity) : undefined}
           onTap={isHost && onTapSpeaker ? () => onTapSpeaker(g.identity) : undefined}
         />
@@ -162,13 +172,14 @@ function StageTile({
   hostFollow = null,
 }: {
   slot: StageSlot
-  role: "Host" | "Guest" | "Co-Host"
+  role: "Host" | "Guest" | "Co-Host" | "Acting Host"
   onRemove?: () => void
   onTap?: () => void
   hostFollow?: HostFollow | null
 }) {
   const isHost = role === "Host"
-  const isCoHost = role === "Co-Host"
+  const isActingHost = role === "Acting Host"
+  const isCoHost = role === "Co-Host" || isActingHost
   return (
     <div
       onClick={onTap}
@@ -276,7 +287,7 @@ function StageTile({
       <span
         className={cn(
           "rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide",
-          isHost
+          isHost || isActingHost
             ? "bg-primary/20 text-primary"
             : isCoHost
               ? "bg-amber-400/20 text-amber-300"

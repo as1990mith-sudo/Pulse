@@ -54,6 +54,7 @@ import { BackExitMenu } from "@/components/live-back-menu"
 import { SaveEpisodePrompt } from "@/components/live/save-episode-prompt"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { useLivePresence } from "@/lib/use-live-presence"
+import { useMeetingDurationWarnings } from "@/lib/use-meeting-duration-warnings"
 import { ShareSheet } from "@/components/share-sheet"
 import { ConversationVideo } from "@/components/conversation/conversation-video"
 import { LiveSetupSheet } from "@/components/live/live-setup-sheet"
@@ -565,6 +566,9 @@ export function VideoStudioConsole({
     { refreshInterval: 2500 },
   )
   const pending = callState?.pendingRequests ?? []
+
+  // Host-only wrap-up warnings before the 4h max-duration cap (server-clocked).
+  useMeetingDurationWarnings({ isHost: callState?.myRole === "host", remainingMs: callState?.remainingMs })
 
   // Guest call-in section toggle (host-controlled). Kept in local state for
   // instant UI feedback and reconciled with the polled server value.

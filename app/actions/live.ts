@@ -1,6 +1,6 @@
 "use server"
 
-import { and, asc, count, desc, eq, gt, inArray, isNull, lt, or } from "drizzle-orm"
+import { and, asc, count, desc, eq, gt, inArray, isNull, or } from "drizzle-orm"
 import { cookies, headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
@@ -37,10 +37,19 @@ import { notifyFollowers, notifyUser, notifyHomeLive } from "@/app/actions/notif
 // Host + up to 11 guests = 12 on stage.
 const MAX_GUESTS = 11
 
-// A live stream whose host hasn't sent a heartbeat in this long is considered
-// abandoned (closed tab, lost connection, killed app) and is auto-ended. The
-// host pings every ~20s, so this tolerates a couple of missed beats + reconnect.
-const STALE_AFTER_MS = 60_000
+// Host-disconnection continuity. The host pings ~every 20s. We wait a 90s GRACE
+// before treating the host as GENUINELY disconnected, so ordinary packet loss /
+// a brief reconnect (which LiveKit's own reconnectPolicy already rides out at
+// the media layer) never triggers a handoff or ends the meeting.
+const HOST_GRACE_MS = 90_000
+// Non-podcast live types: once the host is genuinely gone WITH participants
+// still present, the meeting stays alive for at most this long waiting for the
+// host to return before it ends. The original host stays the owner throughout —
+// no automatic host transfer.
+const HOST_RECOVERY_MS = 600_000 // 10 minutes
+// Hard cap on any live session. Derived from startedAt (server clock), so it is
+// reconnect-safe and never resets. When reached, the session ends normally.
+const MAX_DURATION_MS = 14_400_000 // 4 hours
 
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -133,28 +142,138 @@ async function stopEgressForRoom(roomName: string): Promise<void> {
   }
 }
 
-async function endStaleStreams(): Promise<void> {
-  // Best-effort cleanup that runs at the top of read paths — swallow errors so a
-  // transient DB failure (or the DB being unreachable) can't crash the page that
-  // just wanted to list streams. The next read will retry the cleanup.
-  try {
-    // Stop egress for any abandoned VIDEO host (closed tab / lost connection)
-    // before ending the rows, so the replay finalizes promptly rather than
-    // waiting on LiveKit's room-empty timeout. This is exactly the case that
-    // used to truncate device-side recordings.
-    const stale = await db
-      .select({ roomName: liveStream.roomName, egressId: liveStream.egressId })
-      .from(liveStream)
-      .where(and(eq(liveStream.status, "live"), lt(liveStream.lastSeenAt, new Date(Date.now() - STALE_AFTER_MS))))
-    for (const s of stale) {
-      if (s.egressId) await stopRoomEgress(s.egressId)
+/** Ends a single live stream normally: stop egress, flip to "ended". */
+async function endStreamRow(roomName: string, egressId: string | null): Promise<void> {
+  if (egressId) {
+    try {
+      await stopRoomEgress(egressId)
+    } catch {
+      /* best-effort — the egress-ended webhook still finalizes the replay */
     }
-    await db
-      .update(liveStream)
-      .set({ status: "ended", endedAt: new Date(), egressId: null })
-      .where(and(eq(liveStream.status, "live"), lt(liveStream.lastSeenAt, new Date(Date.now() - STALE_AFTER_MS))))
+  }
+  await db
+    .update(liveStream)
+    .set({ status: "ended", endedAt: new Date(), egressId: null })
+    .where(and(eq(liveStream.roomName, roomName), eq(liveStream.status, "live")))
+}
+
+/**
+ * Reconciles every in-progress live session. Runs (best-effort) at the top of
+ * read paths — there is no cron — and REPLACES the old "end any stale host"
+ * sweep that used to terminate a meeting the instant the host's network blipped.
+ *
+ * Per live stream, in order:
+ *  1. Max duration reached (startedAt + 4h) → end normally.
+ *  2. Host heartbeat within the 90s grace → nothing to do (a blip is not a drop).
+ *  3. Host genuinely gone (grace breached):
+ *     • No participants left → end normally (host abandoned an empty room).
+ *     • Participants present → keep the meeting ALIVE and record hostDisconnectedAt.
+ *       – Audio Podcast: promote the first called-in guest to a TEMPORARY co-host
+ *         (full powers) so the room keeps running; hostId is never changed. No
+ *         recovery deadline — it lives as long as participants remain.
+ *       – All other types: hold for up to a 10-min recovery window, then end.
+ *         The original host stays the owner; there is no automatic host transfer.
+ *
+ * The host returning is handled in heartbeatBroadcast (clears the flags + reverts
+ * the temporary co-host); because the row stays "live" throughout, the resumed
+ * heartbeat revives the same session with no reset and no new session.
+ */
+async function reconcileLiveSessions(): Promise<void> {
+  try {
+    const nowMs = Date.now()
+    const liveRows = await db
+      .select({
+        roomName: liveStream.roomName,
+        egressId: liveStream.egressId,
+        mode: liveStream.mode,
+        layout: liveStream.layout,
+        startedAt: liveStream.startedAt,
+        lastSeenAt: liveStream.lastSeenAt,
+        hostDisconnectedAt: liveStream.hostDisconnectedAt,
+        actingHostId: liveStream.actingHostId,
+      })
+      .from(liveStream)
+      .where(eq(liveStream.status, "live"))
+
+    for (const s of liveRows) {
+      // 1. Hard max-duration cap — server-enforced regardless of clients.
+      if (nowMs - new Date(s.startedAt).getTime() >= MAX_DURATION_MS) {
+        await endStreamRow(s.roomName, s.egressId)
+        continue
+      }
+
+      // 2. Host still within grace → treat as present, do nothing.
+      const hostStale = nowMs - new Date(s.lastSeenAt).getTime() > HOST_GRACE_MS
+      if (!hostStale) continue
+
+      // 3. Host genuinely gone. Are there still participants to keep it alive?
+      const [presence] = await db
+        .select({ n: count() })
+        .from(livePresence)
+        .where(
+          and(
+            eq(livePresence.roomName, s.roomName),
+            eq(livePresence.isHost, false),
+            gt(livePresence.lastSeenAt, new Date(nowMs - PRESENCE_STALE_MS)),
+          ),
+        )
+      const isPodcast = s.mode === "audio" && s.layout === "podcast"
+
+      // Accepted call-in guests (ordered by join time) — used both as a
+      // participant signal and to pick the podcast temp co-host.
+      const acceptedGuests = await db
+        .select({ id: liveCallRequest.id, userId: liveCallRequest.userId })
+        .from(liveCallRequest)
+        .where(and(eq(liveCallRequest.roomName, s.roomName), eq(liveCallRequest.status, "accepted")))
+        .orderBy(asc(liveCallRequest.createdAt))
+
+      const participantsPresent = Number(presence?.n ?? 0) > 0 || acceptedGuests.length > 0
+      if (!participantsPresent) {
+        // Nobody left to sustain the call → end normally.
+        await endStreamRow(s.roomName, s.egressId)
+        continue
+      }
+
+      // Record the first moment we saw the host genuinely gone (with people here).
+      const disconnectedSinceMs = s.hostDisconnectedAt ? new Date(s.hostDisconnectedAt).getTime() : nowMs
+      if (!s.hostDisconnectedAt) {
+        await db
+          .update(liveStream)
+          .set({ hostDisconnectedAt: new Date(nowMs) })
+          .where(and(eq(liveStream.roomName, s.roomName), eq(liveStream.status, "live")))
+      }
+
+      if (isPodcast) {
+        // Audio Podcast: auto-promote the first called-in guest to a TEMPORARY
+        // co-host with full powers so the room keeps running. Ownership (hostId)
+        // is untouched; this is reverted the moment the host returns.
+        if (!s.actingHostId && acceptedGuests.length > 0) {
+          const first = acceptedGuests[0]
+          await db
+            .update(liveCallRequest)
+            .set({
+              role: "cohost",
+              canAcceptRequests: true,
+              canControlTracks: true,
+              canSaveRecording: true,
+              updatedAt: new Date(),
+            })
+            .where(eq(liveCallRequest.id, first.id))
+          await db
+            .update(liveStream)
+            .set({ actingHostId: first.userId })
+            .where(and(eq(liveStream.roomName, s.roomName), eq(liveStream.status, "live")))
+        }
+        // No recovery deadline for podcast — it lives as long as people remain.
+      } else {
+        // All other types: hold for the 10-min recovery window, then end.
+        if (nowMs - disconnectedSinceMs >= HOST_RECOVERY_MS) {
+          await endStreamRow(s.roomName, s.egressId)
+        }
+      }
+    }
   } catch (err) {
-    console.error("[v0] endStaleStreams cleanup failed:", err)
+    console.error("[v0] reconcileLiveSessions failed:", err)
   }
 }
 
@@ -175,7 +294,43 @@ export async function heartbeatBroadcast(input: { roomName: string }): Promise<{
     .where(
       and(eq(liveStream.roomName, input.roomName), eq(liveStream.hostId, actor.id), eq(liveStream.status, "live")),
     )
-    .returning({ id: liveStream.id })
+    .returning({
+      id: liveStream.id,
+      hostDisconnectedAt: liveStream.hostDisconnectedAt,
+      actingHostId: liveStream.actingHostId,
+    })
+  // Row still "live" during the grace/recovery window, so a resumed host
+  // heartbeat matches here and REVIVES the same session — no reset, no new
+  // session. When the host returns after a genuine disconnection, clear the
+  // continuity flags and revert any temporary podcast co-host back to a plain
+  // guest. The host was always hostId, so they regain full control automatically.
+  const row = rows[0]
+  if (row && (row.hostDisconnectedAt || row.actingHostId)) {
+    if (row.actingHostId) {
+      await db
+        .update(liveCallRequest)
+        .set({
+          role: "guest",
+          canAcceptRequests: false,
+          canControlTracks: false,
+          canSaveRecording: false,
+          musicApproved: false,
+          musicRequestPending: false,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(liveCallRequest.roomName, input.roomName),
+            eq(liveCallRequest.userId, row.actingHostId),
+            eq(liveCallRequest.role, "cohost"),
+          ),
+        )
+    }
+    await db
+      .update(liveStream)
+      .set({ hostDisconnectedAt: null, actingHostId: null })
+      .where(eq(liveStream.roomName, input.roomName))
+  }
   return { ok: true, ended: rows.length === 0 }
 }
 
@@ -574,7 +729,7 @@ export async function joinBroadcast(input: { roomName: string }): Promise<JoinRe
   }
 
   // Clean up abandoned streams before deciding whether this room is still live.
-  await endStaleStreams()
+  await reconcileLiveSessions()
 
   const [stream] = await db
     .select()
@@ -681,7 +836,7 @@ export async function joinBroadcast(input: { roomName: string }): Promise<JoinRe
 
 /** All currently-live streams, newest first. */
 export async function getLiveStreams(): Promise<LiveStreamView[]> {
-  await endStaleStreams()
+  await reconcileLiveSessions()
   // Private sessions are NEVER listed here, whatever their Home: they are
   // reachable only by direct link. Among public sessions, Ongoing Live Streams
   // shows Universal ones (no Home) plus those belonging to a Home the viewer is
@@ -1053,7 +1208,7 @@ export async function getLiveReactions(input: {
 export async function getMyActiveStream(): Promise<LiveStreamView | null> {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) return null
-  await endStaleStreams()
+  await reconcileLiveSessions()
   const [r] = await db
     .select()
     .from(liveStream)
@@ -1092,7 +1247,7 @@ export async function getMyActiveStream(): Promise<LiveStreamView | null> {
 export async function getMyActiveVideoStream(): Promise<LiveStreamView | null> {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) return null
-  await endStaleStreams()
+  await reconcileLiveSessions()
   const [r] = await db
     .select()
     .from(liveStream)
@@ -1125,7 +1280,7 @@ export async function getMyActiveVideoStream(): Promise<LiveStreamView | null> {
 
 /** A single live stream by room name. */
 export async function getLiveStream(roomName: string): Promise<LiveStreamView | null> {
-  await endStaleStreams()
+  await reconcileLiveSessions()
   const [r] = await db
     .select()
     .from(liveStream)
@@ -1775,9 +1930,24 @@ export async function getCallState(input: { roomName: string }): Promise<{
   gridPinRequest: { userId: string; userName: string } | null
   // Host-selected Conversation video layout, synced to everyone.
   gridLayout: GridLayout
+  // --- Max-duration timer (server-clock, reconnect-safe) ---
+  // Milliseconds until the session hits its hard cap; drives the host-only
+  // 15/5/1-min wrap-up warnings. Computed on the server so it never depends on
+  // the host's device clock and survives reconnects (never resets).
+  remainingMs: number
+  maxDurationMs: number
+  // --- Host-disconnection continuity ---
+  // True while the host is in the grace/recovery window (genuinely dropped but
+  // the meeting is being kept alive). Cleared when the host returns.
+  hostDisconnected: boolean
+  // Audio Podcast: the guest currently acting as a TEMPORARY co-host after a
+  // host drop (drives the "ACTING HOST" badge). Null when there is none.
+  actingHostId: string | null
 }> {
-  // Auto-end abandoned streams first so listeners of a vanished host close out.
-  await endStaleStreams()
+  // Reconcile in-progress sessions first (max-duration, host continuity) so
+  // listeners of a genuinely-vanished host close out, while a brief host blip
+  // keeps everyone in the room.
+  await reconcileLiveSessions()
   // Resolve the caller as either a member or a display-name guest, so an accepted
   // guest still sees their own call status (myStatus/myOnCall) and can come on
   // stage. A guest id (`guest:<id>`) never matches a hostId, so guests never gain
@@ -1799,6 +1969,9 @@ export async function getCallState(input: { roomName: string }): Promise<{
       gridPinRequestId: liveStream.gridPinRequestId,
       gridPinRequestName: liveStream.gridPinRequestName,
       gridLayout: liveStream.gridLayout,
+      startedAt: liveStream.startedAt,
+      hostDisconnectedAt: liveStream.hostDisconnectedAt,
+      actingHostId: liveStream.actingHostId,
     })
     .from(liveStream)
     .where(eq(liveStream.roomName, input.roomName))
@@ -1903,6 +2076,12 @@ export async function getCallState(input: { roomName: string }): Promise<{
         ? { userId: stream.gridPinRequestId, userName: stream.gridPinRequestName ?? "A participant" }
         : null,
     gridLayout: ((stream?.gridLayout as GridLayout | undefined) ?? "balanced") as GridLayout,
+    remainingMs: stream?.startedAt
+      ? Math.max(0, new Date(stream.startedAt).getTime() + MAX_DURATION_MS - Date.now())
+      : MAX_DURATION_MS,
+    maxDurationMs: MAX_DURATION_MS,
+    hostDisconnected: Boolean(stream?.hostDisconnectedAt),
+    actingHostId: stream?.actingHostId ?? null,
   }
 }
 
@@ -2134,6 +2313,9 @@ export type ConversationState = {
   theme: string
   // Host-selected Conversation video layout, synced to every participant.
   gridLayout: GridLayout
+  // Milliseconds until the 4h max-duration cap (server clock), for the host-only
+  // wrap-up warnings. 0 when the session is gone.
+  remainingMs: number
 }
 
 /**
@@ -2142,22 +2324,24 @@ export type ConversationState = {
  */
 export async function getConversationState(input: { roomName: string }): Promise<ConversationState> {
   const [r] = await db
-    .select({
-      gridPinnedId: liveStream.gridPinnedId,
-      locked: liveStream.locked,
-      status: liveStream.status,
-      theme: liveStream.theme,
-      gridLayout: liveStream.gridLayout,
-    })
-    .from(liveStream)
-    .where(eq(liveStream.roomName, input.roomName))
-    .limit(1)
-  if (!r) return { pinnedId: null, locked: false, ended: true, theme: "default", gridLayout: "balanced" }
+  .select({
+  gridPinnedId: liveStream.gridPinnedId,
+  locked: liveStream.locked,
+  status: liveStream.status,
+  theme: liveStream.theme,
+  gridLayout: liveStream.gridLayout,
+  startedAt: liveStream.startedAt,
+  })
+  .from(liveStream)
+  .where(eq(liveStream.roomName, input.roomName))
+  .limit(1)
+  if (!r) return { pinnedId: null, locked: false, ended: true, theme: "default", gridLayout: "balanced", remainingMs: 0 }
   return {
-    pinnedId: r.gridPinnedId ?? null,
-    locked: r.locked ?? false,
-    ended: r.status !== "live",
-    theme: r.theme ?? "default",
-    gridLayout: ((r.gridLayout as GridLayout | undefined) ?? "balanced") as GridLayout,
+  pinnedId: r.gridPinnedId ?? null,
+  locked: r.locked ?? false,
+  ended: r.status !== "live",
+  theme: r.theme ?? "default",
+  gridLayout: ((r.gridLayout as GridLayout | undefined) ?? "balanced") as GridLayout,
+  remainingMs: Math.max(0, new Date(r.startedAt).getTime() + MAX_DURATION_MS - Date.now()),
   }
-}
+  }

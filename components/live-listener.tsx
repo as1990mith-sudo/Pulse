@@ -244,6 +244,8 @@ export function LiveListener({
   const [pendingRequests, setPendingRequests] = useState<CallRequestView[]>([])
   const [guests, setGuests] = useState<CallRequestView[]>([])
   const [coHostIds, setCoHostIds] = useState<Set<string>>(new Set())
+  // The guest temporarily acting as host after a host drop (Audio Podcast).
+  const [actingHostId, setActingHostId] = useState<string | null>(null)
   // Begin capturing as soon as this co-host is publishing, so a save is possible
   // later without asking them to opt in mid-show. Recording stays local until
   // they explicitly choose "Save" on the post-end prompt; declining discards it.
@@ -393,6 +395,7 @@ export function LiveListener({
       setPendingRequests(s.pendingRequests)
       setGuests(s.guests)
       setCoHostIds(new Set(s.coHosts.map((c) => c.userId)))
+      setActingHostId(s.actingHostId)
       // Flash a "declined" toast when status transitions to declined.
       if (s.myStatus === "declined" && prevStatus.current && prevStatus.current !== "declined") {
         setDeclinedFlash(true)
@@ -485,6 +488,7 @@ export function LiveListener({
       setPendingRequests(s.pendingRequests)
       setGuests(s.guests)
       setCoHostIds(new Set(s.coHosts.map((c) => c.userId)))
+      setActingHostId(s.actingHostId)
     } catch {
       // poll will catch up on its next tick
     }
@@ -507,6 +511,7 @@ export function LiveListener({
         pending={pendingRequests}
         guests={guests}
         coHostIds={coHostIds}
+        actingHostId={actingHostId}
         viewers={audience}
         locked={locked}
         theme={theme}
@@ -721,6 +726,7 @@ export function LiveListener({
             activeSpeakers={state.activeSpeakers}
             hostColorById={colorById}
             isHost={false}
+            actingHostId={actingHostId}
             canRequestCall={canListen && !isOnStage && !locked && myStatus !== "pending"}
             callPending={myStatus === "pending"}
             hostFollow={{
