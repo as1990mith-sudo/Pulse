@@ -95,8 +95,8 @@ const STATUS_DOT: Record<string, string> = {
 
 function StatusPill({ status, paymentStatus }: { status: string; paymentStatus: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-      <span className={cn("size-1.5 rounded-full", STATUS_DOT[status] ?? "bg-muted-foreground")} />
+    <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[11px] font-medium text-muted-foreground">
+      <span className={cn("size-1.5 shrink-0 rounded-full", STATUS_DOT[status] ?? "bg-muted-foreground")} />
       {STATUS_LABEL[status] ?? status}
       {paymentStatus === "paid" ? " · Paid" : ""}
     </span>
@@ -513,9 +513,9 @@ function AppointmentRow({
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
             {a.hostName ? `with ${a.hostName}` : a.homeName}
           </p>
-          <div className="mt-1.5 flex items-center gap-3">
+          <div className="mt-1.5 flex flex-nowrap items-center gap-3">
             <StatusPill status={a.status} paymentStatus={a.paymentStatus} />
-            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+            <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px] text-muted-foreground">
               {a.useFrequencyLive ? <Video className="size-3" /> : <MapPin className="size-3" />}
               {a.durationMinutes} min
             </span>
