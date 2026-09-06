@@ -1,6 +1,6 @@
 "use server"
 
-import { and, asc, desc, eq, inArray } from "drizzle-orm"
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm"
 import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
@@ -445,27 +445,30 @@ export type PlaylistView = {
   name: string
   description: string | null
   cover: string | null
+  /** Parent playlist id when this is a sub-playlist, else null (top-level). */
+  parentId: number | null
   /** Up to four material covers for the 2×2 collage, newest position first. */
   collage: string[]
   count: number
+  /** Number of sub-playlists nested directly under this playlist. */
+  childCount: number
   totalDurationLabel: string
   createdAtMs: number
   updatedAtMs: number
 }
 
 /**
- * All playlists for an organisation with derived collage + counts. One grouped
- * pass over the join rows avoids an N+1 across playlists.
+ * Turn raw playlist rows into PlaylistViews with derived collage, material
+ * counts and sub-playlist counts. One grouped pass over the material join rows
+ * plus one grouped pass over child rows avoids an N+1 across playlists.
  */
-export async function getOrganizationPlaylists(orgId: string): Promise<PlaylistView[]> {
-  const lists = await db
-    .select()
-    .from(playlist)
-    .where(eq(playlist.organizationId, orgId))
-    .orderBy(desc(playlist.updatedAt))
+async function buildPlaylistViews(
+  orgId: string,
+  lists: (typeof playlist.$inferSelect)[],
+): Promise<PlaylistView[]> {
   if (lists.length === 0) return []
-
   const listIds = lists.map((l) => l.id)
+
   const joins = await db
     .select({
       playlistId: playlistMaterial.playlistId,
@@ -488,6 +491,17 @@ export async function getOrganizationPlaylists(orgId: string): Promise<PlaylistV
     if (j.cover && agg.covers.length < 4) agg.covers.push(j.cover)
   }
 
+  // Direct sub-playlist counts, grouped in one query.
+  const childRows = await db
+    .select({ parentId: playlist.parentId })
+    .from(playlist)
+    .where(and(eq(playlist.organizationId, orgId), inArray(playlist.parentId, listIds)))
+  const childCounts = new Map<number, number>()
+  for (const c of childRows) {
+    if (c.parentId == null) continue
+    childCounts.set(c.parentId, (childCounts.get(c.parentId) ?? 0) + 1)
+  }
+
   return lists.map((l) => {
     const agg = byList.get(l.id) ?? { covers: [], seconds: 0, count: 0 }
     return {
@@ -496,8 +510,10 @@ export async function getOrganizationPlaylists(orgId: string): Promise<PlaylistV
       name: l.name,
       description: l.description,
       cover: l.cover,
+      parentId: l.parentId,
       collage: agg.covers,
       count: agg.count,
+      childCount: childCounts.get(l.id) ?? 0,
       totalDurationLabel: formatTotalDuration(agg.seconds),
       createdAtMs: l.createdAt.getTime(),
       updatedAtMs: l.updatedAt.getTime(),
@@ -505,12 +521,27 @@ export async function getOrganizationPlaylists(orgId: string): Promise<PlaylistV
   })
 }
 
+/**
+ * Top-level playlists for an organisation (sub-playlists are excluded — they
+ * surface only inside their parent's editor).
+ */
+export async function getOrganizationPlaylists(orgId: string): Promise<PlaylistView[]> {
+  const lists = await db
+    .select()
+    .from(playlist)
+    .where(and(eq(playlist.organizationId, orgId), isNull(playlist.parentId)))
+    .orderBy(desc(playlist.updatedAt))
+  return buildPlaylistViews(orgId, lists)
+}
+
 export type PlaylistDetail = {
   playlist: PlaylistView
   materials: MaterialView[]
+  /** Sub-playlists nested directly under this playlist, newest first. */
+  children: PlaylistView[]
 }
 
-/** A single playlist with its materials in playlist order. */
+/** A single playlist with its materials in playlist order and its sub-playlists. */
 export async function getPlaylist(orgId: string, playlistId: number): Promise<PlaylistDetail | null> {
   const [row] = await db
     .select()
@@ -530,6 +561,13 @@ export async function getPlaylist(orgId: string, playlistId: number): Promise<Pl
   const seconds = materials.reduce((acc, m) => acc + durationToSeconds(m.duration), 0)
   const covers = materials.map((m) => m.cover).filter((c): c is string => Boolean(c)).slice(0, 4)
 
+  const childRows = await db
+    .select()
+    .from(playlist)
+    .where(and(eq(playlist.organizationId, orgId), eq(playlist.parentId, playlistId)))
+    .orderBy(desc(playlist.updatedAt))
+  const children = await buildPlaylistViews(orgId, childRows)
+
   return {
     playlist: {
       id: row.id,
@@ -537,13 +575,16 @@ export async function getPlaylist(orgId: string, playlistId: number): Promise<Pl
       name: row.name,
       description: row.description,
       cover: row.cover,
+      parentId: row.parentId,
       collage: covers,
       count: materials.length,
+      childCount: children.length,
       totalDurationLabel: formatTotalDuration(seconds),
       createdAtMs: row.createdAt.getTime(),
       updatedAtMs: row.updatedAt.getTime(),
     },
     materials,
+    children,
   }
 }
 
@@ -553,10 +594,25 @@ export async function createPlaylist(input: {
   description?: string | null
   cover?: string | null
   materialIds?: number[]
+  /** When set, the new playlist is nested as a sub-playlist of this one. */
+  parentId?: number | null
 }) {
   await requireOrgOwner(input.organizationId)
   const name = input.name.trim()
   if (!name) throw new Error("Please name the playlist.")
+
+  // A parent must exist and belong to the same organisation before we nest.
+  let parentId: number | null = null
+  if (input.parentId != null) {
+    const [parent] = await db
+      .select({ id: playlist.id })
+      .from(playlist)
+      .where(and(eq(playlist.id, input.parentId), eq(playlist.organizationId, input.organizationId)))
+      .limit(1)
+    if (!parent) throw new Error("Parent playlist not found.")
+    parentId = parent.id
+  }
+
   const [created] = await db
     .insert(playlist)
     .values({
@@ -564,6 +620,7 @@ export async function createPlaylist(input: {
       name,
       description: input.description?.trim() || null,
       cover: input.cover || null,
+      parentId,
       updatedAt: new Date(),
     })
     .returning({ id: playlist.id })
@@ -617,6 +674,9 @@ export async function duplicatePlaylist(input: { id: number; organizationId: str
       name: `${row.name} (copy)`,
       description: row.description,
       cover: row.cover,
+      // The copy stays a sibling of the original (same parent), so duplicating
+      // a sub-playlist keeps it inside the same parent.
+      parentId: row.parentId,
       updatedAt: new Date(),
     })
     .returning({ id: playlist.id })
@@ -638,8 +698,26 @@ export async function duplicatePlaylist(input: { id: number; organizationId: str
 
 export async function deletePlaylist(input: { id: number; organizationId: string }) {
   await requireOrgOwner(input.organizationId)
-  await db.delete(playlist).where(and(eq(playlist.id, input.id), eq(playlist.organizationId, input.organizationId)))
-  await db.delete(playlistMaterial).where(eq(playlistMaterial.playlistId, input.id))
+
+  // Deleting a playlist also removes every sub-playlist beneath it (at any
+  // depth) so no orphaned children are left behind. Gather the whole subtree
+  // first, then drop their material links and the playlists themselves.
+  const ids = new Set<number>([input.id])
+  let frontier = [input.id]
+  while (frontier.length > 0) {
+    const kids = await db
+      .select({ id: playlist.id })
+      .from(playlist)
+      .where(and(eq(playlist.organizationId, input.organizationId), inArray(playlist.parentId, frontier)))
+    frontier = kids.map((k) => k.id).filter((id) => !ids.has(id))
+    for (const id of frontier) ids.add(id)
+  }
+  const allIds = Array.from(ids)
+
+  await db.delete(playlistMaterial).where(inArray(playlistMaterial.playlistId, allIds))
+  await db
+    .delete(playlist)
+    .where(and(eq(playlist.organizationId, input.organizationId), inArray(playlist.id, allIds)))
   await revalidateOrg(input.organizationId)
   return { ok: true }
 }

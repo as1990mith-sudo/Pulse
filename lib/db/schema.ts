@@ -355,11 +355,17 @@ export const playlist = pgTable(
     // Optional custom cover image. When null the UI renders a 2×2 collage from
     // the playlist's first four materials.
     cover: text("cover"),
+    // Self-referential parent so a playlist can nest inside another playlist as
+    // a sub-playlist (a folder-like collection). null = a top-level playlist,
+    // which is all the main Playlists list shows. Children surface only inside
+    // their parent's editor.
+    parentId: integer("parentId"),
     createdAt: timestamp("createdAt").notNull().defaultNow(),
     updatedAt: timestamp("updatedAt").notNull().defaultNow(),
   },
   (t) => ({
     orgIdx: index("playlist_org_idx").on(t.organizationId),
+    parentIdx: index("playlist_parent_idx").on(t.parentId),
   }),
 )
 

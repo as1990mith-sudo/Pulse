@@ -25,6 +25,8 @@ export function CreatePlaylistSheet({
   materials,
   onCreated,
   editing,
+  parentId,
+  parentName,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -34,9 +36,16 @@ export function CreatePlaylistSheet({
   /** When provided, the sheet edits this playlist's name/description instead of
    *  creating a new one (skips the choose step and the material picker). */
   editing?: PlaylistView | null
+  /** When set, a newly created playlist is nested under this playlist id. */
+  parentId?: number | null
+  /** Parent name, shown in the sheet copy when creating a sub-playlist. */
+  parentName?: string
 }) {
   const isEditing = Boolean(editing)
-  const [step, setStep] = useState<Step>(isEditing ? "details" : "choose")
+  // Editing and sub-playlist creation both jump straight to the details form;
+  // only a fresh top-level playlist starts on the Empty/Smart choice.
+  const skipChoose = isEditing || parentId != null
+  const [step, setStep] = useState<Step>(skipChoose ? "details" : "choose")
   const [name, setName] = useState(editing?.name ?? "")
   const [description, setDescription] = useState(editing?.description ?? "")
   const [selected, setSelected] = useState<Set<number>>(new Set())
@@ -46,7 +55,7 @@ export function CreatePlaylistSheet({
   // Re-sync when the target playlist changes (the sheet instance is reused).
   useEffect(() => {
     if (open) {
-      setStep(editing ? "details" : "choose")
+      setStep(skipChoose ? "details" : "choose")
       setName(editing?.name ?? "")
       setDescription(editing?.description ?? "")
       setSelected(new Set())
@@ -55,7 +64,7 @@ export function CreatePlaylistSheet({
   }, [open, editing])
 
   function reset() {
-    setStep(isEditing ? "details" : "choose")
+    setStep(skipChoose ? "details" : "choose")
     setName("")
     setDescription("")
     setSelected(new Set())
@@ -101,8 +110,9 @@ export function CreatePlaylistSheet({
           name,
           description,
           materialIds: Array.from(selected),
+          parentId: parentId ?? null,
         })
-        toast.success("Playlist created")
+        toast.success(parentId != null ? "Sub-playlist created" : "Playlist created")
       }
       onCreated()
       handleOpenChange(false)
@@ -117,18 +127,30 @@ export function CreatePlaylistSheet({
     <UploadSheet
       open={open}
       onOpenChange={handleOpenChange}
-      title={isEditing ? "Edit playlist" : step === "choose" ? "Create Playlist" : "New playlist"}
+      title={
+        isEditing
+          ? "Edit playlist"
+          : parentId != null
+            ? "New sub-playlist"
+            : step === "choose"
+              ? "Create Playlist"
+              : "New playlist"
+      }
       description={
         isEditing
           ? "Update the name and description."
-          : step === "choose"
-            ? "Curate existing materials into a collection."
-            : "Name it, then add materials from your catalogue."
+          : parentId != null
+            ? parentName
+              ? `A collection nested inside “${parentName}”.`
+              : "A collection nested inside this playlist."
+            : step === "choose"
+              ? "Curate existing materials into a collection."
+              : "Name it, then add materials from your catalogue."
       }
       footer={
         step === "details" ? (
           <>
-            {!isEditing && (
+            {!skipChoose && (
               <button
                 type="button"
                 onClick={() => setStep("choose")}

@@ -14,6 +14,7 @@ export function PlaylistsView({
   playlists,
   isAdmin,
   loading,
+  leadingAction,
   onOpen,
   onCreate,
   onEdit,
@@ -24,6 +25,9 @@ export function PlaylistsView({
   playlists: PlaylistView[]
   isAdmin: boolean
   loading?: boolean
+  /** Optional control (the owner "+" menu) rendered inline before the search
+   *  field on mobile, so add + search share one line. */
+  leadingAction?: React.ReactNode
   onOpen: (p: PlaylistView) => void
   onCreate: () => void
   onEdit: (p: PlaylistView) => void
@@ -84,15 +88,20 @@ export function PlaylistsView({
 
   return (
     <div className="space-y-4">
-      {playlists.length > 4 && (
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search playlists..."
-            className="h-11 w-full rounded-full border border-border bg-secondary/40 pl-10 pr-4 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary/50"
-          />
+      {(leadingAction || playlists.length > 4) && (
+        <div className="flex items-center gap-2">
+          {leadingAction && <div className="sm:hidden">{leadingAction}</div>}
+          {playlists.length > 4 && (
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search playlists..."
+                className="h-11 w-full rounded-full border border-border bg-secondary/40 pl-10 pr-4 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary/50"
+              />
+            </div>
+          )}
         </div>
       )}
 
