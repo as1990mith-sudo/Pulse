@@ -21,13 +21,6 @@ import { cn } from "@/lib/utils"
 import { renderMessageBody } from "@/lib/rich-text"
 import { useLiveResourcesOptional } from "@/components/live/resource/resource-context"
 
-// A compact, curated set of emojis for the inline chat picker.
-const CHAT_EMOJIS = [
-  "😀", "😂", "🥰", "😍", "😎", "🤔", "😮", "😢",
-  "👍", "👏", "🙌", "🙏", "🔥", "💯", "❤️", "✨",
-  "🎉", "🕊️", "✝️", "📖", "🎶", "💪", "😇", "🤝",
-] as const
-
 /** Renders message text with @mentions highlighted in the accent color. */
 function MentionText({ body, accent = false }: { body: string; accent?: boolean }) {
   // Highlights @mentions and supports WhatsApp-style **bold** / __italic__.
@@ -93,16 +86,9 @@ export function LiveChat({
   flatText?: boolean
 }) {
   const [draft, setDraft] = useState("")
-  const [emojiOpen, setEmojiOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const scrollRef = useRef<HTMLUListElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-
-  // Insert an emoji into the message at the end and keep the composer focused.
-  function insertEmoji(emoji: string) {
-    setDraft((d) => d + emoji)
-    requestAnimationFrame(() => textareaRef.current?.focus())
-  }
 
   const { data: messages = [], mutate } = useSWR<LiveChatMessageView[]>(
     roomName ? ["live-chat", roomName] : null,
@@ -203,19 +189,19 @@ export function LiveChat({
     return unregister
   }, [registerChatSender, canSend, roomName, asHost, currentUser, myName, messages, mutate])
 
-  // Emoji toggle button — rendered on the left or right of the composer.
+  // Emoji button — focuses the message input so the device's native keyboard
+  // opens; emojis come from the keyboard's own emoji key. No custom in-app
+  // emoji panel is rendered (it would cover the chat).
   const emojiButton = (
     <button
       type="button"
-      onClick={() => setEmojiOpen((o) => !o)}
-      aria-label="Insert emoji"
-      aria-pressed={emojiOpen}
+      onClick={() => textareaRef.current?.focus()}
+      aria-label="Emoji"
       className={cn(
         "flex size-10 shrink-0 items-center justify-center rounded-full transition-colors",
         immersive
           ? "bg-white/10 text-white/70 hover:bg-white/20 hover:text-white"
           : "bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
-        emojiOpen && (immersive ? "bg-primary/25 text-primary" : "bg-primary/15 text-primary"),
       )}
     >
       <Smile className="size-5" />
@@ -419,30 +405,6 @@ export function LiveChat({
             immersive ? "bg-white/5 backdrop-blur-xl" : "border-t border-border/60 bg-card/80 backdrop-blur",
           )}
         >
-          {/* Inline emoji picker — taps insert the emoji into the message. */}
-          {emojiOpen && (
-            <div
-              className={cn(
-                "mb-2 grid grid-cols-8 gap-1 rounded-xl border p-2 shadow-lg",
-                immersive ? "border-white/10 bg-zinc-900/95 backdrop-blur-xl" : "border-border/60 bg-popover",
-              )}
-            >
-              {CHAT_EMOJIS.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onClick={() => insertEmoji(emoji)}
-                  className={cn(
-                    "flex size-8 items-center justify-center rounded-lg text-lg transition-transform hover:scale-110 active:scale-95",
-                    immersive ? "hover:bg-white/10" : "hover:bg-secondary",
-                  )}
-                  aria-label={`Insert ${emoji}`}
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-          )}
           <div className="flex items-end gap-2">
             {leadingSlot}
             {emojiSide === "left" && emojiButton}
