@@ -9,6 +9,7 @@ import {
   resumeSpeakerPlayout,
 } from "@/lib/android-speaker-route"
 import { applyAudioRouting, prepareAudioRouting, releaseAudioRouting } from "@/lib/audio-routing"
+import { applyAudioOutputRoute } from "@/lib/audio-output"
 import {
   AudioPresets,
   ConnectionQuality,
@@ -658,6 +659,7 @@ export function useLiveAudio() {
       // headphone preference so it stays sticky across self-mute/unmute.
       await applyMicDsp()
       applyAudioRouting()
+      void applyAudioOutputRoute()
     }
     update({ micEnabled: next })
   }, [update, applyMicDsp])
@@ -676,6 +678,7 @@ export function useLiveAudio() {
     update({ headphoneMode: on })
     await applyMicDsp()
     applyAudioRouting()
+    void applyAudioOutputRoute()
   }, [update, applyMicDsp])
 
   const setListenerMuted = useCallback((muted: boolean) => {
@@ -714,6 +717,8 @@ export function useLiveAudio() {
     // The element feeding the music graph can also be paused by an interruption.
     const musicEl = musicElRef.current
     if (musicEl && musicPlayingRef.current && musicEl.paused) void musicEl.play().catch(() => {})
+    // A user gesture is also the moment to re-assert the chosen output route.
+    void applyAudioOutputRoute()
     update({ audioBlocked: !room.canPlaybackAudio })
   }, [update])
 
@@ -1163,11 +1168,33 @@ export function useLiveAudio() {
       if (fxCtxRef.current) void ensureCtxRunning(fxCtxRef.current)
       const musicEl = musicElRef.current
       if (musicEl && musicPlayingRef.current && musicEl.paused) void musicEl.play().catch(() => {})
+      // Returning from an OS file picker (or any interruption) can leave the
+      // published mic muted or its underlying track ended on iOS — the room
+      // would then look connected while the person is silent. Re-assert capture
+      // so it self-heals without a manual mute/unmute, then re-apply the chosen
+      // output route.
+      if (room.localParticipant.isMicrophoneEnabled) {
+        const pub = room.localParticipant.getTrackPublication(Track.Source.Microphone)
+        const track = pub?.track instanceof LocalAudioTrack ? pub.track : null
+        const dead = !track || track.isMuted || track.mediaStreamTrack?.readyState === "ended"
+        if (dead) {
+          if (!track) {
+            // The publication is gone entirely — republish, then re-apply DSP.
+            void room.localParticipant
+              .setMicrophoneEnabled(true)
+              .then(() => applyMicDsp())
+              .catch(() => {})
+          } else {
+            void applyMicDsp()
+          }
+        }
+      }
+      void applyAudioOutputRoute()
       update({ audioBlocked: !room.canPlaybackAudio })
     }
     document.addEventListener("visibilitychange", recover)
     return () => document.removeEventListener("visibilitychange", recover)
-  }, [update])
+  }, [update, applyMicDsp])
 
   // Clean up on unmount.
   useEffect(() => {

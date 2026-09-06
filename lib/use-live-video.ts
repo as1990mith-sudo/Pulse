@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { ensureCtxRunning } from "@/lib/audio-context"
 import { prepareAudioRouting, applyAudioRouting, releaseAudioRouting } from "@/lib/audio-routing"
+import { applyAudioOutputRoute } from "@/lib/audio-output"
 import {
   routeRemoteAudioToSpeaker,
   releaseRemoteAudioRoute,
@@ -1173,6 +1174,7 @@ export function useLiveVideo({
     // Only restart a track that had actually been loaded and got cut off.
     const musicEl = musicElRef.current
     if (musicEl?.src && musicEl.paused) void musicEl.play().catch(() => {})
+    void applyAudioOutputRoute()
     setAudioBlocked(!room.canPlaybackAudio)
   }, [])
 
@@ -1682,6 +1684,17 @@ export function useLiveVideo({
       if (musicCtxRef.current) void ensureCtxRunning(musicCtxRef.current)
       const musicEl = musicElRef.current
       if (musicEl?.src && musicEl.paused) void musicEl.play().catch(() => {})
+      // Returning from an OS file picker / interruption can leave the published
+      // mic muted or its underlying track ended on iOS — the person then looks
+      // connected but is silent. Re-publish so it self-heals, then re-apply the
+      // chosen output route.
+      if (room.localParticipant.isMicrophoneEnabled) {
+        const pub = room.localParticipant.getTrackPublication(Track.Source.Microphone)
+        const track = pub?.track instanceof LocalAudioTrack ? pub.track : null
+        const dead = !track || track.isMuted || track.mediaStreamTrack?.readyState === "ended"
+        if (dead) void room.localParticipant.setMicrophoneEnabled(true).catch(() => {})
+      }
+      void applyAudioOutputRoute()
       setAudioBlocked(!room.canPlaybackAudio)
     }
     document.addEventListener("visibilitychange", recover)

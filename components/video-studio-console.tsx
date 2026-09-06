@@ -25,6 +25,8 @@ import {
   X,
 } from "lucide-react"
 import type { CurrentUser } from "@/lib/session"
+import { AudioOutputSheet, audioRouteIcon } from "@/components/live/audio-output-control"
+import { useAudioOutput } from "@/lib/audio-output"
 import {
   startBroadcast,
   beginRoomRecording,
@@ -336,6 +338,9 @@ export function VideoStudioConsole({
   // Background music playlist — the exact same rich panel used in podcast studio
   // mode (MusicPanel): a queue with transport, scrubber, loop and volume.
   const [musicPanelOpen, setMusicPanelOpen] = useState(false)
+  const [audioOutOpen, setAudioOutOpen] = useState(false)
+  const audioOut = useAudioOutput()
+  const AudioOutIcon = audioRouteIcon(audioOut.route)
   // Tap the camera surface to show/hide the bottom control dock (mic, camera,
   // music, etc.), so the host can preview a clean frame.
   const [controlsVisible, setControlsVisible] = useState(true)
@@ -1129,7 +1134,7 @@ export function VideoStudioConsole({
         {/* Floating reactions + gifts */}
         {live && <ReactionLayer roomName={connected ? roomName! : undefined} />}
 
-        {/* ── Broadcast stage guests ───────────────────────────────────────────
+        {/* ── Broadcast stage guests ──────────���────────────────────────────────
             Each called-in guest occupies a slot in the dynamic layout. Tiles
             animate their rect as guests join/leave. The host can spotlight (pin)
             a guest — moving them into the primary slot — or remove them. */}
@@ -1362,6 +1367,9 @@ export function VideoStudioConsole({
             >
               <Users className="size-5" />
             </GlassButton>
+            <GlassButton label="Audio output" onClick={() => setAudioOutOpen(true)} active={audioOutOpen} tone="glass">
+              <AudioOutIcon className="size-5" />
+            </GlassButton>
             <GlassButton
               label="Background music"
               onClick={() => setMusicPanelOpen((o) => !o)}
@@ -1536,6 +1544,7 @@ export function VideoStudioConsole({
           onClose={() => setShareOpen(false)}
         />
       )}
+      <AudioOutputSheet open={audioOutOpen} onOpenChange={setAudioOutOpen} />
 
     </div>
   )
