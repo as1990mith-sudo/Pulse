@@ -35,6 +35,8 @@ import {
   X,
 } from "lucide-react"
 import type { CurrentUser } from "@/lib/session"
+import { AudioOutputSheet, audioRouteIcon } from "@/components/live/audio-output-control"
+import { useAudioOutput } from "@/lib/audio-output"
 import { Switch } from "@/components/ui/switch"
 import { publishShow, updateEpisode } from "@/app/actions/shows"
 import {
@@ -206,6 +208,10 @@ export function StudioConsole({
   const recordedBlobRef = useRef<Blob | null>(null)
   // Which slide-up panel is open. Only one at a time keeps the studio compact.
   const [panel, setPanel] = useState<null | "music" | "people" | "theme" | "cohosts">(null)
+  // Audio output chooser (Speaker/Earpiece/Bluetooth) — a sticky preference.
+  const [audioOutOpen, setAudioOutOpen] = useState(false)
+  const audioOut = useAudioOutput()
+  const AudioOutIcon = audioRouteIcon(audioOut.route)
   // Confirmation gate before the host ends the live session, so a mis-tap on the
   // back menu can't drop everyone out of the broadcast (mirrors the video studio).
   const [endConfirmOpen, setEndConfirmOpen] = useState(false)
@@ -213,6 +219,14 @@ export function StudioConsole({
   // A resumed broadcast keeps its own theme; a brand-new one opens on the host's
   // last-used backdrop (their remembered preference) so they needn't re-pick it.
   const [theme, setTheme] = useState(resumeStream?.theme ?? currentUser.preferredLiveTheme ?? "default")
+
+  // Spec 2.3 — when the host chooses Bluetooth output AND a Bluetooth device is
+  // actually connected, auto-engage "I'm on headphones" (which keeps their mic
+  // off the narrowband call profile). Disengages when they pick another route.
+  // Fires only on transitions, so a manual toggle in another route is preserved.
+  useEffect(() => {
+    void setHeadphoneMode(audioOut.shouldEngageHeadphones)
+  }, [audioOut.shouldEngageHeadphones, setHeadphoneMode])
 
   // ── Background-music playlist (lifted here so it survives closing the music
   // panel and minimising the whole console — the audio engine itself lives in
@@ -948,9 +962,16 @@ export function StudioConsole({
                 onClick={() => setPanel((p) => (p === "cohosts" ? null : "cohosts"))}
               />
             )}
+            <DockButton
+              icon={<AudioOutIcon className="size-5" />}
+              label="Audio output"
+              active={audioOutOpen}
+              onClick={() => setAudioOutOpen(true)}
+            />
             {live && roomName && <ShareButton roomName={roomName} title={title} cover={cover} />}
           </div>
         </div>
+        <AudioOutputSheet open={audioOutOpen} onOpenChange={setAudioOutOpen} />
 
         {/* Live chat — flows as one with the room, filling all remaining space */}
         <section className="flex min-h-0 flex-1 flex-col overflow-hidden pb-safe">
@@ -1323,7 +1344,7 @@ function ThemePanel({
               <span className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
                 <CheckCircle2 className="size-4" />
               </span>
-              <span className="text-xs font-semibold">Your photo · tap to change</span>
+              <span className="text-xs font-semibold">Your photo �� tap to change</span>
             </span>
           ) : (
             <span className="flex flex-col items-center gap-1.5 text-muted-foreground group-hover:text-foreground">

@@ -22,6 +22,8 @@ import {
   X,
 } from "lucide-react"
 import type { CurrentUser } from "@/lib/session"
+import { AudioOutputSheet, audioRouteIcon } from "@/components/live/audio-output-control"
+import { useAudioOutput } from "@/lib/audio-output"
 import type { LiveStreamView, CallRequestView } from "@/app/actions/live"
 import {
   joinBroadcast,
@@ -202,6 +204,9 @@ export function LiveVideoViewer({
   // A pending "come on stage" invite from the host (accept/decline in-session).
   const [myInvite, setMyInvite] = useState<CallRequestView | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
+  const [audioOutOpen, setAudioOutOpen] = useState(false)
+  const audioOut = useAudioOutput()
+  const AudioOutIcon = audioRouteIcon(audioOut.route)
   const [bursts, setBursts] = useState<Burst[]>([])
   // Tap the stage to hide/reveal the header + on-screen controls (immersive).
   const [controlsVisible, setControlsVisible] = useState(true)
@@ -921,6 +926,14 @@ export function LiveVideoViewer({
               >
                 <Share2 className="size-5" />
               </button>
+              <button
+                type="button"
+                onClick={() => setAudioOutOpen(true)}
+                aria-label={`Audio output: ${audioOut.route}`}
+                className="flex size-11 items-center justify-center rounded-full bg-black/35 text-white ring-1 ring-inset ring-white/15 backdrop-blur-md transition-all hover:bg-black/50 active:scale-90"
+              >
+                <AudioOutIcon className="size-5" />
+              </button>
             </>
           )}
         </div>
@@ -1006,6 +1019,7 @@ export function LiveVideoViewer({
       )}
 
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
+      <AudioOutputSheet open={audioOutOpen} onOpenChange={setAudioOutOpen} />
     </div>
   )
 }

@@ -31,6 +31,8 @@ import { SaveEpisodePrompt } from "@/components/live/save-episode-prompt"
 import { publishShow } from "@/app/actions/shows"
 import { uploadMedia } from "@/lib/upload-media"
 import type { CurrentUser } from "@/lib/session"
+import { AudioOutputSheet, audioRouteIcon } from "@/components/live/audio-output-control"
+import { useAudioOutput } from "@/lib/audio-output"
 import type { ShareTarget } from "@/lib/share-types"
 import type { CallRequestView, CoHostPermissions, LiveRole, LiveStreamView } from "@/app/actions/live"
 import {
@@ -139,6 +141,10 @@ export function LiveListener({
   // treats them as a participant rather than prompting them to sign in.
   const [guestName, setGuestName] = useState<string | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
+  // Audio output chooser — available to every listener/guest (sticky preference).
+  const [audioOutOpen, setAudioOutOpen] = useState(false)
+  const audioOut = useAudioOutput()
+  const AudioOutIcon = audioRouteIcon(audioOut.route)
   // Set when the host ends the broadcast — shows a "Session ended" splash then
   // bounces the listener back to the Live tab.
   const [hostEnded, setHostEnded] = useState(false)
@@ -839,6 +845,10 @@ export function LiveListener({
               </>
             )}
 
+            <DockButton label="Audio output" onClick={() => setAudioOutOpen(true)} active={audioOutOpen}>
+              <AudioOutIcon className="size-5" />
+            </DockButton>
+
             <DockButton label="Share room" onClick={() => setShareOpen(true)}>
               <Send className="size-5" />
             </DockButton>
@@ -896,6 +906,7 @@ export function LiveListener({
       </section>
 
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
+      <AudioOutputSheet open={audioOutOpen} onOpenChange={setAudioOutOpen} />
 
     </div>
   )

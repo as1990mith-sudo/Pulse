@@ -16,6 +16,8 @@ import { getAvatarColor } from "@/lib/identity"
 import { useLivePresence } from "@/lib/use-live-presence"
 import type { useLiveAudio } from "@/lib/use-live-audio"
 import type { CurrentUser } from "@/lib/session"
+import { AudioOutputSheet, audioRouteIcon } from "@/components/live/audio-output-control"
+import { useAudioOutput } from "@/lib/audio-output"
 import type { ShareTarget } from "@/lib/share-types"
 import type { CallRequestView, CoHostPermissions, LiveStreamView } from "@/app/actions/live"
 import { respondToCallRequest, requestMusicControl, stepOffStage, callIn } from "@/app/actions/live"
@@ -142,6 +144,9 @@ export function CoHostConsole({
   const [panel, setPanel] = useState<null | "music" | "people">(null)
   const [muted, setMuted] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
+  const [audioOutOpen, setAudioOutOpen] = useState(false)
+  const audioOut = useAudioOutput()
+  const AudioOutIcon = audioRouteIcon(audioOut.route)
 
   // ── Background-music playlist (only usable with the Control Tracks perm). ──
   const [musicTracks, setMusicTracks] = useState<Track[]>([])
@@ -470,6 +475,11 @@ export function CoHostConsole({
             {muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
           </DockButton>
 
+          {/* Audio output (Speaker/Earpiece/Bluetooth). */}
+          <DockButton label="Audio output" onClick={() => setAudioOutOpen(true)} active={audioOutOpen}>
+            <AudioOutIcon className="size-5" />
+          </DockButton>
+
           {/* People — gated by the Accept Call Requests permission. */}
           {permissions.acceptRequests && (
             <DockButton
@@ -573,6 +583,7 @@ export function CoHostConsole({
       )}
 
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
+      <AudioOutputSheet open={audioOutOpen} onOpenChange={setAudioOutOpen} />
     </div>
   )
 }

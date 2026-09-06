@@ -284,7 +284,9 @@ export async function startBroadcast(input: {
   const orientation: LiveOrientation = mode === "video" && input.orientation === "landscape" ? "landscape" : "portrait"
   const visibility: LiveVisibility = input.visibility === "private" ? "private" : "public"
 
-  const title = input.title.trim() || `${user.name} — live`
+  // Stream titles are stored uppercase (normalized client-side too), so the
+  // title reads consistently everywhere it is displayed during the live.
+  const title = (input.title.trim() || `${user.name} — live`).toUpperCase()
   // Deterministic, unique room name per host session.
   const roomName = `live_${user.id}_${Date.now()}`
 

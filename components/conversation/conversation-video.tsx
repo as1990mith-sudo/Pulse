@@ -56,6 +56,8 @@ import {
 import { toggleFollow, getFollowingIds } from "@/app/actions/follow"
 import { isMedianApp, openNativeAppSettings, type RemotePeer } from "@/lib/use-live-video"
 import type { CurrentUser } from "@/lib/session"
+import { AudioOutputSheet, audioRouteIcon } from "@/components/live/audio-output-control"
+import { useAudioOutput } from "@/lib/audio-output"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { cn } from "@/lib/utils"
 
@@ -559,6 +561,10 @@ export function ConversationVideo(props: ConversationVideoProps) {
 
   // ── Host controls sheet ───────────────────────────────────────────────────
   const [hostSheet, setHostSheet] = useState(false)
+  // Audio output chooser — available to every participant in the grid meeting.
+  const [audioOutOpen, setAudioOutOpen] = useState(false)
+  const audioOut = useAudioOutput()
+  const AudioOutIcon = audioRouteIcon(audioOut.route)
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden bg-neutral-950 text-white">
@@ -995,6 +1001,9 @@ export function ConversationVideo(props: ConversationVideoProps) {
             <BookOpen />
           </DockButton>
         )}
+        <DockButton label="Audio output" active={audioOutOpen} onClick={() => setAudioOutOpen(true)}>
+          <AudioOutIcon />
+        </DockButton>
         <DockButton label={chatOpen ? "Close chat" : "Open chat"} active={chatOpen} onClick={() => setChatOpen((v) => !v)}>
           <MessageSquare />
         </DockButton>
@@ -1074,6 +1083,8 @@ export function ConversationVideo(props: ConversationVideoProps) {
           </>
         )}
       </AnimatePresence>
+
+      <AudioOutputSheet open={audioOutOpen} onOpenChange={setAudioOutOpen} />
     </div>
   )
 }

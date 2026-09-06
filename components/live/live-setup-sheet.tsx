@@ -149,10 +149,14 @@ export function LiveSetupSheet({
               <input
                 id="live-title"
                 value={title}
-                onChange={(e) => onTitleChange(e.target.value)}
+                // Stream titles are uppercase only. Normalize every keystroke so
+                // lowercase can never remain, while numbers/spaces/punctuation
+                // pass through untouched. autoCapitalize hints mobile keyboards.
+                onChange={(e) => onTitleChange(e.target.value.toUpperCase())}
+                autoCapitalize="characters"
                 maxLength={titleMaxLength}
                 placeholder={titlePlaceholder}
-                className="w-full rounded-2xl bg-white/[0.06] py-3.5 pl-10 pr-4 text-[15px] font-medium text-white ring-1 ring-inset ring-white/10 placeholder:text-white/35 focus:outline-none focus:ring-primary"
+                className="w-full rounded-2xl bg-white/[0.06] py-3.5 pl-10 pr-4 text-[15px] font-medium uppercase text-white ring-1 ring-inset ring-white/10 placeholder:text-white/35 placeholder:normal-case focus:outline-none focus:ring-primary"
               />
             </div>
           </div>
