@@ -32,9 +32,6 @@ import {
 } from "@/lib/appointments/core"
 import { notifyAppointment } from "@/lib/appointments/notify"
 
-// Re-export so existing importers (e.g. the hub) keep getting OpenSlot from here.
-export type { OpenSlot }
-
 /* -------------------------------------------------------------------------- */
 /* Auth / scoping helpers                                                     */
 /* -------------------------------------------------------------------------- */

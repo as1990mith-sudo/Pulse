@@ -312,11 +312,13 @@ function Reschedule({
   const submit = () => {
     if (!selected) return
     setError(null)
+    // Use the slot's real end time (start + duration) for the optimistic view,
+    // never the start again — otherwise "When" renders "10:30 – 10:30".
+    const endISO = (slots ?? []).find((s) => s.startISO === selected)?.endISO ?? selected
     start(async () => {
       try {
         await rescheduleAppointmentByToken(token, selected)
-        const end = new Date(selected)
-        onDone(selected, end.toISOString())
+        onDone(selected, endISO)
       } catch (e) {
         setError(e instanceof Error ? e.message : "Could not reschedule.")
       }

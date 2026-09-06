@@ -38,8 +38,8 @@ import {
   rescheduleMyAppointment,
   type AppointmentTypeRow,
   type MyAppointmentRow,
-  type OpenSlot,
 } from "@/app/actions/home-appointments"
+import type { OpenSlot } from "@/lib/appointments/core"
 
 /* -------------------------------------------------------------------------- */
 /* Formatting helpers                                                         */
