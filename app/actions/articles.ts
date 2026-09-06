@@ -147,17 +147,23 @@ async function toCards(rows: ArticleRow[]): Promise<ArticleCard[]> {
 }
 
 /**
- * The set of authorIds whose published articles may appear on the *global*
- * Articles hub/feed: active members of the viewer's Home who are ALSO platform
- * admins/staff. Members can still write and publish — their pieces simply stay
- * on their own profile (see getWriterArticles) and never surface on the shared
- * Articles page. Returns [] when there's no Home or no staff authors.
+ * The scope for the Home's Articles hub/feed: the ACTIVE Home's id (the sole
+ * determinant of where an article appears) plus the set of its staff/admin
+ * authors (used only to curate the hub to official pieces).
+ *
+ * Both are needed together, and every hub read must filter on `homeId` — an
+ * article belongs to the Home it was published INTO, never to whoever authored
+ * it. Filtering by author alone was the bug: an admin who runs several Homes saw
+ * their Home A pieces surface inside Home B simply because the same account is
+ * staff of both. `staffIds` still confines the hub to official articles;
+ * members' own pieces (published as themselves) stay on their profile. Returns
+ * an empty scope when there is no active Home or it has no staff authors.
  */
-async function getArticleHubAuthorIds(): Promise<string[]> {
-  const { memberIds } = await getActiveHomeMemberIds()
-  if (memberIds.length === 0) return []
+async function getArticleHubScope(): Promise<{ homeId: string | null; staffIds: string[] }> {
+  const { home, memberIds } = await getActiveHomeMemberIds()
+  if (!home || memberIds.length === 0) return { homeId: null, staffIds: [] }
   const staff = await getStaffUserIds()
-  return memberIds.filter((id) => staff.has(id))
+  return { homeId: home.id, staffIds: memberIds.filter((id) => staff.has(id)) }
 }
 
 // --- Hub + feed reads ------------------------------------------------------
@@ -175,8 +181,8 @@ export async function getArticleHub(): Promise<{
   // The Articles hub is a curated, staff-authored surface within the viewer's
   // current Home. Only pieces by admins/staff of that Home appear; members'
   // articles live on their own profiles instead. No Home / no staff ⇒ nothing.
-  const memberIds = await getArticleHubAuthorIds()
-  if (memberIds.length === 0) {
+  const { homeId, staffIds } = await getArticleHubScope()
+  if (!homeId || staffIds.length === 0) {
     return { featured: null, editorsPicks: [], latest: [], categories: [...ARTICLE_CATEGORIES] }
   }
 
@@ -185,14 +191,19 @@ export async function getArticleHub(): Promise<{
       .select()
       .from(article)
       .where(
-        and(eq(article.status, "published"), eq(article.featured, true), inArray(article.authorId, memberIds)),
+        and(
+          eq(article.status, "published"),
+          eq(article.featured, true),
+          eq(article.homeId, homeId),
+          inArray(article.authorId, staffIds),
+        ),
       )
       .orderBy(desc(article.publishedAt))
       .limit(1),
     db
       .select()
       .from(article)
-      .where(and(eq(article.status, "published"), inArray(article.authorId, memberIds)))
+      .where(and(eq(article.status, "published"), eq(article.homeId, homeId), inArray(article.authorId, staffIds)))
       // Tie-broken by id to match getArticleFeed's ordering EXACTLY. The
       // Articles page seeds its first feed page from `latest` and then pages
       // deeper through getArticleFeed by offset; if the two differed on ties
@@ -210,7 +221,8 @@ export async function getArticleHub(): Promise<{
         and(
           eq(article.status, "published"),
           eq(article.editorsPick, true),
-          inArray(article.authorId, memberIds),
+          eq(article.homeId, homeId),
+          inArray(article.authorId, staffIds),
         ),
       )
       .orderBy(desc(article.publishedAt))
@@ -261,12 +273,13 @@ export async function getArticleFeed(input: {
   const limit = Math.min(Math.max(input.limit ?? 12, 1), 30)
   const offset = Math.max(input.offset ?? 0, 0)
 
-  // Staff-only: the shared feed lists articles by admins/staff of the viewer's
-  // active Home. Members' articles stay on their own profile.
-  const memberIds = await getArticleHubAuthorIds()
-  if (memberIds.length === 0) return { items: [], nextOffset: null }
+  // Home-scoped + staff-curated: the shared feed lists official articles that
+  // were published INTO the viewer's active Home. Members' own pieces stay on
+  // their profile; another Home's articles never appear here.
+  const { homeId, staffIds } = await getArticleHubScope()
+  if (!homeId || staffIds.length === 0) return { items: [], nextOffset: null }
 
-  const filters = [eq(article.status, "published"), inArray(article.authorId, memberIds)]
+  const filters = [eq(article.status, "published"), eq(article.homeId, homeId), inArray(article.authorId, staffIds)]
   const excludeNum = Number(input.excludeId)
   if (Number.isFinite(excludeNum)) filters.push(ne(article.id, excludeNum))
   if (input.category && input.category !== "All") filters.push(eq(article.category, input.category))
@@ -303,12 +316,14 @@ export async function getArticle(id: string): Promise<ArticleDetail | null> {
   const isAuthor = viewer?.id === row.authorId
   if (row.status !== "published" && !isAuthor) return null
 
-  // Members-only: you can always read your own article, but someone else's is
-  // only visible when its author is an active member of your current Home — so a
-  // direct URL can't leak an article from outside the Home you're inside.
+  // Home-scoped: you can always read your own article, but someone else's is
+  // only visible when it BELONGS to the Home you're currently inside (its own
+  // homeId), not merely because its author is a member here. Scoping on the
+  // author's membership let a piece from one of an admin's Homes leak into
+  // another via a direct URL; scoping on the article's homeId closes that.
   if (!isAuthor) {
-    const { memberIds } = await getActiveHomeMemberIds()
-    if (!memberIds.includes(row.authorId)) return null
+    const scope = await getProfileScope()
+    if ((row.homeId ?? null) !== (scope.homeId ?? null)) return null
   }
 
   const [card] = await toCards([row])
@@ -349,6 +364,7 @@ export async function getArticle(id: string): Promise<ArticleDetail | null> {
 /** Up to 4 more published articles by the same author (excludes the current). */
 export async function getMoreFromAuthor(articleId: string, authorId: string): Promise<ArticleCard[]> {
   const numId = Number(articleId)
+  const scope = await getProfileScope()
   const rows = await db
     .select()
     .from(article)
@@ -356,6 +372,7 @@ export async function getMoreFromAuthor(articleId: string, authorId: string): Pr
       and(
         eq(article.authorId, authorId),
         eq(article.status, "published"),
+        scopeToHome(article.homeId, scope),
         Number.isFinite(numId) ? ne(article.id, numId) : undefined,
       ),
     )
@@ -367,6 +384,7 @@ export async function getMoreFromAuthor(articleId: string, authorId: string): Pr
 /** Up to 4 related published articles in the same category (excludes current + author). */
 export async function getRelatedArticles(articleId: string, category: string, authorId: string): Promise<ArticleCard[]> {
   const numId = Number(articleId)
+  const scope = await getProfileScope()
   const rows = await db
     .select()
     .from(article)
@@ -374,6 +392,7 @@ export async function getRelatedArticles(articleId: string, category: string, au
       and(
         eq(article.status, "published"),
         eq(article.category, category),
+        scopeToHome(article.homeId, scope),
         ne(article.authorId, authorId),
         Number.isFinite(numId) ? ne(article.id, numId) : undefined,
       ),
@@ -391,10 +410,15 @@ export async function getMyArticles(): Promise<{
 }> {
   const user = await getSessionUser()
   if (!user) return { drafts: [], published: [], archived: [] }
+  // Home-scoped like every other management surface: switching Homes loads only
+  // the articles you authored INTO the now-active Home (each was stamped with
+  // the Home it was created in). Authorship still gates the list; homeId decides
+  // which Home's worth of your writing is in view.
+  const scope = await getProfileScope()
   const rows = await db
     .select()
     .from(article)
-    .where(eq(article.authorId, user.id))
+    .where(and(eq(article.authorId, user.id), scopeToHome(article.homeId, scope)))
     .orderBy(desc(article.updatedAt))
   const cards = await toCards(rows)
   return {
@@ -488,16 +512,16 @@ export async function getWriterStats(userId: string): Promise<WriterStats> {
 
 /** Top writers by follower count then article count, for the hub rail. */
 export async function getFeaturedWriters(limit = 10): Promise<FeaturedWriter[]> {
-  // Staff-only: the hub's writers rail features admins/staff of the viewer's
-  // active Home, matching the articles shown alongside it.
-  const memberIds = await getArticleHubAuthorIds()
-  if (memberIds.length === 0) return []
+  // Home-scoped + staff-curated: the writers rail features staff of the active
+  // Home who have published INTO it, matching the articles shown alongside.
+  const { homeId, staffIds } = await getArticleHubScope()
+  if (!homeId || staffIds.length === 0) return []
 
-  // Writers who have at least one published article, ranked by published count.
+  // Writers who have at least one published article in this Home, ranked by count.
   const rows = await db
     .select({ authorId: article.authorId, articleCount: count() })
     .from(article)
-    .where(and(eq(article.status, "published"), inArray(article.authorId, memberIds)))
+    .where(and(eq(article.status, "published"), eq(article.homeId, homeId), inArray(article.authorId, staffIds)))
     .groupBy(article.authorId)
     .orderBy(desc(count()))
     .limit(limit)
@@ -833,14 +857,15 @@ export async function setFeaturedArticle(id: string, featured: boolean): Promise
   if (featured && row.status !== "published") throw new Error("Only published articles can be featured.")
 
   if (featured) {
-    // One hero at a time: clear any current featured article across the Home's
-    // hub authors before flagging this one.
-    const authorIds = await getArticleHubAuthorIds()
-    if (authorIds.length > 0) {
+    // One hero at a time: clear any current featured article that belongs to
+    // THIS Home before flagging this one (scoped by the article's homeId, not
+    // the author, so another Home's hero is never touched).
+    const { homeId, staffIds } = await getArticleHubScope()
+    if (homeId && staffIds.length > 0) {
       await db
         .update(article)
         .set({ featured: false })
-        .where(and(eq(article.featured, true), inArray(article.authorId, authorIds)))
+        .where(and(eq(article.featured, true), eq(article.homeId, homeId), inArray(article.authorId, staffIds)))
     }
     await db.update(article).set({ featured: true, updatedAt: new Date() }).where(eq(article.id, numId))
   } else {
@@ -881,8 +906,8 @@ export async function setArticleEditorsPick(id: string, pick: boolean): Promise<
   // Enforce the cap against the live count, ignoring this article so re-picking
   // an already-flagged piece is a no-op rather than a spurious failure.
   if (pick && !row.editorsPick) {
-    const authorIds = await getArticleHubAuthorIds()
-    if (authorIds.length > 0) {
+    const { homeId, staffIds } = await getArticleHubScope()
+    if (homeId && staffIds.length > 0) {
       const current = await db
         .select({ id: article.id })
         .from(article)
@@ -890,7 +915,8 @@ export async function setArticleEditorsPick(id: string, pick: boolean): Promise<
           and(
             eq(article.editorsPick, true),
             eq(article.status, "published"),
-            inArray(article.authorId, authorIds),
+            eq(article.homeId, homeId),
+            inArray(article.authorId, staffIds),
           ),
         )
       if (current.filter((r) => r.id !== numId).length >= EDITORS_PICK_LIMIT) {

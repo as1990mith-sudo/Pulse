@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { useRouter } from "next/navigation"
 import { Check, FileText, ImagePlus, Link2, Loader2, Sparkles, Wand2 } from "lucide-react"
 import {
   type MaterialContentType,
@@ -60,10 +59,14 @@ export function UploadMaterialSheet({
   open,
   onOpenChange,
   editing,
+  onSaved,
 }: {
   organizationId: string
   open: boolean
   onOpenChange: (open: boolean) => void
+  // Called once the material is created/updated, so the Catalogue can re-sync
+  // its list immediately without a full-page refresh.
+  onSaved?: () => void
   editing?: {
     id: number
     url: string
@@ -79,7 +82,6 @@ export function UploadMaterialSheet({
     resourceDateMs: number | null
   } | null
 }) {
-  const router = useRouter()
   const [draft, setDraft] = useState<Draft>(emptyDraft)
   const [recognizing, setRecognizing] = useState(false)
   const [recognized, setRecognized] = useState(false)
@@ -251,7 +253,7 @@ export function UploadMaterialSheet({
         await createMaterial(payload)
       }
       onOpenChange(false)
-      router.refresh()
+      onSaved?.()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't save the material.")
     } finally {

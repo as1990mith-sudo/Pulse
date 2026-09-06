@@ -17,7 +17,7 @@ import {
   X,
 } from "lucide-react"
 import { useLiveResources } from "@/components/live/resource/resource-context"
-import { getPinnedResources, pinResource, unpinResource } from "@/app/actions/pinned-resources"
+import { getPinnedResources, pinResource, unpinResource, setResourcePinned } from "@/app/actions/pinned-resources"
 import { compressImage, uploadMedia } from "@/lib/upload-media"
 import type { PinKind, PinnedResourceView } from "@/lib/pinned-resources"
 
@@ -53,7 +53,10 @@ export function MiniPinnedPanel() {
     () => getPinnedResources(roomName as string),
     { revalidateOnFocus: false },
   )
-  const pins = data ?? []
+  // Only quick-access pins belong here. Uploaded documents (kind "pdf") default
+  // to unpinned so they show ONLY in the dedicated PDF/Document panel — they
+  // surface here solely when a host explicitly pins them (pinned === true).
+  const pins = (data ?? []).filter((p) => p.pinned)
 
   const imageInputRef = useRef<HTMLInputElement>(null)
   const [note, setNote] = useState("")
@@ -127,9 +130,14 @@ export function MiniPinnedPanel() {
     }
   }
 
-  async function remove(id: number) {
+  async function remove(pin: PinnedResourceView) {
     if (!roomName) return
-    await unpinResource(id, roomName)
+    // A pinned document is a REFERENCE to a file that lives in the PDF/Document
+    // panel, so removing it from quick access must only unpin it — never delete
+    // the underlying document. Everything else here was created in this panel,
+    // so it is deleted outright.
+    if (pin.kind === "pdf") await setResourcePinned(pin.id, roomName, false)
+    else await unpinResource(pin.id, roomName)
     void mutate()
   }
 
@@ -241,7 +249,7 @@ export function MiniPinnedPanel() {
                       {isHost && (
                         <button
                           type="button"
-                          onClick={() => remove(pin.id)}
+                          onClick={() => remove(pin)}
                           aria-label="Unpin image"
                           className="flex size-8 items-center justify-center rounded-full text-white/30 transition-colors hover:bg-white/10 hover:text-red-400"
                         >
@@ -266,7 +274,7 @@ export function MiniPinnedPanel() {
                     {isHost && (
                       <button
                         type="button"
-                        onClick={() => remove(pin.id)}
+                        onClick={() => remove(pin)}
                         aria-label="Unpin note"
                         className="-mr-1 -mt-1 flex size-8 shrink-0 items-center justify-center rounded-full text-white/30 transition-colors hover:bg-white/10 hover:text-red-400"
                       >
@@ -298,7 +306,7 @@ export function MiniPinnedPanel() {
                   </button>
                   {isHost && (
                     <button
-                      onClick={() => remove(pin.id)}
+                      onClick={() => remove(pin)}
                       aria-label="Unpin"
                       className="rounded-full p-2 text-white/30 transition-colors hover:bg-white/10 hover:text-red-400"
                     >

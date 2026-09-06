@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
 import { AlertCircle, Check, Loader2, Wand2 } from "lucide-react"
 import { type ImportedLink, createMaterialsBulk, recognizeMany } from "@/app/actions/materials"
 import { type SaveMaterialInput } from "@/app/actions/materials"
@@ -16,12 +15,15 @@ export function ImportLinksSheet({
   organizationId,
   open,
   onOpenChange,
+  onImported,
 }: {
   organizationId: string
   open: boolean
   onOpenChange: (open: boolean) => void
+  // Called once the links are imported, so the Catalogue can re-sync its list
+  // immediately without a full-page refresh.
+  onImported?: () => void
 }) {
-  const router = useRouter()
   const [raw, setRaw] = useState("")
   const [rows, setRows] = useState<Row[]>([])
   const [recognizing, setRecognizing] = useState(false)
@@ -81,7 +83,7 @@ export function ImportLinksSheet({
       }))
       await createMaterialsBulk(inputs)
       onOpenChange(false)
-      router.refresh()
+      onImported?.()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't import those links.")
     } finally {

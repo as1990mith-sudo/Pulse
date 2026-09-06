@@ -1481,6 +1481,13 @@ export const pinnedResource = pgTable("pinned_resource", {
   url: text("url"),
   refId: text("refId"),
   meta: jsonb("meta"),
+  // Whether this row shows in the room's "Pinned Resources" quick-access list.
+  // Uploaded documents (kind "pdf") live in the dedicated PDF/Document panel and
+  // default to NOT pinned, so they are never auto-duplicated into Pinned. A host
+  // can explicitly pin one, which flips THIS flag on the same row (never a copy),
+  // so the pinned entry references the existing document. Every other kind is
+  // created directly as a pin and defaults to true.
+  pinned: boolean("pinned").notNull().default(true),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 

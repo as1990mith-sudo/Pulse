@@ -1,7 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect, useCallback } from "react"
 import { ListPlus, Plus, Radio, Upload, Link2, LibraryBig, ListMusic } from "lucide-react"
 import { toast } from "sonner"
 import type { MaterialView } from "@/lib/materials"
@@ -11,6 +10,8 @@ import {
   getPlaylist,
   duplicatePlaylist,
   deletePlaylist,
+  getOrganizationMaterials,
+  getOrganizationPlaylists,
 } from "@/app/actions/materials"
 import { OrgEpisodeCatalog } from "@/components/org/org-catalogue-tab"
 import type { CatalogueItemView } from "@/app/actions/org-content"
@@ -42,8 +43,8 @@ type Segment = "materials" | "playlists" | "live"
 export function UploadSection({
   organizationId,
   isOwner,
-  materials,
-  playlists,
+  materials: materialsProp,
+  playlists: playlistsProp,
   liveItems,
   orgName,
   orgLogo,
@@ -58,6 +59,8 @@ export function UploadSection({
   materials: MaterialView[]
   playlists: PlaylistView[]
   liveItems: CatalogueItemView[]
+  // Renamed below to `materialsProp`/`playlistsProp`; the rendered lists come
+  // from local state seeded off these so a create/import shows up instantly.
   orgName: string
   orgLogo: string | null
   orgHandle: string
@@ -69,7 +72,6 @@ export function UploadSection({
   liveTab?: "video" | "audio"
   onLiveTabChange?: (t: "video" | "audio") => void
 }) {
-  const router = useRouter()
   const [segmentState, setSegmentState] = useState<Segment>("materials")
   // Controlled when the parent supplies `segment`, else internal state.
   const segment = segmentProp ?? segmentState
@@ -77,7 +79,15 @@ export function UploadSection({
     setSegmentState(s)
     onSegmentChange?.(s)
   }
-  const [, startTransition] = useTransition()
+
+  // The Materials + Playlists lists render from local state seeded off the
+  // server props, so a create/import/add appears the instant its action
+  // confirms — with no full-page refresh, the overlay keeps its scroll and
+  // segment. Genuine navigations still arrive through these prop-sync effects.
+  const [materials, setMaterials] = useState<MaterialView[]>(materialsProp)
+  const [playlists, setPlaylists] = useState<PlaylistView[]>(playlistsProp)
+  useEffect(() => setMaterials(materialsProp), [materialsProp])
+  useEffect(() => setPlaylists(playlistsProp), [playlistsProp])
 
   // Sheet / overlay state.
   const [detail, setDetail] = useState<MaterialView | null>(null)
@@ -94,8 +104,24 @@ export function UploadSection({
   // Create-sub-playlist sheet, parented to the currently open playlist.
   const [subCreateOpen, setSubCreateOpen] = useState(false)
 
+  // Re-read both lists straight from the server after a mutation and swap the
+  // results into local state. This is a targeted data sync, not a route
+  // refresh, so the user stays exactly where they are in the Catalogue.
+  const syncCatalogue = useCallback(async () => {
+    try {
+      const [m, p] = await Promise.all([
+        getOrganizationMaterials(organizationId),
+        getOrganizationPlaylists(organizationId),
+      ])
+      setMaterials(m)
+      setPlaylists(p)
+    } catch {
+      // Non-fatal: keep the current lists if the re-read fails.
+    }
+  }, [organizationId])
+
   function refresh() {
-    startTransition(() => router.refresh())
+    void syncCatalogue()
   }
 
   async function loadPlaylistInto(id: number, path: number[]) {
@@ -470,8 +496,14 @@ export function UploadSection({
               if (!o) setEditingMaterial(null)
             }}
             editing={editingMaterial}
+            onSaved={refresh}
           />
-          <ImportLinksSheet organizationId={organizationId} open={importOpen} onOpenChange={setImportOpen} />
+          <ImportLinksSheet
+            organizationId={organizationId}
+            open={importOpen}
+            onOpenChange={setImportOpen}
+            onImported={refresh}
+          />
           <CreatePlaylistSheet
             open={createOpen || Boolean(editingPlaylist)}
             onOpenChange={(o) => {

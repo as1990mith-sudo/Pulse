@@ -735,7 +735,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
         </AnimatePresence>
       </motion.header>
 
-      {/* ── Participant area ─────────────────────────────────────────────────── */}
+      {/* ── Participant area ────────────────────────��────────────────────────── */}
       <motion.div layout className="relative min-h-0 flex-1">
         {/* Video Project band — a screen share becomes the focused surface at the
             top of the gathering; the participant grid reflows beneath it. */}
@@ -1000,15 +1000,14 @@ export function ConversationVideo(props: ConversationVideoProps) {
         <DockButton label={camOn ? "Turn camera off" : "Turn camera on"} active={camOn} onClick={onToggleCam}>
           {camOn ? <Video /> : <VideoOff />}
         </DockButton>
-        {/* Host/co-host: the Project chooser (screen share OR a synced video)
-            takes the flip-camera slot. Everyone else keeps flip-camera. */}
+        {/* Host/co-host: the screen-share chooser takes the flip-camera slot.
+            Everyone else keeps flip-camera. */}
         {isController ? (
           <ProjectMenu
             canScreenShare={canScreenShare}
             screenShareOn={screenShareOn}
             onToggleScreenShare={() => onToggleScreenShare?.()}
             onSwitchScreenShare={onSwitchScreenShare ? () => onSwitchScreenShare() : undefined}
-            onProjectVideo={() => resources?.openPanel("video")}
             renderTrigger={({ toggle, active }) => (
               <DockButton label="Project or share screen" active={active} onClick={toggle}>
                 <MonitorPlay />

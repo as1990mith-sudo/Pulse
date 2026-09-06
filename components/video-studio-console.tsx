@@ -421,7 +421,7 @@ export function VideoStudioConsole({
 
   // Expose the room's video-audio publishing to the resource system, so the
   // shared-video panel can route its <video> audio into the egress recording.
-  const { registerVideoAudioSink, openPanel } = useLiveResources()
+  const { registerVideoAudioSink } = useLiveResources()
   useEffect(
     () =>
       registerVideoAudioSink({
@@ -1329,14 +1329,13 @@ export function VideoStudioConsole({
               controlsVisible ? "opacity-100" : "pointer-events-none opacity-0",
             )}
           >
-            {/* Project chooser (screen share OR a synced video) takes the
-                flip-camera slot for the broadcasting host. */}
+            {/* Screen-share chooser takes the flip-camera slot for the
+                broadcasting host. */}
             <ProjectMenu
               canScreenShare={canScreenShare}
               screenShareOn={screenShareOn}
               onToggleScreenShare={() => void (screenShareOn ? stopScreenShare() : startScreenShare())}
               onSwitchScreenShare={() => void switchScreenShare()}
-              onProjectVideo={() => openPanel("video")}
               renderTrigger={({ toggle, active }) => (
                 <GlassButton
                   label="Project or share screen"
