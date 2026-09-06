@@ -1169,10 +1169,10 @@ export function useLiveAudio() {
       const musicEl = musicElRef.current
       if (musicEl && musicPlayingRef.current && musicEl.paused) void musicEl.play().catch(() => {})
       // Returning from an OS file picker (or any interruption) can leave the
-      // published mic muted or its underlying track ended on iOS — the room
-      // would then look connected while the person is silent. Re-assert capture
-      // so it self-heals without a manual mute/unmute, then re-apply the chosen
-      // output route.
+      // published mic muted or its underlying track ended on BOTH iOS and
+      // Android — the room would then look connected while the person is silent.
+      // Re-assert capture so it self-heals without a manual mute/unmute, then
+      // re-apply the chosen output route.
       if (room.localParticipant.isMicrophoneEnabled) {
         const pub = room.localParticipant.getTrackPublication(Track.Source.Microphone)
         const track = pub?.track instanceof LocalAudioTrack ? pub.track : null

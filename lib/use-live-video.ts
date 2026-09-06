@@ -1685,9 +1685,9 @@ export function useLiveVideo({
       const musicEl = musicElRef.current
       if (musicEl?.src && musicEl.paused) void musicEl.play().catch(() => {})
       // Returning from an OS file picker / interruption can leave the published
-      // mic muted or its underlying track ended on iOS — the person then looks
-      // connected but is silent. Re-publish so it self-heals, then re-apply the
-      // chosen output route.
+      // mic muted or its underlying track ended on BOTH iOS and Android — the
+      // person then looks connected but is silent. Re-publish so it self-heals,
+      // then re-apply the chosen output route.
       if (room.localParticipant.isMicrophoneEnabled) {
         const pub = room.localParticipant.getTrackPublication(Track.Source.Microphone)
         const track = pub?.track instanceof LocalAudioTrack ? pub.track : null
