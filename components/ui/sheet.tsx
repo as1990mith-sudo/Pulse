@@ -38,6 +38,7 @@ function SheetOverlay({ className, ...props }: SheetPrimitive.Backdrop.Props) {
 
 function SheetContent({
   className,
+  overlayClassName,
   children,
   side = "right",
   showCloseButton = true,
@@ -45,10 +46,14 @@ function SheetContent({
 }: SheetPrimitive.Popup.Props & {
   side?: "top" | "right" | "bottom" | "left"
   showCloseButton?: boolean
+  // Lets a caller raise the backdrop's z-index in lockstep with the popup when
+  // the sheet is opened from inside a high z-index immersive surface (e.g. a
+  // live meeting at z-60), so both clear that surface instead of hiding behind it.
+  overlayClassName?: string
 }) {
   return (
     <SheetPortal>
-      <SheetOverlay />
+      <SheetOverlay className={overlayClassName} />
       <SheetPrimitive.Popup
         data-slot="sheet-content"
         data-side={side}

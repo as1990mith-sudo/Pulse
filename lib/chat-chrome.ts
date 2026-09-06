@@ -42,6 +42,7 @@ export function useChatChromeHidden() {
 const HIDE_DELTA = 12 // px of sustained downward travel before hiding
 const REVEAL_DELTA = 12 // px of upward travel before revealing (direction-change debounce)
 const TOP_ZONE = 8 // always reveal within this many px of the top
+const BOTTOM_ZONE = 28 // freeze the chrome state within this many px of the end
 
 /**
  * Returns an `onScroll` handler to attach to a chat's inner scroll container.
@@ -66,7 +67,9 @@ export function useAutoHideChatChrome() {
 
   return useCallback((event: React.UIEvent<HTMLElement>) => {
     // Capture synchronously — the event target is not valid inside rAF.
-    const y = event.currentTarget.scrollTop
+    const el = event.currentTarget
+    const y = el.scrollTop
+    const maxScroll = el.scrollHeight - el.clientHeight
     if (frame.current) return
     frame.current = requestAnimationFrame(() => {
       frame.current = 0
@@ -77,6 +80,16 @@ export function useAutoHideChatChrome() {
         setChatChromeHidden(false)
         lastY.current = y
         dir.current = 0
+        return
+      }
+
+      // At the very bottom, freeze the current chrome state. Mobile overscroll
+      // (rubber-band) bounce makes scrollTop oscillate by a few px at the end
+      // of the list, which would otherwise flip the header/floating-"+" hide
+      // state on and off repeatedly — the flicker seen when a feed is scrolled
+      // all the way down. Re-anchor and leave the chrome exactly as it is.
+      if (maxScroll > 0 && maxScroll - y <= BOTTOM_ZONE) {
+        lastY.current = y
         return
       }
 

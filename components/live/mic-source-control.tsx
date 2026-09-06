@@ -60,7 +60,13 @@ export function MicSourceSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-3xl border-white/10 bg-zinc-900/95 text-white backdrop-blur-xl">
+      <SheetContent
+        side="bottom"
+        // z-[80] clears the live-meeting surfaces (z-60) this sheet is opened
+        // from, matching the audio-output sheet; overlay raised in lockstep.
+        className="z-[80] rounded-t-3xl border-white/10 bg-zinc-900/95 text-white backdrop-blur-xl"
+        overlayClassName="z-[80]"
+      >
         <SheetHeader className="px-4">
           <SheetTitle className="text-white">Microphone</SheetTitle>
         </SheetHeader>
