@@ -54,6 +54,7 @@ import { BackExitMenu } from "@/components/live-back-menu"
 import { SaveEpisodePrompt } from "@/components/live/save-episode-prompt"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { useLivePresence } from "@/lib/use-live-presence"
+import { useMeetingDurationWarnings } from "@/lib/use-meeting-duration-warnings"
 import { ShareSheet } from "@/components/share-sheet"
 import { ConversationVideo } from "@/components/conversation/conversation-video"
 import { LiveSetupSheet } from "@/components/live/live-setup-sheet"
@@ -420,7 +421,7 @@ export function VideoStudioConsole({
 
   // Expose the room's video-audio publishing to the resource system, so the
   // shared-video panel can route its <video> audio into the egress recording.
-  const { registerVideoAudioSink, openPanel } = useLiveResources()
+  const { registerVideoAudioSink } = useLiveResources()
   useEffect(
     () =>
       registerVideoAudioSink({
@@ -565,6 +566,9 @@ export function VideoStudioConsole({
     { refreshInterval: 2500 },
   )
   const pending = callState?.pendingRequests ?? []
+
+  // Host-only wrap-up warnings before the 4h max-duration cap (server-clocked).
+  useMeetingDurationWarnings({ isHost: callState?.myRole === "host", remainingMs: callState?.remainingMs })
 
   // Guest call-in section toggle (host-controlled). Kept in local state for
   // instant UI feedback and reconciled with the polled server value.
@@ -1325,14 +1329,13 @@ export function VideoStudioConsole({
               controlsVisible ? "opacity-100" : "pointer-events-none opacity-0",
             )}
           >
-            {/* Project chooser (screen share OR a synced video) takes the
-                flip-camera slot for the broadcasting host. */}
+            {/* Screen-share chooser takes the flip-camera slot for the
+                broadcasting host. */}
             <ProjectMenu
               canScreenShare={canScreenShare}
               screenShareOn={screenShareOn}
               onToggleScreenShare={() => void (screenShareOn ? stopScreenShare() : startScreenShare())}
               onSwitchScreenShare={() => void switchScreenShare()}
-              onProjectVideo={() => openPanel("video")}
               renderTrigger={({ toggle, active }) => (
                 <GlassButton
                   label="Project or share screen"

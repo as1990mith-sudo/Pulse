@@ -14,5 +14,9 @@ export type PinnedResourceView = {
   url: string | null
   refId: string | null
   meta: Record<string, unknown> | null
+  // Whether this row appears in the "Pinned Resources" quick-access list.
+  // Documents (kind "pdf") default to false so they aren't duplicated out of the
+  // PDF/Document panel; a host can explicitly flip it on the same row.
+  pinned: boolean
   createdAt: string
 }

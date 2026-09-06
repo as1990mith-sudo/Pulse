@@ -11,7 +11,7 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState } fro
 import type { CurrentUser } from "@/lib/session"
 import type { LiveChatMessageMeta } from "@/app/actions/live"
 
-export type ResourcePanelId = "bible" | "notes" | "pdf" | "books" | "pinned" | "video"
+export type ResourcePanelId = "bible" | "notes" | "pdf" | "books" | "pinned"
 
 // Optional payload handed to a panel when it opens (e.g. open the PDF panel on a
 // specific document, or the Bible panel on a specific verse).
@@ -123,9 +123,9 @@ export function ResourceProvider({
   const closeDrawer = useCallback(() => setDrawerOpen(false), [])
 
   const openPanel = useCallback((id: ResourcePanelId, p: PanelPayload = null) => {
-    // While locked, the only permissible target is the video panel itself;
-    // switching to any other resource is blocked.
-    if (lockedRef.current && id !== "video") return
+    // Locking is retained for safety but is inert now that the shared-video
+    // resource has been removed (nothing ever sets videoLocked true).
+    if (lockedRef.current) return
     setPayload(p)
     setActivePanel(id)
     setDrawerOpen(false)

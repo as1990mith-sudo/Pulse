@@ -67,6 +67,7 @@ import { MarqueeTitle } from "@/components/marquee-title"
 import { ShareSheet } from "@/components/share-sheet"
 import type { ShareTarget } from "@/lib/share-types"
 import { LiveStage, MAX_GUESTS, QualityIcon } from "@/components/live-stage"
+import { useMeetingDurationWarnings } from "@/lib/use-meeting-duration-warnings"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { useLivePresence } from "@/lib/use-live-presence"
 import { LIVE_THEMES, liveThemeStyle, isLiveImageTheme } from "@/lib/live-themes"
@@ -390,6 +391,9 @@ export function StudioConsole({
   const pending = callState?.pendingRequests ?? []
   const guests = callState?.guests ?? []
   const locked = callState?.locked ?? false
+
+  // Host-only wrap-up warnings before the 4h max-duration cap (server-clocked).
+  useMeetingDurationWarnings({ isHost: callState?.myRole === "host", remainingMs: callState?.remainingMs })
 
   // Co-host state from the poll. `coHosts` includes everyone granted co-host
   // status (on the call or off it) so the host can manage them all.
@@ -880,8 +884,11 @@ export function StudioConsole({
           </div>
         )}
 
-        {/* Speaker stage — unified 4-col grid (host first, then guests) */}
-        <div className="relative shrink-0 border-b border-white/10 bg-zinc-950/30 px-4 py-2 backdrop-blur-xl sm:px-6">
+                {/* Speaker stage — unified 4-col grid (host first, then guests).
+                    Background is fully transparent (no fill / no backdrop-blur)
+                    to match the guest/listener stage; the frosted "mirror" look
+                    was removed per design. */}
+                <div className="relative shrink-0 border-b border-white/10 px-4 py-2 sm:px-6">
           {/* Status row only appears when there's something to flag, so an idle
               room gives all its vertical space to the call-in slots & chat. */}
           {(locked || pending.length > 0) && (
@@ -906,6 +913,7 @@ export function StudioConsole({
             isHost
             hostMuted={!micOn}
             coHostIds={coHostIds}
+            actingHostId={callState?.actingHostId ?? null}
             onRemoveGuest={dropGuest}
             onTapSpeaker={openSpeakerMenu}
           />
@@ -1712,47 +1720,48 @@ export function MusicPanel({
           </div>
         )}
 
-        {/* ── Duck under speech (host choice) ──
-            Only rendered for consoles that mix live speech with music. When on,
-            the music automatically dips while anyone is speaking so voices stay
-            clean; when off, music holds at the set volume the whole time. */}
-        {onToggleDuck && (
-          <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-secondary/40 p-3.5">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-background text-primary ring-1 ring-inset ring-border/60">
-              <AudioLines className="size-4" strokeWidth={2.5} />
-            </span>
-            <label htmlFor="music-duck" className="min-w-0 flex-1 cursor-pointer">
-              <span className="block text-sm font-semibold text-foreground">Lower music under speech</span>
-              <span className="block text-[11px] leading-tight text-muted-foreground">
-                Dips the music while someone is talking, then restores it
-              </span>
-            </label>
-            <Switch id="music-duck" checked={duck ?? false} onCheckedChange={(next) => onToggleDuck(next)} />
-          </div>
-        )}
-
-        {/* ── Headphones mode (host choice) ──
-            While the mic is open with echo cancellation, phones force Bluetooth
-            headphones into the low-quality call profile, muffling the host's own
-            music monitor. When the host confirms they're on headphones there's no
-            speaker bleed to cancel, so we drop the voice DSP and Bluetooth stays
-            on high-quality output. Listeners are unaffected either way. */}
-        {onToggleHeadphones && (
-          <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-secondary/40 p-3.5">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-background text-primary ring-1 ring-inset ring-border/60">
-              <Headphones className="size-4" strokeWidth={2.5} />
-            </span>
-            <label htmlFor="music-headphones" className="min-w-0 flex-1 cursor-pointer">
-              <span className="block text-sm font-semibold text-foreground">I&apos;m on headphones</span>
-              <span className="block text-[11px] leading-tight text-muted-foreground">
-                Improves music quality in your ears. Turn off if you hear an echo.
-              </span>
-            </label>
-            <Switch
-              id="music-headphones"
-              checked={headphoneMode ?? false}
-              onCheckedChange={(next) => onToggleHeadphones(next)}
-            />
+        {/* ── Audio options (host choices) ──
+            Both toggles now share ONE compact card (a divided list) instead of a
+            card each. Descriptions were removed for a tighter, premium row.
+            • Duck under speech: dips the music while anyone speaks so voices stay
+              clean; off holds music at the set volume.
+            • Headphones mode: when the host confirms headphones, there's no
+              speaker bleed to cancel, so we drop the voice DSP and Bluetooth
+              stays on high-quality output. Listeners are unaffected either way. */}
+        {(onToggleDuck || onToggleHeadphones) && (
+          <div className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/60 bg-secondary/40">
+            {onToggleDuck && (
+              <div className="flex items-center gap-3 px-3.5 py-2.5">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-background text-primary ring-1 ring-inset ring-border/60">
+                  <AudioLines className="size-4" strokeWidth={2.5} />
+                </span>
+                <label
+                  htmlFor="music-duck"
+                  className="min-w-0 flex-1 cursor-pointer text-sm font-semibold text-foreground"
+                >
+                  Lower music under speech
+                </label>
+                <Switch id="music-duck" checked={duck ?? false} onCheckedChange={(next) => onToggleDuck(next)} />
+              </div>
+            )}
+            {onToggleHeadphones && (
+              <div className="flex items-center gap-3 px-3.5 py-2.5">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-background text-primary ring-1 ring-inset ring-border/60">
+                  <Headphones className="size-4" strokeWidth={2.5} />
+                </span>
+                <label
+                  htmlFor="music-headphones"
+                  className="min-w-0 flex-1 cursor-pointer text-sm font-semibold text-foreground"
+                >
+                  I&apos;m on headphones
+                </label>
+                <Switch
+                  id="music-headphones"
+                  checked={headphoneMode ?? false}
+                  onCheckedChange={(next) => onToggleHeadphones(next)}
+                />
+              </div>
+            )}
           </div>
         )}
 

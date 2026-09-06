@@ -94,6 +94,7 @@ export function CoHostConsole({
   pending,
   guests,
   coHostIds,
+  actingHostId = null,
   viewers,
   locked,
   theme,
@@ -113,6 +114,7 @@ export function CoHostConsole({
   pending: CallRequestView[]
   guests: CallRequestView[]
   coHostIds: Set<string>
+  actingHostId?: string | null
   viewers: number
   locked: boolean
   theme: string
@@ -430,6 +432,7 @@ export function CoHostConsole({
             hostColorById={colorById}
             isHost={false}
             coHostIds={coHostIds}
+            actingHostId={actingHostId}
           />
         </div>
 

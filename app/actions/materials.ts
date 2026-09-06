@@ -502,6 +502,57 @@ async function buildPlaylistViews(
     childCounts.set(c.parentId, (childCounts.get(c.parentId) ?? 0) + 1)
   }
 
+  // Backfill collages from nested sub-playlists. A playlist that holds no direct
+  // materials (or fewer than four covers) — e.g. one that only groups
+  // sub-playlists — would otherwise render an empty placeholder. Walk its whole
+  // descendant tree so its thumbnail still shows real material covers pulled
+  // from materials living inside its sub-playlists. Done with grouped BFS
+  // queries (one per depth level) rather than per-playlist to avoid an N+1.
+  const needy = lists.filter((l) => (byList.get(l.id)?.covers.length ?? 0) < 4)
+  if (needy.length > 0) {
+    // Map every descendant playlist id → the needy ancestor it rolls up to.
+    // Roots map to themselves; the guard doubles as a cycle breaker.
+    const rootOf = new Map<number, number>()
+    for (const l of needy) rootOf.set(l.id, l.id)
+    let frontier = needy.map((l) => l.id)
+    while (frontier.length > 0) {
+      const kids = await db
+        .select({ id: playlist.id, parentId: playlist.parentId })
+        .from(playlist)
+        .where(and(eq(playlist.organizationId, orgId), inArray(playlist.parentId, frontier)))
+      const next: number[] = []
+      for (const k of kids) {
+        if (k.parentId == null || rootOf.has(k.id)) continue
+        const root = rootOf.get(k.parentId)
+        if (root == null) continue
+        rootOf.set(k.id, root)
+        next.push(k.id)
+      }
+      frontier = next
+    }
+
+    const descendantIds = [...rootOf.entries()].filter(([id, root]) => id !== root).map(([id]) => id)
+    if (descendantIds.length > 0) {
+      const subJoins = await db
+        .select({
+          playlistId: playlistMaterial.playlistId,
+          cover: catalogueItem.cover,
+        })
+        .from(playlistMaterial)
+        .innerJoin(catalogueItem, eq(playlistMaterial.materialId, catalogueItem.id))
+        .where(inArray(playlistMaterial.playlistId, descendantIds))
+        .orderBy(asc(playlistMaterial.playlistId), asc(playlistMaterial.position))
+      for (const j of subJoins) {
+        if (!j.cover) continue
+        const root = rootOf.get(j.playlistId)
+        if (root == null) continue
+        const agg = byList.get(root)
+        if (!agg || agg.covers.length >= 4 || agg.covers.includes(j.cover)) continue
+        agg.covers.push(j.cover)
+      }
+    }
+  }
+
   return lists.map((l) => {
     const agg = byList.get(l.id) ?? { covers: [], seconds: 0, count: 0 }
     return {

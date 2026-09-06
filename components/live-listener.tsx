@@ -48,7 +48,6 @@ import { LiveJoinGate } from "@/components/live-join-gate"
 import { getOrCreateConversation } from "@/app/actions/dm"
 import { useLiveAudio } from "@/lib/use-live-audio"
 import { useLivePresence } from "@/lib/use-live-presence"
-import { LiveBadge } from "@/components/live-badge"
 import { LiveStage, QualityIcon } from "@/components/live-stage"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { liveThemeStyle, isLiveImageTheme } from "@/lib/live-themes"
@@ -245,6 +244,8 @@ export function LiveListener({
   const [pendingRequests, setPendingRequests] = useState<CallRequestView[]>([])
   const [guests, setGuests] = useState<CallRequestView[]>([])
   const [coHostIds, setCoHostIds] = useState<Set<string>>(new Set())
+  // The guest temporarily acting as host after a host drop (Audio Podcast).
+  const [actingHostId, setActingHostId] = useState<string | null>(null)
   // Begin capturing as soon as this co-host is publishing, so a save is possible
   // later without asking them to opt in mid-show. Recording stays local until
   // they explicitly choose "Save" on the post-end prompt; declining discards it.
@@ -394,6 +395,7 @@ export function LiveListener({
       setPendingRequests(s.pendingRequests)
       setGuests(s.guests)
       setCoHostIds(new Set(s.coHosts.map((c) => c.userId)))
+      setActingHostId(s.actingHostId)
       // Flash a "declined" toast when status transitions to declined.
       if (s.myStatus === "declined" && prevStatus.current && prevStatus.current !== "declined") {
         setDeclinedFlash(true)
@@ -486,6 +488,7 @@ export function LiveListener({
       setPendingRequests(s.pendingRequests)
       setGuests(s.guests)
       setCoHostIds(new Set(s.coHosts.map((c) => c.userId)))
+      setActingHostId(s.actingHostId)
     } catch {
       // poll will catch up on its next tick
     }
@@ -508,6 +511,7 @@ export function LiveListener({
         pending={pendingRequests}
         guests={guests}
         coHostIds={coHostIds}
+        actingHostId={actingHostId}
         viewers={audience}
         locked={locked}
         theme={theme}
@@ -669,11 +673,10 @@ export function LiveListener({
 
         <div className="relative min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            {/* Podcast Audio: a listener follows the host straight from the header,
-                so the LIVE pill is replaced by a compact follow toggle. The host
-                previewing their own session can't follow themselves, so they keep
-                the LIVE badge. */}
-            {currentUser && !isSelfHost ? (
+            {/* Podcast Audio: a listener follows the host straight from the
+                header. The "LIVE" label has been removed — the signal-strength
+                indicator now occupies that leading space instead. */}
+            {currentUser && !isSelfHost && (
               <button
                 type="button"
                 onClick={() => void handleToggleFollow()}
@@ -688,8 +691,6 @@ export function LiveListener({
               >
                 {following ? <UserCheck className="size-3" /> : <UserPlus className="size-3" />}
               </button>
-            ) : (
-              <LiveBadge />
             )}
             {state.connected && (
               <span className="flex items-center gap-1 text-[11px] font-medium text-white/60">
@@ -700,12 +701,12 @@ export function LiveListener({
           </div>
           <MarqueeTitle
             text={stream.title}
-            className="mt-0.5 text-base font-bold leading-tight tracking-tight text-white"
+            className="mt-0.5 text-base font-bold uppercase leading-tight tracking-tight text-white"
           />
           <p className="truncate text-xs font-medium text-white/70">with {stream.hostName}</p>
         </div>
 
-        <div className="relative flex shrink-0 flex-col items-end gap-1">
+        <div className="relative flex shrink-0 flex-col items-center gap-1">
           <LiveAudienceSheet count={presenceCount || audience} members={presenceMembers} immersive />
           {state.connected && (
             <span className="font-mono text-[11px] tabular-nums text-white/50">{formatElapsed(elapsed)}</span>
@@ -725,6 +726,7 @@ export function LiveListener({
             activeSpeakers={state.activeSpeakers}
             hostColorById={colorById}
             isHost={false}
+            actingHostId={actingHostId}
             canRequestCall={canListen && !isOnStage && !locked && myStatus !== "pending"}
             callPending={myStatus === "pending"}
             hostFollow={{

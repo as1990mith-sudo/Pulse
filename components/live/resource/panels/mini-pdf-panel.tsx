@@ -2,10 +2,10 @@
 
 import { useRef, useState } from "react"
 import useSWR from "swr"
-import { Download, FileText, Loader2, Bookmark, Upload, Trash2 } from "lucide-react"
+import { Download, FileText, Loader2, Bookmark, BookmarkCheck, Upload, Trash2 } from "lucide-react"
 import { PdfViewer } from "@/components/library/pdf-viewer"
 import { useLiveResources } from "@/components/live/resource/resource-context"
-import { getPinnedResources, pinResource, unpinResource } from "@/app/actions/pinned-resources"
+import { getPinnedResources, pinResource, unpinResource, setResourcePinned } from "@/app/actions/pinned-resources"
 import { uploadMedia } from "@/lib/upload-media"
 
 /**
@@ -23,8 +23,10 @@ export function MiniPdfPanel() {
   const roomName = descriptor?.roomName ?? null
   const isHost = Boolean(descriptor?.isHost)
 
+  // Shares the "room-pins" SWR cache with the Pinned panel, so pinning or
+  // unpinning a document here updates both lists without a manual refresh.
   const { data, isLoading, mutate } = useSWR(
-    roomName ? ["room-pins-pdf", roomName] : null,
+    roomName ? ["room-pins", roomName] : null,
     () => getPinnedResources(roomName as string),
     { revalidateOnFocus: false },
   )
@@ -70,6 +72,15 @@ export function MiniPdfPanel() {
   async function handleRemove(id: number) {
     if (!roomName) return
     await unpinResource(id, roomName)
+    await mutate()
+  }
+
+  // Toggle whether this document also appears in the room's "Pinned Resources"
+  // quick-access list. This flips a flag on the SAME record — it never creates a
+  // second copy — so the pinned entry is a reference to this document.
+  async function togglePinned(id: number, next: boolean) {
+    if (!roomName) return
+    await setResourcePinned(id, roomName, next)
     await mutate()
   }
 
@@ -161,17 +172,34 @@ export function MiniPdfPanel() {
                     <span className="block truncate text-sm font-medium text-white">{p.title}</span>
                     {p.subtitle && <span className="block truncate text-xs text-white/40">{p.subtitle}</span>}
                   </span>
-                  <Bookmark className="size-4 shrink-0 text-white/25" />
+                  {p.pinned ? (
+                    <BookmarkCheck className="size-4 shrink-0 text-primary" />
+                  ) : (
+                    <Bookmark className="size-4 shrink-0 text-white/25" />
+                  )}
                 </button>
                 {isHost && (
-                  <button
-                    type="button"
-                    onClick={() => void handleRemove(p.id)}
-                    aria-label={`Remove ${p.title}`}
-                    className="flex size-9 shrink-0 items-center justify-center rounded-full text-white/40 transition-colors hover:bg-white/10 hover:text-destructive"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => void togglePinned(p.id, !p.pinned)}
+                      aria-label={p.pinned ? `Remove ${p.title} from pinned resources` : `Pin ${p.title} to pinned resources`}
+                      aria-pressed={p.pinned}
+                      className={`flex size-9 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-white/10 ${
+                        p.pinned ? "text-primary" : "text-white/40 hover:text-white"
+                      }`}
+                    >
+                      {p.pinned ? <BookmarkCheck className="size-4" /> : <Bookmark className="size-4" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleRemove(p.id)}
+                      aria-label={`Remove ${p.title}`}
+                      className="flex size-9 shrink-0 items-center justify-center rounded-full text-white/40 transition-colors hover:bg-white/10 hover:text-destructive"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </>
                 )}
               </li>
             ))}

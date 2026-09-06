@@ -17,7 +17,6 @@ import {
   Minus,
   NotebookPen,
   Pin,
-  Video,
   X,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
@@ -28,7 +27,6 @@ const SWITCHER: { id: ResourcePanelId; icon: LucideIcon; label: string }[] = [
   { id: "bible", icon: BookOpen, label: "Bible" },
   { id: "notes", icon: NotebookPen, label: "Notes" },
   { id: "pdf", icon: FileText, label: "PDFs" },
-  { id: "video", icon: Video, label: "Video" },
   { id: "pinned", icon: Pin, label: "Pinned" },
 ]
 
@@ -50,10 +48,8 @@ export function MiniPanelShell({
   // Ref to the layer element, so the panel can't be dragged off-screen.
   constraintsRef: React.RefObject<HTMLDivElement | null>
 }) {
-  const { activePanel, openPanel, closePanel, openDrawer, videoLocked, descriptor } = useLiveResources()
-  // The shared-video resource only exists on the audio surfaces (podcast &
-  // audio conversation); video broadcast/conversation already show video.
-  const switcher = SWITCHER.filter((s) => s.id !== "video" || descriptor?.mode === "audio")
+  const { activePanel, openPanel, closePanel, openDrawer, videoLocked } = useLiveResources()
+  const switcher = SWITCHER
   const dragControls = useDragControls()
   const panelRef = useRef<HTMLDivElement>(null)
   // "Expand" grows the floating card ~20% larger (both height and width) so more

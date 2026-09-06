@@ -46,6 +46,7 @@ import { useLiveResourcesOptional } from "@/components/live/resource/resource-co
 import { ConversationThemeSheet } from "@/components/conversation/conversation-theme-sheet"
 import { useLiveAudio } from "@/lib/use-live-audio"
 import { useLivePresence } from "@/lib/use-live-presence"
+import { useMeetingDurationWarnings } from "@/lib/use-meeting-duration-warnings"
 import { AudioOutputSheet, audioRouteIcon } from "@/components/live/audio-output-control"
 import { MicSourceSheet } from "@/components/live/mic-source-control"
 import { useAudioOutput } from "@/lib/audio-output"
@@ -380,6 +381,8 @@ export function ConversationRoom({
   // ── Shared room state (pin, lock, ended) ─────────────────────────────────
   const [pinnedId, setPinnedId] = useState<string | null>(streamData?.gridPinnedId ?? null)
   const [locked, setLocked] = useState<boolean>(streamData?.locked ?? false)
+  // Server-clocked time left before the 4h max-duration cap, for host warnings.
+  const [remainingMs, setRemainingMs] = useState<number | null>(null)
   const [theme, setThemeState] = useState<string>(streamData?.theme ?? "default")
   const [ended, setEnded] = useState(false)
   const [hostEnded, setHostEnded] = useState(false)
@@ -404,12 +407,14 @@ export function ConversationRoom({
   const [themeOpen, setThemeOpen] = useState(false)
 
   // Host heartbeat: while the room is live, the host pings every 20s so the
-  // stream's lastSeenAt stays fresh and the 60s stale-stream sweep never
-  // auto-ends a conversation the host didn't end himself (which previously
-  // kicked every participant out abruptly). Only the host pings —
-  // heartbeatBroadcast only refreshes the host's own row — and we deliberately
-  // do NOT act on a transient `ended` response so the host is never silently
-  // dropped; the next ping re-marks the stream live.
+  // stream's lastSeenAt stays fresh. A brief blip is absorbed by the 90s grace
+  // in reconcileLiveSessions (server-side), and a genuine drop keeps the room
+  // alive for a 10-min recovery window as long as participants remain — so the
+  // sweep never auto-ends a conversation the host didn't end himself (which
+  // previously kicked every participant out abruptly). Only the host pings —
+  // heartbeatBroadcast only refreshes the host's own row (and, on return, clears
+  // the disconnection flags) — and we deliberately do NOT act on a transient
+  // `ended` response so the host is never silently dropped.
   useEffect(() => {
     if (!isHost || !roomName || !live) return
     let cancelled = false
@@ -442,6 +447,7 @@ export function ConversationRoom({
         }
         setPinnedId(s.pinnedId)
         setLocked(s.locked)
+        setRemainingMs(s.remainingMs)
         // Participants follow the host's theme; the host keeps their own local
         // (snappy) value so a stale poll never reverts a just-made change.
         if (!isHost) setThemeState(s.theme)
@@ -458,6 +464,9 @@ export function ConversationRoom({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomName, live])
 
+
+  // Host-only wrap-up warnings before the 4h max-duration cap (server-clocked).
+  useMeetingDurationWarnings({ isHost, remainingMs })
 
   // ── Chat (for floating messages when the panel is closed) ────────────────
   const { data: chatMessages = [] } = useSWR<LiveChatMessageView[]>(

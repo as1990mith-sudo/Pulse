@@ -18,7 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { SourceBadge, PlayGlyph, Collage } from "./upload-primitives"
+import { SourceBadge, PlayGlyph } from "./upload-primitives"
 import { AddMaterialsSheet } from "./add-materials-sheet"
 import { PlaylistCard } from "./playlist-card"
 
@@ -125,8 +125,6 @@ export function PlaylistEditor({
     }
   }
 
-  const covers = items.map((m) => m.cover).filter((c): c is string => Boolean(c))
-
   return (
     <div className="space-y-5">
       {/* Back to the Upload grid */}
@@ -140,14 +138,7 @@ export function PlaylistEditor({
       </button>
 
       {/* Playlist header */}
-      <div className="flex gap-4">
-        {p.cover ? (
-          <div className="relative aspect-square w-28 shrink-0 overflow-hidden rounded-2xl border border-border bg-secondary sm:w-36">
-            <Image src={p.cover || "/placeholder.svg"} alt="" fill sizes="144px" className="object-cover" />
-          </div>
-        ) : (
-          <Collage covers={covers} className="aspect-square w-28 shrink-0 sm:w-36" />
-        )}
+      <div className="flex">
         <div className="flex min-w-0 flex-1 flex-col">
           <h1 className="font-display text-xl font-semibold leading-tight tracking-tight text-balance sm:text-2xl">
             {p.name}

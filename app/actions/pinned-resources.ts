@@ -41,6 +41,13 @@ export async function pinResource(input: {
   url?: string | null
   refId?: string | null
   meta?: Record<string, unknown> | null
+  /**
+   * Whether the row joins the "Pinned Resources" quick-access list. Defaults to
+   * false for uploaded documents (kind "pdf") so they live only in the dedicated
+   * PDF/Document panel, and true for everything else (notes, images, verses…),
+   * which is created directly as a pin.
+   */
+  pinned?: boolean
 }): Promise<{ ok: boolean; resource: PinnedResourceView | null }> {
   const userId = await getUserId()
   if (!userId) return { ok: false, resource: null }
@@ -58,10 +65,33 @@ export async function pinResource(input: {
       url: input.url ?? null,
       refId: input.refId ?? null,
       meta: input.meta ?? null,
+      pinned: input.pinned ?? input.kind !== "pdf",
     })
     .returning()
 
   return { ok: true, resource: toView(row) }
+}
+
+/**
+ * Flips a document's quick-access pin without touching the underlying record.
+ * Pinning a PDF makes it appear in the Pinned Resources list as a reference to
+ * the SAME document row; unpinning removes it from that list but leaves it in
+ * the PDF/Document panel. Host-gated like every other pin mutation.
+ */
+export async function setResourcePinned(
+  id: number,
+  roomName: string,
+  pinned: boolean,
+): Promise<{ ok: boolean }> {
+  const userId = await getUserId()
+  if (!userId) return { ok: false }
+  if (!(await isRoomHost(roomName, userId))) return { ok: false }
+
+  await db
+    .update(pinnedResource)
+    .set({ pinned })
+    .where(and(eq(pinnedResource.id, id), eq(pinnedResource.roomName, roomName)))
+  return { ok: true }
 }
 
 export async function unpinResource(id: number, roomName: string): Promise<{ ok: boolean }> {
@@ -92,6 +122,7 @@ function toView(row: typeof pinnedResource.$inferSelect): PinnedResourceView {
     url: row.url,
     refId: row.refId,
     meta: (row.meta as Record<string, unknown> | null) ?? null,
+    pinned: row.pinned,
     createdAt: (row.createdAt ?? new Date()).toISOString(),
   }
 }

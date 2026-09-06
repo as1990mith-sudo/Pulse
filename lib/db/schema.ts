@@ -921,6 +921,18 @@ export const liveStream = pgTable("live_stream", {
   // session. (Pass B replaces the earlier host-membership heuristic with this
   // explicit column so scoping is exact and never leaks across organisations.)
   homeId: text("homeId"),
+  // ── Host-disconnection continuity ─────────────────────────────────────────
+  // Set the first moment the host's heartbeat breaches the 90s grace WHILE
+  // participants remain; the basis for the 10-min recovery deadline (non-podcast
+  // types). Null whenever the host is present — cleared as soon as the host's
+  // heartbeat resumes. A brief blip that recovers within grace never sets it, so
+  // it never triggers a handoff or premature end.
+  hostDisconnectedAt: timestamp("hostDisconnectedAt"),
+  // Audio Podcast only: the called-in guest TEMPORARILY promoted to co-host when
+  // the host genuinely drops, retained so the promotion can be reverted the
+  // moment the host returns. This is never the meeting owner — hostId is left
+  // untouched — and doubles as the "ACTING HOST" UI flag. Null = no temp host.
+  actingHostId: text("actingHostId"),
 })
 
 // Call-in requests (listener -> host) and invites (host -> listener) for a live
@@ -1469,6 +1481,13 @@ export const pinnedResource = pgTable("pinned_resource", {
   url: text("url"),
   refId: text("refId"),
   meta: jsonb("meta"),
+  // Whether this row shows in the room's "Pinned Resources" quick-access list.
+  // Uploaded documents (kind "pdf") live in the dedicated PDF/Document panel and
+  // default to NOT pinned, so they are never auto-duplicated into Pinned. A host
+  // can explicitly pin one, which flips THIS flag on the same row (never a copy),
+  // so the pinned entry references the existing document. Every other kind is
+  // created directly as a pin and defaults to true.
+  pinned: boolean("pinned").notNull().default(true),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
 

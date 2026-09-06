@@ -1,21 +1,18 @@
 "use client"
 
-// The host's "Project" chooser, shared by the Video Broadcast and Video
+// The host's screen-share chooser, shared by the Video Broadcast and Video
 // Conversation control docks. It replaces the old flip-camera control and opens
-// a small popover with the two ways a host can put something on the stage:
+// a small popover for the one way a host can put something on the stage:
 //
 //   • Share screen  — LiveKit screen capture (desktop / browsers that expose
 //                     getDisplayMedia). Hidden as unavailable elsewhere.
-//   • Project a video — the synced live_video_state playback (upload or link),
-//                     which works on every device, reusing the resource "video"
-//                     panel that the audio surfaces already use.
 //
 // The trigger is supplied by each dock via `renderTrigger` so it keeps that
 // surface's native button styling (GlassButton vs DockButton); this component
 // only owns the menu, its open/close state, and outside-click dismissal.
 
 import { useEffect, useRef, useState } from "react"
-import { Film, MonitorUp, MonitorX, MonitorSmartphone } from "lucide-react"
+import { MonitorUp, MonitorX, MonitorSmartphone } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -24,7 +21,6 @@ export function ProjectMenu({
   screenShareOn,
   onToggleScreenShare,
   onSwitchScreenShare,
-  onProjectVideo,
   renderTrigger,
 }: {
   canScreenShare: boolean
@@ -34,7 +30,6 @@ export function ProjectMenu({
   // picker). When provided and a share is live, the menu splits into an explicit
   // "Share another screen" + "Stop sharing screen" pair for easy management.
   onSwitchScreenShare?: () => void
-  onProjectVideo: () => void
   renderTrigger: (args: { toggle: () => void; open: boolean; active: boolean }) => React.ReactNode
 }) {
   const [open, setOpen] = useState(false)
@@ -97,12 +92,6 @@ export function ProjectMenu({
               onClick={() => choose(onToggleScreenShare)}
             />
           )}
-          <MenuItem
-            icon={Film}
-            title="Project a video"
-            subtitle="Upload or paste a link — synced to everyone"
-            onClick={() => choose(onProjectVideo)}
-          />
         </div>
       )}
     </div>
