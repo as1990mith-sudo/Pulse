@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import useSWR from "swr"
-import { ArrowLeft, ChevronDown, Loader2, Send, Share2 } from "lucide-react"
+import { ArrowLeft, Loader2, Send, Share2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ShareSheet } from "@/components/share-sheet"
@@ -26,7 +26,7 @@ import { FeedVideo } from "@/components/feed-video"
 import { CommunityMediaViewer } from "@/components/community-media-viewer"
 import { setImmersiveViewerOpen } from "@/lib/video-handoff"
 import { useMiniChat } from "@/components/mini-chat"
-import { BibleChips, FeedPostImage, LikeButton, PostIdentity, SaveButton, ANON_AVATAR } from "@/components/community-help-shared"
+import { BibleChips, FeedPostImage, LikeButton, PostIdentity, SaveButton } from "@/components/community-help-shared"
 
 function toThreadComment(c: CommunityCommentView): ThreadComment {
   return {
@@ -114,55 +114,6 @@ function ReplyComposer({ onSubmit }: { onSubmit: (text: string, asHome?: boolean
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Related questions                                                         */
-/* -------------------------------------------------------------------------- */
-
-function RelatedQuestions({ posts, onOpen }: { posts: CommunityPostView[]; onOpen: (p: CommunityPostView) => void }) {
-  const [open, setOpen] = useState(false)
-  if (posts.length === 0) return null
-  return (
-    <section className="mt-8 border-t border-border/60 px-4 pt-6 sm:px-6">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="mb-3 flex w-full items-center justify-between gap-2 text-sm font-bold uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <span>More</span>
-        <ChevronDown className={cn("size-4 shrink-0 transition-transform duration-300", open ? "rotate-180" : "rotate-0")} />
-      </button>
-      <ul className={cn("space-y-1", !open && "hidden")}>
-        {posts.map((p) => (
-          <li key={p.id}>
-            <button
-              type="button"
-              onClick={() => onOpen(p)}
-              className="flex w-full items-center gap-3 rounded-2xl px-2 py-3 text-left transition-colors hover:bg-secondary/40"
-            >
-              <img
-                src={ANON_AVATAR || "/placeholder.svg"}
-                alt=""
-                className="size-9 shrink-0 rounded-full ring-2 ring-border/70"
-              />
-              <span className="min-w-0 flex-1">
-                <span className="line-clamp-2 text-[15px] leading-snug text-foreground text-pretty">
-                  {p.body || (p.imageUrl ? "Shared a photo" : "")}
-                </span>
-                <span className="mt-0.5 block text-xs text-muted-foreground">
-                  {p.commentCount > 0
-                    ? `${p.commentCount} ${p.commentCount === 1 ? "reply" : "replies"}`
-                    : "No replies yet"}
-                </span>
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </section>
-  )
-}
-
-/* -------------------------------------------------------------------------- */
 /*  Conversation screen                                                       */
 /* -------------------------------------------------------------------------- */
 
@@ -170,13 +121,12 @@ export function CommunityConversation({
   post,
   related,
   onClose,
-  onOpenRelated,
   onCountChange,
 }: {
   post: CommunityPostView
+  /** This thread plus its siblings, used only to let the media viewer swipe. */
   related: CommunityPostView[]
   onClose: () => void
-  onOpenRelated: (p: CommunityPostView) => void
   onCountChange: (postId: number, delta: number) => void
 }) {
   const [shareOpen, setShareOpen] = useState(false)
@@ -342,7 +292,6 @@ export function CommunityConversation({
           )}
         </div>
 
-        <RelatedQuestions posts={related} onOpen={onOpenRelated} />
         <div className="h-6" />
       </div>
 
