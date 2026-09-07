@@ -61,7 +61,9 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
   const [searchQuery, setSearchQuery] = useState("")
   const [activeMatch, setActiveMatch] = useState(0)
   const [bgSheetOpen, setBgSheetOpen] = useState(false)
-  const [bgId, setBgId] = useState("default")
+  // Fernwood (the live "default" theme, exposed here as "live-default") is the
+  // app-wide default DM wallpaper. Users can still pick plain dark ("default").
+  const [bgId, setBgId] = useState("live-default")
   const [reportOpen, setReportOpen] = useState(false)
   const [reportReason, setReportReason] = useState<(typeof REPORT_REASONS)[number] | null>(null)
   const [reportDone, setReportDone] = useState(false)
@@ -76,7 +78,7 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
     const read = () => {
       try {
         const saved = localStorage.getItem(CHAT_BACKGROUND_STORAGE_KEY)
-        setBgId(saved || "default")
+        setBgId(saved || "live-default")
       } catch {
         // ignore storage access errors
       }
