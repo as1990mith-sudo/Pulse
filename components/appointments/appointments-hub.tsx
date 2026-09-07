@@ -778,13 +778,13 @@ function AppointmentRow({
       )}
 
       {a.status !== "cancelled" && (a.conversationId || canJoin) && (
-        <div className="mt-3.5 flex flex-wrap items-center gap-2.5 border-t border-border/50 pt-3.5">
+        <div className="mt-3.5 flex items-stretch gap-2.5 border-t border-border/50 pt-3.5">
           {a.conversationId ? (
             <Link
               href={`/messages/${a.conversationId}`}
-              className="inline-flex min-w-[10rem] flex-1 items-center justify-center gap-2 rounded-2xl bg-foreground px-4 py-3 text-sm font-semibold text-background shadow-lg shadow-black/25 ring-1 ring-inset ring-white/10 transition-all hover:opacity-90 active:scale-[0.98]"
+              className="inline-flex min-w-0 flex-1 basis-0 items-center justify-center gap-2 truncate rounded-2xl bg-foreground px-4 py-3 text-sm font-semibold text-background shadow-lg shadow-black/25 ring-1 ring-inset ring-white/10 transition-all hover:opacity-90 active:scale-[0.98]"
             >
-              <MessageSquare className="size-4" />
+              <MessageSquare className="size-4 shrink-0" />
               Open conversation
             </Link>
           ) : null}
@@ -794,7 +794,7 @@ function AppointmentRow({
               title={a.title}
               counterpartName={a.hostName ?? a.homeName}
               size="sm"
-              className="min-w-[10rem] flex-1 rounded-2xl px-4 py-3 text-sm"
+              className="min-w-0 flex-1 basis-0 whitespace-nowrap rounded-2xl px-4 py-3 text-sm"
             />
           )}
         </div>
@@ -806,7 +806,7 @@ function AppointmentRow({
             <button
               type="button"
               onClick={onReschedule}
-              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3.5 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="inline-flex flex-1 basis-0 items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3.5 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <CalendarClock className="size-3.5" />
               Reschedule
@@ -816,7 +816,7 @@ function AppointmentRow({
             <button
               type="button"
               onClick={onCancel}
-              className="inline-flex items-center gap-1.5 rounded-full border border-destructive/40 bg-destructive/5 px-3.5 py-1.5 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/10"
+              className="inline-flex flex-1 basis-0 items-center justify-center gap-1.5 rounded-full border border-destructive/40 bg-destructive/5 px-3.5 py-1.5 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/10"
             >
               Cancel
             </button>
