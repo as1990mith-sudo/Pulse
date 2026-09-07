@@ -72,7 +72,6 @@ import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { useLivePresence } from "@/lib/use-live-presence"
 import { LIVE_THEMES, liveThemeStyle, isLiveImageTheme } from "@/lib/live-themes"
 import { LIVE_CATEGORIES } from "@/lib/live-categories"
-import { LiveBadge } from "@/components/live-badge"
 import { ReactionLayer } from "@/components/live-reactions"
 import { BackExitMenu } from "@/components/live-back-menu"
 import { CoverUpload } from "@/components/admin/cover-upload"
@@ -780,7 +779,6 @@ export function StudioConsole({
             <div className="flex items-center gap-2">
               {live ? (
                 <>
-                  <LiveBadge className="py-0.5" />
                   {reconnecting ? (
                     <span className="flex items-center gap-1 text-[11px] font-medium text-amber-300">
                       <Loader2 className="size-3 animate-spin" />
@@ -806,7 +804,7 @@ export function StudioConsole({
             {live ? (
               <MarqueeTitle
                 text={title || "Untitled session"}
-                className="mt-0.5 text-base font-bold leading-tight tracking-tight text-white"
+                className="mt-0.5 text-base font-bold uppercase leading-tight tracking-tight text-white"
               />
             ) : (
               <input

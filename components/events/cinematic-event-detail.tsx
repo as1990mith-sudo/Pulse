@@ -117,17 +117,10 @@ export function CinematicEventDetail({
         <div className="relative h-[clamp(460px,78vh,680px)] w-full overflow-hidden">
           {flyer ? (
             <>
-              {/* Blurred fill of the same flyer so the uncropped flyer never sits
-                  on empty letterbox bars — the frame stays full-bleed while no
-                  part of the artwork itself is cropped away. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={flyer || "/placeholder.svg"}
-                alt=""
-                aria-hidden
-                className="absolute inset-0 size-full scale-125 object-cover blur-2xl saturate-[1.2]"
-              />
-              <div aria-hidden className="absolute inset-0 bg-[#050505]/35" />
+              {/* Solid pure-black fill behind and around the flyer — no blur,
+                  gradient, glow, or duplicated artwork. The flyer sits WHOLE
+                  (object-contain) over it, unchanged in size and position. */}
+              <div aria-hidden className="absolute inset-0 bg-black" />
               {/* The real flyer, shown WHOLE (object-contain) so viewers keep
                   every detail — dates, venue, names — with nothing cropped. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
