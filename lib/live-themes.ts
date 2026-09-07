@@ -12,8 +12,7 @@ import type { CSSProperties } from "react"
  */
 export type LiveThemeId =
   | "default"
-  | "midnight"
-  | "ocean"
+  | "sunlit-leaf"
   | "evergreen"
   | "golden-lake"
   | "winter-cabin"
@@ -37,41 +36,21 @@ export type LiveTheme = {
 }
 
 export const LIVE_THEMES: LiveTheme[] = [
-  // Forest Road is the preset/default room look — a calm, dark aerial photo
-  // whose uniform deep greens keep overlaid text and controls perfectly legible.
-  // It intentionally reuses the id "default" so brand-new rooms (whose DB theme
-  // column defaults to "default") and any room already on the old default adopt
-  // this photo automatically, with no data migration.
+  // Fernwood is the preset/default room look — a dense, deep-green fern canopy
+  // in low light whose uniform darkness keeps overlaid text and controls
+  // perfectly legible. It intentionally reuses the id "default" so brand-new
+  // rooms (whose DB theme column defaults to "default") and any room already on
+  // the old default adopt this photo automatically, with no data migration.
   {
     id: "default",
-    name: "Forest Road",
-    description: "A quiet road through deep green forest.",
+    name: "Fernwood",
+    description: "A deep green fern canopy in low light.",
     background: "linear-gradient(160deg, oklch(0.16 0.03 150), oklch(0.2 0.04 145) 45%, oklch(0.26 0.05 140))",
     primary: "oklch(0.78 0.15 145)",
     primaryForeground: "oklch(0.15 0.03 150)",
     accent: "oklch(0.82 0.15 128)",
     swatch: ["oklch(0.78 0.15 145)", "oklch(0.2 0.04 145)"],
-    backgroundImage: "/live-themes/forest-road.jpg",
-  },
-  {
-    id: "midnight",
-    name: "Deep Indigo",
-    description: "A cool indigo-to-blue night sky.",
-    background: "linear-gradient(160deg, oklch(0.12 0.03 260), oklch(0.16 0.05 265) 45%, oklch(0.26 0.08 280))",
-    primary: "oklch(0.7 0.16 255)",
-    primaryForeground: "oklch(0.99 0.005 260)",
-    accent: "oklch(0.72 0.13 210)",
-    swatch: ["oklch(0.7 0.16 255)", "oklch(0.16 0.05 265)"],
-  },
-  {
-    id: "ocean",
-    name: "Tidewater",
-    description: "Calm teal and cyan over deep water.",
-    background: "linear-gradient(160deg, oklch(0.12 0.03 210), oklch(0.16 0.04 205) 45%, oklch(0.24 0.06 200))",
-    primary: "oklch(0.72 0.13 195)",
-    primaryForeground: "oklch(0.99 0.005 200)",
-    accent: "oklch(0.74 0.12 165)",
-    swatch: ["oklch(0.72 0.13 195)", "oklch(0.16 0.04 205)"],
+    backgroundImage: "/live-themes/fernwood.jpg",
   },
   // ── Photo themes ─────────────────────────────────────────────────────────
   // These render a full-bleed image. Their accent (primary/accent) is curated
@@ -121,6 +100,17 @@ export const LIVE_THEMES: LiveTheme[] = [
     accent: "oklch(0.83 0.14 95)",
     swatch: ["oklch(0.82 0.16 135)", "oklch(0.2 0.05 120)"],
     backgroundImage: "/live-themes/fernlight.jpg",
+  },
+  {
+    id: "sunlit-leaf",
+    name: "Sunlit Leaf",
+    description: "A single backlit leaf glowing green.",
+    background: "linear-gradient(160deg, oklch(0.14 0.03 150), oklch(0.18 0.05 145) 45%, oklch(0.24 0.07 140))",
+    primary: "oklch(0.8 0.17 140)",
+    primaryForeground: "oklch(0.14 0.03 150)",
+    accent: "oklch(0.83 0.16 125)",
+    swatch: ["oklch(0.8 0.17 140)", "oklch(0.18 0.05 145)"],
+    backgroundImage: "/live-themes/sunlit-leaf.jpg",
   },
 ]
 

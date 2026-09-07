@@ -17,6 +17,7 @@ import {
   Smartphone,
   RefreshCw,
   Send,
+  SwitchCamera,
   Settings,
   UserPlus,
   Users,
@@ -60,7 +61,6 @@ import { ConversationVideo } from "@/components/conversation/conversation-video"
 import { LiveSetupSheet } from "@/components/live/live-setup-sheet"
 import { ProjectionStage } from "@/components/live/projection-stage"
 import { SelfViewPip } from "@/components/live/self-view-pip"
-import { ProjectMenu } from "@/components/live/project-menu"
 import { CoverArt } from "@/components/cover-art"
 import { MarqueeTitle } from "@/components/marquee-title"
 import type { ShareTarget } from "@/lib/share-types"
@@ -1329,25 +1329,16 @@ export function VideoStudioConsole({
               controlsVisible ? "opacity-100" : "pointer-events-none opacity-0",
             )}
           >
-            {/* Screen-share chooser takes the flip-camera slot for the
-                broadcasting host. */}
-            <ProjectMenu
-              canScreenShare={canScreenShare}
-              screenShareOn={screenShareOn}
-              onToggleScreenShare={() => void (screenShareOn ? stopScreenShare() : startScreenShare())}
-              onSwitchScreenShare={() => void switchScreenShare()}
-              renderTrigger={({ toggle, active }) => (
-                <GlassButton
-                  label="Project or share screen"
-                  onClick={toggle}
-                  active={active}
-                  tone={active ? "muted" : "glass"}
-                  disabled={!connected}
-                >
-                  <MonitorPlay className="size-5" />
-                </GlassButton>
-              )}
-            />
+            {/* Flip front/back camera. (Screen sharing was removed from the
+                mobile controls — it no longer works reliably on phones.) */}
+            <GlassButton
+              label="Flip camera"
+              onClick={() => void flipCamera()}
+              disabled={!connected || !camOn}
+              tone="glass"
+            >
+              <SwitchCamera className="size-5" />
+            </GlassButton>
             <GlassButton
               label={micOn ? "Mute microphone" : "Unmute microphone"}
               onClick={() => void toggleMic()}

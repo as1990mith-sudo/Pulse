@@ -1274,7 +1274,6 @@ export function CommunityThreadFeed({ posts }: { posts: CommunityPostView[] }) {
           post={activePost}
           related={related}
           onClose={() => setActiveId(null)}
-          onOpenRelated={(p) => setActiveId(p.id)}
           onCountChange={handleCountChange}
         />
       )}
@@ -1626,7 +1625,6 @@ export function CommunityHelp({
             post={activePost}
             related={relatedPosts}
             onClose={closeConversation}
-            onOpenRelated={(p) => setActiveId(p.id)}
             onCountChange={handleCountChange}
           />
         )}

@@ -916,15 +916,17 @@ function BookingDetailSheet({
               )}
             </div>
 
-            {/* Actions */}
-            <div className="space-y-2 border-t border-border p-5">
-              {canJoin && <JoinMeetingButton appointmentId={b.id} className="w-full justify-center" />}
+            {/* Actions — pills sit as equal left/right halves (two per row) */}
+            <div className="flex flex-wrap gap-2 border-t border-border p-5">
+              {canJoin && (
+                <JoinMeetingButton appointmentId={b.id} className="flex-1 basis-[calc(50%-0.25rem)] justify-center" />
+              )}
               {b.conversationId && (
                 <Link
                   href={`/messages/${b.conversationId}`}
-                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2.5 text-sm font-semibold transition-colors hover:bg-muted"
+                  className="flex flex-1 basis-[calc(50%-0.25rem)] items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2.5 text-sm font-semibold transition-colors hover:bg-muted"
                 >
-                  <MessageSquare className="size-4" />
+                  <MessageSquare className="size-4 shrink-0" />
                   Open conversation
                 </Link>
               )}
@@ -933,7 +935,7 @@ function BookingDetailSheet({
                   type="button"
                   onClick={() => onComplete(b.id)}
                   disabled={completing === b.id}
-                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2.5 text-sm font-semibold transition-colors hover:bg-muted disabled:opacity-60"
+                  className="flex flex-1 basis-[calc(50%-0.25rem)] items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2.5 text-sm font-semibold transition-colors hover:bg-muted disabled:opacity-60"
                 >
                   {completing === b.id ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
                   Mark finished

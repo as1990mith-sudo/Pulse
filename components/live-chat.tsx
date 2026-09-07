@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import useSWR from "swr"
 import { AlertCircle, BookOpen, ChevronDown, Loader2, Pin, PinOff, RotateCw, Send } from "lucide-react"
-import { EmojiPicker } from "@/components/emoji-picker"
 import type { CurrentUser } from "@/lib/session"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import {
@@ -110,7 +109,6 @@ export function LiveChat({
   bgEffect = "none",
   immersive = false,
   leadingSlot = null,
-  emojiSide = "left",
   placeholder,
   showResourceButton = false,
   flatText = false,
@@ -135,7 +133,6 @@ export function LiveChat({
   leadingSlot?: React.ReactNode
   // Which side the emoji button sits on. "right" places it just left of Send,
   // freeing the left for `leadingSlot`.
-  emojiSide?: "left" | "right"
   // Overrides the composer placeholder. Pass "" to show no placeholder text.
   placeholder?: string
   // When true, renders the study-resources trigger in the composer, just left of
@@ -358,19 +355,6 @@ export function LiveChat({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [outbox.length])
 
-  // Emoji picker — a portalled popover that inserts emoji into the draft. The
-  // OS keyboard has no web API to open its emoji panel on demand, so an in-app
-  // picker is the only reliable way to give people emoji from this button.
-  const emojiButton = (
-    <EmojiPicker
-      immersive={immersive}
-      onSelect={(emoji) => {
-        setDraft((d) => d + emoji)
-        textareaRef.current?.focus()
-      }}
-    />
-  )
-
   function send(e: React.FormEvent) {
     e.preventDefault()
     const text = draft.trim()
@@ -450,7 +434,7 @@ export function LiveChat({
           onScroll={handleScroll}
           className={cn(
             "relative z-[1] flex h-full flex-col overflow-y-auto overscroll-contain p-4",
-            feed ? "gap-1.5" : "gap-2",
+            feed ? "gap-1.5" : "gap-[0.55rem]",
           )}
         >
           {rendered.length === 0 && (
@@ -673,7 +657,6 @@ export function LiveChat({
         >
           <div className="flex items-end gap-2">
             {leadingSlot}
-            {emojiSide === "left" && emojiButton}
             <Textarea
               ref={textareaRef}
               value={draft}
@@ -695,7 +678,6 @@ export function LiveChat({
               )}
               aria-label="Chat message"
             />
-            {emojiSide === "right" && emojiButton}
             {showResourceButton && resources && (
               <button
                 type="button"
