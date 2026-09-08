@@ -9,14 +9,16 @@ import { cn } from "@/lib/utils"
 
 export type AspectOption = { label: string; value: number | null; hint?: string }
 
-// Photo crop presets for the feed. "Free" is intentionally omitted so every
-// posted photo lands on one of four consistent, premium shapes. The first entry
-// (4:5 Portrait) is the default selection. Order matches the product spec.
+// Photo crop presets for the feed. The four fixed shapes plus "Free" (value:
+// null), which follows the photo's own natural aspect — so the author can keep
+// the original dimensions or frame a custom region with pan/zoom, without being
+// forced onto a fixed ratio. The first entry (4:5 Portrait) is the default.
 const DEFAULT_RATIOS: AspectOption[] = [
   { label: "4:5", value: 4 / 5, hint: "Portrait" },
   { label: "1:1", value: 1, hint: "Square" },
   { label: "16:9", value: 16 / 9, hint: "Landscape" },
   { label: "9:16", value: 9 / 16, hint: "Vertical" },
+  { label: "Free", value: null, hint: "Original" },
 ]
 
 // Tallest portrait shape we ever allow (width/height). Nothing may be taller
