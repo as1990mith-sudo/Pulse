@@ -7,7 +7,7 @@ import { ArrowLeft, Flame, PenLine, Plus } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { ChannelComposer } from "@/components/channel-composer"
-import { PostCard } from "@/components/mind-feed"
+import { TestimonialCard } from "@/components/testimonial-card"
 import { getChannelFeed, type FeedPostView } from "@/app/actions/feed"
 import { useAutoHideChatChrome, useChatChromeHidden } from "@/lib/chat-chrome"
 import { ITESTIFY_CHANNEL } from "@/lib/qotd-types"
@@ -86,30 +86,55 @@ export function ITestify({
       )}
 
       <div onScroll={onFeedScroll} className="flex-1 overflow-y-auto scroll-smooth overscroll-contain">
-        {posts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 px-6 py-24 text-center">
-            <Avatar className="size-16 ring-2 ring-rose-500/30">
-              <AvatarFallback className="bg-rose-600 text-white">
-                <Flame className="size-7" />
-              </AvatarFallback>
-            </Avatar>
-            <p className="text-lg font-semibold">No testimonies yet</p>
-            <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
-              Be the first to share what God has done in your life — with words, photos, or a video.
-            </p>
-            <Button onClick={() => setComposerOpen(true)} className="mt-2 gap-2 rounded-full">
-              <PenLine className="size-4" /> Share your testimony
+        <div className="mx-auto w-full max-w-2xl px-4 pb-28 pt-4 sm:px-6">
+          {/* Section intro — understated heading with a clear "Share yours"
+              action. The global/room chrome above is untouched. */}
+          <div className="flex items-end justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="font-display text-xl font-bold tracking-tight">Testimonials</h2>
+              <p className="mt-0.5 text-sm text-pretty text-muted-foreground">
+                Real stories. Real faith. Real impact.
+              </p>
+            </div>
+            <Button
+              onClick={() => setComposerOpen(true)}
+              size="sm"
+              variant="outline"
+              className="shrink-0 gap-1.5 rounded-full"
+            >
+              <PenLine className="size-4" /> Share yours
             </Button>
           </div>
-        ) : (
-          <ul className="mx-auto max-w-2xl divide-y divide-border/60 pb-28">
-            {posts.map((post) => (
-              <li key={post.id}>
-                <PostCard post={post} currentUser={currentUser} variant="feed" videoFeedPosts={posts} />
-              </li>
-            ))}
-          </ul>
-        )}
+
+          {posts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
+              <Avatar className="size-16 ring-2 ring-rose-500/30">
+                <AvatarFallback className="bg-rose-600 text-white">
+                  <Flame className="size-7" />
+                </AvatarFallback>
+              </Avatar>
+              <p className="text-lg font-semibold">No testimonies yet</p>
+              <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
+                Be the first to share what God has done in your life — with words, photos, or a video.
+              </p>
+              <Button onClick={() => setComposerOpen(true)} className="mt-2 gap-2 rounded-full">
+                <PenLine className="size-4" /> Share your testimony
+              </Button>
+            </div>
+          ) : (
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              {posts.map((post) => (
+                <TestimonialCard
+                  key={post.id}
+                  post={post}
+                  currentUser={currentUser}
+                  allPosts={posts}
+                  onChanged={() => mutate()}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Floating share button — hides on scroll-down, returns on scroll-up,
@@ -136,6 +161,8 @@ export function ITestify({
         submitLabel="Share testimony"
         accent="rose"
         maxVideoSeconds={MAX_VIDEO_SECONDS}
+        // A testimony must carry a 1–5 star rating before it can be shared.
+        requireRating
         // Taller writing surface, matching the Community composer's h-32 box.
         textareaClassName="field-sizing-fixed h-32 min-h-0 overflow-y-auto"
       />

@@ -298,6 +298,13 @@ export function MindFeed({
   const [error, setError] = useState<string | null>(null)
   // Index currently being dragged in the reorder strip (null when not dragging).
   const [dragIndex, setDragIndex] = useState<number | null>(null)
+  // Pointer-drag plumbing for the Instagram-style media reorder. Uses raw
+  // pointer events (not HTML5 draggable, which is desktop-mouse-only) so it works
+  // with touch. Tile DOM nodes are tracked so we can hit-test the finger against
+  // them; the live index of the tile under the finger lives in a ref.
+  const mediaTileRefs = useRef<(HTMLLIElement | null)[]>([])
+  const mediaDraggingRef = useRef(false)
+  const mediaDragIndexRef = useRef(0)
   const [isPending, startTransition] = useTransition()
   // "status" is kept in the union (still deep-linkable via /status and ?tab=status)
   // but is intentionally NOT surfaced as a feed sub-tab anymore — "events" takes
@@ -563,7 +570,8 @@ export function MindFeed({
     if (videoCaptureRef.current) videoCaptureRef.current.value = ""
   }
 
-  // Drag-to-reorder: move the dragged thumbnail to the drop target's slot.
+  // Move a media item from one slot to another (used by the pointer drag as the
+  // finger crosses tiles, so the strip reflows live like Instagram's picker).
   function reorderMedia(from: number, to: number) {
     if (from === to) return
     setMedia((prev) => {
@@ -572,6 +580,53 @@ export function MindFeed({
       next.splice(to, 0, moved)
       return next
     })
+  }
+
+  // Stable pointer handlers: the same references added on pointer-down are the
+  // ones removed on pointer-up, even though the component re-renders on every
+  // reflow mid-drag.
+  const onMediaDragMove = useRef((e: PointerEvent) => {
+    if (!mediaDraggingRef.current) return
+    const x = e.clientX
+    const y = e.clientY
+    const tiles = mediaTileRefs.current
+    let target = mediaDragIndexRef.current
+    for (let i = 0; i < tiles.length; i++) {
+      const el = tiles[i]
+      if (!el) continue
+      const r = el.getBoundingClientRect()
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+        target = i
+        break
+      }
+    }
+    if (target !== mediaDragIndexRef.current) {
+      reorderMedia(mediaDragIndexRef.current, target)
+      mediaDragIndexRef.current = target
+      setDragIndex(target)
+      haptic("light")
+    }
+  }).current
+
+  const endMediaDrag = useRef(() => {
+    window.removeEventListener("pointermove", onMediaDragMove)
+    window.removeEventListener("pointerup", endMediaDrag)
+    window.removeEventListener("pointercancel", endMediaDrag)
+    mediaDraggingRef.current = false
+    setDragIndex(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }).current
+
+  function startMediaDrag(index: number, e: React.PointerEvent) {
+    // Ignore drags that begin on the remove button (it stops propagation too).
+    e.preventDefault()
+    mediaDraggingRef.current = true
+    mediaDragIndexRef.current = index
+    setDragIndex(index)
+    haptic("light")
+    window.addEventListener("pointermove", onMediaDragMove)
+    window.addEventListener("pointerup", endMediaDrag)
+    window.addEventListener("pointercancel", endMediaDrag)
   }
 
   // The main feed accepts posts from both individuals and organisations, but
@@ -844,31 +899,28 @@ export function MindFeed({
                   {media.map((item, index) => (
                     <li
                       key={item.url}
-                      draggable
-                      onDragStart={() => setDragIndex(index)}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={() => {
-                        if (dragIndex !== null) reorderMedia(dragIndex, index)
-                        setDragIndex(null)
+                      ref={(el) => {
+                        mediaTileRefs.current[index] = el
                       }}
-                      onDragEnd={() => setDragIndex(null)}
+                      onPointerDown={(e) => startMediaDrag(index, e)}
+                      style={{ touchAction: "none" }}
                       className={cn(
-                        "group relative size-20 cursor-grab overflow-hidden rounded-xl border bg-muted shadow-sm transition-all active:cursor-grabbing",
+                        "group relative size-20 cursor-grab select-none overflow-hidden rounded-xl border bg-muted shadow-sm transition-transform duration-150 active:cursor-grabbing",
                         dragIndex === index
-                          ? "scale-95 border-primary opacity-60 ring-2 ring-primary"
+                          ? "z-10 scale-105 border-primary opacity-90 shadow-lg ring-2 ring-primary"
                           : "border-border/60 hover:border-primary/50",
                       )}
                     >
                       {item.type === "video" ? (
                         item.coverImageUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={item.coverImageUrl || "/placeholder.svg"} alt={`Upload ${index + 1}`} className="size-full object-cover" />
+                          <img src={item.coverImageUrl || "/placeholder.svg"} alt={`Upload ${index + 1}`} draggable={false} className="pointer-events-none size-full object-cover" />
                         ) : (
-                          <video src={item.url} muted playsInline className="size-full object-cover" />
+                          <video src={item.url} muted playsInline draggable={false} className="pointer-events-none size-full object-cover" />
                         )
                       ) : (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={item.url || "/placeholder.svg"} alt={`Upload ${index + 1}`} className="size-full object-cover" />
+                        <img src={item.url || "/placeholder.svg"} alt={`Upload ${index + 1}`} draggable={false} className="pointer-events-none size-full object-cover" />
                       )}
                       {/* Order badge — leading item highlighted in brand color. */}
                       <span
@@ -886,8 +938,9 @@ export function MindFeed({
                       )}
                       <button
                         type="button"
+                        onPointerDown={(e) => e.stopPropagation()}
                         onClick={() => removeMediaAt(index)}
-                        className="absolute right-1.5 top-1.5 flex size-5 items-center justify-center rounded-full bg-background/80 text-foreground opacity-0 backdrop-blur transition-opacity hover:bg-background group-hover:opacity-100"
+                        className="absolute right-1.5 top-1.5 flex size-5 items-center justify-center rounded-full bg-background/80 text-foreground opacity-100 backdrop-blur transition-opacity hover:bg-background sm:opacity-0 sm:group-hover:opacity-100"
                         aria-label={`Remove item ${index + 1}`}
                       >
                         <X className="size-3" />
@@ -1126,14 +1179,16 @@ function MediaSlide({
   const chosen = item.aspectRatio ?? ratio
 
   // The preview honours the crop the author actually chose at upload. The only
-  // limits are the extremes: nothing wider than 16:9 (absurdly panoramic) and
-  // nothing TALLER than 4:5 — a taller crop (portrait 3:4, vertical 9:16) is
-  // shown in a 4:5 card and centre-filled, so one post cannot swallow the whole
-  // screen. Media between those bounds keeps its exact ratio.
+  // limits are the extremes: nothing wider than 16:9 (absurdly panoramic) and a
+  // per-type "tallest" bound. Anything taller is centre-filled with object-cover
+  // so one post cannot swallow the whole screen. Media between those bounds keeps
+  // its exact ratio. This is a display constraint only; the uploaded media keeps
+  // its real cropped ratio.
   const WIDEST = 16 / 9
-  // 4:5 portrait — the tallest card the feed shows. Expressed width/height
-  // (0.8), so a SMALLER number means a taller frame.
-  const TALLEST = 4 / 5
+  // Tallest card the feed shows, expressed width/height (a SMALLER number means
+  // a taller frame). IMAGES clamp at a 1:1 square; VIDEOS keep the taller 4:5
+  // portrait bound so vertical clips still show as intended.
+  const TALLEST = item.type === "video" ? 4 / 5 : 1
   const framedAspect = chosen != null ? Math.min(WIDEST, Math.max(TALLEST, chosen)) : null
   // Whether the shown frame crops the media's true framing — used to show an
   // "expand to full screen" hint so viewers know the full composition is
@@ -1161,6 +1216,7 @@ function MediaSlide({
           // already passed this; the main feed's never did, which is why only
           // the main feed restarted on the way back from full screen.
           resume
+          previewMuted
           onExpand={onOpenVideo}
         />
       </div>

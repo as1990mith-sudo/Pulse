@@ -402,6 +402,12 @@ export function useLiveVideo({
   const [connected, setConnected] = useState(false)
   const [micOn, setMicOn] = useState(initialMicOn)
   const [camOn, setCamOn] = useState(initialCamOn)
+  // "I'm on headphones" mode, mirroring the audio lives. When on, the mic is
+  // re-captured with the voice-comms DSP disabled so Bluetooth output stays on
+  // high-quality A2DP instead of dropping to the narrowband call profile. The
+  // sticky preference is read from a ref whenever the mic (re)opens.
+  const [headphoneMode, setHeadphoneModeState] = useState(false)
+  const headphoneModeRef = useRef(false)
   const [localVideoReady, setLocalVideoReady] = useState(false)
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user")
   const [participants, setParticipants] = useState(0)
@@ -1057,16 +1063,59 @@ export function useLiveVideo({
     return () => clearInterval(id)
   }, [connected, camOn, localVideoReady])
 
+  // Re-captures the currently published mic track with DSP flags matching the
+  // sticky headphone preference. On headphones there is no speaker bleed for the
+  // echo canceller to remove, so disabling echo/noise/gain requests a raw MEDIA
+  // capture — which lets Bluetooth stay on high-quality A2DP instead of dropping
+  // to the narrowband call profile. A no-op when the mic isn't open.
+  const applyMicDsp = useCallback(async () => {
+    const room = roomRef.current
+    if (!room) return
+    const pub = room.localParticipant.getTrackPublication(Track.Source.Microphone)
+    const track = pub?.track
+    if (!(track instanceof LocalAudioTrack)) return
+    const constraints = headphoneModeRef.current
+      ? {
+          ...LIVE_MIC_CONSTRAINTS,
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+          voiceIsolation: false,
+        }
+      : LIVE_MIC_CONSTRAINTS
+    try {
+      await track.restartTrack(constraints)
+    } catch {
+      // Re-capture failed (device busy / unsupported) — keep the existing track.
+    }
+  }, [])
+
   const toggleMic = useCallback(async () => {
     const room = roomRef.current
     if (!room) return
     const next = !micOn
     await room.localParticipant.setMicrophoneEnabled(next)
     // Reopening the mic can bounce iOS back to the earpiece, so re-assert the
-    // loudspeaker each time it goes on.
-    if (next) applyAudioRouting()
+    // loudspeaker each time it goes on, and re-apply the headphone preference so
+    // it stays sticky across self-mute/unmute.
+    if (next) {
+      await applyMicDsp()
+      applyAudioRouting()
+    }
     setMicOn(next)
-  }, [micOn])
+  }, [micOn, applyMicDsp])
+
+  // Host "I'm on headphones" toggle. Re-captures the mic with the voice-comms
+  // DSP disabled so the OS keeps Bluetooth output on high-quality A2DP. Off by
+  // default so loudspeaker hosts keep echo/feedback protection. Mirrors the
+  // audio lives' implementation exactly.
+  const setHeadphoneMode = useCallback(async (on: boolean) => {
+    headphoneModeRef.current = on
+    setHeadphoneModeState(on)
+    await applyMicDsp()
+    applyAudioRouting()
+    void applyAudioOutputRoute()
+  }, [applyMicDsp])
 
   // Host asks a specific participant to unmute (server can't reopen a mic
   // silently, so we send a targeted data message and they choose to accept).
@@ -1760,6 +1809,8 @@ export function useLiveVideo({
     publishVideoProjectionTrack,
     unpublishVideoProjectionTrack,
     toggleMic,
+    headphoneMode,
+    setHeadphoneMode,
     askUnmute,
     toggleCam,
     flipCamera,

@@ -127,6 +127,11 @@ export const feedPost = pgTable("feed_post", {
   // { userId, name } for a user who passed the privacy check at save time.
   // Drives clickable mention links + notifications. Null/empty for none.
   mentions: jsonb("mentions").$type<{ userId: string; name: string }[]>(),
+  // 1–5 star rating for iTestify testimonies. Required at creation time for new
+  // testimonies (enforced server-side in createPost); NULL for main-feed posts,
+  // QOTD responses, and legacy testimonies created before ratings existed — the
+  // UI shows no rating for those rather than inventing one.
+  rating: integer("rating"),
   likes: integer("likes").notNull().default(0),
   reposts: integer("reposts").notNull().default(0),
   // Set the first time the author edits the post; drives the "· edited" label.
@@ -608,6 +613,10 @@ export const announcement = pgTable("announcement", {
   adType: text("adType").notNull().default("event"), // "event" | "product"
   title: text("title").notNull(),
   description: text("description"),
+  // Optional free-text note the publishing admin can add with any important
+  // information registrants should know (parking, dress code, what to bring,
+  // entry instructions, …). Shown on the event detail alongside the description.
+  additionalInfo: text("additionalInfo"),
   flyer: text("flyer"),
   location: text("location"), // venue (events) — required for events
   // How/where an event happens. "in_person" uses `location` + the confirmed
@@ -1972,6 +1981,10 @@ export const homeMembership = pgTable(
     status: text("status").notNull().default("active"),
     // How they joined: "created" (founding owner), "key_auto", "key_request".
     joinedVia: text("joinedVia").notNull().default("key_auto"),
+    // Per-member manual ordering of their own "My Homes" list. Null means the
+    // member hasn't reordered, so those fall back to the default (newest first)
+    // order. Lower numbers sort earlier.
+    sortOrder: integer("sortOrder"),
     createdAt: timestamp("createdAt").notNull().defaultNow(),
     updatedAt: timestamp("updatedAt").notNull().defaultNow(),
   },

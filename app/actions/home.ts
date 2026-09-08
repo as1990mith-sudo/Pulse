@@ -182,9 +182,22 @@ export async function getMyHomeMemberships(): Promise<MyHomeLink[]> {
   const activeHandle = store.get(ACTIVE_HOME_COOKIE)?.value
   const activeResolved = activeHandle && homes.some((h) => h.handle === activeHandle) ? activeHandle : homes[0]?.handle
 
+  // The viewer's manual ordering of their own list. Fetched once (not per-home)
+  // and keyed by homeId; a null/absent value means "not reordered" and falls
+  // back to the default order `getMyHomes` already returns (newest first).
+  const viewerId = homes.length > 0 ? (await auth.api.getSession({ headers: await headers() }))?.user?.id : null
+  const orderRows = viewerId
+    ? await db
+        .select({ homeId: homeMembership.homeId, sortOrder: homeMembership.sortOrder })
+        .from(homeMembership)
+        .where(eq(homeMembership.userId, viewerId))
+    : []
+  const orderByHome = new Map(orderRows.map((r) => [r.homeId, r.sortOrder]))
+
   const rows = await Promise.all(
-    homes.map(async (h) => {
+    homes.map(async (h, index) => {
       const membership = await getViewerMembership(h.id)
+      const sortOrder = orderByHome.get(h.id)
       return {
         handle: h.handle,
         name: h.name,
@@ -194,10 +207,50 @@ export async function getMyHomeMemberships(): Promise<MyHomeLink[]> {
         role: (membership?.role ?? "member") as HomeRole,
         memberCount: h.memberCount,
         isActive: h.handle === activeResolved,
+        // Kept only for the sort below; stripped from the returned shape.
+        _rank: sortOrder ?? null,
+        _index: index,
       }
     }),
   )
-  return rows
+
+  // Members who reordered sort by their explicit rank; everything unranked keeps
+  // the default order beneath them (stable via the original index).
+  rows.sort((a, b) => {
+    if (a._rank != null && b._rank != null) return a._rank - b._rank
+    if (a._rank != null) return -1
+    if (b._rank != null) return 1
+    return a._index - b._index
+  })
+
+  return rows.map(({ _rank, _index, ...link }) => link)
+}
+
+/**
+ * Persists the viewer's manual ordering of their own "My Homes" list. Each
+ * handle's position becomes that membership's `sortOrder`. Foreign handles (a
+ * Home the viewer doesn't belong to) are ignored, so the ordering can never be
+ * used to probe another organisation's membership.
+ */
+export async function reorderMyHomes(orderedHandles: string[]): Promise<void> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  const viewerId = session?.user?.id
+  if (!viewerId) throw new Error("You must be signed in.")
+
+  const homes = await getMyHomes()
+  const idByHandle = new Map(homes.map((h) => [h.handle, h.id]))
+
+  let rank = 0
+  for (const handle of orderedHandles) {
+    const homeId = idByHandle.get(handle)
+    if (!homeId) continue
+    await db
+      .update(homeMembership)
+      .set({ sortOrder: rank, updatedAt: new Date() })
+      .where(and(eq(homeMembership.userId, viewerId), eq(homeMembership.homeId, homeId)))
+    rank += 1
+  }
+  revalidatePath("/", "layout")
 }
 
 /**

@@ -9,7 +9,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react"
 import type { CurrentUser } from "@/lib/session"
-import type { LiveChatMessageMeta } from "@/app/actions/live"
+import { sendLiveChat, type LiveChatMessageMeta } from "@/app/actions/live"
 
 export type ResourcePanelId = "bible" | "notes" | "pdf" | "books" | "pinned"
 
@@ -146,10 +146,29 @@ export function ResourceProvider({
     }
   }, [])
 
+  // Post a message into the live's chat. When the chat UI is mounted it owns an
+  // optimistic sender (registered below), so we use it. But the mini-panels can
+  // share while the chat panel is CLOSED — and then no sender is registered, so
+  // the old code returned false and callers fell back to the native OS share
+  // sheet (the reported bug: sharing a verse tried to leave the app). We now
+  // fall back to sending straight to the server for the current room, so a
+  // shared verse always lands in the chat whether or not it's open. `roomName`
+  // is read from a ref so this callback stays stable across descriptor changes.
+  const roomNameRef = useRef<string | null>(descriptor.roomName)
+  roomNameRef.current = descriptor.roomName
   const shareToChat = useCallback(async (text: string, meta: LiveChatMessageMeta | null = null) => {
-    if (!senderRef.current) return false
-    await senderRef.current(text, meta)
-    return true
+    if (senderRef.current) {
+      await senderRef.current(text, meta)
+      return true
+    }
+    const roomName = roomNameRef.current
+    if (!roomName) return false
+    try {
+      await sendLiveChat({ roomName, body: text, kind: meta?.kind === "bible" ? "bible" : "message", meta })
+      return true
+    } catch {
+      return false
+    }
   }, [])
 
   const videoAudioSinkRef = useRef<VideoAudioSink | null>(null)
@@ -184,7 +203,9 @@ export function ResourceProvider({
       closePanel,
       registerChatSender,
       shareToChat,
-      canShareToChat: senderCount > 0,
+      // True whenever we can deliver to chat: either a mounted chat sender, or a
+      // room to send directly to when the chat panel is closed.
+      canShareToChat: senderCount > 0 || !!descriptor.roomName,
       registerVideoAudioSink,
       publishVideoAudio,
       unpublishVideoAudio,

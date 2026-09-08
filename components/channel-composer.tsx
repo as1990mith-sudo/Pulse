@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState, useTransition } from "react"
 import { createPortal } from "react-dom"
-import { ImageIcon, Loader2, Send, Video, X } from "lucide-react"
+import { ImageIcon, Loader2, Send, Star, Video, X } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { MediaEditorFlow, type EditedMedia } from "@/components/media-editor/media-editor-flow"
 import { createPost, type PostMedia } from "@/app/actions/feed"
+import { haptic } from "@/lib/haptics"
 import type { CurrentUser } from "@/lib/session"
 import { cn } from "@/lib/utils"
 
@@ -56,6 +57,10 @@ export function ChannelComposer({
   // Extra classes for the writing surface. Callers use this to pin a taller,
   // fixed-height box (e.g. iTestify matches the Community composer's `h-32`).
   textareaClassName,
+  // When true, the composer shows a REQUIRED 1–5 star rating selector and blocks
+  // submission until one is chosen. Used by iTestify testimonies; QOTD leaves it
+  // off. The server independently enforces the rating for the iTestify channel.
+  requireRating = false,
 }: {
   open: boolean
   onClose: () => void
@@ -69,9 +74,14 @@ export function ChannelComposer({
   allowVideo?: boolean
   maxVideoSeconds?: number
   textareaClassName?: string
+  requireRating?: boolean
 }) {
   const [body, setBody] = useState("")
   const [media, setMedia] = useState<PostMedia[]>([])
+  // Chosen star rating (0 = none yet). Only meaningful when `requireRating`.
+  const [rating, setRating] = useState(0)
+  // Hover preview so the row lights up to the star under the cursor before click.
+  const [hoverRating, setHoverRating] = useState(0)
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -88,6 +98,8 @@ export function ChannelComposer({
       setMedia([])
       setPendingFiles(null)
       setError(null)
+      setRating(0)
+      setHoverRating(0)
     }
   }, [open])
 
@@ -158,10 +170,14 @@ export function ChannelComposer({
     e.preventDefault()
     const text = body.trim()
     if (!text && media.length === 0) return
+    if (requireRating && rating === 0) {
+      setError("Please choose a 1–5 star rating before sharing.")
+      return
+    }
     setError(null)
     startTransition(async () => {
       try {
-        await createPost({ text, media, channel })
+        await createPost({ text, media, channel, rating: requireRating ? rating : undefined })
         onCreated()
         onClose()
       } catch (err) {
@@ -217,6 +233,51 @@ export function ChannelComposer({
               className={cn("resize-none rounded-2xl text-base", textareaClassName)}
             />
 
+            {requireRating && (
+              <div className="mt-4 rounded-2xl border border-border/60 bg-background/40 px-4 py-3.5">
+                <p className="text-sm font-medium text-foreground">
+                  How do you feel about what you&apos;re sharing?
+                </p>
+                <div
+                  className="mt-2.5 flex items-center gap-1"
+                  role="radiogroup"
+                  aria-label="Rating out of five stars"
+                  onMouseLeave={() => setHoverRating(0)}
+                >
+                  {[1, 2, 3, 4, 5].map((n) => {
+                    const active = (hoverRating || rating) >= n
+                    return (
+                      <button
+                        key={n}
+                        type="button"
+                        role="radio"
+                        aria-checked={rating === n}
+                        aria-label={`${n} star${n > 1 ? "s" : ""}`}
+                        onMouseEnter={() => setHoverRating(n)}
+                        onFocus={() => setHoverRating(n)}
+                        onClick={() => {
+                          setRating(n)
+                          setError(null)
+                          haptic("light")
+                        }}
+                        className="rounded-full p-1 transition-transform duration-150 hover:scale-110 active:scale-95"
+                      >
+                        <Star
+                          className={cn(
+                            "size-7 transition-colors duration-150",
+                            active ? "fill-primary text-primary" : "text-muted-foreground/35",
+                          )}
+                        />
+                      </button>
+                    )
+                  })}
+                  {rating > 0 && (
+                    <span className="ml-2 text-sm font-semibold tabular-nums text-primary">{rating}/5</span>
+                  )}
+                </div>
+              </div>
+            )}
+
             {media.length > 0 && (
               <div className="mt-3 grid grid-cols-3 gap-2">
                 {media.map((m, i) => (
@@ -269,7 +330,12 @@ export function ChannelComposer({
             <Button
               type="submit"
               className="mt-3 w-full gap-2 rounded-full"
-              disabled={isPending || uploading || (!body.trim() && media.length === 0)}
+              disabled={
+                isPending ||
+                uploading ||
+                (!body.trim() && media.length === 0) ||
+                (requireRating && rating === 0)
+              }
             >
               {isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
               {submitLabel}

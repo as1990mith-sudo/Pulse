@@ -379,6 +379,8 @@ export function VideoStudioConsole({
     clearError: clearRtcError,
     registerPeerVideoEl,
     toggleMic,
+    headphoneMode,
+    setHeadphoneMode,
     askUnmute,
     toggleCam,
     flipCamera,
@@ -1410,6 +1412,8 @@ export function VideoStudioConsole({
             onRemoveTrack={(i) => void removeTrack(i)}
             onError={setMusicError}
             onToggleDuck={setDuckEnabled}
+            headphoneMode={headphoneMode}
+            onToggleHeadphones={(next) => void setHeadphoneMode(next)}
             onClose={() => setMusicPanelOpen(false)}
           />
         )}

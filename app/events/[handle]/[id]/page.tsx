@@ -133,6 +133,7 @@ export default async function PublicEventPage({ params, searchParams }: Params) 
         accentColor={accentColor}
         flyer={event.flyer}
         description={event.description}
+        additionalInfo={event.additionalInfo}
         dateLabel={dateLabel}
         timeLabel={timeLabel}
         location={event.location}

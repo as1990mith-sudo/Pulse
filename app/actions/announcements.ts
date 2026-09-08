@@ -33,6 +33,8 @@ export type AnnouncementView = {
   adType: AdType
   title: string
   description: string | null
+  // Optional admin note with any important information for registrants.
+  additionalInfo: string | null
   flyer: string | null
   location: string | null
   // How/where the event happens. Legacy rows (null) are treated as in-person.
@@ -108,6 +110,7 @@ function toView(
     adType: (row.adType as AdType) ?? "event",
     title: row.title,
     description: row.description,
+    additionalInfo: row.additionalInfo ?? null,
     flyer: row.flyer,
     location: row.location,
     locationMode: (row.locationMode as AnnouncementView["locationMode"]) ?? null,
@@ -326,6 +329,7 @@ export async function createAnnouncement(input: {
   adType: AdType
   title: string
   description?: string | null
+  additionalInfo?: string | null
   flyer?: string | null
   location?: string | null
   locationMode?: "in_person" | "online" | null
@@ -385,6 +389,7 @@ export async function createAnnouncement(input: {
     adType,
     title,
     description: input.description?.trim() || null,
+    additionalInfo: input.additionalInfo?.trim() || null,
     flyer: input.flyer || null,
     location,
     locationMode,
@@ -511,6 +516,7 @@ export async function orgUpdateEvent(
   input: {
     title: string
     description?: string | null
+    additionalInfo?: string | null
     flyer?: string | null
     location?: string | null
     locationMode?: "in_person" | "online" | null
@@ -563,6 +569,7 @@ export async function orgUpdateEvent(
     .set({
       title,
       description: input.description?.trim() || null,
+      additionalInfo: input.additionalInfo?.trim() || null,
       flyer: input.flyer || null,
       location,
       locationMode,

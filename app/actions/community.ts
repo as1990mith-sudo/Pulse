@@ -364,7 +364,7 @@ export async function getOrgCommunityPosts(organizationId: string): Promise<Comm
  * therefore always composed as whichever row Postgres happened to return first:
  * standing in Prayer Palace International, every thread was attributed to
  * Kingdom Academy Global. That is the precise mistake `lib/home/publishing.ts`
- * exists to prevent — a role belongs to one Home, never to the account.
+ * exists to prevent ��� a role belongs to one Home, never to the account.
  */
 export async function getPublishableOrg(): Promise<{ id: string; name: string; logo: string | null } | null> {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -764,8 +764,12 @@ export async function deleteCommunityPost(postId: number) {
   if (!post) throw new Error("Post not found.")
   if (post.userId !== user.id) throw new Error("You can only delete your own post.")
   await db.update(communityPost).set({ deleted: true }).where(eq(communityPost.id, postId))
-  revalidatePath("/chatrooms")
-}
+  // Deliberately NOT revalidatePath("/chatrooms") — see addCommunityComment.
+  // Rebuilding the /chatrooms route tears down the client feed tree, which made
+  // the ENTIRE community list go blank the instant a post was deleted (it only
+  // came back on a manual refresh). The caller drops the row optimistically via
+  // mutatePosts, so server state re-syncs on the next natural revalidation.
+  }
 
 /**
  * Pins or unpins ANY Community Help thread in the room it belongs to. Mirrors

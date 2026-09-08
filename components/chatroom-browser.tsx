@@ -6,7 +6,6 @@ import Link from "next/link"
 import { Check, Clock, Compass, Flame, Globe, ImageIcon, Lightbulb, Loader2, Lock, MoonStar, Plus, PlusCircle, Search, Users } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -394,7 +393,6 @@ function DiscoverRooms({ initialRooms }: { initialRooms: ChatroomSearchResult[] 
 function CreateRoom() {
   const router = useRouter()
   const [name, setName] = useState("")
-  const [description, setDescription] = useState("")
   const [image, setImage] = useState<string | null>(null)
   // Required choice — no default so the user must explicitly pick one.
   const [visibility, setVisibility] = useState<"public" | "private" | null>(null)
@@ -436,7 +434,7 @@ function CreateRoom() {
     }
     startTransition(async () => {
       try {
-        const roomId = await createChatroom({ name: trimmed, description, image, visibility })
+        const roomId = await createChatroom({ name: trimmed, description: "", image, visibility })
         router.push(`/chatrooms/${roomId}`)
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not create the chatroom.")
@@ -475,26 +473,7 @@ function CreateRoom() {
           <label htmlFor="room-name" className="text-sm font-medium">
             Chatroom name
           </label>
-          <Input
-            id="room-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Sunday Worship Crew"
-            maxLength={80}
-          />
-        </div>
-        <div className="space-y-2">
-          <label htmlFor="room-desc" className="text-sm font-medium">
-            Description <span className="text-muted-foreground">(optional)</span>
-          </label>
-          <Textarea
-            id="room-desc"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="What's this room about?"
-            rows={3}
-            maxLength={280}
-          />
+          <Input id="room-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} />
         </div>
         <fieldset className="space-y-2">
           <legend className="text-sm font-medium">
@@ -535,10 +514,6 @@ function CreateRoom() {
           {isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
           Create chatroom
         </Button>
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          You&apos;ll become the admin and get an invite link to share. Public rooms appear under Discover; private
-          rooms stay hidden there and can only be found by searching their exact name.
-        </p>
       </form>
 
       {cropSrc && (

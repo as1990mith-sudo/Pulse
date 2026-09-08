@@ -4,7 +4,7 @@ import { useState } from "react"
 import { createPortal } from "react-dom"
 import { AnimatePresence, motion } from "motion/react"
 import { Check, Palette } from "lucide-react"
-import { LIVE_THEMES, liveThemeStyle } from "@/lib/live-themes"
+import { LIVE_THEMES, liveThemeSwatchStyle } from "@/lib/live-themes"
 import { cn } from "@/lib/utils"
 
 /**
@@ -69,7 +69,7 @@ export function ConversationThemeSheet({
                       "group relative overflow-hidden rounded-2xl p-3 text-left ring-1 ring-inset transition-all",
                       active ? "ring-2 ring-primary" : "ring-white/15 hover:ring-white/40",
                     )}
-                    style={liveThemeStyle(t.id)}
+                    style={liveThemeSwatchStyle(t.id)}
                   >
                     <div className="mb-8 flex items-center gap-1.5">
                       <span className="size-6 rounded-full ring-1 ring-white/20" style={{ background: t.primary }} />

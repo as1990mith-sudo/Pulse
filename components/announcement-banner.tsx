@@ -15,6 +15,7 @@ import {
   ClipboardList,
   Clock,
   Globe,
+  Info,
   ImageIcon,
   Loader2,
   MapPin,
@@ -401,12 +402,14 @@ export function AnnouncementBanner({
               </div>
               <ul className="space-y-2.5">
                 {upcoming.map((a, i) => (
-                  <UpcomingEventRow
-                    key={a.id}
-                    event={a}
-                    index={i}
-                    onOpen={() => setOpenId(a.id)}
-                  />
+                <UpcomingEventRow
+                  key={a.id}
+                  event={a}
+                  index={i}
+                  isAdmin={isAdmin}
+                  onOpen={() => setOpenId(a.id)}
+                  onEdit={() => setEditId(a.id)}
+                />
                 ))}
               </ul>
             </div>
@@ -714,7 +717,19 @@ function FeaturedEventCard({
 }
 
 /** Compact one-line event row for the "Upcoming events" list. */
-function UpcomingEventRow({ event: a, index = 0, onOpen }: { event: AnnouncementView; index?: number; onOpen: () => void }) {
+function UpcomingEventRow({
+  event: a,
+  index = 0,
+  isAdmin = false,
+  onOpen,
+  onEdit,
+}: {
+  event: AnnouncementView
+  index?: number
+  isAdmin?: boolean
+  onOpen: () => void
+  onEdit: () => void
+}) {
   const href = eventHref(a)
   const { mon, day, dow } = feedDateParts(a.eventDate)
 
@@ -747,25 +762,31 @@ function UpcomingEventRow({ event: a, index = 0, onOpen }: { event: Announcement
         </p>
         {a.location && <p className="mt-0.5 truncate text-xs text-muted-foreground">{a.location}</p>}
       </div>
-      <ChevronRight className="size-4 shrink-0 self-center text-muted-foreground" />
     </>
   )
 
-  const className =
-    "group flex items-stretch gap-3 rounded-2xl border border-border bg-card p-2.5 text-left transition-all duration-200 hover:border-primary/40 animate-in fade-in slide-in-from-bottom-2 fill-mode-both"
+  // The card styling + entrance animation live on the <li> so the tappable
+  // area and the manage menu can sit side by side — a menu with its own buttons
+  // can't be nested inside the row's <Link>.
+  const wrapClass =
+    "flex items-stretch gap-2 rounded-2xl border border-border bg-card p-2.5 transition-all duration-200 hover:border-primary/40 animate-in fade-in slide-in-from-bottom-2 fill-mode-both"
+  const innerClass = "group flex min-w-0 flex-1 items-stretch gap-3 text-left"
   const style = { animationDelay: `${Math.min(index, 6) * 40}ms` }
 
   return (
-    <li>
+    <li className={wrapClass} style={style}>
       {href ? (
-        <Link href={href} aria-label={`View details for ${a.title}`} className={className} style={style}>
+        <Link href={href} aria-label={`View details for ${a.title}`} className={innerClass}>
           {body}
         </Link>
       ) : (
-        <button type="button" onClick={onOpen} aria-label={`View details for ${a.title}`} className={cn(className, "w-full")} style={style}>
+        <button type="button" onClick={onOpen} aria-label={`View details for ${a.title}`} className={cn(innerClass, "w-full")}>
           {body}
         </button>
       )}
+      <div className="flex items-center self-center">
+        <EventCardMenu event={a} isAdmin={isAdmin} onEdit={onEdit} onOpen={onOpen} />
+      </div>
     </li>
   )
 }
@@ -1327,9 +1348,17 @@ function EventDetailSheet({
             </div>
           </div>
 
-          {a.description && (
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{a.description}</p>
-          )}
+            {a.description && (
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{a.description}</p>
+            )}
+            {a.additionalInfo && (
+              <div className="rounded-2xl border border-primary/25 bg-primary/5 p-3.5">
+                <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary">
+                  <Info className="size-3.5" /> Additional information
+                </p>
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">{a.additionalInfo}</p>
+              </div>
+            )}
 
           {/* Registration is the only way to attend, so this is the single CTA. */}
           {!a.isOwner && takesRegistrations && (
@@ -1512,6 +1541,8 @@ function AdvertiseForm({
   const adType: AdType = "event"
   const [title, setTitle] = useState(event?.title ?? "")
   const [description, setDescription] = useState(event?.description ?? "")
+  // Optional admin note: any important information registrants should know.
+  const [additionalInfo, setAdditionalInfo] = useState(event?.additionalInfo ?? "")
   // Online vs in-person. Existing events keep their stored mode; new events start
   // on the type chosen in the create sheet, defaulting to in-person.
   const [locationMode, setLocationMode] = useState<"in_person" | "online">(
@@ -1598,6 +1629,7 @@ function AdvertiseForm({
           await orgUpdateEvent(event.id, {
             title,
             description,
+            additionalInfo,
             flyer,
             eventDate,
             eventTime,
@@ -1612,6 +1644,7 @@ function AdvertiseForm({
           adType,
           title,
           description,
+          additionalInfo,
           flyer,
           eventDate,
           eventTime,
@@ -1751,6 +1784,21 @@ function AdvertiseForm({
                 rows={3}
                 maxLength={400}
               />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="ann-info" className="text-sm font-medium">
+                Additional information
+              </label>
+              <Textarea
+                id="ann-info"
+                value={additionalInfo}
+                onChange={(e) => setAdditionalInfo(e.target.value)}
+                rows={3}
+                maxLength={600}
+                placeholder="Anything important attendees should know — parking, dress code, what to bring, entry instructions…"
+              />
+              <p className="text-xs text-muted-foreground">Optional. Shown on the event page alongside the details.</p>
             </div>
 
             {/* Date, time, venue (all required) */}

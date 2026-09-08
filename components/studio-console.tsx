@@ -70,7 +70,7 @@ import { LiveStage, MAX_GUESTS, QualityIcon } from "@/components/live-stage"
 import { useMeetingDurationWarnings } from "@/lib/use-meeting-duration-warnings"
 import { LiveAudienceSheet } from "@/components/live-audience-sheet"
 import { useLivePresence } from "@/lib/use-live-presence"
-import { LIVE_THEMES, liveThemeStyle, isLiveImageTheme } from "@/lib/live-themes"
+import { LIVE_THEMES, liveThemeStyle, liveThemeSwatchStyle, isLiveImageTheme } from "@/lib/live-themes"
 import { LIVE_CATEGORIES } from "@/lib/live-categories"
 import { ReactionLayer } from "@/components/live-reactions"
 import { BackExitMenu } from "@/components/live-back-menu"
@@ -1302,7 +1302,7 @@ function ThemePanel({
                 "group relative overflow-hidden rounded-2xl p-3 text-left ring-1 ring-inset transition-all",
                 active ? "ring-2 ring-primary" : "ring-border hover:ring-foreground/30",
               )}
-              style={liveThemeStyle(t.id)}
+              style={liveThemeSwatchStyle(t.id)}
             >
               {/* Preview swatch — photo themes show a single accent dot (the
                   image itself is the preview), gradient themes show both hues. */}
