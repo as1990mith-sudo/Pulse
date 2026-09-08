@@ -1740,9 +1740,21 @@ export function PostCard({
       setClampable(true)
     }
     measure()
-    // Re-measure on reflow (rotation, font swap, container resize) so the clamp
-    // and the "Read more" toggle stay correct instead of going stale.
-    const observer = new ResizeObserver(measure)
+    // Re-measure only on a genuine WIDTH change (rotation, font swap, container
+    // resize) — never on the height/visibility churn from `content-visibility:
+    // auto`. Each feed post's <article> is `cv-auto`, so scrolling repeatedly
+    // collapses this element to 0×0 and back; an unguarded observer would re-run
+    // the getClientRects() line measurement — a forced synchronous layout — on
+    // every post as it crosses the viewport edge, which is the feed's scroll
+    // jank. The clamp only depends on width, so keying off the rendered width
+    // skips those no-op re-fires and keeps scrolling smooth.
+    let lastWidth = el.clientWidth
+    const observer = new ResizeObserver(() => {
+      const w = el.clientWidth
+      if (w === 0 || w === lastWidth) return
+      lastWidth = w
+      measure()
+    })
     observer.observe(el)
     return () => observer.disconnect()
   }, [text, clampLines, expanded])
