@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import useSWR from "swr"
@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Building2,
+  GripVertical,
   KeyRound,
   Plus,
   Loader2,
@@ -24,6 +25,7 @@ import {
   getMyHomeMemberships,
   purgeHomeNow,
   reactivateHome,
+  reorderMyHomes,
   setActiveHome,
   leaveHome,
   type DeletedHomeLink,
@@ -90,6 +92,79 @@ export function MyHomesView() {
   const canLeaveConfirm = leaveConfirm.trim().toUpperCase() === "LEAVE"
   // While a destructive action is in flight the sheet must not be dismissable.
   const busyAction = leaving || deleting
+
+  // ── Personal reordering ───────────────────────────────────────────────────
+  // The list the member sees is a LOCAL copy so a drag reorders instantly, then
+  // persists in the background. It re-syncs from the server whenever the set of
+  // Homes (or the active one) actually changes, but never mid-drag — otherwise a
+  // background revalidation would snap the row out from under the finger.
+  const [items, setItems] = useState<MyHomeLink[]>(homes)
+  const [draggingHandle, setDraggingHandle] = useState<string | null>(null)
+  const draggingRef = useRef(false)
+  const dragIndexRef = useRef(0)
+  const rowRefs = useRef<(HTMLDivElement | null)[]>([])
+  const homesKey = homes.map((h) => `${h.handle}${h.isActive ? "*" : ""}`).join(",")
+  useEffect(() => {
+    if (!draggingRef.current) setItems(homes)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [homesKey])
+
+  // Stable identities so the window listeners added on pointer-down are the same
+  // references removed on pointer-up, even though the component re-renders on
+  // every reorder while the drag is in flight.
+  const onDragMove = useRef((e: PointerEvent) => {
+    if (!draggingRef.current) return
+    const y = e.clientY
+    const els = rowRefs.current
+    let target = dragIndexRef.current
+    for (let i = 0; i < els.length; i++) {
+      const el = els[i]
+      if (!el) continue
+      const r = el.getBoundingClientRect()
+      if (y >= r.top && y <= r.bottom) {
+        target = i
+        break
+      }
+    }
+    if (target !== dragIndexRef.current) {
+      const from = dragIndexRef.current
+      setItems((prev) => {
+        const next = [...prev]
+        const [moved] = next.splice(from, 1)
+        next.splice(target, 0, moved)
+        return next
+      })
+      dragIndexRef.current = target
+      haptic("light")
+    }
+  }).current
+
+  const endDrag = useRef(() => {
+    window.removeEventListener("pointermove", onDragMove)
+    window.removeEventListener("pointerup", endDrag)
+    draggingRef.current = false
+    setDraggingHandle(null)
+    // Persist the order the member landed on. Optimistically reflect it in the
+    // SWR cache so a background revalidation can't briefly restore the old order.
+    setItems((current) => {
+      const ordered = current.map((h) => h.handle)
+      void mutate(current, { revalidate: false })
+      void reorderMyHomes(ordered).catch(() => {})
+      return current
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }).current
+
+  function startDrag(index: number, e: React.PointerEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    draggingRef.current = true
+    dragIndexRef.current = index
+    setDraggingHandle(items[index]?.handle ?? null)
+    haptic("light")
+    window.addEventListener("pointermove", onDragMove)
+    window.addEventListener("pointerup", endDrag)
+  }
 
   function closeActions() {
     setActionsFor(null)
@@ -254,7 +329,7 @@ export function MyHomesView() {
         <p className="px-1 py-6 text-sm text-muted-foreground">Tap + to join or set up a Home.</p>
       ) : (
         <div className="flex flex-col gap-2">
-          {homes.map((h) => {
+          {items.map((h, index) => {
             // Show the member's ACTUAL role in this Home (Owner, Administrator,
             // Content Manager, Member, …) rather than flattening every admin
             // role to "Admin". A user's role is per-Home, so this row is also
@@ -262,22 +337,38 @@ export function MyHomesView() {
             // an ordinary member in another.
             const roleLabel = homeRoleLabel(h.role)
             const busy = switching === h.handle
+            const isDragging = draggingHandle === h.handle
             return (
               <div
                 key={h.handle}
+                ref={(el) => {
+                  rowRefs.current[index] = el
+                }}
                 className={cn(
                   "group flex w-full items-center rounded-xl border pr-1 transition-all",
                   h.isActive
                     ? "border-primary/50 bg-primary/[0.06]"
                     : "border-border/60 hover:border-border hover:bg-secondary/40",
                   switching && !busy && "opacity-40",
+                  isDragging && "scale-[1.02] border-primary/60 bg-secondary/60 shadow-lg",
                 )}
               >
+                {/* Drag handle — personal reordering of the member's own list. */}
+                <button
+                  type="button"
+                  aria-label={`Reorder ${h.name}`}
+                  onPointerDown={(e) => startDrag(index, e)}
+                  disabled={!!switching}
+                  style={{ touchAction: "none" }}
+                  className="flex h-full shrink-0 cursor-grab items-center justify-center pl-2 pr-0.5 text-muted-foreground/40 transition-colors hover:text-muted-foreground active:cursor-grabbing"
+                >
+                  <GripVertical className="size-4" />
+                </button>
                 <button
                   type="button"
                   onClick={() => handleSwitch(h.handle, h.isActive)}
-                  disabled={!!switching}
-                  className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left active:scale-[0.99]"
+                  disabled={!!switching || draggingRef.current}
+                  className="flex min-w-0 flex-1 items-center gap-3 py-2.5 pl-1 pr-3 text-left active:scale-[0.99]"
                 >
                   <span
                     className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-lg text-sm font-bold text-white"

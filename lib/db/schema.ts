@@ -1976,6 +1976,10 @@ export const homeMembership = pgTable(
     status: text("status").notNull().default("active"),
     // How they joined: "created" (founding owner), "key_auto", "key_request".
     joinedVia: text("joinedVia").notNull().default("key_auto"),
+    // Per-member manual ordering of their own "My Homes" list. Null means the
+    // member hasn't reordered, so those fall back to the default (newest first)
+    // order. Lower numbers sort earlier.
+    sortOrder: integer("sortOrder"),
     createdAt: timestamp("createdAt").notNull().defaultNow(),
     updatedAt: timestamp("updatedAt").notNull().defaultNow(),
   },

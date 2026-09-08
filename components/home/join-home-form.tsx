@@ -25,20 +25,41 @@ export function JoinHomeForm({ initialKey = "", signedIn = true }: { initialKey?
   const [error, setError] = useState<string | null>(null)
   const [preview, setPreview] = useState<HomeKeyPreview | null>(null)
   const [result, setResult] = useState<Result | null>(null)
+  // True while we auto-resolve a key passed in the URL into its Home preview, so
+  // the initial paint is a calm loading state rather than the empty key form.
+  const [booting, setBooting] = useState(signedIn && !!initialKey && isValidKeyFormat(initialKey))
 
   const valid = isValidKeyFormat(value)
 
-  // When the member returns from sign-up already signed in with a valid key in
-  // the URL, complete the join automatically and drop them inside the Home —
-  // no need to re-confirm the organisation they already chose before signing up.
+  // When someone opens a Home link with a valid key, DON'T silently make them a
+  // member — resolve the key into the Home's preview and drop them on the
+  // confirmation card, where they explicitly tap the confirm button to join.
+  // (Previously this auto-joined, so following a link enrolled the account
+  // holder with no chance to review the Home first.)
   const autoRan = useRef(false)
   useEffect(() => {
     if (autoRan.current) return
     if (!signedIn || !initialKey || !isValidKeyFormat(initialKey)) return
     autoRan.current = true
-    void runJoin(normalizeKey(initialKey))
+    void runPreview(normalizeKey(initialKey))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signedIn, initialKey])
+
+  // Resolve a key into its Home preview (shared by the auto-run and, indirectly,
+  // the manual validate step). Clears the boot state once it settles.
+  async function runPreview(key: string) {
+    setError(null)
+    setLoading(true)
+    try {
+      const p = await previewHomeByKey(key)
+      setPreview(p)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "That Home key isn't recognised.")
+    } finally {
+      setLoading(false)
+      setBooting(false)
+    }
+  }
 
   // Performs the actual join and routes on success. Shared by the auto-join
   // effect and the manual "confirm" button.
@@ -67,15 +88,7 @@ export function JoinHomeForm({ initialKey = "", signedIn = true }: { initialKey?
       setError("Enter a key in the format FREQ-XXX-XXXX-XXXX.")
       return
     }
-    setLoading(true)
-    try {
-      const p = await previewHomeByKey(normalizeKey(value))
-      setPreview(p)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "That Home key isn't recognised.")
-    } finally {
-      setLoading(false)
-    }
+    await runPreview(normalizeKey(value))
   }
 
   async function confirmJoin() {
@@ -150,6 +163,7 @@ export function JoinHomeForm({ initialKey = "", signedIn = true }: { initialKey?
             onClick={() => {
               setPreview(null)
               setError(null)
+              setBooting(false)
             }}
             disabled={loading}
             className="w-full"
@@ -161,13 +175,13 @@ export function JoinHomeForm({ initialKey = "", signedIn = true }: { initialKey?
     )
   }
 
-  // Auto-join in progress (member just signed up and is being placed into the
-  // Home). Show a calm loading state instead of the empty key form.
-  if (signedIn && initialKey && isValidKeyFormat(initialKey) && !error) {
+  // Resolving a key from the URL into its Home preview. Show a calm loading
+  // state instead of the empty key form until the confirmation card is ready.
+  if (booting && !error) {
     return (
       <div className="flex flex-col items-center gap-3 rounded-2xl border border-border/60 bg-card p-8 text-center">
         <Loader2 className="size-6 animate-spin text-primary" />
-        <p className="text-sm text-muted-foreground">Joining your Home…</p>
+        <p className="text-sm text-muted-foreground">Loading your Home…</p>
       </div>
     )
   }

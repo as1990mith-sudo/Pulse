@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react"
-import { LIVE_THEMES } from "@/lib/live-themes"
+import { LIVE_THEMES, liveThemeThumbUrl } from "@/lib/live-themes"
 
 /**
  * Chat wallpapers for 1-on-1 conversations (and reusable by group chatrooms).
@@ -26,6 +26,8 @@ export type ChatBackground = {
   gradient?: string
   /** Public image path for `photo`. */
   image?: string
+  /** Lightweight thumbnail for the picker swatch (full `image` is multi-MB). */
+  thumbnail?: string
 }
 
 export const CHAT_BACKGROUNDS: ChatBackground[] = [
@@ -41,6 +43,7 @@ export const CHAT_BACKGROUNDS: ChatBackground[] = [
     kind: t.backgroundImage ? "photo" : "gradient",
     gradient: t.background,
     image: t.backgroundImage,
+    thumbnail: t.backgroundImage ? liveThemeThumbUrl(t.id) ?? undefined : undefined,
   })),
 ]
 
@@ -69,7 +72,8 @@ export function chatBackgroundStyle(id: string | null | undefined): CSSPropertie
 export function chatBackgroundSwatchStyle(bg: ChatBackground): CSSProperties {
   if (bg.kind === "gradient") return { backgroundImage: bg.gradient }
   if (bg.kind === "photo") {
-    return { backgroundImage: `url(${bg.image})`, backgroundSize: "cover", backgroundPosition: "center" }
+    // Prefer the tiny thumbnail so the picker doesn't pull full-res wallpapers.
+    return { backgroundImage: `url(${bg.thumbnail ?? bg.image})`, backgroundSize: "cover", backgroundPosition: "center" }
   }
   return {}
 }

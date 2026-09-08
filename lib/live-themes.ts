@@ -140,6 +140,44 @@ export function isLiveImageTheme(id: string | null | undefined): boolean {
   return liveThemeImageUrl(id) !== null
 }
 
+/**
+ * Small, optimized thumbnail of a theme's photo — for the picker swatches only.
+ * The full room backgrounds are multi-megabyte photos (winter-cabin alone is
+ * ~3.7MB); rendering them into a grid of tiny swatches made the theme/background
+ * picker download ~8MB of imagery just to preview it, which is why it opened so
+ * slowly. Bundled presets ship a ~10-25KB thumbnail alongside the original at
+ * `/live-themes/thumbs/<name>.jpg`; custom uploads (blob/https/data) have no
+ * thumbnail, so they fall back to the original URL.
+ */
+export function liveThemeThumbUrl(id: string | null | undefined): string | null {
+  const url = liveThemeImageUrl(id)
+  if (!url) return null
+  if (url.startsWith("/live-themes/")) return url.replace("/live-themes/", "/live-themes/thumbs/")
+  return url
+}
+
+/**
+ * Style for a theme PICKER SWATCH. Identical accent variables to
+ * `liveThemeStyle`, but it paints the lightweight thumbnail instead of the
+ * full-resolution room photo, so opening the picker is instant.
+ */
+export function liveThemeSwatchStyle(id: string | null | undefined): CSSProperties {
+  const thumb = liveThemeThumbUrl(id)
+  if (thumb) {
+    const t = getLiveTheme(id)
+    const cssUrl = `url("${thumb.replace(/"/g, '\\"')}")`
+    return {
+      background: `${PHOTO_SCRIM}, ${cssUrl} center / cover no-repeat`,
+      backgroundColor: "oklch(0.11 0.005 285)",
+      ["--live-accent" as string]: t.accent,
+      ["--primary" as string]: t.primary,
+      ["--primary-foreground" as string]: t.primaryForeground,
+      ["--ring" as string]: t.primary,
+    } as CSSProperties
+  }
+  return liveThemeStyle(id)
+}
+
 // Legibility scrim layered over photo backgrounds: light in the middle so the
 // image reads, darker at top/bottom where the header and controls sit.
 const PHOTO_SCRIM =
