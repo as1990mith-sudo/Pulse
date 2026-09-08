@@ -792,23 +792,32 @@ export function LiveVideoViewer({
               }}
               onMinimize={onMinimize ?? (() => {})}
             />
-            <div className="flex min-w-0 items-center gap-2 rounded-full bg-black/40 py-1 pl-1 pr-1.5 ring-1 ring-inset ring-white/10 backdrop-blur-md">
+            <div className="flex min-w-0 items-center gap-2.5 rounded-2xl bg-black/35 py-1.5 pl-1.5 pr-2 ring-1 ring-inset ring-white/10 backdrop-blur-xl">
               {stream.cover ? (
-                <CoverArt src={stream.cover} alt={`${stream.title} cover artwork`} className="size-8" />
+                <CoverArt src={stream.cover} alt={`${stream.title} cover artwork`} className="size-9 rounded-xl" />
               ) : (
                 <span
                   className={cn(
-                    "flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white",
+                    "flex size-9 shrink-0 items-center justify-center rounded-xl text-xs font-semibold text-white",
                     getAvatarColor(stream.hostId),
                   )}
                   aria-hidden="true"
                 >
-                  {getInitials(stream.hostName)}
+                  {getInitials(stream.homeName ?? stream.hostName)}
                 </span>
               )}
               <div className="flex min-w-0 flex-col leading-tight">
-                <span className="truncate text-sm font-semibold text-white">{stream.hostName}</span>
-                <MarqueeTitle text={stream.title} className="text-[11px] text-white/60" />
+                <span className="truncate font-display text-[13px] font-semibold tracking-tight text-white">
+                  {stream.homeName ?? stream.hostName}
+                </span>
+                <MarqueeTitle
+                  text={
+                    stream.homeName && stream.homeName !== stream.hostName
+                      ? `${stream.hostName} · ${stream.title}`
+                      : stream.title
+                  }
+                  className="text-[11px] font-medium tracking-wide text-white/55"
+                />
               </div>
               {!isSelf && (
                 <InlineFollowButton
@@ -938,7 +947,7 @@ export function LiveVideoViewer({
           )}
         </div>
 
-        {/* ── Call-in affordance ───────────────────────────────────────────────
+        {/* ── Call-in affordance ────────��──────────────────────────────────────
             A floating tap-to-call-in control for signed-in viewers not yet on
             stage. Promoted guests appear as stage tiles above. */}
         {guestsEnabled && canWatch && !canPublish && (
