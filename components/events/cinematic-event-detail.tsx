@@ -10,6 +10,7 @@ import {
   Check,
   Clock,
   Heart,
+  Info,
   MapPin,
   Navigation,
   Share2,
@@ -36,6 +37,8 @@ type Props = {
   accentColor: string | null
   flyer: string | null
   description: string | null
+  /** Optional admin note with any important information for attendees. */
+  additionalInfo: string | null
   dateLabel: string | null
   timeLabel: string | null
   location: string | null
@@ -73,6 +76,7 @@ export function CinematicEventDetail({
   accentColor,
   flyer,
   description,
+  additionalInfo,
   dateLabel,
   timeLabel,
   location,
@@ -305,6 +309,24 @@ export function CinematicEventDetail({
                   {para}
                 </p>
               ))}
+            </div>
+          </section>
+        ) : null}
+
+        {/* ---- ADDITIONAL INFORMATION (admin note) ---- */}
+        {additionalInfo ? (
+          <section className="px-5">
+            <div className="rounded-2xl border border-white/12 bg-white/[0.04] p-4">
+              <h2 className="flex items-center gap-2 text-[12px] font-medium uppercase tracking-[0.24em]" style={accentText}>
+                <Info className="size-3.5" /> Additional information
+              </h2>
+              <div className="mt-3 flex flex-col gap-3 text-[15px] leading-relaxed text-white/80">
+                {additionalInfo.split(/\n{2,}/).map((para, i) => (
+                  <p key={i} className="whitespace-pre-wrap text-pretty">
+                    {para}
+                  </p>
+                ))}
+              </div>
             </div>
           </section>
         ) : null}

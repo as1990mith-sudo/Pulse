@@ -608,6 +608,10 @@ export const announcement = pgTable("announcement", {
   adType: text("adType").notNull().default("event"), // "event" | "product"
   title: text("title").notNull(),
   description: text("description"),
+  // Optional free-text note the publishing admin can add with any important
+  // information registrants should know (parking, dress code, what to bring,
+  // entry instructions, …). Shown on the event detail alongside the description.
+  additionalInfo: text("additionalInfo"),
   flyer: text("flyer"),
   location: text("location"), // venue (events) — required for events
   // How/where an event happens. "in_person" uses `location` + the confirmed
