@@ -89,12 +89,9 @@ export function ITestify({
         <div className="mx-auto w-full max-w-2xl px-4 pb-28 pt-4 sm:px-6">
           {/* Section intro — understated heading with a clear "Share yours"
               action. The global/room chrome above is untouched. */}
-          <div className="flex items-end justify-between gap-3">
+          <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <h2 className="font-display text-xl font-bold tracking-tight">Testimonials</h2>
-              <p className="mt-0.5 text-sm text-pretty text-muted-foreground">
-                Real stories. Real faith. Real impact.
-              </p>
             </div>
             <Button
               onClick={() => setComposerOpen(true)}
