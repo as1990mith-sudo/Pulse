@@ -6,10 +6,14 @@ import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme()
+  // Sonner only understands light/dark/system. Every app theme except Light is
+  // dark-toned (Charcoal, Glass), so collapse them to "dark"; toast colours
+  // themselves come from the --popover CSS vars, so they still match the theme.
+  const toasterTheme: ToasterProps["theme"] = theme === "light" ? "light" : "dark"
 
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme={toasterTheme}
       className="toaster group"
       icons={{
         success: (

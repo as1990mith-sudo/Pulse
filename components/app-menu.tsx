@@ -18,6 +18,7 @@ import {
   Library as LibraryIcon,
   LogOut,
   Mic,
+  Layers,
   Moon,
   MoonStar,
   Newspaper,
@@ -39,9 +40,9 @@ import { useOverlayHistory } from "@/lib/navigation/use-overlay-history"
 import { cn } from "@/lib/utils"
 
 const themes = [
-  { value: "charcoal", label: "Charcoal", icon: MoonStar },
-  { value: "dark", label: "Dark", icon: Moon },
-  { value: "light", label: "Light", icon: Sun },
+    { value: "charcoal", label: "Charcoal", icon: MoonStar },
+    { value: "glass", label: "Glass", icon: Layers },
+    { value: "light", label: "Light", icon: Sun },
 ] as const
 
 const SKIN_SWATCH: Record<string, string> = {
