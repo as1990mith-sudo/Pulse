@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { Reorder, useDragControls } from "motion/react"
 import useSWR from "swr"
 import {
   Check,
@@ -637,5 +638,132 @@ export function MyHomesView() {
         </SheetContent>
       </Sheet>
     </div>
+  )
+}
+
+/**
+ * One Home in the member's personal list, wrapped as a Framer Motion
+ * `<Reorder.Item>` so it animates smoothly as siblings shift (the same feel as
+ * the playlist tracklist). Drag is grip-only via `dragControls` so the switch
+ * button and 3-dot menu stay tappable; the grip carries `touch-none` so a drag
+ * never scrolls the page. The lifted row gets an opaque background so it doesn't
+ * turn transparent under the Glass theme's translucent surfaces.
+ */
+function HomeRow({
+  home: h,
+  busy,
+  switching,
+  isDragging,
+  onSwitch,
+  onOpenActions,
+  onDragStart,
+  onCommit,
+}: {
+  home: MyHomeLink
+  busy: boolean
+  switching: string | null
+  isDragging: boolean
+  onSwitch: () => void
+  onOpenActions: () => void
+  onDragStart: () => void
+  onCommit: () => void
+}) {
+  const controls = useDragControls()
+  // Show the member's ACTUAL role in this Home (Owner, Administrator, Content
+  // Manager, Member, …) rather than flattening every admin role to "Admin".
+  const roleLabel = homeRoleLabel(h.role)
+  return (
+    <Reorder.Item
+      value={h}
+      dragListener={false}
+      dragControls={controls}
+      onDragStart={onDragStart}
+      onDragEnd={onCommit}
+      className={cn(
+        "group flex w-full items-center rounded-xl border bg-background pr-1 transition-colors",
+        h.isActive
+          ? "border-primary/50 bg-primary/[0.06]"
+          : "border-border/60 hover:border-border hover:bg-secondary/40",
+        switching && !busy && "opacity-40",
+        isDragging && "border-primary/60 bg-secondary/60 shadow-lg",
+      )}
+    >
+      {/* Drag handle — personal reordering of the member's own list. */}
+      <button
+        type="button"
+        aria-label={`Reorder ${h.name}`}
+        onPointerDown={(e) => {
+          e.preventDefault()
+          controls.start(e)
+        }}
+        disabled={!!switching}
+        className="flex h-full shrink-0 cursor-grab touch-none items-center justify-center pl-2 pr-0.5 text-muted-foreground/40 transition-colors hover:text-muted-foreground active:cursor-grabbing"
+      >
+        <GripVertical className="size-4" />
+      </button>
+      <button
+        type="button"
+        onClick={onSwitch}
+        disabled={!!switching}
+        className="flex min-w-0 flex-1 items-center gap-3 py-2.5 pl-1 pr-3 text-left active:scale-[0.99]"
+      >
+        <span
+          className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-lg text-sm font-bold text-white"
+          style={{ backgroundColor: h.accent }}
+        >
+          {h.logo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={h.logo || "/placeholder.svg"} alt="" className="size-full object-cover" />
+          ) : (
+            h.initials
+          )}
+        </span>
+
+        <span className="min-w-0 flex-1">
+          {/* Name — always exactly one line, ellipsis on overflow. */}
+          <span className="block overflow-hidden text-ellipsis whitespace-nowrap text-[15px] font-semibold leading-tight text-foreground">
+            {h.name}
+          </span>
+          <span className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span>{roleLabel}</span>
+            {typeof h.memberCount === "number" && (
+              <>
+                <span className="text-muted-foreground/40" aria-hidden>
+                  |
+                </span>
+                <Users className="size-3" aria-hidden />
+                <span>{h.memberCount}</span>
+              </>
+            )}
+          </span>
+        </span>
+
+        {/* Active/loading indicator, kept inside the switch button. */}
+        <span className="flex w-5 shrink-0 items-center justify-center">
+          {busy ? (
+            <Loader2 className="size-4 animate-spin text-primary" />
+          ) : h.isActive ? (
+            <Check className="size-[18px] text-primary" strokeWidth={2.5} />
+          ) : (
+            <ChevronRight className="size-4 text-muted-foreground/30 transition-colors group-hover:text-muted-foreground/60" />
+          )}
+        </span>
+      </button>
+
+      {/* 3-dot menu — on every row. It opens the Home's public profile for
+          anyone, and adds the destructive actions that apply to the viewer's
+          role (leave for members, delete for the owner). */}
+      <span className="flex w-8 shrink-0 items-center justify-center">
+        <button
+          type="button"
+          onClick={onOpenActions}
+          disabled={!!switching}
+          aria-label={`Options for ${h.name}`}
+          className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground active:scale-90"
+        >
+          <MoreVertical className="size-[18px]" />
+        </button>
+      </span>
+    </Reorder.Item>
   )
 }
