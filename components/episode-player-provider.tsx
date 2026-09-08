@@ -35,6 +35,55 @@ function fmt(s: number) {
 
 const SPEEDS = [1, 1.25, 1.5, 1.75, 2] as const
 
+/**
+ * Pointer-based free-drag for a floating surface (the minimised audio replay
+ * pill). Returns a ref for the draggable element, its explicit position once
+ * moved (`null` = CSS default anchor), a `moved` ref so a concluding click can
+ * tell a drag from a tap, a `setPos` reset, and the pointer handlers. Controls
+ * that must click instead of dragging should carry a `data-no-drag` attribute.
+ */
+function useDragHandle() {
+  const ref = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
+  const drag = useRef<{ id: number; startX: number; startY: number; originX: number; originY: number } | null>(null)
+  const moved = useRef(false)
+
+  function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if ((e.target as HTMLElement).closest("[data-no-drag]")) return
+    const el = ref.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    drag.current = { id: e.pointerId, startX: e.clientX, startY: e.clientY, originX: rect.left, originY: rect.top }
+    moved.current = false
+    el.setPointerCapture(e.pointerId)
+  }
+
+  function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const d = drag.current
+    const el = ref.current
+    if (!d || !el || e.pointerId !== d.id) return
+    const dx = e.clientX - d.startX
+    const dy = e.clientY - d.startY
+    if (!moved.current && Math.hypot(dx, dy) < 6) return
+    moved.current = true
+    const w = el.offsetWidth
+    const h = el.offsetHeight
+    setPos({
+      x: Math.max(8, Math.min(d.originX + dx, window.innerWidth - w - 8)),
+      y: Math.max(8, Math.min(d.originY + dy, window.innerHeight - h - 8)),
+    })
+  }
+
+  function onPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    const d = drag.current
+    if (!d || e.pointerId !== d.id) return
+    ref.current?.releasePointerCapture?.(e.pointerId)
+    drag.current = null
+  }
+
+  return { ref, pos, setPos, moved, handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp } }
+}
+
 /** An episode is playable on-demand when it has a recording (audio OR video) and isn't live/upcoming. */
 export function isPlayable(show: Show): boolean {
   return Boolean(show.audioUrl || show.videoUrl) && show.status !== "live" && show.status !== "upcoming"
@@ -522,6 +571,15 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
       miniMoved.current = false
     }
   }, [videoMini])
+
+  // Free-drag for the minimised AUDIO pill (video uses the videoMini window
+  // above). Position resets to the default anchor whenever the pill is hidden.
+  const audioBar = useDragHandle()
+  const audioMiniShown = Boolean(current) && minimized && !isVideo
+  useEffect(() => {
+    if (!audioMiniShown) audioBar.setPos(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioMiniShown])
 
   function onMiniPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (!videoMini) return

@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { ChevronUp, Radio } from "lucide-react"
+import { ChevronUp, Maximize2, Radio, X } from "lucide-react"
 import { StudioConsole } from "@/components/studio-console"
 import { LiveListener } from "@/components/live-listener"
 import { VideoStudioConsole } from "@/components/video-studio-console"
@@ -135,10 +135,23 @@ export function LiveSessionProvider({ children }: { children: React.ReactNode })
   const expand = useCallback(() => setMinimized(false), [])
   const setMeta = useCallback((m: LiveMeta) => setMetaState(m), [])
 
-  // While a session is minimised, the MiniPlayer is pinned to the bottom of the
-  // viewport. Reserve its height as bottom padding on <body> so page content
-  // never scrolls behind it — the bar acts as a hard floor for the layout.
-  const miniPlayerShown = Boolean(session) && minimized && Boolean(meta)
+  // Minimise behaviour splits by format:
+  //  • VIDEO (host-video / viewer-video) collapses into a floating, draggable
+  //    Picture-in-Picture window that keeps the live video visible.
+  //  • AUDIO (podcast host/listener, conversation) collapses into a floating,
+  //    draggable mini-player pill.
+  const isVideo = session?.kind === "host-video" || session?.kind === "viewer-video"
+  const videoMini = Boolean(session) && minimized && isVideo
+  const audioMini = Boolean(session) && minimized && !isVideo
+
+  // While the audio mini-player is docked at the bottom, reserve its height as
+  // bottom padding on <body> so page content never scrolls behind its resting
+  // position. (The video PiP floats freely and needs no reservation.)
+  const miniPlayerShown = audioMini && Boolean(meta)
+
+  const roomChildren = session ? (
+    <LiveRoomBody session={session} minimize={minimize} close={close} setMeta={setMeta} />
+  ) : null
   useEffect(() => {
     if (!miniPlayerShown) return
     const body = document.body
@@ -189,7 +202,42 @@ export function LiveSessionProvider({ children }: { children: React.ReactNode })
           live format without ever navigating away. */}
       {session && (
         <ResourceProvider descriptor={deriveDescriptor(session, meta)}>
-        <LiveRoomStage minimized={minimized}>
+          {/* One always-mounted stage. Video-live minimise re-styles it in place
+              into a floating draggable PiP (the live video keeps playing);
+              swapping to a differently-wrapped element would remount the room
+              and tear down the LiveKit tracks. */}
+          <LiveRoomStage
+            minimized={minimized}
+            pip={videoMini ? { onExpand: expand, onClose: close, title: meta?.title, live: meta?.live } : null}
+          >
+            {roomChildren}
+          </LiveRoomStage>
+        </ResourceProvider>
+      )}
+
+      {session && audioMini && meta && <MiniPlayer meta={meta} onExpand={expand} />}
+    </LiveSessionContext.Provider>
+  )
+}
+
+/**
+ * The immersive room body for the active session. Extracted so it can be
+ * rendered either full-screen (normal / audio-minimised) or inside the floating
+ * video PiP frame without duplicating the per-kind switch.
+ */
+function LiveRoomBody({
+  session,
+  minimize,
+  close,
+  setMeta,
+}: {
+  session: Session
+  minimize: (to?: string) => void
+  close: () => void
+  setMeta: (m: LiveMeta) => void
+}) {
+  return (
+    <>
           {session.kind === "host" ? (
             <StudioErrorBoundary>
               <div className="flex h-dvh flex-col overflow-hidden">
@@ -266,13 +314,7 @@ export function LiveSessionProvider({ children }: { children: React.ReactNode })
               />
             </div>
           )}
-
-        </LiveRoomStage>
-        </ResourceProvider>
-      )}
-
-      {session && minimized && meta && <MiniPlayer meta={meta} onExpand={expand} />}
-    </LiveSessionContext.Provider>
+    </>
   )
 }
 
@@ -287,33 +329,114 @@ export function LiveSessionProvider({ children }: { children: React.ReactNode })
  *
  * Rendered inside ResourceProvider so it can react to the active resource panel.
  */
-function LiveRoomStage({ minimized, children }: { minimized: boolean; children: React.ReactNode }) {
+/** Config for the floating video PiP; null when the stage is not a video-mini. */
+type PipConfig = { onExpand: () => void; onClose: () => void; title?: string; live?: boolean }
+
+function LiveRoomStage({
+  minimized,
+  pip,
+  children,
+}: {
+  minimized: boolean
+  pip: PipConfig | null
+  children: React.ReactNode
+}) {
   const { activePanel } = useLiveResources()
   const docked = Boolean(activePanel)
+  const { ref, pos, moved, handlers } = useDraggable()
+  const active = Boolean(pip)
+  const scale = 0.4
 
   return (
     <div
+      ref={ref}
+      {...(active ? handlers : {})}
       className={cn(
-        "fixed inset-0 z-[60] overscroll-contain",
-        "lg:flex lg:justify-center lg:overflow-hidden lg:bg-black",
+        active
+          ? cn(
+              "fixed z-[60] cursor-grab touch-none select-none overflow-hidden rounded-3xl bg-black shadow-2xl ring-1 ring-white/20 active:cursor-grabbing",
+              // Default resting spot: bottom-right, clearing the footer + safe area.
+              !pos && "bottom-[calc(env(safe-area-inset-bottom,0px)+var(--bottom-nav-height,0px)+0.75rem)] right-3",
+            )
+          : "fixed inset-0 z-[60] overscroll-contain lg:flex lg:justify-center lg:overflow-hidden lg:bg-black",
       )}
-      style={minimized ? { display: "none" } : undefined}
-      aria-hidden={minimized}
+      style={
+        active
+          ? { width: `calc(100vw * ${scale})`, height: `calc(100dvh * ${scale})`, ...(pos ? { left: pos.x, top: pos.y } : {}) }
+          : minimized
+            ? { display: "none" }
+            : undefined
+      }
+      aria-hidden={minimized && !active}
     >
-      {/* Room column: full-screen on mobile, centred framed column on desktop. */}
+      {/* Transform layer: transparent to layout normally (display:contents), and a
+          scaled 100vw×100dvh box when floating as PiP. Permanently mounted so the
+          live video DOM never tears down when toggling in/out of PiP. A
+          transformed element also becomes the containing block for the room's
+          inner fixed layers, so they scale with it. */}
       <div
-        className={cn(
-          "relative h-dvh w-full overflow-hidden bg-black lg:h-dvh lg:shrink-0 lg:border-x lg:border-white/10",
-          docked ? "lg:w-[600px]" : "lg:w-[680px]",
-        )}
+        className={active ? "pointer-events-none absolute left-0 top-0 origin-top-left" : "contents"}
+        style={active ? { width: "100vw", height: "100dvh", transform: `scale(${scale})` } : undefined}
       >
-        {children}
-        {/* Universal resource layer: drawer picker + floating mini-panel (mobile). */}
-        <LiveResourceLayer />
+        {/* Room column: full-screen on mobile, centred framed column on desktop. */}
+        <div
+          className={cn(
+            "relative h-dvh w-full overflow-hidden bg-black lg:h-dvh lg:shrink-0 lg:border-x lg:border-white/10",
+            docked ? "lg:w-[600px]" : "lg:w-[680px]",
+          )}
+        >
+          {children}
+          {/* Universal resource layer: drawer picker + floating mini-panel (mobile). */}
+          <LiveResourceLayer />
+        </div>
       </div>
 
       {/* Desktop-only right dock (renders nothing until a panel is open). */}
-      <DesktopResourceDock />
+      {!active && <DesktopResourceDock />}
+
+      {/* PiP chrome: tap-anywhere-to-expand surface + corner expand/close. */}
+      {active && pip && (
+        <>
+          <button
+            type="button"
+            aria-label={pip.title ? `Expand live: ${pip.title}` : "Expand live session"}
+            onClick={() => {
+              if (!moved.current) pip.onExpand()
+            }}
+            className="absolute inset-0 z-10"
+          />
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between p-1.5">
+            {pip.live ? (
+              <span className="flex items-center gap-1 rounded-full bg-live px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-live-foreground shadow">
+                <span className="size-1 animate-pulse rounded-full bg-current" />
+                Live
+              </span>
+            ) : (
+              <span />
+            )}
+            <div className="pointer-events-auto flex items-center gap-1">
+              <button
+                type="button"
+                data-no-drag
+                onClick={pip.onExpand}
+                aria-label="Expand live session"
+                className="flex size-7 items-center justify-center rounded-full bg-black/50 text-white ring-1 ring-inset ring-white/20 backdrop-blur-md transition-transform active:scale-90"
+              >
+                <Maximize2 className="size-3.5" strokeWidth={2.5} />
+              </button>
+              <button
+                type="button"
+                data-no-drag
+                onClick={pip.onClose}
+                aria-label="Close live session"
+                className="flex size-7 items-center justify-center rounded-full bg-black/50 text-white ring-1 ring-inset ring-white/20 backdrop-blur-md transition-transform active:scale-90"
+              >
+                <X className="size-3.5" strokeWidth={2.5} />
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -358,47 +481,118 @@ function deriveDescriptor(session: Session, meta: LiveMeta | null): LiveDescript
   }
 }
 
-/** Persistent bar pinned to the bottom while a session is minimised. */
+/**
+ * Pointer-based free-drag for a floating minimised surface (audio mini-player or
+ * video PiP). Returns a ref to attach to the draggable element, its explicit
+ * position once moved (`null` = use the CSS default anchor), a `moved` ref so a
+ * concluding click can tell a drag from a tap, and the pointer handlers.
+ *
+ * The gesture uses pointer capture and only commits to a drag after a small
+ * threshold, so taps still register. Position is clamped inside the viewport.
+ */
+function useDraggable() {
+  const ref = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
+  const drag = useRef<{ id: number; startX: number; startY: number; originX: number; originY: number } | null>(null)
+  const moved = useRef(false)
+
+  function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    // Real controls (marked data-no-drag) should click, not start a drag.
+    if ((e.target as HTMLElement).closest("[data-no-drag]")) return
+    const el = ref.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    drag.current = { id: e.pointerId, startX: e.clientX, startY: e.clientY, originX: rect.left, originY: rect.top }
+    moved.current = false
+    el.setPointerCapture(e.pointerId)
+  }
+
+  function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const d = drag.current
+    const el = ref.current
+    if (!d || !el || e.pointerId !== d.id) return
+    const dx = e.clientX - d.startX
+    const dy = e.clientY - d.startY
+    if (!moved.current && Math.hypot(dx, dy) < 6) return // below threshold — still a tap
+    moved.current = true
+    const w = el.offsetWidth
+    const h = el.offsetHeight
+    setPos({
+      x: Math.max(8, Math.min(d.originX + dx, window.innerWidth - w - 8)),
+      y: Math.max(8, Math.min(d.originY + dy, window.innerHeight - h - 8)),
+    })
+  }
+
+  function onPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    const d = drag.current
+    if (!d || e.pointerId !== d.id) return
+    ref.current?.releasePointerCapture?.(e.pointerId)
+    drag.current = null
+  }
+
+  return {
+    ref,
+    pos,
+    moved,
+    handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp },
+  }
+}
+
+/**
+ * Floating, draggable mini-player pill for a minimised AUDIO session. Rests
+ * centred just above the footer nav; the user can drag it anywhere. Tapping the
+ * pill (without dragging) returns to the immersive room.
+ */
 function MiniPlayer({ meta, onExpand }: { meta: LiveMeta; onExpand: () => void }) {
+  const { ref, pos, moved, handlers } = useDraggable()
+
   return (
     <div
-      className="fixed inset-x-0 z-[55] px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
-      // Dock just above the footer nav when it's visible (var set on
-      // body.has-bottom-nav), otherwise flush to the bottom edge on immersive
-      // routes where the nav is hidden. Keeps the footer usable.
-      style={{ bottom: "var(--bottom-nav-height, 0px)" }}
+      ref={ref}
+      {...handlers}
+      role="button"
+      tabIndex={0}
+      aria-label={`Expand live session: ${meta.title}`}
+      onClick={() => {
+        if (!moved.current) onExpand()
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          onExpand()
+        }
+      }}
+      className={cn(
+        "fixed z-[55] flex w-[min(92vw,26rem)] cursor-grab touch-none select-none items-center gap-3 rounded-2xl border border-white/15 bg-zinc-900/95 p-2.5 text-left shadow-2xl ring-1 ring-black/40 backdrop-blur-xl transition-transform active:scale-[0.99] active:cursor-grabbing",
+        // Default resting spot: bottom-centred, above the footer nav + safe area.
+        !pos && "bottom-[calc(env(safe-area-inset-bottom,0px)+var(--bottom-nav-height,0px)+0.5rem)] left-1/2 -translate-x-1/2",
+      )}
+      style={pos ? { left: pos.x, top: pos.y } : undefined}
     >
-      <button
-        type="button"
-        onClick={onExpand}
-        aria-label={`Expand live session: ${meta.title}`}
-        className="mx-auto flex w-full max-w-2xl items-center gap-3 rounded-2xl border border-white/15 bg-zinc-900/95 p-2.5 text-left shadow-2xl ring-1 ring-black/40 backdrop-blur-xl transition-transform active:scale-[0.99]"
-      >
-        <span className="relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-zinc-800 ring-1 ring-white/10">
-          {meta.cover ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={meta.cover || "/placeholder.svg"} alt="" className="size-full object-cover" />
-          ) : (
-            <Radio className="size-5 text-white/70" strokeWidth={2.5} />
+      <span className="relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-zinc-800 ring-1 ring-white/10">
+        {meta.cover ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={meta.cover || "/placeholder.svg"} alt="" className="size-full object-cover" />
+        ) : (
+          <Radio className="size-5 text-white/70" strokeWidth={2.5} />
+        )}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5">
+          {meta.live && (
+            <span className="flex items-center gap-1 rounded-full bg-live px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-live-foreground">
+              <span className="size-1.5 animate-pulse rounded-full bg-current" /> Live
+            </span>
           )}
+          <span className="truncate text-sm font-bold text-white">{meta.title}</span>
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-1.5">
-            {meta.live && (
-              <span className="flex items-center gap-1 rounded-full bg-live px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-live-foreground">
-                <span className="size-1.5 animate-pulse rounded-full bg-current" /> Live
-              </span>
-            )}
-            <span className="truncate text-sm font-bold text-white">{meta.title}</span>
-          </span>
-          <span className="mt-0.5 block truncate text-xs font-medium text-white/55">
-            {meta.subtitle ?? "Tap to return to the room"}
-          </span>
+        <span className="mt-0.5 block truncate text-xs font-medium text-white/55">
+          {meta.subtitle ?? "Tap to return · drag to move"}
         </span>
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/15 text-white ring-1 ring-inset ring-white/15">
-          <ChevronUp className="size-5" strokeWidth={2.5} />
-        </span>
-      </button>
+      </span>
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/15 text-white ring-1 ring-inset ring-white/15">
+        <ChevronUp className="size-5" strokeWidth={2.5} />
+      </span>
     </div>
   )
 }

@@ -18,6 +18,8 @@ import {
   liveBlocked,
   episode,
   user as userTable,
+  home,
+  organization,
 } from "@/lib/db/schema"
 import { getHandle, getAvatarColor, getInitials } from "@/lib/identity"
 import { LIVE_CATEGORIES } from "@/lib/live-categories"
@@ -354,6 +356,12 @@ export type LiveStreamView = {
   mode: LiveMode
   orientation: LiveOrientation
   layout: LiveLayout
+  // The Home this broadcast belongs to (null for Universal sessions). `homeName`
+  // is the Home's public display name (organisation name), resolved for the
+  // broadcast header so viewers always see the organisation they're watching —
+  // even when an admin hosts personally within that Home.
+  homeId?: string | null
+  homeName?: string | null
   topic?: string | null
   gridPinnedId?: string | null
   visibility: LiveVisibility
@@ -835,6 +843,22 @@ export async function joinBroadcast(input: { roomName: string }): Promise<JoinRe
 }
 
 /** All currently-live streams, newest first. */
+/**
+ * Batch-resolve Home display names (the organisation name — `home.name` is
+ * deprecated for display) for a set of Home ids. Returns a Map keyed by home id
+ * so callers can attach `homeName` to each stream without a per-row join.
+ */
+async function loadHomeNames(homeIds: string[]): Promise<Map<string, string>> {
+  const ids = Array.from(new Set(homeIds))
+  if (ids.length === 0) return new Map()
+  const rows = await db
+    .select({ homeId: home.id, name: organization.name })
+    .from(home)
+    .innerJoin(organization, eq(home.organizationId, organization.id))
+    .where(inArray(home.id, ids))
+  return new Map(rows.map((r) => [r.homeId, r.name]))
+}
+
 export async function getLiveStreams(): Promise<LiveStreamView[]> {
   await reconcileLiveSessions()
   // Private sessions are NEVER listed here, whatever their Home: they are
@@ -862,6 +886,8 @@ export async function getLiveStreams(): Promise<LiveStreamView[]> {
     )
     .orderBy(desc(liveStream.startedAt))
 
+  const homeNames = await loadHomeNames(rows.flatMap((r) => (r.homeId ? [r.homeId] : [])))
+
   return rows.map((r) => ({
     id: r.id,
     roomName: r.roomName,
@@ -874,6 +900,8 @@ export async function getLiveStreams(): Promise<LiveStreamView[]> {
     mode: (r.mode as LiveMode) ?? "audio",
     orientation: (r.orientation as LiveOrientation) ?? "portrait",
     layout: (r.layout as LiveLayout) ?? "podcast",
+    homeId: r.homeId ?? null,
+    homeName: r.homeId ? (homeNames.get(r.homeId) ?? null) : null,
     topic: r.topic ?? null,
     gridPinnedId: r.gridPinnedId ?? null,
     visibility: (r.visibility as LiveVisibility) ?? "public",
@@ -1286,6 +1314,7 @@ export async function getLiveStream(roomName: string): Promise<LiveStreamView | 
     .from(liveStream)
     .where(and(eq(liveStream.roomName, roomName), eq(liveStream.status, "live")))
   if (!r) return null
+  const homeName = r.homeId ? ((await loadHomeNames([r.homeId])).get(r.homeId) ?? null) : null
   return {
     id: r.id,
     roomName: r.roomName,
@@ -1298,6 +1327,8 @@ export async function getLiveStream(roomName: string): Promise<LiveStreamView | 
     mode: (r.mode as LiveMode) ?? "audio",
     orientation: (r.orientation as LiveOrientation) ?? "portrait",
     layout: (r.layout as LiveLayout) ?? "podcast",
+    homeId: r.homeId ?? null,
+    homeName,
     topic: r.topic ?? null,
     gridPinnedId: r.gridPinnedId ?? null,
     visibility: (r.visibility as LiveVisibility) ?? "public",
