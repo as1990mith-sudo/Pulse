@@ -1127,13 +1127,14 @@ function MediaSlide({
 
   // The preview honours the crop the author actually chose at upload. The only
   // limits are the extremes: nothing wider than 16:9 (absurdly panoramic) and
-  // nothing TALLER than 4:5 — a taller crop (portrait 3:4, vertical 9:16) is
-  // shown in a 4:5 card and centre-filled, so one post cannot swallow the whole
-  // screen. Media between those bounds keeps its exact ratio.
+  // nothing TALLER than a 1:1 square — a taller crop (4:5, 3:4, vertical 9:16)
+  // is shown in a square card and centre-filled, so one post cannot swallow the
+  // whole screen. Media between those bounds keeps its exact ratio. This is a
+  // display constraint only; the uploaded media keeps its real cropped ratio.
   const WIDEST = 16 / 9
-  // 4:5 portrait — the tallest card the feed shows. Expressed width/height
-  // (0.8), so a SMALLER number means a taller frame.
-  const TALLEST = 4 / 5
+  // 1:1 square — the tallest card the feed shows. Expressed width/height (1.0),
+  // so a SMALLER number would mean a taller frame.
+  const TALLEST = 1
   const framedAspect = chosen != null ? Math.min(WIDEST, Math.max(TALLEST, chosen)) : null
   // Whether the shown frame crops the media's true framing — used to show an
   // "expand to full screen" hint so viewers know the full composition is
