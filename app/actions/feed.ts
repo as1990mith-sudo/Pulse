@@ -930,6 +930,10 @@ export async function getChannelFeed(
     edited: !!p.editedAt,
     isFollowing: followingIds.has(p.userId),
     isSelf: currentUserId === p.userId,
+    // Carry the 1–5 star rating so iTestify testimony tiles can render it. This
+    // channel is exactly where ratings live, so omitting it here made every
+    // testimony card look unrated even though the value was saved.
+    rating: p.rating ?? null,
     mentionedMe: currentUserId ? (p.mentions ?? []).some((m) => m.userId === currentUserId) : false,
     comments: comments
       .filter((c) => c.postId === p.id)
