@@ -10,6 +10,7 @@ import {
   getPlaylist,
   duplicatePlaylist,
   deletePlaylist,
+  reorderPlaylists,
   getOrganizationMaterials,
   getOrganizationPlaylists,
 } from "@/app/actions/materials"
@@ -451,6 +452,15 @@ export function UploadSection({
               refresh()
             } catch (err) {
               toast.error(err instanceof Error ? err.message : "Could not delete")
+            }
+          }}
+          onReorder={async (orderedIds) => {
+            try {
+              await reorderPlaylists({ organizationId, parentId: null, orderedPlaylistIds: orderedIds })
+              refresh()
+            } catch {
+              toast.error("Could not save the new order")
+              refresh()
             }
           }}
         />

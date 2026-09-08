@@ -1,9 +1,10 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { Reorder } from "motion/react"
 import { ListMusic, Plus, Search } from "lucide-react"
 import type { PlaylistView } from "@/app/actions/materials"
-import { PlaylistCard } from "./playlist-card"
+import { PlaylistCard, ReorderablePlaylistRow } from "./playlist-card"
 
 /**
  * Playlists discovery + management grid. Members browse curated collections;
@@ -21,6 +22,7 @@ export function PlaylistsView({
   onShare,
   onDuplicate,
   onDelete,
+  onReorder,
 }: {
   playlists: PlaylistView[]
   isAdmin: boolean
@@ -34,16 +36,49 @@ export function PlaylistsView({
   onShare: (p: PlaylistView) => void
   onDuplicate: (p: PlaylistView) => void
   onDelete: (p: PlaylistView) => void
+  /** Persist a new top-level playlist order (drag-to-reorder). */
+  onReorder?: (orderedIds: number[]) => void
 }) {
   const [query, setQuery] = useState("")
 
+  // Local copy so a drag reorders instantly, then persists in the background.
+  // Mirrors the material tracklist: `onReorder` updates live during the drag and
+  // we commit once, on drag end. It re-syncs from the incoming prop whenever the
+  // set of playlists actually changes, but never mid-drag, so a background
+  // re-read can't snap a row out from under the finger.
+  const [items, setItems] = useState<PlaylistView[]>(playlists)
+  const itemsRef = useRef(items)
+  itemsRef.current = items
+  const orderAtDragStart = useRef<PlaylistView[]>(items)
+  const draggingRef = useRef(false)
+  const playlistsKey = playlists.map((p) => p.id).join(",")
+  useEffect(() => {
+    if (!draggingRef.current) setItems(playlists)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playlistsKey])
+
+  function handleDragStart() {
+    draggingRef.current = true
+    orderAtDragStart.current = itemsRef.current
+  }
+
+  function commitOrder() {
+    draggingRef.current = false
+    const next = itemsRef.current
+    const prev = orderAtDragStart.current
+    const unchanged = next.map((p) => p.id).join() === prev.map((p) => p.id).join()
+    if (unchanged) return
+    onReorder?.(next.map((p) => p.id))
+  }
+
+  const q = query.trim().toLowerCase()
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return playlists
-    return playlists.filter(
-      (p) => p.name.toLowerCase().includes(q) || (p.description ?? "").toLowerCase().includes(q),
-    )
-  }, [playlists, query])
+    if (!q) return items
+    return items.filter((p) => p.name.toLowerCase().includes(q) || (p.description ?? "").toLowerCase().includes(q))
+  }, [items, q])
+  // Reordering only makes sense over the full, unfiltered list, and only for
+  // admins with a persist handler. While searching we show read-only rows.
+  const reorderable = isAdmin && !q && Boolean(onReorder)
 
   if (loading) {
     return (
@@ -107,6 +142,22 @@ export function PlaylistsView({
 
       {filtered.length === 0 ? (
         <p className="py-10 text-center text-sm text-muted-foreground">No playlists match &ldquo;{query}&rdquo;.</p>
+      ) : reorderable ? (
+        <Reorder.Group axis="y" values={items} onReorder={setItems} as="ul">
+          {items.map((p) => (
+            <ReorderablePlaylistRow
+              key={p.id}
+              playlist={p}
+              onOpen={() => onOpen(p)}
+              onEdit={() => onEdit(p)}
+              onShare={() => onShare(p)}
+              onDuplicate={() => onDuplicate(p)}
+              onDelete={() => onDelete(p)}
+              onDragStart={handleDragStart}
+              onCommit={commitOrder}
+            />
+          ))}
+        </Reorder.Group>
       ) : (
         <div className="divide-y divide-border/60">
           {filtered.map((p) => (
