@@ -113,10 +113,16 @@ export function TestimonialCard({
 
   const rating = typeof post.rating === "number" ? post.rating : null
   const commentCount = post.comments.length
+  const gradient = TILE_GRADIENTS[hashToIndex(String(post.id), TILE_GRADIENTS.length)]
 
   return (
     <>
-      <article className="flex h-full flex-col rounded-2xl border border-border/60 bg-card p-3.5 shadow-sm transition-colors hover:border-border sm:p-4">
+      <article
+        className={cn(
+          "flex h-full flex-col rounded-2xl border border-white/10 p-3.5 text-white shadow-sm transition-colors hover:border-white/20 sm:p-4",
+          gradient,
+        )}
+      >
         {/* Author + date */}
         <header className="flex items-center gap-2.5">
           <Avatar className="size-8 shrink-0">
