@@ -1,6 +1,6 @@
 "use server"
 
-import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm"
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm"
 import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
@@ -581,7 +581,7 @@ export async function getOrganizationPlaylists(orgId: string): Promise<PlaylistV
     .select()
     .from(playlist)
     .where(and(eq(playlist.organizationId, orgId), isNull(playlist.parentId)))
-    .orderBy(desc(playlist.updatedAt))
+    .orderBy(asc(playlist.position), desc(playlist.updatedAt))
   return buildPlaylistViews(orgId, lists)
 }
 
@@ -616,7 +616,7 @@ export async function getPlaylist(orgId: string, playlistId: number): Promise<Pl
     .select()
     .from(playlist)
     .where(and(eq(playlist.organizationId, orgId), eq(playlist.parentId, playlistId)))
-    .orderBy(desc(playlist.updatedAt))
+    .orderBy(asc(playlist.position), desc(playlist.updatedAt))
   const children = await buildPlaylistViews(orgId, childRows)
 
   return {
@@ -664,6 +664,18 @@ export async function createPlaylist(input: {
     parentId = parent.id
   }
 
+  // Append after existing siblings (same org + same parent) so a new playlist
+  // lands at the end of the manual order rather than colliding on position 0.
+  const [{ nextPosition } = { nextPosition: 0 }] = await db
+    .select({ nextPosition: sql<number>`coalesce(max(${playlist.position}), -1) + 1` })
+    .from(playlist)
+    .where(
+      and(
+        eq(playlist.organizationId, input.organizationId),
+        parentId == null ? isNull(playlist.parentId) : eq(playlist.parentId, parentId),
+      ),
+    )
+
   const [created] = await db
     .insert(playlist)
     .values({
@@ -672,6 +684,7 @@ export async function createPlaylist(input: {
       description: input.description?.trim() || null,
       cover: input.cover || null,
       parentId,
+      position: nextPosition,
       updatedAt: new Date(),
     })
     .returning({ id: playlist.id })
@@ -830,6 +843,43 @@ export async function removeMaterialFromPlaylist(input: {
     .delete(playlistMaterial)
     .where(and(eq(playlistMaterial.playlistId, input.playlistId), eq(playlistMaterial.materialId, input.materialId)))
   await db.update(playlist).set({ updatedAt: new Date() }).where(eq(playlist.id, input.playlistId))
+  await revalidateOrg(input.organizationId)
+  return { ok: true }
+}
+
+/**
+ * Persist a new order for a group of sibling playlists (drag-to-reorder of the
+ * playlist "folders" themselves). `parentId` scopes the group: null reorders the
+ * top-level Playlists list, a value reorders the sub-playlists of that parent.
+ * Only ids that actually belong to the org AND that sibling group are written,
+ * so a stale or spoofed id can never move a playlist out of another group.
+ */
+export async function reorderPlaylists(input: {
+  organizationId: string
+  parentId: number | null
+  orderedPlaylistIds: number[]
+}) {
+  await requireOrgOwner(input.organizationId)
+  if (input.orderedPlaylistIds.length === 0) return { ok: true }
+
+  // The real membership of this sibling group, straight from the DB.
+  const siblings = await db
+    .select({ id: playlist.id })
+    .from(playlist)
+    .where(
+      and(
+        eq(playlist.organizationId, input.organizationId),
+        input.parentId == null ? isNull(playlist.parentId) : eq(playlist.parentId, input.parentId),
+      ),
+    )
+  const allowed = new Set(siblings.map((s) => s.id))
+  const ordered = input.orderedPlaylistIds.filter((id) => allowed.has(id))
+
+  await Promise.all(
+    ordered.map((id, position) =>
+      db.update(playlist).set({ position }).where(eq(playlist.id, id)),
+    ),
+  )
   await revalidateOrg(input.organizationId)
   return { ok: true }
 }

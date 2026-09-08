@@ -1,7 +1,8 @@
 "use client"
 
 import Image from "next/image"
-import { ListMusic, MoreVertical, Play } from "lucide-react"
+import { Reorder, useDragControls } from "motion/react"
+import { GripVertical, ListMusic, MoreVertical, Play } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -138,5 +139,69 @@ export function PlaylistCard({
         </DropdownMenu>
       )}
     </div>
+  )
+}
+
+/**
+ * A drag-to-reorder wrapper around {@link PlaylistCard}, matching the material
+ * tracklist's reorder feel exactly (Framer Motion `<Reorder.Item>` so it works
+ * on touch, grip-only drag via `dragControls` so the card body stays tappable,
+ * animated layout as siblings shift). The grip carries `touch-none` so a drag
+ * never scrolls the page on mobile, and the row gets an opaque background + its
+ * own hairline divider so it doesn't turn transparent while lifted. Order is
+ * committed once, on drag end, by the parent.
+ */
+export function ReorderablePlaylistRow({
+  playlist: p,
+  onOpen,
+  onEdit,
+  onShare,
+  onDuplicate,
+  onDelete,
+  onDragStart,
+  onCommit,
+}: {
+  playlist: PlaylistView
+  onOpen: () => void
+  onEdit?: () => void
+  onShare?: () => void
+  onDuplicate?: () => void
+  onDelete?: () => void
+  onDragStart: () => void
+  onCommit: () => void
+}) {
+  const controls = useDragControls()
+  return (
+    <Reorder.Item
+      value={p}
+      dragListener={false}
+      dragControls={controls}
+      onDragStart={onDragStart}
+      onDragEnd={onCommit}
+      className="flex items-center gap-1 border-b border-border/60 bg-background last:border-b-0"
+    >
+      <button
+        type="button"
+        aria-label={`Drag to reorder ${p.name}`}
+        onPointerDown={(e) => {
+          e.preventDefault()
+          controls.start(e)
+        }}
+        className="-mr-1 shrink-0 cursor-grab touch-none py-3 pl-1 text-muted-foreground/50 transition-colors hover:text-muted-foreground active:cursor-grabbing"
+      >
+        <GripVertical className="size-4" />
+      </button>
+      <div className="min-w-0 flex-1">
+        <PlaylistCard
+          playlist={p}
+          isAdmin
+          onOpen={onOpen}
+          onEdit={onEdit}
+          onShare={onShare}
+          onDuplicate={onDuplicate}
+          onDelete={onDelete}
+        />
+      </div>
+    </Reorder.Item>
   )
 }

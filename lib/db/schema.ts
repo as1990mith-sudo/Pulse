@@ -366,6 +366,10 @@ export const playlist = pgTable(
     // which is all the main Playlists list shows. Children surface only inside
     // their parent's editor.
     parentId: integer("parentId"),
+    // Manual admin ordering WITHIN a sibling group (same organisation + same
+    // parentId). Lower sorts first; ties fall back to most-recently-updated.
+    // Reordering playlists drag-and-drop persists here.
+    position: integer("position").notNull().default(0),
     createdAt: timestamp("createdAt").notNull().defaultNow(),
     updatedAt: timestamp("updatedAt").notNull().defaultNow(),
   },
@@ -917,7 +921,7 @@ export const liveStream = pgTable("live_stream", {
   endRequestAt: timestamp("endRequestAt"),
   endRequestById: text("endRequestById"),
   endRequestByName: text("endRequestByName"),
-  // ── Grid meeting (video + "landscape") coordination ──────────────────────
+  // ��─ Grid meeting (video + "landscape") coordination ──────────────────────
   // A single co-host, promoted by the host, who mirrors every host power
   // (mute, pin, promote, add track, end). Null when there is no co-host.
   gridCohostId: text("gridCohostId"),

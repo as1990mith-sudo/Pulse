@@ -94,76 +94,43 @@ export function MyHomesView() {
   const busyAction = leaving || deleting
 
   // ── Personal reordering ───────────────────────────────────────────────────
-  // The list the member sees is a LOCAL copy so a drag reorders instantly, then
-  // persists in the background. It re-syncs from the server whenever the set of
-  // Homes (or the active one) actually changes, but never mid-drag — otherwise a
-  // background revalidation would snap the row out from under the finger.
+  // Driven by Framer Motion's <Reorder> (same engine as the playlist tracklist)
+  // so rows animate smoothly as they shift and it works with touch. The list is
+  // a LOCAL copy so a drag reorders instantly, then persists in the background;
+  // `onReorder` updates it live during the drag and we commit once, on drag end.
+  // It re-syncs from the server whenever the set of Homes (or the active one)
+  // actually changes, but never mid-drag — otherwise a background revalidation
+  // would snap the row out from under the finger.
   const [items, setItems] = useState<MyHomeLink[]>(homes)
-  const [draggingHandle, setDraggingHandle] = useState<string | null>(null)
+  const itemsRef = useRef(items)
+  itemsRef.current = items
+  const orderAtDragStart = useRef<MyHomeLink[]>(items)
   const draggingRef = useRef(false)
-  const dragIndexRef = useRef(0)
-  const rowRefs = useRef<(HTMLDivElement | null)[]>([])
+  const [draggingHandle, setDraggingHandle] = useState<string | null>(null)
   const homesKey = homes.map((h) => `${h.handle}${h.isActive ? "*" : ""}`).join(",")
   useEffect(() => {
     if (!draggingRef.current) setItems(homes)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [homesKey])
 
-  // Stable identities so the window listeners added on pointer-down are the same
-  // references removed on pointer-up, even though the component re-renders on
-  // every reorder while the drag is in flight.
-  const onDragMove = useRef((e: PointerEvent) => {
-    if (!draggingRef.current) return
-    const y = e.clientY
-    const els = rowRefs.current
-    let target = dragIndexRef.current
-    for (let i = 0; i < els.length; i++) {
-      const el = els[i]
-      if (!el) continue
-      const r = el.getBoundingClientRect()
-      if (y >= r.top && y <= r.bottom) {
-        target = i
-        break
-      }
-    }
-    if (target !== dragIndexRef.current) {
-      const from = dragIndexRef.current
-      setItems((prev) => {
-        const next = [...prev]
-        const [moved] = next.splice(from, 1)
-        next.splice(target, 0, moved)
-        return next
-      })
-      dragIndexRef.current = target
-      haptic("light")
-    }
-  }).current
+  function handleDragStart(handle: string) {
+    draggingRef.current = true
+    orderAtDragStart.current = itemsRef.current
+    setDraggingHandle(handle)
+    haptic("light")
+  }
 
-  const endDrag = useRef(() => {
-    window.removeEventListener("pointermove", onDragMove)
-    window.removeEventListener("pointerup", endDrag)
+  function commitOrder() {
     draggingRef.current = false
     setDraggingHandle(null)
-    // Persist the order the member landed on. Optimistically reflect it in the
-    // SWR cache so a background revalidation can't briefly restore the old order.
-    setItems((current) => {
-      const ordered = current.map((h) => h.handle)
-      void mutate(current, { revalidate: false })
-      void reorderMyHomes(ordered).catch(() => {})
-      return current
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }).current
-
-  function startDrag(index: number, e: React.PointerEvent) {
-    e.preventDefault()
-    e.stopPropagation()
-    draggingRef.current = true
-    dragIndexRef.current = index
-    setDraggingHandle(items[index]?.handle ?? null)
-    haptic("light")
-    window.addEventListener("pointermove", onDragMove)
-    window.addEventListener("pointerup", endDrag)
+    const next = itemsRef.current
+    const prev = orderAtDragStart.current
+    const unchanged = next.map((h) => h.handle).join() === prev.map((h) => h.handle).join()
+    if (unchanged) return
+    // Optimistically reflect the landed order in the SWR cache so a background
+    // revalidation can't briefly restore the old one, then persist it.
+    void mutate(next, { revalidate: false })
+    void reorderMyHomes(next.map((h) => h.handle)).catch(() => {})
   }
 
   function closeActions() {
@@ -328,110 +295,21 @@ export function MyHomesView() {
       ) : homes.length === 0 ? (
         <p className="px-1 py-6 text-sm text-muted-foreground">Tap + to join or set up a Home.</p>
       ) : (
-        <div className="flex flex-col gap-2">
-          {items.map((h, index) => {
-            // Show the member's ACTUAL role in this Home (Owner, Administrator,
-            // Content Manager, Member, …) rather than flattening every admin
-            // role to "Admin". A user's role is per-Home, so this row is also
-            // the only place they can see that they're an owner in one Home and
-            // an ordinary member in another.
-            const roleLabel = homeRoleLabel(h.role)
-            const busy = switching === h.handle
-            const isDragging = draggingHandle === h.handle
-            return (
-              <div
-                key={h.handle}
-                ref={(el) => {
-                  rowRefs.current[index] = el
-                }}
-                className={cn(
-                  "group flex w-full items-center rounded-xl border pr-1 transition-all",
-                  h.isActive
-                    ? "border-primary/50 bg-primary/[0.06]"
-                    : "border-border/60 hover:border-border hover:bg-secondary/40",
-                  switching && !busy && "opacity-40",
-                  isDragging && "scale-[1.02] border-primary/60 bg-secondary/60 shadow-lg",
-                )}
-              >
-                {/* Drag handle — personal reordering of the member's own list. */}
-                <button
-                  type="button"
-                  aria-label={`Reorder ${h.name}`}
-                  onPointerDown={(e) => startDrag(index, e)}
-                  disabled={!!switching}
-                  style={{ touchAction: "none" }}
-                  className="flex h-full shrink-0 cursor-grab items-center justify-center pl-2 pr-0.5 text-muted-foreground/40 transition-colors hover:text-muted-foreground active:cursor-grabbing"
-                >
-                  <GripVertical className="size-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSwitch(h.handle, h.isActive)}
-                  disabled={!!switching || draggingRef.current}
-                  className="flex min-w-0 flex-1 items-center gap-3 py-2.5 pl-1 pr-3 text-left active:scale-[0.99]"
-                >
-                  <span
-                    className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-lg text-sm font-bold text-white"
-                    style={{ backgroundColor: h.accent }}
-                  >
-                    {h.logo ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={h.logo || "/placeholder.svg"} alt="" className="size-full object-cover" />
-                    ) : (
-                      h.initials
-                    )}
-                  </span>
-
-                  <span className="min-w-0 flex-1">
-                    {/* Name — always exactly one line, ellipsis on overflow. */}
-                    <span className="block overflow-hidden text-ellipsis whitespace-nowrap text-[15px] font-semibold leading-tight text-foreground">
-                      {h.name}
-                    </span>
-                    <span className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <span>{roleLabel}</span>
-                      {typeof h.memberCount === "number" && (
-                        <>
-                          <span className="text-muted-foreground/40" aria-hidden>
-                            |
-                          </span>
-                          <Users className="size-3" aria-hidden />
-                          <span>{h.memberCount}</span>
-                        </>
-                      )}
-                    </span>
-                  </span>
-
-                  {/* Active/loading indicator, kept inside the switch button. */}
-                  <span className="flex w-5 shrink-0 items-center justify-center">
-                    {busy ? (
-                      <Loader2 className="size-4 animate-spin text-primary" />
-                    ) : h.isActive ? (
-                      <Check className="size-[18px] text-primary" strokeWidth={2.5} />
-                    ) : (
-                      <ChevronRight className="size-4 text-muted-foreground/30 transition-colors group-hover:text-muted-foreground/60" />
-                    )}
-                  </span>
-                </button>
-
-                {/* 3-dot menu — on every row now. It opens the Home's public
-                    profile for anyone, and adds the destructive actions that
-                    apply to the viewer's role (leave for members, delete for
-                    the owner). */}
-                <span className="flex w-8 shrink-0 items-center justify-center">
-                  <button
-                    type="button"
-                    onClick={() => setActionsFor(h)}
-                    disabled={!!switching}
-                    aria-label={`Options for ${h.name}`}
-                    className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground active:scale-90"
-                  >
-                    <MoreVertical className="size-[18px]" />
-                  </button>
-                </span>
-              </div>
-            )
-          })}
-        </div>
+        <Reorder.Group axis="y" values={items} onReorder={setItems} as="div" className="flex flex-col gap-2">
+          {items.map((h) => (
+            <HomeRow
+              key={h.handle}
+              home={h}
+              busy={switching === h.handle}
+              switching={switching}
+              isDragging={draggingHandle === h.handle}
+              onSwitch={() => handleSwitch(h.handle, h.isActive)}
+              onOpenActions={() => setActionsFor(h)}
+              onDragStart={() => handleDragStart(h.handle)}
+              onCommit={commitOrder}
+            />
+          ))}
+        </Reorder.Group>
       )}
 
       {/* Recently deleted — only rendered when something is actually pending, so

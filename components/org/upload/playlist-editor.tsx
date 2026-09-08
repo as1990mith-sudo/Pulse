@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Image from "next/image"
 import { Reorder, useDragControls } from "motion/react"
 import { ArrowLeft, GripVertical, ListPlus, ListMusic, MoreVertical, Play, Share2, SquarePen } from "lucide-react"
@@ -10,6 +10,7 @@ import type { PlaylistDetail, PlaylistView } from "@/app/actions/materials"
 import {
   removeMaterialFromPlaylist,
   reorderPlaylist,
+  reorderPlaylists,
   addMaterialsToPlaylist,
 } from "@/app/actions/materials"
 import {
@@ -20,7 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { SourceBadge, PlayGlyph } from "./upload-primitives"
 import { AddMaterialsSheet } from "./add-materials-sheet"
-import { PlaylistCard } from "./playlist-card"
+import { PlaylistCard, ReorderablePlaylistRow } from "./playlist-card"
 
 /**
  * Playlist editor / viewer. Members see an ordered, read-only tracklist they
@@ -67,9 +68,48 @@ export function PlaylistEditor({
   onDeletePlaylist: (p: PlaylistView) => void
 }) {
   const { playlist: p } = detail
-  const children = detail.children
   const [items, setItems] = useState<MaterialView[]>(detail.materials)
   const [addOpen, setAddOpen] = useState(false)
+
+  // Sub-playlist ("folder") ordering — the same optimistic drag-to-reorder as
+  // the material tracklist below, but persisted with `reorderPlaylists` scoped
+  // to this playlist as the parent. Local copy re-syncs from the incoming detail
+  // whenever the child set changes, but never mid-drag.
+  const children = detail.children
+  const [childItems, setChildItems] = useState<PlaylistView[]>(children)
+  const childItemsRef = useRef(childItems)
+  childItemsRef.current = childItems
+  const childOrderAtDragStart = useRef<PlaylistView[]>(childItems)
+  const childDraggingRef = useRef(false)
+  const childKey = children.map((c) => c.id).join(",")
+  useEffect(() => {
+    if (!childDraggingRef.current) setChildItems(children)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [childKey])
+
+  function handleChildDragStart() {
+    childDraggingRef.current = true
+    childOrderAtDragStart.current = childItemsRef.current
+  }
+
+  async function commitChildOrder() {
+    childDraggingRef.current = false
+    const next = childItemsRef.current
+    const prev = childOrderAtDragStart.current
+    const unchanged = next.map((c) => c.id).join() === prev.map((c) => c.id).join()
+    if (unchanged) return
+    try {
+      await reorderPlaylists({
+        organizationId,
+        parentId: p.id,
+        orderedPlaylistIds: next.map((c) => c.id),
+      })
+      onChanged()
+    } catch {
+      setChildItems(prev)
+      toast.error("Could not save the new order")
+    }
+  }
 
   // Reordering is driven by Framer Motion's <Reorder>, which works with touch
   // (the old HTML5 `draggable` never fired on mobile). `onReorder` updates the
@@ -192,24 +232,43 @@ export function PlaylistEditor({
         </div>
       </div>
 
-      {/* Sub-playlists */}
-      {children.length > 0 && (
+      {/* Sub-playlists — admins can drag to reorder them (smooth, like the
+          tracklist); members get a plain read-only list. */}
+      {childItems.length > 0 && (
         <div>
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Playlists</h2>
-          <div className="divide-y divide-border/60">
-            {children.map((c) => (
-              <PlaylistCard
-                key={c.id}
-                playlist={c}
-                isAdmin={isAdmin}
-                onOpen={() => onOpenPlaylist(c)}
-                onEdit={() => onEditPlaylist(c)}
-                onShare={() => onSharePlaylist(c)}
-                onDuplicate={() => onDuplicatePlaylist(c)}
-                onDelete={() => onDeletePlaylist(c)}
-              />
-            ))}
-          </div>
+          {isAdmin ? (
+            <Reorder.Group axis="y" values={childItems} onReorder={setChildItems} as="ul">
+              {childItems.map((c) => (
+                <ReorderablePlaylistRow
+                  key={c.id}
+                  playlist={c}
+                  onOpen={() => onOpenPlaylist(c)}
+                  onEdit={() => onEditPlaylist(c)}
+                  onShare={() => onSharePlaylist(c)}
+                  onDuplicate={() => onDuplicatePlaylist(c)}
+                  onDelete={() => onDeletePlaylist(c)}
+                  onDragStart={handleChildDragStart}
+                  onCommit={commitChildOrder}
+                />
+              ))}
+            </Reorder.Group>
+          ) : (
+            <div className="divide-y divide-border/60">
+              {childItems.map((c) => (
+                <PlaylistCard
+                  key={c.id}
+                  playlist={c}
+                  isAdmin={false}
+                  onOpen={() => onOpenPlaylist(c)}
+                  onEdit={() => onEditPlaylist(c)}
+                  onShare={() => onSharePlaylist(c)}
+                  onDuplicate={() => onDuplicatePlaylist(c)}
+                  onDelete={() => onDeletePlaylist(c)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
