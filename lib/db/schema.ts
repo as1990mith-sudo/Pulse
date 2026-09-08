@@ -1,4 +1,5 @@
 import { pgTable, text, timestamp, boolean, serial, integer, jsonb, index, uniqueIndex, primaryKey } from "drizzle-orm/pg-core"
+import type { OnlineDestination } from "@/lib/events/online-platforms"
 
 // --- Better Auth required tables -------------------------------------------
 // Column names are camelCase to match Better Auth's defaults. Do not rename.
@@ -609,6 +610,21 @@ export const announcement = pgTable("announcement", {
   description: text("description"),
   flyer: text("flyer"),
   location: text("location"), // venue (events) — required for events
+  // How/where an event happens. "in_person" uses `location` + the confirmed
+  // coordinates below; "online" uses `onlinePlatforms` instead of a venue. Null
+  // on legacy rows, which are treated as in-person (their `location` is a venue).
+  locationMode: text("locationMode"), // "in_person" | "online" | null
+  // Confirmed geocode of an in-person `location`, resolved from an address the
+  // admin picked from autocomplete suggestions. Lets the public page link
+  // Directions to the exact spot instead of a fuzzy text search. Null when not
+  // geocoded (online events, or legacy/manually-typed venues).
+  latitude: text("latitude"),
+  longitude: text("longitude"),
+  // Online destinations, in the admin's chosen order. Each is a selected
+  // platform with an OPTIONAL link (the link may not exist when the event is
+  // first created). A destination only becomes an actionable button for
+  // registrants once it has a URL. `name` is used only for the "other" platform.
+  onlinePlatforms: jsonb("onlinePlatforms").$type<OnlineDestination[]>(),
   eventDate: text("eventDate"), // YYYY-MM-DD (events only)
   eventTime: text("eventTime"), // HH:MM (24h) (events only)
   price: text("price"), // raw amount string, shown with a $ prefix (products only)

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import useSWR from "swr"
+import { createPortal } from "react-dom"
 import { AnimatePresence, motion, type Variants } from "motion/react"
 import {
   AlertTriangle,
@@ -27,6 +28,7 @@ import {
   UserCheck,
   UserPlus,
   UserX,
+  Users,
   Video,
   VideoOff,
   Volume2,
@@ -283,18 +285,16 @@ export function ConversationVideo(props: ConversationVideoProps) {
     return () => clearTimeout(t)
   }, [])
 
-  // ── Collapsing header. Expanded on arrival, collapses after a short dwell to
-  //    maximise the gathering; tapping the compact bar re-expands briefly. ────
-  const [collapsed, setCollapsed] = useState(false)
-  useEffect(() => {
-    if (!arrived) return
-    const t = setTimeout(() => setCollapsed(true), 5200)
-    return () => clearTimeout(t)
-  }, [arrived])
+  // Portal mount flag — tile option menus render into <body> so they escape the
+  // tile's overflow clip (see renderTileMenu).
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   const [page, setPage] = useState(0)
   const [dir, setDir] = useState(0)
   const [menuFor, setMenuFor] = useState<string | null>(null)
+  // Viewport rect of the open menu's trigger, used to anchor the portaled menu.
+  const [menuRect, setMenuRect] = useState<DOMRect | null>(null)
   const [controlsOpen, setControlsOpen] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   // Study-resources drawer opener (present on every live). Sits in the dock
@@ -377,72 +377,120 @@ export function ConversationVideo(props: ConversationVideoProps) {
   // ── Per-tile controller menu (spotlight / co-host / mute / remove) ────────
   function TileMenu({ tile }: { tile: Tile }) {
     if (!isController) return null
+    const open = menuFor === tile.identity
+    return (
+      <div className="absolute right-1.5 top-1.5 z-20">
+        <button
+          type="button"
+          onClick={(e) => {
+            if (open) {
+              setMenuFor(null)
+            } else {
+              setMenuRect(e.currentTarget.getBoundingClientRect())
+              setMenuFor(tile.identity)
+            }
+          }}
+          aria-label="Participant options"
+          className={cn(
+            "flex size-7 items-center justify-center rounded-full text-white backdrop-blur transition-colors",
+            open ? "bg-primary text-primary-foreground" : "bg-black/50 hover:bg-black/70",
+          )}
+        >
+          <MoreVertical className="size-4" />
+        </button>
+      </div>
+    )
+  }
+
+  // The per-tile options menu is portaled to <body> and positioned with fixed
+  // coordinates so it can NEVER be clipped by the tile's own `overflow-hidden`.
+  // The old inline dropdown was sliced to the tile's width in the compact
+  // layout, hiding the "Spotlight" action behind the frame edge.
+  const menuTile = menuFor ? tiles.find((t) => t.identity === menuFor) ?? null : null
+  function renderTileMenu() {
+    if (!mounted || !isController || !menuTile || !menuRect) return null
+    const tile = menuTile
     const peer = tile.kind === "remote" ? tile.peer : null
     const isSelf = tile.identity === self.identity
     const isPinned = gridPinnedIds.includes(tile.identity)
     const isThisCohost = gridCohostId === tile.identity
     const isThisHost = hostId === tile.identity
     const name = tile.kind === "remote" ? tile.peer.name : tile.name
-    const open = menuFor === tile.identity
-    return (
-      <div className="absolute right-1.5 top-1.5 z-20">
+
+    const MENU_W = 208
+    const GAP = 8
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const left = Math.max(GAP, Math.min(menuRect.right - MENU_W, vw - MENU_W - GAP))
+    const openUp = menuRect.bottom + 240 > vh
+    const pos: React.CSSProperties = openUp
+      ? { bottom: vh - menuRect.top + 6, left, width: MENU_W }
+      : { top: menuRect.bottom + 6, left, width: MENU_W }
+
+    return createPortal(
+      <>
         <button
           type="button"
-          onClick={() => setMenuFor(open ? null : tile.identity)}
-          aria-label="Participant options"
-          className="flex size-7 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur transition-colors hover:bg-black/70"
+          aria-label="Close menu"
+          onClick={() => setMenuFor(null)}
+          className="fixed inset-0 z-[110]"
+        />
+        <motion.div
+          initial={{ opacity: 0, scale: 0.94, y: openUp ? 6 : -6 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 460, damping: 32 }}
+          style={{ position: "fixed", ...pos }}
+          className="z-[115] overflow-hidden rounded-2xl border border-white/10 bg-neutral-900/95 text-sm text-white shadow-2xl backdrop-blur-xl"
         >
-          <MoreVertical className="size-4" />
-        </button>
-        {open && (
-          <div className="absolute right-0 top-8 w-44 overflow-hidden rounded-2xl border border-white/10 bg-neutral-900/95 text-sm text-white shadow-2xl backdrop-blur-xl">
+          <MenuItem
+            onClick={() =>
+              run(`pin-${tile.identity}`, () => requestGridPin({ roomName, userId: tile.identity, userName: name }))
+            }
+          >
+            {isPinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+            {isPinned ? "Remove spotlight" : "Spotlight"}
+          </MenuItem>
+          {amHost && !isThisHost && !isSelf && (
             <MenuItem
               onClick={() =>
-                run(`pin-${tile.identity}`, () =>
-                  requestGridPin({ roomName, userId: tile.identity, userName: name }),
+                run(`cohost-${tile.identity}`, () =>
+                  setGridCohost({ roomName, userId: isThisCohost ? "" : tile.identity }),
                 )
               }
             >
-              {isPinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
-              {isPinned ? "Remove spotlight" : "Spotlight"}
+              <Pin className="size-4" />
+              {isThisCohost ? "Remove co-host" : "Make co-host"}
             </MenuItem>
-            {amHost && !isThisHost && !isSelf && (
-              <MenuItem
-                onClick={() =>
-                  run(`cohost-${tile.identity}`, () =>
-                    setGridCohost({ roomName, userId: isThisCohost ? "" : tile.identity }),
-                  )
-                }
-              >
-                <Pin className="size-4" />
-                {isThisCohost ? "Remove co-host" : "Make co-host"}
+          )}
+          {peer &&
+            (peer.micMuted ? (
+              <MenuItem onClick={() => (onAskUnmute(tile.identity), setMenuFor(null))}>
+                <Volume2 className="size-4" /> Ask to unmute
               </MenuItem>
-            )}
-            {peer &&
-              (peer.micMuted ? (
-                <MenuItem onClick={() => (onAskUnmute(tile.identity), setMenuFor(null))}>
-                  <Volume2 className="size-4" /> Ask to unmute
-                </MenuItem>
-              ) : (
-                <MenuItem
-                  disabled={busy === `mute-${tile.identity}`}
-                  onClick={() => run(`mute-${tile.identity}`, () => muteParticipant({ roomName, userId: tile.identity }))}
-                >
-                  <MicOff className="size-4" /> Mute
-                </MenuItem>
-              ))}
-            {!isThisHost && !isSelf && (
+            ) : (
               <MenuItem
-                disabled={busy === `remove-${tile.identity}`}
-                onClick={() => run(`remove-${tile.identity}`, () => blockParticipant({ roomName, userId: tile.identity, userName: name }))}
+                disabled={busy === `mute-${tile.identity}`}
+                onClick={() => run(`mute-${tile.identity}`, () => muteParticipant({ roomName, userId: tile.identity }))}
               >
-                <UserX className="size-4 text-destructive" />
-                <span className="text-destructive">Remove</span>
+                <MicOff className="size-4" /> Mute
               </MenuItem>
-            )}
-          </div>
-        )}
-      </div>
+            ))}
+          {!isThisHost && !isSelf && (
+            <MenuItem
+              disabled={busy === `remove-${tile.identity}`}
+              onClick={() =>
+                run(`remove-${tile.identity}`, () =>
+                  blockParticipant({ roomName, userId: tile.identity, userName: name }),
+                )
+              }
+            >
+              <UserX className="size-4 text-destructive" />
+              <span className="text-destructive">Remove</span>
+            </MenuItem>
+          )}
+        </motion.div>
+      </>,
+      document.body,
     )
   }
 
@@ -462,31 +510,30 @@ export function ConversationVideo(props: ConversationVideoProps) {
         layout
         layoutId={tile.identity}
         initial={{ opacity: 0, scale: 0.7 }}
-        animate={{ opacity: 1, scale: 1 }}
+        animate={{
+          opacity: 1,
+          scale: 1,
+          // A speaking participant's frame GLOWS: a crisp primary edge plus a
+          // soft pulsing halo, drawn as the tile's OWN box-shadow (not a clipped
+          // child), so it reads as a glowing border in every layout without
+          // resizing the tile. Idle keeps a subtle hairline + drop shadow.
+          boxShadow: speaking
+            ? [
+                "0 0 0 2px var(--primary), 0 0 14px 1px color-mix(in oklch, var(--primary) 45%, transparent), 0 8px 24px -12px rgba(0,0,0,0.7)",
+                "0 0 0 2px var(--primary), 0 0 26px 6px color-mix(in oklch, var(--primary) 72%, transparent), 0 8px 24px -12px rgba(0,0,0,0.7)",
+                "0 0 0 2px var(--primary), 0 0 14px 1px color-mix(in oklch, var(--primary) 45%, transparent), 0 8px 24px -12px rgba(0,0,0,0.7)",
+              ]
+            : "0 0 0 1px rgba(255,255,255,0.06), 0 8px 24px -12px rgba(0,0,0,0.7)",
+        }}
         exit={{ opacity: 0, scale: 0.7 }}
-        transition={{ type: "spring", stiffness: 420, damping: 32, mass: 0.7 }}
-        // Speaking emphasis is drawn by a CONTAINED inner overlay below — never
-        // by scaling the tile up or an outward glow — so the active tile can't
-        // grow past its assigned cell or bleed onto neighbouring tiles.
-        className={cn(
-          "relative size-full overflow-hidden rounded-3xl bg-neutral-800/80 shadow-lg ring-1 ring-white/5",
-        )}
+        transition={{
+          default: { type: "spring", stiffness: 420, damping: 32, mass: 0.7 },
+          boxShadow: speaking
+            ? { duration: 1.8, repeat: Number.POSITIVE_INFINITY, ease: "easeInOut" }
+            : { duration: 0.3 },
+        }}
+        className="relative size-full overflow-hidden rounded-3xl bg-neutral-800/80"
       >
-        {/* Speaking "breathing" emphasis. Because it is `absolute inset-0`
-            inside the tile's `overflow-hidden` box and uses `ring-inset` + an
-            INSET box-shadow, the pulse is strictly clipped to the frame: it can
-            never spill outside the tile or nudge neighbouring tiles, and it
-            doesn't shift the tile's position or size. */}
-        {speaking && (
-          <motion.span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 z-10 rounded-3xl ring-2 ring-inset ring-primary"
-            initial={{ opacity: 0.4 }}
-            animate={{ opacity: [0.4, 1, 0.4] }}
-            transition={{ duration: 1.8, repeat: Number.POSITIVE_INFINITY, ease: "easeInOut" }}
-            style={{ boxShadow: "inset 0 0 20px 1px color-mix(in oklch, var(--primary) 40%, transparent)" }}
-          />
-        )}
         {/* The <video> element is ALWAYS mounted (only hidden when the camera is
             off). This avoids a chicken-and-egg deadlock: the hook needs the
             element to exist before it can attach the track and flip
@@ -541,24 +588,8 @@ export function ConversationVideo(props: ConversationVideoProps) {
 
         {TileMenu({ tile })}
 
-        {/* Speaking indicator — fades into the corner. */}
-        <AnimatePresence>
-          {speaking && (
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 6 }}
-              className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded-full bg-primary/90 px-2 py-0.5 text-[10px] font-semibold text-primary-foreground shadow"
-            >
-              <span className="flex gap-0.5">
-                <span className="h-2 w-0.5 animate-pulse rounded-full bg-current" />
-                <span className="h-2.5 w-0.5 animate-pulse rounded-full bg-current [animation-delay:120ms]" />
-                <span className="h-1.5 w-0.5 animate-pulse rounded-full bg-current [animation-delay:240ms]" />
-              </span>
-              Speaking
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Speaking is signalled by the tile's glowing frame border (above),
+            not a corner label. */}
 
         {/* Name + mic state */}
         <div className="absolute inset-x-0 bottom-0 z-10 flex items-center gap-1.5 bg-gradient-to-t from-black/70 to-transparent px-2.5 pb-2 pt-6">
@@ -655,87 +686,47 @@ export function ConversationVideo(props: ConversationVideoProps) {
           </div>
         </div>
 
-        <AnimatePresence initial={false} mode="wait">
-          {collapsed ? (
-            // Compact sticky header
-            <motion.button
-              key="compact"
-              type="button"
-              onClick={() => setCollapsed(false)}
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="flex w-full items-center gap-2.5 px-3 py-2 text-left"
-            >
-              <div className="size-9 shrink-0 overflow-hidden rounded-xl ring-1 ring-white/10">
-                {cover ? (
-                  <img src={cover || "/placeholder.svg"} alt="" className="size-full object-cover" />
-                ) : (
-                  <div className="flex size-full items-center justify-center bg-primary/20 text-xs font-bold text-primary">
-                    {getInitials(title)}
-                  </div>
-                )}
+        {/* Compact identity strip — always visible: cover, room/Home name, and
+            an at-a-glance meta line (present count, live speakers, host). */}
+        <div className="flex items-center gap-2.5 px-3 pb-2.5 pt-2">
+          <div className="size-9 shrink-0 overflow-hidden rounded-xl ring-1 ring-white/10">
+            {cover ? (
+              <img src={cover || "/placeholder.svg"} alt="" className="size-full object-cover" />
+            ) : (
+              <div className="flex size-full items-center justify-center bg-primary/20 text-xs font-bold text-primary">
+                {getInitials(title)}
               </div>
-              <MarqueeTitle text={title} className="min-w-0 flex-1 text-sm font-semibold" />
-              <span className="shrink-0 text-xs text-white/60">{participantCount} here</span>
-            </motion.button>
-          ) : (
-            // Expanded header with centered cover art
-            <motion.div
-              key="expanded"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="flex flex-col items-center gap-2 px-4 pb-4 pt-3 text-center"
-            >
-              {/* The WHOLE expanded header (cover + title + details) is a single
-                  collapse control, so tapping anywhere in the opened top area
-                  hides it back — a clear two-way toggle with the compact bar
-                  (which re-expands). No lightbox here; collapse is the expected
-                  gesture in the live header. */}
-              <button
-                type="button"
-                onClick={() => setCollapsed(true)}
-                aria-label="Collapse room details"
-                className="flex max-w-full flex-col items-center gap-2"
-              >
-                {cover ? (
-                  <img
-                    src={cover || "/placeholder.svg"}
-                    alt={`${title} cover art`}
-                    className="size-20 rounded-full object-cover shadow-xl ring-2 ring-black"
-                  />
-                ) : (
-                  <div className="flex size-20 items-center justify-center rounded-full bg-primary/20 text-2xl font-bold text-primary shadow-xl ring-2 ring-black">
-                    {getInitials(title)}
-                  </div>
-                )}
-                <h1 className="text-balance text-base font-semibold leading-tight">{title}</h1>
-                {topic && (
-                  <p className="mt-1 text-pretty text-sm text-white/75">
-                    <span className="text-white/45">Today&apos;s Discussion · </span>
-                    {topic}
-                  </p>
-                )}
-                <p className="mt-0.5 text-xs text-white/55">
-                  Hosted by {hostName}
-                  {category ? ` · ${category}` : ""}
-                </p>
-                <p className="mt-1 flex items-center justify-center gap-3 text-[11px] text-white/50">
-                  <span>{participantCount} present</span>
-                  {speakingCount > 0 && (
-                    <span className="flex items-center gap-1 text-primary">
-                      <Mic className="size-3" /> {speakingCount} speaking
-                    </span>
-                  )}
-                </p>
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <MarqueeTitle text={title} className="text-[15px] font-semibold leading-tight tracking-tight text-white" />
+            <div className="mt-0.5 flex items-center gap-2.5 text-[11px] font-medium text-white/55">
+              <span className="inline-flex shrink-0 items-center gap-1">
+                <Users className="size-3" /> {participantCount}
+              </span>
+              {speakingCount > 0 && (
+                <span className="inline-flex shrink-0 items-center gap-1 text-primary">
+                  <Mic className="size-3" /> {speakingCount}
+                </span>
+              )}
+              <span className="truncate text-white/45">
+                {hostName}
+                {category ? ` · ${category}` : ""}
+              </span>
+            </div>
+          </div>
+        </div>
+        {topic && (
+          <p className="truncate px-3 pb-2 text-[11px] leading-tight text-white/60">
+            <span className="text-white/40">Today&apos;s Discussion · </span>
+            {topic}
+          </p>
+        )}
       </motion.header>
 
-      {/* ── Participant area ────────────────────────��────────────────────────── */}
+      {renderTileMenu()}
+
+      {/* ── Participant area ────────────────────────���────────────────────────── */}
       <motion.div layout className="relative min-h-0 flex-1">
         {/* Video Project band — a screen share becomes the focused surface at the
             top of the gathering; the participant grid reflows beneath it. */}

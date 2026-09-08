@@ -17,6 +17,13 @@ import {
 } from "lucide-react"
 import { homeAccentStyle } from "@/lib/home/accent"
 import { Countdown } from "@/components/event-showcase/countdown"
+import { PlatformIcon } from "@/components/events/platform-icon"
+import {
+  actionableDestinations,
+  destinationAction,
+  destinationLabel,
+  type OnlineDestination,
+} from "@/lib/events/online-platforms"
 
 type Mode = "open" | "full" | "closed" | "members" | "registered"
 
@@ -32,6 +39,13 @@ type Props = {
   dateLabel: string | null
   timeLabel: string | null
   location: string | null
+  /** Online events replace the venue map with a destinations block. */
+  locationMode: "in_person" | "online"
+  /** Confirmed venue coordinates (in-person only); enables exact Directions. */
+  latitude: string | null
+  longitude: string | null
+  /** Selected online destinations with optional links (online only). */
+  onlinePlatforms: OnlineDestination[] | null
   /** Future event start as ISO; null when past or undated (no countdown). */
   startISO: string | null
   /** e.g. "42 of 100 places left" — null for unlimited/unknown. */
@@ -62,6 +76,10 @@ export function CinematicEventDetail({
   dateLabel,
   timeLabel,
   location,
+  locationMode,
+  latitude,
+  longitude,
+  onlinePlatforms,
   startISO,
   capacityNote,
   mode,
@@ -297,8 +315,11 @@ export function CinematicEventDetail({
           {children}
         </section>
 
-        {/* ---- LOCATION ---- */}
-        {location ? (
+        {/* ---- ONLINE DESTINATIONS (online events) ---- */}
+        {locationMode === "online" ? (
+          <OnlineDestinations destinations={onlinePlatforms} accentText={accentText} />
+        ) : location ? (
+          /* ---- LOCATION (in-person) — existing grid map, unchanged ---- */
           <section className="px-5">
             <h2 className="text-[12px] font-medium uppercase tracking-[0.24em] text-white/45">Location</h2>
             <div className="mt-3 overflow-hidden rounded-[20px] border border-white/[0.07] bg-white/[0.02]">
@@ -322,7 +343,11 @@ export function CinematicEventDetail({
               <div className="flex items-center justify-between gap-3 p-4">
                 <p className="text-[14px] leading-snug text-white/80">{location}</p>
                 <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`}
+                  href={
+                    latitude && longitude
+                      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`
+                      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex shrink-0 items-center gap-1.5 text-[13px] font-semibold"
@@ -361,6 +386,64 @@ export function CinematicEventDetail({
         </div>
       </div>
     </div>
+  )
+}
+
+/**
+ * The online-event equivalent of the location card: a premium "Join / Watch
+ * Online" block. Only destinations that have a link become actionable buttons;
+ * selected-but-linkless platforms are acknowledged in a quiet "coming soon" line
+ * so the page never shows a dead button.
+ */
+function OnlineDestinations({
+  destinations,
+  accentText,
+}: {
+  destinations: OnlineDestination[] | null
+  accentText: React.CSSProperties
+}) {
+  const live = actionableDestinations(destinations)
+  const pending = (destinations ?? []).filter((d) => !d.url || !d.url.trim())
+  if (live.length === 0 && pending.length === 0) return null
+
+  return (
+    <section className="px-5">
+      <h2 className="text-[12px] font-medium uppercase tracking-[0.24em] text-white/45">Join / Watch Online</h2>
+      <div className="mt-3 flex flex-col gap-2.5">
+        {live.map((d, i) => (
+          <a
+            key={`${d.platform}-${i}`}
+            href={d.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group flex items-center gap-3.5 rounded-[20px] border border-white/[0.07] bg-white/[0.02] p-4 transition-colors hover:bg-white/[0.05]"
+          >
+            <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-white/[0.06] text-white">
+              <PlatformIcon platform={d.platform} className="size-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[11px] uppercase tracking-[0.18em] text-white/40">
+                {destinationLabel(d)}
+              </span>
+              <span className="block truncate text-[15px] font-semibold text-white">{destinationAction(d)}</span>
+            </span>
+            <span
+              className="grid size-8 shrink-0 place-items-center rounded-full bg-white/[0.06] transition-transform group-hover:translate-x-0.5"
+              style={accentText}
+              aria-hidden
+            >
+              <ArrowRight className="size-4" />
+            </span>
+          </a>
+        ))}
+      </div>
+      {pending.length > 0 && (
+        <p className="mt-2.5 text-[13px] leading-snug text-white/40">
+          {pending.map((d) => destinationLabel(d)).join(", ")}{" "}
+          {pending.length === 1 ? "link will be shared soon." : "links will be shared soon."}
+        </p>
+      )}
+    </section>
   )
 }
 

@@ -481,9 +481,9 @@ export async function sendDirectMessage(input: {
 
   // Notify the other participant on their device, deep-linking straight to this
   // exact conversation. Fire-and-forget: a slow/unreachable push service must
-  // never fail the send. Type "message" is intentionally not in the category
-  // registry, so it always delivers (a DM is never a category the user opts out
-  // of) and, being outside the service worker's QUIET_TYPES, alerts normally.
+  // never fail the send. Type "message" belongs to the "Messages" notification
+  // category, so delivery honours the recipient's Messages preference (on by
+  // default); being outside the service worker's QUIET_TYPES, it alerts normally.
   const recipientId = conv.userAId === user.id ? conv.userBId : conv.userAId
   if (recipientId && recipientId !== user.id) {
     await sendPushToUsers([recipientId], {

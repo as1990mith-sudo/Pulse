@@ -136,6 +136,10 @@ export default async function PublicEventPage({ params, searchParams }: Params) 
         dateLabel={dateLabel}
         timeLabel={timeLabel}
         location={event.location}
+        locationMode={event.locationMode === "online" ? "online" : "in_person"}
+        latitude={event.latitude}
+        longitude={event.longitude}
+        onlinePlatforms={event.onlinePlatforms ?? null}
         startISO={startISO}
         capacityNote={capacityNote}
         mode={mode}

@@ -3,7 +3,8 @@ import "server-only"
 import { and, asc, eq, isNull, sql } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { announcement, eventRegistration, home, organization } from "@/lib/db/schema"
-import { getInitials } from "@/lib/identity"
+import { getAvatarColor, getInitials } from "@/lib/identity"
+import { orgCategoryLabel } from "@/lib/org-types"
 
 export type PublicEventCard = {
   id: number
@@ -30,6 +31,9 @@ export type PublicHostInfo = {
   cover: string | null
   description: string | null
   initials: string
+  // Branding for the members'-style events header shown on the public page.
+  color: string
+  categoryLabel: string
 }
 
 /**
@@ -54,6 +58,8 @@ export async function getPublicHost(handle: string): Promise<PublicHostInfo | nu
     cover: row.org.cover,
     description: row.org.description,
     initials: getInitials(row.org.name),
+    color: getAvatarColor(row.org.id),
+    categoryLabel: orgCategoryLabel(row.org.category, row.org.categoryOther),
   }
 }
 

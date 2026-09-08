@@ -88,7 +88,10 @@ export function AppointmentThreadBanner({ conversationId }: { conversationId: nu
           <div className="shrink-0 self-center">
             <JoinMeetingButton
               appointmentId={data.appointmentId}
-              className="rounded-2xl px-6 py-3 text-sm shadow-xl shadow-primary/25 ring-1 ring-inset ring-white/10"
+              title={data.title}
+              counterpartName={data.title}
+              size="sm"
+              className="whitespace-nowrap rounded-2xl px-4 py-3 text-sm"
             />
           </div>
         )}

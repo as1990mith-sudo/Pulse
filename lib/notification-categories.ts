@@ -20,9 +20,10 @@ export type NotificationType =
   | "follow"
   | "repost"
   | "mention"
+  | "message"
   | "announcement"
 
-export type NotificationCategory = "live" | "home" | "replies" | "reactions"
+export type NotificationCategory = "live" | "messages" | "mentions" | "replies" | "home" | "reactions"
 
 export type CategoryMeta = {
   key: NotificationCategory
@@ -51,17 +52,31 @@ export const NOTIFICATION_CATEGORIES: CategoryMeta[] = [
     defaultEnabled: true,
   },
   {
-    key: "home",
-    types: ["announcement", "post"],
-    label: "Home activity",
-    description: "Announcements and new posts from your Homes.",
+    key: "messages",
+    types: ["message"],
+    label: "Messages",
+    description: "When someone sends you a direct message.",
+    defaultEnabled: true,
+  },
+  {
+    key: "mentions",
+    types: ["mention"],
+    label: "Mentions",
+    description: "When someone tags you by name.",
     defaultEnabled: true,
   },
   {
     key: "replies",
-    types: ["comment", "mention"],
-    label: "Replies and mentions",
-    description: "When someone replies to you or tags you by name.",
+    types: ["comment"],
+    label: "Replies",
+    description: "When someone replies to you.",
+    defaultEnabled: true,
+  },
+  {
+    key: "home",
+    types: ["announcement", "post"],
+    label: "Home activity",
+    description: "Announcements and new posts from your Homes.",
     defaultEnabled: true,
   },
   {

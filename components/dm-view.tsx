@@ -347,7 +347,10 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
       // `dark` pins the entire chat surface to the dark palette regardless of the
       // app theme: chat wallpapers are dark imagery, so the scrim, header, bubbles
       // and composer must stay dark even in light mode (they'd otherwise wash out).
-      className={cn("dark relative flex h-full flex-1 flex-col overflow-hidden font-display", !hasWallpaper && "bg-background")}
+      className={cn(
+        "dark relative flex h-full flex-1 flex-col overflow-hidden font-display duration-500 animate-in fade-in-0",
+        !hasWallpaper && "bg-background",
+      )}
       style={chatBackgroundStyle(bgId)}
     >
       {/* Wallpaper legibility scrim spanning the full chat height so the dark
@@ -361,7 +364,7 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
           // Pinned to the top with the notch respected, so only the conversation
           // scrolls. The identity block flexes and the action cluster is fixed
           // width, which stops the display name being clipped by the icons.
-          "sticky top-0 z-30 flex items-center gap-1.5 border-b border-border/50 px-2 pb-2.5 pt-[calc(env(safe-area-inset-top)+0.625rem)] sm:px-4",
+          "sticky top-0 z-30 flex items-center gap-1.5 border-b border-border/50 px-2 pb-2.5 pt-[calc(env(safe-area-inset-top)+0.625rem)] duration-500 animate-in fade-in-0 slide-in-from-top-2 sm:px-4",
           hasWallpaper ? "bg-background/60 backdrop-blur-xl" : "bg-background/80 backdrop-blur-xl",
         )}
       >
@@ -562,7 +565,12 @@ export function DmView({ detail }: { detail: DmConversationDetail }) {
       <AppointmentThreadBanner conversationId={detail.id} />
 
       {/* Messages */}
-      <div className={cn("relative z-10 flex-1 overflow-y-auto", !hasWallpaper && "bg-card/30")}>
+      <div
+        className={cn(
+          "relative z-10 flex-1 overflow-y-auto delay-100 duration-700 animate-in fade-in-0 slide-in-from-bottom-3 fill-mode-both",
+          !hasWallpaper && "bg-card/30",
+        )}
+      >
         {/* Vertical rhythm is set per-run with margins (tight for a continued
             run, looser when the speaker or day changes), so no `gap` here. */}
         <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col px-3 py-4 sm:px-6">

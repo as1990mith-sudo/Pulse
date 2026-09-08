@@ -55,16 +55,14 @@ export type RegisterResult =
 /**
  * Registers a person for an event.
  *
- * ONE action serves both the authenticated member and the anonymous public
- * visitor, because the rules that matter — capacity, the registration window,
- * question validation, one-place-per-person — are identical for both and must
- * not be allowed to drift apart in two copies. What differs is only where the
- * contact details come from:
- *
- *   signed in   name/email are taken from the account and the submitted values
- *               are IGNORED, so a member cannot register under someone else's
- *               identity by editing the form.
- *   anonymous   name/email are taken from the form and validated.
+ * ONE action, ONE form, for the authenticated member and the anonymous public
+ * visitor alike. The rules that matter — capacity, the registration window,
+ * question validation, one-place-per-person — are identical for both, and the
+ * contact details always come from what the person submits. Membership no longer
+ * changes the contact details: a member's account name/email may be unsuitable
+ * for a given event, so they complete the same fields as everyone else. Their
+ * membership is still recorded internally (isMember, userId) but never bypasses
+ * or auto-fills past the form.
  *
  * Registering never creates a Home membership. A registrant is a contact of the
  * Home, not a member of it — see lib/events/registration.ts.
@@ -111,10 +109,17 @@ export async function registerForEvent(input: {
     return { ok: false, error: "This event is open to members of this Home only." }
   }
 
-  // Trust the account over the form for anyone signed in.
-  const fullName = (viewerId ? identity.knownName : input.fullName)?.trim() ?? ""
-  const email = (viewerId ? identity.knownEmail : input.email)?.trim() ?? ""
-  const phone = normalisePhone(input.phone ?? identity.knownPhone)
+  // Everyone — member or not — completes the same form, and the details THEY
+  // submit are what count. A member's Frequency profile may carry a display
+  // name that isn't their legal name or a stale email, neither of which is
+  // necessarily right for this specific event, so we no longer silently
+  // substitute the account's values. Membership is still recognised internally
+  // (identity.isMember, userId below); it simply doesn't bypass or overwrite the
+  // registration details. Phone falls back to the saved number only when the
+  // field is left blank.
+  const fullName = input.fullName?.trim() ?? ""
+  const email = input.email?.trim() ?? ""
+  const phone = normalisePhone(input.phone?.trim() || (viewerId ? identity.knownPhone : null))
 
   if (fullName.length < 2) return { ok: false, error: "Please give your full name." }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: "Please give a valid email address." }

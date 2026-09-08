@@ -124,9 +124,7 @@ export function RegistrationPanel({
     <div className="rounded-2xl border border-border bg-card p-6">
       <h2 className="font-display text-base font-semibold text-card-foreground">Register</h2>
       <p className="mt-1 mb-4 text-sm leading-relaxed text-muted-foreground text-pretty">
-        {knownEmail
-          ? "Confirm your place below."
-          : "No account needed — just your details and you're in."}
+        Complete the details below to secure your place. No account needed.
       </p>
       <RegistrationForm
         handle={handle}

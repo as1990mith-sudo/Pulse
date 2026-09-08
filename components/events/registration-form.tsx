@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { CheckCircle2, Loader2 } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { registerForEvent } from "@/app/actions/event-registration"
 import { MAX_GUESTS, type EventQuestion } from "@/lib/events/questions"
 
@@ -33,7 +33,6 @@ export function RegistrationForm({
   knownName,
   knownEmail,
   knownPhone,
-  isMember,
   requiresPhone,
   questions,
   onRegistered,
@@ -47,12 +46,11 @@ export function RegistrationForm({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [pending, startTransition] = useTransition()
 
-  // Only ask for what we don't hold. A member with a saved mobile is asked
-  // nothing at all beyond the event's own questions.
-  const needsName = !knownName
-  const needsEmail = !knownEmail
-  const needsPhone = requiresPhone && !knownPhone
-  const isOneTap = !needsName && !needsEmail && !needsPhone && questions.length === 0
+  // Everyone completes the same form. A member's account values prefill the
+  // fields for convenience, but they stay fully editable and whatever is
+  // submitted is what's stored — membership never bypasses the form, because a
+  // profile's name or email may be wrong for this particular event.
+  const showPhone = requiresPhone
 
   function submit() {
     setError(null)
@@ -87,52 +85,39 @@ export function RegistrationForm({
         submit()
       }}
     >
-      {isOneTap ? (
-        <div className="flex items-start gap-3 rounded-xl bg-secondary px-4 py-3">
-          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-secondary-foreground" aria-hidden="true" />
-          <p className="text-sm leading-relaxed text-secondary-foreground text-pretty">
-            We already have your details, {knownName?.split(" ")[0]}. Just confirm to register.
-          </p>
-        </div>
-      ) : null}
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="reg-name" className="text-sm font-medium text-foreground">
+          Full name
+        </label>
+        <input
+          id="reg-name"
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+          required
+          autoComplete="name"
+          className={inputClass}
+          placeholder="Jane Doe"
+        />
+      </div>
 
-      {needsName ? (
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="reg-name" className="text-sm font-medium text-foreground">
-            Full name
-          </label>
-          <input
-            id="reg-name"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            required
-            autoComplete="name"
-            className={inputClass}
-            placeholder="Jane Doe"
-          />
-        </div>
-      ) : null}
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="reg-email" className="text-sm font-medium text-foreground">
+          Email
+        </label>
+        <input
+          id="reg-email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          autoComplete="email"
+          className={inputClass}
+          placeholder="jane@example.com"
+        />
+        <p className="text-xs text-muted-foreground">We&apos;ll send your confirmation and event updates here.</p>
+      </div>
 
-      {needsEmail ? (
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="reg-email" className="text-sm font-medium text-foreground">
-            Email
-          </label>
-          <input
-            id="reg-email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoComplete="email"
-            className={inputClass}
-            placeholder="jane@example.com"
-          />
-          <p className="text-xs text-muted-foreground">We&apos;ll send your confirmation here.</p>
-        </div>
-      ) : null}
-
-      {needsPhone ? (
+      {showPhone ? (
         <div className="flex flex-col gap-1.5">
           <label htmlFor="reg-phone" className="text-sm font-medium text-foreground">
             Mobile number
@@ -147,11 +132,7 @@ export function RegistrationForm({
             className={inputClass}
             placeholder="07700 900000"
           />
-          <p className="text-xs text-muted-foreground">
-            {isMember
-              ? "Saved to your account, so we won't ask again."
-              : "So the hosts can reach you about this event."}
-          </p>
+          <p className="text-xs text-muted-foreground">So the hosts can reach you about this event.</p>
         </div>
       ) : null}
 
@@ -254,7 +235,7 @@ export function RegistrationForm({
         className="flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
         {pending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
-        {pending ? "Registering…" : isOneTap ? "Confirm my place" : "Register"}
+        {pending ? "Registering…" : "Register"}
       </button>
     </form>
   )

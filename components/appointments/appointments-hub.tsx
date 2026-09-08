@@ -784,8 +784,7 @@ function AppointmentRow({
               href={`/messages/${a.conversationId}`}
               className="inline-flex min-w-0 flex-1 basis-0 items-center justify-center gap-2 truncate rounded-2xl bg-foreground px-4 py-3 text-sm font-semibold text-background shadow-lg shadow-black/25 ring-1 ring-inset ring-white/10 transition-all hover:opacity-90 active:scale-[0.98]"
             >
-              <MessageSquare className="size-4 shrink-0" />
-              Open conversation
+              Open Conversation
             </Link>
           ) : null}
           {canJoin && (
