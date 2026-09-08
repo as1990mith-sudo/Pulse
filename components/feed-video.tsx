@@ -86,11 +86,11 @@ export function FeedVideo({
    *  would show two controls for the same shared mute state. Everything else in
    *  the bar — play/pause, skip, elapsed time, seek — is unaffected. */
   hideMuteControl?: boolean
-  /** Force this inline clip to always play SILENTLY, independent of the app-wide
-   *  mute preference, and drop the mute toggle from its control bar. Used by the
-   *  main feed and Community previews so scrolling never blasts audio — sound is
-   *  reserved for the expanded / full-screen player the preview opens into. Muted
-   *  playback is also always autoplay-allowed, so previews start reliably. */
+  /** Start this inline clip SILENT, independent of the app-wide mute preference.
+   *  Used by the main feed and Community previews so scrolling never blasts audio
+   *  and previews (being muted) always autoplay reliably. The control bar still
+   *  shows a mute toggle so a viewer can unmute the clip they stopped on; that
+   *  choice is per-clip, so the next clip scrolled to defaults back to muted. */
   previewMuted?: boolean
   /** The player fills the screen, so its control bar sits on the device's bottom
    *  edge. Adds the safe-area inset beneath the bar to lift play/pause and the
@@ -129,6 +129,17 @@ export function FeedVideo({
 
   // Mute is a single app-wide preference shared with the expanded reel player.
   const [muted, setMuted] = useSharedMute()
+  // Preview clips (`previewMuted`) start SILENT so scrolling never blasts audio,
+  // but keep their own per-clip mute toggle so a viewer can unmute the one they
+  // stopped on. This is deliberately local (not the shared preference) so each
+  // clip you scroll to defaults back to muted. `previewSilentRef` mirrors it for
+  // the memoised play path, which must not re-create on every toggle.
+  const [previewSilent, setPreviewSilent] = useState(true)
+  const previewSilentRef = useRef(true)
+  previewSilentRef.current = previewSilent
+  // The mute state actually applied to the element: the per-clip preview choice
+  // in preview mode, otherwise the app-wide shared preference.
+  const effectiveMuted = previewMuted ? previewSilent : muted
   const [playing, setPlaying] = useState(false)
   const [current, setCurrent] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -138,8 +149,8 @@ export function FeedVideo({
 
   useEffect(() => {
     const el = ref.current
-    if (el) el.muted = previewMuted || muted
-  }, [muted, previewMuted])
+    if (el) el.muted = effectiveMuted
+  }, [effectiveMuted])
 
   // Arm the app-wide "only one recorded media element plays" guard. Idempotent,
   // so every player can safely ask for it.
@@ -160,11 +171,20 @@ export function FeedVideo({
         /* not seekable yet */
       }
     }
-    // Preview clips are always silent, so play muted (always autoplay-allowed)
-    // and skip the unmuted-attempt / autoplay-block dance entirely.
+    // Preview clips default to silent (always autoplay-allowed). If the viewer
+    // has unmuted this specific clip, honour that; should the browser refuse an
+    // unmuted autoplay (page not yet interacted with), fall back to muted so the
+    // clip still plays rather than freezing.
     if (previewMuted) {
-      el.muted = true
-      el.play().catch(() => {})
+      const silent = previewSilentRef.current
+      el.muted = silent
+      el.play().catch((err: unknown) => {
+        const name = (err as { name?: string } | null)?.name
+        if (name === "NotAllowedError" && !silent) {
+          el.muted = true
+          el.play().catch(() => {})
+        }
+      })
       return
     }
     el.muted = getSharedMuted()
@@ -334,6 +354,17 @@ export function FeedVideo({
 
   function toggleMute() {
     const el = ref.current
+    // Preview clips carry their own per-clip mute, independent of the shared
+    // preference, so unmuting one doesn't unmute every clip you scroll past.
+    if (previewMuted) {
+      const next = !previewSilentRef.current
+      setPreviewSilent(next)
+      if (el) {
+        el.muted = next
+        if (!next && el.paused && !userPausedRef.current) el.play().catch(() => {})
+      }
+      return
+    }
     const next = !muted
     setSharedMuted(next)
     if (el) {
@@ -422,7 +453,7 @@ export function FeedVideo({
         poster={poster}
         loop
         playsInline
-        muted={previewMuted || muted}
+        muted={effectiveMuted}
         preload="metadata"
         {...exclusivePlaybackProps}
         className={cn("h-full w-full", className)}
@@ -547,8 +578,8 @@ export function FeedVideo({
         onSeekPointerMove={onSeekPointerMove}
         onSeekPointerUp={onSeekPointerUp}
         onSeekKeyDown={onSeekKeyDown}
-        muted={hideMuteControl || previewMuted ? undefined : muted}
-        onToggleMute={hideMuteControl || previewMuted ? undefined : toggleMute}
+        muted={hideMuteControl ? undefined : effectiveMuted}
+        onToggleMute={hideMuteControl ? undefined : toggleMute}
         safeArea={safeAreaControls}
         // Full screen ties the bar to the overlay's chrome so it fades together
         // with the author row and action rail. Inline cards keep the old rule of
