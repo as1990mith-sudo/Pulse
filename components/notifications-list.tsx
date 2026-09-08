@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import useSWR, { useSWRConfig } from "swr"
-import { Bell, Heart, Radio, UserPlus, Megaphone, Repeat2, Trash2, X, CheckCircle2, Circle, AtSign } from "lucide-react"
+import { Bell, Heart, Radio, UserPlus, Megaphone, Repeat2, Trash2, X, CheckCircle2, Circle, AtSign, MessageSquare } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import {
   getNotifications,
@@ -29,6 +29,7 @@ const ICONS: Record<NotificationType, React.ComponentType<{ className?: string }
   follow: UserPlus,
   repost: Repeat2,
   mention: AtSign,
+  message: MessageSquare,
   announcement: Megaphone,
 }
 

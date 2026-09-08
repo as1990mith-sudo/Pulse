@@ -8,6 +8,7 @@ import { db } from "@/lib/db"
 import { follow, user as userTable } from "@/lib/db/schema"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { getFollowers, getFollowing, type ProfileSummary } from "@/lib/profile"
+import { getActiveHomeMemberIds } from "@/lib/home/active-home"
 
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -53,25 +54,36 @@ export type DiscoverProfile = ProfileSummary & {
 }
 
 /**
- * Powers the "Find" tab. With a query, searches profiles by name; without one,
- * browses all profiles ordered by follower count. Each result carries follow
- * state for the current viewer so the list can render follow buttons inline.
+ * Powers the "Find" tab and the header search. With a query, searches profiles
+ * by name; without one, browses all profiles ordered by follower count. Each
+ * result carries follow state for the current viewer so the list can render
+ * follow buttons inline.
+ *
+ * `homeScoped` restricts results to active members of the viewer's active Home.
+ * The header search passes it so search stays inside the current organisation,
+ * mirroring `searchPosts`; the open "Find" tab leaves it off to browse everyone.
  */
-export async function discoverProfiles(query?: string): Promise<DiscoverProfile[]> {
+export async function discoverProfiles(query?: string, homeScoped = false): Promise<DiscoverProfile[]> {
   const session = await auth.api.getSession({ headers: await headers() })
   const me = session?.user?.id ?? null
   const q = (query ?? "").trim()
 
+  // Home scope: no active Home (or an empty one) means nothing to show.
+  let homeFilter
+  if (homeScoped) {
+    const { memberIds } = await getActiveHomeMemberIds()
+    if (memberIds.length === 0) return []
+    homeFilter = inArray(userTable.id, memberIds)
+  }
+
   const selection = { id: userTable.id, name: userTable.name, image: userTable.image }
-  const rows =
-    q.length > 0
-      ? await db
-          .select(selection)
-          .from(userTable)
-          .where(ilike(userTable.name, `%${q}%`))
-          .orderBy(userTable.name)
-          .limit(50)
-      : await db.select(selection).from(userTable).orderBy(userTable.name).limit(100)
+  const nameFilter = q.length > 0 ? ilike(userTable.name, `%${q}%`) : undefined
+  const rows = await db
+    .select(selection)
+    .from(userTable)
+    .where(and(homeFilter, nameFilter))
+    .orderBy(userTable.name)
+    .limit(q.length > 0 ? 50 : 100)
 
   if (rows.length === 0) return []
   const ids = rows.map((r) => r.id)

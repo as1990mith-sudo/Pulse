@@ -18,8 +18,10 @@ export function SearchView({ currentUser }: { currentUser: CurrentUser | null })
     inputRef.current?.focus()
   }, [])
 
-  // People: search by name when there's a query, otherwise browse everyone.
-  const { data: people, isLoading: peopleLoading } = useSWR(["search-people", q], () => discoverProfiles(q), {
+  // People: search within the viewer's active Home (homeScoped) by name, or
+  // browse that Home's members when there's no query. Keeps header search inside
+  // the current organisation, matching the Home-scoped post search below.
+  const { data: people, isLoading: peopleLoading } = useSWR(["search-people", q], () => discoverProfiles(q, true), {
     keepPreviousData: true,
     revalidateOnFocus: false,
   })

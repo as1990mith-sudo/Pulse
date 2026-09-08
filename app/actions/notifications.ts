@@ -87,6 +87,8 @@ function pushVerb(type: NotificationType): string {
       return "reposted you"
     case "mention":
       return "mentioned you"
+    case "message":
+      return "sent you a message"
     case "announcement":
       return "shared an announcement"
   }

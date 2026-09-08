@@ -21,6 +21,7 @@ import {
   user as userTable,
 } from "@/lib/db/schema"
 import { getHandle } from "@/lib/identity"
+import { getActiveHomeMemberIds } from "@/lib/home/active-home"
 import { MAX_BIBLE_CHATS } from "@/lib/bible-chat-constants"
 
 // A reader whose heartbeat hasn't landed in this long is treated as "left".
@@ -152,14 +153,23 @@ export async function getBibleIndicator(input: { book: string }): Promise<BibleI
   const u = await getSessionUser()
   if (!u) return null
 
-  const rows = await db
-    .select({
-      userId: biblePresence.userId,
-      userImage: biblePresence.userImage,
-      book: biblePresence.book,
-    })
-    .from(biblePresence)
-    .where(gt(biblePresence.lastSeenAt, freshCutoff()))
+  // Home-specific: only fellow readers who are active members of the viewer's
+  // active Home count toward the indicator, so "others reading" never leaks
+  // people from other organisations. The viewer is always included (they never
+  // vanish from their own count, and personal mode simply shows only them).
+  const { memberIds } = await getActiveHomeMemberIds()
+  const allowed = new Set<string>([u.id, ...memberIds])
+
+  const rows = (
+    await db
+      .select({
+        userId: biblePresence.userId,
+        userImage: biblePresence.userImage,
+        book: biblePresence.book,
+      })
+      .from(biblePresence)
+      .where(gt(biblePresence.lastSeenAt, freshCutoff()))
+  ).filter((r) => allowed.has(r.userId))
 
   const others = rows.filter((r) => r.userId !== u.id)
   const sameBookOthers = others.filter((r) => r.book === input.book)
@@ -194,11 +204,18 @@ export async function getBibleReaders(input: {
   const u = await getSessionUser()
   if (!u) return []
 
-  const base = await db
-    .select()
-    .from(biblePresence)
-    .where(gt(biblePresence.lastSeenAt, freshCutoff()))
-    .orderBy(asc(biblePresence.book), desc(biblePresence.lastSeenAt))
+  // Home-specific: mirror getBibleIndicator so the discovery sheet lists only
+  // readers who belong to the viewer's active Home (viewer always included).
+  const { memberIds } = await getActiveHomeMemberIds()
+  const allowed = new Set<string>([u.id, ...memberIds])
+
+  const base = (
+    await db
+      .select()
+      .from(biblePresence)
+      .where(gt(biblePresence.lastSeenAt, freshCutoff()))
+      .orderBy(asc(biblePresence.book), desc(biblePresence.lastSeenAt))
+  ).filter((r) => allowed.has(r.userId))
 
   const rows = input.scope === "book" ? base.filter((r) => r.book === input.book) : base
   if (rows.length === 0) return []

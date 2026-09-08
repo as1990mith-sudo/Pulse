@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { AtSign, Bell, BellOff, Heart, Radio, Share2, ShieldAlert, Smartphone } from "lucide-react"
+import { AtSign, Bell, BellOff, Heart, MessageCircle, MessageSquare, Radio, Share2, ShieldAlert, Smartphone } from "lucide-react"
 import { toast } from "sonner"
 import { NOTIFICATION_CATEGORIES, type NotificationCategory } from "@/lib/notification-categories"
 import { updateNotificationPreference } from "@/app/actions/push"
@@ -14,8 +14,10 @@ import { cn } from "@/lib/utils"
 
 const CATEGORY_ICONS: Record<NotificationCategory, typeof Bell> = {
   live: Radio,
+  messages: MessageSquare,
+  mentions: AtSign,
+  replies: MessageCircle,
   home: Bell,
-  replies: AtSign,
   reactions: Heart,
 }
 
