@@ -120,6 +120,145 @@ export async function sendRegistrationConfirmation(
   }
 }
 
+export type EventChangeRecipient = { email: string; name: string | null }
+
+export type EventChangeDetails = {
+  eventTitle: string
+  homeName: string
+  date: string | null
+  time: string | null
+  location: string | null
+  /** Absolute URL of the event page, so recipients can check the latest details. */
+  eventUrl: string | null
+}
+
+/**
+ * Emails every registrant that an event changed or was cancelled.
+ *
+ * Like {@link sendBroadcast}, each recipient gets their OWN send with a single
+ * address — never a shared `to`/cc — so no registrant's email is exposed to
+ * another. These are transactional lifecycle notices (not marketing), so they
+ * go to everyone holding a place. Fail-soft: never throws; returns the
+ * delivered/failed split.
+ */
+async function sendEventLifecycle(
+  kind: "updated" | "cancelled",
+  recipients: EventChangeRecipient[],
+  details: EventChangeDetails,
+): Promise<{ sent: number; failed: number }> {
+  if (!resend) {
+    console.log(`[v0] RESEND_API_KEY not set — skipping event ${kind} emails.`)
+    return { sent: 0, failed: recipients.length }
+  }
+  if (recipients.length === 0) return { sent: 0, failed: 0 }
+
+  const when = [details.date, details.time].filter(Boolean).join(" at ")
+  const heading = kind === "cancelled" ? "Event cancelled" : "Event updated"
+  const subject =
+    kind === "cancelled"
+      ? `Cancelled — ${details.eventTitle}`
+      : `Updated — ${details.eventTitle}`
+  const reason = "You're receiving this because you registered for this event."
+
+  const detailRows: string[] = []
+  if (kind !== "cancelled") {
+    if (when) detailRows.push(`<strong>When</strong><br />${escapeHtml(when)}`)
+    if (details.location) detailRows.push(`<strong>Where</strong><br />${escapeHtml(details.location)}`)
+  }
+
+  const lead =
+    kind === "cancelled"
+      ? `Unfortunately <strong>${escapeHtml(details.eventTitle)}</strong>, hosted by ${escapeHtml(
+          details.homeName,
+        )}, has been cancelled. We're sorry for any inconvenience.`
+      : `The details for <strong>${escapeHtml(details.eventTitle)}</strong>, hosted by ${escapeHtml(
+          details.homeName,
+        )}, have changed. Here are the latest details.`
+
+  const textLead =
+    kind === "cancelled"
+      ? `Unfortunately ${details.eventTitle}, hosted by ${details.homeName}, has been cancelled. We're sorry for any inconvenience.`
+      : `The details for ${details.eventTitle}, hosted by ${details.homeName}, have changed. Here are the latest details.`
+
+  let sent = 0
+  let failed = 0
+  const CONCURRENCY = 5
+
+  for (let i = 0; i < recipients.length; i += CONCURRENCY) {
+    const slice = recipients.slice(i, i + CONCURRENCY)
+    const results = await Promise.all(
+      slice.map(async (recipient) => {
+        try {
+          const greeting = recipient.name ? `Hi ${recipient.name},` : "Hi,"
+          const inner = `
+            <p style="font-size:14px;line-height:1.6;margin:0 0 12px">${escapeHtml(greeting)}</p>
+            <p style="font-size:14px;line-height:1.6;margin:0 0 20px">${lead}</p>
+            ${
+              detailRows.length > 0
+                ? `<div style="font-size:14px;line-height:1.7;background:#f9fafb;border-radius:12px;padding:16px;margin:0 0 20px">${detailRows.join(
+                    "<br /><br />",
+                  )}</div>`
+                : ""
+            }
+            ${
+              kind !== "cancelled" && details.eventUrl
+                ? `<a href="${details.eventUrl}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 20px;border-radius:9999px">View the event</a>`
+                : ""
+            }
+          `
+          const { error } = await resend.emails.send({
+            from: FROM,
+            to: recipient.email,
+            subject,
+            text: [
+              greeting,
+              "",
+              textLead,
+              "",
+              kind !== "cancelled" && when ? `When: ${when}` : "",
+              kind !== "cancelled" && details.location ? `Where: ${details.location}` : "",
+              kind !== "cancelled" && details.eventUrl ? `View the event: ${details.eventUrl}` : "",
+              "",
+              reason,
+            ]
+              .filter((line) => line !== "")
+              .join("\n"),
+            html: shell(heading, inner, reason),
+          })
+          if (error) console.log(`[v0] Event ${kind} email failed:`, error.name, error.message)
+          return !error
+        } catch (err) {
+          console.log(`[v0] Event ${kind} email threw:`, err instanceof Error ? err.message : err)
+          return false
+        }
+      }),
+    )
+    for (const ok of results) {
+      if (ok) sent += 1
+      else failed += 1
+    }
+  }
+
+  console.log(`[v0] Event ${kind} emails: ${sent} sent, ${failed} failed.`)
+  return { sent, failed }
+}
+
+/** Notifies registrants that an event's details changed. */
+export function sendEventUpdated(
+  recipients: EventChangeRecipient[],
+  details: EventChangeDetails,
+): Promise<{ sent: number; failed: number }> {
+  return sendEventLifecycle("updated", recipients, details)
+}
+
+/** Notifies registrants that an event was cancelled. */
+export function sendEventCancelled(
+  recipients: EventChangeRecipient[],
+  details: EventChangeDetails,
+): Promise<{ sent: number; failed: number }> {
+  return sendEventLifecycle("cancelled", recipients, details)
+}
+
 /**
  * Sends one broadcast to many recipients, individually.
  *

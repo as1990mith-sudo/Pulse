@@ -8,16 +8,20 @@ import {
   announcementInteraction,
   dmConversation,
   dmMessage,
+  eventRegistration,
   home,
   homeMembership,
   organization,
 } from "@/lib/db/schema"
+import { sendEventCancelled, sendEventUpdated, type EventChangeRecipient } from "@/lib/events/email"
+import { absoluteShareUrl } from "@/lib/share/site-url"
 import { getCurrentUser } from "@/lib/session"
 import { getAdminUser, requireAdmin } from "@/lib/admin"
 import { getHomeByHandle, getViewerMembership } from "@/lib/home/access"
 import { canViewerManageEvents, getActiveHome, getViewerEventHome } from "@/lib/home/active-home"
 import { homeRoleHasPermission, type HomeRole } from "@/lib/home/roles"
 import { AD_MAX_HOURS, AD_BLOCK_HOURS, FREQUENCY_TEAM_ID, type AdType, type AdAction } from "@/lib/ads"
+import { sanitizeDestinations, type OnlineDestination } from "@/lib/events/online-platforms"
 
 /** How a published event leaves the community feed. */
 export type EventDeleteMode = "auto5h" | "manual"
@@ -31,6 +35,13 @@ export type AnnouncementView = {
   description: string | null
   flyer: string | null
   location: string | null
+  // How/where the event happens. Legacy rows (null) are treated as in-person.
+  locationMode: "in_person" | "online" | null
+  // Confirmed geocode of an in-person venue (null when not geocoded).
+  latitude: string | null
+  longitude: string | null
+  // Selected online destinations with optional links (online events only).
+  onlinePlatforms: OnlineDestination[] | null
   eventDate: string | null
   eventTime: string | null
   price: string | null
@@ -99,6 +110,10 @@ function toView(
     description: row.description,
     flyer: row.flyer,
     location: row.location,
+    locationMode: (row.locationMode as AnnouncementView["locationMode"]) ?? null,
+    latitude: row.latitude ?? null,
+    longitude: row.longitude ?? null,
+    onlinePlatforms: (row.onlinePlatforms as OnlineDestination[] | null) ?? null,
     eventDate: row.eventDate,
     eventTime: row.eventTime,
     price: row.price,
@@ -211,12 +226,83 @@ export async function canPublishEvents(): Promise<boolean> {
   return canViewerManageEvents()
 }
 
+/**
+ * Normalises an event's location fields for both create and update. Online
+ * events must have at least one selected destination and carry no venue/coords;
+ * in-person events must have a venue and may carry confirmed coordinates. The
+ * `location` column is always kept populated (venue, or "Online") so existing
+ * readers that show `location` never render blank.
+ */
+function resolveEventLocation(input: {
+  location?: string | null
+  locationMode?: "in_person" | "online" | null
+  latitude?: string | null
+  longitude?: string | null
+  onlinePlatforms?: OnlineDestination[] | null
+}): {
+  locationMode: "in_person" | "online"
+  location: string
+  latitude: string | null
+  longitude: string | null
+  onlinePlatforms: OnlineDestination[] | null
+} {
+  if (input.locationMode === "online") {
+    const destinations = sanitizeDestinations(input.onlinePlatforms)
+    if (destinations.length === 0) {
+      throw new Error("Pick at least one place the event will take place.")
+    }
+    return { locationMode: "online", location: "Online", latitude: null, longitude: null, onlinePlatforms: destinations }
+  }
+  if (!input.location?.trim()) throw new Error("Event venue is required.")
+  const coord = (v: string | null | undefined) => {
+    const n = typeof v === "string" ? Number(v) : NaN
+    return Number.isFinite(n) ? String(n) : null
+  }
+  return {
+    locationMode: "in_person",
+    location: input.location.trim(),
+    latitude: coord(input.latitude),
+    longitude: coord(input.longitude),
+    onlinePlatforms: null,
+  }
+}
+
+/** Distinct active-registrant recipients for an event's lifecycle emails. */
+async function eventRegistrantRecipients(announcementId: number): Promise<EventChangeRecipient[]> {
+  const rows = await db
+    .select({ email: eventRegistration.email, name: eventRegistration.fullName })
+    .from(eventRegistration)
+    .where(and(eq(eventRegistration.announcementId, announcementId), eq(eventRegistration.status, "registered")))
+  const seen = new Set<string>()
+  const out: EventChangeRecipient[] = []
+  for (const r of rows) {
+    if (!r.email) continue
+    const key = r.email.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ email: r.email, name: r.name ?? null })
+  }
+  return out
+}
+
+/** Long-form event date for emails, e.g. "Saturday, 14 June 2026". */
+function formatEventDateLabel(date: string | null): string | null {
+  if (!date) return null
+  const d = new Date(`${date}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return date
+  return d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+}
+
 export async function createAnnouncement(input: {
   adType: AdType
   title: string
   description?: string | null
   flyer?: string | null
   location?: string | null
+  locationMode?: "in_person" | "online" | null
+  latitude?: string | null
+  longitude?: string | null
+  onlinePlatforms?: OnlineDestination[] | null
   eventDate?: string | null
   eventTime?: string | null
   price?: string | null
@@ -239,13 +325,13 @@ export async function createAnnouncement(input: {
 
   if (!input.eventDate) throw new Error("Event date is required.")
   if (!input.eventTime) throw new Error("Event time is required.")
-  if (!input.location?.trim()) throw new Error("Event venue is required.")
   if (input.eventDate < new Date().toISOString().slice(0, 10)) {
     throw new Error("The event date must be today or in the future.")
   }
   const eventDate = input.eventDate
   const eventTime = input.eventTime
-  const location = input.location.trim()
+  // Online (destinations) or in-person (venue + optional coordinates).
+  const { locationMode, location, latitude, longitude, onlinePlatforms } = resolveEventLocation(input)
   // Events can be free or paid. A blank/absent price means free (null);
   // otherwise store the ticket price the creator set.
   const rawTicket = (input.price ?? "").trim().replace(/^\$/, "").trim()
@@ -272,6 +358,10 @@ export async function createAnnouncement(input: {
     description: input.description?.trim() || null,
     flyer: input.flyer || null,
     location,
+    locationMode,
+    latitude,
+    longitude,
+    onlinePlatforms,
     eventDate,
     eventTime,
     price,
@@ -344,6 +434,11 @@ export async function orgDeleteEvent(id: number): Promise<void> {
     throw new Error("You don't have permission to remove this event.")
   }
 
+  // Gather registrant recipients BEFORE deleting the event — the read still works
+  // afterwards (registration rows aren't cascaded), but capturing them first
+  // keeps the cancellation notice independent of any future cleanup.
+  const recipients = await eventRegistrantRecipients(id)
+
   await db.delete(announcement).where(eq(announcement.id, id))
 
   revalidatePath("/feed")
@@ -354,6 +449,23 @@ export async function orgDeleteEvent(id: number): Promise<void> {
       .where(eq(organization.id, row.organizationId))
       .limit(1)
     if (org) revalidatePath(`/org/${org.handle}/admin/events`)
+  }
+
+  // Notify everyone holding a place that the event was cancelled. Fail-soft and
+  // one send per registrant, at the address they registered with.
+  try {
+    if (recipients.length > 0) {
+      await sendEventCancelled(recipients, {
+        eventTitle: row.title,
+        homeName: row.creatorName,
+        date: formatEventDateLabel(row.eventDate),
+        time: row.eventTime,
+        location: row.locationMode === "online" ? "Online" : row.location,
+        eventUrl: null,
+      })
+    }
+  } catch (err) {
+    console.log("[v0] Event cancelled emails failed:", err)
   }
 }
 
@@ -372,6 +484,10 @@ export async function orgUpdateEvent(
     description?: string | null
     flyer?: string | null
     location?: string | null
+    locationMode?: "in_person" | "online" | null
+    latitude?: string | null
+    longitude?: string | null
+    onlinePlatforms?: OnlineDestination[] | null
     eventDate?: string | null
     eventTime?: string | null
     price?: string | null
@@ -392,13 +508,13 @@ export async function orgUpdateEvent(
   if (!title) throw new Error("Event title is required.")
   if (!input.eventDate) throw new Error("Event date is required.")
   if (!input.eventTime) throw new Error("Event time is required.")
-  if (!input.location?.trim()) throw new Error("Event venue is required.")
   if (input.eventDate < new Date().toISOString().slice(0, 10)) {
     throw new Error("The event date must be today or in the future.")
   }
   const eventDate = input.eventDate
   const eventTime = input.eventTime
-  const location = input.location.trim()
+  // Online (destinations) or in-person (venue + optional coordinates).
+  const { locationMode, location, latitude, longitude, onlinePlatforms } = resolveEventLocation(input)
   const rawTicket = (input.price ?? "").trim().replace(/^\$/, "").trim()
   const price = rawTicket || null
 
@@ -420,6 +536,10 @@ export async function orgUpdateEvent(
       description: input.description?.trim() || null,
       flyer: input.flyer || null,
       location,
+      locationMode,
+      latitude,
+      longitude,
+      onlinePlatforms,
       eventDate,
       eventTime,
       price,
@@ -429,13 +549,38 @@ export async function orgUpdateEvent(
     .where(eq(announcement.id, id))
 
   revalidatePath("/feed")
+  let orgHandle: string | null = null
   if (row.organizationId) {
     const [org] = await db
       .select({ handle: organization.handle })
       .from(organization)
       .where(eq(organization.id, row.organizationId))
       .limit(1)
-    if (org) revalidatePath(`/org/${org.handle}/admin/events`)
+    if (org) {
+      orgHandle = org.handle
+      revalidatePath(`/org/${org.handle}/admin/events`)
+    }
+  }
+
+  // Tell everyone holding a place that the details changed. Fail-soft: the edit
+  // is already saved, so an email hiccup must not surface as a failed save. Each
+  // registrant is emailed individually (no shared recipient list) at the address
+  // they registered with.
+  try {
+    const recipients = await eventRegistrantRecipients(id)
+    if (recipients.length > 0) {
+      const eventUrl = orgHandle ? await absoluteShareUrl(`/events/${orgHandle}/${id}`) : null
+      await sendEventUpdated(recipients, {
+        eventTitle: title,
+        homeName: row.creatorName,
+        date: formatEventDateLabel(eventDate),
+        time: eventTime,
+        location: locationMode === "online" ? "Online" : location,
+        eventUrl,
+      })
+    }
+  } catch (err) {
+    console.log("[v0] Event updated emails failed:", err)
   }
 }
 

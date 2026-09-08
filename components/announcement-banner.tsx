@@ -46,6 +46,14 @@ import {
   type EventDeleteMode,
 } from "@/app/actions/announcements"
 import { type AdType } from "@/lib/ads"
+import { AddressAutocomplete } from "@/components/events/address-autocomplete"
+import { MapConfirm } from "@/components/events/map-confirm"
+import { PlatformIcon } from "@/components/events/platform-icon"
+import {
+  ONLINE_PLATFORMS,
+  type OnlineDestination,
+  type OnlinePlatformId,
+} from "@/lib/events/online-platforms"
 import { formatEventDate } from "@/lib/calendar"
 import type { CurrentUser } from "@/lib/session"
 import { cn } from "@/lib/utils"
@@ -208,8 +216,8 @@ export function AnnouncementBanner({
   // The create bottom sheet (choose event / online / in-person), then the form.
   const [createOpen, setCreateOpen] = useState(false)
   const [showForm, setShowForm] = useState(false)
-  // A venue hint prefilled into the form when opened via a create-sheet option.
-  const [formPreset, setFormPreset] = useState<string | undefined>(undefined)
+  // Which event type the form should open on, chosen in the create sheet.
+  const [formPreset, setFormPreset] = useState<"online" | "in_person" | undefined>(undefined)
   // The id of the event whose detail sheet is open (opened by tapping a card).
   const [openId, setOpenId] = useState<number | null>(null)
   // The id of the event being edited (opened from a card's "…" manage menu).
@@ -260,7 +268,7 @@ export function AnnouncementBanner({
             ? "This week"
             : "Later"
 
-  function openCreate(preset?: string) {
+  function openCreate(preset?: "online" | "in_person") {
     setCreateOpen(false)
     setFormPreset(preset)
     setShowForm(true)
@@ -452,7 +460,7 @@ export function AnnouncementBanner({
       )}
       {showForm && currentUser && (
         <AdvertiseForm
-          presetLocation={formPreset}
+          presetMode={formPreset}
           onClose={() => {
             setShowForm(false)
             setFormPreset(undefined)
@@ -771,14 +779,19 @@ function CreateEventSheet({
 }: {
   open: boolean
   onClose: () => void
-  onChoose: (presetLocation?: string) => void
+  onChoose: (presetMode?: "online" | "in_person") => void
 }) {
   if (typeof document === "undefined") return null
 
-  const options: { icon: typeof Calendar; label: string; hint: string; preset?: string }[] = [
+  const options: {
+    icon: typeof Calendar
+    label: string
+    hint: string
+    preset?: "online" | "in_person"
+  }[] = [
     { icon: CalendarPlus, label: "Create event", hint: "A standard gathering", preset: undefined },
-    { icon: Video, label: "Create online event", hint: "Streamed or hosted on a link", preset: "Online" },
-    { icon: Building2, label: "Create in-person event", hint: "At a physical venue", preset: "" },
+    { icon: Video, label: "Create online event", hint: "Streamed or hosted on a link", preset: "online" },
+    { icon: Building2, label: "Create in-person event", hint: "At a physical venue", preset: "in_person" },
   ]
 
   return createPortal(
@@ -1483,13 +1496,13 @@ function AdminMenu({ announcement: a }: { announcement: AnnouncementView }) {
 
 function AdvertiseForm({
   event,
-  presetLocation,
+  presetMode,
   onClose,
 }: {
   event?: AnnouncementView
-  // A venue hint prefilled when the form is opened for a new event via a
-  // create-sheet option (e.g. "Online"). Ignored when editing an existing event.
-  presetLocation?: string
+  // Which event type to start on when opening for a NEW event via a create-sheet
+  // option. Ignored when editing (the event's own mode wins).
+  presetMode?: "online" | "in_person"
   onClose: () => void
 }) {
   // When `event` is present we're editing an existing event; otherwise publishing
@@ -1499,7 +1512,23 @@ function AdvertiseForm({
   const adType: AdType = "event"
   const [title, setTitle] = useState(event?.title ?? "")
   const [description, setDescription] = useState(event?.description ?? "")
-  const [location, setLocation] = useState(event?.location ?? presetLocation ?? "")
+  // Online vs in-person. Existing events keep their stored mode; new events start
+  // on the type chosen in the create sheet, defaulting to in-person.
+  const [locationMode, setLocationMode] = useState<"in_person" | "online">(
+    event?.locationMode ?? presetMode ?? "in_person",
+  )
+  // In-person venue text + its confirmed geocode. `addressConfirmed` is true once
+  // the text came from a picked autocomplete suggestion (so it has coordinates).
+  const [location, setLocation] = useState(
+    event && event.locationMode !== "online" ? (event.location ?? "") : "",
+  )
+  const [latitude, setLatitude] = useState<string | null>(event?.latitude ?? null)
+  const [longitude, setLongitude] = useState<string | null>(event?.longitude ?? null)
+  const [addressConfirmed, setAddressConfirmed] = useState(Boolean(event?.latitude && event?.longitude))
+  // Online destinations the admin has selected, with optional links.
+  const [destinations, setDestinations] = useState<OnlineDestination[]>(
+    event?.locationMode === "online" && Array.isArray(event.onlinePlatforms) ? event.onlinePlatforms : [],
+  )
   const [eventDate, setEventDate] = useState(event?.eventDate ?? "")
   const [eventTime, setEventTime] = useState(event?.eventTime ?? "")
   // Whether an event is free to attend or ticketed. `price` holds the ticket
@@ -1542,12 +1571,24 @@ function AdvertiseForm({
     }
     if (!eventDate) return setError("Please pick an event date.")
     if (!eventTime) return setError("Please pick an event time.")
-    if (!location.trim()) return setError("Please add the event venue.")
+    if (locationMode === "online") {
+      if (destinations.length === 0) {
+        return setError("Pick at least one place the event will take place.")
+      }
+    } else if (!location.trim()) {
+      return setError("Please add the event venue.")
+    }
     if (eventPricing === "paid" && !price.trim()) {
       return setError("Please add the ticket price, or mark the event as free.")
     }
     // Send the ticket price only when the event is paid (free → null).
     const submittedPrice = eventPricing === "paid" ? price : null
+    // The shared location payload for both create and update. Online events send
+    // their destinations (no venue/coords); in-person sends venue + coordinates.
+    const locationPayload =
+      locationMode === "online"
+        ? { locationMode: "online" as const, onlinePlatforms: destinations }
+        : { locationMode: "in_person" as const, location, latitude, longitude }
     startTransition(async () => {
       try {
         if (isEditing && event) {
@@ -1558,11 +1599,11 @@ function AdvertiseForm({
             title,
             description,
             flyer,
-            location,
             eventDate,
             eventTime,
             price: submittedPrice,
             deleteMode,
+            ...locationPayload,
           })
           onClose()
           return
@@ -1572,17 +1613,49 @@ function AdvertiseForm({
           title,
           description,
           flyer,
-          location,
           eventDate,
           eventTime,
           price: submittedPrice,
           deleteMode,
+          ...locationPayload,
         })
         setResult(res)
       } catch (err) {
         setError(err instanceof Error ? err.message : `Could not ${isEditing ? "save" : "publish"} your event.`)
       }
     })
+  }
+
+  // --- Online destination helpers ------------------------------------------
+  const isPlatformSelected = (id: OnlinePlatformId) => destinations.some((d) => d.platform === id)
+  function togglePlatform(id: OnlinePlatformId) {
+    setDestinations((prev) =>
+      prev.some((d) => d.platform === id)
+        ? prev.filter((d) => d.platform !== id)
+        : [...prev, { platform: id }],
+    )
+  }
+  function setPlatformUrl(id: OnlinePlatformId, url: string) {
+    setDestinations((prev) => prev.map((d) => (d.platform === id ? { ...d, url } : d)))
+  }
+  function setPlatformName(id: OnlinePlatformId, name: string) {
+    setDestinations((prev) => prev.map((d) => (d.platform === id ? { ...d, name } : d)))
+  }
+  const destinationOf = (id: OnlinePlatformId) => destinations.find((d) => d.platform === id)
+
+  // Picking a suggestion confirms the venue AND its exact coordinates; typing by
+  // hand clears any prior confirmation so we never show a stale pin.
+  function handleAddressManual(text: string) {
+    setLocation(text)
+    setAddressConfirmed(false)
+    setLatitude(null)
+    setLongitude(null)
+  }
+  function handleAddressSelect(s: { formatted: string; latitude: number; longitude: number }) {
+    setLocation(s.formatted)
+    setLatitude(String(s.latitude))
+    setLongitude(String(s.longitude))
+    setAddressConfirmed(true)
   }
 
   if (typeof document === "undefined") return null
@@ -1702,16 +1775,133 @@ function AdvertiseForm({
                     <Input id="ann-time" type="time" value={eventTime} onChange={(e) => setEventTime(e.target.value)} />
                   </div>
                 </div>
+                {/* Event type: online vs in-person. Switches the location UI below. */}
                 <div className="space-y-2">
-                  <label htmlFor="ann-loc" className="text-sm font-medium">
-                    Venue
-                  </label>
-                  <Input
-                    id="ann-loc"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                  />
+                  <span className="text-sm font-medium">Event type</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setLocationMode("online")}
+                      aria-pressed={locationMode === "online"}
+                      className={cn(
+                        "flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors",
+                        locationMode === "online"
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border text-muted-foreground hover:bg-secondary",
+                      )}
+                    >
+                      <Video className="size-4" /> Online
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLocationMode("in_person")}
+                      aria-pressed={locationMode === "in_person"}
+                      className={cn(
+                        "flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors",
+                        locationMode === "in_person"
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border text-muted-foreground hover:bg-secondary",
+                      )}
+                    >
+                      <Building2 className="size-4" /> In-person
+                    </button>
+                  </div>
                 </div>
+
+                {locationMode === "online" ? (
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <span className="text-sm font-medium">Where will this event take place?</span>
+                      <p className="text-xs text-muted-foreground">
+                        Pick one or more. Add a link where you have one — you can fill these in later.
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      {ONLINE_PLATFORMS.map((p) => {
+                        const selected = isPlatformSelected(p.id)
+                        const dest = destinationOf(p.id)
+                        return (
+                          <div
+                            key={p.id}
+                            className={cn(
+                              "rounded-xl border transition-colors",
+                              selected ? "border-primary/40 bg-primary/5" : "border-border",
+                            )}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => togglePlatform(p.id)}
+                              aria-pressed={selected}
+                              className="flex w-full items-center gap-3 px-3 py-2.5 text-left"
+                            >
+                              <span
+                                className={cn(
+                                  "grid size-8 shrink-0 place-items-center rounded-lg ring-1 transition-colors",
+                                  selected
+                                    ? "bg-primary/15 text-primary ring-primary/25"
+                                    : "bg-secondary text-muted-foreground ring-border",
+                                )}
+                              >
+                                <PlatformIcon platform={p.id} className="size-4" />
+                              </span>
+                              <span className="flex-1 text-sm font-medium">{p.label}</span>
+                              <span
+                                className={cn(
+                                  "grid size-5 place-items-center rounded-md border transition-colors",
+                                  selected ? "border-primary bg-primary text-primary-foreground" : "border-border",
+                                )}
+                                aria-hidden
+                              >
+                                {selected && <Check className="size-3.5" />}
+                              </span>
+                            </button>
+                            {selected && (
+                              <div className="space-y-2 px-3 pb-3">
+                                {p.id === "other" && (
+                                  <Input
+                                    value={dest?.name ?? ""}
+                                    onChange={(e) => setPlatformName(p.id, e.target.value)}
+                                    placeholder="Platform / service name"
+                                    maxLength={60}
+                                    aria-label="Other platform name"
+                                  />
+                                )}
+                                <Input
+                                  value={dest?.url ?? ""}
+                                  onChange={(e) => setPlatformUrl(p.id, e.target.value)}
+                                  placeholder={p.linkPlaceholder}
+                                  inputMode="url"
+                                  aria-label={`${p.label} link`}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <label htmlFor="ann-loc" className="text-sm font-medium">
+                      Address
+                    </label>
+                    <AddressAutocomplete
+                      id="ann-loc"
+                      value={location}
+                      confirmed={addressConfirmed}
+                      onManualChange={handleAddressManual}
+                      onSelect={handleAddressSelect}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {addressConfirmed
+                        ? "Location confirmed — registrants will get exact directions."
+                        : "Start typing and pick the correct address so registrants get exact directions."}
+                    </p>
+                    {addressConfirmed && latitude && longitude && (
+                      <MapConfirm latitude={latitude} longitude={longitude} label={location} />
+                    )}
+                  </div>
+                )}
 
                 {/* Free vs paid entry. Paid reveals a ticket-price field. */}
                 <div className="space-y-2">
