@@ -127,6 +127,11 @@ export const feedPost = pgTable("feed_post", {
   // { userId, name } for a user who passed the privacy check at save time.
   // Drives clickable mention links + notifications. Null/empty for none.
   mentions: jsonb("mentions").$type<{ userId: string; name: string }[]>(),
+  // 1–5 star rating for iTestify testimonies. Required at creation time for new
+  // testimonies (enforced server-side in createPost); NULL for main-feed posts,
+  // QOTD responses, and legacy testimonies created before ratings existed — the
+  // UI shows no rating for those rather than inventing one.
+  rating: integer("rating"),
   likes: integer("likes").notNull().default(0),
   reposts: integer("reposts").notNull().default(0),
   // Set the first time the author edits the post; drives the "· edited" label.

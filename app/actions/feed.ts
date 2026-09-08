@@ -152,6 +152,10 @@ export type FeedPostView = {
   edited: boolean
   isFollowing: boolean
   isSelf: boolean
+  // 1–5 star rating for iTestify testimonies. Optional and null everywhere else
+  // (main feed, QOTD) and for legacy testimonies created before ratings existed,
+  // so those surfaces simply render no stars.
+  rating?: number | null
   // True when the signed-in viewer is one of this post's allowed mentions, so
   // the UI can offer "Remove my mention" without exposing the full list.
   mentionedMe: boolean
@@ -477,10 +481,11 @@ export async function getFeed(): Promise<FeedPostView[]> {
     edited: !!p.editedAt,
     isFollowing: followingIds.has(p.userId),
     isSelf: currentUserId === p.userId,
+    rating: p.rating ?? null,
     mentionedMe: currentUserId ? (p.mentions ?? []).some((m) => m.userId === currentUserId) : false,
-    comments: commentsByPost.get(p.id) ?? [],
-    pinned: p.pinnedAt !== null,
-    canPin: viewerCanPin,
+    comments: comments
+      .filter((c) => c.postId === p.id)
+      .map((c) => toCommentView(c, infoMap, currentUserId, likedCommentSet, orgMap)),
   }))
   // Polls hang off the post, so they are hydrated after the view is built.
   return attachPolls(views, currentUserId)
@@ -1244,6 +1249,10 @@ export async function createPost(input: {
   // "itestify" (a testimony) or "qotd:<questionId>" (a Question of the Day
   // response). Omitted/null for a normal feed post.
   channel?: string | null
+  // Required 1–5 star rating for an iTestify testimony (channel === "itestify").
+  // Ignored for every other channel and the main feed. Validated server-side
+  // below — the composer's requirement is a convenience, not the gate.
+  rating?: number | null
   // Identity choice from the composer. Admins of the active Home may publish as
   // the organisation or as themselves; everyone else is personal regardless, so
   // this can only ever narrow what the server would otherwise grant.
@@ -1341,6 +1350,18 @@ export async function createPost(input: {
   if (wantsPoll && !text) throw new Error("Add a question for your poll.")
   if (!text && media.length === 0 && !wantsPoll) throw new Error("Post cannot be empty.")
 
+  // Testimonies carry a REQUIRED 1–5 star rating; it is stored only for the
+  // iTestify room and never for the main feed or QOTD. Validated here rather
+  // than trusting the composer, so a crafted request cannot skip it.
+  let rating: number | null = null
+  if (channel === ITESTIFY_CHANNEL) {
+    const r = input.rating
+    if (typeof r !== "number" || !Number.isInteger(r) || r < 1 || r > 5) {
+      throw new Error("Please choose a 1–5 star rating for your testimony.")
+    }
+    rating = r
+  }
+
   // Mirror the first item into the legacy columns so older readers still work.
   const first = media[0] ?? null
 
@@ -1359,6 +1380,7 @@ export async function createPost(input: {
       homeId,
       publishedAsType,
       publishedAsRole,
+      rating,
       mentions: mentions.length > 0 ? mentions : null,
     })
     .returning({ id: feedPost.id })
