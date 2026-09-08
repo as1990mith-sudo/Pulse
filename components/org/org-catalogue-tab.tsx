@@ -646,6 +646,10 @@ function OrgCatalogueRow({
         <h3
           className={cn(
             "truncate font-display text-sm font-semibold leading-tight tracking-tight transition-colors",
+            // Saved live episodes display in caps in the Live tab. Applied as a CSS
+            // transform (not on the string) so search, rename, and aria-labels
+            // keep the original casing.
+            isLive && "uppercase",
             isActive ? "text-primary" : "group-hover:text-live",
           )}
         >

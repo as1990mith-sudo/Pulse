@@ -1327,52 +1327,62 @@ export function EpisodePlayerProvider({ children }: { children: React.ReactNode 
       )}
 
       {/* Docked mini-player while minimised — for AUDIO only. Video uses the
-          in-app floating video window (`videoMini`) instead. */}
-      {current && minimized && !isVideo && (
+          in-app floating video window (`videoMini`) instead. The pill is
+          free-draggable: tapping it (without a drag) expands, while the play and
+          close buttons always click. Rests centred above the footer nav. */}
+      {audioMiniShown && current && (
         <div
-          className="fixed inset-x-0 z-[55] px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
-          // Dock just above the footer nav when it's visible (var set on
-          // body.has-bottom-nav), otherwise flush to the bottom edge on
-          // immersive routes where the nav is hidden. Keeps the footer usable.
-          style={{ bottom: "var(--bottom-nav-height, 0px)" }}
+          ref={audioBar.ref}
+          {...audioBar.handlers}
+          role="button"
+          tabIndex={0}
+          aria-label={`Expand player: ${current.title}`}
+          onClick={() => {
+            if (!audioBar.moved.current) expand()
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault()
+              expand()
+            }
+          }}
+          className={cn(
+            "fixed z-[55] flex w-[min(92vw,42rem)] cursor-grab touch-none select-none items-center gap-2 rounded-2xl border border-white/15 bg-zinc-900/95 p-2 text-left shadow-2xl ring-1 ring-black/40 backdrop-blur-xl active:cursor-grabbing",
+            !audioBar.pos &&
+              "bottom-[calc(env(safe-area-inset-bottom,0px)+var(--bottom-nav-height,0px)+0.5rem)] left-1/2 -translate-x-1/2",
+          )}
+          style={audioBar.pos ? { left: audioBar.pos.x, top: audioBar.pos.y } : undefined}
         >
-          <div className="mx-auto flex w-full max-w-2xl items-center gap-2 rounded-2xl border border-white/15 bg-zinc-900/95 p-2 text-left shadow-2xl ring-1 ring-black/40 backdrop-blur-xl">
-            <button
-              type="button"
-              onClick={expand}
-              aria-label={`Expand player: ${current.title}`}
-              className="flex min-w-0 flex-1 items-center gap-3 transition-transform active:scale-[0.99]"
-            >
-              <span className="relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-zinc-800 ring-1 ring-white/10">
-                {current.cover ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={current.cover || "/placeholder.svg"} alt="" className="size-full object-cover" />
-                ) : (
-                  <Radio className="size-5 text-white/70" strokeWidth={2.5} />
-                )}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-bold text-white">{current.title}</span>
-                <span className="mt-0.5 block truncate text-xs font-medium text-white/55">{current.host.name}</span>
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={toggle}
-              aria-label={playing ? "Pause" : "Play"}
-              className="flex size-11 shrink-0 items-center justify-center rounded-full bg-white text-zinc-900 transition-transform active:scale-90"
-            >
-              {playing ? <Pause className="size-5" /> : <Play className="size-5 translate-x-px" />}
-            </button>
-            <button
-              type="button"
-              onClick={close}
-              aria-label="Close player"
-              className="flex size-9 shrink-0 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white"
-            >
-              <X className="size-4" />
-            </button>
-          </div>
+          <span className="relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-zinc-800 ring-1 ring-white/10">
+            {current.cover ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={current.cover || "/placeholder.svg"} alt="" className="size-full object-cover" />
+            ) : (
+              <Radio className="size-5 text-white/70" strokeWidth={2.5} />
+            )}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-bold text-white">{current.title}</span>
+            <span className="mt-0.5 block truncate text-xs font-medium text-white/55">{current.host.name}</span>
+          </span>
+          <button
+            type="button"
+            data-no-drag
+            onClick={toggle}
+            aria-label={playing ? "Pause" : "Play"}
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-white text-zinc-900 transition-transform active:scale-90"
+          >
+            {playing ? <Pause className="size-5" /> : <Play className="size-5 translate-x-px" />}
+          </button>
+          <button
+            type="button"
+            data-no-drag
+            onClick={close}
+            aria-label="Close player"
+            className="flex size-9 shrink-0 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <X className="size-4" />
+          </button>
         </div>
       )}
     </EpisodePlayerContext.Provider>

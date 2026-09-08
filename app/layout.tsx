@@ -133,10 +133,10 @@ export default async function RootLayout({
         <ThemeProvider
           attribute="class"
           defaultTheme="charcoal"
-          themes={['light', 'dark', 'charcoal']}
+          themes={['light', 'glass', 'charcoal']}
           value={{
             light: 'theme-light',
-            dark: 'dark',
+            glass: 'theme-glass',
             charcoal: 'theme-charcoal',
           }}
           enableSystem={false}

@@ -18,7 +18,7 @@
    every screen size.
    =========================================================================== */
 
-@custom-variant dark (&:is(.dark *, .theme-mid *, .theme-charcoal *, .theme-grass *));
+@custom-variant dark (&:is(.theme-glass *, .theme-mid *, .theme-charcoal *, .theme-grass *));
 
 @theme inline {
   --font-heading: var(--font-sans);
@@ -78,8 +78,7 @@
   --shadow-floating: 0 4px 8px -4px oklch(0 0 0 / 0.16), 0 16px 40px -8px oklch(0 0 0 / 0.24);
 }
 
-:root,
-.dark {
+:root {
   color-scheme: dark;
   --background: oklch(0.16 0.006 285);
   --foreground: oklch(0.97 0.002 285);
@@ -241,6 +240,49 @@
   --sidebar-border: oklch(1 0 0 / 12%);
 }
 
+/* Glass mode — a premium, iOS-17-inspired frosted-glass appearance. Keeps
+   Charcoal's deep, neutral, sophisticated tone but lifts the canvas just off
+   pure black so translucent surfaces read with real depth. The elevated surface
+   tokens (card / popover / sidebar) are semi-transparent; the `.theme-glass`
+   rules further down add the backdrop-blur, delicate hairline borders and soft
+   top-edge highlights that make panels feel like frosted glass floating above
+   the background. Chips, buttons and inputs (secondary / muted / accent) stay
+   solid and crisp so text contrast and legibility never suffer. */
+.theme-glass {
+  color-scheme: dark;
+  --background: oklch(0.15 0.004 285);
+  --foreground: oklch(0.98 0 0);
+  /* Translucent + blurred (see rules below) → frosted panels. */
+  --card: oklch(0.4 0.006 285 / 0.5);
+  --card-foreground: oklch(0.98 0 0);
+  --popover: oklch(0.34 0.006 285 / 0.64);
+  --popover-foreground: oklch(0.98 0 0);
+  /* Opaque fallback for the rare surface that can't sit over a blur. */
+  --popover-solid: oklch(0.18 0.004 285);
+  --primary: oklch(0.72 0.18 55);
+  --primary-foreground: oklch(0.99 0.005 60);
+  /* Solid neutrals for chips / buttons / inputs — crisp, not see-through. */
+  --secondary: oklch(0.27 0.005 285);
+  --secondary-foreground: oklch(0.98 0 0);
+  --muted: oklch(0.27 0.005 285);
+  --muted-foreground: oklch(0.76 0.004 285);
+  --accent: oklch(0.32 0.005 285);
+  --accent-foreground: oklch(0.98 0 0);
+  --destructive: oklch(0.66 0.21 24);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 15%);
+  --feed-divider: oklch(0.1 0.004 285);
+  --ring: oklch(0.72 0.18 55);
+  --live: oklch(0.66 0.21 24);
+  --live-foreground: oklch(0.99 0.005 60);
+  --chart-5: oklch(0.76 0.004 285);
+  --sidebar: oklch(0.22 0.005 285 / 0.62);
+  --sidebar-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.32 0.005 285);
+  --sidebar-accent-foreground: oklch(0.98 0 0);
+  --sidebar-border: oklch(1 0 0 / 12%);
+}
+
 /* Grass mode — same translucent-glass treatment as Mid, but the twilight
    palette is swapped for a bright, vibrant green instead of Mid's blue lean. */
 .theme-grass {
@@ -324,17 +366,45 @@
   --skin-ring: linear-gradient(to top right, oklch(0.9 0.16 95), oklch(0.84 0.17 85), oklch(0.76 0.16 68));
 }
 
-/* Dark mode — translucent ~95%-solid panels floating over a soft dark zinc
-   gradient, mirroring the Mid treatment but keeping dark's neutral palette. */
-.dark body {
-  background-color: oklch(0.16 0.006 285);
+/* Glass mode — a deep, neutral canvas (close to Charcoal, kept just off pure
+   black) with the faintest cool gradient so the frosted panels above it read
+   with real depth. */
+.theme-glass body {
+  background-color: oklch(0.12 0.004 285);
   background-image: linear-gradient(
     155deg,
-    oklch(0.22 0.008 285),
-    oklch(0.16 0.006 285) 50%,
-    oklch(0.13 0.006 285)
+    oklch(0.2 0.006 285),
+    oklch(0.13 0.004 285) 55%,
+    oklch(0.1 0.004 285)
   );
   background-attachment: fixed;
+}
+
+/* Glass mode — real frosted-glass treatment for elevated surfaces. Every card,
+   dialog, sheet, dropdown, select, popover and the sidebar renders over a
+   backdrop blur so the canvas shows through softly (their tokens are already
+   translucent above). Blur is scoped to these elevated surfaces only — chips,
+   buttons and inputs stay solid — so the effect stays tasteful and performant.
+   `saturate` keeps colours lively behind the glass without gradients or neon. */
+.theme-glass :is(.bg-card, .bg-popover, .bg-sidebar) {
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+}
+
+/* The primitive containers additionally get a delicate top-edge highlight and a
+   soft, diffuse drop shadow so they feel like glass floating above the
+   background — depth from light and shadow rather than heavy borders. */
+.theme-glass :is(
+    [data-slot='card'],
+    [data-slot='dialog-content'],
+    [data-slot='sheet-content'],
+    [data-slot='dropdown-menu-content'],
+    [data-slot='select-content']
+  ) {
+  box-shadow:
+    inset 0 1px 0 0 oklch(1 0 0 / 0.1),
+    inset 0 0 0 1px oklch(1 0 0 / 0.04),
+    0 16px 44px -18px oklch(0 0 0 / 0.62);
 }
 
 /* Mid mode — a soft twilight gradient canvas (indigo → blue → teal) that the
