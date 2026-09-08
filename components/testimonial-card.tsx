@@ -14,6 +14,29 @@ import type { CurrentUser } from "@/lib/session"
 import type { ShareTarget } from "@/lib/share-types"
 import { cn } from "@/lib/utils"
 
+// Colorful-but-dark gradient washes for the testimony tiles. Each keeps a deep,
+// low-luminance base so white text stays fully legible while the grid reads
+// vibrant and editorial rather than flat black. A tile picks one deterministically
+// from its post id (see hashToIndex) so a given testimony always looks the same
+// and neighbours stay varied.
+const TILE_GRADIENTS = [
+  "bg-gradient-to-br from-orange-500/25 via-card to-rose-500/20",
+  "bg-gradient-to-br from-violet-500/25 via-card to-indigo-500/20",
+  "bg-gradient-to-br from-emerald-500/25 via-card to-teal-500/20",
+  "bg-gradient-to-br from-sky-500/25 via-card to-blue-500/20",
+  "bg-gradient-to-br from-amber-500/25 via-card to-orange-500/20",
+  "bg-gradient-to-br from-fuchsia-500/25 via-card to-purple-500/20",
+  "bg-gradient-to-br from-rose-500/25 via-card to-pink-500/20",
+  "bg-gradient-to-br from-cyan-500/25 via-card to-emerald-500/20",
+]
+
+/** Stable, well-distributed index from a string key (djb2-ish). */
+function hashToIndex(key: string, mod: number) {
+  let h = 5381
+  for (let i = 0; i < key.length; i++) h = (h * 33 + key.charCodeAt(i)) >>> 0
+  return h % mod
+}
+
 /**
  * A row of five stars rendering an integer 1–5 rating in Frequency's gold/orange
  * accent. Filled stars up to `value`; the rest sit muted. Compact by default so
@@ -26,7 +49,7 @@ function StarRating({ value, className }: { value: number; className?: string })
         {[1, 2, 3, 4, 5].map((n) => (
           <Star
             key={n}
-            className={cn("size-3.5", n <= value ? "fill-primary text-primary" : "text-muted-foreground/30")}
+            className={cn("size-3.5", n <= value ? "fill-primary text-primary" : "text-white/25")}
           />
         ))}
       </div>
@@ -131,7 +154,7 @@ export function TestimonialCard({
           </Avatar>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold leading-tight">{post.user}</p>
-            <p className="truncate text-xs text-muted-foreground">{post.postedAt}</p>
+            <p className="truncate text-xs text-white/60">{post.postedAt}</p>
           </div>
         </header>
 
@@ -153,11 +176,11 @@ export function TestimonialCard({
         </button>
 
         {/* Interaction row — like / comment / share, directly on the tile. */}
-        <div className="mt-3 flex items-center gap-1 border-t border-border/50 pt-2.5 text-muted-foreground">
+        <div className="mt-3 flex items-center gap-1 border-t border-white/10 pt-2.5 text-white/70">
           <button
             type="button"
             onClick={toggleLike}
-            className="flex items-center gap-1.5 rounded-full py-1 pr-2 text-xs font-medium transition-colors hover:text-foreground"
+            className="flex items-center gap-1.5 rounded-full py-1 pr-2 text-xs font-medium transition-colors hover:text-white"
             aria-pressed={liked}
             aria-label={liked ? "Unlike" : "Like"}
           >
@@ -168,7 +191,7 @@ export function TestimonialCard({
           <button
             type="button"
             onClick={() => openDetail(true)}
-            className="flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium transition-colors hover:text-foreground"
+            className="flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium transition-colors hover:text-white"
             aria-label="Comment"
           >
             <CommentIcon className="size-[18px]" strokeWidth={2} />
@@ -178,7 +201,7 @@ export function TestimonialCard({
           <button
             type="button"
             onClick={() => setShareOpen(true)}
-            className="ml-auto flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium transition-colors hover:text-foreground"
+            className="ml-auto flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium transition-colors hover:text-white"
             aria-label="Share"
           >
             <Share2 className="size-[18px]" strokeWidth={2} />
