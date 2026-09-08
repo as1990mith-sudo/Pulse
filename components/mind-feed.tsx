@@ -1161,6 +1161,7 @@ function MediaSlide({
           // already passed this; the main feed's never did, which is why only
           // the main feed restarted on the way back from full screen.
           resume
+          previewMuted
           onExpand={onOpenVideo}
         />
       </div>

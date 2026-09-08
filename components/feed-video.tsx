@@ -53,6 +53,7 @@ export function FeedVideo({
   resume = false,
   ignoreViewerGate = false,
   hideMuteControl = false,
+  previewMuted = false,
   safeAreaControls = false,
   chromeVisible,
   onToggleChrome,
@@ -85,6 +86,12 @@ export function FeedVideo({
    *  would show two controls for the same shared mute state. Everything else in
    *  the bar — play/pause, skip, elapsed time, seek — is unaffected. */
   hideMuteControl?: boolean
+  /** Force this inline clip to always play SILENTLY, independent of the app-wide
+   *  mute preference, and drop the mute toggle from its control bar. Used by the
+   *  main feed and Community previews so scrolling never blasts audio — sound is
+   *  reserved for the expanded / full-screen player the preview opens into. Muted
+   *  playback is also always autoplay-allowed, so previews start reliably. */
+  previewMuted?: boolean
   /** The player fills the screen, so its control bar sits on the device's bottom
    *  edge. Adds the safe-area inset beneath the bar to lift play/pause and the
    *  scrubber out of the home-indicator / gesture strip. Off for inline cards,
@@ -131,8 +138,8 @@ export function FeedVideo({
 
   useEffect(() => {
     const el = ref.current
-    if (el) el.muted = muted
-  }, [muted])
+    if (el) el.muted = previewMuted || muted
+  }, [muted, previewMuted])
 
   // Arm the app-wide "only one recorded media element plays" guard. Idempotent,
   // so every player can safely ask for it.
@@ -153,6 +160,13 @@ export function FeedVideo({
         /* not seekable yet */
       }
     }
+    // Preview clips are always silent, so play muted (always autoplay-allowed)
+    // and skip the unmuted-attempt / autoplay-block dance entirely.
+    if (previewMuted) {
+      el.muted = true
+      el.play().catch(() => {})
+      return
+    }
     el.muted = getSharedMuted()
     el.play().catch((err: unknown) => {
       // Only an autoplay-policy refusal means "the browser wants silence". An
@@ -172,7 +186,7 @@ export function FeedVideo({
         el.play().catch(() => {})
       }
     })
-  }, [ignoreViewerGate])
+  }, [ignoreViewerGate, previewMuted])
 
   useEffect(() => {
     const el = ref.current
@@ -408,7 +422,7 @@ export function FeedVideo({
         poster={poster}
         loop
         playsInline
-        muted={muted}
+        muted={previewMuted || muted}
         preload="metadata"
         {...exclusivePlaybackProps}
         className={cn("h-full w-full", className)}
@@ -533,8 +547,8 @@ export function FeedVideo({
         onSeekPointerMove={onSeekPointerMove}
         onSeekPointerUp={onSeekPointerUp}
         onSeekKeyDown={onSeekKeyDown}
-        muted={hideMuteControl ? undefined : muted}
-        onToggleMute={hideMuteControl ? undefined : toggleMute}
+        muted={hideMuteControl || previewMuted ? undefined : muted}
+        onToggleMute={hideMuteControl || previewMuted ? undefined : toggleMute}
         safeArea={safeAreaControls}
         // Full screen ties the bar to the overlay's chrome so it fades together
         // with the author row and action rail. Inline cards keep the old rule of

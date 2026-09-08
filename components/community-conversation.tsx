@@ -383,6 +383,7 @@ function PostVideo({
           onAspectRatio={setRatio}
           resume
           ignoreViewerGate
+          previewMuted
           onExpand={() => setFullscreen(true)}
         />
       )}

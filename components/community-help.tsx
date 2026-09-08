@@ -150,6 +150,7 @@ function FeedPostVideo({
           className="h-full w-full object-cover"
           onAspectRatio={setRatio}
           resume
+          previewMuted
           onExpand={() => setFullscreen(true)}
         />
       )}
