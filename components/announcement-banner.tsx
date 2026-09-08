@@ -222,8 +222,8 @@ export function AnnouncementBanner({
   const [openId, setOpenId] = useState<number | null>(null)
   // The id of the event being edited (opened from a card's "…" manage menu).
   const [editId, setEditId] = useState<number | null>(null)
-  // The active filter: a range tab (default Today) or a specific rail day.
-  const [view, setView] = useState<EventView>({ type: "range", key: "today" })
+  // The active filter: a range tab (default All) or a specific rail day.
+  const [view, setView] = useState<EventView>({ type: "range", key: "all" })
 
   const today = todayStr()
 

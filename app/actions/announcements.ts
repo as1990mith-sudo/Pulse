@@ -227,6 +227,35 @@ export async function canPublishEvents(): Promise<boolean> {
 }
 
 /**
+ * Public, Home-scoped active events for the shareable /events/[handle] page.
+ *
+ * This powers the SAME members' Events UI (AnnouncementBanner) for visitors with
+ * no account or no membership — the public link is byte-for-byte the members'
+ * page, just without the app chrome. Two guards keep it safe and correct:
+ *  • `publicPageEnabled` — a members-only event never leaks to the open web.
+ *  • same approved + unexpired window as the member feed, so the set matches.
+ * `homeHandle` is stamped on every row so each card links to its PUBLIC detail
+ * page (`/events/[handle]/[id]`) rather than the in-app, auth-gated sheet.
+ */
+export async function getPublicHomeAnnouncements(homeId: string, handle: string): Promise<AnnouncementView[]> {
+  await expireDueAnnouncements()
+  const rows = await db
+    .select()
+    .from(announcement)
+    .where(
+      and(
+        eq(announcement.homeId, homeId),
+        eq(announcement.adType, "event"),
+        eq(announcement.status, "approved"),
+        eq(announcement.publicPageEnabled, true),
+        or(isNull(announcement.expiresAt), gt(announcement.expiresAt, new Date())),
+      ),
+    )
+    .orderBy(asc(announcement.eventDate))
+  return rows.map((r) => toView(r, null, undefined, handle))
+}
+
+/**
  * Normalises an event's location fields for both create and update. Online
  * events must have at least one selected destination and carry no venue/coords;
  * in-person events must have a venue and may carry confirmed coordinates. The
