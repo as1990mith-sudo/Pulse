@@ -71,12 +71,15 @@ export function IdentityPen({
     }
     document.addEventListener("pointerdown", onPointerDown)
     document.addEventListener("keydown", onKey)
-    window.addEventListener("scroll", onScroll, true)
+    // Passive + capture: catches scrolls from any container to reposition/close
+    // the popup, but promises never to preventDefault so it can never block the
+    // scroll's compositor thread.
+    window.addEventListener("scroll", onScroll, { passive: true, capture: true })
     window.addEventListener("resize", onScroll)
     return () => {
       document.removeEventListener("pointerdown", onPointerDown)
       document.removeEventListener("keydown", onKey)
-      window.removeEventListener("scroll", onScroll, true)
+      window.removeEventListener("scroll", onScroll, { capture: true })
       window.removeEventListener("resize", onScroll)
     }
   }, [open])
