@@ -458,11 +458,20 @@
     scroll-behavior: smooth;
     /* Keep sticky headers from clipping scrolled-to content */
     scroll-padding-top: 5rem;
+    /* Isolate the root scroller so a fling that reaches the top/bottom stops
+       here instead of chaining into the browser's own pull-to-refresh / history
+       overscroll. This is the single biggest "feels like a native app, not a
+       web page" win — the document owns its overscroll. `contain` (not `none`)
+       keeps the platform's subtle end-of-scroll cue while killing the chaining. */
+    overscroll-behavior-y: contain;
   }
-  /* Momentum scrolling in any internal scroll areas (chat, dropdowns, etc.) */
+  /* Momentum scrolling in every internal scroll area (chat, dropdowns, sheets,
+     feeds, …). Kept frame-rate-independent: it's the platform compositor doing
+     the inertia, so it stays smooth at 60/90/120Hz+ with zero JS. */
   body,
   [data-scroll],
   .overflow-y-auto,
+  .overflow-y-scroll,
   .overflow-auto {
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
@@ -471,24 +480,28 @@
      (Firefox + WebKit). */
   [data-scroll],
   .overflow-y-auto,
+  .overflow-y-scroll,
   .overflow-auto {
     scrollbar-width: thin;
     scrollbar-color: color-mix(in oklab, var(--foreground) 18%, transparent) transparent;
   }
   [data-scroll]::-webkit-scrollbar,
   .overflow-y-auto::-webkit-scrollbar,
+  .overflow-y-scroll::-webkit-scrollbar,
   .overflow-auto::-webkit-scrollbar {
     width: 8px;
     height: 8px;
   }
   [data-scroll]::-webkit-scrollbar-thumb,
   .overflow-y-auto::-webkit-scrollbar-thumb,
+  .overflow-y-scroll::-webkit-scrollbar-thumb,
   .overflow-auto::-webkit-scrollbar-thumb {
     background-color: color-mix(in oklab, var(--foreground) 18%, transparent);
     border-radius: 9999px;
   }
   [data-scroll]::-webkit-scrollbar-track,
   .overflow-y-auto::-webkit-scrollbar-track,
+  .overflow-y-scroll::-webkit-scrollbar-track,
   .overflow-auto::-webkit-scrollbar-track {
     background: transparent;
   }
@@ -918,6 +931,12 @@ body.has-bottom-nav {
   -ms-overflow-style: none;
   overscroll-behavior-x: contain;
   overscroll-behavior-y: auto;
+  /* Commit to the horizontal axis the instant a drag starts: the browser no
+     longer spends the first frames disambiguating H vs V, so the rail tracks
+     the finger immediately AND a mostly-vertical swipe passes straight through
+     to the page scroll instead of being briefly captured. This is what keeps a
+     carousel-inside-a-feed from feeling "sticky" (requirement: nested scroll). */
+  touch-action: pan-x;
 }
 .hscroll::-webkit-scrollbar {
   display: none;

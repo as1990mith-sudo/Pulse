@@ -56,12 +56,13 @@ export function EditedIndicator({ className }: { className?: string }) {
     }
     document.addEventListener("pointerdown", onPointerDown)
     document.addEventListener("keydown", onKey)
-    window.addEventListener("scroll", onScroll, true)
+    // Passive + capture: closes the popup on any scroll but never blocks it.
+    window.addEventListener("scroll", onScroll, { passive: true, capture: true })
     window.addEventListener("resize", onScroll)
     return () => {
       document.removeEventListener("pointerdown", onPointerDown)
       document.removeEventListener("keydown", onKey)
-      window.removeEventListener("scroll", onScroll, true)
+      window.removeEventListener("scroll", onScroll, { capture: true })
       window.removeEventListener("resize", onScroll)
     }
   }, [open])
