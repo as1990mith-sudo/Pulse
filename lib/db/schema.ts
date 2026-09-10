@@ -785,9 +785,6 @@ export const eventRegistration = pgTable(
     // "registered" | "cancelled". Cancelled rows are retained so the audience
     // system can tell "never registered" from "registered then withdrew".
     status: text("status").notNull().default("registered"),
-    // Attendance, set by an admin at the event. Null = not yet marked, which is
-    // distinct from explicitly marked absent.
-    attendedAt: timestamp("attendedAt"),
     // How the registration arrived: "member" (one tap, authenticated) or
     // "public" (the no-account public page). Useful for the admin breakdown.
     source: text("source").notNull().default("member"),

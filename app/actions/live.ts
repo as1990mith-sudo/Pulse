@@ -610,7 +610,9 @@ export async function startBroadcast(input: {
  * room (e.g. the host reconnects, or the effect fires twice). Any failure is
  * swallowed — a missing recording is far better than blocking the live session.
  */
-export async function beginRoomRecording(input: { roomName: string }): Promise<{ recording: boolean }> {
+export async function beginRoomRecording(
+  input: { roomName: string },
+): Promise<{ recording: boolean; reason?: "quota" | "error" }> {
   let user
   try {
     user = await requireUser()
@@ -666,7 +668,8 @@ export async function beginRoomRecording(input: { roomName: string }): Promise<{
       .where(eq(liveStream.roomName, input.roomName))
     return { recording: true }
   } catch (err) {
-    console.log("[v0] beginRoomRecording failed:", (err as Error)?.message)
+    const message = (err as Error)?.message ?? ""
+    console.log("[v0] beginRoomRecording failed:", message)
     // Roll back the placeholder so it doesn't linger as a stuck "processing" row.
     if (placeholderId != null) {
       try {
@@ -675,7 +678,12 @@ export async function beginRoomRecording(input: { roomName: string }): Promise<{
         /* best-effort cleanup */
       }
     }
-    return { recording: false }
+    // LiveKit Cloud rejects egress with HTTP 429 "egress minutes exceeded" once
+    // the plan's recording minutes are used up. Distinguish that specific,
+    // account-level limit from a generic failure so the host gets an accurate,
+    // actionable message rather than a silent no-save.
+    const quota = /egress minutes exceeded|resource_exhausted|too many requests|quota/i.test(message)
+    return { recording: false, reason: quota ? "quota" : "error" }
   }
 }
 

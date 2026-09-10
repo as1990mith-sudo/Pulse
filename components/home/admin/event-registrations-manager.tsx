@@ -1,10 +1,9 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import * as XLSX from "xlsx"
 import {
   CalendarDays,
-  Check,
   ChevronRight,
   Download,
   Loader2,
@@ -27,7 +26,6 @@ import {
   type RegistrationFilter,
   type RegistrationRow,
 } from "@/app/actions/event-admin"
-import { setAttendance } from "@/app/actions/event-registration"
 import { EVENT_GENDER_LABEL, type EventGender, type EventQuestion } from "@/lib/events/questions"
 
 function formatWhen(date: string | null, time: string | null) {
@@ -69,7 +67,6 @@ const FILTERS: { key: RegistrationFilter; label: string }[] = [
   { key: "all", label: "All" },
   { key: "members", label: "Members" },
   { key: "non_members", label: "Guests" },
-  { key: "attended", label: "Attended" },
 ]
 
 const GENDER_FILTERS: { key: GenderFilter; label: string }[] = [
@@ -421,11 +418,10 @@ function CountStrip({ counts }: { counts: RegistrationCounts }) {
     { label: "Registered", value: counts.total },
     { label: "Members", value: counts.members },
     { label: "Guests", value: counts.nonMembers },
-    { label: "Attended", value: counts.attended },
   ]
   return (
     <div className="border-t border-border">
-      <dl className="grid grid-cols-4">
+      <dl className="grid grid-cols-3">
         {items.map((it) => (
           <div key={it.label} className="border-r border-border px-2.5 py-2.5 last:border-r-0">
             <dt className={cn(EYEBROW, "text-muted-foreground")}>{it.label}</dt>
@@ -758,9 +754,6 @@ function RegistrationList({ handle, event }: { handle: string; event: EventRegis
                     {r.guests > 1 ? ` · party of ${r.guests}` : ""}
                   </span>
                 </span>
-                {r.attendedAt ? (
-                  <Check className="size-4 shrink-0" style={{ color: "var(--home-accent)" }} aria-label="Attended" />
-                ) : null}
                 <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
               </button>
             </li>
@@ -774,10 +767,6 @@ function RegistrationList({ handle, event }: { handle: string; event: EventRegis
           questions={event.questions}
           row={selected}
           onClose={() => setSelected(null)}
-          onAttendanceChange={(attendedAt) => {
-            setRows((prev) => prev.map((r) => (r.id === selected.id ? { ...r, attendedAt } : r)))
-            setSelected((cur) => (cur ? { ...cur, attendedAt } : cur))
-          }}
         />
       ) : null}
     </div>
@@ -811,17 +800,13 @@ function RegistrationDetail({
   questions,
   row,
   onClose,
-  onAttendanceChange,
 }: {
   handle: string
   questions: EventQuestion[]
   row: RegistrationRow
   onClose: () => void
-  onAttendanceChange: (attendedAt: string | null) => void
 }) {
-  const [pending, startTransition] = useTransition()
   const [history, setHistory] = useState<ContactHistoryEntry[] | null>(null)
-  const [err, setErr] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -836,19 +821,6 @@ function RegistrationDetail({
       alive = false
     }
   }, [handle, row.contactId])
-
-  function toggleAttendance() {
-    const next = !row.attendedAt
-    startTransition(async () => {
-      const res = await setAttendance({ registrationId: row.id, attended: next })
-      if (!res.ok) {
-        setErr(res.error ?? "Could not update attendance.")
-        return
-      }
-      setErr(null)
-      onAttendanceChange(next ? new Date().toISOString() : null)
-    })
-  }
 
   const answered = questions.filter((q) => row.answers && row.answers[q.id] !== undefined && row.answers[q.id] !== "")
 
@@ -916,34 +888,6 @@ function RegistrationDetail({
         </dl>
       ) : null}
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={toggleAttendance}
-          disabled={pending}
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] disabled:opacity-60",
-            !row.attendedAt && "border border-border hover:bg-muted/60",
-          )}
-          style={
-            row.attendedAt
-              ? {
-                  backgroundColor: "color-mix(in oklch, var(--home-accent) 16%, transparent)",
-                  color: "var(--home-accent)",
-                }
-              : undefined
-          }
-        >
-          {pending ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
-          {row.attendedAt ? "Marked as attended" : "Mark as attended"}
-        </button>
-      </div>
-      {err ? (
-        <p role="alert" className="mt-2 text-xs text-destructive">
-          {err}
-        </p>
-      ) : null}
-
       <div className="mt-4">
         <h5 className={cn(EYEBROW, "text-muted-foreground")}>Event history</h5>
         {history === null ? (
@@ -958,7 +902,7 @@ function RegistrationDetail({
               <li key={h.registrationId} className="flex items-center justify-between gap-2 text-xs">
                 <span className="truncate text-muted-foreground">{h.title}</span>
                 <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] tabular-nums text-muted-foreground">
-                  {h.status === "cancelled" ? "Cancelled" : h.attendedAt ? "Attended" : "Registered"}
+                  {h.status === "cancelled" ? "Cancelled" : "Registered"}
                 </span>
               </li>
             ))}

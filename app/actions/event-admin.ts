@@ -50,7 +50,6 @@ export type RegistrationCounts = {
   nonMembers: number
   /** Places taken once party sizes are included; what capacity is measured in. */
   seats: number
-  attended: number
   // Gender breakdown of REGISTRATIONS — never attendance. `unknownGender`
   // catches legacy rows saved before gender was captured, so the three known
   // counts always add up to (total − unknownGender) and the UI can hide the
@@ -81,7 +80,6 @@ const EMPTY_COUNTS: RegistrationCounts = {
   members: 0,
   nonMembers: 0,
   seats: 0,
-  attended: 0,
   male: 0,
   female: 0,
   other: 0,
@@ -131,7 +129,6 @@ export async function getHomeEventRegistrations(handle: string): Promise<EventRe
       members: sql<number>`count(*) filter (where ${eventRegistration.isMember})::int`,
       nonMembers: sql<number>`count(*) filter (where not ${eventRegistration.isMember})::int`,
       seats: sql<number>`coalesce(sum(${eventRegistration.guests}), 0)::int`,
-      attended: sql<number>`count(*) filter (where ${eventRegistration.attendedAt} is not null)::int`,
       ...genderAggregates,
     })
     .from(eventRegistration)
@@ -165,7 +162,6 @@ export async function getHomeEventRegistrations(handle: string): Promise<EventRe
             members: g.members,
             nonMembers: g.nonMembers,
             seats: g.seats,
-            attended: g.attended,
             male: g.male,
             female: g.female,
             other: g.other,
@@ -187,13 +183,12 @@ export type RegistrationRow = {
   guests: number
   source: string
   status: string
-  attendedAt: string | null
   createdAt: string
   answers: Record<string, string | number | boolean> | null
   marketingOptIn: boolean
 }
 
-export type RegistrationFilter = "all" | "members" | "non_members" | "attended"
+export type RegistrationFilter = "all" | "members" | "non_members"
 
 /**
  * The registrant list for one event, with search and filter applied server-side.
@@ -230,7 +225,6 @@ export async function listEventRegistrations(input: {
   ]
   if (filter === "members") conditions.push(eq(eventRegistration.isMember, true))
   if (filter === "non_members") conditions.push(eq(eventRegistration.isMember, false))
-  if (filter === "attended") conditions.push(sql`${eventRegistration.attendedAt} is not null`)
   // Member-status and gender are INDEPENDENT filters, so they compose: an admin
   // can ask for "female non-members" and both conditions apply together.
   if (gender !== "all") conditions.push(eq(eventRegistration.gender, gender))
@@ -258,7 +252,6 @@ export async function listEventRegistrations(input: {
       guests: eventRegistration.guests,
       source: eventRegistration.source,
       status: eventRegistration.status,
-      attendedAt: eventRegistration.attendedAt,
       createdAt: eventRegistration.createdAt,
       answers: eventRegistration.answers,
       marketingOptIn: eventContact.marketingOptIn,
@@ -276,7 +269,6 @@ export async function listEventRegistrations(input: {
       members: sql<number>`count(*) filter (where ${eventRegistration.isMember})::int`,
       nonMembers: sql<number>`count(*) filter (where not ${eventRegistration.isMember})::int`,
       seats: sql<number>`coalesce(sum(${eventRegistration.guests}), 0)::int`,
-      attended: sql<number>`count(*) filter (where ${eventRegistration.attendedAt} is not null)::int`,
       ...genderAggregates,
     })
     .from(eventRegistration)
@@ -292,7 +284,6 @@ export async function listEventRegistrations(input: {
     rows: rows.map((r) => ({
       ...r,
       gender: normaliseEventGender(r.gender),
-      attendedAt: r.attendedAt ? r.attendedAt.toISOString() : null,
       createdAt: r.createdAt.toISOString(),
     })),
     counts: totals ?? EMPTY_COUNTS,
@@ -306,7 +297,6 @@ export type ContactHistoryEntry = {
   eventDate: string | null
   isMember: boolean
   guests: number
-  attendedAt: string | null
   status: string
   createdAt: string
 }
@@ -333,7 +323,6 @@ export async function getContactEventHistory(input: {
       eventDate: announcement.eventDate,
       isMember: eventRegistration.isMember,
       guests: eventRegistration.guests,
-      attendedAt: eventRegistration.attendedAt,
       status: eventRegistration.status,
       createdAt: eventRegistration.createdAt,
     })
@@ -344,7 +333,6 @@ export async function getContactEventHistory(input: {
 
   return rows.map((r) => ({
     ...r,
-    attendedAt: r.attendedAt ? r.attendedAt.toISOString() : null,
     createdAt: r.createdAt.toISOString(),
   }))
 }

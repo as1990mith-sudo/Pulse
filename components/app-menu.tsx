@@ -41,7 +41,7 @@ import { cn } from "@/lib/utils"
 
 const themes = [
     { value: "charcoal", label: "Charcoal", icon: MoonStar },
-    { value: "glass", label: "Glass", icon: Layers },
+    { value: "glass", label: "Gradient", icon: Layers },
     { value: "light", label: "Light", icon: Sun },
 ] as const
 

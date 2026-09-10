@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import useSWR from "swr"
+import { toast } from "sonner"
 import {
   Check,
   Clock,
@@ -558,10 +559,25 @@ export function VideoStudioConsole({
     if (!recordOnServer || !roomName || !connected || !camOn) return
     if (recordingBegunRef.current) return
     recordingBegunRef.current = true
-    void beginRoomRecording({ roomName }).catch(() => {
-      // Allow a later retry if the call failed outright (network hiccup).
-      recordingBegunRef.current = false
-    })
+    void beginRoomRecording({ roomName })
+      .then((res) => {
+        // A benign no-op (audio room, non-host) returns recording:false with no
+        // reason and must stay silent. Only a real egress failure carries a
+        // reason — surface it so the host knows this session won't be saved as a
+        // replay, instead of it silently never appearing in the catalogue.
+        if (!res.recording && res.reason) {
+          toast.error(
+            res.reason === "quota"
+              ? "Recording limit reached — this session won't be saved to the catalogue. Your live continues normally."
+              : "Couldn't start recording — this session won't be saved as a replay. Your live continues normally.",
+            { duration: 8000 },
+          )
+        }
+      })
+      .catch(() => {
+        // Allow a later retry if the call failed outright (network hiccup).
+        recordingBegunRef.current = false
+      })
   }, [recordOnServer, roomName, connected, camOn])
 
   // Keep the app-level mini-player's "now playing" info in sync.
@@ -776,7 +792,7 @@ export function VideoStudioConsole({
     refreshCalls()
   }
 
-  // ── Music controls ──────────────────────────────────────────────────────
+  // ── Music controls ───────────────────��──────────────────────────────────
   // Load (publish) a playlist track and start it playing on its own timeline.
   async function playTrack(index: number) {
     const track = musicTracks[index]
