@@ -46,6 +46,10 @@ export default async function HomeAdminOverviewPage({ params }: { params: Promis
               key={s.label}
               href={s.href}
               className="tap-scale group rounded-2xl bg-card/60 p-3.5 shadow-soft ring-1 ring-inset ring-border/50 transition-shadow hover:shadow-elevated"
+              style={{
+                backgroundImage:
+                  "linear-gradient(155deg, color-mix(in oklab, var(--home-accent) 9%, transparent), transparent 48%)",
+              }}
             >
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
@@ -71,7 +75,13 @@ export default async function HomeAdminOverviewPage({ params }: { params: Promis
 
       {/* Plan + view Home */}
       <div className="grid gap-2.5 sm:grid-cols-2">
-        <div className="flex items-center justify-between rounded-2xl bg-card/60 p-4 shadow-soft ring-1 ring-inset ring-border/50">
+        <div
+          className="flex items-center justify-between rounded-2xl bg-card/60 p-4 shadow-soft ring-1 ring-inset ring-border/50"
+          style={{
+            backgroundImage:
+              "linear-gradient(135deg, color-mix(in oklab, var(--home-accent) 12%, transparent), transparent 55%)",
+          }}
+        >
           <div className="min-w-0">
             <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Plan</span>
             <p className="mt-0.5 truncate font-display text-base font-semibold tracking-tight">{plan.name}</p>
