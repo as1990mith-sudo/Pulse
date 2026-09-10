@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react"
 import { Loader2 } from "lucide-react"
 import { registerForEvent } from "@/app/actions/event-registration"
-import { MAX_GUESTS, type EventQuestion } from "@/lib/events/questions"
+import { EVENT_GENDERS, EVENT_GENDER_LABEL, MAX_GUESTS, type EventGender, type EventQuestion } from "@/lib/events/questions"
 
 type Props = {
   handle: string
@@ -12,6 +12,8 @@ type Props = {
   knownName: string | null
   knownEmail: string | null
   knownPhone: string | null
+  /** A member's profile gender, prefilled but always editable. */
+  knownGender: EventGender | null
   isMember: boolean
   requiresPhone: boolean
   questions: EventQuestion[]
@@ -33,6 +35,7 @@ export function RegistrationForm({
   knownName,
   knownEmail,
   knownPhone,
+  knownGender,
   requiresPhone,
   questions,
   onRegistered,
@@ -40,6 +43,7 @@ export function RegistrationForm({
   const [fullName, setFullName] = useState(knownName ?? "")
   const [email, setEmail] = useState(knownEmail ?? "")
   const [phone, setPhone] = useState(knownPhone ?? "")
+  const [gender, setGender] = useState<EventGender | "">(knownGender ?? "")
   const [answers, setAnswers] = useState<Record<string, string | boolean>>({})
   const [marketingOptIn, setMarketingOptIn] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -55,6 +59,12 @@ export function RegistrationForm({
   function submit() {
     setError(null)
     setFieldErrors({})
+    // Gender is required. Caught here for an instant, inline message rather than
+    // a server round trip; the server enforces the same rule regardless.
+    if (!gender) {
+      setFieldErrors({ gender: "Select your gender to continue." })
+      return
+    }
     startTransition(async () => {
       const result = await registerForEvent({
         handle,
@@ -62,6 +72,7 @@ export function RegistrationForm({
         fullName,
         email,
         phone,
+        gender,
         answers,
         marketingOptIn,
       })
@@ -135,6 +146,35 @@ export function RegistrationForm({
           <p className="text-xs text-muted-foreground">So the hosts can reach you about this event.</p>
         </div>
       ) : null}
+
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="reg-gender" className="text-sm font-medium text-foreground">
+          Gender
+        </label>
+        <select
+          id="reg-gender"
+          value={gender}
+          onChange={(e) => {
+            setGender(e.target.value as EventGender | "")
+            setFieldErrors(({ gender: _drop, ...rest }) => rest)
+          }}
+          aria-required="true"
+          aria-invalid={fieldErrors.gender ? true : undefined}
+          className={inputClass}
+        >
+          <option value="">Select…</option>
+          {EVENT_GENDERS.map((g) => (
+            <option key={g} value={g}>
+              {EVENT_GENDER_LABEL[g]}
+            </option>
+          ))}
+        </select>
+        {fieldErrors.gender ? (
+          <p role="alert" className="text-xs text-destructive">
+            {fieldErrors.gender}
+          </p>
+        ) : null}
+      </div>
 
       {questions.map((q) => {
         const err = fieldErrors[q.id]

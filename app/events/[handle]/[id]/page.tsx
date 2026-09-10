@@ -153,6 +153,7 @@ export default async function PublicEventPage({ params, searchParams }: Params) 
           knownName={identity.knownName}
           knownEmail={identity.knownEmail}
           knownPhone={identity.knownPhone}
+          knownGender={identity.knownGender}
           isMember={identity.isMember}
           alreadyRegistered={identity.isRegistrant}
           requiresPhone={config.requiresPhone}

@@ -772,6 +772,12 @@ export const eventRegistration = pgTable(
     fullName: text("fullName").notNull(),
     email: text("email").notNull(),
     phone: text("phone"),
+    // Gender AS GIVEN for this registration ("male" | "female" | "other").
+    // Snapshotted like the rest of the contact details: a member's value is
+    // prefilled from their profile but stored here at submit time, so a later
+    // profile edit never rewrites the event's historical roll. Nullable only
+    // for rows that predate this field — every new registration requires it.
+    gender: text("gender"),
     // Answers to the event's `questions`, keyed by question id.
     answers: jsonb("answers").$type<Record<string, string | number | boolean>>(),
     // Party size for events that allow guests. 1 = just the registrant.

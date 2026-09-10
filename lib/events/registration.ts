@@ -37,7 +37,7 @@ export type EventIdentity = {
 // callers can keep importing everything from one place.
 export { MAX_GUESTS, type EventQuestion, type RegistrationAnswers } from "./questions"
 
-import { MAX_GUESTS, type EventQuestion, type RegistrationAnswers } from "./questions"
+import { MAX_GUESTS, normaliseEventGender, type EventGender, type EventQuestion, type RegistrationAnswers } from "./questions"
 
 /**
  * Normalises an email for identity matching.
@@ -195,6 +195,7 @@ export async function resolveIdentity(input: {
     knownName: string | null
     knownEmail: string | null
     knownPhone: string | null
+    knownGender: EventGender | null
     existingRegistrationId: number | null
   }
 > {
@@ -206,12 +207,13 @@ export async function resolveIdentity(input: {
       knownName: null,
       knownEmail: null,
       knownPhone: null,
+      knownGender: null,
       existingRegistrationId: null,
     }
   }
 
   const [account] = await db
-    .select({ name: userTable.name, email: userTable.email, phone: userTable.phone })
+    .select({ name: userTable.name, email: userTable.email, phone: userTable.phone, gender: userTable.gender })
     .from(userTable)
     .where(eq(userTable.id, input.userId))
     .limit(1)
@@ -224,6 +226,7 @@ export async function resolveIdentity(input: {
       knownName: null,
       knownEmail: null,
       knownPhone: null,
+      knownGender: null,
       existingRegistrationId: null,
     }
   }
@@ -265,6 +268,7 @@ export async function resolveIdentity(input: {
     knownName: account.name,
     knownEmail: account.email,
     knownPhone: account.phone ?? null,
+    knownGender: normaliseEventGender(account.gender),
     existingRegistrationId: existing?.id ?? null,
   }
 }
