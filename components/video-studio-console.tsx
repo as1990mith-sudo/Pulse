@@ -532,22 +532,32 @@ export function VideoStudioConsole({
   }, [live, roomName])
 
   // Start the SERVER-SIDE replay recording (LiveKit Egress) only once the host
-  // is actually connected AND publishing video. Egress composites the room, so
-  // starting it before the host's camera is live (as startBroadcast used to)
-  // records an empty room and strands the replay at 0:00. Gating on
-  // `localVideoReady` guarantees the host's camera track exists in the room
-  // first. `beginRoomRecording` is idempotent server-side, and the ref makes
-  // sure we only ever fire it once per room even across re-renders/reconnects.
+  // is actually connected AND publishing a camera. Egress composites the room,
+  // so starting it before any camera is live (as startBroadcast used to) records
+  // an empty room and strands the replay at 0:00.
+  //
+  // We gate on `camOn` — which flips true the moment LiveKit confirms the host's
+  // camera track is PUBLISHED to the room — NOT on `localVideoReady`.
+  // `localVideoReady` additionally requires the host's self-view <video> element
+  // to be mounted and the track attached to it. In a Conversation (grid meeting)
+  // that self-view lives inside the paginated ConversationVideo overlay, so it
+  // mounts late or scrolls off-page and `localVideoReady` often never flips true
+  // — egress then never started, no placeholder episode was created, and the
+  // session silently failed to save even after the host chose "Save Episode".
+  // A published camera is all egress needs to composite a non-empty room, and it
+  // fires identically for Broadcast and Conversation. `beginRoomRecording` is
+  // idempotent server-side, and the ref makes sure we only ever fire it once per
+  // room even across re-renders/reconnects.
   const recordingBegunRef = useRef(false)
   useEffect(() => {
-    if (!recordOnServer || !roomName || !connected || !localVideoReady) return
+    if (!recordOnServer || !roomName || !connected || !camOn) return
     if (recordingBegunRef.current) return
     recordingBegunRef.current = true
     void beginRoomRecording({ roomName }).catch(() => {
       // Allow a later retry if the call failed outright (network hiccup).
       recordingBegunRef.current = false
     })
-  }, [recordOnServer, roomName, connected, localVideoReady])
+  }, [recordOnServer, roomName, connected, camOn])
 
   // Keep the app-level mini-player's "now playing" info in sync.
   useEffect(() => {

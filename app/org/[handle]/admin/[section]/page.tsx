@@ -13,7 +13,6 @@ import { ReviewTabManager } from "@/components/home/admin/review-tab-manager"
 import { ContentManager } from "@/components/home/admin/content-manager"
 import { BookingsManager } from "@/components/home/admin/bookings-manager"
 import { AppointmentsAdmin } from "@/components/home/admin/appointments-admin"
-import { ComingSoonSection } from "@/components/home/admin/coming-soon-section"
 
 export default async function HomeAdminSectionPage({
   params,
@@ -22,17 +21,13 @@ export default async function HomeAdminSectionPage({
 }) {
   const { handle, section } = await params
   const meta = getHomeAdminSection(section)
-  // "overview" is the index route; unknown slugs 404.
+  // "overview" is the index route; unknown or deprecated slugs 404.
   if (!meta || section === "overview") notFound()
 
   return (
-    <div className="space-y-8">
-      <header className="space-y-1">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Admin Console</p>
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-balance lg:text-3xl">{meta.label}</h1>
-        {meta.description && (
-          <p className="max-w-2xl text-pretty text-sm text-muted-foreground">{meta.description}</p>
-        )}
+    <div className="space-y-5">
+      <header>
+        <h1 className="font-display text-xl font-semibold tracking-tight lg:text-2xl">{meta.label}</h1>
       </header>
 
       <SectionBody handle={handle} section={section} />
@@ -82,15 +77,15 @@ async function SectionBody({ handle, section }: { handle: string; section: strin
     // registration records and the audiences built from them.
     const registrations = await getHomeEventRegistrations(handle)
     return (
-      <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-6">
         <section>
-          <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             Registrations
           </h2>
           <EventRegistrationsManager handle={handle} events={registrations} />
         </section>
         <section>
-          <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             Audiences
           </h2>
           <EventAudienceComposer
@@ -102,6 +97,5 @@ async function SectionBody({ handle, section }: { handle: string; section: strin
     )
   }
 
-  const meta = getHomeAdminSection(section)!
-  return <ComingSoonSection label={meta.label} description={meta.description} />
+  notFound()
 }
