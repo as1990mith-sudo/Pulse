@@ -1,12 +1,16 @@
 import { notFound } from "next/navigation"
 import { getHomeAdminSection } from "@/lib/home/admin-nav"
-import { getHomeMembers, getHomeAdminOverview } from "@/app/actions/home"
+import { getHomeAdminOverview } from "@/app/actions/home"
+import { getMembersDirectory } from "@/app/actions/home-members"
+import { defaultQuery } from "@/lib/home/members"
+import { getHomeByHandle, getViewerMembership } from "@/lib/home/access"
+import { homeRoleHasPermission } from "@/lib/home/roles"
 import { getHomeBookings } from "@/app/actions/home-scheduling"
 import { listAppointmentTypes, listHomeBookings } from "@/app/actions/home-appointments"
 import { getHomeEventRegistrations } from "@/app/actions/event-admin"
 import { EventRegistrationsManager } from "@/components/home/admin/event-registrations-manager"
 import { EventAudienceComposer } from "@/components/home/admin/event-audience-composer"
-import { MembersManager } from "@/components/home/admin/members-manager"
+import { MembersCommandCentre } from "@/components/home/admin/members/members-command-centre"
 import { SubscriptionManager } from "@/components/home/admin/subscription-manager"
 import { SettingsManager } from "@/components/home/admin/settings-manager"
 import { ReviewTabManager } from "@/components/home/admin/review-tab-manager"
@@ -24,6 +28,26 @@ export default async function HomeAdminSectionPage({
   // "overview" is the index route; unknown or deprecated slugs 404.
   if (!meta || section === "overview") notFound()
 
+  // The Members command centre owns its own compact header (title + live count +
+  // timeframe), so it renders full-bleed without the default section header.
+  if (section === "members") {
+    const initialQuery = defaultQuery()
+    const [initialData, home] = await Promise.all([
+      getMembersDirectory(handle, initialQuery),
+      getHomeByHandle(handle),
+    ])
+    const membership = home ? await getViewerMembership(home.id) : null
+    const canManage = homeRoleHasPermission(membership?.role, "members.manage")
+    return (
+      <MembersCommandCentre
+        handle={handle}
+        initialQuery={initialQuery}
+        initialData={initialData}
+        canManage={canManage}
+      />
+    )
+  }
+
   return (
     <div className="space-y-5">
       <header>
@@ -36,12 +60,6 @@ export default async function HomeAdminSectionPage({
 }
 
 async function SectionBody({ handle, section }: { handle: string; section: string }) {
-  if (section === "members") {
-    const members = await getHomeMembers(handle)
-    // Owners/admins can manage; the action layer re-checks on every mutation.
-    return <MembersManager handle={handle} initialMembers={members} canManage />
-  }
-
   if (section === "subscription") {
     const { home } = await getHomeAdminOverview(handle)
     return <SubscriptionManager handle={handle} currentPlan={home.plan} />

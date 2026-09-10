@@ -23,6 +23,10 @@ export const user = pgTable("user", {
   // captured lazily the first time an event genuinely requires it, then reused,
   // so a member is asked at most once ever. Nullable by design.
   phone: text("phone"),
+  // Administrative member-management data: "male" | "female" | "other". Nullable
+  // because signup does not yet capture it (legacy accounts read as "Not set").
+  // Treated as private admin data — never exposed on a public profile surface.
+  gender: text("gender"),
   // Optional self-reported location, used to surface nearby organisations in
   // discovery. All nullable — matched against organisation country/city text.
   country: text("country"),
