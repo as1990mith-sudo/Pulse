@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useTheme } from "next-themes"
-import { Check, Contrast, Layers, MoonStar, Palette, Sun } from "lucide-react"
+import { Blend, Check, Contrast, MoonStar, Palette, Sun } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -16,10 +16,14 @@ import {
 import { SKINS, useSkin } from "@/components/skin-provider"
 import { cn } from "@/lib/utils"
 
-// Display order: Charcoal (default), then Glass, Light.
+// Display order: Charcoal (default), then Gradient, Light.
+// NOTE: the Gradient theme keeps the internal id "glass" (and the .theme-glass
+// class) so existing saved preferences keep working with no migration — only
+// its label, icon and canvas changed. It now renders a charcoal base washed
+// with the chosen skin's accent gradient, mirroring the Admin Console.
 const themes = [
   { value: "charcoal", label: "Charcoal", icon: MoonStar },
-  { value: "glass", label: "Glass", icon: Layers },
+  { value: "glass", label: "Gradient", icon: Blend },
   { value: "light", label: "Light", icon: Sun },
 ] as const
 
