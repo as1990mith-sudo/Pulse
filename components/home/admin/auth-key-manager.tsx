@@ -6,6 +6,10 @@ import { cn } from "@/lib/utils"
 import { regenerateAuthKey, disableAuthKey, setJoinPolicy } from "@/app/actions/home"
 import type { HomeAuthKeyView, HomeJoinPolicy } from "@/lib/home/types"
 
+// Shared surface for the console's compact cards: translucent card fill, inset
+// hairline ring, and a soft shadow. Matches the Overview command-centre tiles.
+const SURFACE = "rounded-2xl bg-card/60 shadow-soft ring-1 ring-inset ring-border/50"
+
 export function AuthKeyManager({
   handle,
   initialKey,
@@ -86,131 +90,154 @@ export function AuthKeyManager({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-2xl border border-border bg-card p-5">
-        <div className="mb-4 flex items-center gap-2">
-          <span
-            className="flex size-9 items-center justify-center rounded-xl text-white"
-            style={{ backgroundColor: "var(--home-accent)" }}
-          >
-            <KeyRound className="size-[18px]" />
-          </span>
-          <div>
-            <h3 className="text-sm font-semibold">Organisation authorisation key</h3>
-            <p className="text-xs text-muted-foreground">Members enter this key to join your Home.</p>
-          </div>
-        </div>
-
-        {authKey ? (
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <code className="flex-1 select-all rounded-xl border border-border bg-muted/40 px-4 py-3 font-mono text-base tracking-wider">
-              {authKey.key}
-            </code>
-            <button
-              type="button"
-              onClick={copy}
-              className={cn(
-                "inline-flex items-center justify-center gap-2 rounded-xl border border-border px-4 py-3 text-sm font-semibold transition-colors hover:bg-muted",
-                copied && "border-emerald-500/40 text-emerald-500",
-              )}
+    <div className="space-y-4">
+      {/* ── Auth key hero ─────────────────────────────────────────────
+          A gradient accent wash in the top-right corner lifts this from a
+          flat card into the console's "hero" surface without flooding it. */}
+      <div className={cn("relative overflow-hidden p-4", SURFACE)}>
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(130% 95% at 100% 0%, color-mix(in oklab, var(--home-accent) 15%, transparent), transparent 55%)",
+          }}
+        />
+        <div className="relative">
+          <div className="mb-3.5 flex items-center gap-2.5">
+            <span
+              className="flex size-9 shrink-0 items-center justify-center rounded-xl text-white shadow-soft"
+              style={{
+                background:
+                  "linear-gradient(135deg, var(--home-accent), color-mix(in oklab, var(--home-accent) 55%, #000))",
+              }}
             >
-              {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-              {copied ? "Copied" : "Copy"}
-            </button>
+              <KeyRound className="size-[18px]" />
+            </span>
+            <div className="min-w-0">
+              <h3 className="font-display text-sm font-semibold tracking-tight">Organisation authorisation key</h3>
+              <p className="text-xs text-muted-foreground">Members enter this key to join your Home.</p>
+            </div>
           </div>
-        ) : (
-          <div className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-6 text-center text-sm text-muted-foreground">
-            No active key. Regenerate one to let new members join.
-          </div>
-        )}
 
-        {/* Ready-to-send invite link. Most people are invited over WhatsApp or
-            email, where a tappable link is far more reliable than asking someone
-            to retype a key into the right screen. */}
-        {authKey && (
-          <div className="mt-4 rounded-xl border border-border bg-muted/20 p-3">
-            <p className="mb-2 text-xs font-semibold text-muted-foreground">Invite link</p>
-            <p className="mb-3 break-all font-mono text-xs leading-relaxed text-foreground/80">
-              {inviteLink || "Preparing link…"}
-            </p>
-            <div className="flex flex-wrap gap-2">
+          {authKey ? (
+            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+              <code className="flex-1 select-all rounded-xl bg-background/60 px-3.5 py-2.5 font-mono text-[15px] tracking-wider ring-1 ring-inset ring-border/60">
+                {authKey.key}
+              </code>
               <button
                 type="button"
-                onClick={copyLink}
-                disabled={!inviteLink}
+                onClick={copy}
                 className={cn(
-                  "inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-semibold transition-colors hover:bg-muted disabled:opacity-60",
-                  linkCopied && "border-emerald-500/40 text-emerald-500",
+                  "tap-scale inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold ring-1 ring-inset ring-border/60 transition-colors hover:bg-secondary/60",
+                  copied && "text-emerald-500 ring-emerald-500/40",
                 )}
               >
-                {linkCopied ? <Check className="size-4" /> : <Copy className="size-4" />}
-                {linkCopied ? "Link copied" : "Copy link"}
-              </button>
-              <button
-                type="button"
-                onClick={share}
-                disabled={!inviteLink}
-                className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted disabled:opacity-60"
-              >
-                <Share2 className="size-4" /> Share
+                {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+                {copied ? "Copied" : "Copy"}
               </button>
             </div>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Opens straight to a confirmation screen. If they don&apos;t have an account yet, they&apos;ll join this
-              Home right after signing up.
-            </p>
-          </div>
-        )}
+          ) : (
+            <div className="rounded-xl border border-dashed border-border/70 bg-background/40 px-4 py-5 text-center text-sm text-muted-foreground">
+              No active key. Regenerate one to let new members join.
+            </div>
+          )}
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={regenerate}
-            disabled={pending}
-            className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-            style={{ backgroundColor: "var(--home-accent)" }}
-          >
-            {pending ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-            Regenerate key
-          </button>
-          {authKey &&
-            (confirmDisable ? (
-              <span className="inline-flex items-center gap-2">
+          {/* Ready-to-send invite link. Most people are invited over WhatsApp or
+              email, where a tappable link is far more reliable than asking
+              someone to retype a key into the right screen. */}
+          {authKey && (
+            <div className="mt-3 rounded-xl bg-background/50 p-3 ring-1 ring-inset ring-border/50">
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Invite link
+              </p>
+              <p className="mb-2.5 break-all font-mono text-xs leading-relaxed text-foreground/80">
+                {inviteLink || "Preparing link…"}
+              </p>
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={disable}
-                  disabled={pending}
-                  className="inline-flex items-center gap-2 rounded-lg bg-destructive px-3 py-2 text-sm font-semibold text-destructive-foreground hover:opacity-90 disabled:opacity-60"
+                  onClick={copyLink}
+                  disabled={!inviteLink}
+                  className={cn(
+                    "tap-scale inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-[13px] font-semibold ring-1 ring-inset ring-border/60 transition-colors hover:bg-secondary/60 disabled:opacity-60",
+                    linkCopied && "text-emerald-500 ring-emerald-500/40",
+                  )}
                 >
-                  <ShieldOff className="size-4" /> Confirm disable
+                  {linkCopied ? <Check className="size-4" /> : <Copy className="size-4" />}
+                  {linkCopied ? "Link copied" : "Copy link"}
                 </button>
                 <button
                   type="button"
-                  onClick={() => setConfirmDisable(false)}
-                  className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
+                  onClick={share}
+                  disabled={!inviteLink}
+                  className="tap-scale inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-[13px] font-semibold text-muted-foreground ring-1 ring-inset ring-border/60 transition-colors hover:bg-secondary/60 disabled:opacity-60"
                 >
-                  Cancel
+                  <Share2 className="size-4" /> Share
                 </button>
-              </span>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setConfirmDisable(true)}
-                className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted"
-              >
-                <ShieldOff className="size-4" /> Disable key
-              </button>
-            ))}
+              </div>
+              <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
+                Opens straight to a confirmation screen. If they don&apos;t have an account yet, they&apos;ll join this
+                Home right after signing up.
+              </p>
+            </div>
+          )}
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={regenerate}
+              disabled={pending}
+              className="tap-scale inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold text-white shadow-soft transition-opacity hover:opacity-95 disabled:opacity-60"
+              style={{
+                background:
+                  "linear-gradient(135deg, var(--home-accent), color-mix(in oklab, var(--home-accent) 60%, #000))",
+              }}
+            >
+              {pending ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+              Regenerate key
+            </button>
+            {authKey &&
+              (confirmDisable ? (
+                <span className="inline-flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={disable}
+                    disabled={pending}
+                    className="tap-scale inline-flex items-center gap-2 rounded-lg bg-destructive px-3.5 py-2 text-sm font-semibold text-destructive-foreground hover:opacity-90 disabled:opacity-60"
+                  >
+                    <ShieldOff className="size-4" /> Confirm disable
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDisable(false)}
+                    className="tap-scale rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-secondary/60"
+                  >
+                    Cancel
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDisable(true)}
+                  className="tap-scale inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold text-muted-foreground ring-1 ring-inset ring-border/60 hover:bg-secondary/60"
+                >
+                  <ShieldOff className="size-4" /> Disable key
+                </button>
+              ))}
+          </div>
+          <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
+            Regenerating or disabling the key never removes existing members — it only affects future onboarding.
+          </p>
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">
-          Regenerating or disabling the key never removes existing members — it only affects future onboarding.
-        </p>
       </div>
 
-      {/* Join policy */}
-      <div className="rounded-2xl border border-border bg-card p-5">
-        <h3 className="mb-4 text-sm font-semibold">When someone enters a valid key</h3>
-        <div className="grid gap-3 sm:grid-cols-2">
+      {/* ── Join policy ──────────────────────────────────────────────── */}
+      <div className={cn("p-4", SURFACE)}>
+        <h3 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          When someone enters a valid key
+        </h3>
+        <div className="grid gap-2.5 sm:grid-cols-2">
           <PolicyCard
             active={policy === "auto"}
             onClick={() => changePolicy("auto")}
@@ -246,13 +273,31 @@ function PolicyCard({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "rounded-xl border p-4 text-left transition-all",
-        active ? "border-transparent ring-2" : "border-border hover:bg-muted/40",
+        "tap-scale relative overflow-hidden rounded-xl p-3.5 text-left ring-1 ring-inset transition-all",
+        active ? "ring-transparent" : "ring-border/60 hover:bg-secondary/40",
       )}
-      style={active ? { ["--tw-ring-color" as string]: "var(--home-accent)" } : undefined}
+      style={
+        active
+          ? {
+              background:
+                "linear-gradient(135deg, color-mix(in oklab, var(--home-accent) 22%, transparent), color-mix(in oklab, var(--home-accent) 5%, transparent))",
+              boxShadow: "inset 0 0 0 1.5px color-mix(in oklab, var(--home-accent) 55%, transparent)",
+            }
+          : undefined
+      }
     >
-      <p className="text-sm font-semibold">{title}</p>
-      <p className="mt-1 text-xs text-muted-foreground">{desc}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold">{title}</p>
+        {active && (
+          <span
+            className="flex size-4 items-center justify-center rounded-full text-white"
+            style={{ backgroundColor: "var(--home-accent)" }}
+          >
+            <Check className="size-3" />
+          </span>
+        )}
+      </div>
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{desc}</p>
     </button>
   )
 }

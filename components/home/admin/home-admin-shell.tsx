@@ -67,7 +67,15 @@ export function HomeAdminShell({
   return (
     <div
       className="flex min-h-dvh bg-background text-foreground"
-      style={{ ["--home-accent" as string]: accent }}
+      style={{
+        ["--home-accent" as string]: accent,
+        // Ambient accent wash for the whole console. A background-image always
+        // paints behind content, so this tints the surface without ever sitting
+        // over text — two soft pools (top-centre + lower-left) keep it premium
+        // rather than a flat tint.
+        backgroundImage: `radial-gradient(90% 55% at 50% -8%, color-mix(in oklab, ${accent} 10%, transparent), transparent 60%), radial-gradient(70% 50% at 0% 100%, color-mix(in oklab, ${accent} 7%, transparent), transparent 55%)`,
+        backgroundAttachment: "fixed",
+      }}
     >
       {/* ── Desktop rail ─────────────────────────────────────────────── */}
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-border/50 bg-card/40 backdrop-blur-xl lg:flex">
