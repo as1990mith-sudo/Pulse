@@ -337,6 +337,98 @@ export async function getContactEventHistory(input: {
   }))
 }
 
+export type EventRegistrationDetailData = {
+  row: RegistrationRow
+  event: { id: number; title: string; eventDate: string | null; questions: EventQuestion[] }
+  history: ContactHistoryEntry[]
+}
+
+/**
+ * Everything the dedicated registrant page needs in one Home-scoped round trip:
+ * the registration itself (joined to its contact for marketing consent), the
+ * parent event's title and questions so answers can be labelled, and the
+ * contact's full history within this Home. Returns null when the id does not
+ * resolve to a registration this Home owns, so the page can 404 cleanly rather
+ * than leak the existence of another Home's record.
+ */
+export async function getEventRegistrationDetail(input: {
+  handle: string
+  registrationId: number
+}): Promise<EventRegistrationDetailData | null> {
+  const { home } = await requireEventsManager(input.handle)
+
+  const [reg] = await db
+    .select({
+      id: eventRegistration.id,
+      contactId: eventRegistration.contactId,
+      fullName: eventRegistration.fullName,
+      email: eventRegistration.email,
+      phone: eventRegistration.phone,
+      gender: eventRegistration.gender,
+      isMember: eventRegistration.isMember,
+      guests: eventRegistration.guests,
+      source: eventRegistration.source,
+      status: eventRegistration.status,
+      createdAt: eventRegistration.createdAt,
+      answers: eventRegistration.answers,
+      marketingOptIn: eventContact.marketingOptIn,
+      eventId: announcement.id,
+      eventTitle: announcement.title,
+      eventDate: announcement.eventDate,
+      questions: announcement.questions,
+    })
+    .from(eventRegistration)
+    .innerJoin(eventContact, eq(eventContact.id, eventRegistration.contactId))
+    .innerJoin(announcement, eq(announcement.id, eventRegistration.announcementId))
+    .where(and(eq(eventRegistration.id, input.registrationId), eq(eventRegistration.homeId, home.id)))
+    .limit(1)
+
+  if (!reg) return null
+
+  // Same Home-scoped history as getContactEventHistory, inlined so the whole
+  // page loads behind a single permission check.
+  const historyRows = await db
+    .select({
+      registrationId: eventRegistration.id,
+      announcementId: eventRegistration.announcementId,
+      title: announcement.title,
+      eventDate: announcement.eventDate,
+      isMember: eventRegistration.isMember,
+      guests: eventRegistration.guests,
+      status: eventRegistration.status,
+      createdAt: eventRegistration.createdAt,
+    })
+    .from(eventRegistration)
+    .innerJoin(announcement, eq(announcement.id, eventRegistration.announcementId))
+    .where(and(eq(eventRegistration.contactId, reg.contactId), eq(eventRegistration.homeId, home.id)))
+    .orderBy(desc(announcement.eventDate), desc(eventRegistration.id))
+
+  return {
+    row: {
+      id: reg.id,
+      contactId: reg.contactId,
+      fullName: reg.fullName,
+      email: reg.email,
+      phone: reg.phone,
+      gender: normaliseEventGender(reg.gender),
+      isMember: reg.isMember,
+      guests: reg.guests,
+      source: reg.source,
+      status: reg.status,
+      createdAt: reg.createdAt.toISOString(),
+      answers: reg.answers as RegistrationRow["answers"],
+      marketingOptIn: reg.marketingOptIn,
+    },
+    event: {
+      id: reg.eventId,
+      title: reg.eventTitle,
+      eventDate: reg.eventDate,
+      questions: Array.isArray(reg.questions) ? (reg.questions as EventQuestion[]) : [],
+    },
+    history: historyRows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })),
+  }
+}
+
 /** Audience sizes for the compose screen, for the given purpose. */
 export async function getEventAudiences(input: {
   handle: string
