@@ -54,6 +54,8 @@ function toHomeView(h: HomeRow, org: OrgRow, memberCount: number): HomeView {
     handle: org.handle,
     plan: h.plan as HomePlanId,
     planStatus: h.planStatus,
+    planInterval: h.planInterval === "annual" ? "annual" : "monthly",
+    planRenewsAt: h.planRenewsAt,
     accentColor: h.accentColor,
     joinPolicy: h.joinPolicy as HomeJoinPolicy,
     status: h.status,

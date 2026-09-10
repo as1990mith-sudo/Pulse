@@ -27,7 +27,7 @@ import { ACTIVE_HOME_COOKIE } from "@/lib/home/active-home"
 import { DEFAULT_HOME_ACCENT } from "@/lib/home/accent"
 import { isValidKeyFormat, normalizeKey } from "@/lib/home/auth-key"
 import { ensureHomeForOrg, insertFreshKey } from "@/lib/home/provision"
-import { isHomePlanId, type HomePlanId } from "@/lib/home/plans"
+import { isBillingInterval, isHomePlanId, type BillingInterval, type HomePlanId } from "@/lib/home/plans"
 import { homeRoleHasPermission, type HomeRole } from "@/lib/home/roles"
 import { getHomeOrgType } from "@/lib/home/org-types"
 import { orgCategoryLabel, type OrgSocials } from "@/lib/org-types"
@@ -803,13 +803,27 @@ export async function updateReviewTabLabel(handle: string, label: ReviewTabLabel
   return { label }
 }
 
-/** Change the Home's subscription plan. */
-export async function changePlan(handle: string, plan: HomePlanId) {
+/**
+ * Subscribe the Home to a plan at a billing cadence. There is no real charge
+ * yet — this persists the chosen plan, interval and a computed renewal date and
+ * marks the subscription active. All inputs are re-validated server-side; the
+ * client's plan id and interval are treated as intent only.
+ */
+export async function changePlan(handle: string, plan: HomePlanId, interval: BillingInterval = "monthly") {
   const { home: homeView } = await requireHomeManager(handle, "subscription.manage")
   if (!isHomePlanId(plan)) throw new Error("Unknown plan.")
-  await db.update(home).set({ plan, updatedAt: new Date() }).where(eq(home.id, homeView.id))
+  if (!isBillingInterval(interval)) throw new Error("Unknown billing interval.")
+
+  const renewsAt = new Date()
+  if (interval === "annual") renewsAt.setFullYear(renewsAt.getFullYear() + 1)
+  else renewsAt.setMonth(renewsAt.getMonth() + 1)
+
+  await db
+    .update(home)
+    .set({ plan, planInterval: interval, planStatus: "active", planRenewsAt: renewsAt, updatedAt: new Date() })
+    .where(eq(home.id, homeView.id))
   revalidatePath(`/org/${handle}/admin/subscription`)
-  return { plan }
+  return { plan, interval, renewsAt: renewsAt.toISOString() }
 }
 
 /** Aggregated data for the admin Overview page. */

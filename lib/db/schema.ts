@@ -1921,6 +1921,13 @@ export const home = pgTable(
     // Plan lifecycle: "active" | "trialing" | "past_due" | "canceled". Kept
     // simple now; a real billing integration can expand this later.
     planStatus: text("planStatus").notNull().default("active"),
+    // Billing cadence for the current plan: "monthly" | "annual". Persisted so
+    // the Subscription page can reflect the chosen cadence and renewal, even
+    // though no real charge is taken yet.
+    planInterval: text("planInterval").notNull().default("monthly"),
+    // When the current billing period renews. Set when a plan/interval is
+    // chosen (now + 1 month or + 1 year). Nullable for rows that predate this.
+    planRenewsAt: timestamp("planRenewsAt"),
     // Organisation accent colour (hex). Becomes the Home's primary accent so
     // the environment feels like the organisation's own, not generic Frequency.
     accentColor: text("accentColor"),
@@ -2035,7 +2042,7 @@ export const homeBooking = pgTable(
 )
 
 // A scheduled appointment between a Home member and a host (leader/coach/admin)
-// inside a Home — e.g. a pastoral meeting, a mentoring session, a consultation.
+// inside a Home �� e.g. a pastoral meeting, a mentoring session, a consultation.
 // Scoped to one Home via homeId. Distinct from bookings: an appointment has a
 // concrete time slot and a host, whereas a booking is a request to be triaged.
 export const homeAppointment = pgTable(

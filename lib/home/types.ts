@@ -23,6 +23,8 @@ export type HomeView = {
   handle: string
   plan: HomePlanId
   planStatus: string
+  planInterval: "monthly" | "annual"
+  planRenewsAt: Date | null
   accentColor: string | null
   joinPolicy: HomeJoinPolicy
   status: string

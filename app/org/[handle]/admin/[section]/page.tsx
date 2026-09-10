@@ -62,7 +62,15 @@ export default async function HomeAdminSectionPage({
 async function SectionBody({ handle, section }: { handle: string; section: string }) {
   if (section === "subscription") {
     const { home } = await getHomeAdminOverview(handle)
-    return <SubscriptionManager handle={handle} currentPlan={home.plan} />
+    return (
+      <SubscriptionManager
+        handle={handle}
+        currentPlan={home.plan}
+        currentInterval={home.planInterval}
+        planStatus={home.planStatus}
+        renewsAt={home.planRenewsAt ? home.planRenewsAt.toISOString() : null}
+      />
+    )
   }
 
   if (section === "settings") {
