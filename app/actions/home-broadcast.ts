@@ -11,13 +11,18 @@ import {
   user as userTable,
 } from "@/lib/db/schema"
 import { getHomeByHandle, getViewerMembership } from "@/lib/home/access"
-import { getViewerBroadcastSummary } from "@/lib/home/broadcast-read"
+import {
+  getViewerBroadcastSummary,
+  getViewerBroadcastThread,
+  markViewerBroadcastsOpened,
+} from "@/lib/home/broadcast-read"
 import { homeRoleHasPermission, type HomeRole } from "@/lib/home/roles"
 import { normalizeGender } from "@/lib/home/members"
 import {
   recipientTypeLabel,
   type BroadcastAudience,
   type BroadcastMemberPick,
+  type BroadcastMessageView,
   type BroadcastRecipientType,
   type BroadcastView,
 } from "@/lib/home/broadcast"
@@ -283,4 +288,81 @@ export async function getMyBroadcastInboxItems(): Promise<BroadcastInboxItem[]> 
   // Newest broadcast first; the inbox itself pins unread ones above all chats.
   items.sort((a, b) => new Date(b.lastSentAt).getTime() - new Date(a.lastSentAt).getTime())
   return items
+}
+
+export type BroadcastThread = {
+  homeId: string
+  homeName: string
+  image: string | null
+  initials: string
+  color: string
+  messages: BroadcastMessageView[]
+}
+
+/**
+ * The member-facing Home Broadcast thread for one Home. Resolves the viewer's
+ * active membership server-side — a non-member (or a client forging a homeId)
+ * gets null, never another Home's broadcasts.
+ */
+export async function getBroadcastThread(homeId: string): Promise<BroadcastThread | null> {
+  const user = await getCurrentUser()
+  if (!user) return null
+
+  const [membership] = await db
+    .select({ id: homeMembership.id })
+    .from(homeMembership)
+    .where(
+      and(
+        eq(homeMembership.userId, user.id),
+        eq(homeMembership.homeId, homeId),
+        eq(homeMembership.status, "active"),
+      ),
+    )
+    .limit(1)
+  if (!membership) return null
+
+  const [org] = await db
+    .select({ id: organization.id, name: organization.name, logo: organization.logo })
+    .from(organization)
+    .where(eq(organization.id, homeId))
+    .limit(1)
+  if (!org) return null
+
+  const messages = await getViewerBroadcastThread(homeId, user.id)
+  if (messages.length === 0) return null
+
+  return {
+    homeId,
+    homeName: org.name,
+    image: org.logo,
+    initials: getInitials(org.name),
+    color: getAvatarColor(org.id),
+    messages,
+  }
+}
+
+/**
+ * Clears the viewer's unread Home Broadcasts for one Home — called when the
+ * member opens the thread. Membership is re-checked so the mutation can't be
+ * aimed at a Home the viewer doesn't belong to.
+ */
+export async function markBroadcastThreadOpened(homeId: string): Promise<void> {
+  const user = await getCurrentUser()
+  if (!user) return
+
+  const [membership] = await db
+    .select({ id: homeMembership.id })
+    .from(homeMembership)
+    .where(
+      and(
+        eq(homeMembership.userId, user.id),
+        eq(homeMembership.homeId, homeId),
+        eq(homeMembership.status, "active"),
+      ),
+    )
+    .limit(1)
+  if (!membership) return
+
+  await markViewerBroadcastsOpened(homeId, user.id)
+  revalidatePath("/messages")
 }
