@@ -8,6 +8,7 @@ import { db } from "@/lib/db"
 import { catalogueItem, episode, event, home, homeMembership, organization } from "@/lib/db/schema"
 import { relativeTime } from "@/lib/content"
 import { getEpisodeViewCounts } from "@/app/actions/engagement"
+import { reconcileVideoReplays } from "@/app/actions/live-processing"
 
 async function requireOrgOwner(orgId: string) {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -198,6 +199,12 @@ export async function getOrganizationCatalogue(orgId: string): Promise<Catalogue
     .where(eq(home.organizationId, orgId))
     .limit(1)
   if (!homeRow) return manual
+
+  // Finalize any server-recorded VIDEO replays for this Home whose egress has
+  // completed but whose webhook never arrived, so a finished recording appears
+  // in the Home Catalogue even without webhook delivery. Cheap no-op when none
+  // are pending; fully best-effort.
+  await reconcileVideoReplays({ homeId: homeRow.id }).catch(() => {})
 
   // Replays saved before a session carried a Home (or saved while the host had
   // no active Home) were stamped with a null homeId and would otherwise be

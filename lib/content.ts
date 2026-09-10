@@ -4,6 +4,7 @@ import { devotional, episode, user as userTable } from "@/lib/db/schema"
 import type { Devotional, Show, Host, PodcastHost } from "@/lib/data"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { getEpisodeViewCounts } from "@/app/actions/engagement"
+import { reconcileVideoReplays } from "@/app/actions/live-processing"
 
 /** "just now" / "5m ago" / "3d ago" — the meta line's published stamp. */
 export function relativeTime(date: Date): string {
@@ -98,6 +99,14 @@ function episodeToShow(row: typeof episode.$inferSelect, views = 0, hostImage?: 
  * only included when the viewer is the host themselves (`includePrivate`).
  */
 export async function getEpisodesByUser(userId: string, includePrivate = false): Promise<Show[]> {
+  // First, finalize any server-recorded VIDEO replays whose egress has completed
+  // but whose webhook never arrived — so a finished recording reaches the
+  // catalogue even if the egress webhook isn't delivered. Runs only for the host
+  // viewing their own catalogue, and is a cheap no-op when nothing is pending.
+  if (includePrivate) {
+    await reconcileVideoReplays({ userId }).catch(() => {})
+  }
+
   // Watchdog: when the host loads their own catalogue, flip any background
   // upload that has been "processing" for over 30 minutes to "failed" so a
   // crashed/closed uploader can never leave a row stuck in "Processing…".

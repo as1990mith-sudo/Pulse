@@ -161,3 +161,56 @@ export async function stopRoomEgress(egressId: string): Promise<void> {
     // finalizes the replay from whatever was recorded.
   }
 }
+
+/** Outcome of querying LiveKit for a room's replay egress. */
+export type ReplayResult =
+  | { status: "complete"; key: string; durationSec: number }
+  | { status: "failed" }
+  | { status: "pending" }
+  // Egress not configured, not found, or the query errored — caller leaves the
+  // episode untouched (still "processing") and tries again on the next read.
+  | { status: "unknown" }
+
+/**
+ * Webhook-independent finalize path. Asks LiveKit directly for the egress that
+ * recorded `roomName` and resolves the replay's outcome for a given episode.
+ *
+ * Why this exists: server-side video replays were finalized ONLY by the
+ * egress-ended webhook (app/api/livekit/webhook). If that webhook isn't
+ * configured/delivered, a completed recording would sit in "processing" forever
+ * and never reach the catalogue — the exact "video doesn't save" bug. Reading
+ * egress status on demand removes the webhook as a single point of failure: the
+ * catalogue reconciler (reconcileVideoReplays) calls this so a replay finalizes
+ * the next time the host or the Home Catalogue is opened, webhook or not.
+ *
+ * We look the egress up by ROOM (not egressId) on purpose: the egressId is
+ * cleared from the live_stream row when the session ends, but the room name
+ * survives, and listEgress({ roomName }) still returns the finished job.
+ */
+export async function getRoomReplayResult(roomName: string, episodeId: number): Promise<ReplayResult> {
+  if (!isEgressConfigured() || !roomName) return { status: "unknown" }
+  try {
+    const list = await egressClient().listEgress({ roomName })
+    // Match the egress whose output file targets THIS episode (the id is encoded
+    // in the object key), so multiple recordings of the same room never cross.
+    const match = list.find((e) => {
+      const name = e.fileResults?.[0]?.filename
+      return name ? episodeIdFromKey(name) === episodeId : false
+    })
+    if (!match) return { status: "unknown" }
+
+    // EgressStatus: 3 = COMPLETE, 4 = FAILED, 5 = ABORTED, 6 = LIMIT_REACHED.
+    const status = Number(match.status)
+    const file = match.fileResults?.[0]
+    if (status === 3 && file?.filename) {
+      const key = file.filename.includes("/") ? file.filename : replayObjectKey(episodeId, roomName)
+      // duration is nanoseconds (bigint) on the proto; convert to seconds.
+      const durationSec = Number(file.duration ?? 0) / 1_000_000_000
+      return { status: "complete", key, durationSec }
+    }
+    if (status === 4 || status === 5 || status === 6) return { status: "failed" }
+    return { status: "pending" }
+  } catch {
+    return { status: "unknown" }
+  }
+}
