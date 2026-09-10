@@ -92,7 +92,10 @@ export async function startRoomVideoEgress(input: {
   })
 
   // Portrait broadcasts record vertically; landscape (Conversation grid) records
-  // 16:9. "speaker" focuses the active publisher; "grid" tiles everyone.
+  // 16:9. Both use the "grid" template so every publisher gets an equal,
+  // balanced tile (1 = full frame, 2 = split, 3–4 = grid) instead of the
+  // "speaker" template's one-big-feed-plus-floating-thumbnails look, which read
+  // as a generic video call rather than a composed broadcast.
   //
   // We set an EXPLICIT high-bitrate EncodingOptions instead of the stock
   // PORTRAIT_H264_1080P_30 / H264_1080P_30 presets. Those presets re-encode the
@@ -137,7 +140,11 @@ export async function startRoomVideoEgress(input: {
           // rather than compressing an already-compressed source.
           audioBitrate: 192,
         })
-  const layout = input.orientation === "landscape" ? "grid" : "speaker"
+  // Balanced grid for every orientation — see the note above. The output
+  // dimensions above still differ per orientation (portrait 1080x1920 vs
+  // landscape 1920x1080), so the grid composes vertically for broadcasts and
+  // horizontally for conversations.
+  const layout = "grid"
 
   const client = egressClient()
   const info = await client.startRoomCompositeEgress(input.roomName, { file: fileOutput }, { layout, encodingOptions })
