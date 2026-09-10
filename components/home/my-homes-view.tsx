@@ -12,6 +12,7 @@ import {
   Building2,
   GripVertical,
   KeyRound,
+  LayoutDashboard,
   Plus,
   Loader2,
   LogOut,
@@ -149,6 +150,15 @@ export function MyHomesView() {
     router.push(`/org/${handle}`)
   }
 
+
+  // Jump straight to this Home's Admin Console. Only rendered for owners/admins
+  // of the Home; the console route re-checks admin membership server-side.
+  function openAdminConsole() {
+    if (!actionsFor) return
+    const handle = actionsFor.handle
+    closeActions()
+    router.push(`/org/${handle}/admin`)
+  }
 
   // Switch the active Home context. The interface stays identical — only the
   // organisation's data changes — so we land on the new Home's main feed.
@@ -483,7 +493,26 @@ export function MyHomesView() {
                 <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" />
               </button>
 
-              {/* Owner: delete the whole Home. Everyone else: leave it. */}
+              {/* Admin Console — shown to owners and admins of THIS Home, so a
+                  manager can jump straight to their console without detouring
+                  through the org profile. Gated on the per-Home role, and the
+                  console re-checks admin membership server-side regardless. */}
+              {actionsFor && isHomeAdminRole(actionsFor.role) && (
+                <button
+                  type="button"
+                  onClick={openAdminConsole}
+                  className="flex items-center gap-4 rounded-2xl px-3 py-3.5 text-left transition-colors hover:bg-secondary/60"
+                >
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <LayoutDashboard className="size-5" />
+                  </span>
+                  <span className="flex-1 text-[15px] font-medium text-foreground">Admin Console</span>
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" />
+                </button>
+              )}
+
+              {/* Owner: delete the whole Home. Everyone else: leave it. Only the
+                  owner can ever delete — no admin sees a delete action. */}
               {actionsFor?.role === "owner" ? (
                 <button
                   type="button"

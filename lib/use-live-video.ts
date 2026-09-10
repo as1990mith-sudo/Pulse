@@ -31,6 +31,7 @@ import {
   LIVE_VOICE_PRESET,
   rampGain,
 } from "@/lib/live-audio-chain"
+import { logMicProcessing, warnDuplicateRemoteAudio } from "@/lib/audio-diagnostics"
 import { LiveCompositor, type CompositorSource } from "@/lib/live-compositor"
 import { fixRecordedVideoDuration } from "@/lib/webm-duration"
 
@@ -852,8 +853,13 @@ export function useLiveVideo({
           // it locally (they hear their own synced copy), so don't attach it.
           if (_pub.trackName === VIDEO_AUDIO_TRACK) return
           attachRemoteAudio(track, p)
+          // Dev-only: verify this remote voice resolves to exactly one element.
+          warnDuplicateRemoteAudio(audioElsRef.current, "video-conversation")
         }
       })
+      // Dev-only: read back the ACTUAL mic processing (echoCancellation etc.)
+      // whenever the local mic (re)publishes, so we can confirm AEC is really on.
+      .on(RoomEvent.LocalTrackPublished, () => logMicProcessing(room, "video-conversation"))
       .on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack, _pub, p: RemoteParticipant) => {
         // A remote screen share ending clears the full-stage projection.
         if (_pub?.source === Track.Source.ScreenShare || track.sid === remoteProjectionSidRef.current) {

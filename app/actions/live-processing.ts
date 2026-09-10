@@ -5,9 +5,11 @@ import { headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { episode, notification } from "@/lib/db/schema"
+import { episode, liveStream, notification } from "@/lib/db/schema"
 import { getHandle } from "@/lib/identity"
 import { getActiveHomeContext } from "@/lib/home/active-home"
+import { buildPublicUrl } from "@/lib/storage"
+import { getRoomReplayResult } from "@/lib/livekit-egress"
 
 async function requireUser() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -227,6 +229,93 @@ export async function reconcileStalledProcessing(userId: string): Promise<void> 
         lt(episode.processingStartedAt, cutoff),
       ),
     )
+}
+
+/** Formats a duration in seconds as H:MM:SS / M:SS for the catalogue label. */
+function formatDuration(totalSeconds: number): string {
+  const s = Math.max(0, Math.round(totalSeconds))
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const sec = s % 60
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`
+}
+
+/**
+ * Webhook-independent finalizer for server-recorded VIDEO replays.
+ *
+ * The egress-ended webhook is the PRIMARY finalize path, but it's a single point
+ * of failure: if LiveKit can't reach `/api/livekit/webhook` (not configured, a
+ * transient delivery failure, a preview deployment), a fully-recorded replay
+ * stays stuck in "processing" and never appears in the catalogue — the reported
+ * "Video Broadcast / Video Conversation doesn't save" bug.
+ *
+ * This reconciler closes that gap: for each of the caller's still-"processing"
+ * video placeholders it asks LiveKit directly (by room) whether the recording
+ * finished, then attaches the MP4 url + duration and flips it to "ready" (or
+ * "failed"), exactly like the webhook would. It runs opportunistically whenever
+ * a catalogue that could show the replay is read (the host's own catalogue and
+ * the Home organisation Catalogue), so saving no longer depends on the webhook.
+ *
+ * Cheap when nothing is pending: it only hits LiveKit when a processing video
+ * row actually exists, and is fully best-effort — any failure leaves the row
+ * "processing" to retry on the next read.
+ */
+export async function reconcileVideoReplays(filter: { userId?: string; homeId?: string }): Promise<void> {
+  if (!filter.userId && !filter.homeId) return
+
+  const conds = [eq(episode.processingStatus, "processing"), eq(episode.mediaKind, "video")]
+  if (filter.userId) conds.push(eq(episode.hostUserId, filter.userId))
+  if (filter.homeId) conds.push(eq(episode.homeId, filter.homeId))
+
+  // Join the live_stream row to recover the room name the egress recorded (the
+  // egressId itself is cleared when the session ends, but the room survives).
+  const rows = await db
+    .select({
+      episodeId: episode.id,
+      slug: episode.slug,
+      hostUserId: episode.hostUserId,
+      hostName: episode.hostName,
+      roomName: liveStream.roomName,
+    })
+    .from(episode)
+    .innerJoin(liveStream, eq(liveStream.replayEpisodeId, episode.id))
+    .where(and(...conds))
+
+  for (const r of rows) {
+    if (!r.roomName) continue
+    const res = await getRoomReplayResult(r.roomName, r.episodeId)
+
+    if (res.status === "complete") {
+      await db
+        .update(episode)
+        .set({
+          videoUrl: buildPublicUrl(res.key),
+          processingStatus: "ready",
+          processingError: null,
+          // Only overwrite the duration when egress reported a real one.
+          ...(res.durationSec > 0 ? { duration: formatDuration(res.durationSec) } : {}),
+        })
+        // Re-check status in the WHERE so a webhook finalizing concurrently can't
+        // be double-processed.
+        .where(and(eq(episode.id, r.episodeId), eq(episode.processingStatus, "processing")))
+
+      if (r.hostUserId) {
+        await notifySelf({
+          userId: r.hostUserId,
+          name: r.hostName,
+          message: "Your live replay is now ready in your Live Catalogue.",
+          link: `/live/${r.slug}`,
+        })
+      }
+    } else if (res.status === "failed") {
+      await db
+        .update(episode)
+        .set({ processingStatus: "failed", processingError: "Recording failed on the server." })
+        .where(and(eq(episode.id, r.episodeId), eq(episode.processingStatus, "processing")))
+    }
+    // "pending" / "unknown" → leave as "processing" and retry on the next read.
+  }
 }
 
 type ActionResult = { ok: true } | { ok: false; error: string }

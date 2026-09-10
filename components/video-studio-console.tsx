@@ -444,6 +444,11 @@ export function VideoStudioConsole({
   // A live "Grid" stream renders the Meet/Zoom-style meeting grid instead of the
   // broadcast layout below.
   const isGridMeeting = orientation === "landscape"
+  // The hosting Home/organisation name, shown as the primary identity in the
+  // live header exactly like the guest/viewer header does (guests read it off
+  // `stream.homeName`; the host reads the org they broadcast as). Null when
+  // hosting personally, in which case the header falls back to the host name.
+  const hostHomeName = currentUser.organization?.name ?? null
 
   // Resume an existing live video the host owns (reopened after minimising).
   const resumedRef = useRef(false)
@@ -931,6 +936,7 @@ export function VideoStudioConsole({
             title={title}
             cover={cover}
             hostName={currentUser.name}
+            homeName={hostHomeName}
             category={category}
             topic={roomTopic || null}
             backSlot={
@@ -1187,23 +1193,36 @@ export function VideoStudioConsole({
             />
             {/* Host identity pill: cover thumb + host name (clear) / title. */}
             {live && orientation !== "landscape" ? (
-              <div className="flex min-w-0 items-center gap-2 rounded-full bg-black/40 py-1 pl-1 pr-2.5 ring-1 ring-inset ring-white/10 backdrop-blur-md">
+              /* Host identity pill — matches the guest broadcast header exactly:
+                 rounded-2xl frosted pill, Home name as the bold primary line and
+                 the host name + title beneath it (or just the title when hosting
+                 personally, so nothing is duplicated). */
+              <div className="flex min-w-0 items-center gap-2.5 rounded-2xl bg-black/35 py-1.5 pl-1.5 pr-2 ring-1 ring-inset ring-white/10 backdrop-blur-xl">
                 {cover ? (
-                  <CoverArt src={cover} alt={`${title} cover artwork`} className="size-8" />
+                  <CoverArt src={cover} alt={`${title} cover artwork`} className="size-9 rounded-xl" />
                 ) : (
                   <span
                     className={cn(
-                      "flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white",
+                      "flex size-9 shrink-0 items-center justify-center rounded-xl text-xs font-semibold text-white",
                       getAvatarColor(currentUser.id),
                     )}
                     aria-hidden="true"
                   >
-                    {getInitials(currentUser.name)}
+                    {getInitials(hostHomeName ?? currentUser.name)}
                   </span>
                 )}
                 <div className="flex min-w-0 flex-col leading-tight">
-                  <span className="truncate text-sm font-semibold text-white">{currentUser.name}</span>
-                  <MarqueeTitle text={title} className="text-[11px] text-white/60" />
+                  <span className="truncate font-display text-[13px] font-semibold tracking-tight text-white">
+                    {hostHomeName ?? currentUser.name}
+                  </span>
+                  <MarqueeTitle
+                    text={
+                      hostHomeName && hostHomeName !== currentUser.name
+                        ? `${currentUser.name} · ${title}`
+                        : title
+                    }
+                    className="text-[11px] font-medium tracking-wide text-white/55"
+                  />
                 </div>
               </div>
             ) : !live ? (

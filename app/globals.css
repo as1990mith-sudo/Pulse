@@ -240,14 +240,13 @@
   --sidebar-border: oklch(1 0 0 / 12%);
 }
 
-/* Glass mode — a premium, iOS-17-inspired frosted-glass appearance. Keeps
-   Charcoal's deep, neutral, sophisticated tone but lifts the canvas just off
-   pure black so translucent surfaces read with real depth. The elevated surface
-   tokens (card / popover / sidebar) are semi-transparent; the `.theme-glass`
-   rules further down add the backdrop-blur, delicate hairline borders and soft
-   top-edge highlights that make panels feel like frosted glass floating above
-   the background. Chips, buttons and inputs (secondary / muted / accent) stay
-   solid and crisp so text contrast and legibility never suffer. */
+/* Gradient mode (internal id "glass") — keeps Charcoal's deep, neutral,
+   sophisticated tone but washes the canvas with the chosen skin's accent (see
+   the `.theme-glass body` rule further down). The elevated surface tokens
+   (card / popover / sidebar) stay semi-transparent with a backdrop-blur so the
+   skin gradient shows through softly behind panels — the same translucent-over-
+   accent treatment the Admin Console uses. Chips, buttons and inputs (secondary
+   / muted / accent) stay solid and crisp so text legibility never suffers. */
 .theme-glass {
   color-scheme: dark;
   --background: oklch(0.15 0.004 285);
@@ -366,17 +365,17 @@
   --skin-ring: linear-gradient(to top right, oklch(0.9 0.16 95), oklch(0.84 0.17 85), oklch(0.76 0.16 68));
 }
 
-/* Glass mode — a deep, neutral canvas (close to Charcoal, kept just off pure
-   black) with the faintest cool gradient so the frosted panels above it read
-   with real depth. */
+/* Gradient mode (internal id "glass") — a deep, neutral Charcoal canvas washed
+   with the CHOSEN SKIN's accent, exactly the way the Admin Console tints its
+   background. The two radial gradients read `var(--primary)`, which each
+   [data-skin] block sets, so switching skin (orange / white / black / yellow)
+   re-tints the whole app's gradient automatically. Kept subtle (color-mix at
+   low opacity) so text and translucent panels stay perfectly legible. */
 .theme-glass body {
-  background-color: oklch(0.12 0.004 285);
-  background-image: linear-gradient(
-    155deg,
-    oklch(0.2 0.006 285),
-    oklch(0.13 0.004 285) 55%,
-    oklch(0.1 0.004 285)
-  );
+  background-color: oklch(0.13 0.004 285);
+  background-image:
+    radial-gradient(90% 55% at 50% -8%, color-mix(in oklab, var(--primary) 12%, transparent), transparent 60%),
+    radial-gradient(70% 50% at 0% 100%, color-mix(in oklab, var(--primary) 8%, transparent), transparent 55%);
   background-attachment: fixed;
 }
 

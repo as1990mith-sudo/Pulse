@@ -29,6 +29,7 @@ import {
   LIVE_VOICE_PRESET,
   rampGain,
 } from "@/lib/live-audio-chain"
+import { logMicProcessing, warnDuplicateRemoteAudio } from "@/lib/audio-diagnostics"
 
 // Normalised connection quality surfaced to the UI for the signal dots.
 export type ConnQuality = "excellent" | "good" | "poor" | "unknown"
@@ -504,6 +505,8 @@ export function useLiveAudio() {
               // via the graph when routed, or the element otherwise.
               routeRemoteAudioToSpeaker(el)
               applyRemoteAudioMuted(el, listenerMutedRef.current)
+              // Dev-only: verify this speaker resolves to exactly one element.
+              warnDuplicateRemoteAudio(audioElsRef.current, "audio-conversation")
 
               // If a recording is in progress, fold this speaker in so late
               // joiners are captured too.
@@ -582,6 +585,9 @@ export function useLiveAudio() {
           })
           .on(RoomEvent.TrackPublished, () => refreshSpeakers(room))
           .on(RoomEvent.TrackUnpublished, () => refreshSpeakers(room))
+          // Dev-only: read back the ACTUAL mic processing (echoCancellation etc.)
+          // whenever the local mic (re)publishes, to confirm AEC is really on.
+          .on(RoomEvent.LocalTrackPublished, () => logMicProcessing(room, "audio-conversation"))
           // Keep the per-participant mic indicator in sync when anyone mutes /
           // unmutes (including the local participant).
           .on(RoomEvent.TrackMuted, () => refreshSpeakers(room))
