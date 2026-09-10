@@ -1237,6 +1237,62 @@ export const dmCall = pgTable("dm_call", {
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 })
 
+// --- Home Broadcast --------------------------------------------------------
+// An official one-to-many message from a Home to selected members. Unlike a
+// feed post or a Notice Board item, a broadcast lands directly in each
+// recipient's Inbox as the single "Home Broadcast" conversation for that Home.
+// The audience is SNAPSHOTTED at send time into home_broadcast_recipient, so a
+// member who joins or leaves afterwards never changes a historical broadcast's
+// reach. The sender identity shown to members is the Home itself, never the
+// admin who composed it.
+export const homeBroadcast = pgTable(
+  "home_broadcast",
+  {
+    id: serial("id").primaryKey(),
+    homeId: text("homeId").notNull(),
+    // The admin who composed it — kept for the admin history/audit only; never
+    // shown to recipients (the Home is the sender).
+    createdBy: text("createdBy").notNull(),
+    message: text("message").notNull(),
+    attachmentUrl: text("attachmentUrl"),
+    attachmentType: text("attachmentType"), // "image" | "video" | "audio" | "document"
+    attachmentName: text("attachmentName"),
+    // "all" | "female" | "male" | "exclude" | "specific" — how the audience was
+    // chosen. The resolved people live in home_broadcast_recipient.
+    recipientType: text("recipientType").notNull().default("all"),
+    recipientCount: integer("recipientCount").notNull().default(0),
+    status: text("status").notNull().default("sent"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    sentAt: timestamp("sentAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    homeIdx: index("home_broadcast_home_idx").on(t.homeId, t.sentAt),
+  }),
+)
+
+// One row per (broadcast, recipient) — the snapshotted audience. openedAt drives
+// per-member read state; while any of a member's rows in a Home are unopened the
+// Home Broadcast conversation is unread and pins to the top of their inbox.
+export const homeBroadcastRecipient = pgTable(
+  "home_broadcast_recipient",
+  {
+    id: serial("id").primaryKey(),
+    broadcastId: integer("broadcastId").notNull(),
+    homeId: text("homeId").notNull(),
+    userId: text("userId").notNull(),
+    sentAt: timestamp("sentAt").notNull().defaultNow(),
+    openedAt: timestamp("openedAt"),
+    status: text("status").notNull().default("sent"), // "sent" | "opened"
+  },
+  (t) => ({
+    broadcastIdx: index("home_broadcast_recipient_broadcast_idx").on(t.broadcastId),
+    // Drives a member's inbox: their broadcasts within one Home, newest first,
+    // and the unopened check that powers the unread pin.
+    userHomeIdx: index("home_broadcast_recipient_user_home_idx").on(t.userId, t.homeId),
+    unique: uniqueIndex("home_broadcast_recipient_unique").on(t.broadcastId, t.userId),
+  }),
+)
+
 // Per-user notifications. A row is created for each follower when someone they
 // follow posts a tweet or starts a live stream.
 export const notification = pgTable("notification", {
@@ -1934,6 +1990,13 @@ export const home = pgTable(
     // How new members join with a valid key: "auto" (instant membership) or
     // "approval" (creates a pending request an admin must approve).
     joinPolicy: text("joinPolicy").notNull().default("auto"),
+    // Home discoverability. When true the Home appears in "Find a Home"
+    // discovery + name search and its public profile advertises a keyless join
+    // (still governed by joinPolicy). When false the Home is hidden from all
+    // discovery/search and is reachable only via key, invitation or direct
+    // link. Chosen at setup and changeable any time from admin settings.
+    // Discoverable does NOT mean open: access is still decided by joinPolicy.
+    discoverable: boolean("discoverable").notNull().default(true),
     // What the "iTestify" tab is called in THIS Home. One of the fixed options
     // in REVIEW_TAB_OPTIONS ("Praise Reports" | "Testimonials" | "Feedback").
     // Cosmetic only — it renames the tab label and nothing else. The default

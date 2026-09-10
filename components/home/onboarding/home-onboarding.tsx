@@ -96,6 +96,11 @@ export function HomeOnboarding() {
     return p && p in HOME_PLANS ? (p as HomePlanId) : "premium"
   })
 
+  // Discoverability — chosen up front, changeable later in admin settings.
+  // Default discoverable: a new Home is most useful when people can find it,
+  // and it never implies open access (joinPolicy still governs joining).
+  const [discoverable, setDiscoverable] = useState(true)
+
   // Step 4 — administrator account
   const [adminName, setAdminName] = useState("")
   const [email, setEmail] = useState("")
@@ -195,6 +200,7 @@ export function HomeOnboarding() {
         cover: coverUrl,
         accentColor: accent,
         plan,
+        discoverable,
         contactEmail: contactEmail.trim() || undefined,
         contactPhone: contactPhone.trim() || undefined,
         socials: {
@@ -392,6 +398,26 @@ export function HomeOnboarding() {
         {stepId === "plan" && (
           <Section title="Choose your plan">
             <PlanCards value={plan} onChange={setPlan} />
+
+            <div className="space-y-2.5">
+              <span className="text-sm font-medium">Visibility</span>
+              <div className="grid gap-2.5 sm:grid-cols-2">
+                <VisibilityOption
+                  active={discoverable}
+                  onClick={() => setDiscoverable(true)}
+                  icon={<Globe className="size-4" />}
+                  title="Discoverable"
+                  description="Appears in Find a Home"
+                />
+                <VisibilityOption
+                  active={!discoverable}
+                  onClick={() => setDiscoverable(false)}
+                  icon={<Lock className="size-4" />}
+                  title="Private"
+                  description="Hidden — join by key or invite"
+                />
+              </div>
+            </div>
           </Section>
         )}
 
@@ -525,6 +551,45 @@ function Field({
   )
 }
 
+function VisibilityOption({
+  active,
+  onClick,
+  icon,
+  title,
+  description,
+}: {
+  active: boolean
+  onClick: () => void
+  icon: React.ReactNode
+  title: string
+  description: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`flex items-start gap-3 rounded-2xl border p-3.5 text-left transition-all active:scale-[0.98] ${
+        active
+          ? "border-primary/60 bg-primary/5 ring-2 ring-primary/20"
+          : "border-border/60 bg-card hover:border-border hover:bg-secondary/40"
+      }`}
+    >
+      <span
+        className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${
+          active ? "bg-primary/10 text-primary" : "bg-secondary text-muted-foreground"
+        }`}
+      >
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold text-foreground">{title}</span>
+        <span className="mt-0.5 block text-xs text-muted-foreground">{description}</span>
+      </span>
+    </button>
+  )
+}
+
 function ReviewCard({
   orgName,
   typeLabel,
@@ -579,8 +644,8 @@ function ReviewCard({
         <div className="flex items-start gap-2 px-5 py-4 text-xs text-muted-foreground">
           <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
           <p className="leading-relaxed">
-            We'll create your private Home and generate a unique authorisation key your members use to join. You become
-            the Owner.
+            We'll create your Home and generate a unique authorisation key your members can use to join. You become the
+            Owner.
           </p>
         </div>
       </dl>

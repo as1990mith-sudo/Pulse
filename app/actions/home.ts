@@ -72,6 +72,7 @@ export type CreateHomeInput = {
   accentColor?: string
   plan: HomePlanId
   joinPolicy?: HomeJoinPolicy
+  discoverable?: boolean
   contactEmail?: string
   contactPhone?: string
   socials?: OrgSocials
@@ -147,6 +148,7 @@ export async function createHome(input: CreateHomeInput): Promise<{ handle: stri
     plan,
     accentColor: input.accentColor || null,
     joinPolicy: input.joinPolicy ?? "auto",
+    discoverable: input.discoverable ?? true,
   })
 
   // Make the brand-new Home the caller's active context immediately, so they
@@ -394,6 +396,87 @@ export async function joinHomeByKey(rawKey: string): Promise<JoinHomeResult> {
 
   revalidatePath("/", "layout")
   return { status: autoJoin ? "joined" : "pending", handle: org.handle, homeName: org.name }
+}
+
+/**
+ * An individual joins a discoverable Home directly from its public profile —
+ * no key required. This is the keyless counterpart to joinHomeByKey and shares
+ * the SAME access model: discoverability only controls whether the Home can be
+ * FOUND. Whether a join is instant or needs approval is still decided by the
+ * Home's joinPolicy, so a discoverable + approval Home creates a pending
+ * request exactly as a key join would. Private Homes reject this path entirely
+ * and must be reached via key/invite/link.
+ */
+export async function joinDiscoverableHome(handle: string): Promise<JoinHomeResult> {
+  const user = await requireUser()
+
+  const homeRows = await db
+    .select({ h: home, org: organization })
+    .from(home)
+    .innerJoin(organization, eq(organization.id, home.organizationId))
+    .where(eq(organization.handle, handle))
+    .limit(1)
+  if (homeRows.length === 0) throw new Error("This Home is no longer available.")
+  const { h, org } = homeRows[0]
+
+  // Deleted or non-discoverable Homes are never joinable through discovery —
+  // this is the server-side guard that a spoofed handle can't get around.
+  if (h.status === "deleted") throw new Error("This Home is no longer available.")
+  if (!h.discoverable) {
+    throw new Error("This Home is private. You'll need a Home key or an invitation to join.")
+  }
+
+  // Already a member (or awaiting approval)? Report status so the UI can route.
+  const existing = await db
+    .select()
+    .from(homeMembership)
+    .where(and(eq(homeMembership.homeId, h.id), eq(homeMembership.userId, user.id)))
+    .limit(1)
+  if (existing.length > 0) {
+    const status = existing[0].status === "pending" ? "pending" : "already_member"
+    return { status, handle: org.handle, homeName: org.name }
+  }
+
+  const autoJoin = h.joinPolicy === "auto"
+  await db.insert(homeMembership).values({
+    id: crypto.randomUUID(),
+    homeId: h.id,
+    userId: user.id,
+    role: "member",
+    status: autoJoin ? "active" : "pending",
+    joinedVia: autoJoin ? "discovery_auto" : "discovery_request",
+  })
+
+  // Joining a Home directly counts as completed onboarding — never divert them
+  // back to the ministries "Welcome" subscribe screen afterwards.
+  await db
+    .update(userTable)
+    .set({ onboardedAt: new Date() })
+    .where(and(eq(userTable.id, user.id), isNull(userTable.onboardedAt)))
+
+  if (autoJoin) {
+    const store = await cookies()
+    store.set(ACTIVE_HOME_COOKIE, org.handle, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" })
+  }
+
+  revalidatePath("/", "layout")
+  return { status: autoJoin ? "joined" : "pending", handle: org.handle, homeName: org.name }
+}
+
+/**
+ * Owner/admin sets whether this Home is discoverable in "Find a Home" search +
+ * directory. Flipping to private removes it from discovery immediately; flipping
+ * to discoverable makes it eligible again. Existing members are never affected
+ * either way — visibility only governs who can FIND the Home, not who belongs.
+ */
+export async function setHomeVisibility(handle: string, discoverable: boolean) {
+  const { home: homeView } = await requireHomeManager(handle, "home.manage")
+  await db.update(home).set({ discoverable, updatedAt: new Date() }).where(eq(home.id, homeView.id))
+  // Discovery reads are uncached server actions, but the admin settings page and
+  // the public profile both reflect this, so revalidate their routes.
+  revalidatePath(`/org/${handle}/admin/settings`)
+  revalidatePath(`/org/${handle}`)
+  return { discoverable }
 }
 
 /** Owner/admin sets whether a valid key auto-joins or requires approval. */

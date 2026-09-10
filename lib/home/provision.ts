@@ -28,6 +28,7 @@ export type EnsureHomeInput = {
   plan?: HomePlanId
   accentColor?: string | null
   joinPolicy?: HomeJoinPolicy
+  discoverable?: boolean
 }
 
 /**
@@ -60,6 +61,7 @@ export async function ensureHomeForOrg(input: EnsureHomeInput): Promise<{ homeId
     if (input.plan && isHomePlanId(input.plan)) patch.plan = plan
     if (input.accentColor !== undefined) patch.accentColor = input.accentColor ?? existing[0].accentColor
     if (input.joinPolicy !== undefined) patch.joinPolicy = input.joinPolicy
+    if (input.discoverable !== undefined) patch.discoverable = input.discoverable
     if (Object.keys(patch).length > 0) {
       await db
         .update(home)
@@ -75,6 +77,7 @@ export async function ensureHomeForOrg(input: EnsureHomeInput): Promise<{ homeId
       plan,
       accentColor: input.accentColor ?? null,
       joinPolicy: input.joinPolicy ?? "auto",
+      discoverable: input.discoverable ?? true,
     })
     created = true
   }

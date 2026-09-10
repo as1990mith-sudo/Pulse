@@ -51,6 +51,9 @@ export type DmConversationSummary = {
   image: string | null
   lastMessage: string | null
   lastMessageAt: string
+  // Raw ISO timestamp of the conversation's last activity, for cross-source
+  // (chat + broadcast) chronological merging in the unified inbox.
+  sortAt: string
   unread: boolean
   // Story-ring state: does the other user have a live (non-expired) status, and
   // has the current user already seen all of it?
@@ -304,9 +307,10 @@ export async function getConversations(): Promise<DmConversationSummary[]> {
         initials: getInitials(other?.name ?? "?"),
         color: getAvatarColor(otherId),
         image: other?.image ?? null,
-        lastMessage: last ? (last.deleted ? "Message deleted" : previewOf(last.body, last.attachmentType)) : null,
-        lastMessageAt: timeAgo(conv.lastMessageAt),
-        unread,
+    lastMessage: last ? (last.deleted ? "Message deleted" : previewOf(last.body, last.attachmentType)) : null,
+    lastMessageAt: timeAgo(conv.lastMessageAt),
+    sortAt: new Date(conv.lastMessageAt).toISOString(),
+    unread,
         hasActiveStatus,
         statusAllViewed,
         // Priority pinning only applies while the recipient hasn't opened it.
