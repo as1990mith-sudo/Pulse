@@ -1934,6 +1934,13 @@ export const home = pgTable(
     // How new members join with a valid key: "auto" (instant membership) or
     // "approval" (creates a pending request an admin must approve).
     joinPolicy: text("joinPolicy").notNull().default("auto"),
+    // Home discoverability. When true the Home appears in "Find a Home"
+    // discovery + name search and its public profile advertises a keyless join
+    // (still governed by joinPolicy). When false the Home is hidden from all
+    // discovery/search and is reachable only via key, invitation or direct
+    // link. Chosen at setup and changeable any time from admin settings.
+    // Discoverable does NOT mean open: access is still decided by joinPolicy.
+    discoverable: boolean("discoverable").notNull().default(true),
     // What the "iTestify" tab is called in THIS Home. One of the fixed options
     // in REVIEW_TAB_OPTIONS ("Praise Reports" | "Testimonials" | "Feedback").
     // Cosmetic only — it renames the tab label and nothing else. The default

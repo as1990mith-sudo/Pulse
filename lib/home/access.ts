@@ -58,6 +58,7 @@ function toHomeView(h: HomeRow, org: OrgRow, memberCount: number): HomeView {
     planRenewsAt: h.planRenewsAt,
     accentColor: h.accentColor,
     joinPolicy: h.joinPolicy as HomeJoinPolicy,
+    discoverable: h.discoverable,
     status: h.status,
     // Guard the free-text column against an unexpected value so the tab always
     // renders a known label rather than whatever happens to be stored.

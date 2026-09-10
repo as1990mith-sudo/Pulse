@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Building2,
+  Compass,
   GripVertical,
   KeyRound,
   LayoutDashboard,
@@ -304,7 +305,31 @@ export function MyHomesView() {
           <Loader2 className="size-5 animate-spin" />
         </div>
       ) : homes.length === 0 ? (
-        <p className="px-1 py-6 text-sm text-muted-foreground">Tap + to join or set up a Home.</p>
+        <div className="flex flex-col items-center gap-4 py-14 text-center">
+          <span className="flex size-14 items-center justify-center rounded-2xl bg-secondary/60 text-muted-foreground">
+            <Compass className="size-6" />
+          </span>
+          <div className="space-y-1">
+            <p className="text-[15px] font-semibold text-foreground">You&apos;re not in any Homes yet</p>
+            <p className="text-sm text-muted-foreground">Find a Home to join, or set up your own.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/homes/discover"
+              className="flex h-10 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition-all hover:opacity-90 active:scale-95"
+            >
+              <Compass className="size-4" />
+              Find a Home
+            </Link>
+            <Link
+              href="/sign-up/home"
+              className="flex h-10 items-center gap-2 rounded-full border border-border bg-card px-5 text-sm font-semibold text-foreground transition-all hover:bg-secondary/60 active:scale-95"
+            >
+              <Building2 className="size-4" />
+              Set Up
+            </Link>
+          </div>
+        </div>
       ) : (
         <Reorder.Group axis="y" values={items} onReorder={setItems} as="div" className="flex flex-col gap-2">
           {items.map((h) => (
@@ -406,6 +431,30 @@ export function MyHomesView() {
           <SheetTitle className="sr-only">Add a Home</SheetTitle>
           <div className="mx-auto mt-3 h-1 w-9 rounded-full bg-border" aria-hidden />
           <div className="flex flex-col gap-1 p-3 pt-4">
+            {/*
+              "Find a Home" is the discovery gateway — it lets someone who
+              belongs to no Home (or wants another) browse and search every
+              DISCOVERABLE Home and join from its public profile. It sits above
+              the key-based "Join a Home" because discovery is the path that
+              doesn't require already having a key.
+            */}
+            <SheetClose
+              render={
+                <Link
+                  href="/homes/discover"
+                  className="flex items-center gap-4 rounded-2xl px-3 py-3.5 transition-colors hover:bg-secondary/60"
+                >
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <Compass className="size-5" />
+                  </span>
+                  <span className="flex flex-1 flex-col">
+                    <span className="text-[15px] font-medium text-foreground">Find a Home</span>
+                    <span className="text-xs text-muted-foreground">Discover Homes to join</span>
+                  </span>
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" />
+                </Link>
+              }
+            />
             {/*
               "Join a Home" is available to EVERYONE, including owners. A person
               is not their organisation: the owner of Kingdom Academy is still an

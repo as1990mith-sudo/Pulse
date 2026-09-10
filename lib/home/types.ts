@@ -27,6 +27,10 @@ export type HomeView = {
   planRenewsAt: Date | null
   accentColor: string | null
   joinPolicy: HomeJoinPolicy
+  // Whether this Home appears in discovery + search and advertises a keyless
+  // join on its public profile. Never implies open access — joinPolicy still
+  // decides whether a join is instant or requires approval.
+  discoverable: boolean
   status: string
   // The admin-chosen name for the iTestify tab in this Home (cosmetic label).
   reviewTabLabel: ReviewTabLabel
