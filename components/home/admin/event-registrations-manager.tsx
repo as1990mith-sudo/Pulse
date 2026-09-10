@@ -120,8 +120,9 @@ function exportRegistrations(rows: RegistrationRow[], eventTitle: string) {
   XLSX.writeFile(wb, `Frequency-${safe}-registrants.xlsx`)
 }
 
-/** Mono eyebrow — the technical label layer used for every caption and stat tag. */
-const EYEBROW = "font-mono text-[10px] font-semibold uppercase tracking-[0.16em]"
+/** Eyebrow — the label layer used for every caption and stat tag. Matches the
+ *  members console: sans, not mono. */
+const EYEBROW = "text-[10px] font-semibold uppercase tracking-[0.12em]"
 
 export function EventRegistrationsManager({
   handle,
@@ -231,7 +232,7 @@ function Block({
         <StatusDot kind={dot} />
         <span className={cn(EYEBROW, "text-muted-foreground")}>{label}</span>
         <span className="h-px flex-1 bg-border" />
-        <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+        <span className="text-[10px] tabular-nums text-muted-foreground">
           {String(count).padStart(2, "0")}
         </span>
       </div>
@@ -272,7 +273,7 @@ function Ring({ members, total, size = 34 }: { members: number; total: number; s
         style={{ width: size, height: size }}
         aria-label="No registrations yet"
       >
-        <span className="font-mono text-[10px] text-muted-foreground">—</span>
+        <span className="text-[10px] text-muted-foreground">—</span>
       </div>
     )
   }
@@ -315,8 +316,8 @@ function EventCard({
   return (
     <article
       className={cn(
-        "overflow-hidden rounded-2xl border bg-card transition-colors",
-        open ? "border-[color:var(--home-accent)]/40" : "border-border",
+        "overflow-hidden rounded-2xl border bg-card/50 backdrop-blur-xl transition-colors",
+        open ? "border-[color:var(--home-accent)]/40" : "border-border/50",
       )}
     >
       <div className="flex items-start gap-3 p-4">
@@ -351,7 +352,7 @@ function EventCard({
           onClick={onToggle}
           aria-expanded={open}
           aria-label={open ? "Hide registrations" : `View registrations for ${event.title}`}
-          className="grid size-9 shrink-0 place-items-center rounded-xl border transition-colors"
+          className="tap-scale grid size-9 shrink-0 place-items-center rounded-xl border transition-colors"
           style={{
             backgroundColor: "color-mix(in oklch, var(--home-accent) 14%, transparent)",
             borderColor: "color-mix(in oklch, var(--home-accent) 30%, transparent)",
@@ -386,7 +387,7 @@ function PastRow({
   onToggle: () => void
 }) {
   return (
-    <div className={cn("rounded-xl", open && "border border-border bg-card")}>
+    <div className={cn("rounded-xl", open && "border border-border/50 bg-card/50 backdrop-blur-xl")}>
       <button
         type="button"
         onClick={onToggle}
@@ -398,13 +399,13 @@ function PastRow({
       >
         <span className="min-w-0 flex-1">
           <span className="block truncate font-display text-sm font-semibold">{event.title}</span>
-          <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+          <span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
             {formatWhen(event.eventDate, event.eventTime)}
           </span>
         </span>
         <span className="shrink-0 text-right">
           <span className="block font-display text-sm font-bold tabular-nums">{event.counts.total}</span>
-          <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground">Registered</span>
+          <span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Registered</span>
         </span>
         <ChevronRight className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-90")} />
       </button>
@@ -420,10 +421,10 @@ function CountStrip({ counts }: { counts: RegistrationCounts }) {
     { label: "Guests", value: counts.nonMembers },
   ]
   return (
-    <div className="border-t border-border">
+    <div className="border-t border-border/50">
       <dl className="grid grid-cols-3">
         {items.map((it) => (
-          <div key={it.label} className="border-r border-border px-2.5 py-2.5 last:border-r-0">
+          <div key={it.label} className="border-r border-border/50 px-2.5 py-2.5 last:border-r-0">
             <dt className={cn(EYEBROW, "text-muted-foreground")}>{it.label}</dt>
             <dd className="mt-1 font-display text-lg font-bold tabular-nums leading-none">{it.value}</dd>
           </div>
@@ -450,7 +451,7 @@ function GenderBreakdown({ counts }: { counts: RegistrationCounts }) {
   ]
   if (counts.unknownGender > 0) parts.push({ label: "Not set", value: counts.unknownGender })
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border px-2.5 py-2 font-mono text-[11px] tabular-nums">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border/50 px-2.5 py-2 text-[11px] tabular-nums">
       <span className="sr-only">Registrations by gender:</span>
       {parts.map((p, i) => (
         <span key={p.label} className="inline-flex items-center gap-1">
@@ -528,7 +529,7 @@ function ExportMenu({
           type="button"
           onClick={download}
           disabled={busy}
-          className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-white disabled:opacity-60"
+          className="tap-scale mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-white disabled:opacity-60"
           style={{ backgroundColor: "var(--home-accent)" }}
         >
           {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
@@ -574,7 +575,7 @@ function ScopeOption({
         </span>
         <span className="text-foreground">{label}</span>
       </span>
-      <span className="font-mono tabular-nums text-muted-foreground">{count}</span>
+      <span className="tabular-nums text-muted-foreground">{count}</span>
     </button>
   )
 }
@@ -643,7 +644,7 @@ function RegistrationList({ handle, event }: { handle: string; event: EventRegis
   }
 
   return (
-    <div className="border-t border-border">
+    <div className="border-t border-border/50">
       <div className="flex flex-col gap-3 p-4">
         <label className="relative flex items-center">
           <Search className="pointer-events-none absolute left-3 size-4 text-muted-foreground" aria-hidden="true" />
@@ -668,8 +669,8 @@ function RegistrationList({ handle, event }: { handle: string; event: EventRegis
                 onClick={() => setFilter(f.key)}
                 aria-pressed={active}
                 className={cn(
-                  "rounded-lg px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] transition-colors",
-                  active ? "text-white" : "border border-border text-muted-foreground hover:bg-muted/60",
+                  "tap-scale rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] transition-colors",
+                  active ? "text-white" : "border border-border/60 text-muted-foreground hover:bg-muted/60",
                 )}
                 style={active ? { backgroundColor: "var(--home-accent)", boxShadow: "0 0 14px -6px var(--home-accent)" } : undefined}
               >
@@ -685,7 +686,7 @@ function RegistrationList({ handle, event }: { handle: string; event: EventRegis
             <select
               value={gender}
               onChange={(e) => setGender(e.target.value as GenderFilter)}
-              className="w-full appearance-none rounded-lg border border-border bg-background py-1.5 pl-3 pr-8 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground outline-none focus-visible:ring-2"
+              className="w-full appearance-none rounded-lg border border-border/60 bg-background py-1.5 pl-3 pr-8 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground outline-none focus-visible:ring-2"
               style={{ ["--tw-ring-color" as string]: "var(--home-accent)" }}
             >
               {GENDER_FILTERS.map((g) => (
@@ -703,7 +704,7 @@ function RegistrationList({ handle, event }: { handle: string; event: EventRegis
               onClick={() => setExportOpen((v) => !v)}
               aria-expanded={exportOpen}
               disabled={!counts || counts.total === 0}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:bg-muted/60 disabled:opacity-50"
+              className="tap-scale inline-flex items-center gap-1.5 rounded-full border border-border/60 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:bg-muted/60 disabled:opacity-50"
             >
               <Download className="size-3.5" aria-hidden="true" /> Export
             </button>
@@ -733,13 +734,13 @@ function RegistrationList({ handle, event }: { handle: string; event: EventRegis
           {filtersActive ? "Nobody matches those filters." : "No registrations yet."}
         </p>
       ) : (
-        <ul className="divide-y divide-border border-t border-border">
+        <ul className="divide-y divide-border/40 border-t border-border/50">
           {rows.map((r) => (
             <li key={r.id}>
               <button
                 type="button"
                 onClick={() => setSelected(r)}
-                className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/50"
+                className="tap-scale flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-foreground/[0.04]"
               >
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-center gap-2">
@@ -783,13 +784,13 @@ function RegistrationList({ handle, event }: { handle: string; event: EventRegis
 function MemberBadge({ isMember }: { isMember: boolean }) {
   return isMember ? (
     <span
-      className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-white"
+      className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-white"
       style={{ backgroundColor: "var(--home-accent)" }}
     >
       <UserCheck className="size-3" /> Member
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+    <span className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
       <UserPlus className="size-3" /> Registrant
     </span>
   )
@@ -825,7 +826,7 @@ function RegistrationDetail({
   const answered = questions.filter((q) => row.answers && row.answers[q.id] !== undefined && row.answers[q.id] !== "")
 
   return (
-    <div className="border-t border-border bg-background/40 p-4">
+    <div className="border-t border-border/50 bg-background/40 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h4 className="flex flex-wrap items-center gap-2 font-display text-sm font-bold">
@@ -878,7 +879,7 @@ function RegistrationDetail({
       </p>
 
       {answered.length > 0 ? (
-        <dl className="mt-3 flex flex-col gap-2 rounded-xl border border-border bg-card p-3">
+        <dl className="mt-3 flex flex-col gap-2 rounded-xl border border-border/50 bg-card/50 p-3">
           {answered.map((q) => (
             <div key={q.id}>
               <dt className={cn(EYEBROW, "text-muted-foreground")}>{q.label}</dt>
@@ -901,7 +902,7 @@ function RegistrationDetail({
             {history.map((h) => (
               <li key={h.registrationId} className="flex items-center justify-between gap-2 text-xs">
                 <span className="truncate text-muted-foreground">{h.title}</span>
-                <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] tabular-nums text-muted-foreground">
+                <span className="shrink-0 text-[10px] uppercase tracking-[0.1em] tabular-nums text-muted-foreground">
                   {h.status === "cancelled" ? "Cancelled" : "Registered"}
                 </span>
               </li>
