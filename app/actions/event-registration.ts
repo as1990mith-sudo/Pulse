@@ -14,6 +14,7 @@ import {
 } from "@/lib/db/schema"
 import { getCurrentUser } from "@/lib/session"
 import { homeRoleHasPermission, type HomeRole } from "@/lib/home/roles"
+import { normaliseEventGender } from "@/lib/events/questions"
 import { sendRegistrationConfirmation } from "@/lib/events/email"
 import {
   countRegistrations,
@@ -73,6 +74,8 @@ export async function registerForEvent(input: {
   fullName?: string
   email?: string
   phone?: string
+  /** "male" | "female" | "other". Required for every new registration. */
+  gender?: string
   answers?: RegistrationAnswers
   guests?: number
   /** Explicit, separate consent. Never implied by registering. */
@@ -120,11 +123,22 @@ export async function registerForEvent(input: {
   const fullName = input.fullName?.trim() ?? ""
   const email = input.email?.trim() ?? ""
   const phone = normalisePhone(input.phone?.trim() || (viewerId ? identity.knownPhone : null))
+  // Prefer what was submitted; fall back to a member's profile gender only when
+  // the field arrives blank. The value is then snapshotted onto the
+  // registration, so it never changes if the profile is later edited.
+  const gender = normaliseEventGender(input.gender) ?? identity.knownGender ?? null
 
   if (fullName.length < 2) return { ok: false, error: "Please give your full name." }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: "Please give a valid email address." }
   if (config.requiresPhone && !phone) {
     return { ok: false, error: "This event needs a mobile number so the hosts can reach you." }
+  }
+  if (!gender) {
+    return {
+      ok: false,
+      error: "Select your gender to continue.",
+      fieldErrors: { gender: "Select your gender to continue." },
+    }
   }
 
   const answers = input.answers ?? {}
@@ -181,6 +195,16 @@ export async function registerForEvent(input: {
           .where(and(eq(userTable.id, viewerId), sql`${userTable.phone} is null`))
       }
 
+      // Likewise, seed a member's profile gender the first time they give it,
+      // so future registrations prefill. Only ever fills a NULL — a value the
+      // person already set on their profile is never overwritten from here.
+      if (viewerId && gender) {
+        await tx
+          .update(userTable)
+          .set({ gender, updatedAt: new Date() })
+          .where(and(eq(userTable.id, viewerId), sql`${userTable.gender} is null`))
+      }
+
       // The unique index on (announcementId, contactId) makes this idempotent:
       // a double-tapped button or resubmitted form updates the existing place
       // instead of creating a second one.
@@ -196,6 +220,7 @@ export async function registerForEvent(input: {
           fullName,
           email,
           phone,
+          gender,
           answers,
           guests,
           status: "registered",
@@ -207,6 +232,7 @@ export async function registerForEvent(input: {
             fullName,
             email,
             phone,
+            gender,
             answers,
             guests,
             // Re-registering after cancelling restores the place.
@@ -365,59 +391,5 @@ export async function updateEventRegistrationConfig(input: {
     .where(eq(announcement.id, input.announcementId))
 
   revalidatePath("/feed")
-  return { ok: true }
-}
-
-/** Marks a registrant present/absent at the event. Admin-only. */
-export async function setAttendance(input: {
-  registrationId: number
-  attended: boolean
-}): Promise<{ ok: boolean; error?: string }> {
-  const viewer = await getCurrentUser()
-  if (!viewer) return { ok: false, error: "Please sign in." }
-
-  const [reg] = await db
-    .select({ homeId: eventRegistration.homeId })
-    .from(eventRegistration)
-    .where(eq(eventRegistration.id, input.registrationId))
-    .limit(1)
-  if (!reg) return { ok: false, error: "Registration not found." }
-
-  const [membership] = await db
-    .select({ role: homeMembership.role })
-    .from(homeMembership)
-    .where(
-      and(
-        eq(homeMembership.homeId, reg.homeId),
-        eq(homeMembership.userId, viewer.id),
-        eq(homeMembership.status, "active"),
-      ),
-    )
-    .limit(1)
-  // Defer to the role/permission matrix instead of a hardcoded role list. The
-  // old list disagreed with the `events.manage` permission that gates the
-  // Registrations UI, in BOTH directions: a Content Manager — whose stated
-  // remit covers events — could open the register but got "You don't have
-  // permission." on every tap, while a Moderator could write attendance for a
-  // screen they cannot even open.
-  if (!homeRoleHasPermission(membership.role as HomeRole, "events.manage")) {
-    return { ok: false, error: "You don't have permission." }
-  }
-
-  await db
-    .update(eventRegistration)
-    .set({ attendedAt: input.attended ? new Date() : null, updatedAt: new Date() })
-    .where(eq(eventRegistration.id, input.registrationId))
-
-  // The Attended tallies are server-rendered, so they would otherwise keep
-  // showing the pre-toggle figure until something else revalidated the page.
-  const [home] = await db
-    .select({ handle: organization.handle })
-    .from(home_)
-    .innerJoin(organization, eq(organization.id, home_.organizationId))
-    .where(eq(home_.id, reg.homeId))
-    .limit(1)
-  if (home?.handle) revalidatePath(`/org/${home.handle}/admin/events`)
-
   return { ok: true }
 }

@@ -249,7 +249,9 @@
    / muted / accent) stay solid and crisp so text legibility never suffers. */
 .theme-glass {
   color-scheme: dark;
-  --background: oklch(0.15 0.004 285);
+  /* Same deep blackness as Charcoal — the accent wash (see `.theme-glass body`)
+     sits on top of a true-charcoal base rather than a raised grey one. */
+  --background: oklch(0.04 0 0);
   --foreground: oklch(0.98 0 0);
   /* Translucent + blurred (see rules below) → frosted panels. */
   --card: oklch(0.4 0.006 285 / 0.5);
@@ -372,10 +374,10 @@
    re-tints the whole app's gradient automatically. Kept subtle (color-mix at
    low opacity) so text and translucent panels stay perfectly legible. */
 .theme-glass body {
-  background-color: oklch(0.13 0.004 285);
+  background-color: oklch(0.03 0 0);
   background-image:
-    radial-gradient(90% 55% at 50% -8%, color-mix(in oklab, var(--primary) 12%, transparent), transparent 60%),
-    radial-gradient(70% 50% at 0% 100%, color-mix(in oklab, var(--primary) 8%, transparent), transparent 55%);
+    radial-gradient(95% 60% at 50% -8%, color-mix(in oklab, var(--primary) 32%, transparent), transparent 62%),
+    radial-gradient(75% 55% at 0% 100%, color-mix(in oklab, var(--primary) 22%, transparent), transparent 58%);
   background-attachment: fixed;
 }
 

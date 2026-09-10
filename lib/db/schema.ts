@@ -772,6 +772,12 @@ export const eventRegistration = pgTable(
     fullName: text("fullName").notNull(),
     email: text("email").notNull(),
     phone: text("phone"),
+    // Gender AS GIVEN for this registration ("male" | "female" | "other").
+    // Snapshotted like the rest of the contact details: a member's value is
+    // prefilled from their profile but stored here at submit time, so a later
+    // profile edit never rewrites the event's historical roll. Nullable only
+    // for rows that predate this field — every new registration requires it.
+    gender: text("gender"),
     // Answers to the event's `questions`, keyed by question id.
     answers: jsonb("answers").$type<Record<string, string | number | boolean>>(),
     // Party size for events that allow guests. 1 = just the registrant.
@@ -779,9 +785,6 @@ export const eventRegistration = pgTable(
     // "registered" | "cancelled". Cancelled rows are retained so the audience
     // system can tell "never registered" from "registered then withdrew".
     status: text("status").notNull().default("registered"),
-    // Attendance, set by an admin at the event. Null = not yet marked, which is
-    // distinct from explicitly marked absent.
-    attendedAt: timestamp("attendedAt"),
     // How the registration arrived: "member" (one tap, authenticated) or
     // "public" (the no-account public page). Useful for the admin breakdown.
     source: text("source").notNull().default("member"),

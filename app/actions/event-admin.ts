@@ -7,7 +7,7 @@ import { announcement, eventBroadcast, eventContact, eventRegistration } from "@
 import { getCurrentUser } from "@/lib/session"
 import { getHomeByHandle, getViewerMembership } from "@/lib/home/access"
 import { homeRoleHasPermission } from "@/lib/home/roles"
-import type { EventQuestion } from "@/lib/events/questions"
+import { normaliseEventGender, type EventGender, type EventQuestion } from "@/lib/events/questions"
 import {
   getAudienceSizes,
   isAudienceKind,
@@ -50,8 +50,18 @@ export type RegistrationCounts = {
   nonMembers: number
   /** Places taken once party sizes are included; what capacity is measured in. */
   seats: number
-  attended: number
+  // Gender breakdown of REGISTRATIONS — never attendance. `unknownGender`
+  // catches legacy rows saved before gender was captured, so the three known
+  // counts always add up to (total − unknownGender) and the UI can hide the
+  // "unknown" line entirely when there is nothing to show.
+  male: number
+  female: number
+  other: number
+  unknownGender: number
 }
+
+/** Admin-only gender filter. "all" is a view control, not a stored value. */
+export type GenderFilter = "all" | EventGender
 
 export type EventRegistrationSummary = {
   id: number
@@ -65,7 +75,24 @@ export type EventRegistrationSummary = {
   counts: RegistrationCounts
 }
 
-const EMPTY_COUNTS: RegistrationCounts = { total: 0, members: 0, nonMembers: 0, seats: 0, attended: 0 }
+const EMPTY_COUNTS: RegistrationCounts = {
+  total: 0,
+  members: 0,
+  nonMembers: 0,
+  seats: 0,
+  male: 0,
+  female: 0,
+  other: 0,
+  unknownGender: 0,
+}
+
+/** The four gender aggregates, shared by every counts query below. */
+const genderAggregates = {
+  male: sql<number>`count(*) filter (where ${eventRegistration.gender} = 'male')::int`,
+  female: sql<number>`count(*) filter (where ${eventRegistration.gender} = 'female')::int`,
+  other: sql<number>`count(*) filter (where ${eventRegistration.gender} = 'other')::int`,
+  unknownGender: sql<number>`count(*) filter (where ${eventRegistration.gender} is null or ${eventRegistration.gender} not in ('male','female','other'))::int`,
+}
 
 /**
  * Every event this Home has published, each with its live registration counts.
@@ -102,7 +129,7 @@ export async function getHomeEventRegistrations(handle: string): Promise<EventRe
       members: sql<number>`count(*) filter (where ${eventRegistration.isMember})::int`,
       nonMembers: sql<number>`count(*) filter (where not ${eventRegistration.isMember})::int`,
       seats: sql<number>`coalesce(sum(${eventRegistration.guests}), 0)::int`,
-      attended: sql<number>`count(*) filter (where ${eventRegistration.attendedAt} is not null)::int`,
+      ...genderAggregates,
     })
     .from(eventRegistration)
     .where(
@@ -130,7 +157,16 @@ export async function getHomeEventRegistrations(handle: string): Promise<EventRe
       capacity: e.capacity,
       questions: Array.isArray(e.questions) ? (e.questions as EventQuestion[]) : [],
       counts: g
-        ? { total: g.total, members: g.members, nonMembers: g.nonMembers, seats: g.seats, attended: g.attended }
+        ? {
+            total: g.total,
+            members: g.members,
+            nonMembers: g.nonMembers,
+            seats: g.seats,
+            male: g.male,
+            female: g.female,
+            other: g.other,
+            unknownGender: g.unknownGender,
+          }
         : EMPTY_COUNTS,
     }
   })
@@ -142,17 +178,17 @@ export type RegistrationRow = {
   fullName: string
   email: string
   phone: string | null
+  gender: EventGender | null
   isMember: boolean
   guests: number
   source: string
   status: string
-  attendedAt: string | null
   createdAt: string
   answers: Record<string, string | number | boolean> | null
   marketingOptIn: boolean
 }
 
-export type RegistrationFilter = "all" | "members" | "non_members" | "attended"
+export type RegistrationFilter = "all" | "members" | "non_members"
 
 /**
  * The registrant list for one event, with search and filter applied server-side.
@@ -166,6 +202,7 @@ export async function listEventRegistrations(input: {
   announcementId: number
   query?: string
   filter?: RegistrationFilter
+  gender?: GenderFilter
 }): Promise<{ rows: RegistrationRow[]; counts: RegistrationCounts }> {
   const { home } = await requireEventsManager(input.handle)
 
@@ -178,6 +215,7 @@ export async function listEventRegistrations(input: {
   if (!event) throw new Error("Event not found.")
 
   const filter = input.filter ?? "all"
+  const gender = input.gender ?? "all"
   const q = input.query?.trim()
 
   const conditions = [
@@ -187,7 +225,9 @@ export async function listEventRegistrations(input: {
   ]
   if (filter === "members") conditions.push(eq(eventRegistration.isMember, true))
   if (filter === "non_members") conditions.push(eq(eventRegistration.isMember, false))
-  if (filter === "attended") conditions.push(sql`${eventRegistration.attendedAt} is not null`)
+  // Member-status and gender are INDEPENDENT filters, so they compose: an admin
+  // can ask for "female non-members" and both conditions apply together.
+  if (gender !== "all") conditions.push(eq(eventRegistration.gender, gender))
   if (q) {
     const like = `%${q}%`
     // ilike keeps the match case-insensitive, matching how people actually type
@@ -207,11 +247,11 @@ export async function listEventRegistrations(input: {
       fullName: eventRegistration.fullName,
       email: eventRegistration.email,
       phone: eventRegistration.phone,
+      gender: eventRegistration.gender,
       isMember: eventRegistration.isMember,
       guests: eventRegistration.guests,
       source: eventRegistration.source,
       status: eventRegistration.status,
-      attendedAt: eventRegistration.attendedAt,
       createdAt: eventRegistration.createdAt,
       answers: eventRegistration.answers,
       marketingOptIn: eventContact.marketingOptIn,
@@ -229,7 +269,7 @@ export async function listEventRegistrations(input: {
       members: sql<number>`count(*) filter (where ${eventRegistration.isMember})::int`,
       nonMembers: sql<number>`count(*) filter (where not ${eventRegistration.isMember})::int`,
       seats: sql<number>`coalesce(sum(${eventRegistration.guests}), 0)::int`,
-      attended: sql<number>`count(*) filter (where ${eventRegistration.attendedAt} is not null)::int`,
+      ...genderAggregates,
     })
     .from(eventRegistration)
     .where(
@@ -243,7 +283,7 @@ export async function listEventRegistrations(input: {
   return {
     rows: rows.map((r) => ({
       ...r,
-      attendedAt: r.attendedAt ? r.attendedAt.toISOString() : null,
+      gender: normaliseEventGender(r.gender),
       createdAt: r.createdAt.toISOString(),
     })),
     counts: totals ?? EMPTY_COUNTS,
@@ -257,7 +297,6 @@ export type ContactHistoryEntry = {
   eventDate: string | null
   isMember: boolean
   guests: number
-  attendedAt: string | null
   status: string
   createdAt: string
 }
@@ -284,7 +323,6 @@ export async function getContactEventHistory(input: {
       eventDate: announcement.eventDate,
       isMember: eventRegistration.isMember,
       guests: eventRegistration.guests,
-      attendedAt: eventRegistration.attendedAt,
       status: eventRegistration.status,
       createdAt: eventRegistration.createdAt,
     })
@@ -295,7 +333,6 @@ export async function getContactEventHistory(input: {
 
   return rows.map((r) => ({
     ...r,
-    attendedAt: r.attendedAt ? r.attendedAt.toISOString() : null,
     createdAt: r.createdAt.toISOString(),
   }))
 }

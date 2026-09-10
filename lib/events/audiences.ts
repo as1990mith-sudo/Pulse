@@ -1,6 +1,6 @@
 import "server-only"
 
-import { and, eq, isNotNull, isNull } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 
 import { db } from "@/lib/db"
 import { announcement, eventContact, eventRegistration, homeMembership, user as userTable } from "@/lib/db/schema"
@@ -16,7 +16,7 @@ import { announcement, eventContact, eventRegistration, homeMembership, user as 
  */
 
 /** Audiences scoped to a single event. */
-const EVENT_SCOPED = ["event_registrants", "event_members", "event_non_members", "event_attended", "event_no_show"] as const
+const EVENT_SCOPED = ["event_registrants", "event_members", "event_non_members"] as const
 
 /** Audiences scoped to the whole Home. */
 const HOME_SCOPED = ["home_members", "non_member_registrants"] as const
@@ -39,8 +39,6 @@ export const AUDIENCE_LABELS: Record<AudienceKind, string> = {
   event_registrants: "Everyone registered",
   event_members: "Registered members",
   event_non_members: "Registered non-members",
-  event_attended: "Attended",
-  event_no_show: "Did not attend",
   home_members: "All church members",
   non_member_registrants: "All non-member contacts",
 }
@@ -96,8 +94,6 @@ export async function resolveAudience(input: {
 
     if (kind === "event_members") conditions.push(eq(eventRegistration.isMember, true))
     if (kind === "event_non_members") conditions.push(eq(eventRegistration.isMember, false))
-    if (kind === "event_attended") conditions.push(isNotNull(eventRegistration.attendedAt))
-    if (kind === "event_no_show") conditions.push(isNull(eventRegistration.attendedAt))
 
     // Left join the contact so a registration whose contact row is somehow
     // missing still resolves (email lives on the registration too) rather than

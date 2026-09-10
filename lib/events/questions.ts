@@ -36,3 +36,30 @@ export const QUESTION_TYPE_LABELS: Record<EventQuestion["type"], string> = {
   boolean: "Yes / no",
   guests: "Number of guests",
 }
+
+/**
+ * The gender captured at event registration.
+ *
+ * Deliberately the SAME three values the rest of Frequency uses for a person's
+ * gender (see lib/home/members.ts) so the registration snapshot and a member's
+ * profile never drift into incompatible vocabularies. This is a fixed
+ * registration selector, not a free-text field: exactly Male / Female / Other.
+ *
+ * Lives here, not in the `server-only` registration module, because both the
+ * client registration form and the server validator need it.
+ */
+export const EVENT_GENDERS = ["male", "female", "other"] as const
+export type EventGender = (typeof EVENT_GENDERS)[number]
+
+export const EVENT_GENDER_LABEL: Record<EventGender, string> = {
+  male: "Male",
+  female: "Female",
+  other: "Other",
+}
+
+/** Coerces arbitrary input to a known gender, or null. Server-authoritative. */
+export function normaliseEventGender(raw: string | null | undefined): EventGender | null {
+  if (!raw) return null
+  const v = raw.trim().toLowerCase()
+  return v === "male" || v === "female" || v === "other" ? v : null
+}

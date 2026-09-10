@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { CheckCircle2, Lock } from "lucide-react"
 import { RegistrationForm } from "@/components/events/registration-form"
-import type { EventQuestion } from "@/lib/events/questions"
+import type { EventGender, EventQuestion } from "@/lib/events/questions"
 
 type Props = {
   handle: string
@@ -12,6 +12,7 @@ type Props = {
   knownName: string | null
   knownEmail: string | null
   knownPhone: string | null
+  knownGender: EventGender | null
   isMember: boolean
   alreadyRegistered: boolean
   requiresPhone: boolean
@@ -38,6 +39,7 @@ export function RegistrationPanel({
   knownName,
   knownEmail,
   knownPhone,
+  knownGender,
   isMember,
   alreadyRegistered,
   requiresPhone,
@@ -132,6 +134,7 @@ export function RegistrationPanel({
         knownName={knownName}
         knownEmail={knownEmail}
         knownPhone={knownPhone}
+        knownGender={knownGender}
         isMember={isMember}
         requiresPhone={requiresPhone}
         questions={questions}
