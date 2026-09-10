@@ -555,6 +555,7 @@ export function LiveVideoViewer({
           title={stream.title}
           cover={stream.cover ?? null}
           hostName={stream.hostName}
+          homeName={stream.homeName ?? null}
           category={stream.category}
           topic={stream.topic}
           backSlot={

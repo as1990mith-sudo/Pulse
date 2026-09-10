@@ -121,6 +121,10 @@ export type ConversationVideoProps = {
   title: string
   cover: string | null
   hostName: string
+  // Hosting Home/organisation name — shown as the primary identity line so the
+  // Conversation header names the Home the same way the video broadcast header
+  // does. Null for personal/Universal sessions.
+  homeName?: string | null
   category?: string | null
   topic?: string | null
   // Consumer-owned slots so host/viewer keep their own back + options logic.
@@ -178,9 +182,10 @@ export function ConversationVideo(props: ConversationVideoProps) {
     onAddTrack,
     chatBgUrl = null,
     chatBgEffect = "none",
-    title,
-    cover,
-    hostName,
+  title,
+  cover,
+  hostName,
+  homeName = null,
     category,
     topic,
     backSlot,
@@ -699,6 +704,11 @@ export function ConversationVideo(props: ConversationVideoProps) {
             )}
           </div>
           <div className="min-w-0 flex-1">
+            {homeName && (
+              <span className="block truncate text-[10px] font-semibold uppercase tracking-wide text-white/45">
+                {homeName}
+              </span>
+            )}
             <MarqueeTitle text={title} className="text-[15px] font-semibold leading-tight tracking-tight text-white" />
             <div className="mt-0.5 flex items-center gap-2.5 text-[11px] font-medium text-white/55">
               <span className="inline-flex shrink-0 items-center gap-1">

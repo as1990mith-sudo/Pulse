@@ -188,6 +188,10 @@ export function ConversationRoom({
   const [live, setLive] = useState<boolean>(Boolean(streamData))
   const hostId = isHostMode ? currentUser!.id : stream!.hostId
   const hostName = isHostMode ? currentUser!.name : stream!.hostName
+  // Hosting Home/organisation name for the header, mirroring the video
+  // Conversation header. The host reads the org they gather as; a participant
+  // reads it off the resolved stream. Null for personal/Universal gatherings.
+  const homeName = isHostMode ? (currentUser?.organization?.name ?? null) : (stream?.homeName ?? null)
   const isHost = viewerId != null && viewerId === hostId
 
   // ── Reconnection resilience ────────────────────────────────────────────────
@@ -988,6 +992,11 @@ export function ConversationRoom({
             >
               {cover && <CoverArt src={cover} alt={`${title} cover`} className="mb-3 size-24" />}
               <h1 className="max-w-full truncate text-lg font-bold uppercase leading-tight tracking-tight text-balance">{title}</h1>
+              {homeName && (
+                <p className="mt-1 max-w-full truncate text-[11px] font-semibold uppercase tracking-wide text-white/45">
+                  {homeName}
+                </p>
+              )}
               <p className="mt-0.5 text-xs font-medium text-white/60">Hosted by {hostName}</p>
               {topic && (
                 <div className="mt-2 rounded-full bg-white/[0.06] px-3 py-1 ring-1 ring-inset ring-white/10">
