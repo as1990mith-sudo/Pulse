@@ -223,7 +223,6 @@ export function LiveVideoViewer({
   const [prejoin, setPrejoin] = useState<{ micOn: boolean; camOn: boolean }>({ micOn: true, camOn: true })
 
   const {
-    localVideoRef,
     registerLocalVideoEl,
     connected,
     canPublish,
@@ -710,7 +709,16 @@ export function LiveVideoViewer({
               )}
             >
               <video
-                ref={localVideoRef}
+                // Remount-safe callback ref (NOT the bare localVideoRef object
+                // ref): the self-view <video> node is replaced whenever this tile
+                // remounts as the stage reflows around a spotlight change or the
+                // guest is demoted/re-promoted. A plain object ref never re-runs
+                // attach on that new node, so the local camera silently went black
+                // on the spotlighted guest's OWN screen even though their track
+                // was still publishing to everyone else. registerLocalVideoEl
+                // re-attaches on every mount (and is a no-op for an unchanged
+                // element, so it never restarts/flickers a healthy preview).
+                ref={registerLocalVideoEl}
                 autoPlay
                 playsInline
                 muted
