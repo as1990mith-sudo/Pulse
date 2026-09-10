@@ -15,6 +15,7 @@ import {
   user as userTable,
 } from "@/lib/db/schema"
 import { getHandle } from "@/lib/identity"
+import { normalizeGender, type Gender } from "@/lib/home/members"
 
 // Column names across the schema that identify a row as "belonging to" a user.
 // Any public table carrying one of these is cleaned up when that user deletes
@@ -123,6 +124,23 @@ export async function deleteMyAccount(): Promise<{ ok: true }> {
     client.release()
   }
 
+  return { ok: true }
+}
+
+/**
+ * Persists the signed-in user's gender. Called right after sign-up, where the
+ * field is required. Gender is a structured, server-validated attribute — the
+ * value is normalised to the fixed male/female/other set here and rejected
+ * otherwise. Legacy accounts simply never call this and keep NULL.
+ */
+export async function setMyGender(gender: string): Promise<{ ok: true }> {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) throw new Error("You must be signed in to do that.")
+
+  const value: Gender | null = normalizeGender(gender)
+  if (!value) throw new Error("Please choose Male, Female or Other.")
+
+  await db.update(userTable).set({ gender: value }).where(eq(userTable.id, session.user.id))
   return { ok: true }
 }
 

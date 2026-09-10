@@ -19,6 +19,8 @@ import {
 import { ImageCropper } from "@/components/image-cropper"
 import { uploadMedia, compressImage } from "@/lib/upload-media"
 import { createOrganization } from "@/app/actions/organizations"
+import { setMyGender } from "@/app/actions/account"
+import { GENDER_OPTIONS, type Gender } from "@/lib/home/members"
 import { ORG_CATEGORIES, ORG_REACH, type OrgCategory, type OrgReach } from "@/lib/org-types"
 
 type AccountType = "individual" | "organization"
@@ -74,6 +76,10 @@ export function AuthForm({
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  // Sign-up (individual): gender is a required, structured attribute persisted
+  // to the user profile straight after the account is created. Empty until
+  // chosen so we can enforce the requirement before submitting.
+  const [gender, setGender] = useState<Gender | "">("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
@@ -119,6 +125,12 @@ export function AuthForm({
       return
     }
 
+    // Gender is a required part of an individual sign-up.
+    if (isSignUp && !isOrg && !gender) {
+      setError("Please choose Male, Female or Other to continue.")
+      return
+    }
+
     setLoading(true)
 
     if (!isSignUp) {
@@ -153,6 +165,17 @@ export function AuthForm({
       // The account exists; surface the issue but still let them in — they can
       // re-upload from their profile.
       setError(err instanceof Error ? err.message : "Your photo could not be saved.")
+    }
+
+    // Persist the chosen gender to the new account (individual sign-up only).
+    // Non-blocking: the account already exists, so a failure here shouldn't trap
+    // the user on the form — they can set it later from their profile.
+    if (!isOrg && gender) {
+      try {
+        await setMyGender(gender)
+      } catch (err) {
+        console.error("[v0] setMyGender failed:", err)
+      }
     }
 
     setLoading(false)
@@ -476,6 +499,36 @@ export function AuthForm({
                       required
                       autoComplete="name"
                     />
+                  </div>
+                )}
+                {isSignUp && !isOrg && (
+                  <div className="space-y-2">
+                    <span className="text-sm font-medium">Gender</span>
+                    <div
+                      role="radiogroup"
+                      aria-label="Gender"
+                      className="grid grid-cols-3 gap-2"
+                    >
+                      {GENDER_OPTIONS.filter((o) => o.id !== "all").map((o) => {
+                        const active = gender === o.id
+                        return (
+                          <button
+                            key={o.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={active}
+                            onClick={() => setGender(o.id as Gender)}
+                            className={`rounded-xl border px-3 py-2.5 text-sm font-medium transition-all ${
+                              active
+                                ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary"
+                                : "border-border/60 bg-card text-muted-foreground hover:border-border hover:bg-muted/40"
+                            }`}
+                          >
+                            {o.label}
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
                 )}
                 <div className="space-y-2">

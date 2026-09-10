@@ -5,7 +5,7 @@ import { getMembersDirectory } from "@/app/actions/home-members"
 import { defaultQuery } from "@/lib/home/members"
 import { getHomeByHandle, getViewerMembership } from "@/lib/home/access"
 import { homeRoleHasPermission } from "@/lib/home/roles"
-import { getHomeBookings } from "@/app/actions/home-scheduling"
+import { getBroadcasts } from "@/app/actions/home-broadcast"
 import { listAppointmentTypes, listHomeBookings } from "@/app/actions/home-appointments"
 import { getHomeEventRegistrations } from "@/app/actions/event-admin"
 import { EventRegistrationsManager } from "@/components/home/admin/event-registrations-manager"
@@ -15,7 +15,7 @@ import { SubscriptionManager } from "@/components/home/admin/subscription-manage
 import { SettingsManager } from "@/components/home/admin/settings-manager"
 import { ReviewTabManager } from "@/components/home/admin/review-tab-manager"
 import { ContentManager } from "@/components/home/admin/content-manager"
-import { BookingsManager } from "@/components/home/admin/bookings-manager"
+import { BroadcastManager } from "@/components/home/admin/broadcast/broadcast-manager"
 import { AppointmentsAdmin } from "@/components/home/admin/appointments-admin"
 
 export default async function HomeAdminSectionPage({
@@ -88,9 +88,9 @@ async function SectionBody({ handle, section }: { handle: string; section: strin
     return <ContentManager handle={handle} homeName={home.name} />
   }
 
-  if (section === "bookings") {
-    const bookings = await getHomeBookings(handle)
-    return <BookingsManager handle={handle} initialBookings={bookings} />
+  if (section === "broadcast") {
+    const broadcasts = await getBroadcasts(handle)
+    return <BroadcastManager handle={handle} initialBroadcasts={broadcasts} />
   }
 
   if (section === "appointments") {
