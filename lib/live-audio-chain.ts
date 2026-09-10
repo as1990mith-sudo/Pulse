@@ -161,8 +161,23 @@ export const LIVE_MIC_CONSTRAINTS = {
   // Live to the same standard.
   voiceIsolation: true,
   channelCount: 1,
-  sampleRate: 48000,
-  // Full 16-bit sample depth for maximum dynamic range before Opus encoding
-  // (a quieter, cleaner noise floor).
-  sampleSize: 16,
+  // NB: we deliberately DO NOT pin sampleRate / sampleSize here.
+  //
+  // This was the real cause of the "I hear my own voice come back" echo in
+  // Audio and Video Conversation. The acoustic echo path is: participant A
+  // speaks → B's loudspeaker plays A → B's mic re-captures A → A hears
+  // themselves. The browser's acoustic echo canceller (AEC) exists to strip
+  // that speaker-bleed at capture, and echoCancellation:true above asks for it.
+  //
+  // BUT Chromium's AEC negotiates its OWN capture format (historically the
+  // 16 kHz voice-processing rate on the hardware path). Forcing an exact
+  // sampleRate: 48000 / sampleSize: 16 conflicts with that: the browser either
+  // drops the whole constraint set (falling back to a raw, unprocessed capture)
+  // or engages a capture path where the echo canceller never actually runs. In
+  // both cases echoCancellation is requested but NOT effective — which is why
+  // the echo appeared even though the flag was set. Leaving the rate
+  // unspecified lets the AEC pick its native format and stay engaged; Opus
+  // re-encodes to 48 kHz for transport regardless, so voice fidelity is
+  // unchanged. (Background music has its own dedicated 48 kHz AudioContext and
+  // is unaffected by this — see publishMusic.)
 } as const
