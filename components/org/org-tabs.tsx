@@ -546,53 +546,70 @@ function AboutTab({ org }: { org: OrganizationView }) {
   }
 
   return (
-    // One flat stack so every section — intro, Mission, Vision, and Contact —
-    // is parted by the same clearly-visible thick rule. `divide-y-2` only draws
-    // between children (never above the first / below the last), and the
-    // generous vertical padding gives each rule room to breathe for a premium,
-    // editorial rhythm that reads easily on the near-black background.
-    <div className="flex flex-col divide-y-2 divide-border">
-      {org.description && (
-        <p className="text-pretty pb-8 text-[15px] leading-relaxed text-foreground/90">{org.description}</p>
-      )}
+    // Same premium/elegant language as the Members command centre: glass
+    // surfaces (rounded-2xl + hairline border + card tint + backdrop-blur),
+    // uppercase micro-label eyebrows, font-display values and hairline row
+    // dividers — quiet, tactile cards that sit cleanly on the near-black page
+    // rather than the heavy 2px editorial rules used before.
+    <div className="animate-in fade-in duration-300">
+      <div className="mb-5">
+        <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">About</h2>
+      </div>
 
-      {sections.map((s) => (
-        <section key={s.label} className="flex flex-col gap-2 py-8 first:pt-0">
-          <h3 className="font-display text-lg font-semibold tracking-tight text-foreground">{s.label}</h3>
-          <p className="whitespace-pre-wrap text-pretty text-[15px] leading-relaxed text-foreground/90">
-            {s.value}
-          </p>
-        </section>
-      ))}
+      <div className="space-y-3">
+        {org.description && (
+          <p className="text-pretty text-[15px] leading-relaxed text-foreground/90">{org.description}</p>
+        )}
 
-      {contactRows.length > 0 && (
-        <section className="flex flex-col gap-4 py-8 first:pt-0 last:pb-0">
-          <h3 className="font-display text-lg font-semibold tracking-tight text-foreground">Contact &amp; links</h3>
-          {/* Solid 2px border + strong row dividers so the block reads as a
-              distinct, tactile card rather than fading into the background. */}
-          <div className="overflow-hidden rounded-2xl border-2 border-border bg-card/60 shadow-sm">
-            <div className="divide-y-2 divide-border/70">
-              {contactRows.map((row) => (
-                <a
-                  key={row.key}
-                  href={row.href}
-                  {...(row.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-                  className="group flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-secondary/50"
-                >
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border-2 border-border bg-background/70 text-muted-foreground transition-colors group-hover:text-foreground">
-                    {row.icon}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[13px] font-medium text-foreground">{row.label}</span>
-                    <span className="block truncate text-xs text-muted-foreground">{row.value}</span>
-                  </span>
-                  <ArrowUpRight className="size-4 shrink-0 text-muted-foreground/50 transition-colors group-hover:text-primary" />
-                </a>
-              ))}
-            </div>
+        {sections.length > 0 && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {sections.map((s) => (
+              <section
+                key={s.label}
+                className="flex flex-col gap-2 rounded-2xl border border-border/50 bg-card/50 p-5 backdrop-blur-xl"
+              >
+                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  {s.label}
+                </span>
+                <p className="whitespace-pre-wrap text-pretty text-[15px] leading-relaxed text-foreground/90">
+                  {s.value}
+                </p>
+              </section>
+            ))}
           </div>
-        </section>
-      )}
+        )}
+
+        {contactRows.length > 0 && (
+          <section className="space-y-2.5">
+            <span className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              Contact &amp; links
+            </span>
+            {/* Glass card with hairline row dividers — matches the members
+                directory / snapshot surfaces rather than a heavy bordered block. */}
+            <div className="overflow-hidden rounded-2xl border border-border/50 bg-card/50 backdrop-blur-xl">
+              <div className="divide-y divide-border/50">
+                {contactRows.map((row) => (
+                  <a
+                    key={row.key}
+                    href={row.href}
+                    {...(row.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                    className="group flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-secondary/40"
+                  >
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-border/50 bg-background/60 text-muted-foreground transition-colors group-hover:text-foreground">
+                      {row.icon}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13px] font-medium text-foreground">{row.label}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{row.value}</span>
+                    </span>
+                    <ArrowUpRight className="size-4 shrink-0 text-muted-foreground/40 transition-colors group-hover:text-foreground" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+      </div>
     </div>
   )
 }
