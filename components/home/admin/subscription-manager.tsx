@@ -368,9 +368,7 @@ function PlanDetailSheet({
         transition={{ type: "spring", stiffness: 320, damping: 30 }}
         onClick={(e) => e.stopPropagation()}
         className={cn(
-          "relative flex w-full flex-col overflow-hidden border border-border/70 bg-background/95 backdrop-blur-xl",
-          "max-h-[92vh] rounded-t-3xl sm:max-h-[88vh] sm:max-w-lg sm:rounded-3xl",
-          "shadow-2xl",
+          "relative flex h-full w-full flex-col overflow-hidden bg-background/95 backdrop-blur-xl",
         )}
       >
         {/* Accent wash */}
@@ -569,7 +567,7 @@ function CompareSheet({ onClose }: { onClose: () => void }) {
         exit={reduce ? { opacity: 0 } : { opacity: 0, y: 24, scale: 0.98 }}
         transition={{ type: "spring", stiffness: 320, damping: 30 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative flex w-full flex-col overflow-hidden border border-border/70 bg-background/95 backdrop-blur-xl max-h-[92vh] rounded-t-3xl sm:max-h-[88vh] sm:max-w-md sm:rounded-3xl shadow-2xl"
+        className="relative flex h-full w-full flex-col overflow-hidden bg-background/95 backdrop-blur-xl"
       >
         <div className="flex items-center justify-between gap-3 px-5 pt-5">
           <h3 className="text-base font-semibold text-[var(--home-fg,inherit)]">Compare plans</h3>
@@ -635,7 +633,7 @@ function Overlay({ children, onClose }: { children: React.ReactNode; onClose: ()
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
       onClick={onClose}
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center sm:p-4"
+      className="fixed inset-0 z-50 flex bg-black/50 backdrop-blur-sm"
     >
       {children}
     </motion.div>
