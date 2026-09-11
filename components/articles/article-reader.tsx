@@ -176,7 +176,7 @@ export function ArticleReader({
     : null
 
   return (
-    <article className="mx-auto w-full max-w-2xl px-4 pb-28 pt-3 font-display">
+    <article className="mx-auto w-full max-w-2xl px-4 pb-28 pt-3">
       {/* Top bar */}
       <div className="flex items-center justify-between">
         <button

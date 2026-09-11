@@ -327,7 +327,7 @@ function PostItem({
       // whole list remounts and visibly re-forms as the new Home's feed.
       style={{ "--enter-index": enterIndex } as React.CSSProperties}
       className={cn(
-        "feed-item-in scroll-mt-24 px-4 py-5 font-display transition-colors sm:px-6",
+        "feed-item-in scroll-mt-24 px-4 py-5 transition-colors sm:px-6",
         highlighted && "bg-emerald-500/5",
         // While this post's options menu is open, lift the whole card above the
         // sibling posts. `feed-item-in` uses a transform, so each card is its own
@@ -1587,7 +1587,7 @@ export function CommunityHelp({
             </Avatar>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <h1 className="truncate font-display text-xl font-semibold tracking-tight">Community</h1>
+                <h1 className="truncate text-xl font-bold tracking-tight">Community</h1>
                 <button
                   type="button"
                   onClick={() => setInfoOpen(true)}
