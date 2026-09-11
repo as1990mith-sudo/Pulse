@@ -394,6 +394,97 @@ export async function removeReportedContent(
   revalidatePath(`/org/${handle}/admin/reports`)
 }
 
+// ── Inline moderation (from the feed/comment ⋮ menu) ───────────────────────────
+// These power the contextual "delete / suspend / remove" actions an admin sees
+// directly on someone else's post or comment, without opening the Reports queue.
+// The owning Home is resolved from the CONTENT itself (never trusted from the
+// client), then `reports.manage` is enforced via requireReportManager — so the
+// main cross-Home feed routes each action to the correct Home's authority.
+
+async function resolveContentHome(
+  targetType: "post" | "comment",
+  targetId: string,
+): Promise<{ homeId: string; authorId: string; handle: string } | null> {
+  if (targetType === "post") {
+    const pid = Number(targetId)
+    if (!Number.isInteger(pid)) return null
+    const [row] = await db
+      .select({ userId: feedPost.userId, homeId: feedPost.homeId })
+      .from(feedPost)
+      .where(eq(feedPost.id, pid))
+    if (!row || !row.homeId) return null
+    const home = await db
+      .select({ handle: homeMembership.homeId })
+      .from(homeMembership)
+      .where(eq(homeMembership.homeId, row.homeId))
+      .limit(0)
+    void home
+    const h = await getHandleForHome(row.homeId)
+    if (!h) return null
+    return { homeId: row.homeId, authorId: row.userId, handle: h }
+  }
+  const cid = Number(targetId)
+  if (!Number.isInteger(cid)) return null
+  const [row] = await db
+    .select({ userId: feedComment.userId, homeId: feedPost.homeId })
+    .from(feedComment)
+    .innerJoin(feedPost, eq(feedComment.postId, feedPost.id))
+    .where(eq(feedComment.id, cid))
+  if (!row || !row.homeId) return null
+  const h = await getHandleForHome(row.homeId)
+  if (!h) return null
+  return { homeId: row.homeId, authorId: row.userId, handle: h }
+}
+
+async function getHandleForHome(homeId: string): Promise<string | null> {
+  const { organization } = await import("@/lib/db/schema")
+  const [org] = await db
+    .select({ handle: organization.handle, name: organization.name })
+    .from(organization)
+    .where(eq(organization.id, homeId))
+  if (!org) return null
+  return org.handle || null
+}
+
+/**
+ * Delete a post/comment straight from its ⋮ menu. Delegates to the same gated
+ * primitive the Reports queue uses (soft-delete for posts, hard-delete for
+ * comments), so the authorisation and audit trail are identical.
+ */
+export async function moderateRemoveContent(
+  targetType: "post" | "comment",
+  targetId: string,
+): Promise<{ ok: true }> {
+  const resolved = await resolveContentHome(targetType, targetId)
+  if (!resolved) throw new Error("That content no longer exists.")
+  await removeReportedContent(resolved.handle, targetType, targetId)
+  return { ok: true }
+}
+
+/** Suspend the author of a post/comment straight from its ⋮ menu. */
+export async function moderateSuspendAuthor(
+  targetType: "post" | "comment",
+  targetId: string,
+  duration: SuspensionDurationId,
+  reason?: string | null,
+): Promise<{ ok: true }> {
+  const resolved = await resolveContentHome(targetType, targetId)
+  if (!resolved) throw new Error("That content no longer exists.")
+  await suspendMember(resolved.handle, resolved.authorId, duration, reason ?? null)
+  return { ok: true }
+}
+
+/** Remove the author of a post/comment from the Home, straight from its ⋮ menu. */
+export async function moderateRemoveAuthor(
+  targetType: "post" | "comment",
+  targetId: string,
+): Promise<{ ok: true }> {
+  const resolved = await resolveContentHome(targetType, targetId)
+  if (!resolved) throw new Error("That content no longer exists.")
+  await removeMemberFromHome(resolved.handle, resolved.authorId)
+  return { ok: true }
+}
+
 // ── Admin: resolve a report with an outcome ────────────────────────────────────
 export async function resolveReport(
   handle: string,

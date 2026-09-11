@@ -47,6 +47,30 @@ export async function canPinInScope(homeId: string | null): Promise<boolean> {
 }
 
 /**
+ * Can the current viewer moderate members/content inside this feed scope?
+ *
+ * This mirrors `canPinInScope` but gates on `reports.manage` — the same
+ * permission that guards the admin Reports queue — so the inline "delete /
+ * suspend / remove from Home" actions on a post or comment are available to
+ * exactly the roles that already own moderation (owner / administrator /
+ * moderator), and to nobody else.
+ *
+ * Resolved once per feed read (a property of the scope, not the row), just like
+ * pinning. `homeId === null` is the Universal/personal scope with no Home admin,
+ * so only platform staff qualify there.
+ */
+export async function canModerateInScope(homeId: string | null): Promise<boolean> {
+  const staff = await getAdminUser()
+  if (staff) return true
+
+  if (!homeId) return false
+
+  const membership = await getViewerMembership(homeId)
+  if (!membership || membership.status !== "active") return false
+  return homeRoleHasPermission(membership.role, "reports.manage")
+}
+
+/**
  * Pins one post, enforcing MAX_PINNED_PER_SCOPE atomically. Returns false when
  * the feed is already at the cap (the caller turns that into a user-facing
  * message) and true when the pin was applied.
