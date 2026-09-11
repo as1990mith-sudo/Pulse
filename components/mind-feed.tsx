@@ -1776,7 +1776,7 @@ export function PostCard({
     <article
       id={`post-${post.id}`}
       className={cn(
-        "overflow-hidden scroll-mt-24 transition-shadow",
+        "overflow-hidden scroll-mt-24 font-display transition-shadow",
         feed
           ? "cv-auto bg-background"
           : "rounded-xl border border-border bg-card text-card-foreground",

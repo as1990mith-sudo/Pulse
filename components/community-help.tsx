@@ -327,8 +327,13 @@ function PostItem({
       // whole list remounts and visibly re-forms as the new Home's feed.
       style={{ "--enter-index": enterIndex } as React.CSSProperties}
       className={cn(
-        "feed-item-in scroll-mt-24 px-4 py-5 transition-colors sm:px-6",
+        "feed-item-in scroll-mt-24 px-4 py-5 font-display transition-colors sm:px-6",
         highlighted && "bg-emerald-500/5",
+        // While this post's options menu is open, lift the whole card above the
+        // sibling posts. `feed-item-in` uses a transform, so each card is its own
+        // stacking context — without this the menu's own z-index can't rise over
+        // the NEXT post, which would paint on top of the open menu.
+        menuOpen && "relative z-40",
       )}
     >
       {/* Explains why this thread is at the top, rather than leaving it looking
