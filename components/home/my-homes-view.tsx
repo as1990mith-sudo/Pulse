@@ -449,7 +449,6 @@ export function MyHomesView() {
                   </span>
                   <span className="flex flex-1 flex-col">
                     <span className="text-[15px] font-medium text-foreground">Find a Home</span>
-                    <span className="text-xs text-muted-foreground">Discover Homes to join</span>
                   </span>
                   <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" />
                 </Link>
