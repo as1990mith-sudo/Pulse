@@ -553,7 +553,10 @@ function TypesTab({ handle, initialTypes }: { handle: string; initialTypes: Appo
                 <AvailabilityEditor
                   handle={handle}
                   type={t}
-                  onSaved={(windows) => setTypes((prev) => prev.map((x) => (x.id === t.id ? { ...x, windows } : x)))}
+                  onSaved={(windows) => {
+                    setTypes((prev) => prev.map((x) => (x.id === t.id ? { ...x, windows } : x)))
+                    setExpandedId(null)
+                  }}
                 />
               )}
             </div>
