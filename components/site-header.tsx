@@ -81,10 +81,10 @@ export function SiteHeader({ collapsible = false }: { collapsible?: boolean } = 
               returning, so we never swap in an in-app back arrow here. */}
           <AppMenu />
           <Link href="/" className="flex min-w-0 items-center gap-2">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Radio className="size-4" />
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-soft">
+              <Radio className="size-[18px]" strokeWidth={2.25} />
             </span>
-            <span className="shrink-0 whitespace-nowrap text-lg font-semibold tracking-tight">Frequency</span>
+            <span className="truncate whitespace-nowrap text-lg font-semibold tracking-tight">Frequency Home</span>
           </Link>
         </div>
 
@@ -97,11 +97,11 @@ export function SiteHeader({ collapsible = false }: { collapsible?: boolean } = 
             href="/search"
             aria-label="Search"
             className={cn(
-              "relative flex size-11 items-center justify-center rounded-2xl border border-border/50 bg-secondary/40 shadow-soft outline-none backdrop-blur-md transition-all duration-200 hover:bg-secondary/70 active:scale-95 focus-visible:ring-2 focus-visible:ring-ring",
+              "relative flex size-10 items-center justify-center rounded-xl border border-border/50 bg-secondary/40 shadow-soft outline-none backdrop-blur-md transition-all duration-200 hover:bg-secondary/70 active:scale-95 focus-visible:ring-2 focus-visible:ring-ring",
               isActive("/search") ? "text-primary" : "text-muted-foreground hover:text-foreground",
             )}
           >
-            <Search className="size-[22px]" strokeWidth={2} />
+            <Search className="size-5" strokeWidth={2} />
           </Link>
         </div>
       </div>
