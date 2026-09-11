@@ -51,6 +51,8 @@ const KIND_NOUN: Record<ReportTargetType, string> = {
   member: "member",
   post: "post",
   comment: "comment",
+  community_post: "post",
+  community_comment: "comment",
 }
 
 /**

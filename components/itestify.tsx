@@ -79,7 +79,7 @@ export function ITestify({
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-xl font-bold tracking-tight">{label}</h1>
+            <h1 className="truncate font-display text-xl font-semibold tracking-tight">{label}</h1>
             <p className="truncate text-sm text-muted-foreground">Share what God has done</p>
           </div>
         </header>
@@ -91,7 +91,7 @@ export function ITestify({
               action. The global/room chrome above is untouched. */}
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="font-display text-xl font-bold tracking-tight">Testimonials</h2>
+              <h2 className="font-display text-xl font-semibold tracking-tight">Testimonials</h2>
             </div>
             <Button
               onClick={() => setComposerOpen(true)}

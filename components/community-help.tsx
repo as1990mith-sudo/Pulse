@@ -1582,7 +1582,7 @@ export function CommunityHelp({
             </Avatar>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <h1 className="truncate text-xl font-bold tracking-tight">Community</h1>
+                <h1 className="truncate font-display text-xl font-semibold tracking-tight">Community</h1>
                 <button
                   type="button"
                   onClick={() => setInfoOpen(true)}
