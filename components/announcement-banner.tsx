@@ -1796,7 +1796,6 @@ function AdvertiseForm({
                 onChange={(e) => setAdditionalInfo(e.target.value)}
                 rows={3}
                 maxLength={600}
-                placeholder="Anything important attendees should know — parking, dress code, what to bring, entry instructions…"
               />
               <p className="text-xs text-muted-foreground">Optional. Shown on the event page alongside the details.</p>
             </div>
