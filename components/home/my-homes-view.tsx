@@ -552,8 +552,8 @@ export function MyHomesView() {
                   onClick={openAdminConsole}
                   className="flex items-center gap-4 rounded-2xl px-3 py-3.5 text-left transition-colors hover:bg-secondary/60"
                 >
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                    <LayoutDashboard className="size-5" />
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-foreground">
+                  <LayoutDashboard className="size-5" />
                   </span>
                   <span className="flex-1 text-[15px] font-medium text-foreground">Admin Console</span>
                   <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" />
