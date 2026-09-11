@@ -73,7 +73,7 @@ export default async function DevotionalPage() {
   return (
     <div className="min-h-screen">
       <SiteHeader />
-      <main className="mx-auto w-full max-w-2xl px-4 pb-16 pt-4 font-display sm:px-6">
+      <main className="mx-auto w-full max-w-2xl px-4 pb-16 pt-4 sm:px-6">
         {/* Premium, compact hero card: the cover art sits inside a rounded
             frame with a soft gradient, keeping the fold tight while feeling
             crafted rather than a full-bleed banner. */}
