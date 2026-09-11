@@ -14,14 +14,17 @@ import {
   Info,
   Loader2,
   MoreHorizontal,
+  Flag,
   Pencil,
   Pin,
   PinOff,
   Plus,
   Send,
   Share2,
+  ShieldOff,
   Trash2,
   User,
+  UserMinus,
   VenetianMask,
   X,
 } from "lucide-react"
@@ -49,6 +52,8 @@ import { useRestoredScroll } from "@/lib/navigation/use-restored-scroll"
 import { hasInAppHistory } from "@/lib/navigation/history-key"
 import { MiniChatProvider, useMiniChat } from "@/components/mini-chat"
 import { CommunityConversation } from "@/components/community-conversation"
+import { ContentModerationDialog, type ModerationMode } from "@/components/content-moderation-dialog"
+import { ReportReasonModal } from "@/components/report-reason-modal"
 import { FeedVideo } from "@/components/feed-video"
 import { CommunityMediaViewer } from "@/components/community-media-viewer"
 import {
@@ -216,6 +221,10 @@ function PostItem({
   const [isPending, startTransition] = useTransition()
   // Local mirror so the badge flips at once; the refresh below reorders the room.
   const [pinned, setPinned] = useState(!!post.pinned)
+  // Admin moderation surfaces reachable from this menu (delete/suspend/remove +
+  // member report). `null` = closed.
+  const [moderationMode, setModerationMode] = useState<ModerationMode>(null)
+  const [reportOpen, setReportOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   // Track server updates (e.g. another admin pinned something) so this local copy
@@ -406,6 +415,64 @@ function PostItem({
                     <Trash2 className="size-4" /> Delete
                   </button>
                 )}
+                {/* Report is for ordinary members only — admins act on the
+                    content directly via the moderation items below, so they
+                    never see (or need) Report. Hidden on the viewer's own post. */}
+                {!post.isSelf && !post.canModerate && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false)
+                      setReportOpen(true)
+                    }}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-secondary"
+                  >
+                    <Flag className="size-4" /> Report post
+                  </button>
+                )}
+                {/* Home admin moderation. Not gated on isSelf: an admin acts on
+                    ANY member's thread, including anonymous ones — the server
+                    resolves the author from the post id, so identity is never
+                    exposed here. */}
+                {!post.isSelf && post.canModerate && (
+                  <>
+                    <div className="my-1 h-px bg-border/60" role="separator" />
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        setModerationMode("delete")
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
+                    >
+                      <Trash2 className="size-4" /> Delete post
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        setModerationMode("suspend")
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-secondary"
+                    >
+                      <ShieldOff className="size-4" /> Suspend author
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        setModerationMode("remove")
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
+                    >
+                      <UserMinus className="size-4" /> Remove from Home
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -515,6 +582,24 @@ function PostItem({
       )}
 
       <ShareSheet target={shareTarget} open={shareOpen} onClose={() => setShareOpen(false)} />
+
+      {reportOpen && (
+        <ReportReasonModal
+          open={reportOpen}
+          onClose={() => setReportOpen(false)}
+          subjectLabel={post.authorName ?? "this post"}
+          kind="post"
+          homeReport={{ targetType: "community_post", targetId: String(post.id) }}
+        />
+      )}
+      <ContentModerationDialog
+        mode={moderationMode}
+        onClose={() => setModerationMode(null)}
+        targetType="community_post"
+        targetId={String(post.id)}
+        subjectLabel={post.authorName ?? "this member"}
+        onContentRemoved={() => onDeleted(post.id)}
+      />
     </article>
   )
 }

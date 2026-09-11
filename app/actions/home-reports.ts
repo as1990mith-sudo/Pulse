@@ -16,6 +16,8 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import {
+  communityComment,
+  communityPost,
   feedComment,
   feedPost,
   homeMembership,
@@ -347,11 +349,15 @@ export async function removeMemberFromHome(handle: string, targetUserId: string)
 }
 
 // ── Admin content moderation ───────────────────────────────────────────────────
-// Posts carry a soft-delete flag (hidden from every feed read); comments have no
-// such flag and are hard-deleted, matching the existing author-delete behaviour.
+// Target vocabulary spanning the two content systems this queue can act on: the
+// main feed (`post`/`comment`) and Community Help (`community_post`/
+// `community_comment`). Feed posts and both community kinds soft-delete; only
+// feed comments are hard-deleted (they carry no `deleted` flag).
+export type ModerationTargetType = "post" | "comment" | "community_post" | "community_comment"
+
 export async function removeReportedContent(
   handle: string,
-  targetType: "post" | "comment",
+  targetType: ModerationTargetType,
   targetId: string,
 ): Promise<void> {
   const { home, userId, actorName } = await requireReportManager(handle)
@@ -368,6 +374,42 @@ export async function removeReportedContent(
     await recordAction({
       homeId: home.id,
       targetUserId: post.userId,
+      action: "content_removed",
+      adminId: userId,
+      adminName: actorName,
+    })
+  } else if (targetType === "community_post") {
+    const pid = Number(targetId)
+    if (!Number.isInteger(pid)) return
+    const [post] = await db
+      .select({ userId: communityPost.userId, homeId: communityPost.homeId })
+      .from(communityPost)
+      .where(eq(communityPost.id, pid))
+    if (!post || post.homeId !== home.id) throw new Error("That post isn't in this Home.")
+    // Community posts carry the same soft-delete flag as feed posts.
+    await db.update(communityPost).set({ deleted: true }).where(eq(communityPost.id, pid))
+    await recordAction({
+      homeId: home.id,
+      targetUserId: post.userId,
+      action: "content_removed",
+      adminId: userId,
+      adminName: actorName,
+    })
+  } else if (targetType === "community_comment") {
+    const cid = Number(targetId)
+    if (!Number.isInteger(cid)) return
+    const [row] = await db
+      .select({ userId: communityComment.userId, homeId: communityPost.homeId })
+      .from(communityComment)
+      .innerJoin(communityPost, eq(communityComment.postId, communityPost.id))
+      .where(eq(communityComment.id, cid))
+    if (!row || row.homeId !== home.id) throw new Error("That comment isn't in this Home.")
+    // Community comments carry a soft-delete flag (feed comments do not), so the
+    // reply is hidden from every read rather than hard-deleted.
+    await db.update(communityComment).set({ deleted: true }).where(eq(communityComment.id, cid))
+    await recordAction({
+      homeId: home.id,
+      targetUserId: row.userId,
       action: "content_removed",
       adminId: userId,
       adminName: actorName,
@@ -391,6 +433,7 @@ export async function removeReportedContent(
     })
   }
   revalidatePath("/feed")
+  revalidatePath("/chatrooms")
   revalidatePath(`/org/${handle}/admin/reports`)
 }
 
@@ -402,7 +445,7 @@ export async function removeReportedContent(
 // main cross-Home feed routes each action to the correct Home's authority.
 
 async function resolveContentHome(
-  targetType: "post" | "comment",
+  targetType: ModerationTargetType,
   targetId: string,
 ): Promise<{ homeId: string; authorId: string; handle: string } | null> {
   if (targetType === "post") {
@@ -412,6 +455,31 @@ async function resolveContentHome(
       .select({ userId: feedPost.userId, homeId: feedPost.homeId })
       .from(feedPost)
       .where(eq(feedPost.id, pid))
+    if (!row || !row.homeId) return null
+    const h = await getHandleForHome(row.homeId)
+    if (!h) return null
+    return { homeId: row.homeId, authorId: row.userId, handle: h }
+  }
+  if (targetType === "community_post") {
+    const pid = Number(targetId)
+    if (!Number.isInteger(pid)) return null
+    const [row] = await db
+      .select({ userId: communityPost.userId, homeId: communityPost.homeId })
+      .from(communityPost)
+      .where(eq(communityPost.id, pid))
+    if (!row || !row.homeId) return null
+    const h = await getHandleForHome(row.homeId)
+    if (!h) return null
+    return { homeId: row.homeId, authorId: row.userId, handle: h }
+  }
+  if (targetType === "community_comment") {
+    const cid = Number(targetId)
+    if (!Number.isInteger(cid)) return null
+    const [row] = await db
+      .select({ userId: communityComment.userId, homeId: communityPost.homeId })
+      .from(communityComment)
+      .innerJoin(communityPost, eq(communityComment.postId, communityPost.id))
+      .where(eq(communityComment.id, cid))
     if (!row || !row.homeId) return null
     const h = await getHandleForHome(row.homeId)
     if (!h) return null
@@ -446,7 +514,7 @@ async function getHandleForHome(homeId: string): Promise<string | null> {
  * comments), so the authorisation and audit trail are identical.
  */
 export async function moderateRemoveContent(
-  targetType: "post" | "comment",
+  targetType: ModerationTargetType,
   targetId: string,
 ): Promise<{ ok: true }> {
   const resolved = await resolveContentHome(targetType, targetId)
@@ -457,7 +525,7 @@ export async function moderateRemoveContent(
 
 /** Suspend the author of a post/comment straight from its ⋮ menu. */
 export async function moderateSuspendAuthor(
-  targetType: "post" | "comment",
+  targetType: ModerationTargetType,
   targetId: string,
   duration: SuspensionDurationId,
   reason?: string | null,
@@ -470,7 +538,7 @@ export async function moderateSuspendAuthor(
 
 /** Remove the author of a post/comment from the Home, straight from its ⋮ menu. */
 export async function moderateRemoveAuthor(
-  targetType: "post" | "comment",
+  targetType: ModerationTargetType,
   targetId: string,
 ): Promise<{ ok: true }> {
   const resolved = await resolveContentHome(targetType, targetId)

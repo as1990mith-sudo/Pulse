@@ -4,7 +4,12 @@ import { useState, useTransition } from "react"
 import { Ban, Loader2, Trash2, UserMinus } from "lucide-react"
 import { toast } from "sonner"
 import { SUSPENSION_DURATIONS, type SuspensionDurationId } from "@/lib/home/moderation"
-import { moderateRemoveAuthor, moderateRemoveContent, moderateSuspendAuthor } from "@/app/actions/home-reports"
+import {
+  moderateRemoveAuthor,
+  moderateRemoveContent,
+  moderateSuspendAuthor,
+  type ModerationTargetType,
+} from "@/app/actions/home-reports"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -33,7 +38,7 @@ export function ContentModerationDialog({
 }: {
   mode: ModerationMode
   onClose: () => void
-  targetType: "post" | "comment"
+  targetType: ModerationTargetType
   targetId: string
   subjectLabel: string
   /** Called after a successful delete so the surface can hide the row. */
@@ -44,7 +49,7 @@ export function ContentModerationDialog({
 
   if (!mode) return null
 
-  const noun = targetType === "post" ? "post" : "comment"
+  const noun = targetType === "post" || targetType === "community_post" ? "post" : "comment"
 
   const run = (fn: () => Promise<unknown>, successMsg: string, after?: () => void) => {
     startTransition(async () => {

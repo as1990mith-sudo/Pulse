@@ -38,12 +38,19 @@ export function reportReasonLabel(id: string): string {
 }
 
 // ── Target ───────────────────────────────────────────────────────────────────
-export type ReportTargetType = "member" | "post" | "comment"
+export type ReportTargetType =
+  | "member"
+  | "post"
+  | "comment"
+  | "community_post"
+  | "community_comment"
 
 export const REPORT_TARGET_LABEL: Record<ReportTargetType, string> = {
   member: "Member",
   post: "Post",
   comment: "Comment",
+  community_post: "Post",
+  community_comment: "Comment",
 }
 
 // ── Status ─────────────────────────────────────────────────────────────────��─
