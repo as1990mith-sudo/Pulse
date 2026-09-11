@@ -118,7 +118,7 @@ export function ArticlesHub({
   const showFeatured = isDefaultView && featured
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-24 pt-4 sm:px-6">
+    <div className="mx-auto w-full max-w-3xl px-4 pb-24 pt-4 font-display sm:px-6">
       {/* Search — refined surface with a soft focus ring; the My Articles
           control sits beside it as a quiet ghost button so it never competes. */}
       <div className="mb-6 flex items-center gap-2.5">
