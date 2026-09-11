@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { BadgeCheck, MoreHorizontal, Copy, Pencil, Trash2, Send, X, Flag } from "lucide-react"
+import { BadgeCheck, MoreHorizontal, Copy, Pencil, Trash2, Send, X, Flag, Ban, UserMinus } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import { LikeHeart } from "@/components/like-heart"
 import { ReportReasonModal } from "@/components/report-reason-modal"
+import { ContentModerationDialog, type ModerationMode } from "@/components/content-moderation-dialog"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -113,6 +114,13 @@ export type CommentThreadProps = {
    * Defaults to false so surfaces outside a Home context are unaffected.
    */
   enableReporting?: boolean
+  /**
+   * When true, Home Admins (viewers holding `reports.manage` in this post's
+   * Home) get direct Delete / Suspend author / Remove from Home actions on
+   * other members' comments. Resolved per-post server-side and passed down as
+   * the parent post's `canModerate`. Defaults to false.
+   */
+  canModerate?: boolean
 }
 
 /**
@@ -138,6 +146,7 @@ export function CommentThread({
   personalImage = null,
   personalInitials = "",
   enableReporting = false,
+  canModerate = false,
 }: CommentThreadProps) {
   // Delete window inherits the edit/general window unless explicitly overridden.
   const deleteWindow = enforceDeleteWindow ?? enforceTimeWindows
@@ -198,6 +207,7 @@ export function CommentThread({
               personalImage={personalImage}
               personalInitials={personalInitials}
               enableReporting={enableReporting}
+              canModerate={canModerate}
             />
           </li>
         ))}
@@ -243,6 +253,7 @@ function CommentNode({
   personalImage = null,
   personalInitials = "",
   enableReporting = false,
+  canModerate = false,
 }: {
   comment: ThreadComment
   depth: number
@@ -264,6 +275,7 @@ function CommentNode({
   personalImage?: string | null
   personalInitials?: string
   enableReporting?: boolean
+  canModerate?: boolean
 }) {
   const replies = repliesByParent.get(comment.id) ?? []
   const [collapsed, setCollapsed] = useState(true)
@@ -289,6 +301,7 @@ function CommentNode({
         personalImage={personalImage}
         personalInitials={personalInitials}
         enableReporting={enableReporting}
+        canModerate={canModerate}
       />
 
       {replies.length > 0 && (
@@ -328,6 +341,7 @@ function CommentNode({
                     personalImage={personalImage}
                     personalInitials={personalInitials}
                     enableReporting={enableReporting}
+                    canModerate={canModerate}
                   />
                 </li>
               ))}
@@ -358,6 +372,7 @@ function CommentItem({
   personalImage = null,
   personalInitials = "",
   enableReporting = false,
+  canModerate = false,
 }: {
   comment: ThreadComment
   canInteract: boolean
@@ -378,6 +393,7 @@ function CommentItem({
   personalImage?: string | null
   personalInitials?: string
   enableReporting?: boolean
+  canModerate?: boolean
 }) {
   const [liked, setLiked] = useState(comment.liked)
   const [likes, setLikes] = useState(comment.likes)
@@ -395,6 +411,7 @@ function CommentItem({
   const [edited, setEdited] = useState(comment.edited)
   const [copied, setCopied] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
+  const [moderationMode, setModerationMode] = useState<ModerationMode>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   let pressTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -448,6 +465,14 @@ function CommentItem({
   // Members can report someone else's comment into the owning Home's queue.
   if (enableReporting && !comment.isSelf && comment.authorId) {
     actions.push({ label: "Report", icon: Flag, onClick: () => setReportOpen(true) })
+  }
+  // Home Admins get direct discipline on other members' comments. The server
+  // action re-checks `reports.manage` and resolves the Home from the comment, so
+  // showing these is safe even though the flag is passed down from the post.
+  if (canModerate && !comment.isSelf && comment.authorId) {
+    actions.push({ label: "Delete comment", icon: Trash2, destructive: true, onClick: () => setModerationMode("delete") })
+    actions.push({ label: `Suspend ${comment.name}`, icon: Ban, destructive: true, onClick: () => setModerationMode("suspend") })
+    actions.push({ label: "Remove from Home", icon: UserMinus, destructive: true, onClick: () => setModerationMode("remove") })
   }
   const hasMenu = actions.length > 0
 
@@ -697,6 +722,14 @@ function CommentItem({
           homeReport={{ targetType: "comment", targetId: String(comment.id) }}
         />
       )}
+      <ContentModerationDialog
+        mode={moderationMode}
+        onClose={() => setModerationMode(null)}
+        targetType="comment"
+        targetId={String(comment.id)}
+        subjectLabel={comment.name}
+        onContentRemoved={() => setDeleted(true)}
+      />
     </div>
   )
 }

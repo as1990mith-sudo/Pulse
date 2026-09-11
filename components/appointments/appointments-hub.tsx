@@ -1099,7 +1099,7 @@ function BookFlow({
 
           {/* Sticky selection bar */}
           {selectedSlot && (
-            <div className="sticky bottom-4 z-10 mt-6 animate-in fade-in-0 slide-in-from-bottom-4 duration-300">
+            <div className="sticky bottom-24 z-10 mt-6 animate-in fade-in-0 slide-in-from-bottom-4 duration-300">
               <div className="rounded-2xl border border-border bg-popover/95 p-3 shadow-floating backdrop-blur-md">
                 <div className="flex items-center justify-between gap-3 px-1 pb-2.5">
                   <div className="flex min-w-0 items-center gap-2.5">

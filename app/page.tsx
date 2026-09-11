@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Clock, Calendar, BookHeart, Quote, Plus, Pencil } from "lucide-react"
+import { Clock, Calendar, BookHeart, Quote, Plus, Pencil, Megaphone } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
 import { DevotionalInteractions } from "@/components/devotional-interactions"
 import { Button } from "@/components/ui/button"
@@ -59,7 +59,7 @@ export default async function DevotionalPage() {
             </>
           ) : (
             <p className="max-w-md text-pretty text-muted-foreground">
-              {home.name}&apos;s daily devotional will appear here as soon as an admin publishes one.
+              {home.name}&apos;s latest notice or devotional will appear here as soon as an admin publishes one.
             </p>
           )}
         </main>
@@ -88,11 +88,21 @@ export default async function DevotionalPage() {
           <div className="relative flex flex-col gap-4 p-6 pt-24 sm:p-8 sm:pt-32">
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
-                <Calendar className="size-3.5" /> Daily Devotional
+                {d.kind === "notice" ? (
+                  <>
+                    <Megaphone className="size-3.5" /> Notice
+                  </>
+                ) : (
+                  <>
+                    <Calendar className="size-3.5" /> Daily Devotional
+                  </>
+                )}
               </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-foreground/5 px-3 py-1 text-xs font-medium text-muted-foreground">
-                <Clock className="size-3.5" /> {d.readingMinutes} min read
-              </span>
+              {d.kind === "devotional" && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-foreground/5 px-3 py-1 text-xs font-medium text-muted-foreground">
+                  <Clock className="size-3.5" /> {d.readingMinutes} min read
+                </span>
+              )}
               {canManage && (
                 <Link
                   href={manageHref}
@@ -108,24 +118,28 @@ export default async function DevotionalPage() {
         </section>
 
         <article className="mt-8 space-y-8">
-          {/* Scripture pull-quote with a large decorative quote mark. */}
-          <blockquote className="relative overflow-hidden rounded-2xl border border-border/60 bg-card p-6 sm:p-7">
-            <Quote className="absolute -right-2 -top-2 size-20 text-primary/10" aria-hidden="true" />
-            <p className="relative text-pretty text-xl font-medium leading-relaxed sm:text-2xl">{`"${d.verse}"`}</p>
-            <footer className="relative mt-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-primary">
-              <span className="h-px w-6 bg-primary/40" aria-hidden="true" />
-              {d.verseRef}
-            </footer>
-          </blockquote>
+          {/* Scripture pull-quote — devotional only. A notice carries no verse. */}
+          {d.kind === "devotional" && d.verse && (
+            <blockquote className="relative overflow-hidden rounded-2xl border border-border/60 bg-card p-6 sm:p-7">
+              <Quote className="absolute -right-2 -top-2 size-20 text-primary/10" aria-hidden="true" />
+              <p className="relative text-pretty text-xl font-medium leading-relaxed sm:text-2xl">{`"${d.verse}"`}</p>
+              {d.verseRef && (
+                <footer className="relative mt-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-primary">
+                  <span className="h-px w-6 bg-primary/40" aria-hidden="true" />
+                  {d.verseRef}
+                </footer>
+              )}
+            </blockquote>
+          )}
 
-          {/* Reading column: left-aligned, roomy line-height and a drop cap on
-              the opening paragraph for a refined, easy-to-read flow. */}
+          {/* Reading column. The drop cap is a devotional flourish; a notice reads
+              as a plain, evenly-weighted announcement. */}
           <div className="space-y-5">
             {d.body.map((paragraph, i) => (
               <p
                 key={i}
                 className={
-                  i === 0
+                  d.kind === "devotional" && i === 0
                     ? "text-pretty text-[1.0625rem] leading-8 text-foreground first-letter:float-left first-letter:mr-3 first-letter:mt-1 first-letter:text-6xl first-letter:font-bold first-letter:leading-[0.8] first-letter:text-primary sm:text-lg"
                     : "text-pretty text-[1.0625rem] leading-8 text-foreground sm:text-lg"
                 }
@@ -135,15 +149,15 @@ export default async function DevotionalPage() {
             ))}
           </div>
 
-          {/* Prayer callout. */}
-          <div className="rounded-2xl border border-primary/25 bg-primary/[0.06] p-6 sm:p-7">
-            <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary">
-              <BookHeart className="size-4" /> A prayer for today
-            </h2>
-            <p className="mt-3 text-pretty text-[1.0625rem] leading-8 text-foreground sm:text-lg">
-              {d.prayer}
-            </p>
-          </div>
+          {/* Prayer callout — devotional only, and only when a prayer was written. */}
+          {d.kind === "devotional" && d.prayer && (
+            <div className="rounded-2xl border border-primary/25 bg-primary/[0.06] p-6 sm:p-7">
+              <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary">
+                <BookHeart className="size-4" /> A prayer for today
+              </h2>
+              <p className="mt-3 text-pretty text-[1.0625rem] leading-8 text-foreground sm:text-lg">{d.prayer}</p>
+            </div>
+          )}
 
           <DevotionalInteractions
             title={d.title}

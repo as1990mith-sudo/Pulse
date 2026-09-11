@@ -81,6 +81,12 @@ export type CommentSheetProps = {
    * derived server-side from the comment. Defaults to false.
    */
   enableReporting?: boolean
+  /**
+   * Enables direct Home Admin moderation (Delete / Suspend / Remove) on other
+   * members' comments. Pass the parent post's `canModerate`; the owning Home is
+   * derived server-side from the comment. Defaults to false.
+   */
+  canModerate?: boolean
 }
 
 /**
@@ -113,6 +119,7 @@ export function CommentSheet({
   heightClassName,
   homeVoice = null,
   enableReporting = false,
+  canModerate = false,
 }: CommentSheetProps) {
   const [draft, setDraft] = useState("")
   // Admins default to their Home's voice, matching the main composer.

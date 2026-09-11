@@ -446,7 +446,7 @@ export function FeedVideo({
     // to the *visible* crop rather than the video's full natural height. Without
     // this the wrapper grew to the clip's intrinsic (e.g. 9:16) height, centering
     // the play button off-frame and pushing the controls out of the 4:5 view.
-    <div className="group absolute inset-0 overflow-hidden bg-black">
+    <div className="group absolute inset-0 isolate overflow-hidden bg-black [transform:translateZ(0)]">
       <video
         ref={ref}
         src={posterSrc}
@@ -456,7 +456,7 @@ export function FeedVideo({
         muted={effectiveMuted}
         preload="metadata"
         {...exclusivePlaybackProps}
-        className={cn("h-full w-full", className)}
+        className={cn("h-full w-full [backface-visibility:hidden] [transform:translateZ(0)]", className)}
         aria-label={surfaceLabel}
         onClick={surfaceClick}
         onPlay={() => {

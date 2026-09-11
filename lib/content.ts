@@ -188,6 +188,7 @@ export async function getLatestDevotional(homeId?: string): Promise<Devotional |
   if (!row) return null
   return {
     date: row.publishDate,
+    kind: row.kind === "notice" ? "notice" : "devotional",
     title: row.title,
     verseRef: row.verseRef,
     verse: row.verse,

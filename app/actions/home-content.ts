@@ -22,8 +22,11 @@ async function requireContentManager(handle: string) {
   return { user: session.user, homeId: home.id, handle }
 }
 
+export type HomeContentKind = "devotional" | "notice"
+
 export type HomeDevotionalRow = {
   id: number
+  kind: HomeContentKind
   title: string
   verseRef: string
   verse: string
@@ -50,6 +53,7 @@ export async function getHomeDevotionals(handle: string): Promise<HomeDevotional
     .orderBy(desc(devotional.lastPostedAt))
   return rows.map((r) => ({
     id: r.id,
+    kind: (r.kind === "notice" ? "notice" : "devotional") as HomeContentKind,
     title: r.title,
     verseRef: r.verseRef,
     verse: r.verse,
@@ -68,9 +72,12 @@ export type HomeDevotionalInput = {
   handle: string
   // When present, updates that existing devotional instead of creating a new one.
   id?: number
+  // Which content type this is. A "notice" needs only a title + body; a
+  // "devotional" additionally requires scripture reference + verse.
+  kind?: HomeContentKind
   title: string
-  verseRef: string
-  verse: string
+  verseRef?: string
+  verse?: string
   body: string
   prayer?: string
   cover?: string | null
@@ -91,12 +98,20 @@ export type HomeDevotionalInput = {
  */
 export async function saveHomeDevotional(input: HomeDevotionalInput) {
   const { homeId } = await requireContentManager(input.handle)
+  const kind: HomeContentKind = input.kind === "notice" ? "notice" : "devotional"
   const title = input.title.trim()
-  const verseRef = input.verseRef.trim()
-  const verse = input.verse.trim()
+  const verseRef = (input.verseRef ?? "").trim()
+  const verse = (input.verse ?? "").trim()
   const body = input.body.trim()
-  if (!title || !verseRef || !verse || !body) {
-    throw new Error("Title, reference, verse and body are all required.")
+  if (kind === "notice") {
+    // A general notice is title + body only — no scripture scaffolding.
+    if (!title || !body) {
+      throw new Error("Title and body are both required.")
+    }
+  } else {
+    if (!title || !verseRef || !verse || !body) {
+      throw new Error("Title, reference, verse and body are all required.")
+    }
   }
 
   const status: HomeDevotionalStatus = input.status ?? "published"
@@ -110,7 +125,10 @@ export async function saveHomeDevotional(input: HomeDevotionalInput) {
 
   const now = new Date()
   const fields = {
+    kind,
     title,
+    // Notices carry no scripture — persist empty strings so the NOT NULL columns
+    // are satisfied without inventing a reference/verse.
     verseRef,
     verse,
     body,

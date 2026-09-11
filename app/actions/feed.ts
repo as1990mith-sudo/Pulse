@@ -18,7 +18,7 @@ import {
 } from "@/lib/db/schema"
 import { getActiveHomeContext } from "@/lib/home/active-home"
 import { ITESTIFY_CHANNEL } from "@/lib/qotd-types"
-import { canPinInScope, MAX_PINNED_PER_SCOPE, pinWithinCap } from "@/lib/home/can-pin"
+import { canPinInScope, moderatableHomeIds, MAX_PINNED_PER_SCOPE, pinWithinCap } from "@/lib/home/can-pin"
 import { getProfileScope, scopeToHome } from "@/lib/home/profile-scope"
 import { resolvePublishingIdentity } from "@/lib/home/publishing"
 import { assertNotSuspended } from "@/lib/home/suspension"
@@ -122,6 +122,9 @@ export type FeedCommentView = {
   edited: boolean
   postedAt: string
   createdAtMs: number
+  // Whether THIS viewer may moderate this comment (delete it, discipline its
+  // author). Resolved once per feed scope from `reports.manage`, like canPin.
+  canModerate?: boolean
 }
 
 export type FeedPostView = {
@@ -176,6 +179,10 @@ export type FeedPostView = {
   // Whether THIS viewer may pin/unpin. Resolved once per feed read rather than
   // per post, since the permission is a property of the feed scope.
   canPin?: boolean
+  // Whether THIS viewer may moderate this post (delete it, discipline its
+  // author). Resolved once per feed scope from `reports.manage`, like canPin.
+  // Only surfaces on other people's posts — you never "moderate" your own.
+  canModerate?: boolean
 }
 
 /**
@@ -451,12 +458,21 @@ export async function getFeed(): Promise<FeedPostView[]> {
     getLikedSet(currentUserId, "feed_comment", comments.map((c) => c.id)),
   ])
 
+  // Moderation authority is per-Home, and this feed is cross-Home, so resolve
+  // the subset of Homes present here that the viewer may moderate in one pass.
+  // A post/comment is moderatable iff the viewer is not its author and holds
+  // reports.manage in that post's Home.
+  const moderatableHomes = await moderatableHomeIds(posts.map((p) => p.homeId))
+  const postHomeById = new Map(posts.map((p) => [p.id, p.homeId] as const))
+
   // Group comments by post in a single pass (O(n)) so building each post's
   // thread is a Map lookup instead of re-filtering the whole comment list per
   // post (which was O(posts × comments)).
   const commentsByPost = new Map<number, FeedCommentView[]>()
   for (const c of comments) {
     const view = toCommentView(c, infoMap, currentUserId, likedCommentSet, orgMap)
+    const homeId = postHomeById.get(c.postId)
+    view.canModerate = !view.isSelf && !!homeId && moderatableHomes.has(homeId)
     const arr = commentsByPost.get(c.postId)
     if (arr) arr.push(view)
     else commentsByPost.set(c.postId, [view])
@@ -482,11 +498,10 @@ export async function getFeed(): Promise<FeedPostView[]> {
     edited: !!p.editedAt,
     isFollowing: followingIds.has(p.userId),
     isSelf: currentUserId === p.userId,
+    canModerate: currentUserId !== p.userId && !!p.homeId && moderatableHomes.has(p.homeId),
     rating: p.rating ?? null,
     mentionedMe: currentUserId ? (p.mentions ?? []).some((m) => m.userId === currentUserId) : false,
-    comments: comments
-      .filter((c) => c.postId === p.id)
-      .map((c) => toCommentView(c, infoMap, currentUserId, likedCommentSet, orgMap)),
+    comments: (commentsByPost.get(p.id) ?? []),
   }))
   // Polls hang off the post, so they are hydrated after the view is built.
   return attachPolls(views, currentUserId)
@@ -911,6 +926,20 @@ export async function getChannelFeed(
     ...comments.map((c) => c.organizationId),
   ])
 
+  // Per-Home moderation authority (this room can be Universal or a single Home,
+  // but resolve as a set so the rule matches the cross-Home feed exactly).
+  const moderatableHomes = await moderatableHomeIds(posts.map((p) => p.homeId))
+  const postHomeById = new Map(posts.map((p) => [p.id, p.homeId] as const))
+  const commentsByPost = new Map<number, FeedCommentView[]>()
+  for (const c of comments) {
+    const view = toCommentView(c, infoMap, currentUserId, likedCommentSet, orgMap)
+    const homeId = postHomeById.get(c.postId)
+    view.canModerate = !view.isSelf && !!homeId && moderatableHomes.has(homeId)
+    const arr = commentsByPost.get(c.postId)
+    if (arr) arr.push(view)
+    else commentsByPost.set(c.postId, [view])
+  }
+
   const views = posts.map((p) => ({
     id: p.id,
     authorId: p.userId,
@@ -931,14 +960,13 @@ export async function getChannelFeed(
     edited: !!p.editedAt,
     isFollowing: followingIds.has(p.userId),
     isSelf: currentUserId === p.userId,
+    canModerate: currentUserId !== p.userId && !!p.homeId && moderatableHomes.has(p.homeId),
     // Carry the 1–5 star rating so iTestify testimony tiles can render it. This
     // channel is exactly where ratings live, so omitting it here made every
     // testimony card look unrated even though the value was saved.
     rating: p.rating ?? null,
     mentionedMe: currentUserId ? (p.mentions ?? []).some((m) => m.userId === currentUserId) : false,
-    comments: comments
-      .filter((c) => c.postId === p.id)
-      .map((c) => toCommentView(c, infoMap, currentUserId, likedCommentSet, orgMap)),
+    comments: (commentsByPost.get(p.id) ?? []),
   }))
   // Polls hang off the post, so they are hydrated after the view is built.
   return attachPolls(views, currentUserId)

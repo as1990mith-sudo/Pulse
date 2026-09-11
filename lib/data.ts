@@ -66,6 +66,9 @@ export type DevotionalComment = {
 
 export type Devotional = {
   date: string
+  // "devotional" (scripture-led) or "notice" (general announcement). Drives how
+  // the Home landing renders it — a notice hides the scripture/prayer blocks.
+  kind: "devotional" | "notice"
   title: string
   verseRef: string
   verse: string
