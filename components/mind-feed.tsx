@@ -1905,10 +1905,13 @@ export function PostCard({
                       <DropdownMenuSeparator className="bg-white/10" />
                     </>
                   )}
-                  {/* Non-owner: report opens the reason picker modal. */}
-                  <DropdownMenuItem onClick={() => setReportOpen(true)} className={POPUP_MENU_ITEM}>
-                    <Flag className="text-destructive" /> Report post
-                  </DropdownMenuItem>
+                  {/* Report is for ordinary members. Moderators of this post's
+                      Home don't report — they act directly (below). */}
+                  {!post.canModerate && (
+                    <DropdownMenuItem onClick={() => setReportOpen(true)} className={POPUP_MENU_ITEM}>
+                      <Flag className="text-destructive" /> Report post
+                    </DropdownMenuItem>
+                  )}
 
                   {/* Admin moderation: shown only to viewers who hold
                       reports.manage in THIS post's Home (resolved server-side as
