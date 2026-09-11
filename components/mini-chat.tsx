@@ -82,6 +82,16 @@ export function useMiniChat(): MiniChatContextValue {
   return ctx
 }
 
+/**
+ * Like useMiniChat, but returns null instead of throwing when no provider is
+ * mounted. Lets shared components (e.g. ProfilePreview) opt into the floating
+ * chat popup when it's available — such as inside the immersive live room — and
+ * fall back to plain navigation everywhere else.
+ */
+export function useOptionalMiniChat(): MiniChatContextValue | null {
+  return useContext(MiniChatContext)
+}
+
 export function MiniChatProvider({ children }: { children: ReactNode }) {
   const [openChats, setOpenChats] = useState<ActiveChat[]>([])
   const [expandedChatId, setExpandedChatId] = useState<number | null>(null)

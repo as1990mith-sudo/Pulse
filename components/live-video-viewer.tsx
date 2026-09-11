@@ -654,8 +654,11 @@ export function LiveVideoViewer({
           )}
 
           {/* Host + guest tiles — remote peers use remount-safe callback refs,
-              so they can freely reflow as the stage layout changes. */}
-          {stageTiles.map((t, i) => {
+              so they can freely reflow as the stage layout changes. While the
+              host is sharing their screen, EVERY camera tile is hidden so the
+              shared screen is the entire experience (spec: no tiles, no PiP,
+              nothing over the share). */}
+          {!remoteProjection && stageTiles.map((t, i) => {
             if (t.kind === "host") {
               return hostPeer ? (
                 <StagePeerView
@@ -701,8 +704,9 @@ export function LiveVideoViewer({
           )}
 
           {/* My own self-view — a persistent element (never remounted) so my
-              camera track never detaches as the stage reflows. */}
-          {canPublish && selfRect && (
+              camera track never detaches as the stage reflows. Hidden entirely
+              while the host is sharing their screen so nothing sits over it. */}
+          {canPublish && selfRect && !remoteProjection && (
             <div
               style={stageRectStyle(selfRect)}
               className={cn(

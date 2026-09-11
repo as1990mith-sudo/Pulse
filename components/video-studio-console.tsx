@@ -10,6 +10,7 @@ import {
   Mic,
   MicOff,
   MonitorPlay,
+  MonitorUp,
   MoreVertical,
   Music,
   Pin,
@@ -61,12 +62,12 @@ import { ShareSheet } from "@/components/share-sheet"
 import { ConversationVideo } from "@/components/conversation/conversation-video"
 import { LiveSetupSheet } from "@/components/live/live-setup-sheet"
 import { ProjectionStage } from "@/components/live/projection-stage"
-import { SelfViewPip } from "@/components/live/self-view-pip"
 import { CoverArt } from "@/components/cover-art"
 import { MarqueeTitle } from "@/components/marquee-title"
 import type { ShareTarget } from "@/lib/share-types"
 import { getAvatarColor, getInitials } from "@/lib/identity"
 import { broadcastStageRects, stageRectStyle, type StageRect } from "@/lib/broadcast-stage"
+import { useIsDesktop } from "@/hooks/use-is-desktop"
 import { cn } from "@/lib/utils"
 
 function formatElapsed(totalSeconds: number): string {
@@ -336,6 +337,10 @@ export function VideoStudioConsole({
   // After the room has ended for everyone, the host is asked whether to save the
   // session as an episode. Holds the metadata needed to publish if they say yes.
   const [saveDecision, setSaveDecision] = useState<{ duration: string; durationSec: number } | null>(null)
+  // Once the host chooses save/discard we're leaving the studio. This keeps the
+  // pre-live setup sheet (gated on !live) from flashing back onto the screen
+  // during the exit transition — the bug that made "Save episode" go blank.
+  const [finishing, setFinishing] = useState(false)
   // In-flight recording finalization, started the instant the host ends the live
   // so it never blocks the room from closing for participants.
   const recordingPromiseRef = useRef<Promise<Blob | null> | null>(null)
@@ -347,6 +352,9 @@ export function VideoStudioConsole({
   const [audioOutOpen, setAudioOutOpen] = useState(false)
   const audioOut = useAudioOutput()
   const AudioOutIcon = audioRouteIcon(audioOut.route)
+  // Screen sharing is offered ONLY on real desktop browsers; the control is
+  // hidden entirely on mobile Broadcast.
+  const isDesktop = useIsDesktop()
   // Tap the camera surface to show/hide the bottom control dock (mic, camera,
   // music, etc.), so the host can preview a clean frame.
   const [controlsVisible, setControlsVisible] = useState(true)
@@ -727,6 +735,7 @@ export function VideoStudioConsole({
   // keep using Frequency while it finishes.
   function handleSaveEpisode() {
     const dec = saveDecision
+    setFinishing(true)
     setSaveDecision(null)
     // Server-recorded replays are already being produced by egress + finalized
     // by the webhook into the placeholder episode created at go-live. There's no
@@ -761,6 +770,7 @@ export function VideoStudioConsole({
   // Host confirmed they don't want to save. Drop the recording and leave — the
   // live room already ended when they confirmed.
   function handleDiscardEpisode() {
+    setFinishing(true)
     setSaveDecision(null)
     recordingPromiseRef.current = null
     // For server-recorded sessions, remove the placeholder replay episode (and
@@ -902,6 +912,11 @@ export function VideoStudioConsole({
     : remoteProjection
       ? { name: guests.find((g) => g.identity === remoteProjection.identity)?.name ?? "Guest", role: "Presenter" }
       : null
+  // Full-screen presentation mode: the moment ANY screen share is live (this
+  // host's own, or a called-in guest's), the shared surface becomes the entire
+  // Broadcast — every camera, guest tile, PiP and avatar is hidden beneath it.
+  // Portrait Broadcast only; Conversation (landscape) keeps its paged layout.
+  const presenting = live && orientation !== "landscape" && (screenShareOn || !!remoteProjection)
   // With 3+ people on a portrait Broadcast the stage grows slightly. These flex
   // ratios are kept identical to the viewer (LiveVideoViewer) so the host's
   // video reads at exactly the same height as the audience sees it.
@@ -1133,40 +1148,6 @@ export function VideoStudioConsole({
           </div>
         )}
 
-        {/* Full-stage Video Project — a screen share (local or remote). Fills the
-            broadcast stage above the camera/guests; the host camera continues in
-            its own frame beneath and also appears as the floating thumbnail. */}
-        {live && orientation !== "landscape" && (screenShareOn || remoteProjection) && (
-          // z-30 so it fills the stage above the guest tiles (also z-20) that are
-          // rendered later in the DOM; the presenter chip identifies the source.
-          // Top padding reserves the header band (z-40) so a SHARED SCREEN's
-          // content letterboxes below it instead of hiding behind the host chrome.
-          <div className="absolute inset-0 z-30 pt-[calc(env(safe-area-inset-top)+4rem)]">
-            <ProjectionStage
-              kind="screen"
-              rounded={false}
-              registerSurfaceEl={registerProjectionVideoEl}
-              presenterName={projectionPresenter?.name}
-              presenterRole={projectionPresenter?.role}
-              // Only the host sharing their OWN screen gets the draggable
-              // self-view PiP; for a remote guest's share the host camera stays
-              // in the normal stage/grid.
-              thumbnail={
-                screenShareOn ? (
-                  <SelfViewPip
-                    registerVideoEl={registerSelfPipVideoEl}
-                    camOn={camOn}
-                    mirror={facingMode === "user"}
-                    name={currentUser.name}
-                    image={currentUser.image ?? null}
-                    onToggleCam={() => void toggleCam()}
-                  />
-                ) : undefined
-              }
-            />
-          </div>
-        )}
-
         {/* Legibility scrims */}
         <div
           aria-hidden="true"
@@ -1332,7 +1313,7 @@ export function VideoStudioConsole({
             camera region's overflow-hidden. When the card is taller than the
             screen it scrolls, with safe-area padding so the top (stream title)
             stays clear of the status bar. */}
-        {!live && (
+        {!live && !saveDecision && !finishing && (
           <LiveSetupSheet
             title={title}
             onTitleChange={setTitle}
@@ -1376,8 +1357,7 @@ export function VideoStudioConsole({
               controlsVisible ? "opacity-100" : "pointer-events-none opacity-0",
             )}
           >
-            {/* Flip front/back camera. (Screen sharing was removed from the
-                mobile controls — it no longer works reliably on phones.) */}
+            {/* Flip front/back camera. */}
             <GlassButton
               label="Flip camera"
               onClick={() => void flipCamera()}
@@ -1386,6 +1366,20 @@ export function VideoStudioConsole({
             >
               <SwitchCamera className="size-5" />
             </GlassButton>
+            {/* Screen share — DESKTOP ONLY. Hidden on mobile Broadcast, where it
+                is unreliable. Activating it flips the whole Broadcast into
+                full-screen presentation mode (see `presenting`). */}
+            {isDesktop && canScreenShare && (
+              <GlassButton
+                label={screenShareOn ? "Stop sharing screen" : "Share screen"}
+                onClick={() => void (screenShareOn ? stopScreenShare() : startScreenShare())}
+                disabled={!connected}
+                tone={screenShareOn ? "muted" : "glass"}
+                active={screenShareOn}
+              >
+                <MonitorUp className="size-5" />
+              </GlassButton>
+            )}
             <GlassButton
               label={micOn ? "Mute microphone" : "Unmute microphone"}
               onClick={() => void toggleMic()}
@@ -1485,6 +1479,25 @@ export function VideoStudioConsole({
           placeholder=""
         />
       </div>
+
+      {/* ── Full-screen presentation mode ─────────────────────────────────────
+          When a screen share is live, the shared surface becomes the ENTIRE
+          Broadcast: this root-level overlay fills the viewport (stage + chat),
+          hiding every camera, guest tile, PiP and avatar beneath it (z-30). The
+          header and control dock (z-40) stay above so the host can still stop
+          sharing and end the Broadcast; mics remain fully functional. When the
+          share ends, `presenting` flips false and the normal layout returns. */}
+      {presenting && (
+        <div className="absolute inset-0 z-30 bg-neutral-950">
+          <ProjectionStage
+            kind="screen"
+            rounded={false}
+            registerSurfaceEl={registerProjectionVideoEl}
+            presenterName={projectionPresenter?.name}
+            presenterRole={projectionPresenter?.role}
+          />
+        </div>
+      )}
 
       {rtcError && live && connected && (
         <div className="absolute bottom-2 left-1/2 z-40 flex w-[min(92%,30rem)] -translate-x-1/2 items-center gap-2 rounded-2xl bg-destructive px-3 py-2 text-sm font-medium text-destructive-foreground shadow-lg">

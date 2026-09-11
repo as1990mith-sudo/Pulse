@@ -41,6 +41,7 @@ import { useLiveResourcesOptional } from "@/components/live/resource/resource-co
 import { FloatingMessages } from "@/components/conversation/floating-messages"
 import { ProjectionStage } from "@/components/live/projection-stage"
 import { SelfViewPip } from "@/components/live/self-view-pip"
+import { useIsDesktop } from "@/hooks/use-is-desktop"
 import { ProjectMenu } from "@/components/live/project-menu"
 import {
   blockParticipant,
@@ -295,6 +296,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
 
+  const isDesktop = useIsDesktop()
   const [page, setPage] = useState(0)
   const [dir, setDir] = useState(0)
   const [menuFor, setMenuFor] = useState<string | null>(null)
@@ -335,25 +337,40 @@ export function ConversationVideo(props: ConversationVideoProps) {
     })
   }, [self.identity, self.name, self.image, peers, hostId, gridCohostId])
 
-  // Spotlight: up to two pinned participants floated out of the grid flow.
-  const pinnedSet = new Set(gridPinnedIds)
-  const spotlight = gridPinnedIds
-    .map((id) => tiles.find((t) => t.identity === id))
-    .filter((t): t is Tile => !!t)
-    .slice(0, 2)
+  // A live screen share gets its OWN dedicated first page (spec: shared screen
+  // fills page 1, participants begin on page 2). While it is active the
+  // spotlight band is suppressed so nothing sits over the shared screen.
+  const hasProjection = projectionActive && !!registerProjectionVideoEl
+
+  // Spotlight: up to two pinned participants floated out of the grid flow —
+  // never while a screen share owns page 1.
+  const pinnedSet = new Set(hasProjection ? [] : gridPinnedIds)
+  const spotlight = hasProjection
+    ? []
+    : gridPinnedIds
+        .map((id) => tiles.find((t) => t.identity === id))
+        .filter((t): t is Tile => !!t)
+        .slice(0, 2)
   const rest = tiles.filter((t) => !pinnedSet.has(t.identity))
   const hasSpotlight = spotlight.length > 0
 
-  // Pagination over the non-spotlight tiles.
+  // Pagination over the non-spotlight tiles. When a screen share is active it
+  // occupies page 0 and participants shift to pages 1+.
   const perPage = layout.perPage
-  const pageCount = Math.max(1, Math.ceil(rest.length / perPage))
+  const participantPages = Math.max(1, Math.ceil(rest.length / perPage))
+  const pageCount = hasProjection ? participantPages + 1 : participantPages
   const clampedPage = Math.min(page, pageCount - 1)
   useEffect(() => {
     if (page > pageCount - 1) setPage(Math.max(0, pageCount - 1))
   }, [page, pageCount])
   useEffect(() => setMenuFor(null), [clampedPage])
 
-  const pageTiles = rest.slice(clampedPage * perPage, clampedPage * perPage + perPage)
+  // Page 0 is the shared screen when projecting; otherwise it is participants.
+  const showingProjectionPage = hasProjection && clampedPage === 0
+  const participantPageIndex = hasProjection ? clampedPage - 1 : clampedPage
+  const pageTiles = showingProjectionPage
+    ? []
+    : rest.slice(participantPageIndex * perPage, participantPageIndex * perPage + perPage)
 
   const goto = useCallback(
     (next: number) => {
@@ -738,37 +755,8 @@ export function ConversationVideo(props: ConversationVideoProps) {
 
       {/* ── Participant area ────────────────────────���────────────────────────── */}
       <motion.div layout className="relative min-h-0 flex-1">
-        {/* Video Project band — a screen share becomes the focused surface at the
-            top of the gathering; the participant grid reflows beneath it. */}
-        {projectionActive && registerProjectionVideoEl && (
-          <div className="p-2 pb-0">
-            <div className="aspect-video">
-              <ProjectionStage
-                kind="screen"
-                registerSurfaceEl={registerProjectionVideoEl}
-                presenterName={projectionPresenterName}
-                presenterRole={projectionPresenterRole}
-                // Draggable self-view PiP only when I'm the one sharing my
-                // screen; a remote share keeps my camera in the grid below.
-                thumbnail={
-                  screenShareOn && registerSelfPipVideoEl ? (
-                    <SelfViewPip
-                      registerVideoEl={registerSelfPipVideoEl}
-                      camOn={camOn}
-                      mirror={facingMode === "user"}
-                      name={self.name}
-                      image={self.image ?? null}
-                      onToggleCam={onToggleCam}
-                    />
-                  ) : undefined
-                }
-              />
-            </div>
-          </div>
-        )}
-
         {/* Spotlight band */}
-        {!projectionActive && hasSpotlight && (
+        {!hasProjection && hasSpotlight && (
           <div className="flex flex-col gap-2 p-2 pb-0">
             <div className={cn("grid gap-2", spotlight.length > 1 ? "grid-cols-2" : "grid-cols-1")}>
               {spotlight.map((tile) => (
@@ -780,11 +768,13 @@ export function ConversationVideo(props: ConversationVideoProps) {
           </div>
         )}
 
-        {/* Paged grid of the remaining participants. Sits below whichever focused
-            band is active (projection takes priority over spotlight). */}
+        {/* Paged area. When a screen share is active, page 0 is the dedicated
+            full-page shared screen (nothing over it) and participant pages start
+            at page 1; otherwise the spotlight band (if any) takes the top and the
+            participant grid fills the rest. */}
         <div
           className="absolute inset-0 flex flex-col"
-          style={projectionActive || hasSpotlight ? { top: "38%" } : undefined}
+          style={!hasProjection && hasSpotlight ? { top: "38%" } : undefined}
         >
           <div className="relative min-h-0 flex-1 overflow-hidden">
             <AnimatePresence initial={false} custom={dir} mode="popLayout">
@@ -803,8 +793,21 @@ export function ConversationVideo(props: ConversationVideoProps) {
                   if (info.offset.x < -70 || info.velocity.x < -450) goto(clampedPage + 1)
                   else if (info.offset.x > 70 || info.velocity.x > 450) goto(clampedPage - 1)
                 }}
-                className="absolute inset-0 p-2"
+                className={cn("absolute inset-0", showingProjectionPage ? "" : "p-2")}
               >
+                {showingProjectionPage ? (
+                  // Dedicated shared-screen page: fills the whole page, no tiles,
+                  // no PiP, no participant strip — nothing over the screen.
+                  <div className="absolute inset-0 bg-neutral-950">
+                    <ProjectionStage
+                      kind="screen"
+                      rounded={false}
+                      registerSurfaceEl={registerProjectionVideoEl}
+                      presenterName={projectionPresenterName}
+                      presenterRole={projectionPresenterRole}
+                    />
+                  </div>
+                ) : (
                 <div
                   className="grid h-full gap-2"
                   style={{
@@ -823,6 +826,7 @@ export function ConversationVideo(props: ConversationVideoProps) {
                     {pageTiles.map((tile) => VideoTile({ tile }))}
                   </AnimatePresence>
                 </div>
+                )}
               </motion.div>
             </AnimatePresence>
 
@@ -1001,9 +1005,10 @@ export function ConversationVideo(props: ConversationVideoProps) {
         <DockButton label={camOn ? "Turn camera off" : "Turn camera on"} active={camOn} onClick={onToggleCam}>
           {camOn ? <Video /> : <VideoOff />}
         </DockButton>
-        {/* Host/co-host: the screen-share chooser takes the flip-camera slot.
-            Everyone else keeps flip-camera. */}
-        {isController ? (
+        {/* Host/co-host on DESKTOP: the screen-share chooser takes the
+            flip-camera slot. On mobile the screen-share control is removed
+            entirely, so the controller keeps flip-camera like everyone else. */}
+        {isController && isDesktop ? (
           <ProjectMenu
             canScreenShare={canScreenShare}
             screenShareOn={screenShareOn}

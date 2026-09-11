@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation"
 import { getHomeAdminSection } from "@/lib/home/admin-nav"
 import { getHomeAdminOverview } from "@/app/actions/home"
-import { getMembersDirectory } from "@/app/actions/home-members"
+import { getMembersDirectory, getHomeAdmins } from "@/app/actions/home-members"
 import { defaultQuery } from "@/lib/home/members"
 import { getHomeByHandle, getViewerMembership } from "@/lib/home/access"
 import { homeRoleHasPermission } from "@/lib/home/roles"
@@ -11,6 +11,7 @@ import { getHomeEventRegistrations } from "@/app/actions/event-admin"
 import { EventRegistrationsManager } from "@/components/home/admin/event-registrations-manager"
 import { EventAudienceComposer } from "@/components/home/admin/event-audience-composer"
 import { MembersCommandCentre } from "@/components/home/admin/members/members-command-centre"
+import { AdminsRoster } from "@/components/home/admin/admins/admins-roster"
 import { SubscriptionManager } from "@/components/home/admin/subscription-manager"
 import { SettingsManager } from "@/components/home/admin/settings-manager"
 import { ReviewTabManager } from "@/components/home/admin/review-tab-manager"
@@ -24,6 +25,23 @@ export default async function HomeAdminSectionPage({
   params: Promise<{ handle: string; section: string }>
 }) {
   const { handle, section } = await params
+
+  // "admins" is reached from the ADMINS stat card, not the nav registry, so it
+  // is resolved before the section-meta lookup. It shows only current admins and
+  // their assigned roles, read-only.
+  if (section === "admins") {
+    const admins = await getHomeAdmins(handle)
+    return (
+      <div className="space-y-5">
+        <header>
+          <h1 className="font-display text-xl font-semibold tracking-tight lg:text-2xl">Admins</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Current admins and their assigned roles.</p>
+        </header>
+        <AdminsRoster admins={admins} />
+      </div>
+    )
+  }
+
   const meta = getHomeAdminSection(section)
   // "overview" is the index route; unknown or deprecated slugs 404.
   if (!meta || section === "overview") notFound()

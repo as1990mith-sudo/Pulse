@@ -9,6 +9,7 @@ import { getOrCreateConversation } from "@/app/actions/dm"
 import type { Profile } from "@/lib/profile"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { getAvatarColor, getInitials } from "@/lib/identity"
+import { useOptionalMiniChat } from "@/components/mini-chat"
 import { cn } from "@/lib/utils"
 
 /**
@@ -29,17 +30,26 @@ export function ProfilePreview({
   disabled?: boolean
 }) {
   const [open, setOpen] = useState(false)
+  // Inside a MiniChatProvider (e.g. the immersive live room) the preview opens
+  // the floating profile popup, whose "Message" opens a draggable DM window
+  // ON TOP of the live page — never navigating away behind it. Elsewhere it
+  // falls back to the standalone card, which opens the full Messages thread.
+  const miniChat = useOptionalMiniChat()
   return (
     <>
       <button
         type="button"
         disabled={disabled}
-        onClick={() => !disabled && setOpen(true)}
+        onClick={() => {
+          if (disabled) return
+          if (miniChat) miniChat.openProfile(userId)
+          else setOpen(true)
+        }}
         className={cn("text-left disabled:cursor-default", className)}
       >
         {children}
       </button>
-      {open && <ProfilePreviewCard userId={userId} onClose={() => setOpen(false)} />}
+      {open && !miniChat && <ProfilePreviewCard userId={userId} onClose={() => setOpen(false)} />}
     </>
   )
 }
