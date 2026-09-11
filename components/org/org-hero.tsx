@@ -7,7 +7,6 @@ import type { OrganizationView } from "@/lib/org-types"
 import type { HomeRosterMember } from "@/lib/home/access"
 import { VerifiedBadge } from "@/components/org/verified-badge"
 import { OrgMembersDialog } from "@/components/org/org-members-dialog"
-import { OrgSubscribeButton } from "@/components/org/org-subscribe-button"
 import { OrgVerifyButton } from "@/components/org/org-verify-button"
 import { OrgManageSheet } from "@/components/org/org-manage-sheet"
 import { HomeJoinButton } from "@/components/org/home-join-button"
@@ -102,20 +101,13 @@ export function OrgHero({ org, members = [] }: { org: OrganizationView; members?
             </div>
           ) : (
             <div className="flex w-full max-w-[360px] flex-col items-stretch gap-2.5">
-              {/* Discovery-driven join. Renders only for discoverable Homes and
-                  reflects the viewer's membership state; private Homes show
-                  nothing here and remain key/invite-only. */}
+              {/* Discovery-driven join is the sole primary action. Members
+                  receive Home post notifications by default, so there is no
+                  separate subscribe/notify control here. Renders only for
+                  discoverable Homes and reflects the viewer's membership state;
+                  private Homes show nothing here and remain key/invite-only. */}
               <HomeJoinButton handle={org.handle} className="w-full" />
-              <div className="flex items-center justify-center gap-2.5">
-                <OrgSubscribeButton
-                  organizationId={org.id}
-                  initialSubscribed={org.isSubscribed}
-                  initialNotify={org.notify}
-                  compact
-                  className="min-w-0 flex-1"
-                />
-                {websiteHost && <WebsiteButton href={org.website!} host={websiteHost} />}
-              </div>
+              {websiteHost && <WebsiteButton href={org.website!} host={websiteHost} full />}
             </div>
           )}
 

@@ -1912,7 +1912,13 @@ export function PostCard({
         </div>
       </div>
 
-      <ReportReasonModal open={reportOpen} onClose={() => setReportOpen(false)} subjectLabel={post.user} />
+      <ReportReasonModal
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        subjectLabel={post.user}
+        kind="post"
+        homeReport={{ handle: post.orgHandle ?? "", targetType: "post", targetId: String(post.id) }}
+      />
 
       {/* Dedicated mention report — routes into the shared moderation queue with
           a mention content type via the reportMention server action. */}
@@ -2186,11 +2192,12 @@ export function PostCard({
         homeVoice={homeVoice}
         onLike={handleCommentLike}
         onReply={handleCommentReply}
-        onEdit={handleCommentEdit}
-        onDelete={handleCommentDelete}
-      />
-
-      <ShareSheet
+  onEdit={handleCommentEdit}
+  onDelete={handleCommentDelete}
+  enableReporting
+  />
+  
+  <ShareSheet
         target={shareTarget}
         open={shareOpen}
         onClose={() => setShareOpen(false)}

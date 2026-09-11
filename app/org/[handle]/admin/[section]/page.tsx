@@ -12,6 +12,8 @@ import { EventRegistrationsManager } from "@/components/home/admin/event-registr
 import { EventAudienceComposer } from "@/components/home/admin/event-audience-composer"
 import { MembersCommandCentre } from "@/components/home/admin/members/members-command-centre"
 import { AdminsRoster } from "@/components/home/admin/admins/admins-roster"
+import { ReportsManager } from "@/components/home/admin/reports/reports-manager"
+import { getHomeReports } from "@/app/actions/home-reports"
 import { SubscriptionManager } from "@/components/home/admin/subscription-manager"
 import { SettingsManager } from "@/components/home/admin/settings-manager"
 import { ReviewTabManager } from "@/components/home/admin/review-tab-manager"
@@ -64,6 +66,13 @@ export default async function HomeAdminSectionPage({
         canManage={canManage}
       />
     )
+  }
+
+  // Reports owns its own header (title + live status filters), so it renders
+  // full-bleed like the Members command centre.
+  if (section === "reports") {
+    const { reports, counts } = await getHomeReports(handle, "all")
+    return <ReportsManager handle={handle} initialReports={reports} initialCounts={counts} />
   }
 
   return (

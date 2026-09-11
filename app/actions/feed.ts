@@ -21,6 +21,7 @@ import { ITESTIFY_CHANNEL } from "@/lib/qotd-types"
 import { canPinInScope, MAX_PINNED_PER_SCOPE, pinWithinCap } from "@/lib/home/can-pin"
 import { getProfileScope, scopeToHome } from "@/lib/home/profile-scope"
 import { resolvePublishingIdentity } from "@/lib/home/publishing"
+import { assertNotSuspended } from "@/lib/home/suspension"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { formatPostTimestamp } from "@/lib/format-timestamp"
 import { getLikedSet, setLike } from "@/lib/likes"
@@ -1324,6 +1325,10 @@ export async function createPost(input: {
     homeId = home?.id ?? null
   }
 
+  // A member suspended in the Home they're posting into cannot publish there.
+  // Home-scoped only — their account and other Homes are unaffected.
+  await assertNotSuspended(homeId, user.id)
+
   // Resolve @mentions (privacy-checked); blocked ones become inert text.
   const { text, allowed: mentions } = await resolveTextMentions(user.id, input.text.trim())
 
@@ -1521,6 +1526,13 @@ export async function addPostComment(input: {
   const user = await requireUser()
   const text = input.text.trim()
   if (!text) throw new Error("Comment cannot be empty.")
+
+  // Suspended members can't comment in the Home the post belongs to.
+  const [postHome] = await db
+    .select({ homeId: feedPost.homeId })
+    .from(feedPost)
+    .where(eq(feedPost.id, input.postId))
+  await assertNotSuspended(postHome?.homeId ?? null, user.id)
 
   const identity = await resolvePublishingIdentity(
     {

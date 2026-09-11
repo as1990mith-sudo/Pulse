@@ -1,25 +1,41 @@
 "use client"
 
-import { useEffect, useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import useSWR from "swr"
 import {
+  Ban,
   ExternalLink,
   FileText,
   Heart,
   Loader2,
   MessageCircle,
+  MoreVertical,
+  ShieldCheck,
   Trash2,
   UserCheck,
+  UserMinus,
   X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { approveMember, removeMember, updateMemberRole } from "@/app/actions/home"
+import { approveMember, updateMemberRole } from "@/app/actions/home"
 import { getMemberDetail } from "@/app/actions/home-members"
+import {
+  getMemberModeration,
+  removeMemberFromHome,
+  suspendMember,
+  unsuspendMember,
+} from "@/app/actions/home-reports"
 import { ACTIVITY_META, type MemberActivityItem, type MemberTimeframe } from "@/lib/home/members"
 import { HOME_ROLES, homeRoleLabel, type HomeRole } from "@/lib/home/roles"
 import {
-  ActivityDot,
+  MODERATION_ACTION_META,
+  SUSPENSION_DURATIONS,
+  moderationActionLabel,
+  type ModerationActionKind,
+  type SuspensionDurationId,
+} from "@/lib/home/moderation"
+import {
   MemberAvatar,
   formatJoined,
   formatLastActive,
@@ -45,10 +61,32 @@ export function DetailDrawer({
 }) {
   const [visible, setVisible] = useState(false)
   const [pending, startTransition] = useTransition()
-  const [confirmRemove, setConfirmRemove] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [suspendOpen, setSuspendOpen] = useState(false)
+  const [removeOpen, setRemoveOpen] = useState(false)
+  const [duration, setDuration] = useState<SuspensionDurationId>("24h")
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  // Close the ⋮ menu on any outside click.
+  useEffect(() => {
+    if (!menuOpen) return
+    const onDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
+    }
+    document.addEventListener("mousedown", onDown)
+    return () => document.removeEventListener("mousedown", onDown)
+  }, [menuOpen])
 
   const { data, isLoading, mutate } = useSWR(["home-member-detail", handle, membershipId, timeframe], () =>
     getMemberDetail(handle, membershipId, timeframe),
+  )
+
+  const rowUserId = data?.row?.userId
+  // Home-scoped discipline state + history. Only fetched once we know the user
+  // and only meaningful for manageable, non-owner members.
+  const { data: moderation, mutate: mutateModeration } = useSWR(
+    canManage && rowUserId ? ["home-member-moderation", handle, rowUserId] : null,
+    () => getMemberModeration(handle, rowUserId as string),
   )
 
   useEffect(() => {
@@ -88,14 +126,36 @@ export function DetailDrawer({
     })
   }
 
-  function remove() {
+  function doSuspend() {
     if (!row) return
     startTransition(async () => {
-      await removeMember(handle, row.id)
+      await suspendMember(handle, row.userId, duration)
+      setSuspendOpen(false)
+      await mutateModeration()
+      onChanged()
+    })
+  }
+
+  function doUnsuspend() {
+    if (!row) return
+    startTransition(async () => {
+      await unsuspendMember(handle, row.userId)
+      await mutateModeration()
+      onChanged()
+    })
+  }
+
+  function doRemove() {
+    if (!row) return
+    startTransition(async () => {
+      await removeMemberFromHome(handle, row.userId)
       onChanged()
       close()
     })
   }
+
+  // Only ordinary, non-viewer members can be moderated (never an owner/admin).
+  const canModerate = !!row && canManage && !row.isViewer && row.role !== "owner" && row.role !== "administrator"
 
   return (
     <div className="fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label="Member details">
@@ -121,14 +181,65 @@ export function DetailDrawer({
         <div className="flex h-full flex-col">
           <div className="flex items-center justify-between gap-3 border-b border-border/50 px-4 py-3">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Member</p>
-            <button
-              type="button"
-              onClick={close}
-              className="tap-scale flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
-              aria-label="Close"
-            >
-              <X className="size-5" />
-            </button>
+            <div className="flex items-center gap-1">
+              {canModerate && (
+                <div className="relative" ref={menuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setMenuOpen((v) => !v)}
+                    className="tap-scale flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+                    aria-label="Moderation actions"
+                    aria-haspopup="menu"
+                    aria-expanded={menuOpen}
+                  >
+                    <MoreVertical className="size-5" />
+                  </button>
+                  {menuOpen && (
+                    <div
+                      role="menu"
+                      className="absolute right-0 top-9 z-10 w-52 overflow-hidden rounded-xl border border-border/60 bg-popover shadow-elevated"
+                    >
+                      {moderation?.suspended ? (
+                        <MenuItem
+                          icon={ShieldCheck}
+                          label="Lift suspension"
+                          onClick={() => {
+                            setMenuOpen(false)
+                            doUnsuspend()
+                          }}
+                        />
+                      ) : (
+                        <MenuItem
+                          icon={Ban}
+                          label="Suspend"
+                          onClick={() => {
+                            setMenuOpen(false)
+                            setSuspendOpen(true)
+                          }}
+                        />
+                      )}
+                      <MenuItem
+                        icon={UserMinus}
+                        label="Remove from Home"
+                        destructive
+                        onClick={() => {
+                          setMenuOpen(false)
+                          setRemoveOpen(true)
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={close}
+                className="tap-scale flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+                aria-label="Close"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto" data-scroll>
@@ -201,6 +312,31 @@ export function DetailDrawer({
                   </dl>
                 </Section>
 
+                {/* Moderation — Home-scoped discipline state + history */}
+                {canManage && row.role !== "owner" && (
+                  <Section title="Moderation">
+                    <div className="space-y-2">
+                      {moderation?.suspended && (
+                        <div className="flex items-start gap-2 rounded-xl border border-red-500/25 bg-red-500/5 px-3 py-2.5">
+                          <Ban className="mt-0.5 size-4 shrink-0 text-red-400" />
+                          <div className="min-w-0 text-sm">
+                            <p className="font-medium text-red-300">
+                              Suspended{" "}
+                              {moderation.suspendedUntil
+                                ? `until ${formatTimelineStamp(moderation.suspendedUntil)}`
+                                : "indefinitely"}
+                            </p>
+                            {moderation.suspendedByName && (
+                              <p className="text-xs text-muted-foreground">by {moderation.suspendedByName}</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      <ModerationHistory items={moderation?.history ?? []} />
+                    </div>
+                  </Section>
+                )}
+
                 {/* Admin actions */}
                 <Section title="Actions">
                   <div className="space-y-2">
@@ -243,39 +379,6 @@ export function DetailDrawer({
                       </label>
                     )}
 
-                    {canManage && row.role !== "owner" && !row.isViewer && (
-                      <div>
-                        {!confirmRemove ? (
-                          <button
-                            type="button"
-                            onClick={() => setConfirmRemove(true)}
-                            className="tap-scale flex w-full items-center justify-center gap-2 rounded-xl border border-destructive/40 px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
-                          >
-                            <Trash2 className="size-4" />
-                            Remove from Home
-                          </button>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setConfirmRemove(false)}
-                              className="tap-scale flex-1 rounded-xl border border-border/60 px-3 py-2.5 text-sm font-medium text-muted-foreground"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              type="button"
-                              onClick={remove}
-                              disabled={pending}
-                              className="tap-scale flex flex-1 items-center justify-center gap-2 rounded-xl bg-destructive px-3 py-2.5 text-sm font-semibold text-destructive-foreground disabled:opacity-60"
-                            >
-                              {pending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-                              Confirm
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
                 </Section>
               </div>
@@ -283,7 +386,164 @@ export function DetailDrawer({
           </div>
         </div>
       </div>
+
+      {/* Suspend duration selector */}
+      {suspendOpen && row && (
+        <ConfirmLayer onClose={() => setSuspendOpen(false)} label="Suspend member">
+          <h3 className="font-display text-lg font-semibold tracking-tight">Suspend {row.name}</h3>
+          <p className="mt-1 text-pretty text-sm text-muted-foreground">
+            Pauses their participation in this Home. It does not affect their Frequency account or other Homes.
+          </p>
+          <div className="mt-4 grid grid-cols-3 gap-1.5">
+            {SUSPENSION_DURATIONS.map((d) => {
+              const active = duration === d.id
+              return (
+                <button
+                  key={d.id}
+                  type="button"
+                  onClick={() => setDuration(d.id)}
+                  className={cn(
+                    "tap-scale rounded-lg border px-2 py-2 text-xs font-medium transition-colors",
+                    active ? "border-[var(--home-accent)] text-foreground" : "border-border/60 text-muted-foreground hover:text-foreground",
+                  )}
+                  style={active ? { backgroundColor: "color-mix(in oklab, var(--home-accent) 12%, transparent)" } : undefined}
+                >
+                  {d.label}
+                </button>
+              )
+            })}
+          </div>
+          <div className="mt-4 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSuspendOpen(false)}
+              className="tap-scale flex-1 rounded-xl border border-border/60 px-3 py-2.5 text-sm font-medium text-muted-foreground"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={doSuspend}
+              disabled={pending}
+              className="tap-scale flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+              style={{ backgroundColor: "var(--home-accent)" }}
+            >
+              {pending ? <Loader2 className="size-4 animate-spin" /> : <Ban className="size-4" />}
+              Suspend
+            </button>
+          </div>
+        </ConfirmLayer>
+      )}
+
+      {/* Remove confirmation */}
+      {removeOpen && row && (
+        <ConfirmLayer onClose={() => setRemoveOpen(false)} label="Remove member">
+          <h3 className="font-display text-lg font-semibold tracking-tight">Remove member?</h3>
+          <p className="mt-1 text-pretty text-sm text-muted-foreground">
+            This will remove {row.name} from this Home. Their Frequency account will not be deleted.
+          </p>
+          <div className="mt-4 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setRemoveOpen(false)}
+              className="tap-scale flex-1 rounded-xl border border-border/60 px-3 py-2.5 text-sm font-medium text-muted-foreground"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={doRemove}
+              disabled={pending}
+              className="tap-scale flex flex-1 items-center justify-center gap-2 rounded-xl bg-destructive px-3 py-2.5 text-sm font-semibold text-destructive-foreground disabled:opacity-60"
+            >
+              {pending ? <Loader2 className="size-4 animate-spin" /> : <UserMinus className="size-4" />}
+              Remove from Home
+            </button>
+          </div>
+        </ConfirmLayer>
+      )}
     </div>
+  )
+}
+
+/** A small centered confirm/selector layer that sits above the drawer. */
+function ConfirmLayer({
+  children,
+  onClose,
+  label,
+}: {
+  children: React.ReactNode
+  onClose: () => void
+  label: string
+}) {
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-label={label}>
+      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="relative z-10 m-3 w-full max-w-sm rounded-3xl border border-border/60 bg-popover p-5 shadow-elevated animate-in fade-in-0 zoom-in-95 duration-150">
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function MenuItem({
+  icon: Icon,
+  label,
+  onClick,
+  destructive = false,
+}: {
+  icon: typeof Ban
+  label: string
+  onClick: () => void
+  destructive?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm transition-colors hover:bg-foreground/[0.05]",
+        destructive ? "text-destructive" : "text-foreground",
+      )}
+    >
+      <Icon className="size-4" />
+      {label}
+    </button>
+  )
+}
+
+function ModerationHistory({ items }: { items: { id: string; action: ModerationActionKind; reason: string | null; suspendedUntil: string | null; adminName: string; at: string }[] }) {
+  if (items.length === 0) {
+    return (
+      <p className="rounded-xl border border-border/50 py-4 text-center text-xs text-muted-foreground">
+        No moderation actions in this Home
+      </p>
+    )
+  }
+  return (
+    <ol className="space-y-2">
+      {items.map((a) => {
+        const meta = MODERATION_ACTION_META[a.action]
+        return (
+          <li key={a.id} className="flex items-start gap-2.5 rounded-xl border border-border/50 bg-background/40 px-3 py-2.5">
+            <span className={cn("mt-1 size-1.5 shrink-0 rounded-full", meta ? "" : "bg-muted-foreground")} style={{ backgroundColor: "currentColor" }} aria-hidden />
+            <div className="min-w-0 flex-1">
+              <p className={cn("text-sm font-medium", meta?.text)}>
+                {moderationActionLabel(a.action)}
+                {a.action === "suspended" && a.suspendedUntil && (
+                  <span className="font-normal text-muted-foreground"> · until {formatTimelineStamp(a.suspendedUntil)}</span>
+                )}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {formatTimelineStamp(a.at)} · {a.adminName}
+              </p>
+              {a.reason && <p className="mt-0.5 text-xs text-muted-foreground">“{a.reason}”</p>}
+            </div>
+          </li>
+        )
+      })}
+    </ol>
   )
 }
 

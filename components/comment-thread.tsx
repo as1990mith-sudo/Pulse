@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { BadgeCheck, MoreHorizontal, Copy, Pencil, Trash2, Send, X } from "lucide-react"
+import { BadgeCheck, MoreHorizontal, Copy, Pencil, Trash2, Send, X, Flag } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import { LikeHeart } from "@/components/like-heart"
+import { ReportReasonModal } from "@/components/report-reason-modal"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -105,6 +106,13 @@ export type CommentThreadProps = {
    * unchanged.
    */
   density?: "default" | "comfortable"
+  /**
+   * When true, non-author comments gain a "Report" action that files into the
+   * owning Home's Reports queue (Home Admins). The owning Home is derived
+   * server-side from the comment, so no handle needs threading through here.
+   * Defaults to false so surfaces outside a Home context are unaffected.
+   */
+  enableReporting?: boolean
 }
 
 /**
@@ -129,6 +137,7 @@ export function CommentThread({
   personalName = "",
   personalImage = null,
   personalInitials = "",
+  enableReporting = false,
 }: CommentThreadProps) {
   // Delete window inherits the edit/general window unless explicitly overridden.
   const deleteWindow = enforceDeleteWindow ?? enforceTimeWindows
@@ -188,6 +197,7 @@ export function CommentThread({
               personalName={personalName}
               personalImage={personalImage}
               personalInitials={personalInitials}
+              enableReporting={enableReporting}
             />
           </li>
         ))}
@@ -232,6 +242,7 @@ function CommentNode({
   personalName = "",
   personalImage = null,
   personalInitials = "",
+  enableReporting = false,
 }: {
   comment: ThreadComment
   depth: number
@@ -252,6 +263,7 @@ function CommentNode({
   /** Viewer's photo + initials, so the personal voice chip shows their face. */
   personalImage?: string | null
   personalInitials?: string
+  enableReporting?: boolean
 }) {
   const replies = repliesByParent.get(comment.id) ?? []
   const [collapsed, setCollapsed] = useState(true)
@@ -276,6 +288,7 @@ function CommentNode({
         personalName={personalName}
         personalImage={personalImage}
         personalInitials={personalInitials}
+        enableReporting={enableReporting}
       />
 
       {replies.length > 0 && (
@@ -314,6 +327,7 @@ function CommentNode({
                     personalName={personalName}
                     personalImage={personalImage}
                     personalInitials={personalInitials}
+                    enableReporting={enableReporting}
                   />
                 </li>
               ))}
@@ -343,6 +357,7 @@ function CommentItem({
   personalName = "",
   personalImage = null,
   personalInitials = "",
+  enableReporting = false,
 }: {
   comment: ThreadComment
   canInteract: boolean
@@ -362,6 +377,7 @@ function CommentItem({
   /** Viewer's photo + initials, so the personal voice chip shows their face. */
   personalImage?: string | null
   personalInitials?: string
+  enableReporting?: boolean
 }) {
   const [liked, setLiked] = useState(comment.liked)
   const [likes, setLikes] = useState(comment.likes)
@@ -378,6 +394,7 @@ function CommentItem({
   const [deleted, setDeleted] = useState(false)
   const [edited, setEdited] = useState(comment.edited)
   const [copied, setCopied] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   let pressTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -428,6 +445,10 @@ function CommentItem({
         setDeleted(true)
       },
     })
+  // Members can report someone else's comment into the owning Home's queue.
+  if (enableReporting && !comment.isSelf && comment.authorId) {
+    actions.push({ label: "Report", icon: Flag, onClick: () => setReportOpen(true) })
+  }
   const hasMenu = actions.length > 0
 
   function startPress() {
@@ -666,6 +687,16 @@ function CommentItem({
           </form>
         )}
       </div>
+
+      {reportOpen && (
+        <ReportReasonModal
+          open={reportOpen}
+          onClose={() => setReportOpen(false)}
+          subjectLabel={comment.name}
+          kind="comment"
+          homeReport={{ targetType: "comment", targetId: String(comment.id) }}
+        />
+      )}
     </div>
   )
 }

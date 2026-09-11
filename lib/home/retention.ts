@@ -44,6 +44,8 @@ import {
   homeAuthKey,
   homeBooking,
   homeMembership,
+  homeModerationAction,
+  homeReport,
   liveBlocked,
   liveCallRequest,
   liveChatMessage,
@@ -199,6 +201,10 @@ export async function purgeHomeData(homeId: string, orgId: string | null): Promi
     await tx.delete(homeAppointmentType).where(eq(homeAppointmentType.homeId, homeId))
     await tx.delete(homeAppointment).where(eq(homeAppointment.homeId, homeId))
     await tx.delete(homeAuthKey).where(eq(homeAuthKey.homeId, homeId))
+    // Home-scoped moderation data (reports + discipline history). Holds personal
+    // data about members and dies with the Home — it was never a global record.
+    await tx.delete(homeReport).where(eq(homeReport.homeId, homeId))
+    await tx.delete(homeModerationAction).where(eq(homeModerationAction.homeId, homeId))
     await tx.delete(homeMembership).where(eq(homeMembership.homeId, homeId))
 
     // --- Organisation-scoped rows, then the Home + org themselves -----------

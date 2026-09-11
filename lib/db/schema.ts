@@ -2060,6 +2060,16 @@ export const homeMembership = pgTable(
     // "active" (full member) or "pending" (awaiting admin approval under the
     // approval join policy). Pending members can see nothing private yet.
     status: text("status").notNull().default("active"),
+    // Home-scoped suspension overlay (Home moderation). This is DISTINCT from
+    // `status` and from the global `user_moderation_state`: it only limits the
+    // member's participation within THIS Home and never touches their Frequency
+    // account or other Home memberships. A suspension is active when
+    // `suspendedUntil` is in the future, OR when `suspendedAt` is set and
+    // `suspendedUntil` is null (indefinite). Cleared by unsuspend.
+    suspendedAt: timestamp("suspendedAt"),
+    suspendedUntil: timestamp("suspendedUntil"),
+    suspendedBy: text("suspendedBy"),
+    suspendedReason: text("suspendedReason"),
     // How they joined: "created" (founding owner), "key_auto", "key_request".
     joinedVia: text("joinedVia").notNull().default("key_auto"),
     // Per-member manual ordering of their own "My Homes" list. Null means the
@@ -2073,6 +2083,85 @@ export const homeMembership = pgTable(
     homeUserIdx: uniqueIndex("home_membership_home_user_idx").on(t.homeId, t.userId),
     userIdx: index("home_membership_user_idx").on(t.userId),
     homeStatusIdx: index("home_membership_home_status_idx").on(t.homeId, t.status),
+  }),
+)
+
+// --- Home moderation (Reports) ---------------------------------------------
+// Home-LEVEL community moderation, kept STRICTLY separate from the platform
+// `content_report` / `moderation_action` tables (which belong to the Frequency
+// Super Admin). A member report against another member/post/comment lands ONLY
+// here, scoped to the Home it was raised in, and is resolved by that Home's own
+// admins. It must NEVER be copied into the platform tables or reach Super Admin.
+export const homeReport = pgTable(
+  "home_report",
+  {
+    id: text("id").primaryKey(),
+    homeId: text("homeId").notNull(),
+    // Who filed it. Visible to Home admins for moderation, but NEVER exposed to
+    // the reported member (privacy requirement).
+    reporterId: text("reporterId").notNull(),
+    reporterName: text("reporterName").notNull(),
+    // The member the report is ultimately about (the account being complained
+    // of). For a post/comment report this is the content's author.
+    reportedUserId: text("reportedUserId").notNull(),
+    reportedName: text("reportedName").notNull(),
+    // What was reported: "member" | "post" | "comment".
+    targetType: text("targetType").notNull(),
+    // For post/comment reports: the feed_post.id / feed_comment.id as text. Null
+    // for a bare member report.
+    targetId: text("targetId"),
+    // A short snapshot of the reported content at report time, so admins still
+    // see what was flagged even if it is later edited or removed.
+    targetPreview: text("targetPreview"),
+    // Concise reason category (see lib/home/moderation.ts REPORT_REASONS).
+    reason: text("reason").notNull(),
+    details: text("details"),
+    // "pending" | "under_review" | "resolved".
+    status: text("status").notNull().default("pending"),
+    // Recorded resolution when status = resolved: "no_action" | "warning" |
+    // "content_removed" | "member_suspended" | "member_removed".
+    resolution: text("resolution"),
+    resolvedBy: text("resolvedBy"),
+    resolvedByName: text("resolvedByName"),
+    resolvedAt: timestamp("resolvedAt"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    homeStatusIdx: index("home_report_home_status_idx").on(t.homeId, t.status),
+    homeCreatedIdx: index("home_report_home_created_idx").on(t.homeId, t.createdAt),
+    reportedIdx: index("home_report_reported_idx").on(t.homeId, t.reportedUserId),
+  }),
+)
+
+// Append-only, HOME-SCOPED moderation history for a member. This is the Home's
+// own record of warnings/suspensions/removals it issued — it powers the
+// per-member history in the admin console. It is deliberately NOT a global
+// disciplinary record: a Home can only ever read rows carrying its own homeId,
+// so actions in one Home are invisible to every other Home and to the platform.
+export const homeModerationAction = pgTable(
+  "home_moderation_action",
+  {
+    id: text("id").primaryKey(),
+    homeId: text("homeId").notNull(),
+    // The member the action was taken against.
+    targetUserId: text("targetUserId").notNull(),
+    // "warning" | "content_removed" | "suspended" | "unsuspended" | "removed".
+    action: text("action").notNull(),
+    reason: text("reason"),
+    // For suspensions: when it expires (null = indefinite). Informational copy
+    // for the history timeline; the live overlay lives on home_membership.
+    suspendedUntil: timestamp("suspendedUntil"),
+    // The admin who performed it.
+    adminId: text("adminId").notNull(),
+    adminName: text("adminName").notNull(),
+    // Optional link back to the report that prompted it.
+    reportId: text("reportId"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    homeTargetIdx: index("home_moderation_home_target_idx").on(t.homeId, t.targetUserId),
+    homeCreatedIdx: index("home_moderation_home_created_idx").on(t.homeId, t.createdAt),
   }),
 )
 

@@ -1,47 +1,88 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Flag, Check } from "lucide-react"
+import { useEffect, useState, useTransition } from "react"
+import { Flag, Check, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { haptic } from "@/lib/haptics"
+import { submitHomeReport } from "@/app/actions/home-reports"
+import {
+  REPORT_CONFIRMATION,
+  REPORT_REASONS as HOME_REPORT_REASONS,
+  type ReportReason as HomeReportReason,
+  type ReportTargetType,
+} from "@/lib/home/moderation"
 
-export const REPORT_REASONS = [
-  "Spam",
-  "Harassment or bullying",
-  "Hate speech",
-  "Misinformation",
-  "Nudity or sexual content",
-  "Other",
-] as const
+// Legacy string reasons kept for the mention-report path (platform moderation),
+// which still calls onSubmit(reason) with a display string.
+export const REPORT_REASONS = HOME_REPORT_REASONS.map((r) => r.label)
+export type ReportReason = string
 
-export type ReportReason = (typeof REPORT_REASONS)[number]
+/** Describes a Home-scoped report target; when present the modal files a real report. */
+export type HomeReportTarget = {
+  /** Only needed for member reports; post/comment reports derive the Home server-side. */
+  handle?: string
+  targetType: ReportTargetType
+  /** Post/comment id (as string). Omit for a member report. */
+  targetId?: string | null
+  /** Required for a member report; derived server-side for post/comment. */
+  reportedUserId?: string | null
+}
 
 type ReportReasonModalProps = {
   open: boolean
   onClose: () => void
-  /** Short label for what is being reported, e.g. a post author's name. */
+  /** Short label for what/who is being reported, e.g. a post author's name. */
   subjectLabel?: string
+  /** What kind of thing is being reported (drives copy). Defaults to "post". */
+  kind?: ReportTargetType
   /**
-   * Called when a report is submitted. Stubbed for now — no backend yet, this
-   * will later route into the support/moderation system.
+   * When provided, the modal submits directly into the Home's Reports queue.
+   * This is the primary path for reporting members, posts, and comments.
+   */
+  homeReport?: HomeReportTarget
+  /**
+   * Legacy callback path (e.g. mention reports routed to platform moderation).
+   * Ignored when `homeReport` is provided.
    */
   onSubmit?: (reason: ReportReason) => void
 }
 
+const KIND_NOUN: Record<ReportTargetType, string> = {
+  member: "member",
+  post: "post",
+  comment: "comment",
+}
+
 /**
- * Reusable "report" modal: a tappable list of reasons plus a submit button.
- * On submit it shows a self-dismissing confirmation (no global toast system
- * exists yet) and calls the optional onSubmit callback.
+ * Reusable "report" modal: a compact, tappable list of reasons plus an optional
+ * detail note and submit button. On success it shows a self-dismissing
+ * "Report submitted" confirmation.
+ *
+ * Governance: the `homeReport` path files into the Home's own Reports queue
+ * (Home Admins), never the Frequency Super Admin. The reporter's identity is
+ * never revealed to the reported member.
  */
-export function ReportReasonModal({ open, onClose, subjectLabel, onSubmit }: ReportReasonModalProps) {
-  const [reason, setReason] = useState<ReportReason | null>(null)
+export function ReportReasonModal({
+  open,
+  onClose,
+  subjectLabel,
+  kind = "post",
+  homeReport,
+  onSubmit,
+}: ReportReasonModalProps) {
+  const [reasonId, setReasonId] = useState<HomeReportReason | null>(null)
+  const [details, setDetails] = useState("")
   const [submitted, setSubmitted] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [pending, startTransition] = useTransition()
 
   // Reset transient state whenever the modal is (re)opened.
   useEffect(() => {
     if (open) {
-      setReason(null)
+      setReasonId(null)
+      setDetails("")
       setSubmitted(false)
+      setError(null)
     }
   }, [open])
 
@@ -54,11 +95,35 @@ export function ReportReasonModal({ open, onClose, subjectLabel, onSubmit }: Rep
 
   if (!open) return null
 
+  const noun = KIND_NOUN[homeReport?.targetType ?? kind]
+
   function handleSubmit() {
-    if (!reason) return
-    // Stub: this will route to the support/moderation backend later.
-    console.log("[v0] Report submitted:", { reason, subject: subjectLabel ?? null })
-    onSubmit?.(reason)
+    if (!reasonId) return
+    setError(null)
+
+    if (homeReport) {
+      startTransition(async () => {
+        try {
+          await submitHomeReport({
+            handle: homeReport.handle,
+            targetType: homeReport.targetType,
+            targetId: homeReport.targetId ?? null,
+            reportedUserId: homeReport.reportedUserId ?? null,
+            reason: reasonId,
+            details: details.trim() || null,
+          })
+          haptic("light")
+          setSubmitted(true)
+        } catch (e) {
+          setError(e instanceof Error ? e.message : "Couldn't submit your report.")
+        }
+      })
+      return
+    }
+
+    // Legacy path: hand the display label back to the caller.
+    const label = HOME_REPORT_REASONS.find((r) => r.id === reasonId)?.label ?? "Other"
+    onSubmit?.(label)
     haptic("light")
     setSubmitted(true)
   }
@@ -68,7 +133,7 @@ export function ReportReasonModal({ open, onClose, subjectLabel, onSubmit }: Rep
       className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center"
       role="dialog"
       aria-modal="true"
-      aria-label="Report post"
+      aria-label={`Report ${noun}`}
     >
       <button
         type="button"
@@ -82,10 +147,8 @@ export function ReportReasonModal({ open, onClose, subjectLabel, onSubmit }: Rep
             <span className="flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
               <Check className="size-6" />
             </span>
-            <h3 className="text-base font-bold">Report submitted</h3>
-            <p className="text-sm text-muted-foreground text-pretty">
-              Our team will review it.
-            </p>
+            <h3 className="text-base font-bold">{REPORT_CONFIRMATION}</h3>
+            <p className="text-pretty text-sm text-muted-foreground">Thanks — your Home&apos;s admins will review it.</p>
           </div>
         ) : (
           <>
@@ -94,23 +157,23 @@ export function ReportReasonModal({ open, onClose, subjectLabel, onSubmit }: Rep
                 <Flag className="size-5" />
               </span>
               <div className="min-w-0">
-                <h3 className="text-sm font-bold">Report post</h3>
+                <h3 className="text-sm font-bold">Report {noun}</h3>
                 <p className="truncate text-xs text-muted-foreground">
-                  {subjectLabel ? `Tell us what's wrong with ${subjectLabel}'s post` : "Choose a reason"}
+                  {subjectLabel ? `Tell us what's wrong` : "Choose a reason"}
                 </p>
               </div>
             </div>
 
             <ul className="space-y-1.5" role="radiogroup" aria-label="Report reason">
-              {REPORT_REASONS.map((r) => {
-                const active = reason === r
+              {HOME_REPORT_REASONS.map((r) => {
+                const active = reasonId === r.id
                 return (
-                  <li key={r}>
+                  <li key={r.id}>
                     <button
                       type="button"
                       role="radio"
                       aria-checked={active}
-                      onClick={() => setReason(r)}
+                      onClick={() => setReasonId(r.id)}
                       className={cn(
                         "flex w-full items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 text-left text-sm transition-colors",
                         active
@@ -118,7 +181,7 @@ export function ReportReasonModal({ open, onClose, subjectLabel, onSubmit }: Rep
                           : "border-white/10 text-foreground/90 hover:bg-white/5 active:bg-white/10",
                       )}
                     >
-                      {r}
+                      {r.label}
                       <span
                         className={cn(
                           "flex size-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
@@ -133,7 +196,19 @@ export function ReportReasonModal({ open, onClose, subjectLabel, onSubmit }: Rep
               })}
             </ul>
 
-            <div className="mt-5 flex gap-2">
+            {reasonId && (
+              <textarea
+                value={details}
+                onChange={(e) => setDetails(e.target.value)}
+                rows={2}
+                placeholder="Add any details (optional)"
+                className="mt-2.5 w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            )}
+
+            {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+
+            <div className="mt-4 flex gap-2">
               <button
                 type="button"
                 onClick={onClose}
@@ -143,10 +218,11 @@ export function ReportReasonModal({ open, onClose, subjectLabel, onSubmit }: Rep
               </button>
               <button
                 type="button"
-                disabled={!reason}
+                disabled={!reasonId || pending}
                 onClick={handleSubmit}
-                className="flex-1 rounded-full bg-destructive px-4 py-2.5 text-sm font-medium text-destructive-foreground transition-all hover:bg-destructive/90 active:scale-[0.98] disabled:opacity-50"
+                className="flex flex-1 items-center justify-center gap-2 rounded-full bg-destructive px-4 py-2.5 text-sm font-medium text-destructive-foreground transition-all hover:bg-destructive/90 active:scale-[0.98] disabled:opacity-50"
               >
+                {pending ? <Loader2 className="size-4 animate-spin" /> : null}
                 Submit
               </button>
             </div>

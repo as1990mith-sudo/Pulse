@@ -18,6 +18,7 @@ export type HomePermission =
   | "authkey.manage" // view/copy/regenerate/disable the authorisation key
   | "content.manage" // announcements, articles, media
   | "community.moderate" // moderate the private feed & community help
+  | "reports.manage" // review member reports; suspend/remove members; remove content
   | "rooms.manage"
   | "events.manage"
   | "live.manage"
@@ -35,6 +36,7 @@ export const ALL_HOME_PERMISSIONS: HomePermission[] = [
   "authkey.manage",
   "content.manage",
   "community.moderate",
+  "reports.manage",
   "rooms.manage",
   "events.manage",
   "live.manage",
@@ -83,6 +85,7 @@ const HOME_ROLE_PERMISSIONS: Record<HomeRole, HomePermission[]> = {
     "authkey.manage",
     "content.manage",
     "community.moderate",
+    "reports.manage",
     "rooms.manage",
     "events.manage",
     "live.manage",
@@ -102,7 +105,7 @@ const HOME_ROLE_PERMISSIONS: Record<HomeRole, HomePermission[]> = {
     "notifications.send",
     "analytics.view",
   ],
-  moderator: ["members.view", "community.moderate", "content.manage"],
+  moderator: ["members.view", "community.moderate", "reports.manage", "content.manage"],
   leader: ["members.view", "pastoral.manage", "community.moderate", "appointments.manage", "bookings.manage"],
   member: [],
 }
