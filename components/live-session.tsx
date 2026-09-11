@@ -9,6 +9,7 @@ import { VideoStudioConsole } from "@/components/video-studio-console"
 import { LiveVideoViewer } from "@/components/live-video-viewer"
 import { ConversationRoom } from "@/components/conversation-room"
 import { StudioErrorBoundary } from "@/components/studio-error-boundary"
+import { MiniChatProvider } from "@/components/mini-chat"
 import type { CurrentUser } from "@/lib/session"
 import type { LiveStreamView } from "@/app/actions/live"
 import { cn } from "@/lib/utils"
@@ -237,6 +238,7 @@ function LiveRoomBody({
   setMeta: (m: LiveMeta) => void
 }) {
   return (
+    <MiniChatProvider>
     <>
           {session.kind === "host" ? (
             <StudioErrorBoundary>
@@ -315,6 +317,7 @@ function LiveRoomBody({
             </div>
           )}
     </>
+    </MiniChatProvider>
   )
 }
 

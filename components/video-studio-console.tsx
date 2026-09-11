@@ -337,6 +337,10 @@ export function VideoStudioConsole({
   // After the room has ended for everyone, the host is asked whether to save the
   // session as an episode. Holds the metadata needed to publish if they say yes.
   const [saveDecision, setSaveDecision] = useState<{ duration: string; durationSec: number } | null>(null)
+  // Once the host chooses save/discard we're leaving the studio. This keeps the
+  // pre-live setup sheet (gated on !live) from flashing back onto the screen
+  // during the exit transition — the bug that made "Save episode" go blank.
+  const [finishing, setFinishing] = useState(false)
   // In-flight recording finalization, started the instant the host ends the live
   // so it never blocks the room from closing for participants.
   const recordingPromiseRef = useRef<Promise<Blob | null> | null>(null)
@@ -731,6 +735,7 @@ export function VideoStudioConsole({
   // keep using Frequency while it finishes.
   function handleSaveEpisode() {
     const dec = saveDecision
+    setFinishing(true)
     setSaveDecision(null)
     // Server-recorded replays are already being produced by egress + finalized
     // by the webhook into the placeholder episode created at go-live. There's no
@@ -765,6 +770,7 @@ export function VideoStudioConsole({
   // Host confirmed they don't want to save. Drop the recording and leave — the
   // live room already ended when they confirmed.
   function handleDiscardEpisode() {
+    setFinishing(true)
     setSaveDecision(null)
     recordingPromiseRef.current = null
     // For server-recorded sessions, remove the placeholder replay episode (and
@@ -1307,7 +1313,7 @@ export function VideoStudioConsole({
             camera region's overflow-hidden. When the card is taller than the
             screen it scrolls, with safe-area padding so the top (stream title)
             stays clear of the status bar. */}
-        {!live && (
+        {!live && !saveDecision && !finishing && (
           <LiveSetupSheet
             title={title}
             onTitleChange={setTitle}

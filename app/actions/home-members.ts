@@ -409,6 +409,67 @@ export async function getMemberDetail(
   return { row, recent }
 }
 
+// ── Admins roster ────────────────────────────────────────────────────────────
+// The "Admins" destination (reached from the ADMINS stat card) shows only the
+// people who help run the Home — every active member whose role is not the plain
+// `member` role — with their assigned role. It is read-only and intentionally
+// separate from the full Members command centre.
+
+export type HomeAdminRosterRow = {
+  id: string
+  userId: string
+  name: string
+  email: string
+  image: string | null
+  initials: string
+  color: string
+  role: HomeRole
+  roleLabel: string
+  joinedAt: string
+  isViewer: boolean
+}
+
+// Presentation order for admin roles — highest authority first.
+const ADMIN_ROLE_ORDER: HomeRole[] = ["owner", "administrator", "leader", "content_manager", "moderator"]
+
+export async function getHomeAdmins(handle: string): Promise<HomeAdminRosterRow[]> {
+  const home = await getHomeByHandle(handle)
+  if (!home) throw new Error("Home not found.")
+  const membership = await getViewerMembership(home.id)
+  if (!membership || membership.status !== "active") {
+    throw new Error("You don't have permission to do that.")
+  }
+  const viewerId = await getViewerId()
+
+  const rows = await db
+    .select({ m: homeMembership, u: userTable })
+    .from(homeMembership)
+    .innerJoin(userTable, eq(userTable.id, homeMembership.userId))
+    .where(and(eq(homeMembership.homeId, home.id), eq(homeMembership.status, "active")))
+
+  return rows
+    .filter(({ m }) => m.role !== "member")
+    .map(({ m, u }) => ({
+      id: m.id,
+      userId: m.userId,
+      name: u.name,
+      email: u.email,
+      image: u.image,
+      initials: getInitials(u.name),
+      color: getAvatarColor(u.id),
+      role: m.role as HomeRole,
+      roleLabel: homeRoleLabel(m.role as HomeRole),
+      joinedAt: m.createdAt.toISOString(),
+      isViewer: m.userId === viewerId,
+    }))
+    .sort((a, b) => {
+      const ra = ADMIN_ROLE_ORDER.indexOf(a.role)
+      const rb = ADMIN_ROLE_ORDER.indexOf(b.role)
+      if (ra !== rb) return ra - rb
+      return a.name.localeCompare(b.name)
+    })
+}
+
 export async function getMembersForExport(handle: string, query: MemberDirectoryQuery): Promise<MemberExportRow[]> {
   const { home, viewerId } = await requireManager(handle, "members.view")
   const since = new Date(Date.now() - timeframeDays(query.timeframe) * 86_400_000)

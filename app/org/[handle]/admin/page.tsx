@@ -22,7 +22,7 @@ export default async function HomeAdminOverviewPage({ params }: { params: Promis
   const stats = [
     { label: "Members", value: memberCount, icon: Users, href: `${base}/members` },
     { label: "Pending", value: pendingCount, icon: Clock, href: `${base}/members`, alert: pendingCount > 0 },
-    { label: "Admins", value: adminCount, icon: ShieldCheck, href: `${base}/members` },
+    { label: "Admins", value: adminCount, icon: ShieldCheck, href: `${base}/admins` },
   ]
 
   // Quick actions reuse the real section registry so nothing speculative can

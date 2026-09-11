@@ -4,24 +4,20 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
-import { ArrowLeft, ChevronRight, MoreHorizontal, X } from "lucide-react"
+import { ArrowLeft, ChevronRight, Menu, X } from "lucide-react"
 import { cn } from "@/lib/utils"
-import {
-  HOME_ADMIN_GROUPS,
-  HOME_ADMIN_SECTIONS,
-  MOBILE_PRIMARY_ORDER,
-  type HomeAdminSection,
-} from "@/lib/home/admin-nav"
+import { HOME_ADMIN_GROUPS, HOME_ADMIN_SECTIONS, type HomeAdminSection } from "@/lib/home/admin-nav"
 import { homeRoleHasPermission, type HomeRole } from "@/lib/home/roles"
 import type { HomeView } from "@/lib/home/types"
 
 /**
  * Chrome for the Frequency Home Admin Console — a compact, mobile-first command
- * surface. Mobile leads: a slim top bar for identity, a native bottom tab bar
- * for the primary destinations, and a grouped "More" sheet for the rest.
- * Desktop expands the same system into a compact grouped rail. Sections gate on
- * the viewer's Home role, so lower roles see a smaller console. Nothing here is
- * speculative — every destination is a live capability of the product.
+ * surface. Mobile leads: a slim top bar for identity with a menu button placed
+ * right before the Home logo that opens a grouped left side drawer holding every
+ * destination. Desktop expands the same system into a compact grouped rail.
+ * Sections gate on the viewer's Home role, so lower roles see a smaller console.
+ * Nothing here is speculative — every destination is a live capability of the
+ * product.
  */
 export function HomeAdminShell({
   home,
@@ -33,7 +29,7 @@ export function HomeAdminShell({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
-  const [moreOpen, setMoreOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const base = `/org/${home.handle}/admin`
   const accent = home.accentColor || home.orgColor
   const accentSoft = `color-mix(in oklab, ${accent} 14%, transparent)`
@@ -48,20 +44,15 @@ export function HomeAdminShell({
     return s.slug === "overview" ? pathname === base : pathname === href || pathname.startsWith(`${href}/`)
   }
 
-  // Grouped, permission-filtered sections for the rail and the More sheet.
+  // Grouped, permission-filtered sections for the rail and the side menu.
   const grouped = HOME_ADMIN_GROUPS.map((g) => ({
     ...g,
     items: visible.filter((s) => s.group === g.id),
   })).filter((g) => g.items.length > 0)
 
-  // Mobile bottom bar: Overview + the first few reachable primary destinations.
-  const primary = MOBILE_PRIMARY_ORDER.map((slug) => visible.find((s) => s.slug === slug)).filter(
-    (s): s is HomeAdminSection => Boolean(s),
-  ).slice(0, 4)
-
-  // Close the More sheet whenever the route changes.
+  // Close the side menu whenever the route changes.
   useEffect(() => {
-    setMoreOpen(false)
+    setMenuOpen(false)
   }, [pathname])
 
   return (
@@ -117,6 +108,16 @@ export function HomeAdminShell({
       {/* ── Main column ──────────────────────────────────────────────── */}
       <div className="flex min-w-0 flex-1 flex-col lg:pl-64">
         <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border/50 bg-background/70 px-4 py-2.5 backdrop-blur-xl lg:px-8 lg:py-3">
+          <button
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            className="tap-scale flex size-9 shrink-0 items-center justify-center rounded-full text-foreground hover:bg-secondary/60 lg:hidden"
+            aria-label="Open menu"
+            aria-haspopup="dialog"
+            aria-expanded={menuOpen}
+          >
+            <Menu className="size-5" />
+          </button>
           <span className="lg:hidden">
             <HomeLogo home={home} size="sm" />
           </span>
@@ -135,93 +136,65 @@ export function HomeAdminShell({
         <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-28 pt-5 lg:px-8 lg:py-9 lg:pb-12">{children}</main>
       </div>
 
-      {/* ── Mobile bottom tab bar ────────────────────────────────────── */}
-      <nav
-        className="fixed inset-x-0 bottom-0 z-40 flex items-stretch gap-1 border-t border-border/50 bg-background/85 px-2 pb-[env(safe-area-inset-bottom)] pt-1.5 backdrop-blur-xl lg:hidden"
-        aria-label="Admin sections"
-      >
-        {primary.map((s) => (
-          <TabItem key={s.slug} section={s} href={hrefFor(s)} active={isActive(s)} accent={accent} />
-        ))}
-        <button
-          type="button"
-          onClick={() => setMoreOpen(true)}
-          className="tap-scale flex flex-1 flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-[10px] font-medium text-muted-foreground"
-          aria-haspopup="dialog"
-          aria-expanded={moreOpen}
-        >
-          <MoreHorizontal className="size-5" />
-          More
-        </button>
-      </nav>
-
-      {/* ── Mobile "More" sheet (grouped full nav) ───────────────────── */}
-      {moreOpen && (
+      {/* ── Mobile side menu (grouped full nav) ──────────────────────── */}
+      {menuOpen && (
         <button
           type="button"
           aria-label="Close menu"
-          onClick={() => setMoreOpen(false)}
+          onClick={() => setMenuOpen(false)}
           className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm animate-in fade-in lg:hidden"
         />
       )}
       <div
         role="dialog"
         aria-modal="true"
-        aria-hidden={!moreOpen}
+        aria-hidden={!menuOpen}
         className={cn(
-          "fixed inset-x-0 bottom-0 z-50 max-h-[80dvh] overflow-y-auto rounded-t-3xl border-t border-border/60 bg-card pb-[calc(env(safe-area-inset-bottom)+1rem)] shadow-elevated transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] lg:hidden",
-          moreOpen ? "translate-y-0" : "translate-y-full",
+          "fixed inset-y-0 left-0 z-50 flex w-[min(20rem,85vw)] flex-col border-r border-border/60 bg-card shadow-elevated transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] lg:hidden",
+          menuOpen ? "translate-x-0" : "-translate-x-full",
         )}
         data-scroll
       >
-        <div className="sticky top-0 flex items-center justify-between gap-3 border-b border-border/50 bg-card/95 px-5 py-3.5 backdrop-blur">
-          <p className="font-display text-sm font-semibold tracking-tight">All sections</p>
+        <div className="flex items-center gap-2.5 border-b border-border/50 px-4 py-3.5 pt-[calc(env(safe-area-inset-top)+0.875rem)]">
+          <HomeLogo home={home} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-display text-sm font-semibold leading-tight tracking-tight">{home.orgName}</p>
+            <p className="truncate text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              Admin Console
+            </p>
+          </div>
           <button
             type="button"
-            onClick={() => setMoreOpen(false)}
-            className="tap-scale flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
-            aria-label="Close"
+            onClick={() => setMenuOpen(false)}
+            className="tap-scale flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+            aria-label="Close menu"
           >
             <X className="size-5" />
           </button>
         </div>
-        <div className="space-y-5 px-4 py-4">
+        <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4" data-scroll>
+          {overview && (
+            <div className="overflow-hidden rounded-2xl border border-border/60 bg-background/40">
+              <DrawerItem section={overview} href={hrefFor(overview)} active={isActive(overview)} accent={accent} />
+            </div>
+          )}
           {grouped.map((g) => (
             <div key={g.id} className="space-y-1">
               <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/70">
                 {g.label}
               </p>
               <div className="overflow-hidden rounded-2xl border border-border/60 bg-background/40">
-                {g.items.map((s) => {
-                  const Icon = s.icon
-                  const active = isActive(s)
-                  return (
-                    <Link
-                      key={s.slug}
-                      href={hrefFor(s)}
-                      className="tap-scale flex items-center gap-3 border-b border-border/40 px-3.5 py-3 text-sm font-medium last:border-b-0"
-                    >
-                      <span
-                        className="flex size-8 shrink-0 items-center justify-center rounded-lg"
-                        style={
-                          active
-                            ? { backgroundColor: accent, color: "#fff" }
-                            : { backgroundColor: "color-mix(in oklab, var(--foreground) 6%, transparent)" }
-                        }
-                      >
-                        <Icon className="size-[17px]" />
-                      </span>
-                      <span className="flex-1 truncate">{s.label}</span>
-                      <ChevronRight className="size-4 text-muted-foreground/40" />
-                    </Link>
-                  )
-                })}
+                {g.items.map((s) => (
+                  <DrawerItem key={s.slug} section={s} href={hrefFor(s)} active={isActive(s)} accent={accent} />
+                ))}
               </div>
             </div>
           ))}
+        </div>
+        <div className="border-t border-border/50 px-4 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
           <Link
             href={`/org/${home.handle}`}
-            className="tap-scale flex items-center gap-2 px-1 pt-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+            className="tap-scale flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="size-3.5" />
             Back to organisation
@@ -229,6 +202,40 @@ export function HomeAdminShell({
         </div>
       </div>
     </div>
+  )
+}
+
+function DrawerItem({
+  section,
+  href,
+  active,
+  accent,
+}: {
+  section: HomeAdminSection
+  href: string
+  active: boolean
+  accent: string
+}) {
+  const Icon = section.icon
+  return (
+    <Link
+      href={href}
+      aria-current={active ? "page" : undefined}
+      className="tap-scale flex items-center gap-3 border-b border-border/40 px-3.5 py-3 text-sm font-medium last:border-b-0"
+    >
+      <span
+        className="flex size-8 shrink-0 items-center justify-center rounded-lg"
+        style={
+          active
+            ? { backgroundColor: accent, color: "#fff" }
+            : { backgroundColor: "color-mix(in oklab, var(--foreground) 6%, transparent)" }
+        }
+      >
+        <Icon className="size-[17px]" />
+      </span>
+      <span className="flex-1 truncate">{section.label}</span>
+      <ChevronRight className="size-4 text-muted-foreground/40" />
+    </Link>
   )
 }
 
@@ -267,30 +274,6 @@ function RailItem({
   )
 }
 
-function TabItem({
-  section,
-  href,
-  active,
-  accent,
-}: {
-  section: HomeAdminSection
-  href: string
-  active: boolean
-  accent: string
-}) {
-  const Icon = section.icon
-  return (
-    <Link
-      href={href}
-      aria-current={active ? "page" : undefined}
-      className="tap-scale flex flex-1 flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-[10px] font-medium"
-      style={{ color: active ? accent : undefined }}
-    >
-      <Icon className={cn("size-5", !active && "text-muted-foreground")} />
-      <span className={cn("truncate", !active && "text-muted-foreground")}>{section.label}</span>
-    </Link>
-  )
-}
 
 function HomeLogo({ home, size = "md" }: { home: HomeView; size?: "sm" | "md" }) {
   const dim = size === "sm" ? "size-8" : "size-10"
