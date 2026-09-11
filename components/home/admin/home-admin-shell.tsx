@@ -33,7 +33,7 @@ export function HomeAdminShell({
   const base = `/org/${home.handle}/admin`
   const accent = home.accentColor || home.orgColor
   const accentSoft = `color-mix(in oklab, ${accent} 14%, transparent)`
-  const planLabel = home.plan === "premium_pro" ? "Premium Pro" : "Premium"
+  const planFull = `Frequency Home ${home.plan === "premium_pro" ? "Premium" : "Basic"}`
 
   const visible = HOME_ADMIN_SECTIONS.filter((s) => !s.permission || homeRoleHasPermission(role, s.permission))
   const overview = visible.find((s) => s.slug === "overview")
