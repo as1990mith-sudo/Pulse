@@ -453,6 +453,10 @@ export const devotional = pgTable("devotional", {
   body: text("body").notNull(),
   prayer: text("prayer").notNull(),
   cover: text("cover"),
+  // Multi-purpose content kind: "devotional" (scripture-led reading) or
+  // "notice" (general announcement, no scripture/prayer). Existing rows default
+  // to "devotional" so nothing already published changes shape.
+  kind: text("kind").notNull().default("devotional"),
   readingMinutes: integer("readingMinutes").notNull().default(3),
   publishDate: text("publishDate").notNull(),
   // Lifecycle: "draft" | "scheduled" | "published" | "archived". Existing rows
