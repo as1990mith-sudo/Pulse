@@ -176,10 +176,6 @@ export function AuthKeyManager({
                   <Share2 className="size-4" /> Share
                 </button>
               </div>
-              <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
-                Opens straight to a confirmation screen. If they don&apos;t have an account yet, they&apos;ll join this
-                Home right after signing up.
-              </p>
             </div>
           )}
 
@@ -226,9 +222,6 @@ export function AuthKeyManager({
                 </button>
               ))}
           </div>
-          <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
-            Regenerating or disabling the key never removes existing members — it only affects future onboarding.
-          </p>
         </div>
       </div>
 
