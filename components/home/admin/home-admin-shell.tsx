@@ -33,7 +33,7 @@ export function HomeAdminShell({
   const base = `/org/${home.handle}/admin`
   const accent = home.accentColor || home.orgColor
   const accentSoft = `color-mix(in oklab, ${accent} 14%, transparent)`
-  const planLabel = home.plan === "premium_pro" ? "Premium Pro" : "Premium"
+  const planFull = `Frequency Home ${home.plan === "premium_pro" ? "Premium" : "Basic"}`
 
   const visible = HOME_ADMIN_SECTIONS.filter((s) => !s.permission || homeRoleHasPermission(role, s.permission))
   const overview = visible.find((s) => s.slug === "overview")
@@ -117,7 +117,7 @@ export function HomeAdminShell({
 
       {/* ── Main column ──────────────────────────────────────────────── */}
       <div className="flex min-w-0 flex-1 flex-col lg:pl-64">
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border/50 bg-background/70 px-4 py-2.5 backdrop-blur-xl lg:px-8 lg:py-3">
+        <header className="sticky top-0 z-30 flex items-center gap-2.5 border-b border-border/50 bg-background/70 px-3 py-2.5 backdrop-blur-xl lg:gap-3 lg:px-8 lg:py-3">
           <button
             type="button"
             onClick={() => setMenuOpen(true)}
@@ -128,19 +128,30 @@ export function HomeAdminShell({
           >
             <Menu className="size-5" />
           </button>
-          <span className="lg:hidden">
+          <span
+            className="shrink-0 rounded-full p-[2px] lg:hidden"
+            style={{ backgroundColor: accentSoft }}
+          >
             <HomeLogo home={home} size="sm" />
           </span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate font-display text-[15px] font-semibold tracking-tight lg:text-base">{home.name}</p>
+          <div className="flex min-w-0 flex-1 flex-col justify-center">
+            <p className="truncate font-display text-[15px] font-semibold leading-tight tracking-tight lg:text-base">
+              {home.name}
+            </p>
+            <span className="mt-0.5 flex items-center gap-1.5">
+              <span
+                className="size-1.5 shrink-0 rounded-full"
+                style={{ backgroundColor: accent }}
+                aria-hidden
+              />
+              <span
+                className="truncate text-[11px] font-medium uppercase tracking-wide"
+                style={{ color: accent }}
+              >
+                {planFull}
+              </span>
+            </span>
           </div>
-          <span
-            className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold"
-            style={{ backgroundColor: accentSoft, color: accent }}
-          >
-            <span className="size-1.5 rounded-full" style={{ backgroundColor: accent }} aria-hidden />
-            {planLabel}
-          </span>
         </header>
 
         <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-28 pt-5 lg:px-8 lg:py-9 lg:pb-12">{children}</main>

@@ -462,8 +462,9 @@ function CommentItem({
         setDeleted(true)
       },
     })
-  // Members can report someone else's comment into the owning Home's queue.
-  if (enableReporting && !comment.isSelf && comment.authorId) {
+  // Ordinary members can report someone else's comment into the owning Home's
+  // queue. Moderators of this Home don't report — they act directly (below).
+  if (enableReporting && !canModerate && !comment.isSelf && comment.authorId) {
     actions.push({ label: "Report", icon: Flag, onClick: () => setReportOpen(true) })
   }
   // Home Admins get direct discipline on other members' comments. The server

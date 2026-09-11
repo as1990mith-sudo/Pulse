@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useTransition } from "react"
-import { Flag, Check, Loader2 } from "lucide-react"
+import { Flag, Check, Loader2, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { haptic } from "@/lib/haptics"
 import { submitHomeReport } from "@/app/actions/home-reports"
@@ -141,7 +141,7 @@ export function ReportReasonModal({
         onClick={onClose}
         className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in-0"
       />
-      <div className="relative z-10 m-3 w-full max-w-sm overflow-hidden rounded-3xl border border-white/10 bg-popover/90 p-5 shadow-2xl backdrop-blur-xl animate-in fade-in-0 zoom-in-95 duration-150">
+      <div className="relative z-10 m-3 flex max-h-[85vh] w-full max-w-sm flex-col overflow-hidden rounded-3xl border border-white/10 bg-popover/90 p-5 shadow-2xl backdrop-blur-xl animate-in fade-in-0 zoom-in-95 duration-150">
         {submitted ? (
           <div className="flex flex-col items-center gap-3 py-4 text-center">
             <span className="flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
@@ -153,58 +153,47 @@ export function ReportReasonModal({
         ) : (
           <>
             <div className="mb-4 flex items-center gap-3">
-              <span className="flex size-10 items-center justify-center rounded-xl bg-destructive/15 text-destructive">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-destructive/15 text-destructive">
                 <Flag className="size-5" />
               </span>
               <div className="min-w-0">
                 <h3 className="text-sm font-bold">Report {noun}</h3>
-                <p className="truncate text-xs text-muted-foreground">
-                  {subjectLabel ? `Tell us what's wrong` : "Choose a reason"}
-                </p>
+                <p className="truncate text-xs text-muted-foreground">Tell us what&apos;s wrong</p>
               </div>
             </div>
 
-            <ul className="space-y-1.5" role="radiogroup" aria-label="Report reason">
-              {HOME_REPORT_REASONS.map((r) => {
-                const active = reasonId === r.id
-                return (
-                  <li key={r.id}>
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={active}
-                      onClick={() => setReasonId(r.id)}
-                      className={cn(
-                        "flex w-full items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 text-left text-sm transition-colors",
-                        active
-                          ? "border-primary bg-primary/10 font-medium text-foreground"
-                          : "border-white/10 text-foreground/90 hover:bg-white/5 active:bg-white/10",
-                      )}
-                    >
-                      {r.label}
-                      <span
-                        className={cn(
-                          "flex size-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
-                          active ? "border-primary bg-primary" : "border-muted-foreground/50",
-                        )}
-                      >
-                        {active && <span className="size-1.5 rounded-full bg-primary-foreground" />}
-                      </span>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground" htmlFor="report-reason">
+              Reason
+            </label>
+            <div className="relative">
+              <select
+                id="report-reason"
+                value={reasonId ?? ""}
+                onChange={(e) => setReasonId((e.target.value || null) as HomeReportReason | null)}
+                className={cn(
+                  "w-full appearance-none rounded-xl border border-white/10 bg-black/20 px-3.5 py-2.5 pr-10 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary",
+                  reasonId ? "text-foreground" : "text-muted-foreground/70",
+                )}
+              >
+                <option value="" disabled>
+                  Select a reason…
+                </option>
+                {HOME_REPORT_REASONS.map((r) => (
+                  <option key={r.id} value={r.id} className="bg-popover text-foreground">
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            </div>
 
-            {reasonId && (
-              <textarea
-                value={details}
-                onChange={(e) => setDetails(e.target.value)}
-                rows={2}
-                placeholder="Add any details (optional)"
-                className="mt-2.5 w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            )}
+            <textarea
+              value={details}
+              onChange={(e) => setDetails(e.target.value)}
+              rows={3}
+              placeholder="Add a comment (optional)"
+              className="mt-3 w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary"
+            />
 
             {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
 
@@ -223,7 +212,7 @@ export function ReportReasonModal({
                 className="flex flex-1 items-center justify-center gap-2 rounded-full bg-destructive px-4 py-2.5 text-sm font-medium text-destructive-foreground transition-all hover:bg-destructive/90 active:scale-[0.98] disabled:opacity-50"
               >
                 {pending ? <Loader2 className="size-4 animate-spin" /> : null}
-                Submit
+                Send report
               </button>
             </div>
           </>
