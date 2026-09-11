@@ -659,7 +659,7 @@ function CommentItem({
               {menuOpen && (
                 <div
                   role="menu"
-                  className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-2xl border border-border/60 bg-card p-1 shadow-xl duration-150 animate-in fade-in zoom-in-95"
+                  className="absolute right-0 top-full z-30 mt-1 w-52 overflow-hidden rounded-2xl border border-border/60 bg-card p-1 shadow-xl duration-150 animate-in fade-in zoom-in-95"
                 >
                   {actions.map((action) => (
                     <button
@@ -671,13 +671,13 @@ function CommentItem({
                         void action.onClick()
                       }}
                       className={cn(
-                        "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+                        "flex w-full items-center gap-3 whitespace-nowrap rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
                         action.destructive
                           ? "text-destructive hover:bg-destructive/10"
                           : "hover:bg-secondary",
                       )}
                     >
-                      <action.icon className="size-4" /> {action.label}
+                      <action.icon className="size-4 shrink-0" /> {action.label}
                     </button>
                   ))}
                 </div>

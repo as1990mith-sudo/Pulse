@@ -142,7 +142,7 @@ export function TestimonialCard({
     <>
       <article
         className={cn(
-          "flex h-full flex-col rounded-2xl border border-white/10 p-3.5 text-white shadow-sm transition-colors hover:border-white/20 sm:p-4",
+          "flex h-full flex-col rounded-2xl border border-white/10 p-3.5 font-display text-white shadow-sm transition-colors hover:border-white/20 sm:p-4",
           gradient,
         )}
       >
