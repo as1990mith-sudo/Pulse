@@ -4,7 +4,6 @@ import { redirect } from "next/navigation"
 import { ArrowRight, KeyRound, Plus, Radio } from "lucide-react"
 import { getMyHomes, getViewerId } from "@/lib/home/access"
 import { HomeCard } from "@/components/home/home-card"
-import { PoweredByFrequency } from "@/components/home/powered-by-frequency"
 
 export const metadata: Metadata = {
   title: "Frequency Home",
@@ -60,10 +59,6 @@ export default async function HomeHubPage() {
           </div>
         </div>
       )}
-
-      <div className="mt-12 flex justify-center">
-        <PoweredByFrequency />
-      </div>
     </main>
   )
 }
