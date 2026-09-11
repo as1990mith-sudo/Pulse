@@ -2103,21 +2103,23 @@ export function PostCard({
           aria-label={post.isSelf ? (liked ? "Unlike. Press and hold to see who liked this." : "Like. Press and hold to see who liked this.") : liked ? "Unlike" : "Like"}
         >
           <LikeHeart liked={liked} className={feed ? "size-7" : "size-6"} />
+          {/* The count sits beside the heart at the same gap the comment count
+              sits beside its icon. It stays its own control: for the author it
+              opens the list of accounts that liked the post, so the heart above
+              remains a pure like toggle. */}
+          {likes > 0 &&
+            (post.isSelf ? (
+              <button
+                onClick={() => setEngagementKind("likes")}
+                className={cn("tabular-nums transition-colors hover:text-primary", feed ? "text-[15px]" : "text-sm")}
+                aria-label="See who liked this post"
+              >
+                {likes}
+              </button>
+            ) : (
+              <span className={cn("tabular-nums", feed ? "text-[15px]" : "text-sm")}>{likes}</span>
+            ))}
         </button>
-        {/* The count is its own control: for the author it opens the list of
-            accounts that liked the post, so the icon stays a pure like toggle. */}
-        {likes > 0 &&
-          (post.isSelf ? (
-            <button
-              onClick={() => setEngagementKind("likes")}
-              className={cn("-ml-1 tabular-nums transition-colors hover:text-primary", feed ? "text-[15px]" : "text-sm")}
-              aria-label="See who liked this post"
-            >
-              {likes}
-            </button>
-          ) : (
-            <span className={cn("-ml-1 tabular-nums", feed ? "text-[15px]" : "text-sm")}>{likes}</span>
-          ))}
 
         <button
           onClick={() => setShowComments((v) => !v)}
