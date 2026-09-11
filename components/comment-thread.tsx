@@ -121,6 +121,12 @@ export type CommentThreadProps = {
    * the parent post's `canModerate`. Defaults to false.
    */
   canModerate?: boolean
+  /**
+   * Which content system these comments belong to, so admin moderation routes to
+   * the correct table. `"comment"` = main feed (default), `"community_comment"` =
+   * Community Help.
+   */
+  moderationTargetType?: "comment" | "community_comment"
 }
 
 /**
@@ -147,6 +153,7 @@ export function CommentThread({
   personalInitials = "",
   enableReporting = false,
   canModerate = false,
+  moderationTargetType = "comment",
 }: CommentThreadProps) {
   // Delete window inherits the edit/general window unless explicitly overridden.
   const deleteWindow = enforceDeleteWindow ?? enforceTimeWindows
@@ -208,6 +215,7 @@ export function CommentThread({
               personalInitials={personalInitials}
               enableReporting={enableReporting}
               canModerate={canModerate}
+              moderationTargetType={moderationTargetType}
             />
           </li>
         ))}
@@ -254,6 +262,7 @@ function CommentNode({
   personalInitials = "",
   enableReporting = false,
   canModerate = false,
+  moderationTargetType = "comment",
 }: {
   comment: ThreadComment
   depth: number
@@ -276,6 +285,7 @@ function CommentNode({
   personalInitials?: string
   enableReporting?: boolean
   canModerate?: boolean
+  moderationTargetType?: "comment" | "community_comment"
 }) {
   const replies = repliesByParent.get(comment.id) ?? []
   const [collapsed, setCollapsed] = useState(true)
@@ -302,6 +312,7 @@ function CommentNode({
         personalInitials={personalInitials}
         enableReporting={enableReporting}
         canModerate={canModerate}
+        moderationTargetType={moderationTargetType}
       />
 
       {replies.length > 0 && (
@@ -342,6 +353,7 @@ function CommentNode({
                     personalInitials={personalInitials}
                     enableReporting={enableReporting}
                     canModerate={canModerate}
+                    moderationTargetType={moderationTargetType}
                   />
                 </li>
               ))}
@@ -373,6 +385,7 @@ function CommentItem({
   personalInitials = "",
   enableReporting = false,
   canModerate = false,
+  moderationTargetType = "comment",
 }: {
   comment: ThreadComment
   canInteract: boolean
@@ -394,6 +407,7 @@ function CommentItem({
   personalInitials?: string
   enableReporting?: boolean
   canModerate?: boolean
+  moderationTargetType?: "comment" | "community_comment"
 }) {
   const [liked, setLiked] = useState(comment.liked)
   const [likes, setLikes] = useState(comment.likes)
@@ -726,7 +740,7 @@ function CommentItem({
       <ContentModerationDialog
         mode={moderationMode}
         onClose={() => setModerationMode(null)}
-        targetType="comment"
+        targetType={moderationTargetType}
         targetId={String(comment.id)}
         subjectLabel={comment.name}
         onContentRemoved={() => setDeleted(true)}

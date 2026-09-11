@@ -75,33 +75,36 @@ export function SiteHeader({ collapsible = false }: { collapsible?: boolean } = 
             otherwise the hamburger — then the brand. `min-w-0` lets the brand
             wordmark truncate on narrow screens so the right-side icons are never
             pushed off-frame (and clipped by the body's overflow-x guard). */}
-        <div className="flex min-w-0 items-center gap-2.5">
+        <div className="flex min-w-0 items-center gap-2">
           {/* The hamburger menu is always the left-most control — even on pages
               reached via the side menu. The device/browser back gesture handles
               returning, so we never swap in an in-app back arrow here. */}
           <AppMenu />
-          <Link href="/" className="flex min-w-0 items-center gap-2">
+          {/* The brand never truncates — it is `shrink-0` so the full
+              "Frequency Home" wordmark always reads in one line; the compact
+              icon cluster on the right is sized to leave room for it. */}
+          <Link href="/" className="flex shrink-0 items-center gap-2">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-soft">
               <Radio className="size-[18px]" strokeWidth={2.25} />
             </span>
-            <span className="truncate whitespace-nowrap text-lg font-semibold tracking-tight">Frequency Home</span>
+            <span className="whitespace-nowrap text-[17px] font-semibold tracking-tight">Frequency Home</span>
           </Link>
         </div>
 
-        {/* Right, iOS-aligned: Messages · Notifications · Search. Larger, premium
+        {/* Right, iOS-aligned: Messages · Notifications · Search. Compact
             chip-style icons (profile now lives in the side menu). */}
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1">
           <MessagesBell />
           <NotificationBell />
           <Link
             href="/search"
             aria-label="Search"
             className={cn(
-              "relative flex size-10 items-center justify-center rounded-xl border border-border/50 bg-secondary/40 shadow-soft outline-none backdrop-blur-md transition-all duration-200 hover:bg-secondary/70 active:scale-95 focus-visible:ring-2 focus-visible:ring-ring",
+              "relative flex size-9 items-center justify-center rounded-xl border border-border/50 bg-secondary/40 shadow-soft outline-none backdrop-blur-md transition-all duration-200 hover:bg-secondary/70 active:scale-95 focus-visible:ring-2 focus-visible:ring-ring",
               isActive("/search") ? "text-primary" : "text-muted-foreground hover:text-foreground",
             )}
           >
-            <Search className="size-5" strokeWidth={2} />
+            <Search className="size-[18px]" strokeWidth={2} />
           </Link>
         </div>
       </div>

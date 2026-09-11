@@ -267,6 +267,9 @@ export function CommunityConversation({
               canInteract
               density="comfortable"
               enforceDeleteWindow={false}
+              enableReporting
+              canModerate={!!post.canModerate}
+              moderationTargetType="community_comment"
               onAuthorClick={openProfile}
               onLike={(commentId, liked) => void setCommunityCommentLike({ commentId, liked })}
               onReply={async (parentId, value, asHome) => {
