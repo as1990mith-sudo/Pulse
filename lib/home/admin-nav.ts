@@ -8,6 +8,7 @@ import {
   Megaphone,
   CalendarClock,
   CreditCard,
+  Flag,
   Settings,
 } from "lucide-react"
 import type { HomePermission } from "@/lib/home/roles"
@@ -57,6 +58,13 @@ export const HOME_ADMIN_SECTIONS: HomeAdminSection[] = [
     icon: Users,
     group: "people",
     permission: "members.manage",
+  },
+  {
+    slug: "reports",
+    label: "Reports",
+    icon: Flag,
+    group: "people",
+    permission: "reports.manage",
   },
   {
     slug: "content",

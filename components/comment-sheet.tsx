@@ -75,6 +75,12 @@ export type CommentSheetProps = {
    * Pass e.g. `"h-[85%]"` to override.
    */
   heightClassName?: string
+  /**
+   * Enables the per-comment "Report" action (Home-scoped moderation). Only set
+   * this on comment surfaces that live inside a Home feed; the owning Home is
+   * derived server-side from the comment. Defaults to false.
+   */
+  enableReporting?: boolean
 }
 
 /**
@@ -106,6 +112,7 @@ export function CommentSheet({
   allowReply = true,
   heightClassName,
   homeVoice = null,
+  enableReporting = false,
 }: CommentSheetProps) {
   const [draft, setDraft] = useState("")
   // Admins default to their Home's voice, matching the main composer.
@@ -265,6 +272,7 @@ export function CommentSheet({
               personalName={currentUser?.name ?? "You"}
               personalImage={currentUser?.image ?? null}
               personalInitials={currentUser?.initials ?? ""}
+              enableReporting={enableReporting}
             />
           )}
         </div>
