@@ -693,15 +693,25 @@ const STATUS_META: Record<string, { label: string; className: string; dot: strin
 }
 
 const FILTERS = [
-  { key: "all", label: "All" },
   { key: "upcoming", label: "Upcoming" },
-  { key: "pending_payment", label: "Awaiting payment" },
-  { key: "completed", label: "Finished" },
+  { key: "past", label: "Past" },
+  { key: "successful", label: "Successful" },
+  { key: "no_show", label: "No shows" },
+  { key: "cancelled", label: "Cancelled" },
 ] as const
+
+type BookingBucket = (typeof FILTERS)[number]["key"]
+
+function bucketFor(b: AdminAppointmentDetail): BookingBucket {
+  if (b.status === "cancelled") return "cancelled"
+  if (b.status === "no_show") return "no_show"
+  if (b.status === "completed") return "successful"
+  return new Date(b.startsAt).getTime() < Date.now() ? "past" : "upcoming"
+}
 
 function BookingsTab({ handle, initialBookings }: { handle: string; initialBookings: AdminAppointmentDetail[] }) {
   const [bookings, setBookings] = useState(initialBookings)
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("all")
+  const [filter, setFilter] = useState<BookingBucket>("upcoming")
   const [selected, setSelected] = useState<AdminAppointmentDetail | null>(null)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [, startTransition] = useTransition()
@@ -722,19 +732,15 @@ function BookingsTab({ handle, initialBookings }: { handle: string; initialBooki
   }
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: bookings.length }
+    const c: Record<string, number> = {}
     for (const b of bookings) {
-      const key = b.status === "in_progress" ? "upcoming" : b.status
+      const key = bucketFor(b)
       c[key] = (c[key] ?? 0) + 1
     }
     return c
   }, [bookings])
 
-  const visible = useMemo(() => {
-    if (filter === "all") return bookings
-    if (filter === "upcoming") return bookings.filter((b) => b.status === "upcoming" || b.status === "in_progress")
-    return bookings.filter((b) => b.status === filter)
-  }, [bookings, filter])
+  const visible = useMemo(() => bookings.filter((b) => bucketFor(b) === filter), [bookings, filter])
 
   if (bookings.length === 0) {
     return (
