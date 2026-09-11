@@ -55,6 +55,16 @@ export function HomeAdminShell({
     setMenuOpen(false)
   }, [pathname])
 
+  // Hide the global bottom nav while the mobile drawer is open so the footer
+  // never shows through beneath it. Reuses the same `nav:suppress` beacon the
+  // BottomNav listens for; always clears the flag on close/unmount.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("nav:suppress", { detail: menuOpen }))
+    return () => {
+      window.dispatchEvent(new CustomEvent("nav:suppress", { detail: false }))
+    }
+  }, [menuOpen])
+
   return (
     <div
       className="flex min-h-dvh bg-background text-foreground"
