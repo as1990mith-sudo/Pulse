@@ -71,6 +71,36 @@ export async function canModerateInScope(homeId: string | null): Promise<boolean
 }
 
 /**
+ * Batch counterpart to `canModerateInScope` for CROSS-HOME feeds.
+ *
+ * The main "For you" feed, iTestify and search mix posts from many Homes, so a
+ * single per-scope flag would be wrong — a viewer might moderate Home A but not
+ * Home B in the same list. Given the distinct Home ids present in a feed page,
+ * this returns the subset the viewer may moderate, so each post/comment can be
+ * flagged from its own Home's authority in one round-trip instead of N.
+ *
+ * Platform staff moderate everywhere, so every id is returned for them.
+ */
+export async function moderatableHomeIds(homeIds: (string | null | undefined)[]): Promise<Set<string>> {
+  const distinct = Array.from(new Set(homeIds.filter((id): id is string => !!id)))
+  if (distinct.length === 0) return new Set()
+
+  const staff = await getAdminUser()
+  if (staff) return new Set(distinct)
+
+  const allowed = new Set<string>()
+  await Promise.all(
+    distinct.map(async (homeId) => {
+      const membership = await getViewerMembership(homeId)
+      if (membership && membership.status === "active" && homeRoleHasPermission(membership.role, "reports.manage")) {
+        allowed.add(homeId)
+      }
+    }),
+  )
+  return allowed
+}
+
+/**
  * Pins one post, enforcing MAX_PINNED_PER_SCOPE atomically. Returns false when
  * the feed is already at the cap (the caller turns that into a user-facing
  * message) and true when the pin was applied.

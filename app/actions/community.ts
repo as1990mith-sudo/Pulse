@@ -17,7 +17,7 @@ import {
 import { getProfileScope, scopeToHome } from "@/lib/home/profile-scope"
 import { resolvePublishingIdentity } from "@/lib/home/publishing"
 import { homeRoleHasPermission, type HomeRole } from "@/lib/home/roles"
-import { canPinInScope, MAX_PINNED_PER_SCOPE, pinWithinCap } from "@/lib/home/can-pin"
+import { canPinInScope, MAX_PINNED_PER_SCOPE, moderatableHomeIds, pinWithinCap } from "@/lib/home/can-pin"
 import { getAvatarColor, getHandle, getInitials } from "@/lib/identity"
 import { formatPostTimestamp } from "@/lib/format-timestamp"
 import { EDIT_WINDOW_MS } from "@/lib/interactions"
@@ -79,6 +79,11 @@ export type CommunityPostView = {
   // thread lists stay chronological.
   pinned?: boolean
   canPin?: boolean
+  // Whether THIS viewer may moderate this thread (delete it, discipline its
+  // author) from its ⋮ menu. Resolved per-Home from `reports.manage`. Author
+  // discipline runs server-side from the post id, so an anonymous thread can be
+  // acted on without ever revealing its author to the moderator.
+  canModerate?: boolean
 }
 
 export type CommunityCommentView = {
@@ -165,6 +170,10 @@ async function buildCommunityPostViews(
     for (const r of rows) followingIds.add(r.followingId)
   }
 
+  // Per-Home moderation authority for the Homes present in this batch, so an
+  // admin sees moderation actions only on threads inside a Home they govern.
+  const moderatableHomes = await moderatableHomeIds(posts.map((p) => p.homeId))
+
   return posts.map((p) => {
     const isSelf = viewerId === p.userId
     // Identity is visible when the post is identifiable (to everyone) or when
@@ -199,6 +208,7 @@ async function buildCommunityPostViews(
       authorInitials: org ? getInitials(org.name) : profile ? getInitials(profile.name) : null,
       authorColor: org ? getAvatarColor(p.organizationId!) : reveal ? getAvatarColor(p.userId) : null,
       authorImage: org ? org.logo : profile ? profile.image : null,
+      canModerate: !isSelf && !!p.homeId && moderatableHomes.has(p.homeId),
     }
   })
 }
@@ -364,7 +374,7 @@ export async function getOrgCommunityPosts(organizationId: string): Promise<Comm
  * therefore always composed as whichever row Postgres happened to return first:
  * standing in Prayer Palace International, every thread was attributed to
  * Kingdom Academy Global. That is the precise mistake `lib/home/publishing.ts`
- * exists to prevent ��� a role belongs to one Home, never to the account.
+ * exists to prevent ����� a role belongs to one Home, never to the account.
  */
 export async function getPublishableOrg(): Promise<{ id: string; name: string; logo: string | null } | null> {
   const session = await auth.api.getSession({ headers: await headers() })

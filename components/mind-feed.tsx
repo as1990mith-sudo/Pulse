@@ -30,6 +30,8 @@ import {
   BarChart3,
   Pin,
   PinOff,
+  Ban,
+  UserMinus,
 } from "lucide-react"
 import { CommentIcon } from "@/components/comment-icon"
 import { LikeHeart } from "@/components/like-heart"
@@ -81,6 +83,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ReportReasonModal } from "@/components/report-reason-modal"
+import { ContentModerationDialog, type ModerationMode } from "@/components/content-moderation-dialog"
 import { ImageLightbox } from "@/components/image-lightbox"
 import { ImmersiveImageViewer } from "@/components/immersive-image-viewer"
 import { FeedVideo } from "@/components/feed-video"
@@ -1441,6 +1444,7 @@ export function PostCard({
   }, [openCommentsSignal])
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
+  const [moderationMode, setModerationMode] = useState<ModerationMode>(null)
   const [mentionReportOpen, setMentionReportOpen] = useState(false)
   // Tracks whether the viewer has removed their own mention from this post, so
   // the "Remove my mention" action hides itself after a successful removal.
@@ -1905,6 +1909,37 @@ export function PostCard({
                   <DropdownMenuItem onClick={() => setReportOpen(true)} className={POPUP_MENU_ITEM}>
                     <Flag className="text-destructive" /> Report post
                   </DropdownMenuItem>
+
+                  {/* Admin moderation: shown only to viewers who hold
+                      reports.manage in THIS post's Home (resolved server-side as
+                      post.canModerate). Acting directly on the content, not via
+                      a report. */}
+                  {post.canModerate && (
+                    <>
+                      <DropdownMenuSeparator className="bg-white/10" />
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onClick={() => setModerationMode("delete")}
+                        className={POPUP_MENU_ITEM}
+                      >
+                        <Trash2 /> Delete post
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onClick={() => setModerationMode("suspend")}
+                        className={POPUP_MENU_ITEM}
+                      >
+                        <Ban /> Suspend author
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onClick={() => setModerationMode("remove")}
+                        className={POPUP_MENU_ITEM}
+                      >
+                        <UserMinus /> Remove from Home
+                      </DropdownMenuItem>
+                    </>
+                  )}
                 </>
               )}
             </DropdownMenuContent>
@@ -1918,6 +1953,15 @@ export function PostCard({
         subjectLabel={post.user}
         kind="post"
         homeReport={{ handle: post.orgHandle ?? "", targetType: "post", targetId: String(post.id) }}
+      />
+
+      <ContentModerationDialog
+        mode={moderationMode}
+        onClose={() => setModerationMode(null)}
+        targetType="post"
+        targetId={String(post.id)}
+        subjectLabel={post.user}
+        onContentRemoved={() => setDeleted(true)}
       />
 
       {/* Dedicated mention report — routes into the shared moderation queue with
@@ -2195,6 +2239,7 @@ export function PostCard({
   onEdit={handleCommentEdit}
   onDelete={handleCommentDelete}
   enableReporting
+  canModerate={post.canModerate}
   />
   
   <ShareSheet

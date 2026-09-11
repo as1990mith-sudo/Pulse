@@ -413,12 +413,6 @@ async function resolveContentHome(
       .from(feedPost)
       .where(eq(feedPost.id, pid))
     if (!row || !row.homeId) return null
-    const home = await db
-      .select({ handle: homeMembership.homeId })
-      .from(homeMembership)
-      .where(eq(homeMembership.homeId, row.homeId))
-      .limit(0)
-    void home
     const h = await getHandleForHome(row.homeId)
     if (!h) return null
     return { homeId: row.homeId, authorId: row.userId, handle: h }
