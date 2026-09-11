@@ -5,7 +5,6 @@ import useSWR from "swr"
 import { toast } from "sonner"
 import {
   Check,
-  Clock,
   Loader2,
   Mic,
   MicOff,
@@ -1227,43 +1226,43 @@ export function VideoStudioConsole({
                 <Video className="size-3.5" /> Video studio
               </span>
             ) : null}
-            {/* Elapsed timer — its own dark round pill sitting between the host
-                name and the LIVE badge, matching the other header pills. */}
-            {live && (
-              <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-black/40 px-2.5 py-1.5 text-[11px] font-medium text-white/90 ring-1 ring-inset ring-white/10 backdrop-blur-md">
-                <Clock className="size-3.5 text-white/70" />
-                <span className="font-mono tabular-nums">{formatElapsed(elapsed)}</span>
-              </span>
-            )}
           </div>
 
-          {/* Right cluster: the LIVE badge and the audience count. The count now
-              lives directly in the header (replacing the old three-dot menu);
-              tapping it still opens the full audience management sheet. */}
-          <div className="flex shrink-0 items-center gap-1.5">
+          {/* Right cluster: LIVE badge + audience count on the top row, with the
+              elapsed timer stacked directly beneath the LIVE badge. Stacking the
+              timer here (instead of inline on the left) frees horizontal room for
+              the stream title, and the two rows line up evenly with the host
+              pill's two text lines. */}
+          <div className="flex shrink-0 flex-col items-end gap-1">
             {live && (
-              <span className="flex items-center gap-1.5 rounded-full bg-live px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-live-foreground shadow-lg">
-                <span className="relative flex size-1.5">
-                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-live-foreground/70" />
-                  <span className="relative inline-flex size-1.5 rounded-full bg-live-foreground" />
+              <div className="flex items-center gap-1.5">
+                <span className="flex items-center gap-1.5 rounded-full bg-live px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-live-foreground shadow-lg">
+                  <span className="relative flex size-1.5">
+                    <span className="absolute inline-flex size-full animate-ping rounded-full bg-live-foreground/70" />
+                    <span className="relative inline-flex size-1.5 rounded-full bg-live-foreground" />
+                  </span>
+                  Live
                 </span>
-                Live
-              </span>
+                <LiveAudienceSheet
+                  count={audienceCount || viewers}
+                  members={audienceMembers}
+                  immersive
+                  isHost
+                  roomName={roomName ?? undefined}
+                  blockedUsers={callState?.blockedUsers ?? []}
+                  onChanged={() => void refreshCalls()}
+                  // Match the elapsed timer's dark pill (the default immersive
+                  // trigger uses a light bg-white/10, which read as "no dark
+                  // background" next to the timer). bg-black/40 wins via cn().
+                  className="bg-black/40 px-2.5 py-1.5 text-[11px] font-medium text-white/90 ring-1 ring-inset ring-white/10 backdrop-blur-md hover:bg-black/55"
+                />
+              </div>
             )}
+            {/* Elapsed timer — dark round pill sitting under the LIVE badge. */}
             {live && (
-              <LiveAudienceSheet
-                count={audienceCount || viewers}
-                members={audienceMembers}
-                immersive
-                isHost
-                roomName={roomName ?? undefined}
-                blockedUsers={callState?.blockedUsers ?? []}
-                onChanged={() => void refreshCalls()}
-                // Match the elapsed timer's dark pill (the default immersive
-                // trigger uses a light bg-white/10, which read as "no dark
-                // background" next to the timer). bg-black/40 wins via cn().
-                className="bg-black/40 px-2.5 py-1.5 text-[11px] font-medium text-white/90 ring-1 ring-inset ring-white/10 backdrop-blur-md hover:bg-black/55"
-              />
+              <span className="flex shrink-0 items-center rounded-full bg-black/40 px-2.5 py-1 text-[11px] font-medium text-white/90 ring-1 ring-inset ring-white/10 backdrop-blur-md">
+                <span className="font-mono tabular-nums">{formatElapsed(elapsed)}</span>
+              </span>
             )}
           </div>
         </div>
